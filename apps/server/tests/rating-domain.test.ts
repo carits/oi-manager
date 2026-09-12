@@ -139,14 +139,14 @@ describe('rating domain HTTP and persistence', () => {
 
   it('finalizes one immutable standing and applies one organization batch idempotently', async () => {
     const contest = await createFinishedContest()
-    const firstResponse = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`)
+    const firstResponse = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`).set('X-OI-Organization-ID', organizationId)
     expect(firstResponse.status, JSON.stringify(firstResponse.body)).toBe(200)
     expect(firstResponse.body.data.finalizationStatus).toBe('FINALIZED')
     expect(firstResponse.body.data.standing.entries.map((item: any) => item.userId)).toEqual([first.user.id, second.user.id])
     expect(firstResponse.body.data.batches).toHaveLength(1)
     expect(firstResponse.body.data.batches[0]).toMatchObject({ scope: 'ORGANIZATION', status: 'APPLIED', fieldSize: 2 })
 
-    const again = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`)
+    const again = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`).set('X-OI-Organization-ID', organizationId)
     expect(again.status).toBe(200)
     expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: contest.id } })).toBe(1)
     expect(await prisma.ratingBatch.count({ where: { trainingId: contest.id } })).toBe(1)
@@ -157,12 +157,12 @@ describe('rating domain HTTP and persistence', () => {
 
   it('freezes config after the contest starts and rejects ordinary users from global rating', async () => {
     const future = await prisma.training.create({ data: { title: 'Future contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: manager.user.id } })
-    const global = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).send({ scope: 'GLOBAL', expectedRevision: 0 })
+    const global = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope: 'GLOBAL', expectedRevision: 0 })
     expect(global.status).toBe(403)
-    const organization = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).send({ scope: 'ORGANIZATION', expectedRevision: 0, organizationMinParticipants: 2 })
+    const organization = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope: 'ORGANIZATION', expectedRevision: 0, organizationMinParticipants: 2 })
     expect(organization.status).toBe(200)
     await prisma.trainingRatingConfig.update({ where: { trainingId: future.id }, data: { lockedAt: new Date() } })
-    const frozen = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).send({ scope: 'NONE', expectedRevision: 1 })
+    const frozen = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope: 'NONE', expectedRevision: 1 })
     expect(frozen.status).toBe(409)
     expect(frozen.body.code).toBe('RATING_CONFIG_FROZEN')
   })
@@ -177,12 +177,12 @@ describe('rating domain HTTP and persistence', () => {
     const future = await prisma.training.create({ data: { title: 'Organization-only rating contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: platformAdmin.user.id } })
 
     for (const scope of ['GLOBAL', 'BOTH']) {
-      const response = await createAuthenticatedRequest(app, platformToken).put(`/api/trainings/${future.id}/rating-config`).send({ scope, expectedRevision: 0 })
+      const response = await createAuthenticatedRequest(app, platformToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope, expectedRevision: 0 })
       expect(response.status).toBe(422)
       expect(response.body.code).toBe('GLOBAL_RATING_CONTEST_SCOPE_INVALID')
     }
 
-    const config = await createAuthenticatedRequest(app, platformToken).get(`/api/trainings/${future.id}/rating-config`)
+    const config = await createAuthenticatedRequest(app, platformToken).get(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId)
     expect(config.status, JSON.stringify(config.body)).toBe(200)
     expect(config.body.data).toMatchObject({ context: 'organization', allowedScopes: ['NONE', 'ORGANIZATION'] })
   })
@@ -321,8 +321,8 @@ describe('rating domain HTTP and persistence', () => {
     })) })
 
     const [disposition, finalization] = await Promise.all([
-      createAuthenticatedRequest(app, managerToken).patch(`/api/trainings/${contest.id}/rating-participants/${second.user.id}`).send({ disposition: 'EXCLUDE', reason: '竞赛纪律人工复核排除' }),
-      createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`),
+      createAuthenticatedRequest(app, managerToken).patch(`/api/trainings/${contest.id}/rating-participants/${second.user.id}`).set('X-OI-Organization-ID', organizationId).send({ disposition: 'EXCLUDE', reason: '竞赛纪律人工复核排除' }),
+      createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`).set('X-OI-Organization-ID', organizationId),
     ])
     expect(finalization.status).toBe(200)
     expect([200, 409]).toContain(disposition.status)
@@ -358,13 +358,13 @@ describe('rating domain HTTP and persistence', () => {
     const earlier = await createFinishedContest({ title: 'Earlier rated contest', startHoursAgo: 5, endHoursAgo: 4 })
     const later = await createFinishedContest({ title: 'Later rated contest', startHoursAgo: 3, endHoursAgo: 2 })
 
-    const blocked = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`)
+    const blocked = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`).set('X-OI-Organization-ID', organizationId)
     expect(blocked.status).toBe(409)
     expect(blocked.body.code).toBe('EARLIER_RATED_CONTEST_PENDING')
     expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: later.id } })).toBe(0)
 
-    expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${earlier.id}/finalize`)).status).toBe(200)
-    expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`)).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${earlier.id}/finalize`).set('X-OI-Organization-ID', organizationId)).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`).set('X-OI-Organization-ID', organizationId)).status).toBe(200)
     const batches = await prisma.ratingBatch.findMany({ where: { trainingId: { in: [earlier.id, later.id] } }, orderBy: { sequenceAt: 'asc' } })
     expect(batches).toHaveLength(2)
     expect(batches[0].trainingId).toBe(earlier.id)
@@ -373,13 +373,13 @@ describe('rating domain HTTP and persistence', () => {
 
   it('creates a new standing and superseding batch when a finalized contest is rebuilt', async () => {
     const contest = await createFinishedContest()
-    const finalized = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`)
+    const finalized = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`).set('X-OI-Organization-ID', organizationId)
     expect(finalized.status).toBe(200)
     const secondSubmission = await prisma.submission.findFirstOrThrow({ where: { trainingId: contest.id, userId: second.user.id } })
     await prisma.submission.update({ where: { id: secondSubmission.id }, data: { score: 100, result: 'accepted' } })
     await prisma.training.update({ where: { id: contest.id }, data: { finalizationStatus: 'HELD' } })
 
-    const rebuilt = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/rating/rebuild`)
+    const rebuilt = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/rating/rebuild`).set('X-OI-Organization-ID', organizationId)
     expect(rebuilt.status).toBe(200)
     expect(rebuilt.body.data.finalizationStatus).toBe('FINALIZED')
     expect(rebuilt.body.data.standing.revision).toBe(2)
