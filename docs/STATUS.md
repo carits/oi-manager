@@ -5,7 +5,7 @@ last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-13: Contest 双模型收口进入查询切换第一阶段。Rating 全链路、平台比赛列表，以及数据市场的比赛许可证绑定与可见范围不再自行解释 `Training.type=contest`，统一先通过 `Contest.runtimeTrainingId` 读取规范聚合，仅对尚未回填的旧记录在 Facade 内保留可观测只读回退；架构门禁禁止这些消费者重新直查旧模型。生产只读审计为 767 个运行时比赛全部映射、核心字段差异 0，另有 6 个不带运行时的独立 Contest 被正确排除。隔离 Contest/Rating/Data Market/OJ 测试 27/27、Server 构建和文档/架构门禁通过；测试同时补齐当前 `X-OI-Organization-ID` 与规范化 RoleAssignment，避免旧身份夹具产生假阳性。提交 `f3f5101`、`2bf8a63` 已推送 `main`，API 最新由 3302→3303，readiness 正常；切换后日志中的生产 legacy fallback 为 0。本批无 Prisma 迁移、历史数据改写或 Web 提升。
+- 2026-09-13: Contest 双模型收口进入查询切换第一阶段。Rating 全链路、平台比赛列表、数据市场的比赛许可证绑定与可见范围，以及个人/校园 Dashboard 的比赛发现不再自行解释 `Training.type=contest`，统一先通过 `Contest.runtimeTrainingId` 读取规范聚合，仅对尚未回填的旧记录在 Facade 内保留可观测只读回退；架构门禁禁止这些消费者重新直查旧模型。生产只读审计为 767 个运行时比赛全部映射、核心字段差异 0，另有 6 个不带运行时的独立 Contest 被正确排除。隔离 Contest/Rating/Data Market/OJ/Dashboard 测试 30/30、Server 构建和文档/架构门禁通过；测试同时补齐当前 `X-OI-Organization-ID` 与规范化 RoleAssignment，避免旧身份夹具产生假阳性。提交 `f3f5101`、`2bf8a63`、`0bcd9c4`、`18f2459` 已推送 `main`，API 最新由 3302→3303，readiness 正常；切换后日志中的生产 legacy fallback 为 0。本批无 Prisma 迁移、历史数据改写或 Web 提升。
 
 - 2026-09-13: OJ 平台元数据已收口为 `packages/shared/src/oj-platforms.ts` 的 Canonical Registry。Server 的平台类型、历史别名规范化和适配器能力，Web 的平台筛选、标签与原题 URL 均从该注册表派生；题目详情不再维护平行 URL 映射。生产题目平台键只读审计未发现历史别名，不需要数据迁移。Shared/Server/Web 构建、Web 159/159、隔离 Server Registry 2/2 和全部文档/架构门禁通过；API 3302→3303，Web BUILD_ID `jA0UYtewh75g2X6fruE6X` 经候选及正式消息探针（序号 146–149）后提升。生产服务和数据库 readiness 正常，端口继续仅监听 loopback。
 

@@ -11,10 +11,10 @@ source_of_truth: Git history
 
 ### Contest Query Facade 第一阶段切换
 
-- 新增 Contest 查询 Facade：Rating 配置、参与、结算、重放等全链路、平台比赛列表，以及数据市场的比赛许可证绑定和可见范围优先从 `Contest.runtimeTrainingId` 进入规范聚合，再使用关联的 RuntimeTraining 执行既有评测逻辑；旧 `Training.type=contest` 回退被限制在 Facade 内并记录结构化告警。
-- 架构审计增加 Contest 查询边界，禁止 Rating、平台列表和 Data Market 比赛授权重新绕过 Facade；当前阶段不混入 6 个没有 RuntimeTraining 的独立 Contest，后续消费者将按同一边界逐批迁移。
+- 新增 Contest 查询 Facade：Rating 配置、参与、结算、重放等全链路、平台比赛列表、数据市场的比赛许可证绑定和可见范围，以及个人/校园 Dashboard 的比赛发现优先从 `Contest.runtimeTrainingId` 进入规范聚合，再使用关联的 RuntimeTraining 执行既有评测逻辑；旧 `Training.type=contest` 回退被限制在 Facade 内并记录结构化告警。
+- 架构审计增加 Contest 查询边界，禁止 Rating、平台列表、Data Market 比赛授权和 Dashboard 重新绕过 Facade；当前阶段不混入 6 个没有 RuntimeTraining 的独立 Contest，后续消费者将按同一边界逐批迁移。
 - 生产只读一致性审计确认运行时比赛 767、已映射 767、标题/赛制/范围/组织/团队/时间核心字段差异 0；部署后 `contest_query_legacy_fallback` 计数为 0。
-- 测试夹具同步当前真实授权模型：校园 Rating 请求显式携带组织上下文，平台管理员的学校内管理能力通过规范化 RoleAssignment 授予，不再依赖旧账号角色或 `schoolId`。隔离 Contest/Rating/Data Market/OJ 套件 27/27、Server 构建和文档/架构门禁通过。提交 `f3f5101`、`2bf8a63` 已推送 `main`，API 最新由 3302→3303；无 Prisma 迁移、业务数据改写或 Web 发布。
+- 测试夹具同步当前真实授权模型：校园 Rating 请求显式携带组织上下文，平台管理员的学校内管理能力通过规范化 RoleAssignment 授予，不再依赖旧账号角色或 `schoolId`。隔离 Contest/Rating/Data Market/OJ/Dashboard 套件 30/30、Server 构建和文档/架构门禁通过。提交 `f3f5101`、`2bf8a63`、`0bcd9c4`、`18f2459` 已推送 `main`，API 最新由 3302→3303；无 Prisma 迁移、业务数据改写或 Web 发布。
 
 ### Canonical OJ Registry 收口
 
