@@ -29,11 +29,9 @@ run_chat_probe() {
     echo "Production chat probe credentials are missing: $CHAT_PROBE_ENV" >&2
     return 1
   fi
-  set -a
-  # shellcheck disable=SC1090
-  source "$CHAT_PROBE_ENV"
-  set +a
-  if [[ "${CHAT_PROBE_ENABLED:-false}" != "true" ]]; then
+  local enabled
+  enabled="$(sed -n 's/^CHAT_PROBE_ENABLED=//p' "$CHAT_PROBE_ENV" | tail -n 1)"
+  if [[ "$enabled" != "true" ]]; then
     echo "Production chat probe must be enabled before promotion." >&2
     return 1
   fi
@@ -43,12 +41,13 @@ run_chat_probe() {
     local pnpm_bin
     pnpm_bin="$(command -v pnpm)"
     runuser -u "$runner" -- env \
-      CHAT_PROBE_SENDER_USERNAME="$CHAT_PROBE_SENDER_USERNAME" \
-      CHAT_PROBE_SENDER_PASSWORD="$CHAT_PROBE_SENDER_PASSWORD" \
-      CHAT_PROBE_RECEIVER_USERNAME="$CHAT_PROBE_RECEIVER_USERNAME" \
-      CHAT_PROBE_RECEIVER_PASSWORD="$CHAT_PROBE_RECEIVER_PASSWORD" \
       E2E_LIVE_BASE_URL="$url" E2E_LIVE_BUILD_ID="$build_id" \
-      "$pnpm_bin" exec playwright test chat-probe.spec.ts --config=playwright.live.config.ts
+      bash -c '
+        set -a
+        source "$1"
+        set +a
+        exec "$2" exec playwright test chat-probe.spec.ts --config=playwright.live.config.ts
+      ' chat-probe "$CHAT_PROBE_ENV" "$pnpm_bin"
   )
 }
 

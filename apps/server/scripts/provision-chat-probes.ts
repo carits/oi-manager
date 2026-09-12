@@ -31,12 +31,12 @@ async function main() {
     await tx.user.upsert({
       where: { username: sender.username },
       create: { id: sender.id, username: sender.username, passwordHash: senderHash, role: 'user', status: 'active' },
-      update: { passwordHash: senderHash, role: 'user', status: 'active' },
+      update: { passwordHash: senderHash, role: 'user', status: 'active', sessionVersion: { increment: 1 } },
     })
     await tx.user.upsert({
       where: { username: receiver.username },
       create: { id: receiver.id, username: receiver.username, passwordHash: receiverHash, role: 'user', status: 'active' },
-      update: { passwordHash: receiverHash, role: 'user', status: 'active' },
+      update: { passwordHash: receiverHash, role: 'user', status: 'active', sessionVersion: { increment: 1 } },
     })
     for (const probe of [sender, receiver]) {
       await tx.personalProfile.upsert({ where: { userId: probe.id }, create: { userId: probe.id }, update: {} })

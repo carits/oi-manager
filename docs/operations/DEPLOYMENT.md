@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-09-08
+last_verified: 2026-09-12
 source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, scripts/promote-api.sh, scripts/promote-preview.sh, economy-loop migration and scheduler services
 ---
 
@@ -102,7 +102,7 @@ BASE_URL=http://127.0.0.1:3002 AUTH_TOKEN='<short-lived token>' pnpm judge:workf
 阶段。草稿题保留为发布审计证据，不出现在普通题库；不得使用真实用户题目代替
 探针题。
 
-生产 systemd 环境中的 `preview:promote` 会在 3200 候选和 3000 正式端口各执行一次双浏览器消息闭环；候选失败时不切换，正式探针失败时自动恢复 `.next-previous`。提升后核对 `.next-current/BUILD_ID` 与候选构建 ID 完全一致。Web 失败使用 `pnpm preview:rollback`，不会修改 API 指针或数据库。
+生产 systemd 环境中的 `preview:promote` 会在 3200 候选和 3000 正式端口各执行一次双浏览器消息闭环；候选失败时不切换，正式探针失败时自动恢复 `.next-previous`。提升脚本只把 mode-600 凭据文件路径交给低权限探针进程，并由进程内部加载，禁止把探针密码写入命令行参数或进程清单。提升后核对 `.next-current/BUILD_ID` 与候选构建 ID 完全一致。Web 失败使用 `pnpm preview:rollback`，不会修改 API 指针或数据库。
 
 ## 回滚
 
