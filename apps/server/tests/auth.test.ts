@@ -36,6 +36,7 @@ describe('Authentication Module', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
+      expect(res.body.data.accountRole).toBe('user')
       expect(res.body.data.token).toBeUndefined()
       expect(res.body.data.userId).toBe(user.id)
       expect(res.body.data.role).toBe('student')
@@ -137,6 +138,7 @@ describe('Authentication Module', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
       expect(res.body.data.role).toBe('school_principal')
+      expect(res.body.data.accountRole).toBe('user')
     })
 
     it('should create login log on successful login', async () => {
@@ -447,6 +449,7 @@ describe('Authentication Module', () => {
 
       expect(login.status).toBe(200)
       expect(login.body.data.role).toBe(role)
+      expect(login.body.data.accountRole).toBe('user')
       expect(login.body.data.workspaceMode).toBe('work')
 
       const switched = await agent

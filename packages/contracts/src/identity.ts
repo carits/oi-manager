@@ -19,6 +19,15 @@ export const LegacyUserRoleSchema = z.union([
 ])
 export type LegacyUserRole = z.infer<typeof LegacyUserRoleSchema>
 
+/**
+ * Converts the persisted compatibility role into the account-wide identity.
+ * Historical student/teacher/principal values describe an organization job,
+ * never an account-level privilege.
+ */
+export function accountRoleFromLegacy(role: LegacyUserRole): AccountRole {
+  return role === 'platform_admin' || role === 'super_admin' ? role : 'user'
+}
+
 export const WorkspaceContextSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('personal') }),
   z.object({ type: z.literal('platform') }),

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import type { JwtPayload, UserRole } from '@oi-manager/shared'
-import { LoginRequestSchema, LoginResponseDataSchema } from '@oi-manager/contracts'
+import { accountRoleFromLegacy, LoginRequestSchema, LoginResponseDataSchema } from '@oi-manager/contracts'
 import { authenticate } from '../middleware/auth'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
 import { getJwtSecret } from '../lib/jwtSecret'
@@ -49,7 +49,12 @@ function issueToken(res: Response, payload: JwtPayload) {
 
 authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) => {
   try {
-    const input = LoginRequestSchema.safeParse(req.body && typeof req.body === 'object' ? req.body : {})
+    const rawInput = req.body && typeof req.body === 'object' ? req.body : {}
+    if (typeof rawInput.username !== 'string' || !rawInput.username.trim()
+      || typeof rawInput.password !== 'string' || !rawInput.password) {
+      return res.status(400).json({ success: false, message: '请输入用户名和密码' })
+    }
+    const input = LoginRequestSchema.safeParse(rawInput)
     if (!input.success) {
       return res.status(400).json({ success: false, message: '用户名或密码格式无效' })
     }
@@ -78,7 +83,7 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
     })
     const responseData = LoginResponseDataSchema.parse({
       userId: result.user.id,
-      accountRole: result.user.role,
+      accountRole: accountRoleFromLegacy(result.user.role as UserRole),
       role: result.role,
       username: result.user.username,
       workspaceMode: result.workspaceMode,
@@ -130,7 +135,7 @@ authRouter.get('/me', authenticate, async (req, res) => {
       data: {
         userId: user.id,
         username: user.username,
-        accountRole: user.role,
+        accountRole: accountRoleFromLegacy(user.role as UserRole),
         role: result.isGlobalAdmin ? user.role : (membership?.memberRole || user.role),
         avatar: user.avatar,
         phone: user.phone,
