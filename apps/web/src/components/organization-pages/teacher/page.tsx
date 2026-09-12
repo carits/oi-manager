@@ -32,7 +32,7 @@ export default function TeacherPage() {
   const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1] || ''
   const principal = user?.organizationRole === 'school_principal'
   const teamResource = useResource<TeamPayload | Team[]>(`/api/teams?organizationId=${encodeURIComponent(organizationId)}&view=mine&page=1&pageSize=6`, { sessionKey, isEmpty: data => normalizeTeams(data).length === 0, dedupingInterval: 30000 })
-  const invitationResource = useResource<unknown[]>('/api/teams/admin-invitations', { sessionKey, dedupingInterval: 30000 })
+  const invitationResource = useResource<unknown[]>(`/api/teams/admin-invitations?organizationId=${encodeURIComponent(organizationId)}`, { sessionKey, dedupingInterval: 30000 })
   const assignmentResource = useResource<AssignmentPayload>(`/api/assignments?organizationId=${organizationId}&pageSize=100`, { sessionKey, dedupingInterval: 30000 })
   const joinResource = useResource<JoinPayload>(`/api/organizations/${organizationId}/join-applications?status=pending&pageSize=1`, { sessionKey, dedupingInterval: 30000 })
   const trainingResource = useResource<TrainingItem[]>(`/api/training-sessions?organizationId=${organizationId}`, { sessionKey, dedupingInterval: 30000 })

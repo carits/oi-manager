@@ -1,7 +1,6 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { TrainingDetailPage } from '@/components/training/TrainingDetailPage'
-
-export default function PersonalTeamContestDetailPage() {
-  return <TrainingDetailPage basePath="/personal/teams" />
+export default async function PersonalTeamContestDetailPage({ params }: { params: Promise<{ cid: string }> }) {
+  const { cid } = await params
+  redirect(`/personal/contests/${cid}`)
 }

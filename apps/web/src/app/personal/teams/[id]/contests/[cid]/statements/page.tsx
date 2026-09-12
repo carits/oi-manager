@@ -1,7 +1,6 @@
-'use client'
-import { useParams } from 'next/navigation'
-import { TrainingStatementManagementPage } from '@/components/training/TrainingStatementManagementPage'
-export default function PersonalContestStatementsPage() {
-  const { id, cid } = useParams<{ id: string; cid: string }>()
-  return <TrainingStatementManagementPage trainingId={cid} backPath={`/personal/teams/${id}/contests/${cid}`} />
+import { redirect } from 'next/navigation'
+
+export default async function PersonalContestStatementsPage({ params }: { params: Promise<{ cid: string }> }) {
+  const { cid } = await params
+  redirect(`/personal/contests/${cid}/statements`)
 }

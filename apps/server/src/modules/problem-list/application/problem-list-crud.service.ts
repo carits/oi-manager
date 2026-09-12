@@ -39,14 +39,21 @@ export async function listProblemLists(
   const tab = typeof query.tab === 'string' ? query.tab : 'all'
   const keyword = typeof query.keyword === 'string' ? query.keyword : ''
   const where: any = { scope }
+  const teamId = typeof query.teamId === 'string' && query.teamId ? query.teamId : null
+  if (teamId) {
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { scope: true } })
+    const member = await prisma.teamMember.findFirst({ where: { teamId, userId, status: 'active' }, select: { id: true } })
+    if (!team || team.scope !== scope || (!member && user.role !== 'super_admin')) fail(403, '无权限查看该团队题单')
+    where.TeamProblemList = { some: { teamId } }
+  }
 
-  if (tab === 'mine') where.ownerId = userId
+  if (!teamId && tab === 'mine') where.ownerId = userId
   else if (tab === 'shared') {
     where.ownerId = { not: userId }
     where.NOT = { ownerId: userId }
   }
   if (keyword) where.title = { contains: keyword }
-  if (tab !== 'mine') {
+  if (!teamId && tab !== 'mine') {
     const shared = await prisma.problemListShare.findMany({
       where: { targetType: memberType, targetId: userId || '__none__' },
       select: { problemListId: true },

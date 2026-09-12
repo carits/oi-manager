@@ -37,7 +37,7 @@ export default function TeamTrainingList({ teamId, schoolId, organizationId, bas
     {resource.state.state === 'error' && <LoadError compact message={resource.state.error.message} requestId={resource.state.error.requestId} onRetry={resource.retry} />}
     <div className={styles.toolbar}><div className={styles.summary}><strong>{label}安排</strong><span>共 {trainings.length} 场</span>{ongoingCount > 0 && <span className={styles.liveCount}>进行中 {ongoingCount}</span>}</div>{isAdmin && <div className={styles.createButton}><Button onClick={() => setShowCreateModal(true)}>创建{label}</Button></div>}</div>
     {ordered.length === 0 ? <div className={styles.empty}><strong>暂无{label}</strong><span>{isAdmin ? `可通过右上角创建新的${label}` : `当前没有可参与的${label}`}</span></div> : <div className={styles.list}>{ordered.map(training => {
-      const href = (organizationId || schoolId) && mode === 'contest'
+      const href = mode === 'contest'
         ? `${basePath}/${training.id}`
         : `${basePath}/${teamId}/${detailPath}/${training.id}`
       if (!href) return null

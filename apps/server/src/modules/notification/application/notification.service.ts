@@ -19,10 +19,12 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
   const pageSize = Math.min(50, Math.max(1, Number(query.pageSize || query.take) || 20))
   const filter = ['all', 'unread', 'actionable'].includes(String(query.filter)) ? String(query.filter) : 'all'
   const visible = visibleNotificationWhere(user)
-  const rows = await prisma.userNotification.findMany({
+  const fetchedRows = await prisma.userNotification.findMany({
     where: { ...visible, ...(filter === 'unread' ? { readAt: null } : {}) },
-    orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize,
+    orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize + 1,
   })
+  const hasMore = fetchedRows.length > pageSize
+  const rows = fetchedRows.slice(0, pageSize)
   const scope = getResourceScope(user)
   const teamInvitationIds = rows.filter(row => row.type === 'team_invitation').map(row => row.sourceId)
   const joinRequestIds = rows.filter(row => row.type === 'team_join_request').map(row => row.sourceId)
@@ -105,18 +107,22 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
   }))
   const unreadCount = await prisma.userNotification.count({ where: { ...visible, readAt: null } })
   const filteredNotifications = filter === 'actionable' ? notifications.filter(row => row.actionable) : notifications
-  return { notifications: filteredNotifications, unreadCount, page, pageSize, hasMore: rows.length === pageSize }
+  return { notifications: filteredNotifications, unreadCount, page, pageSize, hasMore }
 }
 
 export async function readNotification(user: AuthUser, id: string) {
+  const existing = await prisma.userNotification.findFirst({ where: { id, ...visibleNotificationWhere(user) }, select: { id: true } })
+  if (!existing) throw new NotificationApplicationError(404, '通知不存在')
   const result = await prisma.userNotification.updateMany({
     where: { id, ...visibleNotificationWhere(user), readAt: null }, data: { readAt: new Date() },
   })
-  if (!result.count) throw new NotificationApplicationError(404, '通知不存在')
+  const unreadCount = await prisma.userNotification.count({ where: { ...visibleNotificationWhere(user), readAt: null } })
+  return { changed: Boolean(result.count), unreadCount }
 }
 
 export async function readAllNotifications(user: AuthUser) {
-  await prisma.userNotification.updateMany({
+  const result = await prisma.userNotification.updateMany({
     where: { ...visibleNotificationWhere(user), readAt: null }, data: { readAt: new Date() },
   })
+  return { changed: result.count, unreadCount: 0 }
 }

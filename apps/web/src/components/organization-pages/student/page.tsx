@@ -5,7 +5,8 @@ import { useParams, usePathname } from 'next/navigation'
 import { ArrowRight, BookOpenCheck, ClipboardList, ListChecks, Trophy, UsersRound } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useResource } from '@/hooks/useResource'
-import { AsyncRegion } from '@/components/ui/AsyncRegion'
+import { LoadError } from '@/components/ui/LoadError'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -62,6 +63,11 @@ export default function StudentPage() {
   }))
   const pendingTasks = [...assignmentTasks, ...trainingTasks, ...contestTasks].sort((a, b) => compareDashboardTasks(a, b, now))
   const displayedTasks = pendingTasks.slice(0, 5)
+  const learningResources = [homeworkResource, trainingResource, contestResource]
+  const learningPending = learningResources.every(resource => resource.state.state === 'pending')
+  const learningAllFailed = learningResources.every(resource => resource.state.state === 'error')
+  const learningPartiallyFailed = !learningAllFailed && learningResources.some(resource => resource.state.state === 'error')
+  const retryLearningFeed = () => { void homeworkResource.retry(); void trainingResource.retry(); void contestResource.retry() }
   const assignmentPendingCount = homeworkResource.data?.statusCounts
     ? ['SCHEDULED', 'OPEN', 'OVERDUE'].reduce((sum, status) => sum + (homeworkResource.data?.statusCounts?.[status] || 0), 0)
     : assignmentTasks.length
@@ -80,14 +86,15 @@ export default function StudentPage() {
       <div className={styles.metricGrid}>
         <div className={styles.metric}><p className={styles.metricLabel}>进行中的作业</p><p className={styles.metricValue}>{activeCount}</p><p className={styles.metricHint}>优先处理临近截止的任务</p></div>
         <div className={styles.metric}><p className={styles.metricLabel}>待完成任务</p><p className={styles.metricValue}>{pendingTaskCountDisplay}</p><p className={styles.metricHint}>包含作业、训练和比赛</p></div>
-        <div className={styles.metric}><p className={styles.metricLabel}>最近提交</p><p className={styles.metricValue}>{submissionResource.data?.total ?? '—'}</p><p className={styles.metricHint}>当前模式下的评测记录</p></div>
+        <div className={styles.metric}><p className={styles.metricLabel}>提交总数</p><p className={styles.metricValue}>{submissionResource.data?.total ?? '—'}</p><p className={styles.metricHint}>当前范围内的全部评测记录</p></div>
       </div>
 
       <div className={styles.dashboardGrid}>
         <section className={styles.section}>
-          <div className={styles.sectionHeader}><h2 className={styles.sectionTitle}>近期学习安排</h2><Link className={styles.sectionLink} href={pathPrefix + '/homeworks'}>查看全部作业<ArrowRight size={14} /></Link></div>
-          <AsyncRegion state={homeworkResource.state} onRetry={homeworkResource.retry} emptyText="当前没有作业" skeletonRows={4}>
-            {() => displayedTasks.length > 0 ? (
+          <div className={styles.sectionHeader}><h2 className={styles.sectionTitle}>近期学习安排</h2><span className={styles.sectionHint}><Link href={pathPrefix + '/homeworks'}>作业</Link> · <Link href={pathPrefix + '/training-sessions'}>训练</Link> · <Link href={pathPrefix + '/contests'}>比赛</Link></span></div>
+          {learningPending ? <SkeletonRegion rows={4} /> : learningAllFailed ? <LoadError message="学习安排暂时无法加载" onRetry={retryLearningFeed} /> : <>
+            {learningPartiallyFailed && <LoadError compact message="部分学习任务暂时无法加载" onRetry={retryLearningFeed} />}
+            {displayedTasks.length > 0 ? (
               <div className={styles.list}>
                 {displayedTasks.map(task => {
                   const label = task.type === 'assignment' ? taskStatus(homeworks.find(item => `assignment-${item.id}` === task.id)!).label : task.actionLabel
@@ -96,7 +103,7 @@ export default function StudentPage() {
                 })}
               </div>
             ) : <div className={styles.inlineEmpty}>当前没有待处理任务</div>}
-          </AsyncRegion>
+          </>}
         </section>
 
         <section className={styles.section}>

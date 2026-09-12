@@ -43,10 +43,12 @@ describe('human UX productization contract', () => {
   it('keeps the sidebar account footer account-only and uses human workspace roles', () => {
     const shell = read('./AppShell.tsx')
     const switcher = read('./workspace/WorkspaceSwitcher.tsx')
+    const routing = read('./workspace/workspaceRouting.ts')
     expect(shell).toContain("isPersonal ? '个人账号' : `@${user.username}`")
     expect(shell).toContain('sidebarOpen ? <PanelLeftClose')
-    expect(switcher).toContain("label === '本校学生'")
-    expect(switcher).toContain("return '学生'")
+    expect(switcher).toContain('workspaceRoleLabel')
+    expect(routing).toContain("label === '本校学生'")
+    expect(routing).toContain("return '学生'")
   })
 
   it('treats a team as an activity container instead of another workspace', () => {
@@ -79,7 +81,24 @@ describe('human UX productization contract', () => {
     expect(source).toContain('contestTasks')
     expect(source).toContain('displayedTasks = pendingTasks.slice(0, 5)')
     expect(source).toContain('pendingTaskCount')
+    expect(source).toContain('learningAllFailed')
+    expect(source).toContain('部分学习任务暂时无法加载')
+    expect(source).toContain('提交总数')
     expect(source).not.toContain('>{nextTasks.length}</p>')
+  })
+
+  it('makes school training targets explicit and keeps team navigation canonical', () => {
+    const training = read('./training-engine/TrainingSessionListPage.tsx')
+    const contests = read('./organization-pages/teacher/contests/page.tsx')
+    const activities = read('./team/TeamActivityOverview.tsx')
+    expect(training).toContain('团队（推荐）')
+    expect(training).toContain('自定义学生')
+    expect(training).toContain('全校学生')
+    expect(training).toContain("searchParams.get('teamId')")
+    expect(contests).toContain("searchParams.get('teamId')")
+    expect(contests).toContain('basePath={pathPrefix}')
+    expect(activities).toContain("item.kind === 'training' ? '训练'")
+    expect(activities).not.toContain("item.kind === 'training' ? '教练训练'")
   })
 
   it('uses an inline submission workbench and merges personal solutions', () => {

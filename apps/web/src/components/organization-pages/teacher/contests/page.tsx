@@ -29,9 +29,10 @@ export default function TeacherContestsPage() {
   const resource = useResource<TeamPayload | Team[]>(teamEndpoint, { sessionKey, isEmpty: data => normalizeTeams(data).length === 0 && !organizationId, dedupingInterval: 30000 })
   const teams = normalizeTeams(resource.data)
   const scopeOptions = [...(organizationId ? [{ value: 'organization:' + organizationId, label: '校级比赛' }] : []), ...teams.map(team => ({ value: 'team:' + team.id, label: team.name }))]
-  const requestedScope = searchParams.get('scope')
+  const requestedTeamId = searchParams.get('teamId')
+  const requestedScope = requestedTeamId ? `team:${requestedTeamId}` : searchParams.get('scope')
   const activeScope = scopeOptions.some(option => option.value === requestedScope) ? requestedScope! : scopeOptions[0]?.value
-  const setScope = (scope: string) => { const params = new URLSearchParams(searchParams.toString()); params.set('scope', scope); router.replace(pathPrefix + '/contests?' + params, { scroll: false }) }
+  const setScope = (scope: string) => { const params = new URLSearchParams(searchParams.toString()); params.delete('scope'); const [type, id] = scope.split(':'); type === 'team' ? params.set('teamId', id) : params.delete('teamId'); router.replace(pathPrefix + '/contests?' + params, { scroll: false }) }
   const [scopeType, scopeId] = activeScope?.split(':') || []
 
   return (
@@ -40,7 +41,7 @@ export default function TeacherContestsPage() {
       <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText='暂无可管理的比赛范围' skeletonRows={5}>
         {() => <>
           <Toolbar><ToolbarGroup><label htmlFor='contest-scope' className={styles.summary}>比赛范围</label><Select id='contest-scope' className={styles.scopeSelect} value={activeScope} onChange={event => setScope(event.target.value)}>{scopeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></ToolbarGroup><span className={styles.summary}>不同范围的数据彼此独立</span></Toolbar>
-          {scopeType === 'organization' && scopeId ? <TeamTrainingList organizationId={scopeId} basePath={pathPrefix} isAdmin mode='contest' /> : scopeType === 'team' && scopeId ? <TeamTrainingList teamId={scopeId} basePath={pathPrefix + '/teams'} isAdmin mode='contest' /> : null}
+          {scopeType === 'organization' && scopeId ? <TeamTrainingList organizationId={scopeId} basePath={pathPrefix} isAdmin mode='contest' /> : scopeType === 'team' && scopeId ? <TeamTrainingList teamId={scopeId} basePath={pathPrefix} isAdmin mode='contest' /> : null}
         </>}
       </AsyncRegion>
     </PageFrame>

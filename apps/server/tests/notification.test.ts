@@ -49,8 +49,25 @@ describe('notification application service', () => {
       .patch(`/api/notifications/${notification.id}/read`)
       .set('Authorization', `Bearer ${token}`)
     expect(marked.status).toBe(200)
+    expect(marked.body.data).toMatchObject({ changed: true, unreadCount: 0 })
+    const repeated = await request(app).patch(`/api/notifications/${notification.id}/read`).set('Authorization', `Bearer ${token}`)
+    expect(repeated.status).toBe(200)
+    expect(repeated.body.data).toMatchObject({ changed: false, unreadCount: 0 })
     const row = await prisma.userNotification.findUnique({ where: { id: notification.id } })
     expect(row?.readAt).not.toBeNull()
+  })
+
+  it('returns an authoritative pagination cursor beyond the first 50 notifications', async () => {
+    await prisma.userNotification.createMany({ data: Array.from({ length: 51 }, (_, index) => ({
+      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', type: 'info',
+      title: `通知 ${index}`, body: '通知正文', sourceType: 'pagination', sourceId: crypto.randomUUID(),
+    })) })
+    const first = await createAuthenticatedRequest(app, token).get('/api/notifications?page=1&pageSize=50')
+    const second = await createAuthenticatedRequest(app, token).get('/api/notifications?page=2&pageSize=50')
+    expect(first.body.data.notifications).toHaveLength(50)
+    expect(first.body.data.hasMore).toBe(true)
+    expect(second.body.data.notifications).toHaveLength(1)
+    expect(second.body.data.hasMore).toBe(false)
   })
 
   it('read-all includes account notifications visible in the current workspace', async () => {

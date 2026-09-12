@@ -116,8 +116,13 @@ teamInvitationsRouter.get('/admin-invitations', authenticate, asyncHandler(async
   const userId = user.userId
   const userType = getMembershipType(user)
   const scope = teamService.getScopeForUser(user)
+  const organizationId = typeof req.query.organizationId === 'string' && req.query.organizationId ? req.query.organizationId : undefined
+  if (organizationId) {
+    const hasMembership = await teamRepository.hasActiveOrganizationMembership(userId, organizationId)
+    if (!hasMembership) return res.status(403).json({ success: false, message: '无权查看该学校的团队邀请' })
+  }
 
-  const invitations = await teamRepository.findUserAdminInvites(userId, userType as MemberType, scope)
+  const invitations = await teamRepository.findUserAdminInvites(userId, userType as MemberType, scope, organizationId)
 
   const invitationsWithOwner = await Promise.all(
     invitations.map(async (invite) => {

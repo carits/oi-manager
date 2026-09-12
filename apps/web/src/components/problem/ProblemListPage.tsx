@@ -42,15 +42,18 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   const pathPrefix = currentWorkspacePrefix(pathname, user?.role === 'platform_admin' ? '/platform-admin' : '/personal')
   const activeTab: 'mine' | 'shared' = searchParams.get('tab') === 'shared' ? 'shared' : 'mine'
   const keyword = searchParams.get('keyword') || ''
+  const teamId = searchParams.get('teamId') || ''
   const [searchInput, setSearchInput] = useState(keyword)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const query = new URLSearchParams({ tab: activeTab, pageSize: '50' })
   if (keyword) query.set('keyword', keyword)
+  if (teamId) query.set('teamId', teamId)
   const resource = useResource<ProblemListPayload>(`/api/problem-lists?${query}`, { sessionKey, isEmpty: data => (data.lists || []).length === 0, dedupingInterval: 15000 })
   const lists = resource.data?.lists || []
 
   const updateLocation = (tab: 'mine' | 'shared', nextKeyword = keyword) => {
     const params = new URLSearchParams()
+    if (teamId) params.set('teamId', teamId)
     if (tab === 'shared') params.set('tab', tab)
     if (nextKeyword.trim()) params.set('keyword', nextKeyword.trim())
     router.replace(`${pathPrefix}/problem-lists${params.size ? `?${params}` : ''}`, { scroll: false })
@@ -68,7 +71,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
 
   return (
     <PageFrame>
-      <PageHeader title="题单" description="集中组织题目，并按需要共享或发布。" actions={newAction} />
+      <PageHeader title="题单" description={teamId ? '仅显示当前团队使用的题单。' : '集中组织题目，并按需要共享或发布。'} actions={newAction} />
       <Toolbar>
         <ToolbarGroup>
           <Input className={styles.search} value={searchInput} onChange={event => setSearchInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') updateLocation(activeTab, searchInput) }} placeholder="按名称搜索题单" aria-label="搜索题单" />
@@ -76,7 +79,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
         </ToolbarGroup>
         {keyword && <Button variant="text" onClick={() => { setSearchInput(''); updateLocation(activeTab, '') }}>清除搜索</Button>}
       </Toolbar>
-      <Tabs label="题单范围" value={activeTab} onChange={tab => updateLocation(tab)} items={[{ value: 'mine', label: '我的题单' }, { value: 'shared', label: '共享给我' }]} />
+      {!teamId && <Tabs label="题单范围" value={activeTab} onChange={tab => updateLocation(tab)} items={[{ value: 'mine', label: '我的题单' }, { value: 'shared', label: '共享给我' }]} />}
       <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText={activeTab === 'mine' ? '暂无题单' : '暂无共享题单'} skeletonRows={6}>
         {(_, refreshing) => displayMode === 'card' ? (
           <div className={styles.cardGrid} aria-busy={refreshing || undefined}>

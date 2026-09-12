@@ -124,7 +124,10 @@ function normalizeSessionSettings(value: unknown, scheduledStartAt: Date | null)
   const requiredProblemCount = completionMode === 'count'
     ? boundedInteger(source.requiredProblemCount, 1, 100, '至少完成题数', false)
     : null
-  return { productMode, dueAt: dueAt?.toISOString() || null, completionMode, requiredProblemCount }
+  const participantTarget = ['team', 'organization_students', 'custom_students'].includes(String(source.participantTarget))
+    ? String(source.participantTarget)
+    : undefined
+  return { productMode, dueAt: dueAt?.toISOString() || null, completionMode, requiredProblemCount, participantTarget }
 }
 
 export async function loadSession(id: string) {
@@ -257,11 +260,29 @@ export async function createTrainingSession(userId: string, body: any) {
   const joinMode = enumValue(body?.joinMode, JOIN_MODES, 'CURRENT_STAGE', '迟到加入方式')
   const scheduledStartAt = optionalDate(body?.scheduledStartAt, '计划开始时间')
   const settings = normalizeSessionSettings(body?.settings, scheduledStartAt)
+  if (scope.organizationId && settings?.participantTarget === 'organization_students') {
+    const [membership, creator] = await Promise.all([
+      prisma.organizationMembership.findFirst({ where: { organizationId: scope.organizationId, userId, status: 'active' }, select: { memberRole: true } }),
+      globalRole(userId),
+    ])
+    if (membership?.memberRole !== 'school_principal' && creator?.role !== 'super_admin') throw new TrainingEngineError(403, 'TRAINING_SCHOOL_WIDE_FORBIDDEN', '只有学校负责人可以创建全校学生训练')
+  }
+  if (scope.organizationId && settings?.participantTarget === 'organization_students') {
+    const principal = await prisma.organizationMembership.findFirst({ where: { organizationId: scope.organizationId, userId, status: 'active', memberRole: 'school_principal' }, select: { id: true } })
+    if (!principal) throw new TrainingEngineError(403, 'TRAINING_SCHOOL_WIDE_FORBIDDEN', '只有学校负责人可以创建全校学生训练')
+  }
   const rawStages = Array.isArray(body?.stages) && body.stages.length ? body.stages : template?.stages || [{ name: '自由训练', mode: 'FREE', advanceMode: 'MANUAL', problems: [] }]
   const stages = rawStages.map((stage: StructureStage) => ({ ...stage, problemAccessMode: stage.problemAccessMode || defaultProblemAccessMode, submissionMode: stage.submissionMode || defaultSubmissionMode }))
   const hydrated = await hydrateStages(stages, await problemAccessContext(userId, scope.organizationId, scope.teamId))
   const title = boundedText(body?.title, 200, '训练名称', 1)
   const id = crypto.randomUUID()
+  const requestedParticipantIds = [...new Set<string>((Array.isArray(body?.participantUserIds) ? body.participantUserIds : []).map(String).filter(Boolean))]
+  if (requestedParticipantIds.length > 5000) throw new TrainingEngineError(422, 'TRAINING_ROSTER_TOO_LARGE', '学员数量超过上限')
+  if (settings?.participantTarget === 'custom_students' && !requestedParticipantIds.length) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_REQUIRED', '自定义学生范围至少选择一名学生')
+  if (requestedParticipantIds.length) {
+    const eligible = new Set(await eligibleParticipantIds(scope))
+    if (requestedParticipantIds.some(participantId => !eligible.has(participantId))) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_OUT_OF_SCOPE', '名单中包含不属于当前训练范围的学生')
+  }
   await prisma.$transaction(async tx => {
     await tx.trainingSession.create({ data: {
       id, title, description: body?.description ? boundedText(body.description, 5000, '训练说明') : null,
@@ -270,13 +291,14 @@ export async function createTrainingSession(userId: string, body: any) {
       defaultProblemAccessMode: defaultProblemAccessMode as any, defaultSubmissionMode: defaultSubmissionMode as any,
       allowHints: body?.allowHints !== false, allowSolution: Boolean(body?.allowSolution), allowDiscussion: Boolean(body?.allowDiscussion),
       rankingMode: rankingMode as any, peerVisibility: peerVisibility as any, joinMode: joinMode as any,
-      settings: asJson(settings),
+      settings: asJson(requestedParticipantIds.length ? { ...settings, rosterExplicit: true } : settings),
     } })
     // Reuse the validated structure without trusting client-side snapshots.
     for (const entry of hydrated) {
       const stage = await tx.trainingSessionStage.create({ data: { sessionId: id, name: entry.name, description: entry.stage.description?.trim() || null, orderIndex: entry.stageIndex, mode: (entry.stage.mode || 'FREE') as any, durationSeconds: boundedInteger(entry.stage.durationSeconds, 60, 86400, '阶段时长'), advanceMode: (entry.stage.advanceMode || 'MANUAL') as any, problemAccessMode: (entry.stage.problemAccessMode || 'STAGE_ONLY') as any, submissionMode: (entry.stage.submissionMode || 'ENABLED') as any, targetScore: boundedInteger(entry.stage.targetScore, 0, 100, '目标分数'), completionThreshold: boundedInteger(entry.stage.completionThreshold, 1, 100, '完成比例'), minDurationSeconds: boundedInteger(entry.stage.minDurationSeconds, 0, 86400, '最短阶段时长'), rules: asJson(entry.stage.rules) } })
       for (const item of entry.stageProblems) await tx.trainingSessionStageProblem.create({ data: { stageId: stage.id, problemId: item.problem.id, testSetRevisionId: item.revision.id, alias: item.item.alias?.trim() || null, orderIndex: item.problemIndex, unlockPolicy: asJson(item.item.unlockPolicy), targetScore: boundedInteger(item.item.targetScore, 0, 100, '题目目标分数'), timeLimitSeconds: boundedInteger(item.item.timeLimitSeconds, 60, 86400, '题目训练时长'), hintPolicy: asJson(item.item.hintPolicy), judgeConfigProjection: item.projection, allowedSubtaskIds: item.allowedSubtaskIds.length ? item.allowedSubtaskIds : undefined, strategyIntervalSeconds: boundedInteger(item.item.strategyIntervalSeconds, 60, 86400, '策略检查间隔'), maxContinuousWorkSeconds: boundedInteger(item.item.maxContinuousWorkSeconds, 60, 86400, '最长连续做题时间'), forceSwitchOnTimeout: Boolean(item.item.forceSwitchOnTimeout) } })
     }
+    for (const participantUserId of requestedParticipantIds) await tx.trainingSessionParticipant.create({ data: { sessionId: id, userId: participantUserId } })
   })
   return loadSession(id)
 }
@@ -416,8 +438,8 @@ export async function replaceTrainingStructure(userId: string, sessionId: string
 }
 
 async function eligibleParticipantIds(session: { organizationId: string | null; teamId: string | null }) {
-  if (session.teamId) return (await prisma.teamMember.findMany({ where: { teamId: session.teamId, status: 'active' }, select: { userId: true } })).map(item => item.userId)
-  if (session.organizationId) return (await prisma.organizationMembership.findMany({ where: { organizationId: session.organizationId, status: 'active' }, select: { userId: true } })).map(item => item.userId)
+  if (session.teamId) return (await prisma.teamMember.findMany({ where: { teamId: session.teamId, status: 'active', userType: 'student' }, select: { userId: true } })).map(item => item.userId)
+  if (session.organizationId) return (await prisma.organizationMembership.findMany({ where: { organizationId: session.organizationId, status: 'active', memberRole: 'student' }, select: { userId: true } })).map(item => item.userId)
   return []
 }
 
@@ -437,7 +459,7 @@ export async function publishTrainingSession(userId: string, sessionId: string, 
   await prisma.$transaction(async tx => {
     const claimed = await tx.trainingSession.updateMany({ where: { id: sessionId, status: 'DRAFT', statusRevision: expectedRevision }, data: { status: 'SCHEDULED', statusRevision: { increment: 1 }, currentStageId: session.Stages[0].id } })
     if (!claimed.count) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练已被其他管理员修改，请刷新')
-    for (const participantUserId of [...new Set(userIds)]) await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active' }, create: { sessionId, userId: participantUserId, currentStageId: session.Stages[0].id } })
+    for (const participantUserId of [...new Set(userIds)]) await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active', currentStageId: session.Stages[0].id }, create: { sessionId, userId: participantUserId, currentStageId: session.Stages[0].id } })
     await appendEvent(tx, sessionId, 'training.session.scheduled', 'ALL', null, { scheduledStartAt: session.scheduledStartAt })
   })
   return loadSession(sessionId)
@@ -561,7 +583,7 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
 export async function joinTrainingSession(userId: string, sessionId: string) {
   const session = await loadSession(sessionId)
   if (!session || session.status === 'DRAFT' || session.status === 'ENDED' || session.status === 'ARCHIVED') throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不可加入')
-  const eligible = session.teamId ? await isTeamMember(userId, session.teamId) : session.organizationId ? await isOrganizationMember(userId, session.organizationId) : false
+  const eligible = new Set(await eligibleParticipantIds(session)).has(userId)
   if (!eligible) throw new TrainingEngineError(403, 'TRAINING_SESSION_FORBIDDEN', '不在该训练的成员范围内')
   const existing = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
   if (existing?.status === 'active') return existing
@@ -688,8 +710,8 @@ export async function replaceTrainingRoster(userId: string, sessionId: string, b
 export async function getTrainingRoster(userId: string, sessionId: string) {
   const session = await assertManage(userId, sessionId)
   const eligible = session.teamId
-    ? await prisma.teamMember.findMany({ where: { teamId: session.teamId, status: 'active' }, include: { User: { select: { id: true, username: true, avatar: true } } }, orderBy: { joinedAt: 'asc' } })
-    : await prisma.organizationMembership.findMany({ where: { organizationId: session.organizationId!, status: 'active' }, include: { User: { select: { id: true, username: true, avatar: true } }, StudentProfile: { select: { name: true } }, TeacherProfile: { select: { name: true } } }, orderBy: { createdAt: 'asc' } })
+    ? await prisma.teamMember.findMany({ where: { teamId: session.teamId, status: 'active', userType: 'student' }, include: { User: { select: { id: true, username: true, avatar: true } } }, orderBy: { joinedAt: 'asc' } })
+    : await prisma.organizationMembership.findMany({ where: { organizationId: session.organizationId!, status: 'active', memberRole: 'student' }, include: { User: { select: { id: true, username: true, avatar: true } }, StudentProfile: { select: { name: true } }, TeacherProfile: { select: { name: true } } }, orderBy: { createdAt: 'asc' } })
   const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId }, select: { userId: true, status: true, groupId: true } })
   const byUser = new Map(participants.map(item => [item.userId, item]))
   return {

@@ -351,7 +351,7 @@ export class TeamRepository {
    * 查找用户收到的管理员邀请（role=admin, status=pending, invitedBy不为空）
    * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
-  async findUserAdminInvites(userId: string, userType: MemberType, scope?: TeamScope) {
+  async findUserAdminInvites(userId: string, userType: MemberType, scope?: TeamScope, organizationId?: string) {
     return prisma.teamMember.findMany({
       where: {
         userId,
@@ -359,10 +359,18 @@ export class TeamRepository {
         role: 'admin',
         status: 'pending',
         invitedBy: { not: null },
-        ...(scope && { Team: { scope } })
+        ...((scope || organizationId) && { Team: { ...(scope ? { scope } : {}), ...(organizationId ? { organizationId } : {}) } })
       },
       orderBy: { joinedAt: 'desc' }
     })
+  }
+
+  async hasActiveOrganizationMembership(userId: string, organizationId: string) {
+    const membership = await prisma.organizationMembership.findFirst({
+      where: { organizationId, userId, status: 'active' },
+      select: { id: true }
+    })
+    return Boolean(membership)
   }
 
   /**

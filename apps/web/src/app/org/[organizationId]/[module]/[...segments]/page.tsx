@@ -1,6 +1,7 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { TeamDetailPage } from '@/components/team/TeamDetailPage'
 import { TrainingDetailPage } from '@/components/training/TrainingDetailPage'
@@ -19,17 +20,24 @@ import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
 export default function OrganizationResourcePage() {
   const { organizationId, module, segments } = useParams<{ organizationId: string; module: string; segments: string[] }>()
   const { user } = useAuth()
+  const router = useRouter()
   const parts = segments || []
   const prefix = `/org/${organizationId}`
   const userType = user?.organizationRole === 'student' ? 'student' : 'teacher'
+  const legacyTeamContestId = module === 'teams' && parts.length >= 3 && parts[1] === 'contests' ? parts[2] : null
+  useEffect(() => {
+    if (legacyTeamContestId) router.replace(`${prefix}/contests/${legacyTeamContestId}${parts[3] === 'statements' ? '/statements' : ''}`)
+  }, [legacyTeamContestId, parts[3], prefix, router])
+
+  if (legacyTeamContestId) return <ContextualRecovery title="正在打开比赛" description="比赛详情已统一到学校比赛页面。" />
 
   if (module === 'teams' && parts.length === 1) {
     return <TeamDetailPage userType={userType} basePath={`${prefix}/teams`} requiredRole={['teacher', 'school_principal', 'student']} teamIdOverride={parts[0]} />
   }
-  if (module === 'teams' && parts.length === 3 && ['contests', 'trainings', 'homeworks'].includes(parts[1])) {
+  if (module === 'teams' && parts.length === 3 && ['trainings', 'homeworks'].includes(parts[1])) {
     return <TrainingDetailPage basePath={`${prefix}/teams`} trainingIdOverride={parts[2]} />
   }
-  if (module === 'teams' && parts.length === 4 && ['contests', 'trainings', 'homeworks'].includes(parts[1]) && parts[3] === 'statements') {
+  if (module === 'teams' && parts.length === 4 && ['trainings', 'homeworks'].includes(parts[1]) && parts[3] === 'statements') {
     return <TrainingStatementManagementPage trainingId={parts[2]} backPath={`${prefix}/teams/${parts[0]}/${parts[1]}/${parts[2]}`} />
   }
   if ((module === 'contests' || module === 'homeworks') && parts.length === 2 && parts[1] === 'statements') {

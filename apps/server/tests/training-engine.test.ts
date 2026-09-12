@@ -79,6 +79,26 @@ describe('independent coach-directed training engine', () => {
     expect(await prisma.trainingSessionEvent.count({ where: { sessionId: ended.id, type: 'training.session.ended' } })).toBe(1)
   })
 
+  it('limits school-wide and custom rosters to active students', async () => {
+    const school = await prisma.school.findUniqueOrThrow({ where: { id: coach.schoolId! } })
+    const token = generateTokenFromUser(coach.user)
+    const body = {
+      title: '学校学生训练', organizationId: school.organizationId,
+      stages: [{ name: '训练任务', mode: 'FREE', advanceMode: 'MANUAL', problemAccessMode: 'ALL', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }] }],
+    }
+    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send(body)
+    expect(created.status).toBe(201)
+    const published = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.body.data.id}/publish`).send({ expectedRevision: 0 })
+    expect(published.status).toBe(200)
+    const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId: created.body.data.id }, select: { userId: true } })
+    expect(participants.map(item => item.userId)).toContain(student.user.id)
+    expect(participants.map(item => item.userId)).not.toContain(coach.user.id)
+
+    const invalidCustom = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({ ...body, title: '非法自定义名单', participantUserIds: [coach.user.id], settings: { productMode: 'coach', participantTarget: 'custom_students' } })
+    expect(invalidCustom.status).toBe(422)
+    expect(invalidCustom.body.code).toBe('TRAINING_PARTICIPANT_OUT_OF_SCOPE')
+  })
+
   it('lists school and school-team training with human card facts', async () => {
     const school = await prisma.school.findUniqueOrThrow({ where: { id: coach.schoolId! } })
     const campusTeam = await createTestTeam({ schoolId: school.id, scope: 'campus', ownerId: coach.user.id, ownerType: 'teacher', name: '提高组' })
