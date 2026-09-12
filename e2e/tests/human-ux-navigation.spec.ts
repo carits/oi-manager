@@ -61,6 +61,37 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     await teacherContext.close()
   })
 
+  test('contest creation exposes all five decisions before the final write', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: accounts.principal.storageState })
+    const page = await context.newPage()
+    await page.goto(`${organizationBase}/contests`)
+    await page.getByRole('button', { name: '创建比赛' }).click()
+
+    const createDialog = page.getByRole('dialog', { name: '创建比赛' })
+    await expect(createDialog.getByRole('button', { name: '1. 基本信息' })).toHaveAttribute('aria-current', 'step')
+    await page.getByPlaceholder('比赛名称').fill('五步向导浏览器验收')
+    await createDialog.getByRole('button', { name: '下一步' }).click()
+
+    await expect(createDialog.getByLabel('比赛赛制')).toBeVisible()
+    await expect(createDialog.getByLabel('Rating 范围')).toHaveValue('NONE')
+    await createDialog.getByRole('button', { name: '下一步' }).click()
+
+    await createDialog.getByRole('button', { name: '选择题目' }).click()
+    const picker = page.getByRole('dialog', { name: '选择比赛题目' })
+    await expect(picker.getByRole('tab', { name: '校内题库' })).toBeVisible()
+    await picker.getByRole('button', { name: '加入比赛' }).first().click()
+    await picker.getByRole('button', { name: '关闭对话框' }).click()
+    await expect(createDialog.locator('[aria-label="已选比赛题目"]')).toBeVisible()
+    await createDialog.getByRole('button', { name: '下一步' }).click()
+
+    await expect(createDialog.getByText('题目来源显示')).toBeVisible()
+    await expect(createDialog.getByText('题解显示')).toBeVisible()
+    await createDialog.getByRole('button', { name: '下一步' }).click()
+    await expect(createDialog.getByRole('heading', { name: '发布前检查' })).toBeVisible()
+    await expect(createDialog.getByText(/创建时固定各题当前评测数据版本/)).toBeVisible()
+    await context.close()
+  })
+
   test('unknown and forbidden organization routes explain the problem without changing location', async ({ browser }) => {
     const teacherContext = await browser.newContext({ storageState: accounts.teacher.storageState })
     const teacherPage = await teacherContext.newPage()

@@ -38,11 +38,12 @@ describe('contest Rating workspace contract', () => {
     expect(source).toContain('disabled={!selectedOrganizationId}')
   })
 
-  it('keeps ordinary contest creation short and moves Rating into advanced settings', () => {
+  it('guides contest creation through explicit rating and visibility steps', () => {
     const source = fs.readFileSync(new URL('./TrainingFormModal.tsx', import.meta.url), 'utf8')
 
-    expect(source).toContain("['基本信息', '题目', '确认发布']")
-    expect(source).toContain('高级比赛设置')
+    expect(source).toContain("['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']")
+    expect(source).toContain('比赛赛制')
+    expect(source).toContain('Rating 范围')
     expect(source).toContain('选择比赛题目')
     expect(source).toContain('Carits 平台题库')
     expect(source).toContain('其他题库')

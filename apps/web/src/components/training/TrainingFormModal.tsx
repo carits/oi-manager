@@ -102,7 +102,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [ratingLocked, setRatingLocked] = useState(false)
   const [allowedRatingScopes, setAllowedRatingScopes] = useState<Array<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>>(['NONE'])
   const [wizardStep, setWizardStep] = useState(0)
-  const [advancedContestSettings, setAdvancedContestSettings] = useState(false)
   const [problemPickerOpen, setProblemPickerOpen] = useState(false)
   const [problemSource, setProblemSource] = useState<'school' | 'carits' | 'external'>(organizationId ? 'school' : 'carits')
   const [problemQuery, setProblemQuery] = useState('')
@@ -126,7 +125,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     setWizardStep(0)
     setRecoveryTrainingId(null)
     setRecoveryMessage('')
-    setAdvancedContestSettings(false)
     setProblemPickerOpen(false)
     setProblemQuery('')
     setProblemSource(organizationId ? 'school' : 'carits')
@@ -141,7 +139,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             const t = infoRes.data as any
             setTitle(t.title)
             setDescription(t.description || '')
-            setFormat(t.format as 'ioi' | 'icpc')
+            setFormat(t.format as 'oi' | 'ioi' | 'icpc')
             setProblemIdVisible(t.problemIdVisible ?? false)
             setSolutionVisible(t.solutionVisible ?? false)
             setIncludeAdminInRanking(t.includeAdminInRanking ?? false)
@@ -625,7 +623,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       if (!isEdit && createdTrainingId) {
         setRecoveryTrainingId(createdTrainingId)
         setRecoveryMessage(message)
-        setWizardStep(2)
+        setWizardStep(4)
         toast.error('比赛草稿已经创建，但后续配置未完成，请进入草稿继续处理')
       } else {
         toast.error(message)
@@ -640,10 +638,20 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     fontSize: '0.875rem', boxSizing: 'border-box',
   }
   const contestWizard = mode === 'contest'
-  const wizardSteps = ['基本信息', '题目', '确认发布']
+  const wizardSteps = ['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']
+  const ratingConfigurationValid = ratingScope === 'NONE' || (
+    Number.isFinite(Number(ratingWeight))
+    && Number(ratingWeight) >= 0.1
+    && Number(ratingWeight) <= 1
+    && Number(organizationRatingMinimum) >= 2
+    && Number(globalRatingMinimum) >= 2
+    && allowedRatingScopes.includes(ratingScope)
+  )
   const canAdvance = wizardStep === 0
-    ? Boolean(title.trim() && startTime && endTime && new Date(endTime) > new Date(startTime) && format)
+    ? Boolean(title.trim() && startTime && endTime && new Date(endTime) > new Date(startTime))
     : wizardStep === 1
+      ? Boolean(format && ratingConfigurationValid)
+      : wizardStep === 2
       ? problemRows.length > 0 && problemRows.every(row => row.resolved?.found)
       : true
   const contestValidationIssues = contestWizard ? [
@@ -685,8 +693,16 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
               <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={mode === 'contest' ? '比赛名称' : mode === 'homework' ? '作业名称' : '训练名称'} style={inputStyle} />
             </div>}
 
-            {mode === 'contest' && wizardStep === 0 && advancedContestSettings && (
+            {mode === 'contest' && wizardStep === 1 && (
               <div className={unifiedStyles.u6}>
+                <div>
+                  <label className={unifiedStyles.u5}>赛制</label>
+                  <Select aria-label="比赛赛制" value={format} disabled={ratingLocked} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
+                    <option value="ioi">IOI（即时反馈 + 部分分）</option>
+                    <option value="icpc">ICPC（即时反馈 + AC / 罚时）</option>
+                    <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
+                  </Select>
+                </div>
                 <div>
                   <label className={unifiedStyles.u5}>Rating 范围</label>
                   <Select aria-label="Rating 范围" value={ratingScope} disabled={ratingLocked} onChange={event => setRatingScope(event.target.value as typeof ratingScope)} style={inputStyle}>
@@ -720,14 +736,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             </div>}
 
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u6}>
-              <div>
+              {!contestWizard && <div>
                 <label className={unifiedStyles.u5}>赛制</label>
                 <Select aria-label="选择" value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
                   <option value="ioi">IOI（即时反馈+部分分）</option>
                   <option value="icpc">ICPC（即时反馈+AC/罚时）</option>
                   <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
                 </Select>
-              </div>
+              </div>}
               {(!contestWizard || wizardStep === 0) && <div>
                 <label className={unifiedStyles.u5}>开始时间 *</label>
                 <Input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
@@ -738,10 +754,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
               </div>}
             </div>}
 
-            {contestWizard && wizardStep === 0 && <Button variant="secondary" aria-expanded={advancedContestSettings} onClick={() => setAdvancedContestSettings(value => !value)}>{advancedContestSettings ? '收起高级比赛设置' : '高级比赛设置'}</Button>}
-
             {/* 可见性设置 */}
-            {(!contestWizard || (wizardStep === 0 && advancedContestSettings)) && <div className={unifiedStyles.u6}>
+            {(!contestWizard || wizardStep === 3) && <div className={unifiedStyles.u6}>
               <div>
                 <label className={unifiedStyles.u5}>题目来源显示</label>
                 <Select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
@@ -766,7 +780,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             </div>}
 
             {/* Problems */}
-            {(!contestWizard || wizardStep === 1) && <div className={unifiedStyles.u10}>
+            {(!contestWizard || wizardStep === 2) && <div className={unifiedStyles.u10}>
               <div className={unifiedStyles.sectionHeading}><h3 className={unifiedStyles.u11}>{mode === 'contest' ? '比赛题目' : '题目列表'}</h3><div className={unifiedStyles.headingActions}>{contestWizard && <Button onClick={() => setProblemPickerOpen(true)}>选择题目</Button>}<Button variant="secondary" onClick={addProblemRow}>{contestWizard ? '按 OJ 题号快速添加' : '添加一道题目'}</Button></div></div>
 
               {problemRows.length > 0 && (
@@ -869,7 +883,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                 </div>
               )}
             </div>}
-            {contestWizard && wizardStep === 2 && <section className={unifiedStyles.reviewCard}><h3>确认比赛信息</h3>{contestValidationIssues.length > 0 ? <ul className={unifiedStyles.reviewIssues}>{contestValidationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p>比赛信息完整。确认后将创建比赛，仍可在开始前继续编辑。</p>}<dl><div><dt>比赛</dt><dd>{title || '未填写名称'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 本校' : ratingScope === 'GLOBAL' ? '全局' : '本校'} · 标准比赛的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道</dd></div><div><dt>原题来源</dt><dd>{problemIdVisible ? '比赛期间显示' : '比赛结束后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '比赛期间显示' : '比赛结束后显示'}</dd></div></dl></section>}
+            {contestWizard && wizardStep === 4 && <section className={unifiedStyles.reviewCard}><h3>发布前检查</h3>{contestValidationIssues.length > 0 ? <ul className={unifiedStyles.reviewIssues}>{contestValidationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p>比赛信息完整。确认后将创建比赛；开始前仍可编辑未冻结字段。</p>}<dl><div><dt>比赛</dt><dd>{title || '未填写名称'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 本校' : ratingScope === 'GLOBAL' ? '全局' : '本校'} · 标准比赛的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道，创建时固定各题当前评测数据版本</dd></div><div><dt>原题来源</dt><dd>{problemIdVisible ? '比赛期间显示' : '比赛结束后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '比赛期间显示' : '比赛结束后显示'}</dd></div></dl></section>}
           </>
         )}
       </div>
