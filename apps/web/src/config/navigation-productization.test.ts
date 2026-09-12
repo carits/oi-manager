@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { personalNav, platformAdminNav, schoolManagerNav, studentNav, teacherNav } from './navigation'
+import { personalNav, platformAdminNav, schoolManagerNav, studentNav, superAdminNav, teacherNav } from './navigation'
+import { hasNavigationIcon } from './navigationIcons'
 
 describe('human navigation productization', () => {
   it('gives students direct access to their home and submissions', () => {
@@ -15,6 +16,20 @@ describe('human navigation productization', () => {
     }
     expect(teacherNav.items.some(item => item.group === '教学')).toBe(true)
     expect(personalNav.items.some(item => item.group === '资源')).toBe(true)
+  })
+
+  it('gives every configured navigation item an explicit icon', () => {
+    for (const config of [personalNav, studentNav, teacherNav, schoolManagerNav, platformAdminNav, superAdminNav]) {
+      expect(config.items.filter(item => !hasNavigationIcon(item.label))).toEqual([])
+    }
+  })
+
+  it('exposes teacher diagnostics and principal teacher management', () => {
+    expect(teacherNav.items).toEqual(expect.arrayContaining([expect.objectContaining({ label: '评测记录', href: 'submissions' })]))
+    expect(schoolManagerNav.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: '评测记录', href: 'submissions' }),
+      expect.objectContaining({ label: '教师与权限', href: 'management?tab=teachers' }),
+    ]))
   })
 
   it('does not silently render the dashboard for unknown or forbidden organization modules', () => {

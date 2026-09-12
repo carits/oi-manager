@@ -63,6 +63,23 @@ describe('human UX productization contract', () => {
     expect(source).toContain('加入申请')
     expect(source).toContain('作业')
     expect(source).toContain('训练')
+    expect(source).toContain("user?.organizationRole === 'school_principal'")
+    expect(source).not.toContain("user?.role === 'school_principal'")
+    expect(source).toContain('compareDashboardTasks')
+    expect(source).toContain('contestResource')
+    expect(source).toContain('teamResource.data?.total')
+    expect(source).toContain('summary?.memberCount')
+    expect(source).toContain('organizationId=${encodeURIComponent(organizationId)}&view=mine')
+  })
+
+  it('builds the student task inbox from assignments, training and contests without counting the displayed slice', () => {
+    const source = read('./organization-pages/student/page.tsx')
+    expect(source).toContain('assignmentTasks')
+    expect(source).toContain('trainingTasks')
+    expect(source).toContain('contestTasks')
+    expect(source).toContain('displayedTasks = pendingTasks.slice(0, 5)')
+    expect(source).toContain('pendingTaskCount')
+    expect(source).not.toContain('>{nextTasks.length}</p>')
   })
 
   it('uses an inline submission workbench and merges personal solutions', () => {

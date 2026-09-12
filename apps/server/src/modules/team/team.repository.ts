@@ -73,6 +73,13 @@ export class TeamRepository {
     return prisma.team.count({ where })
   }
 
+  /** Count active membership rows across the same team scope as a list query. */
+  async countActiveMembers(teamWhere: Record<string, unknown>): Promise<number> {
+    return prisma.teamMember.count({
+      where: { status: 'active', Team: teamWhere }
+    })
+  }
+
   /**
    * 查找学校的公开团队
    */

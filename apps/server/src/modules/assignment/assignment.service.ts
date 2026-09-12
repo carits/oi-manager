@@ -283,11 +283,16 @@ export async function listAssignments(userId: string, query: any) {
       ],
     }),
   }
-  const [total, rows] = await Promise.all([
+  const [total, rows, statusGroups] = await Promise.all([
     prisma.assignment.count({ where }),
     prisma.assignment.findMany({ where, include: ASSIGNMENT_INCLUDE, orderBy: [{ openAt: 'desc' }, { createdAt: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.assignment.groupBy({ by: ['status'], where, _count: { _all: true } }),
   ])
-  return { items: rows.map(row => serializeAssignment(row, 'none')), pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } }
+  return {
+    items: rows.map(row => serializeAssignment(row, 'none')),
+    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+    statusCounts: Object.fromEntries(statusGroups.map(item => [item.status, item._count._all])),
+  }
 }
 
 export async function getAssignment(userId: string, assignmentId: string) {

@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { Activity, BookOpen, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, Menu, PanelLeftClose, School, ShieldCheck, Trophy, UserRound, WalletCards, Users, UsersRound, type LucideIcon } from 'lucide-react'
+import { ChevronDown, Link2, LogOut, Menu, PanelLeftClose, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleNames, UserRole } from '@/config/navigation'
 import { getSidebarNavigationPreference, setSidebarNavigationOpen } from '@/lib/auth'
@@ -16,6 +16,7 @@ import { ChatButton } from '@/components/chat/ChatButton'
 import { UserAvatar } from '@/components/user/UserAvatar'
 import styles from './AppShell.module.css'
 import { navigationHome, resolveNavigationContext } from '@/lib/navigationContext'
+import { getNavigationIcon } from '@/config/navigationIcons'
 
 interface AppShellProps { children: ReactNode }
 
@@ -25,20 +26,6 @@ const accountPaths = {
   binding: '/account/platform-bindings',
 }
 
-const labelIcons: Record<string, LucideIcon> = {
-  '首页': Home, '概览': Home, '校园': School, '学校信息': School, '学校管理': School, '教师管理': GraduationCap, '教师': GraduationCap,
-  '学生管理': Users, '学生': Users, '管理': ShieldCheck, '成员与权限': ShieldCheck, '加入审批': ShieldCheck, '学校设置': ShieldCheck, '学校资产': WalletCards, '账号管理': Users, '团队': UsersRound, '我的团队': UsersRound,
-  '组织': School, '学校': School,
-  '作业': ClipboardList, '比赛': Trophy, '题单': ListChecks, '题库': Library,
-  '题库管理': Library, '排名': Activity, '评测记录': BookOpen, 'OJ账号': Link2, '平台绑定': Link2,
-  '贡献': Activity, '钱包': WalletCards, '贡献审计': ShieldCheck,
-  'AI Token': WalletCards,
-  '私信举报': ShieldCheck,
-  '博客治理': ShieldCheck, '知识广场': BookOpen,
-
-}
-
-function getNavIcon(label: string): LucideIcon { return labelIcons[label] || Home }
 function isWorkbenchPath(pathname: string): boolean {
   return /\/(trainings|submissions)\/[^/]+$/.test(pathname) || /\/problems\/[^/]+$/.test(pathname)
 }
@@ -125,7 +112,7 @@ export function AppShell({ children }: AppShellProps) {
   }, [])
 
   const renderNavLink = (item: (typeof resolvedNavConfig.items)[number]) => {
-    const Icon = getNavIcon(item.label)
+    const Icon = getNavigationIcon(item.label)
     const href = item.href
     const hrefPath = href.split('?')[0]
     const hrefSearch = href.includes('?') ? new URLSearchParams(href.slice(href.indexOf('?') + 1)) : null

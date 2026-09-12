@@ -134,6 +134,8 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 
 前端导航上下文先按全局角色约束，再按 URL 解析组织或个人工作区。超级管理员与平台管理员访问 `/account/*` 时仍属于平台上下文；Logo 和全局内容入口必须直接返回 `/admin` 或 `/platform-admin`，不得经过不存在的个人工作区。组织上下文失效后返回 `/identity?organizationUnavailable=1`，由用户选择仍有效的身份。
 
+普通账号在校园页面的负责人、教师和学生能力必须来自当前有效 Membership 对应的 `organizationRole`，不得读取全局 `User.role`。教师与负责人导航必须提供评测记录诊断入口，负责人额外提供教师与权限入口。校园 Dashboard 的团队查询必须携带当前组织上下文；即使同一账号属于多个学校，也只能统计当前学校的数据。
+
 浏览器登录由 Server 设置同域 `HttpOnly`、`SameSite=Lax` 会话 Cookie；正式环境同时要求
 HTTPS 和 `Secure=true`。鉴权中间件暂时兼容 Bearer Token，供脚本、测试与旧会话一次性
 迁移使用。旧 Token 迁移成功后会从 `localStorage` 清除，不能再把它作为浏览器长期会话来源。

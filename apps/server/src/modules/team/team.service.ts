@@ -306,9 +306,10 @@ export class TeamService {
       }
     }
 
-    const [allTeams, total] = await Promise.all([
+    const [allTeams, total, memberCount] = await Promise.all([
       this.repo.findMany({ where, skip, take: pageSize }),
-      this.repo.count(where)
+      this.repo.count(where),
+      this.repo.countActiveMembers(where)
     ])
 
     // 批量加载所有者信息
@@ -346,7 +347,10 @@ export class TeamService {
       }
     })
 
-    return paginatedResponse(teamsWithOwner.map(transformTeamForFrontend), total, page, pageSize)
+    return {
+      ...paginatedResponse(teamsWithOwner.map(transformTeamForFrontend), total, page, pageSize),
+      summary: { memberCount }
+    }
   }
 
   // ==================== 团队详情 ====================

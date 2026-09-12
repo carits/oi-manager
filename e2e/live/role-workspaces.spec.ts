@@ -58,6 +58,10 @@ test('school principal remains in the organization workspace', async ({ page }) 
   await page.goto('/org/org_school-default/overview')
   await expect(page).toHaveURL(/\/org\/org_school-default\/overview$/)
   await expect(page.getByText('第一中学', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: '学校工作概览' })).toBeVisible()
+  const principalNavigation = page.getByRole('navigation', { name: '学校负责人主导航' })
+  await expect(principalNavigation.getByRole('link', { name: '教师与权限' })).toBeVisible()
+  await expect(principalNavigation.getByRole('link', { name: '评测记录' })).toBeVisible()
 
   await page.goto('/org/org_school-default/training-sessions')
   await expect(page.getByText('布置和管理学生练习。')).toBeVisible()
@@ -94,6 +98,9 @@ test('school student sees only the learner training experience', async ({ page }
   await expect(page.getByRole('button', { name: '切换身份' })).toContainText('学生')
   await expect(page.getByRole('button', { name: '打开账号菜单' })).toContainText('@student1')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+
+  await page.goto('/org/org_school-default/overview')
+  await expect(page.getByText('包含作业、训练和比赛')).toBeVisible()
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.reload()

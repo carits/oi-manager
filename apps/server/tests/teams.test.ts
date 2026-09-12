@@ -593,6 +593,7 @@ describe('Team Operations', () => {
         .set('Authorization', `Bearer ${personalToken}`)
 
       expect(personalList.status).toBe(200)
+      expect(personalList.body.data.summary.memberCount).toBeGreaterThanOrEqual(1)
       expect(personalList.body.data.data.map((team: any) => team.id)).toContain(otherPersonalTeam.id)
       expect(personalList.body.data.data.map((team: any) => team.id)).not.toContain(campusTeam.id)
       expect(personalList.body.data.data[0].school).toBeUndefined()

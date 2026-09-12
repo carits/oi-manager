@@ -14,6 +14,7 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     await expect(page.locator('[data-navigation-mode="expanded"]')).toBeVisible()
     for (const group of ['教学', '学生与团队', '学校', '社区']) await expect(navigation.getByText(group, { exact: true })).toBeVisible()
     await expect(navigation.getByRole('link', { name: '首页' })).toHaveAttribute('aria-current', 'page')
+    await expect(navigation.getByRole('link', { name: '评测记录' })).toBeVisible()
 
     await page.getByRole('button', { name: '收起导航' }).first().click()
     await expect(page.locator('[data-navigation-mode="compact"]')).toBeVisible()
