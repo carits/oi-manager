@@ -1,11 +1,23 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-12
+last_verified: 2026-09-13
 source_of_truth: Git history
 ---
 
 # 变更记录
+
+## 2026-09-13
+
+### Human UX 最终缺口与运行契约收口
+
+- 知识广场在个人、校园及管理工作区统一指向全局 `/blog`，不再被组织路由前缀误改；账号菜单新增“我的文章”并保留作者工作台。
+- 比赛最终排名直接查询已应用且未被取代的 Rating 批次变化，在参赛者行内显示 `变化前 → 变化后（+增量）`；未结算或无变化时不伪造数据。
+- 统一 `SubmissionCodeEditor` 显式启用撤销历史、括号匹配和自动闭合，题库、比赛/训练、Assignment、Training Engine 和 Hack 证明程序继续共用同一编辑器及文本降级路径。
+- 新增正式 `packages/contracts`，统一账号角色、组织成员角色、工作区、认证、健康和 HTTP 契约；前端拆分账号级、平台级和组织级请求客户端，减少作用域头误传。
+- 健康与 readiness 返回版本化结构，数据库 readiness 附带延迟且保持旧 health 字段兼容；路由仍保持纯 HTTP adapter，监控脚本同步验证新契约。
+- Web 37 文件/156 项、聚焦产品回归 6 文件/27 项、Shared/Contracts/Server/Judge/Web 生产构建以及 UI、路由、API、架构和文档门禁通过。本机 PostgreSQL 未运行，数据库集成用例未执行，本记录不将其标记为通过。
+- 提交 `8263da8` 已推送 `main`；API 蓝绿由 3302 切换到 3303。Web BUILD_ID `WtxrOgt8owvb4SdKXEsdd` 在 canary 和正式端口分别完成专用双账号消息发送、SSE、已读和回复闭环（序号 142–145）后提升。部署同步修正 Web systemd 旧单元的公网监听偏差，3000 现仅监听 loopback，网络暴露审计零违规。本轮无 Prisma 迁移、评分规则或历史数据变更。
 
 ## 2026-09-12
 

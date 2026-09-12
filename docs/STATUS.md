@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-12
+last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-09-13: Human UX / Productization 最终缺口与运行契约已完成生产收口。知识广场在个人、校园和管理工作区统一作为全局 `/blog` 导航，账号菜单提供“我的文章”；最终比赛排名直接展示已应用且未被取代的个人 Rating 前后值和增量；统一 CodeMirror 提交编辑器补齐历史、括号匹配和自动闭合。账号/组织身份、认证、健康检查和 HTTP 响应同时收口到正式 contracts 包，前端账号、平台、组织请求使用显式客户端作用域。Web 37 文件/156 项、聚焦产品回归 6 文件/27 项、Shared/Contracts/Server/Judge/Web 生产构建、UI/路由/API/架构/文档门禁均通过；本机 PostgreSQL 未运行，数据库集成用例未执行且未伪造结果。本轮无 Prisma 迁移或历史数据改写。提交 `8263da8` 已推送 `main`，API 3302→3303；Web BUILD_ID `WtxrOgt8owvb4SdKXEsdd` 经 canary 与正式双账号消息闭环（序号 142–145）后提升。部署时修正旧 Web systemd unit 的 `0.0.0.0:3000` 偏差，当前仅监听 `127.0.0.1:3000`，网络暴露审计零违规；公网知识广场、健康检查、数据库 readiness、Worker、Executor、Judge 和外部监控工作流均正常。生产源树原有 7 个未跟踪维护文件未改动。
 
 - 2026-09-12: 账号认证、多组织身份和通知上下文已完成生产收口。登录限流按账号失败与 IP 洪泛分离；浏览器认证为 Cookie-only；认证依赖故障返回 503。普通账号不再从 JWT 或最早 Membership 隐式选择学校，校园角色严格取当前组织 Membership；用户名只读，学校实名留在成员资料。`User.sessionVersion` 已上线，本人改密、管理员重置和退出其他设备可撤销旧会话；全账号消息中心聚合所有有效学校通知并标注来源。生产备份 `oi_manager_20260912_224758.dump` 已校验，恢复库迁移与认证/通知 52/52 通过；Web 37 文件/153 项及生产构建和全部门禁通过。提交至 `03b1101` 已推送 `main`，生产迁移完成，API 3303→3302，Web BUILD_ID `xBZ4etBqhC_0fFZvKCYwJ` 已提升，线上旧/当前会话为 401/200，消息闭环序号 138–139。专用探针凭据已轮换并撤销旧会话，提升进程参数不再携带密码；全部服务和 readiness 正常。
 
