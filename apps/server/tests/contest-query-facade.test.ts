@@ -5,6 +5,7 @@ import {
   findContestRuntimeForLicense,
   findContestRuntimeForRating,
   findActivityRuntimeForRanking,
+  findActivityRuntimeForSubmission,
   findContestRuntimeForBlogReview,
   listDueRatedContestRuntimes,
   listContestRuntimesForDashboard,
@@ -39,6 +40,9 @@ describe('Contest query facade', () => {
     expect(await findContestRuntimeForBlogReview(runtime.id)).toMatchObject({
       source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
     })
+    expect(await findActivityRuntimeForSubmission(runtime.id)).toMatchObject({
+      source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
+    })
   })
 
   it('contains legacy fallback inside the facade and returns each platform contest once', async () => {
@@ -53,6 +57,7 @@ describe('Contest query facade', () => {
     expect(await findContestRuntimeForLicense(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     expect(await findActivityRuntimeForRanking(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     expect(await findContestRuntimeForBlogReview(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
+    expect(await findActivityRuntimeForSubmission(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     const rows = await listPlatformContestRuntimes()
     expect(rows.map(row => row.id).sort((a, b) => a - b)).toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
     const dashboardRows = await listContestRuntimesForDashboard({
@@ -101,6 +106,9 @@ describe('Contest query facade', () => {
       createdBy: crypto.randomUUID(),
     } })
     expect(await findActivityRuntimeForRanking(training.id)).toMatchObject({
+      source: 'training', contest: null, runtime: { id: training.id, type: 'training' },
+    })
+    expect(await findActivityRuntimeForSubmission(training.id)).toMatchObject({
       source: 'training', contest: null, runtime: { id: training.id, type: 'training' },
     })
   })

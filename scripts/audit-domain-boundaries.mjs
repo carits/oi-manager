@@ -60,6 +60,10 @@ if (!blog.includes('findContestRuntimeForBlogReview')) {
 if (!contestRating.includes('listDueRatedContestRuntimes')) {
   violations.push('Rating scheduler bypasses the Contest query facade')
 }
+const submissionQuery = fs.readFileSync(path.join(modulesRoot, 'submission/application/submission-query.service.ts'), 'utf8')
+if (!submissionQuery.includes('findActivityRuntimeForSubmission')) {
+  violations.push('Submission contest detail bypasses the Contest query facade')
+}
 
 console.log(JSON.stringify({
   assignmentAuthorizationBoundary: !violations.some(item => item.startsWith('Assignment')),

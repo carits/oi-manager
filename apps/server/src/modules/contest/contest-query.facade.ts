@@ -305,3 +305,50 @@ export async function listDueRatedContestRuntimes(now = new Date(), limit = 20) 
     .sort((a, b) => a.endTime.getTime() - b.endTime.getTime() || a.id - b.id)
     .slice(0, Math.max(1, Math.min(100, Math.trunc(limit))))
 }
+
+const submissionContextRuntimeSelect = {
+  id: true,
+  teamId: true,
+  organizationId: true,
+  createdBy: true,
+  format: true,
+  type: true,
+  status: true,
+  startTime: true,
+  endTime: true,
+  problemIdVisible: true,
+  scope: true,
+} as const
+
+/**
+ * Submission detail is shared by training and contest routes. Resolve mapped
+ * contests through the aggregate while leaving ordinary training untouched.
+ */
+export async function findActivityRuntimeForSubmission(runtimeTrainingId: number) {
+  const aggregate = await prisma.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { select: submissionContextRuntimeSelect } },
+  })
+  if (aggregate?.RuntimeTraining) {
+    if (aggregate.RuntimeTraining.type !== 'contest') {
+      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
+        action: 'contest_query',
+        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'submission_detail' },
+      })
+      return null
+    }
+    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
+  }
+  const runtime = await prisma.training.findUnique({
+    where: { id: runtimeTrainingId },
+    select: submissionContextRuntimeSelect,
+  })
+  if (!runtime) return null
+  if (runtime.type === 'contest') {
+    logger.warn('contest_query_legacy_fallback', {
+      action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'submission_detail' },
+    })
+    return { contest: null, runtime, source: 'legacy' as const }
+  }
+  return { contest: null, runtime, source: 'training' as const }
+}

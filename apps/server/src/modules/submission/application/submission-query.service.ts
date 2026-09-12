@@ -17,6 +17,7 @@ import {
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
 import { resolveSubmissionIoSnapshot, submissionIoDto } from '../../judge/domain/submission-io'
+import { findActivityRuntimeForSubmission } from '../../contest/contest-query.facade'
 
 export interface SubmissionQueryContext {
   userId: string
@@ -198,22 +199,8 @@ async function requireVisibleSubmission(
   } | null = null
   let hasContestManagerAccess = false
   if (submission.trainingId) {
-    training = await prisma.training.findUnique({
-      where: { id: submission.trainingId },
-      select: {
-        id: true,
-        teamId: true,
-        organizationId: true,
-        createdBy: true,
-        format: true,
-        type: true,
-        status: true,
-        startTime: true,
-        endTime: true,
-        problemIdVisible: true,
-        scope: true,
-      },
-    })
+    const activity = await findActivityRuntimeForSubmission(submission.trainingId)
+    training = activity?.runtime ?? null
     if (!training) throw notFound()
     hasContestManagerAccess = context.isGlobalAdmin || await canManageTraining(context.userId, training)
 
