@@ -36,6 +36,11 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
   })
 
   const client = (user: typeof author) => createAuthenticatedRequest(app, generateTokenFromUser(user.user))
+  const organizationClient = (user: typeof author, organizationId: string) => createAuthenticatedRequest(
+    app,
+    generateTokenFromUser(user.user),
+    { organizationId },
+  )
 
   async function createProblemBlog(extra: Record<string, unknown> = {}) {
     return client(author).post('/api/blogs').send({
@@ -119,8 +124,9 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       references: [{ type: 'PROBLEM', problemId: schoolProblem.id, relationType: 'PRIMARY_SUBJECT' }],
     })
     const postId = created.body.data.id
-    expect((await client(author).post(`/api/blogs/${postId}/publish`).send({ expectedDraftRevision: 1, visibility: 'PUBLIC' })).body.code).toBe('BLOG_REFERENCE_VISIBILITY_CONFLICT')
-    expect((await client(author).post(`/api/blogs/${postId}/publish`).send({ expectedDraftRevision: 1, visibility: 'ORGANIZATION' })).status).toBe(200)
+    const schoolAuthor = organizationClient(author, school.organizationId)
+    expect((await schoolAuthor.post(`/api/blogs/${postId}/publish`).send({ expectedDraftRevision: 1, visibility: 'PUBLIC' })).body.code).toBe('BLOG_REFERENCE_VISIBILITY_CONFLICT')
+    expect((await schoolAuthor.post(`/api/blogs/${postId}/publish`).send({ expectedDraftRevision: 1, visibility: 'ORGANIZATION' })).status).toBe(200)
     expect((await client(member).get(`/api/blogs/${postId}`)).status).toBe(200)
     expect((await client(reader).get(`/api/blogs/${postId}`)).status).toBe(404)
 
