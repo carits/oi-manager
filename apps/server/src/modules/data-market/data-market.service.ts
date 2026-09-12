@@ -8,6 +8,7 @@ import {
 } from '@prisma/client'
 import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../prisma'
+import { findContestRuntimeForLicense, listContestRuntimeIdsForLicenseScopes } from '../contest/contest-query.facade'
 import { postCaritsTransaction } from '../carits/application/carits-ledger.service'
 import { notificationService } from '../notification/notification.service'
 import { canModifyProblem, canViewProblem, isPlatformManager } from '../problem/problem.access'
@@ -230,7 +231,8 @@ async function purchaseScope(user: JwtPayload, licenseType: DataLicenseType, bod
   }
   const contestId = Number(body?.contestId)
   if (!Number.isInteger(contestId) || contestId <= 0) policyFail(422, 'DATA_LICENSE_SCOPE_REQUIRED', '比赛许可证必须指定有效的 contestId')
-  const contest = await prisma.training.findFirst({ where: { id: contestId, type: 'contest' }, include: { Team: { include: { TeamMember: true } } } })
+  const resolved = await findContestRuntimeForLicense(contestId)
+  const contest = resolved?.runtime || null
   const teamManager = contest?.Team?.TeamMember.some(member => member.userId === user.userId && member.status === 'active' && ['owner', 'admin'].includes(member.role))
   const organizationManager = contest?.organizationId ? await prisma.organizationMembership.findFirst({ where: {
     organizationId: contest.organizationId, userId: user.userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] },
@@ -311,10 +313,11 @@ async function accessibleScopeIds(user: JwtPayload) {
     prisma.teamMember.findMany({ where: { userId: user.userId, status: 'active', role: { in: ['owner', 'admin'] } }, select: { teamId: true } }),
   ])
   const organizationIds = memberships.map(item => item.organizationId)
-  const contests = await prisma.training.findMany({ where: { type: 'contest', OR: [
-    { teamId: { in: teamMemberships.map(item => item.teamId) } }, { organizationId: { in: organizationIds } },
-  ] }, select: { id: true } })
-  return { organizations: organizationIds, contests: contests.map(item => item.id) }
+  const contests = await listContestRuntimeIdsForLicenseScopes({
+    organizationIds,
+    teamIds: teamMemberships.map(item => item.teamId),
+  })
+  return { organizations: organizationIds, contests }
 }
 
 function entitlementVisible(user: JwtPayload, entitlement: DataEntitlement, scopes: { organizations: string[]; contests: number[] }) {

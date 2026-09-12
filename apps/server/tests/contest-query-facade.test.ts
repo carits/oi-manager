@@ -1,7 +1,11 @@
 import crypto from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
-import { findContestRuntimeForRating, listPlatformContestRuntimes } from '../src/modules/contest/contest-query.facade'
+import {
+  findContestRuntimeForLicense,
+  findContestRuntimeForRating,
+  listPlatformContestRuntimes,
+} from '../src/modules/contest/contest-query.facade'
 
 async function createRuntime(title: string) {
   return prisma.training.create({ data: {
@@ -22,6 +26,9 @@ describe('Contest query facade', () => {
     } })
     const resolved = await findContestRuntimeForRating(runtime.id)
     expect(resolved).toMatchObject({ source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id } })
+    expect(await findContestRuntimeForLicense(runtime.id)).toMatchObject({
+      source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
+    })
   })
 
   it('contains legacy fallback inside the facade and returns each platform contest once', async () => {
@@ -33,6 +40,7 @@ describe('Contest query facade', () => {
     } })
     const legacy = await createRuntime('Legacy')
     expect(await findContestRuntimeForRating(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
+    expect(await findContestRuntimeForLicense(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     const rows = await listPlatformContestRuntimes()
     expect(rows.map(row => row.id).sort((a, b) => a - b)).toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
   })

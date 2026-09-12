@@ -86,7 +86,8 @@ elif [[ "$TEST_SCOPE" == "authorization" ]]; then
 elif [[ "$TEST_SCOPE" == "contest-cutover" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     --no-file-parallelism \
-    tests/oj-adapters-registry.test.ts tests/contest-query-facade.test.ts tests/rating-domain.test.ts
+    tests/oj-adapters-registry.test.ts tests/contest-query-facade.test.ts \
+    tests/rating-domain.test.ts tests/data-market.test.ts
 else
   echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, authorization, release-invariants, contest-cutover or full" >&2
   exit 1

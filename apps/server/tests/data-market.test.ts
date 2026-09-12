@@ -6,6 +6,7 @@ import { createAuthenticatedRequest, createTestApp } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
+import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 
 const app = createTestApp()
 
@@ -127,7 +128,7 @@ describe('V1 data product marketplace', () => {
     expect((await client(outsider).get(`/api/data-entitlements/${entitlementId}/revisions/${revisionId}/manifest`)).status).toBe(404)
   })
 
-  it('binds CONTEST licenses to Training(type=contest) and excludes ordinary participants', async () => {
+  it('binds CONTEST licenses through the Contest aggregate and excludes ordinary participants', async () => {
     const team = await prisma.team.create({ data: { id: crypto.randomUUID(), name: 'Licensed contest team', scope: 'personal', isPublic: false } })
     await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: buyer.user.id, userType: 'student', role: 'owner', status: 'active' } })
     await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: outsider.user.id, userType: 'student', role: 'member', status: 'active' } })
@@ -136,6 +137,7 @@ describe('V1 data product marketplace', () => {
     expect(rejected.status).toBe(403)
 
     const contest = await prisma.training.create({ data: { title: 'Real contest', type: 'contest', scope: 'personal', teamId: team.id, startTime: new Date(), endTime: new Date(Date.now() + 3600_000), status: 'upcoming', createdBy: buyer.user.id } })
+    await prisma.$transaction(tx => ensureContestAggregateTx(tx, contest.id))
     const purchased = await client(buyer).post(`/api/data-products/${productId}/purchase`).set('Idempotency-Key', crypto.randomUUID()).send({ license: 'CONTEST', contestId: contest.id })
     expect(purchased.status).toBe(201)
     const entitlementId = purchased.body.data.Entitlement.id as string

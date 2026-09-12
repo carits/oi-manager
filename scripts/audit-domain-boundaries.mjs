@@ -37,6 +37,10 @@ const trainingCrud = fs.readFileSync(path.join(modulesRoot, 'training/applicatio
 if (!trainingCrud.includes('listPlatformContestRuntimes')) {
   violations.push('Platform contest list bypasses the Contest query facade')
 }
+const dataMarket = fs.readFileSync(path.join(modulesRoot, 'data-market/data-market.service.ts'), 'utf8')
+if (!dataMarket.includes('findContestRuntimeForLicense') || !dataMarket.includes('listContestRuntimeIdsForLicenseScopes')) {
+  violations.push('Data Market contest license bypasses the Contest query facade')
+}
 
 console.log(JSON.stringify({
   assignmentAuthorizationBoundary: !violations.some(item => item.startsWith('Assignment')),

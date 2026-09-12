@@ -74,3 +74,62 @@ export async function listPlatformContestRuntimes() {
   }
   return [...mapped, ...legacy]
 }
+
+const licenseRuntimeInclude = {
+  Team: { include: { TeamMember: true } },
+} as const
+
+/** Resolve the legacy numeric contest route identity through the aggregate. */
+export async function findContestRuntimeForLicense(runtimeTrainingId: number) {
+  const aggregate = await prisma.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { include: licenseRuntimeInclude } },
+  })
+  if (aggregate?.RuntimeTraining?.type === 'contest') {
+    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
+  }
+  const legacy = await prisma.training.findFirst({
+    where: { id: runtimeTrainingId, type: 'contest' },
+    include: licenseRuntimeInclude,
+  })
+  if (!legacy) return null
+  logger.warn('contest_query_legacy_fallback', {
+    action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'data_license' },
+  })
+  return { contest: null, runtime: legacy, source: 'legacy' as const }
+}
+
+/** Contest license visibility remains keyed by the public runtime id during cutover. */
+export async function listContestRuntimeIdsForLicenseScopes(input: {
+  organizationIds: string[]
+  teamIds: string[]
+}) {
+  if (!input.organizationIds.length && !input.teamIds.length) return []
+  const scopeFilter = {
+    OR: [
+      ...(input.teamIds.length ? [{ teamId: { in: input.teamIds } }] : []),
+      ...(input.organizationIds.length ? [{ organizationId: { in: input.organizationIds } }] : []),
+    ],
+  }
+  const aggregates = await prisma.contest.findMany({
+    where: { runtimeTrainingId: { not: null }, ...scopeFilter },
+    select: { runtimeTrainingId: true },
+  })
+  const mappedIds = aggregates.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
+  const legacy = await prisma.training.findMany({
+    where: {
+      type: 'contest', ...scopeFilter,
+      ...(mappedIds.length ? { id: { notIn: mappedIds } } : {}),
+    },
+    select: { id: true },
+  })
+  if (legacy.length) {
+    logger.warn('contest_query_legacy_fallback', {
+      action: 'contest_query', metadata: {
+        consumer: 'data_license_scope', count: legacy.length,
+        runtimeTrainingIds: legacy.slice(0, 20).map(row => row.id),
+      },
+    })
+  }
+  return [...mappedIds, ...legacy.map(row => row.id)]
+}
