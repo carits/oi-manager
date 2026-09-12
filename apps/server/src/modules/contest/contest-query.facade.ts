@@ -357,7 +357,9 @@ export async function findActivityRuntimeForSubmission(runtimeTrainingId: number
 export async function findActivityRuntimeForAccess(runtimeTrainingId: number) {
   const aggregate = await prisma.contest.findUnique({
     where: { runtimeTrainingId },
-    include: { RuntimeTraining: true },
+    include: {
+      RuntimeTraining: { include: { Team: { select: { organizationId: true, scope: true } } } },
+    },
   })
   if (aggregate?.RuntimeTraining) {
     if (aggregate.RuntimeTraining.type !== 'contest') {
@@ -369,7 +371,10 @@ export async function findActivityRuntimeForAccess(runtimeTrainingId: number) {
     }
     return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
   }
-  const runtime = await prisma.training.findUnique({ where: { id: runtimeTrainingId } })
+  const runtime = await prisma.training.findUnique({
+    where: { id: runtimeTrainingId },
+    include: { Team: { select: { organizationId: true, scope: true } } },
+  })
   if (!runtime) return null
   if (runtime.type === 'contest') {
     logger.warn('contest_query_legacy_fallback', {
