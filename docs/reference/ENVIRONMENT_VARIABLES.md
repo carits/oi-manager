@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, operations
-last_verified: 2026-09-08
+last_verified: 2026-09-12
 source_of_truth: process.env usage, environment examples, Playwright configuration
 ---
 
@@ -27,6 +27,11 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | `MEMBERSHIP_CAPABILITY_SOURCE` | 否 | `hybrid` | 组织授权来源；回填前使用 `hybrid`，对账后可切换 `normalized`，`legacy` 仅用于回滚 |
 | `ACCOUNT_ENCRYPT_KEY` | 正式/OJ 账号必需 | 无 | OJ 账号字段加密 |
 | `RATE_LIMIT_MAX` | 否 | 配置默认值 | 每分钟限流 |
+| `LOGIN_ACCOUNT_FAILED_MAX` | 否 | `10/5分钟` | 同一规范化用户名的失败登录上限；成功不计数 |
+| `LOGIN_IP_FAILED_MAX` | 否 | `120/分钟` | 共享 IP 登录失败洪泛保护；成功不计数 |
+| `REGISTER_IP_MAX` | 否 | `30/小时` | 共享 IP 注册上限 |
+| `PASSWORD_OPERATION_MAX` | 否 | `10/小时` | 已登录账号密码/会话操作上限 |
+| `PASSWORD_RESET_MAX` | 否 | `30/小时` | 管理员账号密码重置上限 |
 | `LOG_LEVEL` | 否 | `info` | 日志级别 |
 | `STORAGE_ROOT` | 否 | `apps/server/uploads` | 文件存储根 |
 | `TESTDATA_DIR` | 否 | Server `testdata` | Judge 测试数据 |

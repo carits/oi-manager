@@ -18,6 +18,8 @@ export interface UserNotification {
   href?: string | null
   sourceType: string
   sourceId: string
+  organizationId?: string | null
+  organizationName?: string | null
   actionable: boolean
   actions?: Array<{ key: string; label: string; style: string }>
   readAt?: string | null

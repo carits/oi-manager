@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-05
+last_verified: 2026-09-12
 source_of_truth: Prisma schema, organization-join, organization-creation and school-directory governance services, notification application service
 ---
 
@@ -44,7 +44,7 @@ account
 organization:<organizationId>
 ```
 
-个人空间读取 account；组织空间读取 account 加当前 organization。学校邀请和申请结果属于 account，加入申请待办属于 organization。铃铛未读数和业务 pending 数量分别计算。
+个人空间与铃铛读取 account；组织空间铃铛读取 account 加当前 organization。完整账号消息中心使用 `view=account`，读取 account 加用户全部有效组织并显示来源学校，`legacy` 组织除外。学校邀请和申请结果属于 account，加入申请待办属于 organization。通知动作按通知记录的组织重新校验 Membership，不能复用另一个学校的当前页面上下文。铃铛未读数和业务 pending 数量分别计算。
 
 ## 兼容迁移
 

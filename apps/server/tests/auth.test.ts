@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import request from 'supertest'
 import { createTestApp } from './helpers/testRequest'
 import { createTestUser, createTestSchoolWithPrincipal } from './helpers/testUser'
@@ -36,7 +36,7 @@ describe('Authentication Module', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      expect(res.body.data.token).toBeDefined()
+      expect(res.body.data.token).toBeUndefined()
       expect(res.body.data.userId).toBe(user.id)
       expect(res.body.data.role).toBe('student')
       expect(res.headers['set-cookie']?.[0]).toContain('oi_session=')
@@ -192,6 +192,7 @@ describe('Authentication Module', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
       expect(res.body.data.userId).toBeDefined()
+      expect(res.body.data.token).toBeUndefined()
     })
 
     it('should reject registration with non-student role', async () => {
@@ -311,11 +312,12 @@ describe('Authentication Module', () => {
         .send({ username: user.username, password, role: 'student' })
       const sessionCookie = login.headers['set-cookie']?.[0]?.split(';')[0]
 
+      const bearerToken = generateTestToken({ userId: user.id, role: user.role, username: user.username })
       const logout = await request(app)
         .post('/api/auth/logout')
         .set('Origin', 'https://untrusted.example')
         .set('Cookie', sessionCookie || '')
-        .set('Authorization', `Bearer ${login.body.data.token}`)
+        .set('Authorization', `Bearer ${bearerToken}`)
 
       expect(logout.status).toBe(403)
       expect(logout.body.code).toBe('CSRF_ORIGIN_REJECTED')
@@ -367,8 +369,50 @@ describe('Authentication Module', () => {
       expect(res.body.success).toBe(false)
     })
 
-    it('should return teacher info with schoolId', async () => {
-      const { school, principal } = await createTestSchoolWithPrincipal()
+    it('keeps account context organization-free and resolves the exact requested membership', async () => {
+      const schoolA = await createTestSchoolWithPrincipal('身份学校 A')
+      const schoolB = await createTestSchoolWithPrincipal('身份学校 B')
+      const created = await createTestUser({ role: 'teacher', schoolId: schoolA.school.id })
+      await prisma.user.update({ where: { id: created.user.id }, data: { role: 'user' } })
+      const organizationB = await prisma.organization.findFirstOrThrow({ where: { School: { id: schoolB.school.id } } })
+      await prisma.organizationMembership.create({
+        data: {
+          id: crypto.randomUUID(),
+          organizationId: organizationB.id,
+          userId: created.user.id,
+          memberRole: 'student',
+          relationType: 'enrolled',
+          status: 'active',
+          joinedAt: new Date(),
+        },
+      })
+      const token = generateTestToken({ userId: created.user.id, role: 'teacher', username: created.user.username })
+
+      const account = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)
+      expect(account.status).toBe(200)
+      expect(account.body.data.role).toBe('user')
+      expect(account.body.data.organizationId).toBeUndefined()
+      expect(account.body.data.organizationRole).toBeUndefined()
+
+      const campus = await request(app).get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`)
+        .set('X-OI-Organization-ID', organizationB.id)
+      expect(campus.status).toBe(200)
+      expect(campus.body.data).toMatchObject({ organizationId: organizationB.id, organizationRole: 'student', role: 'student' })
+    })
+
+    it('returns 503 instead of invalidating the session when account lookup fails', async () => {
+      const { user } = await createTestUser({ role: 'student' })
+      const token = generateTestToken({ userId: user.id, role: 'student', username: user.username })
+      const lookup = vi.spyOn(prisma.user, 'findUnique').mockRejectedValueOnce(new Error('database unavailable'))
+      const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)
+      lookup.mockRestore()
+      expect(res.status).toBe(503)
+      expect(res.body.code).toBe('AUTH_SERVICE_UNAVAILABLE')
+    })
+
+    it('returns school info only when the request names the organization', async () => {
+      const { school, organization, principal } = await createTestSchoolWithPrincipal()
       const token = generateTestToken({
         userId: principal.userId,
         role: 'school_principal',
@@ -380,6 +424,7 @@ describe('Authentication Module', () => {
       const res = await request(app)
         .get('/api/auth/me')
         .set('Authorization', `Bearer ${token}`)
+        .set('X-OI-Organization-ID', organization.id)
 
       expect(res.status).toBe(200)
       expect(res.body.data.schoolId).toBe(school.id)
@@ -409,6 +454,7 @@ describe('Authentication Module', () => {
 
       expect(switched.status).toBe(200)
       expect(switched.body.data.workspaceMode).toBe('personal')
+      expect(switched.body.data.token).toBeUndefined()
       expect(switched.headers['set-cookie']?.[0]).toContain('oi_session=')
 
       const me = await agent.get('/api/auth/me')
@@ -470,6 +516,35 @@ describe('Authentication Module', () => {
   })
 
   describe('PUT /api/auth/password', () => {
+    it('revokes other sessions while keeping the password-changing browser signed in', async () => {
+      const { user, password } = await createTestUser({ role: 'student' })
+      const current = request.agent(app)
+      const other = request.agent(app)
+      await current.post('/api/auth/login').send({ username: user.username, password })
+      await other.post('/api/auth/login').send({ username: user.username, password })
+
+      const changed = await current.put('/api/auth/password').send({ currentPassword: password, newPassword: 'next-password-123' })
+      expect(changed.status).toBe(200)
+      expect((await current.get('/api/auth/me')).status).toBe(200)
+      const stale = await other.get('/api/auth/me')
+      expect(stale.status).toBe(401)
+      expect(stale.body.code).toBe('SESSION_REVOKED')
+    })
+
+    it('can revoke other devices without signing out the current browser', async () => {
+      const { user, password } = await createTestUser({ role: 'student' })
+      const current = request.agent(app)
+      const other = request.agent(app)
+      await current.post('/api/auth/login').send({ username: user.username, password })
+      await other.post('/api/auth/login').send({ username: user.username, password })
+
+      expect((await current.post('/api/auth/sessions/revoke')).status).toBe(200)
+      expect((await current.get('/api/auth/me')).status).toBe(200)
+      const stale = await other.get('/api/auth/me')
+      expect(stale.status).toBe(401)
+      expect(stale.body.code).toBe('SESSION_REVOKED')
+    })
+
     it('should change password successfully', async () => {
       const { user, password } = await createTestUser({ role: 'student' })
       const token = generateTestToken({

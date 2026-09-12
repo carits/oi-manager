@@ -5,7 +5,7 @@ import { authenticate } from '../middleware/auth'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { clearSessionCookie, setSessionCookie } from '../lib/sessionCookie'
-import { loginLimiter, registerLimiter, passwordLimiter } from '../middleware/rateLimiter'
+import { loginAccountLimiter, loginIpLimiter, registerLimiter, passwordLimiter } from '../middleware/rateLimiter'
 import logger from '../lib/logger'
 import { updateRequestContext } from '../middleware/requestLogger'
 import {
@@ -13,6 +13,7 @@ import {
   loadCurrentAccount,
   loginAccount,
   registerPersonalAccount,
+  revokeOtherAccountSessions,
   resolveWorkspaceSwitch,
   updateAccountProfile,
   uploadAccountAvatar,
@@ -26,8 +27,7 @@ import {
 export const authRouter = Router()
 
 function clientIp(req: Request) {
-  const forwarded = req.headers['x-forwarded-for']
-  return typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : (req.socket?.remoteAddress || 'unknown')
+  return req.ip || req.socket?.remoteAddress || 'unknown'
 }
 
 function workspaceMode(value: unknown): WorkspaceMode | null {
@@ -46,7 +46,7 @@ function issueToken(res: Response, payload: JwtPayload) {
   return token
 }
 
-authRouter.post('/login', loginLimiter, async (req, res) => {
+authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) => {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {}
     const username = typeof body.username === 'string' ? body.username.trim() : ''
@@ -65,8 +65,9 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
       logger.security('login_failed', { action: 'login', target: username, metadata: { ip: clientIp(req) } })
       return res.status(401).json({ success: false, message: result.message })
     }
-    const token = issueToken(res, {
+    issueToken(res, {
       userId: result.user.id,
+      sessionVersion: result.user.sessionVersion,
       role: result.role,
       username: result.user.username,
       workspaceMode: result.workspaceMode,
@@ -79,12 +80,10 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
     res.json({
       success: true,
       data: {
-        token,
         userId: result.user.id,
         role: result.role,
         username: result.user.username,
         workspaceMode: result.workspaceMode,
-        schoolId: result.schoolId,
         avatar: result.user.avatar,
         next: result.isGlobalAdmin ? (result.role === 'super_admin' ? '/admin' : '/platform-admin') : '/identity',
       },
@@ -105,11 +104,11 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     if (!passwordCheck.valid) return res.status(400).json({ success: false, message: passwordCheck.message })
     const user = await registerPersonalAccount(username, password)
     if (!user) return res.status(400).json({ success: false, message: '用户名已存在' })
-    const token = issueToken(res, {
-      userId: user.id, role: 'user' as UserRole, username: user.username, workspaceMode: 'personal',
+    issueToken(res, {
+      userId: user.id, sessionVersion: user.sessionVersion, role: 'user' as UserRole, username: user.username, workspaceMode: 'personal',
     })
     res.status(200).json({
-      success: true, data: { userId: user.id, token, workspaceMode: 'personal', next: '/personal' },
+      success: true, data: { userId: user.id, role: 'user', username: user.username, workspaceMode: 'personal', next: '/personal' },
     })
   } catch (error) {
     logger.error('register_error', error)
@@ -142,8 +141,9 @@ authRouter.get('/me', authenticate, async (req, res) => {
         profile: result.profile,
       },
     })
-  } catch {
-    res.status(401).json({ success: false, message: 'Token 无效' })
+  } catch (error) {
+    logger.error('load_current_account_error', error, { userId: (req as any).user?.userId, action: 'auth_me' })
+    res.status(503).json({ success: false, code: 'AUTH_SERVICE_UNAVAILABLE', message: '账号服务暂时不可用，请稍后重试' })
   }
 })
 
@@ -159,8 +159,8 @@ authRouter.post('/switch-workspace', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: '管理员不具备个人工作区' })
     }
     const role = await resolveWorkspaceSwitch(payload.userId, payload.role, mode)
-    const token = issueToken(res, { ...renewablePayload(payload), role: role as UserRole, workspaceMode: mode })
-    res.json({ success: true, data: { token, workspaceMode: mode, role } })
+    issueToken(res, { ...renewablePayload(payload), role: role as UserRole, workspaceMode: mode })
+    res.json({ success: true, data: { workspaceMode: mode, role } })
   } catch (error) {
     logger.error('switch_workspace_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
@@ -179,7 +179,7 @@ authRouter.post('/logout', (_req, res) => {
 
 authRouter.put('/profile', authenticate, async (req, res) => {
   try {
-    const { avatar, phone, email, bio, name } = req.body || {}
+    const { avatar, phone, email, bio } = req.body || {}
     if (phone) {
       const check = validatePhone(phone)
       if (!check.valid) return res.status(400).json({ success: false, message: check.message })
@@ -188,7 +188,7 @@ authRouter.put('/profile', authenticate, async (req, res) => {
       const check = validateEmail(email)
       if (!check.valid) return res.status(400).json({ success: false, message: check.message })
     }
-    const user = await updateAccountProfile((req as any).user, { avatar, phone, email, bio, name })
+    const user = await updateAccountProfile((req as any).user, { avatar, phone, email, bio })
     res.json({
       success: true,
       data: {
@@ -219,7 +219,7 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
   }
 })
 
-authRouter.put('/password', passwordLimiter, authenticate, async (req, res) => {
+authRouter.put('/password', authenticate, passwordLimiter, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body || {}
     if (!currentPassword || !newPassword) return res.status(400).json({ success: false, message: '请填写完整信息' })
@@ -227,9 +227,23 @@ authRouter.put('/password', passwordLimiter, authenticate, async (req, res) => {
     if (!check.valid) return res.status(400).json({ success: false, message: check.message })
     const result = await changeAccountPassword((req as any).user.userId, currentPassword, newPassword)
     if (!result.ok) return res.status(result.statusCode).json({ success: false, message: result.message })
+    const payload = (req as any).user as JwtPayload
+    issueToken(res, { ...renewablePayload(payload), sessionVersion: result.sessionVersion })
     res.json({ success: true, message: '密码修改成功' })
   } catch (error) {
     logger.error('change_password_error', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+authRouter.post('/sessions/revoke', authenticate, passwordLimiter, async (req, res) => {
+  try {
+    const payload = (req as any).user as JwtPayload
+    const sessionVersion = await revokeOtherAccountSessions(payload.userId)
+    issueToken(res, { ...renewablePayload(payload), sessionVersion })
+    res.json({ success: true, message: '其他设备已退出' })
+  } catch (error) {
+    logger.error('revoke_sessions_error', error, { userId: (req as any).user?.userId, action: 'session_revoke' })
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })

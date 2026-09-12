@@ -9,6 +9,16 @@ import { getSessionToken } from '../lib/sessionCookie'
 const noop: RequestHandler = (_req, _res, next) => next()
 const shouldSkip = process.env.NODE_ENV === 'test'
 
+export function normalizeLoginAccount(value: unknown): string {
+  return typeof value === 'string'
+    ? value.normalize('NFKC').trim().toLocaleLowerCase('en-US').slice(0, 64)
+    : ''
+}
+
+function requestIpKey(req: Request): string {
+  return ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown')
+}
+
 export function getRateLimitKey(req: Request): string {
   const authorization = req.headers.authorization
   const bearerToken = authorization?.startsWith('Bearer ')
@@ -46,54 +56,72 @@ export const globalLimiter = shouldSkip ? noop : rateLimit({
 })
 
 /**
- * 登录接口速率限制
- * 限制：每分钟最多 5 次尝试
- * 目的：防止暴力破解密码
+ * Login protection is deliberately split in two. A failed-attempt account
+ * bucket stops credential guessing without treating a whole school NAT as one
+ * user, while a much larger IP bucket remains as flood protection.
  */
-export const loginLimiter = shouldSkip ? noop : rateLimit({
-  windowMs: 60 * 1000, // 1 分钟
-  max: 5,
+export const loginAccountLimiter = shouldSkip ? noop : rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: Number.parseInt(process.env.LOGIN_ACCOUNT_FAILED_MAX || '10', 10),
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: '登录尝试过于频繁，请稍后再试' }
+  skipSuccessfulRequests: true,
+  keyGenerator: req => `account:${normalizeLoginAccount(req.body?.username) || 'missing'}`,
+  message: { success: false, code: 'LOGIN_ACCOUNT_RATE_LIMITED', message: '该账号登录失败次数过多，请稍后再试' },
 })
+
+export const loginIpLimiter = shouldSkip ? noop : rateLimit({
+  windowMs: 60 * 1000,
+  max: Number.parseInt(process.env.LOGIN_IP_FAILED_MAX || '120', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: req => `login-ip:${requestIpKey(req)}`,
+  message: { success: false, code: 'LOGIN_IP_RATE_LIMITED', message: '该网络登录失败请求过多，请稍后再试' },
+})
+
+/** @deprecated Apply loginAccountLimiter and loginIpLimiter together. */
+export const loginLimiter = loginAccountLimiter
 
 /**
  * 注册接口速率限制
- * 限制：每小时最多 3 次注册
+ * 共享网络每小时最多 30 次注册（可下调）
  * 防止批量注册攻击
  */
 export const registerLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 60 * 1000, // 1 小时
-  max: 3,
+  max: Number.parseInt(process.env.REGISTER_IP_MAX || '30', 10),
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: req => `register-ip:${requestIpKey(req)}`,
   message: { success: false, message: '注册请求过于频繁，请稍后再试' }
 })
 
 /**
  * 密码修改接口速率限制
- * 限制：每小时最多 3 次
+ * 已登录账号每小时最多 10 次
  * 防止密码攻击
  */
 export const passwordLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 60 * 1000, // 1 小时
-  max: 3,
+  max: Number.parseInt(process.env.PASSWORD_OPERATION_MAX || '10', 10),
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
   message: { success: false, message: '密码操作过于频繁，请稍后再试' }
 })
 
 /**
  * 密码重置接口速率限制
- * 限制：每小时最多 3 次
+ * 管理员账号每小时最多 30 次
  * 用于管理员重置用户密码
  */
 export const passwordResetLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 60 * 1000, // 1 小时
-  max: 3,
+  max: Number.parseInt(process.env.PASSWORD_RESET_MAX || '30', 10),
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
   message: { success: false, message: '密码重置操作过于频繁，请稍后再试' }
 })
 

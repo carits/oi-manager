@@ -11,10 +11,9 @@ export type LoginAccountResult =
   | { ok: false; message: string }
   | {
       ok: true
-      user: { id: string; username: string; role: string; avatar: string | null }
+      user: { id: string; username: string; role: string; avatar: string | null; sessionVersion: number }
       role: UserRole
       workspaceMode: WorkspaceMode
-      schoolId?: string
       isGlobalAdmin: boolean
     }
 
@@ -68,11 +67,6 @@ export async function loginAccount(params: {
     return { ok: false, message: '该账号已被禁用，请联系管理员' }
   }
   const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(user.role)
-  const membership = isGlobalAdmin ? null : await prisma.organizationMembership.findFirst({
-    where: { userId: user.id, status: 'active' },
-    orderBy: { createdAt: 'asc' },
-    select: { organizationId: true },
-  })
   await prisma.$transaction([
     prisma.personalProfile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} }),
     prisma.loginLog.create({
@@ -84,10 +78,9 @@ export async function loginAccount(params: {
   ])
   return {
     ok: true,
-    user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar },
+    user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar, sessionVersion: user.sessionVersion },
     role: user.role as UserRole,
     workspaceMode: isGlobalAdmin ? 'work' : params.workspaceMode,
-    schoolId: await resolveSchoolId(membership?.organizationId),
     isGlobalAdmin,
   }
 }
@@ -118,16 +111,12 @@ export async function loadCurrentAccount(
   if (!user) return { status: 'missing' as const }
   if (user.status === 'disabled') return { status: 'disabled' as const }
   const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(user.role)
-  const membership = isGlobalAdmin ? null : requestedOrganizationId
-    ? await prisma.organizationMembership.findFirst({
+  const membership = isGlobalAdmin || !requestedOrganizationId ? null
+    : await prisma.organizationMembership.findFirst({
         where: { organizationId: requestedOrganizationId, userId, status: 'active' },
         include: { StudentProfile: true, TeacherProfile: true },
       })
-    : await prisma.organizationMembership.findFirst({
-        where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' },
-        include: { StudentProfile: true, TeacherProfile: true },
-      })
-  const organizationId = requestedOrganizationId || membership?.organizationId
+  const organizationId = membership?.organizationId
   let profile: any = null
   if (membership?.memberRole === 'student' && membership.StudentProfile) {
     profile = {
@@ -157,37 +146,16 @@ export async function resolveWorkspaceSwitch(userId: string, globalRole: string,
   if (workspaceMode === 'personal') {
     await prisma.personalProfile.upsert({ where: { userId }, create: { userId }, update: {} })
   }
-  const membership = await prisma.organizationMembership.findFirst({
-    where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' }, select: { memberRole: true },
-  })
-  return ['super_admin', 'platform_admin'].includes(globalRole) ? globalRole : (membership?.memberRole || globalRole)
+  return globalRole
 }
 
 export async function updateAccountProfile(
   payload: JwtPayload,
-  data: { avatar?: string | null; phone?: string | null; email?: string | null; bio?: string | null; name?: string },
+  data: { avatar?: string | null; phone?: string | null; email?: string | null; bio?: string | null },
 ) {
-  return prisma.$transaction(async tx => {
-    const user = await tx.user.update({
-      where: { id: payload.userId },
-      data: { avatar: data.avatar, phone: data.phone, email: data.email, bio: data.bio },
-    })
-    if (payload.organizationMembershipId && typeof data.name === 'string') {
-      const membership = await tx.organizationMembership.findFirst({
-        where: { id: payload.organizationMembershipId, userId: payload.userId, status: 'active' },
-        select: { memberRole: true },
-      })
-      if (membership?.memberRole === 'student') {
-        await tx.organizationStudentProfile.updateMany({
-          where: { membershipId: payload.organizationMembershipId }, data: { name: data.name },
-        })
-      } else if (membership) {
-        await tx.organizationTeacherProfile.updateMany({
-          where: { membershipId: payload.organizationMembershipId }, data: { name: data.name, bio: data.bio },
-        })
-      }
-    }
-    return user
+  return prisma.user.update({
+    where: { id: payload.userId },
+    data: { avatar: data.avatar, phone: data.phone, email: data.email, bio: data.bio },
   })
 }
 
@@ -237,7 +205,21 @@ export async function changeAccountPassword(userId: string, currentPassword: str
   if (currentPassword === newPassword) {
     return { ok: false as const, statusCode: 400, message: '新密码不能与当前密码相同' }
   }
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } })
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await bcrypt.hash(newPassword, 10), sessionVersion: { increment: 1 } },
+    select: { sessionVersion: true },
+  })
   logger.audit('password_change_success', { userId, action: 'password_change' })
-  return { ok: true as const }
+  return { ok: true as const, sessionVersion: updated.sessionVersion }
+}
+
+export async function revokeOtherAccountSessions(userId: string) {
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { sessionVersion: { increment: 1 } },
+    select: { sessionVersion: true },
+  })
+  logger.audit('other_sessions_revoked', { userId, action: 'session_revoke' })
+  return updated.sessionVersion
 }

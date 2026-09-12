@@ -1,6 +1,6 @@
 import type { Request } from 'express'
 import { describe, expect, it } from 'vitest'
-import { getRateLimitKey } from '../src/middleware/rateLimiter'
+import { getRateLimitKey, normalizeLoginAccount } from '../src/middleware/rateLimiter'
 import { generateTestToken } from './helpers/testToken'
 
 function fakeRequest(headers: Request['headers'] = {}, ip = '203.0.113.10'): Request {
@@ -32,5 +32,12 @@ describe('global rate-limit identity', () => {
     const key = getRateLimitKey(fakeRequest({ authorization: 'Bearer forged-token' }))
     expect(key).toMatch(/^ip:/)
     expect(key).not.toContain('forged-token')
+  })
+})
+
+describe('login failed-attempt identity', () => {
+  it('normalizes case, spacing and full-width account text', () => {
+    expect(normalizeLoginAccount('  Teacher1  ')).toBe('teacher1')
+    expect(normalizeLoginAccount('Ｔｅａｃｈｅｒ１')).toBe('teacher1')
   })
 })

@@ -142,6 +142,26 @@ describe('parseApiResponse', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('evicts only an unavailable organization workspace for explicit organization access errors', async () => {
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { location: { pathname: '/org/org-a/overview' }, dispatchEvent })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: 'forbidden',
+    }), { status: 403, headers: { 'Content-Type': 'application/json' } }))
+    await apiClient.get('/api/private')
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not evict account pages or generic forbidden resources', async () => {
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { location: { pathname: '/account/profile' }, dispatchEvent })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: 'forbidden',
+    }), { status: 403, headers: { 'Content-Type': 'application/json' } }))
+    await apiClient.get('/api/private')
+    expect(dispatchEvent).not.toHaveBeenCalled()
+  })
+
   it('retries one early 5xx response within the same deadline', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(

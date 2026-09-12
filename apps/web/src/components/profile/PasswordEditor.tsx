@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import unifiedStyles from './PasswordEditor.unified.module.css'
-import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
@@ -15,18 +15,19 @@ export function PasswordEditor() {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [revoking, setRevoking] = useState(false)
 
   const handleChange = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setError(null)
-    setSuccess(false)
+    setSuccessMessage('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    setSuccess(false)
+    setSuccessMessage('')
 
     // 验证
     if (!form.currentPassword || !form.newPassword || !form.confirmPassword) {
@@ -56,7 +57,7 @@ export function PasswordEditor() {
         newPassword: form.newPassword
       })
       if (result.success) {
-        setSuccess(true)
+        setSuccessMessage('密码修改成功，其他设备已退出')
         setForm({
           currentPassword: '',
           newPassword: '',
@@ -78,9 +79,9 @@ export function PasswordEditor() {
         修改密码
       </h3>
 
-      {success && (
+      {successMessage && (
         <div className={unifiedStyles.u3}>
-          密码修改成功
+          {successMessage}
         </div>
       )}
 
@@ -133,6 +134,30 @@ export function PasswordEditor() {
           </Button>
         </div>
       </form>
+
+      <div className={unifiedStyles.u5}>
+        <div>
+          <h3 className={unifiedStyles.u2}>登录设备</h3>
+          <p>让其他浏览器和设备上的登录状态立即失效，当前设备会继续保持登录。</p>
+        </div>
+        <div className={unifiedStyles.u6}>
+          <Button
+            variant="secondary"
+            type="button"
+            loading={revoking}
+            onClick={async () => {
+              setRevoking(true)
+              setError(null)
+              const result = await apiClient.post('/api/auth/sessions/revoke')
+              setRevoking(false)
+              if (result.success) setSuccessMessage('其他设备已退出，当前设备保持登录')
+              else setError(result.message || '退出其他设备失败')
+            }}
+          >
+            退出其他设备
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

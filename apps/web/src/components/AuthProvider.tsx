@@ -103,18 +103,48 @@ export function AuthProvider({
   useEffect(() => {
     const handleUnavailableOrganization = () => {
       void mutateCache(() => true, undefined, { revalidate: false })
+      setUser(current => current ? {
+        ...current,
+        organizationId: undefined,
+        organizationName: undefined,
+        organizationMembershipId: undefined,
+        organizationRole: undefined,
+      } : null)
       window.location.assign('/identity?organizationUnavailable=1')
     }
     window.addEventListener(ORGANIZATION_UNAVAILABLE_EVENT, handleUnavailableOrganization)
     return () => window.removeEventListener(ORGANIZATION_UNAVAILABLE_EVENT, handleUnavailableOrganization)
   }, [mutateCache])
 
+  useEffect(() => {
+    if (!user) return
+    const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
+    const contextMatches = organizationId
+      ? user.organizationId === organizationId && Boolean(user.organizationRole)
+      : !user.organizationId
+    if (contextMatches) return
+
+    let cancelled = false
+    void apiClient.query<AuthUser>('/api/auth/me', {
+      retry: false,
+      accountScoped: !organizationId,
+    }).then(nextUser => {
+      if (cancelled) return
+      setUser(nextUser)
+      setStatus('authenticated')
+      storeAccountMetadata(nextUser)
+    }).catch(() => {
+      if (!cancelled) setStatus('degraded')
+    })
+    return () => { cancelled = true }
+  }, [pathname, user?.userId, user?.organizationId, user?.organizationRole])
+
 
   const login = async (
     username: string,
     password: string,
   ): Promise<LoginResult> => {
-    const result = await apiClient.mutate<AuthUser & { token?: string }>(
+    const result = await apiClient.mutate<AuthUser>(
       '/api/auth/login',
       'POST',
       { username, password },

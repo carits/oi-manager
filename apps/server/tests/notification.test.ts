@@ -113,6 +113,36 @@ describe('notification application service', () => {
     expect(personalRow?.readAt).not.toBeNull()
   })
 
+  it('account view aggregates every active school and labels the source organization', async () => {
+    const secondSchool = await createTestSchoolWithPrincipal('第二通知学校')
+    const secondOrganization = await prisma.organization.findFirstOrThrow({ where: { School: { id: secondSchool.school.id } } })
+    await prisma.organizationMembership.create({
+      data: {
+        id: crypto.randomUUID(), organizationId: secondOrganization.id, userId: user.user.id,
+        memberRole: 'student', relationType: 'enrolled', status: 'active', joinedAt: new Date(),
+      },
+    })
+    const firstOrganization = await prisma.organization.findFirstOrThrow({ where: { School: { id: user.schoolId } } })
+    await prisma.userNotification.createMany({ data: [
+      {
+        id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', contextType: 'organization',
+        contextKey: `organization:${firstOrganization.id}`, organizationId: firstOrganization.id,
+        type: 'info', title: '第一学校', body: '通知正文', sourceType: 'account-view', sourceId: 'first',
+      },
+      {
+        id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', contextType: 'organization',
+        contextKey: `organization:${secondOrganization.id}`, organizationId: secondOrganization.id,
+        type: 'info', title: '第二学校', body: '通知正文', sourceType: 'account-view', sourceId: 'second',
+      },
+    ] })
+
+    const response = await createAuthenticatedRequest(app, token).get('/api/notifications?view=account&pageSize=50')
+    expect(response.status).toBe(200)
+    const rows = response.body.data.notifications.filter((item: any) => item.sourceType === 'account-view')
+    expect(rows).toHaveLength(2)
+    expect(new Set(rows.map((item: any) => item.organizationName))).toEqual(new Set([firstOrganization.name, secondOrganization.name]))
+  })
+
   it('does not reveal another user notification when marking it read', async () => {
     const other = await createTestUser({ role: 'student', schoolId: user.schoolId })
     const notification = await prisma.userNotification.create({

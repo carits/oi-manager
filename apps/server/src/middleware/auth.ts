@@ -4,6 +4,7 @@ import { JwtPayload, UserRole, ResourceScope } from '@oi-manager/shared'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { getSessionToken } from '../lib/sessionCookie'
 import { prisma } from '../prisma'
+import logger from '../lib/logger'
 
 // 全局类型扩展：让 Express Request.user 使用 JwtPayload 类型
 declare global {
@@ -31,43 +32,40 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     return res.status(401).json({ success: false, message: '未授权，请先登录' })
   }
 
+  let decoded: JwtPayload
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
+    decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
+  } catch {
+    return res.status(401).json({ success: false, code: 'AUTH_INVALID_SESSION', message: '登录状态无效或已过期' })
+  }
+  if (!decoded?.userId) {
+    return res.status(401).json({ success: false, code: 'AUTH_INVALID_SESSION', message: '登录状态无效或已过期' })
+  }
+
+  try {
     decoded.workspaceMode = decoded.workspaceMode === 'personal' ? 'personal' : 'work'
 
     // 角色以数据库中的全局账号为准，兼容管理员在旧版本生成的 teacher/student token。
     // 组织成员关系只用于普通账号切换校园身份，不能覆盖全局管理员权限。
     const account = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { role: true, status: true }
+      select: { role: true, status: true, sessionVersion: true }
     })
     if (!account || account.status === 'disabled') {
-      return res.status(401).json({ success: false, message: '账号不存在或已被禁用' })
+      return res.status(401).json({ success: false, code: 'ACCOUNT_DISABLED', message: '账号不存在或已被禁用' })
     }
+    if ((decoded.sessionVersion ?? 1) !== account.sessionVersion) {
+      return res.status(401).json({ success: false, code: 'SESSION_REVOKED', message: '登录状态已失效，请重新登录' })
+    }
+    decoded.sessionVersion = account.sessionVersion
+    decoded.role = account.role as UserRole
+    delete decoded.organizationId
+    delete decoded.organizationMembershipId
     if (account.role === 'super_admin' || account.role === 'platform_admin') {
-      decoded.role = account.role as UserRole
       decoded.workspaceMode = 'work'
     }
 
-    let organizationId = req.get('x-oi-organization-id')
-    // Compatibility for campus JWTs issued before organizationId became the
-    // request context key. schoolId is a School.id, so it must be resolved via
-    // School.organizationId and still pass the active-membership check below.
-    if (
-      !organizationId
-      && decoded.workspaceMode === 'work'
-      && decoded.schoolId
-      && decoded.role !== 'super_admin'
-      && decoded.role !== 'platform_admin'
-    ) {
-      const legacySchool = await prisma.school.findUnique({
-        where: { id: decoded.schoolId },
-        select: { organizationId: true, status: true, directoryStatus: true },
-      })
-      if (legacySchool?.status === 'active' && legacySchool.directoryStatus !== 'legacy' && legacySchool.organizationId) {
-        organizationId = legacySchool.organizationId
-      }
-    }
+    const organizationId = req.get('x-oi-organization-id')
     if (organizationId) {
       const membership = await prisma.organizationMembership.findFirst({
         where: { organizationId, userId: decoded.userId, status: 'active', Organization: { status: 'active' } },
@@ -92,8 +90,14 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     req.user = decoded
     req.authSource = bearerToken ? 'bearer' : 'cookie'
     next()
-  } catch {
-    return res.status(401).json({ success: false, message: 'Token 无效或已过期' })
+  } catch (error) {
+    logger.error('authentication_service_error', error, {
+      requestId: req.requestId,
+      userId: decoded.userId,
+      action: 'authenticate',
+      metadata: { path: req.path, method: req.method },
+    })
+    return res.status(503).json({ success: false, code: 'AUTH_SERVICE_UNAVAILABLE', message: '认证服务暂时不可用，请稍后重试' })
   }
 }
 

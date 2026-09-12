@@ -172,5 +172,8 @@ export async function resetGlobalUserPassword(actor: UserActor, userId: string, 
   const target = await prisma.user.findUnique({ where: { id: userId } })
   if (!target) fail(404, '用户不存在')
   protectAdminTarget(actor, target.role, '平台管理员不能重置管理员密码')
-  await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await bcrypt.hash(password, 10) } })
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { passwordHash: await bcrypt.hash(password, 10), sessionVersion: { increment: 1 } },
+  })
 }

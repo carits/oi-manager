@@ -32,6 +32,8 @@ export type TaskStatus = 'pending' | 'done' | 'review'
 // JWT Payload
 export interface JwtPayload {
   userId: string
+  /** Incremented whenever all existing sessions must be revoked. */
+  sessionVersion?: number
   role: UserRole
   username: string
   adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）

@@ -8,6 +8,7 @@ const JWT_SECRET = 'test-secret-key-for-testing-only'
  */
 export function generateTestToken(payload: {
   userId: string
+  sessionVersion?: number
   role: UserRole
   username: string
   teacherId?: string
@@ -25,6 +26,7 @@ export function generateTestToken(payload: {
  */
 export function generateTokenFromUser(user: {
   id: string
+  sessionVersion?: number
   role: UserRole
   username: string
   teacherId?: string
@@ -35,6 +37,7 @@ export function generateTokenFromUser(user: {
 }): string {
   const payload: JwtPayload = {
     userId: user.id,
+    sessionVersion: user.sessionVersion,
     role: user.role,
     username: user.username,
     teacherId: user.teacherId,

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import collisionStyles from './ProfileEditor.collision.module.css'
 import unifiedStyles from './ProfileEditor.unified.module.css'
-import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Input, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
@@ -15,7 +15,7 @@ interface ProfileEditorProps {
   userType: 'teacher' | 'student' | 'admin'
 }
 
-export function ProfileEditor({ userType }: ProfileEditorProps) {
+export function ProfileEditor({ userType: _userType }: ProfileEditorProps) {
   const { user, refreshUser } = useAuth()
   const toast = useToast()
   const [loading, setLoading] = useState(true)
@@ -24,7 +24,6 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
-    name: '',
     email: '',
     phone: '',
     bio: ''
@@ -32,9 +31,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
 
   useEffect(() => {
     if (user) {
-      const profile = user.profile as { name?: string; bio?: string } | undefined
       setForm({
-        name: profile?.name || user.username || '',
         email: user.email || '',
         phone: user.phone || '',
         bio: user.bio || ''
@@ -99,9 +96,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
   }
 
   const getInitial = () => {
-    const profile = user?.profile as { name?: string } | undefined
-    const name = profile?.name || user?.username
-    return name?.charAt(0)?.toUpperCase() || '?'
+    return user?.username?.charAt(0)?.toUpperCase() || '?'
   }
   const avatarStyle = user?.avatar
     ? { '--profile-avatar': `url(${getAssetUrl(user.avatar)})` } as CSSProperties
@@ -144,14 +139,15 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
       {/* 表单区域 */}
       <form onSubmit={handleSubmit} className={unifiedStyles.u7}>
         <div style={formStyles.field}>
-          <label style={formStyles.label}>姓名</label>
+          <label style={formStyles.label}>用户名</label>
           <Input
             type="text"
-            value={form.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            placeholder="请输入姓名"
+            value={user?.username || ''}
+            readOnly
+            aria-describedby="account-username-help"
             style={formStyles.input}
           />
+          <p id="account-username-help" className={unifiedStyles.u6}>账号用户名不可在这里修改；校园真实姓名由各学校身份资料独立管理。</p>
         </div>
 
         <div style={formStyles.field}>

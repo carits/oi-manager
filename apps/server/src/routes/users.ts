@@ -63,7 +63,7 @@ userRouter.put('/:id/status', authenticate, endpoint('更新用户状态失败',
   res.json({ success: true, data: await updateGlobalUserStatus(actor(req), req.params.id, req.body) })
 }))
 
-userRouter.post('/:id/reset-password', passwordResetLimiter, authenticate, endpoint('重置用户密码失败', async (req, res) => {
+userRouter.post('/:id/reset-password', authenticate, passwordResetLimiter, endpoint('重置用户密码失败', async (req, res) => {
   await resetGlobalUserPassword(actor(req), req.params.id, req.body.newPassword)
   res.json({ success: true, message: '密码已重置' })
 }))

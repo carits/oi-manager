@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-29
+last_verified: 2026-09-12
 source_of_truth: apps/web/src
 ---
 
@@ -89,6 +89,13 @@ interface ApiResponse<T> {
 `apiClient.query()`、`apiClient.mutate()` 和 `apiClient.download()`，确保 Cookie、
 四秒读取截止时间、取消与请求编号处理一致。切页、参数变化和组件卸载会取消旧读取，
 旧 key 的迟到响应不能覆盖当前资源。
+
+浏览器认证是 Cookie-only；登录响应、客户端状态与 localStorage 都不持有 JWT。`AuthProvider`
+根据当前 `/org/:organizationId` 重新读取权威 Membership 身份，离开组织 URL 时恢复纯账号上下文。
+只有当前组织明确不可用/无成员关系时才触发身份回收，数据库 `503` 和普通资源 `403` 均保留会话。
+
+`/account/notifications` 必须使用 `view=account + accountScoped`，汇总全部有效学校并显示来源；
+铃铛仍继承当前 URL 组织上下文。跨学校通知动作必须显式携带该通知的 `organizationId`，不能复用页面上下文猜测。
 
 路由级 `error.tsx`、`global-error.tsx` 和 `not-found.tsx` 负责渲染异常与不存在页面。CI 的
 `pnpm ui:state-check` 会拒绝页面级 `mounted` 渲染门、重复 `ProtectedRoute`、“加载中”

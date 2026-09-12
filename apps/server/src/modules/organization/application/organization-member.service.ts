@@ -242,7 +242,10 @@ export async function updateOrganizationStudent(actor: OrganizationActor, profil
   if (requestedTeacher !== undefined) await validateTeacher(actor.organizationId, requestedTeacher)
   if (typeof body.password === 'string' && body.password && body.password.length < 6) badRequest('密码至少 6 位')
   await prisma.$transaction(async tx => {
-    if (typeof body.password === 'string' && body.password) await tx.user.update({ where: { id: profile.Membership.userId }, data: { passwordHash: await bcrypt.hash(body.password, 10) } })
+    if (typeof body.password === 'string' && body.password) await tx.user.update({
+      where: { id: profile.Membership.userId },
+      data: { passwordHash: await bcrypt.hash(body.password, 10), sessionVersion: { increment: 1 } },
+    })
     await tx.organizationStudentProfile.update({ where: { id: profile.id }, data: {
       name: typeof body.name === 'string' ? body.name.trim() || profile.name : undefined,
       gender: body.gender === undefined ? undefined : body.gender || null,
@@ -309,7 +312,10 @@ export async function updateOrganizationTeacher(actor: OrganizationActor, profil
   const profile = await teacherProfile(actor, profileId)
   if (typeof body.password === 'string' && body.password && body.password.length < 6) badRequest('密码至少 6 位')
   await prisma.$transaction(async tx => {
-    if (typeof body.password === 'string' && body.password) await tx.user.update({ where: { id: profile.Membership.userId }, data: { passwordHash: await bcrypt.hash(body.password, 10) } })
+    if (typeof body.password === 'string' && body.password) await tx.user.update({
+      where: { id: profile.Membership.userId },
+      data: { passwordHash: await bcrypt.hash(body.password, 10), sessionVersion: { increment: 1 } },
+    })
     await tx.organizationTeacherProfile.update({ where: { id: profile.id }, data: {
       name: typeof body.name === 'string' ? body.name.trim() || profile.name : undefined,
       email: body.email === undefined ? undefined : body.email || null, phone: body.phone === undefined ? undefined : body.phone || null,

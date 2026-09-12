@@ -4699,6 +4699,7 @@ model User {
   id                                       String                            @id
   username                                 String                            @unique
   passwordHash                             String
+  sessionVersion                           Int                               @default(1)
   // 平台角色仅表达平台级权限；校园身份由 OrganizationMembership 决定。
   role                                     String                            @default("user")
   status                                   String                            @default("active")

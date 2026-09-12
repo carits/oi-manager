@@ -223,7 +223,11 @@ class ApiClient {
       ) {
         window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT))
       }
-      if (parsed.code === 'ORGANIZATION_NOT_AVAILABLE' && typeof window !== 'undefined' && window.location.pathname.startsWith('/org/')) {
+      if (
+        (parsed.code === 'ORGANIZATION_NOT_AVAILABLE' || parsed.code === 'ORGANIZATION_ACCESS_DENIED') &&
+        typeof window !== 'undefined' &&
+        window.location.pathname.startsWith('/org/')
+      ) {
         window.dispatchEvent(new CustomEvent(ORGANIZATION_UNAVAILABLE_EVENT))
       }
       return parsed

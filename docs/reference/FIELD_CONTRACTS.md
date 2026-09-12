@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-09-04
+last_verified: 2026-09-12
 source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
 ---
 
@@ -61,7 +61,6 @@ interface LoginRequest {
 }
 
 interface LoginResponse {
-  token: string
   userId: string
   role: UserRole
   username: string
@@ -92,9 +91,13 @@ interface LoginResponse {
 { workspaceMode: 'work' | 'personal' }
 ```
 
-旧客户端可传 `mode: 'campus' | 'personal'`。成功响应返回刷新后的 `token`、`role` 和
-`workspaceMode`，并同时设置 HttpOnly 会话 Cookie。切入 `personal` 会按需创建
+旧客户端可传 `mode: 'campus' | 'personal'`。成功响应返回 `role` 和
+`workspaceMode`，并刷新 HttpOnly 会话 Cookie；浏览器响应不包含 Token。切入 `personal` 会按需创建
 `PersonalProfile`。
+
+`GET /api/auth/me` 不带组织请求头时只返回账号上下文，不自动选择任一学校。携带
+`X-OI-Organization-ID` 时只返回该组织的 Membership 身份。认证依赖失败使用
+`503 AUTH_SERVICE_UNAVAILABLE`，会话代数不匹配使用 `401 SESSION_REVOKED`。
 
 ## 分页
 

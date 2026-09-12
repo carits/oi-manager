@@ -436,6 +436,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/archived-problems` | 见对应路由实现 |
 | `POST` | `/api/auth/avatar` | 见对应路由实现 |
 | `POST` | `/api/auth/login` | 见对应路由实现 |
+| `POST` | `/api/auth/sessions/revoke` | 递增会话代数、退出其他设备并为当前浏览器换发 HttpOnly Cookie |
 | `POST` | `/api/auth/logout` | 见对应路由实现 |
 | `POST` | `/api/auth/register` | 见对应路由实现 |
 | `POST` | `/api/auth/session/migrate` | 见对应路由实现 |

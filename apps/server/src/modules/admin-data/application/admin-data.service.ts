@@ -107,7 +107,11 @@ export async function resetUserPassword(userId: unknown, newPassword: unknown) {
     throw new AdminDataError(400, '缺少 userId 或 newPassword')
   }
   if (newPassword.length < 6) throw new AdminDataError(400, '密码至少 6 位')
-  const user = await prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(newPassword, 10) }, select: { id: true, username: true } })
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await bcrypt.hash(newPassword, 10), sessionVersion: { increment: 1 } },
+    select: { id: true, username: true },
+  })
   return { userId: user.id, username: user.username, message: '密码已重置' }
 }
 

@@ -27,9 +27,9 @@ notificationRouter.get('/', notificationEndpoint(async (req, res) => {
 }))
 
 notificationRouter.patch('/:id/read', notificationEndpoint(async (req, res) => {
-  res.json({ success: true, data: await readNotification(req.user!, req.params.id) })
+  res.json({ success: true, data: await readNotification(req.user!, req.params.id, req.query) })
 }))
 
 notificationRouter.post('/read-all', notificationEndpoint(async (req, res) => {
-  res.json({ success: true, data: await readAllNotifications(req.user!) })
+  res.json({ success: true, data: await readAllNotifications(req.user!, req.query) })
 }))

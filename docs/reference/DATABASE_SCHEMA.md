@@ -1,13 +1,13 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-10
+last_verified: 2026-09-12
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
 # 数据库模型
 
-校园身份与档案唯一来源为组织成员关系、学生组织档案与教师组织档案。全局账号不再保存校园归属，旧学生、教师和管理员模型已删除。学校资料通过学校资料表关联学校组织。
+校园身份与档案唯一来源为组织成员关系、学生组织档案与教师组织档案。全局账号不再保存校园归属，旧学生、教师和管理员模型已删除。学校资料通过学校资料表关联学校组织。`User.sessionVersion` 是轻量会话撤销代数；密码变化或主动退出其他设备时递增，不建立可变 Session 表。
 
 独立作业由 `Assignment`、`AssignmentProblem`、`AssignmentRecipient`、`AssignmentRecipientOverride`、`AssignmentProblemProgress`、`AssignmentCorrection`、`AssignmentFeedback`、`AssignmentScoreAdjustment`、`AssignmentGradeSnapshot` 和 `AssignmentEvent` 组成。作业题目固定 `ProblemTestSetRevision`；`Submission/JudgeRun` 固定作业上下文，旧 `Training(type=homework)` 只作为迁移来源保留。
 
@@ -209,7 +209,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TrainingRatingConfig` | 比赛开始前可配置、开始或首交时冻结的 Rating 规则快照 |
 | `TrainingSolution` | 以 Prisma schema 为准 |
 | `TrainingUserProblemStatus` | 以 Prisma schema 为准 |
-| `User` | 以 Prisma schema 为准 |
+| `User` | 全局账号、密码摘要、状态与会话撤销代数；不保存学校身份 |
 | `UserProblemContent` | 用户独立题面版本与兼容题解；题面按名称软删除并使用 private/public 可见性 |
 | `UserArchivedProblem` | 以 Prisma schema 为准 |
 | `UserNotification` | 以 Prisma schema 为准 |

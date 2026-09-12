@@ -80,6 +80,10 @@ validateEnv()
 const app = express()
 const PORT = Number.parseInt(process.env.PORT || '3002', 10)
 
+// The API is only expected to sit behind a loopback reverse proxy. Trusting a
+// broader proxy chain would let clients spoof X-Forwarded-For and evade limits.
+app.set('trust proxy', 'loopback')
+
 // ==================== 安全中间件 ====================
 
 // 1. Helmet 安全响应头

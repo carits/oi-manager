@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-11
+last_verified: 2026-09-12
 source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 ---
 
@@ -15,12 +15,15 @@ source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 成功登录响应中的岗位使用数据库全局角色；普通账号的组织成员关系只用于当前校园工作区的成员身份。
 `super_admin` 和 `platform_admin` 永远保留全局角色，不会被学校成员关系覆盖。
 
+登录失败保护使用“规范化用户名五分钟失败桶 + 高阈值 IP 一分钟失败洪泛桶”；机房共享网络中的成功登录不会占用失败额度。注册保留较高的共享 IP 上限，已登录密码操作按 `userId` 分桶。API 反向代理只信任 loopback，客户端不能伪造转发 IP。
+
 ## JWT
 
 ```ts
 interface JwtPayload {
   userId: string
-  role: 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
+  sessionVersion?: number
+  role: 'user' | 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
   username: string
   adminId?: string
   teacherId?: string
@@ -32,20 +35,22 @@ interface JwtPayload {
 }
 ```
 
-HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回 `401`；
-已登录但角色或资源范围不足返回 `403`。
+浏览器只使用同域 HttpOnly Session Cookie，登录、注册和工作区切换响应不向 JavaScript 返回 JWT。
+Bearer 仅供脚本、测试与旧客户端兼容。缺少、无效、过期或被撤销的会话返回 `401`；已登录但角色或资源范围不足返回 `403`；数据库/认证依赖暂时故障返回 `503 AUTH_SERVICE_UNAVAILABLE`，浏览器不会因此清除会话。
+
+`User.sessionVersion` 是账号级会话代数。修改密码、管理员重置密码或“退出其他设备”会原子递增；当前浏览器同时获得新 Cookie，其他旧 Token 在下一次请求返回 `401 SESSION_REVOKED`。迁移前未携带该声明的 Token 按第 1 代兼容。
 
 ## 工作区模式
 
-- `role` 是账号永久岗位；切换工作区不会修改角色、岗位扩展 ID 或学校关系。
+- `role` 是账号平台身份；普通账号通常为 `user`。学校学生/教师/负责人身份只从当前 URL 对应的有效 Membership 解析。
 - `workspaceMode=work`：进入管理或校园工作台，业务资源使用 `resourceScope=campus`。
 - `workspaceMode=personal`：五种角色共用个人工作区，业务资源使用 `resourceScope=personal`。
 - 管理员工作区是严格独立的：超级管理员只进入 `/admin`，平台管理员只进入 `/platform-admin`；管理员不创建或切换个人/校园工作区。
 - 全局管理员查看训练/比赛时不受当前工作区 scope 预过滤限制；仍由 `canAccessTraining`、组织关系和比赛管理权限决定最终可见范围。普通账号继续只能访问当前 `resourceScope` 的资源。
-- `POST /api/auth/switch-workspace` 为所有已登录角色刷新 Cookie 和兼容 JWT；首次切入时事务性创建 `PersonalProfile`。
+- `POST /api/auth/switch-workspace` 为旧客户端保留并刷新 Cookie；响应不返回 Token。当前 Web 以 URL 与工作区目录切换身份。
 - 旧 `studentMode` 与 `POST /api/auth/switch-mode` 仅保留一个开发周期，分别映射至 `workspaceMode` 和新切换接口。
-- 旧校园 JWT 仅携带 `schoolId` 时，服务端在 `workspaceMode=work` 且请求没有组织头的情况下，会通过
-  `School.organizationId` 解析组织，再重新校验活动成员关系；不能仅凭旧字段绕过组织权限。
+- 旧 JWT 中的 `schoolId` 只作为兼容声明保留，不再隐式选择组织。校园请求必须显式携带
+  `X-OI-Organization-ID`，服务端再按该组织校验当前活动 Membership；账号级请求因此不会漂移到“最早加入的学校”。
 - 个人工作区只输出用户名、头像、公开简介和个人 Rating，不输出实名、学校、职称或后台岗位。
 
 `organizationId` 是 `Organization.id`，用于请求头 `X-OI-Organization-ID` 和成员关系查询；
@@ -128,14 +133,20 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 
 ## 前端会话
 
-根布局通过服务器 Session 初始化全站唯一的 `AuthProvider`；`RoleLayout` 只做权限、上下文和 AppShell 选择，不能创建第二份客户端身份状态。这样从校园或个人工作区进入公共内容时不会因卸载内层 Provider 退化成匿名。`AuthProvider` 根据 `role:userId:workspaceMode` 计算 `sessionKey`，用于账号或工作区切换后让组件和缓存重新
+根布局通过服务器 Session 初始化全站唯一的 `AuthProvider`；`RoleLayout` 只做权限、上下文和 AppShell 选择，不能创建第二份客户端身份状态。这样从校园或个人工作区进入公共内容时不会因卸载内层 Provider 退化成匿名。`AuthProvider` 根据 `role:organizationId:organizationRole:userId` 计算 `sessionKey`，用于账号或工作区切换后让组件和缓存重新
 挂载。它不是数据库字段、访问令牌或后端隔离机制。真正隔离由 JWT、权限中间件和
 资源查询条件完成。
 
 前端导航上下文先按全局角色约束，再按 URL 解析组织或个人工作区。超级管理员与平台管理员访问 `/account/*` 时仍属于平台上下文；Logo 和全局内容入口必须直接返回 `/admin` 或 `/platform-admin`，不得经过不存在的个人工作区。组织上下文失效后返回 `/identity?organizationUnavailable=1`，由用户选择仍有效的身份。
 
-普通账号在校园页面的负责人、教师和学生能力必须来自当前有效 Membership 对应的 `organizationRole`，不得读取全局 `User.role`。教师与负责人导航必须提供评测记录诊断入口，负责人额外提供教师与权限入口。校园 Dashboard 的团队查询必须携带当前组织上下文；即使同一账号属于多个学校，也只能统计当前学校的数据。
+普通账号在校园页面的负责人、教师和学生能力必须来自当前 URL 的组织 ID 对应的有效 Membership，解析结果写入 `organizationRole`；账号页面的 `/auth/me` 不选择“最早加入的学校”。教师与负责人导航必须提供评测记录诊断入口，负责人额外提供教师与权限入口。校园 Dashboard 的团队查询必须携带当前组织上下文；即使同一账号属于多个学校，也只能统计当前学校的数据。
+
+组织上下文明确返回 `ORGANIZATION_ACCESS_DENIED` 或 `ORGANIZATION_NOT_AVAILABLE` 时，当前 `/org/:id` 页面清除该组织缓存并回到身份选择；普通资源级 `403` 不触发工作区退出。
 
 浏览器登录由 Server 设置同域 `HttpOnly`、`SameSite=Lax` 会话 Cookie；正式环境同时要求
 HTTPS 和 `Secure=true`。鉴权中间件暂时兼容 Bearer Token，供脚本、测试与旧会话一次性
 迁移使用。旧 Token 迁移成功后会从 `localStorage` 清除，不能再把它作为浏览器长期会话来源。
+
+账号资料只编辑用户名之外的全局字段：用户名只读，头像、邮箱、手机号和简介属于账号。学校真实姓名属于各自 Membership Profile，不允许账号页将某一学校姓名冒充为全局姓名。
+
+右上角铃铛保持“账号 + 当前学校”上下文；`/account/notifications?view=account` 是全账号消息中心，聚合账号通知和用户全部有效学校通知并标注来源学校。`legacy` 学校不进入聚合，可操作状态始终由服务端按通知对应学校实时计算。

@@ -7,30 +7,78 @@ export class NotificationApplicationError extends Error {
   constructor(public readonly statusCode: number, message: string) { super(message) }
 }
 
-function visibleNotificationWhere(user: AuthUser) {
-  const scope = getResourceScope(user)
-  const contexts = [{ contextKey: 'account' }]
-  if (user.organizationId) contexts.push({ contextKey: `organization:${user.organizationId}` })
-  return { userId: user.userId, OR: [...contexts, { contextKey: 'legacy:campus', scope }] }
+function isAccountView(query: Record<string, unknown>) {
+  return query.view === 'account'
 }
 
-async function resolveNotificationRows(user: AuthUser, rows: Awaited<ReturnType<typeof prisma.userNotification.findMany>>) {
+async function notificationAccess(user: AuthUser, query: Record<string, unknown> = {}) {
+  const scope = getResourceScope(user)
+  if (isAccountView(query)) {
+    const memberships = await prisma.organizationMembership.findMany({
+      where: {
+        userId: user.userId,
+        status: 'active',
+        Organization: {
+          status: 'active',
+          OR: [{ type: { not: 'school' } }, { School: { directoryStatus: { not: 'legacy' } } }],
+        },
+      },
+      select: { organizationId: true },
+    })
+    const organizationIds = [...new Set(memberships.map(item => item.organizationId))]
+    return {
+      organizationIds,
+      where: {
+        userId: user.userId,
+        OR: [
+          { contextKey: 'account' },
+          ...organizationIds.map(organizationId => ({ contextKey: `organization:${organizationId}` })),
+        ],
+      },
+    }
+  }
+  const contexts = [{ contextKey: 'account' }]
+  if (user.organizationId) contexts.push({ contextKey: `organization:${user.organizationId}` })
+  return {
+    organizationIds: user.organizationId ? [user.organizationId] : [],
+    where: { userId: user.userId, OR: [...contexts, { contextKey: 'legacy:campus', scope }] },
+  }
+}
+
+async function resolveNotificationRows(
+  user: AuthUser,
+  rows: Awaited<ReturnType<typeof prisma.userNotification.findMany>>,
+  organizationIds: string[],
+  accountView: boolean,
+) {
   const scope = getResourceScope(user)
   const teamInvitationIds = rows.filter(row => row.type === 'team_invitation').map(row => row.sourceId)
   const joinRequestIds = rows.filter(row => row.type === 'team_join_request').map(row => row.sourceId)
   const organizationInvitationIds = rows.filter(row => row.type === 'organization_invitation').map(row => row.sourceId)
   const joinApplicationIds = rows.filter(row => row.type === 'organization_join_application_received').map(row => row.sourceId)
   const creationApplicationIds = rows.filter(row => row.type === 'organization_creation_application_received').map(row => row.sourceId)
-  const [teamMembers, administratorMemberships, organizationInvitations, legacyOrganizationInvitations, joinApplications, creationApplications] = await Promise.all([
+  const rowOrganizationIds = [...new Set(rows.flatMap(row => {
+    if (row.organizationId) return [row.organizationId]
+    const match = row.contextKey.match(/^organization:(.+)$/)
+    return match ? [match[1]] : []
+  }))]
+  const [teamMembers, administratorMemberships, organizationInvitations, legacyOrganizationInvitations, joinApplications, creationApplications, organizations] = await Promise.all([
     teamInvitationIds.length || joinRequestIds.length
       ? prisma.teamMember.findMany({
           where: { id: { in: [...teamInvitationIds, ...joinRequestIds] } },
-          select: { id: true, userId: true, teamId: true, status: true, invitedBy: true, Team: { select: { scope: true } } },
+          select: { id: true, userId: true, teamId: true, status: true, invitedBy: true, Team: { select: { scope: true, organizationId: true } } },
         })
       : [],
     joinRequestIds.length
       ? prisma.teamMember.findMany({
-          where: { userId: user.userId, status: 'active', role: { in: ['owner', 'admin'] }, Team: { scope } },
+          where: {
+            userId: user.userId,
+            status: 'active',
+            role: { in: ['owner', 'admin'] },
+            Team: accountView
+              ? { OR: [{ scope: 'personal' }, { scope: 'campus', organizationId: { in: organizationIds } }] }
+              : { scope },
+          },
           select: { teamId: true },
         })
       : [],
@@ -43,10 +91,16 @@ async function resolveNotificationRows(user: AuthUser, rows: Awaited<ReturnType<
         })
       : [],
     joinApplicationIds.length ? prisma.organizationJoinApplication.findMany({
-      where: { id: { in: joinApplicationIds }, organizationId: user.organizationId || '__none__' }, select: { id: true, status: true },
+      where: {
+        id: { in: joinApplicationIds },
+        organizationId: accountView ? { in: organizationIds } : (user.organizationId || '__none__'),
+      }, select: { id: true, status: true },
     }) : [],
     creationApplicationIds.length && user.role === 'super_admin' ? prisma.organizationCreationApplication.findMany({
       where: { id: { in: creationApplicationIds } }, select: { id: true, status: true },
+    }) : [],
+    rowOrganizationIds.length ? prisma.organization.findMany({
+      where: { id: { in: rowOrganizationIds } }, select: { id: true, name: true },
     }) : [],
   ])
   const teamMemberById = new Map(teamMembers.map(member => [member.id, member]))
@@ -57,12 +111,17 @@ async function resolveNotificationRows(user: AuthUser, rows: Awaited<ReturnType<
   const actionableIds = new Set(rows.flatMap(row => {
     if (row.type === 'team_invitation') {
       const invitation = teamMemberById.get(row.sourceId)
-      return invitation?.userId === user.userId && invitation.status === 'pending' && invitation.invitedBy !== null &&
-        invitation.Team.scope === scope ? [row.id] : []
+      const visibleTeam = accountView
+        ? invitation?.Team.scope === 'personal' || Boolean(invitation?.Team.organizationId && organizationIds.includes(invitation.Team.organizationId))
+        : invitation?.Team.scope === scope
+      return invitation?.userId === user.userId && invitation.status === 'pending' && invitation.invitedBy !== null && visibleTeam ? [row.id] : []
     }
     if (row.type === 'team_join_request') {
       const request = teamMemberById.get(row.sourceId)
-      return request?.status === 'pending' && request.invitedBy === null && request.Team.scope === scope &&
+      const visibleTeam = accountView
+        ? request?.Team.scope === 'personal' || Boolean(request?.Team.organizationId && organizationIds.includes(request.Team.organizationId))
+        : request?.Team.scope === scope
+      return request?.status === 'pending' && request.invitedBy === null && visibleTeam &&
         administratorTeamIds.has(request.teamId) ? [row.id] : []
     }
     if (row.type === 'organization_invitation') {
@@ -85,8 +144,12 @@ async function resolveNotificationRows(user: AuthUser, rows: Awaited<ReturnType<
     await prisma.userNotification.updateMany({ where: { id: { in: staleIds } }, data: { readAt: markedAt } })
   }
   const staleSet = new Set(staleIds)
-  const notifications = rows.map(row => ({
-    ...row,
+  const organizationById = new Map(organizations.map(organization => [organization.id, organization.name]))
+  const notifications = rows.map(row => {
+    const organizationId = row.organizationId || row.contextKey.match(/^organization:(.+)$/)?.[1] || null
+    return ({
+    ...row, organizationId,
+    organizationName: organizationId ? organizationById.get(organizationId) || null : null,
     readAt: staleSet.has(row.id) ? markedAt : row.readAt,
     actionable: actionableIds.has(row.id),
     actions: !actionableIds.has(row.id) ? [] : row.type === 'organization_invitation' || row.type === 'team_invitation'
@@ -94,7 +157,7 @@ async function resolveNotificationRows(user: AuthUser, rows: Awaited<ReturnType<
       : row.type === 'organization_join_application_received' || row.type === 'organization_creation_application_received'
         ? [{ key: 'view', label: '查看', style: 'primary' }]
         : [{ key: 'reject', label: '拒绝', style: 'secondary' }, { key: 'approve', label: '同意', style: 'primary' }],
-  }))
+  })})
   return notifications
 }
 
@@ -102,7 +165,9 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
   const page = Math.max(1, Number(query.page) || 1)
   const pageSize = Math.min(50, Math.max(1, Number(query.pageSize || query.take) || 20))
   const filter = ['all', 'unread', 'actionable'].includes(String(query.filter)) ? String(query.filter) : 'all'
-  const visible = visibleNotificationWhere(user)
+  const accountView = isAccountView(query)
+  const access = await notificationAccess(user, query)
+  const visible = access.where
   let notifications: Awaited<ReturnType<typeof resolveNotificationRows>> = []
   let hasMore = false
 
@@ -123,7 +188,7 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
         take: batchSize,
       })
       if (!rows.length) break
-      const resolved = await resolveNotificationRows(user, rows)
+      const resolved = await resolveNotificationRows(user, rows, access.organizationIds, accountView)
       actionable.push(...resolved.filter(row => row.actionable))
       offset += rows.length
       if (rows.length < batchSize) break
@@ -139,25 +204,27 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
       take: pageSize + 1,
     })
     hasMore = fetchedRows.length > pageSize
-    notifications = await resolveNotificationRows(user, fetchedRows.slice(0, pageSize))
+    notifications = await resolveNotificationRows(user, fetchedRows.slice(0, pageSize), access.organizationIds, accountView)
   }
   const unreadCount = await prisma.userNotification.count({ where: { ...visible, readAt: null } })
   return { notifications, unreadCount, page, pageSize, hasMore }
 }
 
-export async function readNotification(user: AuthUser, id: string) {
-  const existing = await prisma.userNotification.findFirst({ where: { id, ...visibleNotificationWhere(user) }, select: { id: true } })
+export async function readNotification(user: AuthUser, id: string, query: Record<string, unknown> = {}) {
+  const visible = (await notificationAccess(user, query)).where
+  const existing = await prisma.userNotification.findFirst({ where: { id, ...visible }, select: { id: true } })
   if (!existing) throw new NotificationApplicationError(404, '通知不存在')
   const result = await prisma.userNotification.updateMany({
-    where: { id, ...visibleNotificationWhere(user), readAt: null }, data: { readAt: new Date() },
+    where: { id, ...visible, readAt: null }, data: { readAt: new Date() },
   })
-  const unreadCount = await prisma.userNotification.count({ where: { ...visibleNotificationWhere(user), readAt: null } })
+  const unreadCount = await prisma.userNotification.count({ where: { ...visible, readAt: null } })
   return { changed: Boolean(result.count), unreadCount }
 }
 
-export async function readAllNotifications(user: AuthUser) {
+export async function readAllNotifications(user: AuthUser, query: Record<string, unknown> = {}) {
+  const visible = (await notificationAccess(user, query)).where
   const result = await prisma.userNotification.updateMany({
-    where: { ...visibleNotificationWhere(user), readAt: null }, data: { readAt: new Date() },
+    where: { ...visible, readAt: null }, data: { readAt: new Date() },
   })
   return { changed: result.count, unreadCount: 0 }
 }
