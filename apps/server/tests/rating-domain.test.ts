@@ -169,9 +169,13 @@ describe('rating domain HTTP and persistence', () => {
 
   it('rejects GLOBAL and BOTH for an organization contest even when the actor is a platform administrator', async () => {
     const platformAdmin = await createTestUser({ role: 'platform_admin' })
-    await prisma.organizationMembership.create({ data: {
+    const platformMembership = await prisma.organizationMembership.create({ data: {
       id: crypto.randomUUID(), organizationId, userId: platformAdmin.user.id,
       memberRole: 'teacher', relationType: 'employee', status: 'active', joinedAt: new Date(),
+    } })
+    await prisma.organizationMembershipRole.create({ data: {
+      id: crypto.randomUUID(), membershipId: platformMembership.id, roleKey: 'teacher',
+      source: 'test', grantedBy: manager.user.id,
     } })
     const platformToken = generateTestToken({ userId: platformAdmin.user.id, username: platformAdmin.user.username, role: platformAdmin.user.role })
     const future = await prisma.training.create({ data: { title: 'Organization-only rating contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: platformAdmin.user.id } })
