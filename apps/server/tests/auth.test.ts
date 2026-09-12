@@ -412,7 +412,8 @@ describe('Authentication Module', () => {
     })
 
     it('returns school info only when the request names the organization', async () => {
-      const { school, organization, principal } = await createTestSchoolWithPrincipal()
+      const { school, principal } = await createTestSchoolWithPrincipal()
+      const organization = await prisma.organization.findFirstOrThrow({ where: { School: { id: school.id } } })
       const token = generateTestToken({
         userId: principal.userId,
         role: 'school_principal',

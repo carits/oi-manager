@@ -109,17 +109,27 @@ export function createTestApp() {
 /**
  * 创建带认证的请求
  */
-export function createAuthenticatedRequest(app: express.Application, token: string) {
+export function createAuthenticatedRequest(
+  app: express.Application,
+  token: string,
+  options: { organizationId?: string } = {},
+) {
+  const authenticated = (test: any) => {
+    const withToken = test.set('Authorization', `Bearer ${token}`)
+    return options.organizationId
+      ? withToken.set('X-OI-Organization-ID', options.organizationId)
+      : withToken
+  }
   return {
     get: (url: string) =>
-      request(app).get(url).set('Authorization', `Bearer ${token}`),
+      authenticated(request(app).get(url)),
     post: (url: string) =>
-      request(app).post(url).set('Authorization', `Bearer ${token}`),
+      authenticated(request(app).post(url)),
     put: (url: string) =>
-      request(app).put(url).set('Authorization', `Bearer ${token}`),
+      authenticated(request(app).put(url)),
     patch: (url: string) =>
-      request(app).patch(url).set('Authorization', `Bearer ${token}`),
+      authenticated(request(app).patch(url)),
     delete: (url: string) =>
-      request(app).delete(url).set('Authorization', `Bearer ${token}`)
+      authenticated(request(app).delete(url))
   }
 }
