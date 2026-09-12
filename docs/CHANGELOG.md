@@ -14,7 +14,7 @@ source_of_truth: Git history
 - 逐项复核 Human UX / Productization 十项交付，确认 Assignment 批改矩阵与人工完成、四步简单作业、五处统一 CodeMirror、Blog 阅读联动、知识导航、Rating 人类化和题解并排审核仍使用现有真实 API 与权限边界。
 - 比赛创建与编辑恢复为“基本信息 → 赛制与 Rating → 题目 → 可见性 → 发布前检查”五步；Rating 默认关闭，选择计分范围后才出现权重和最低人数，来源/题解/管理员排名集中到可见性步骤，最终步骤统一显示阻断项和固定测试数据说明。
 - 更新 Web 契约和线上角色探针，避免后续再次把五步流程机械压回大表单或隐藏高级设置。
-- Web 36 文件/147 项单元测试、Web/Shared/Server/Judge 生产构建通过；本地数据库服务未启动，因此 PostgreSQL 定向集成测试在连接阶段被明确阻断，未伪造通过结果。
+- Web 36 文件/147 项单元测试、Web/Shared/Server/Judge 生产构建、UI/路由/文档门禁通过；本地数据库服务未启动，因此 PostgreSQL 定向集成测试在连接阶段被明确阻断，未伪造通过结果。提交 `6e93e59` 已推送 `main`；Web BUILD_ID `3rfGuZNz23juHyIVXoERT` 经 canary 和正式端口双账号消息闭环（序号 128–131）后提升，正式环境负责人五步比赛向导浏览器探针 1/1 通过，Web、Router、API、Worker、Executor、Judge 与 readiness 正常。本轮未修改 API、Prisma、评分、权限、冻结规则或历史数据。
 
 ### 权限不变量、规模化选择器与浏览器会话收口
 
