@@ -193,3 +193,52 @@ export async function listContestRuntimesForDashboard(input: {
   }
   return [...mapped, ...legacy]
 }
+
+const rankingRuntimeInclude = {
+  TrainingProblem: {
+    orderBy: { orderIndex: 'asc' as const },
+    select: {
+      id: true,
+      problemId: true,
+      alias: true,
+      points: true,
+      orderIndex: true,
+      Problem: { select: { problemId: true } },
+    },
+  },
+} as const
+
+/**
+ * Ranking is shared by training and contest routes. Contest runtimes resolve
+ * through the aggregate first; ordinary training records remain direct.
+ */
+export async function findActivityRuntimeForRanking(runtimeTrainingId: number) {
+  const aggregate = await prisma.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { include: rankingRuntimeInclude } },
+  })
+  if (aggregate?.RuntimeTraining) {
+    if (aggregate.RuntimeTraining.type !== 'contest') {
+      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
+        action: 'contest_query',
+        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'ranking' },
+      })
+      return null
+    }
+    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
+  }
+
+  const runtime = await prisma.training.findUnique({
+    where: { id: runtimeTrainingId },
+    include: rankingRuntimeInclude,
+  })
+  if (!runtime) return null
+  if (runtime.type === 'contest') {
+    logger.warn('contest_query_legacy_fallback', {
+      action: 'contest_query',
+      metadata: { runtimeTrainingId, consumer: 'ranking' },
+    })
+    return { contest: null, runtime, source: 'legacy' as const }
+  }
+  return { contest: null, runtime, source: 'training' as const }
+}

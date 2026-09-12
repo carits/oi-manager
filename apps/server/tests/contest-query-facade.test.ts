@@ -4,6 +4,7 @@ import { prisma } from '../src/prisma'
 import {
   findContestRuntimeForLicense,
   findContestRuntimeForRating,
+  findActivityRuntimeForRanking,
   listContestRuntimesForDashboard,
   listPlatformContestRuntimes,
 } from '../src/modules/contest/contest-query.facade'
@@ -30,6 +31,9 @@ describe('Contest query facade', () => {
     expect(await findContestRuntimeForLicense(runtime.id)).toMatchObject({
       source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
     })
+    expect(await findActivityRuntimeForRanking(runtime.id)).toMatchObject({
+      source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
+    })
   })
 
   it('contains legacy fallback inside the facade and returns each platform contest once', async () => {
@@ -42,6 +46,7 @@ describe('Contest query facade', () => {
     const legacy = await createRuntime('Legacy')
     expect(await findContestRuntimeForRating(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     expect(await findContestRuntimeForLicense(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
+    expect(await findActivityRuntimeForRanking(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     const rows = await listPlatformContestRuntimes()
     expect(rows.map(row => row.id).sort((a, b) => a - b)).toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
     const dashboardRows = await listContestRuntimesForDashboard({
@@ -51,5 +56,17 @@ describe('Contest query facade', () => {
     })
     expect(dashboardRows.map(row => row.id).sort((a, b) => a - b))
       .toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
+  })
+
+  it('keeps ordinary training ranking reads outside contest fallback semantics', async () => {
+    const training = await prisma.training.create({ data: {
+      title: 'Ordinary training', format: 'oi', type: 'training', scope: 'personal', status: 'upcoming',
+      startTime: new Date('2027-01-01T00:00:00.000Z'),
+      endTime: new Date('2027-01-01T02:00:00.000Z'),
+      createdBy: crypto.randomUUID(),
+    } })
+    expect(await findActivityRuntimeForRanking(training.id)).toMatchObject({
+      source: 'training', contest: null, runtime: { id: training.id, type: 'training' },
+    })
   })
 })

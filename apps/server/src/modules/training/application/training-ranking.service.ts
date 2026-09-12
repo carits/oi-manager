@@ -11,6 +11,7 @@ import {
   getParticipantNames,
   requireTrainingStarted,
 } from '../training.helpers'
+import { findActivityRuntimeForRanking } from '../../contest/contest-query.facade'
 
 export class TrainingRankingError extends Error {
   constructor(
@@ -350,19 +351,9 @@ async function buildIcpcRanking(training: any, excludedIds: string[]) {
 }
 
 export async function getTrainingRanking(trainingId: number, userId: string) {
-  const training = await prisma.training.findUnique({
-    where: { id: trainingId },
-    include: {
-      TrainingProblem: {
-        orderBy: { orderIndex: 'asc' },
-        select: {
-          id: true, problemId: true, alias: true, points: true, orderIndex: true,
-          Problem: { select: { problemId: true } },
-        },
-      },
-    },
-  })
-  if (!training) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
+  const resolved = await findActivityRuntimeForRanking(trainingId)
+  if (!resolved) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
+  const training = resolved.runtime
   if (!await canAccessTraining(userId, training)) fail(403, 'TRAINING_ACCESS_DENIED', '无权限')
   const notStarted = await requireTrainingStarted(training, userId)
   if (notStarted) fail(403, 'TRAINING_NOT_STARTED', notStarted)

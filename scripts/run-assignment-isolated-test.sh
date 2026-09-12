@@ -88,7 +88,7 @@ elif [[ "$TEST_SCOPE" == "contest-cutover" ]]; then
     --no-file-parallelism \
     tests/oj-adapters-registry.test.ts tests/contest-query-facade.test.ts \
     tests/rating-domain.test.ts tests/data-market.test.ts tests/dashboard-workspace.test.ts \
-    tests/school-contest.test.ts
+    tests/school-contest.test.ts tests/contest.test.ts
 else
   echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, authorization, release-invariants, contest-cutover or full" >&2
   exit 1
