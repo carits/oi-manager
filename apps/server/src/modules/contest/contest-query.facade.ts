@@ -352,3 +352,78 @@ export async function findActivityRuntimeForSubmission(runtimeTrainingId: number
   }
   return { contest: null, runtime, source: 'training' as const }
 }
+
+/** Resolve the shared access checks used by activity resources and solutions. */
+export async function findActivityRuntimeForAccess(runtimeTrainingId: number) {
+  const aggregate = await prisma.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: true },
+  })
+  if (aggregate?.RuntimeTraining) {
+    if (aggregate.RuntimeTraining.type !== 'contest') {
+      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
+        action: 'contest_query',
+        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'activity_access' },
+      })
+      return null
+    }
+    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
+  }
+  const runtime = await prisma.training.findUnique({ where: { id: runtimeTrainingId } })
+  if (!runtime) return null
+  if (runtime.type === 'contest') {
+    logger.warn('contest_query_legacy_fallback', {
+      action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'activity_access' },
+    })
+    return { contest: null, runtime, source: 'legacy' as const }
+  }
+  return { contest: null, runtime, source: 'training' as const }
+}
+
+const overviewRuntimeInclude = {
+  _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
+  TrainingProblem: {
+    include: {
+      Problem: {
+        select: {
+          id: true, title: true, platform: true, problemId: true, difficulty: true,
+          timeLimit: true, memoryLimit: true,
+          _count: { select: { ProblemAttachment: true } },
+        },
+      },
+      TrainingSolution: { select: { id: true, visible: true } },
+      _count: { select: { TrainingAttachment: true } },
+    },
+    orderBy: { orderIndex: 'asc' as const },
+  },
+} as const
+
+/** Resolve the participant-facing activity overview through Contest first. */
+export async function findActivityRuntimeForOverview(runtimeTrainingId: number) {
+  const aggregate = await prisma.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { include: overviewRuntimeInclude } },
+  })
+  if (aggregate?.RuntimeTraining) {
+    if (aggregate.RuntimeTraining.type !== 'contest') {
+      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
+        action: 'contest_query',
+        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'activity_overview' },
+      })
+      return null
+    }
+    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
+  }
+  const runtime = await prisma.training.findUnique({
+    where: { id: runtimeTrainingId },
+    include: overviewRuntimeInclude,
+  })
+  if (!runtime) return null
+  if (runtime.type === 'contest') {
+    logger.warn('contest_query_legacy_fallback', {
+      action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'activity_overview' },
+    })
+    return { contest: null, runtime, source: 'legacy' as const }
+  }
+  return { contest: null, runtime, source: 'training' as const }
+}

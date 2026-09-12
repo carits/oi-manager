@@ -14,6 +14,10 @@ import {
   CURRENT_JUDGE_RUN_SELECT,
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
+import {
+  findActivityRuntimeForAccess,
+  findActivityRuntimeForOverview,
+} from '../../contest/contest-query.facade'
 
 export class TrainingMiscError extends Error {
   constructor(
@@ -62,7 +66,7 @@ function rewriteTrainingFileUrls(trainingId: number, trainingProblemId: string, 
 }
 
 async function requireAccessibleTraining(id: number, userId: string, hidden = false) {
-  const training = await prisma.training.findUnique({ where: { id } })
+  const training = (await findActivityRuntimeForAccess(id))?.runtime || null
   if (!training || !await canAccessTraining(userId, training)) {
     fail(hidden ? 404 : training ? 403 : 404, hidden ? 'RESOURCE_NOT_FOUND' : training ? 'TRAINING_ACCESS_DENIED' : 'TRAINING_NOT_FOUND', hidden ? '资源不存在' : training ? '无权限' : '训练不存在')
   }
@@ -70,26 +74,7 @@ async function requireAccessibleTraining(id: number, userId: string, hidden = fa
 }
 
 export async function getTrainingOverview(id: number, userId: string) {
-  const training = await prisma.training.findUnique({
-    where: { id },
-    include: {
-      _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
-      TrainingProblem: {
-        include: {
-          Problem: {
-            select: {
-              id: true, title: true, platform: true, problemId: true, difficulty: true,
-              timeLimit: true, memoryLimit: true,
-              _count: { select: { ProblemAttachment: true } },
-            },
-          },
-          TrainingSolution: { select: { id: true, visible: true } },
-          _count: { select: { TrainingAttachment: true } },
-        },
-        orderBy: { orderIndex: 'asc' },
-      },
-    },
-  })
+  const training = (await findActivityRuntimeForOverview(id))?.runtime || null
   if (!training) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
   if (!await canAccessTraining(userId, training)) fail(403, 'TRAINING_ACCESS_DENIED', '无权查看该训练')
 

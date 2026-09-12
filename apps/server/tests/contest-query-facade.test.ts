@@ -6,6 +6,8 @@ import {
   findContestRuntimeForRating,
   findActivityRuntimeForRanking,
   findActivityRuntimeForSubmission,
+  findActivityRuntimeForAccess,
+  findActivityRuntimeForOverview,
   findContestRuntimeForBlogReview,
   listDueRatedContestRuntimes,
   listContestRuntimesForDashboard,
@@ -43,6 +45,12 @@ describe('Contest query facade', () => {
     expect(await findActivityRuntimeForSubmission(runtime.id)).toMatchObject({
       source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
     })
+    expect(await findActivityRuntimeForAccess(runtime.id)).toMatchObject({
+      source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
+    })
+    expect(await findActivityRuntimeForOverview(runtime.id)).toMatchObject({
+      source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
+    })
   })
 
   it('contains legacy fallback inside the facade and returns each platform contest once', async () => {
@@ -58,6 +66,8 @@ describe('Contest query facade', () => {
     expect(await findActivityRuntimeForRanking(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     expect(await findContestRuntimeForBlogReview(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     expect(await findActivityRuntimeForSubmission(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
+    expect(await findActivityRuntimeForAccess(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
+    expect(await findActivityRuntimeForOverview(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     const rows = await listPlatformContestRuntimes()
     expect(rows.map(row => row.id).sort((a, b) => a - b)).toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
     const dashboardRows = await listContestRuntimesForDashboard({
@@ -109,6 +119,12 @@ describe('Contest query facade', () => {
       source: 'training', contest: null, runtime: { id: training.id, type: 'training' },
     })
     expect(await findActivityRuntimeForSubmission(training.id)).toMatchObject({
+      source: 'training', contest: null, runtime: { id: training.id, type: 'training' },
+    })
+    expect(await findActivityRuntimeForAccess(training.id)).toMatchObject({
+      source: 'training', contest: null, runtime: { id: training.id, type: 'training' },
+    })
+    expect(await findActivityRuntimeForOverview(training.id)).toMatchObject({
       source: 'training', contest: null, runtime: { id: training.id, type: 'training' },
     })
   })
