@@ -7,8 +7,13 @@ REPORT_DIR="${SECURITY_BASELINE_DIR:-/data/backups/oi-manager/security-baseline}
 STATE_FILE="${SECURITY_BASELINE_STATE_FILE:-$REPORT_DIR/security-baseline.json}"
 KEEP_DAYS="${SECURITY_BASELINE_KEEP_DAYS:-90}"
 LOCK_FILE="${SECURITY_BASELINE_LOCK_FILE:-/tmp/oi-manager-security-baseline.lock}"
+check_timeout_seconds="${SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS:-300}"
 
 [[ "$KEEP_DAYS" =~ ^[0-9]+$ ]] || { echo 'SECURITY_BASELINE_KEEP_DAYS must be non-negative' >&2; exit 2; }
+[[ "$check_timeout_seconds" =~ ^[1-9][0-9]*$ ]] || {
+  echo 'SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS must be a positive integer' >&2
+  exit 2
+}
 mkdir -p "$REPORT_DIR"
 chmod 700 "$REPORT_DIR"
 exec 9>"$LOCK_FILE"
@@ -28,8 +33,17 @@ trap cleanup EXIT INT TERM
 
 run_check() {
   local name="$1"
+  local status
   shift
-  if ! (cd "$ROOT_DIR" && "$@") > "$work_dir/${name}.log" 2>&1; then
+  if (cd "$ROOT_DIR" && timeout --signal=TERM --kill-after=15s "${check_timeout_seconds}s" "$@") \
+    > "$work_dir/${name}.log" 2>&1; then
+    return
+  else
+    status=$?
+    if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+      printf '\nCheck timed out after %s seconds (exit %s).\n' "$check_timeout_seconds" "$status" \
+        >> "$work_dir/${name}.log"
+    fi
     failures+=("$name")
   fi
 }

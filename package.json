@@ -41,6 +41,7 @@
     "security:audit": "node scripts/audit-runtime-security.mjs",
     "security:verify": "bash scripts/verify-runtime-security-audit.sh",
     "security:baseline": "bash scripts/run-security-baseline.sh",
+    "security:baseline:verify": "bash scripts/verify-security-baseline-timeout.sh",
     "security:baseline:install": "bash scripts/install-security-baseline-cron.sh",
     "tls:verify": "bash scripts/verify-tls-tooling.sh",
     "csp:verify": "node scripts/verify-csp-response.mjs",
@@ -113,7 +114,7 @@
       "nanoid@>=3.0.0 <3.3.18": "3.3.18",
       "path-to-regexp@<0.1.13": "0.1.13",
       "postcss@<8.5.23": "8.5.23",
-      "qs@>=6.11.1 <6.15.2": "6.15.2"
+      "qs@>=6.11.1 <6.16.0": "6.16.0"
     },
     "ignoredOptionalDependencies": [
       "sharp"

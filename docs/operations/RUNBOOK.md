@@ -125,7 +125,11 @@ cat /data/backups/oi-manager/security-baseline/security-baseline.json
 ```
 
 The monitor rejects a failed, missing, stale or hash-mismatched report. Detailed reports are mode 600 and retained for
-90 days; they contain audit output but never secret values.
+90 days; they contain audit output but never secret values. Every individual check is terminated after
+`SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS` (300 seconds by default), and the corresponding report log records an
+explicit timeout. A registry or other external dependency outage therefore fails the baseline without leaving a
+permanently running audit process. Verify the timeout contract after changing this runner with
+`pnpm security:baseline:verify` on Linux.
 The optimized production preview has no HMR listener; development environments may explicitly set
 `MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. The current host has no SLS Logtail,
 CloudMonitor Agent or ECS RAM Role, so cloud contacts, thresholds and log delivery must be provisioned explicitly.
