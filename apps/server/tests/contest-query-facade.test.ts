@@ -5,6 +5,8 @@ import {
   findContestRuntimeForLicense,
   findContestRuntimeForRating,
   findActivityRuntimeForRanking,
+  findContestRuntimeForBlogReview,
+  listDueRatedContestRuntimes,
   listContestRuntimesForDashboard,
   listPlatformContestRuntimes,
 } from '../src/modules/contest/contest-query.facade'
@@ -34,6 +36,9 @@ describe('Contest query facade', () => {
     expect(await findActivityRuntimeForRanking(runtime.id)).toMatchObject({
       source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
     })
+    expect(await findContestRuntimeForBlogReview(runtime.id)).toMatchObject({
+      source: 'aggregate', contest: { id: contest.id }, runtime: { id: runtime.id },
+    })
   })
 
   it('contains legacy fallback inside the facade and returns each platform contest once', async () => {
@@ -47,6 +52,7 @@ describe('Contest query facade', () => {
     expect(await findContestRuntimeForRating(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     expect(await findContestRuntimeForLicense(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     expect(await findActivityRuntimeForRanking(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
+    expect(await findContestRuntimeForBlogReview(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     const rows = await listPlatformContestRuntimes()
     expect(rows.map(row => row.id).sort((a, b) => a - b)).toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
     const dashboardRows = await listContestRuntimesForDashboard({
@@ -56,6 +62,35 @@ describe('Contest query facade', () => {
     })
     expect(dashboardRows.map(row => row.id).sort((a, b) => a - b))
       .toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
+  })
+
+  it('discovers due Rating work through mapped aggregates and bounded legacy fallback', async () => {
+    const mapped = await prisma.training.create({ data: {
+      title: 'Due mapped', format: 'ioi', type: 'contest', scope: 'platform', status: 'finished',
+      startTime: new Date('2026-01-01T00:00:00.000Z'), endTime: new Date('2026-01-01T02:00:00.000Z'),
+      createdBy: crypto.randomUUID(),
+    } })
+    await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), runtimeTrainingId: mapped.id, title: mapped.title,
+      contestDate: mapped.startTime, startAt: mapped.startTime, endAt: mapped.endTime,
+      format: mapped.format, status: mapped.status, type: 'judged', scope: 'platform',
+    } })
+    await prisma.trainingRatingConfig.create({ data: {
+      id: crypto.randomUUID(), trainingId: mapped.id, track: 'IOI', scope: 'NONE',
+      scoringRules: {}, rulesHash: 'mapped-rules', createdBy: mapped.createdBy,
+    } })
+    const legacy = await prisma.training.create({ data: {
+      title: 'Due legacy', format: 'ioi', type: 'contest', scope: 'platform', status: 'finished',
+      startTime: new Date('2026-01-02T00:00:00.000Z'), endTime: new Date('2026-01-02T02:00:00.000Z'),
+      createdBy: crypto.randomUUID(),
+    } })
+    await prisma.trainingRatingConfig.create({ data: {
+      id: crypto.randomUUID(), trainingId: legacy.id, track: 'IOI', scope: 'NONE',
+      scoringRules: {}, rulesHash: 'legacy-rules', createdBy: legacy.createdBy,
+    } })
+
+    const due = await listDueRatedContestRuntimes(new Date('2026-02-01T00:00:00.000Z'), 10)
+    expect(due.map(row => row.id)).toEqual([mapped.id, legacy.id])
   })
 
   it('keeps ordinary training ranking reads outside contest fallback semantics', async () => {

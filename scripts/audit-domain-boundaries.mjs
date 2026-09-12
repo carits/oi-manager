@@ -53,6 +53,13 @@ const trainingRanking = fs.readFileSync(path.join(modulesRoot, 'training/applica
 if (!trainingRanking.includes('findActivityRuntimeForRanking')) {
   violations.push('Contest ranking bypasses the Contest query facade')
 }
+const blog = fs.readFileSync(path.join(modulesRoot, 'blog/blog.service.ts'), 'utf8')
+if (!blog.includes('findContestRuntimeForBlogReview')) {
+  violations.push('Blog contest review bypasses the Contest query facade')
+}
+if (!contestRating.includes('listDueRatedContestRuntimes')) {
+  violations.push('Rating scheduler bypasses the Contest query facade')
+}
 
 console.log(JSON.stringify({
   assignmentAuthorizationBoundary: !violations.some(item => item.startsWith('Assignment')),

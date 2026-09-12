@@ -15,6 +15,7 @@ import { prisma } from '../../prisma'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { canModifyProblem, canViewProblem } from '../problem/problem.access'
 import { createSolutionContribution, SolutionDomainError } from '../solution/solution.service'
+import { findContestRuntimeForBlogReview } from '../contest/contest-query.facade'
 
 const MAX_MARKDOWN_BYTES = 1024 * 1024
 const MAX_REFERENCES = 50
@@ -1362,7 +1363,8 @@ export async function listTagBlogs(user: JwtPayload, tagId: string, query: any) 
 }
 
 export async function createBlogFromContest(user: JwtPayload, trainingId: number) {
-  const training = await prisma.training.findUnique({ where: { id: trainingId }, select: { id: true, title: true, finalizedStandingId: true, status: true } })
+  const resolved = await findContestRuntimeForBlogReview(trainingId)
+  const training = resolved?.runtime
   if (!training?.finalizedStandingId) fail(409, 'BLOG_CONTEST_NOT_FINALIZED', '比赛尚未生成固定榜单，不能创建复盘')
   await prisma.$transaction(tx => resolveReference(tx, user, {
     type: 'CONTEST_STANDING',

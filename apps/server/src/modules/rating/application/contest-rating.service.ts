@@ -4,7 +4,7 @@ import { prisma } from '../../../prisma'
 import { canAccessTraining, canManageTraining } from '../../training/training.helpers'
 import { buildStanding, defaultScoringRules, normalizeScoringRules, type ScoringParticipant, type ScoringSubmission } from '../domain/contest-scoring'
 import { calculateMultiElo, RATING_ALGORITHM } from '../domain/multi-elo'
-import { findContestRuntimeForRating } from '../../contest/contest-query.facade'
+import { findContestRuntimeForRating, listDueRatedContestRuntimes } from '../../contest/contest-query.facade'
 
 export class ContestRatingError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) { super(message) }
@@ -530,20 +530,9 @@ export async function finalizeContestRating(trainingId: number, userId: string) 
  * blue/green overlap idempotent.
  */
 export async function processDueContestRatings(limit = 20) {
-  const due = await prisma.training.findMany({
-    where: {
-      type: 'contest',
-      endTime: { lte: new Date() },
-      finalizationStatus: { in: ['LIVE', 'JUDGING'] },
-      // Only contests that have entered the new Rating lifecycle are eligible.
-      // This includes explicitly unrated contests (they still need an immutable
-      // final standing) without sweeping legacy contests after deployment.
-      RatingConfig: { isNot: null },
-    },
-    select: { id: true, createdBy: true },
-    orderBy: [{ endTime: 'asc' }, { id: 'asc' }],
-    take: Math.max(1, Math.min(100, Math.trunc(limit))),
-  })
+  // Only contests that entered the Rating lifecycle are eligible. Discovery
+  // goes through the aggregate boundary; the facade owns legacy fallback.
+  const due = await listDueRatedContestRuntimes(new Date(), limit)
   const result = { scanned: due.length, finalized: 0, waiting: 0, failed: 0, failures: [] as Array<{ trainingId: number; code: string }> }
   for (const contest of due) {
     try {

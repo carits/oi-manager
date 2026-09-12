@@ -242,3 +242,66 @@ export async function findActivityRuntimeForRanking(runtimeTrainingId: number) {
   }
   return { contest: null, runtime, source: 'training' as const }
 }
+
+const blogReviewRuntimeSelect = {
+  id: true,
+  title: true,
+  finalizedStandingId: true,
+  status: true,
+} as const
+
+/** Resolve the public runtime route identity before creating a contest review. */
+export async function findContestRuntimeForBlogReview(runtimeTrainingId: number) {
+  const aggregate = await prisma.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { select: blogReviewRuntimeSelect } },
+  })
+  if (aggregate?.RuntimeTraining) {
+    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
+  }
+  const legacy = await prisma.training.findFirst({
+    where: { id: runtimeTrainingId, type: 'contest' },
+    select: blogReviewRuntimeSelect,
+  })
+  if (!legacy) return null
+  logger.warn('contest_query_legacy_fallback', {
+    action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'blog_review' },
+  })
+  return { contest: null, runtime: legacy, source: 'legacy' as const }
+}
+
+/**
+ * Discover due Rating work through Contest first. Runtime state remains on
+ * Training during the cutover, but callers no longer scan the legacy table.
+ */
+export async function listDueRatedContestRuntimes(now = new Date(), limit = 20) {
+  const aggregateIds = (await prisma.contest.findMany({
+    where: { runtimeTrainingId: { not: null } },
+    select: { runtimeTrainingId: true },
+  })).flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
+  const runtimeWhere: Prisma.TrainingWhereInput = {
+    type: 'contest',
+    endTime: { lte: now },
+    finalizationStatus: { in: ['LIVE', 'JUDGING'] },
+    RatingConfig: { isNot: null },
+  }
+  const mapped = aggregateIds.length ? await prisma.training.findMany({
+    where: { id: { in: aggregateIds }, ...runtimeWhere },
+    select: { id: true, createdBy: true, endTime: true },
+  }) : []
+  const legacy = await prisma.training.findMany({
+    where: { ...runtimeWhere, ...(aggregateIds.length ? { id: { notIn: aggregateIds } } : {}) },
+    select: { id: true, createdBy: true, endTime: true },
+  })
+  if (legacy.length) {
+    logger.warn('contest_query_legacy_fallback', {
+      action: 'contest_query', metadata: {
+        consumer: 'rating_scheduler', count: legacy.length,
+        runtimeTrainingIds: legacy.slice(0, 20).map(row => row.id),
+      },
+    })
+  }
+  return [...mapped, ...legacy]
+    .sort((a, b) => a.endTime.getTime() - b.endTime.getTime() || a.id - b.id)
+    .slice(0, Math.max(1, Math.min(100, Math.trunc(limit))))
+}
