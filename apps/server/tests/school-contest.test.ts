@@ -11,6 +11,7 @@ import { createTestApp } from './helpers/testRequest'
 import { generateTestToken } from './helpers/testToken'
 import { createTestSchoolContest, createTestSubmission } from './helpers/school-contest-helpers'
 import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from './helpers/testUser'
+import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 
 const app = createTestApp()
 
@@ -89,6 +90,10 @@ describe('organization contest contract', () => {
           startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),
           status: 'ongoing', createdBy: student.user.id,
         },
+      })
+      await prisma.$transaction(async tx => {
+        await ensureContestAggregateTx(tx, schoolContest.id)
+        await ensureContestAggregateTx(tx, visibleTeamContest.id)
       })
       await prisma.training.create({
         data: {

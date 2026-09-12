@@ -5,6 +5,7 @@ import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
 import { defaultScoringRules, trackForFormat } from '../../rating/application/contest-rating.service'
 import { ensureContestAggregateTx } from '../../contest/contest-aggregate.service'
+import { listContestRuntimesForDashboard } from '../../contest/contest-query.facade'
 import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
 
 export class OrganizationMemberError extends Error {
@@ -108,15 +109,16 @@ async function memberTeamIds(actor: OrganizationActor) {
 
 export async function listOrganizationActivities(actor: OrganizationActor, type: 'homework' | 'contest') {
   const teamIds = await memberTeamIds(actor)
-  const trainings = type === 'homework'
-    ? teamIds.length ? await prisma.training.findMany({
+  const trainings = type === 'contest'
+    ? await listContestRuntimesForDashboard({
+      teamIds,
+      resourceScope: 'campus',
+      organizationId: actor.organizationId,
+    })
+    : teamIds.length ? await prisma.training.findMany({
       where: { organizationId: actor.organizationId, teamId: { in: teamIds }, type }, orderBy: { startTime: 'desc' },
       include: { _count: { select: { TrainingProblem: true } } },
     }) : []
-    : await prisma.training.findMany({
-      where: { organizationId: actor.organizationId, type, OR: [{ teamId: null }, ...(teamIds.length ? [{ teamId: { in: teamIds } }] : [])] },
-      orderBy: { startTime: 'desc' }, include: { _count: { select: { TrainingProblem: true } } },
-    })
   return trainings.map(training => ({
     id: training.id, title: training.title, description: training.description,
     startTime: training.startTime, endTime: training.endTime, status: activityStatus(training.startTime, training.endTime),

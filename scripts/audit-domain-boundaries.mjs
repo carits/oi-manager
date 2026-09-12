@@ -45,6 +45,10 @@ const dashboard = fs.readFileSync(path.join(modulesRoot, 'dashboard/application/
 if (!dashboard.includes('listContestRuntimesForDashboard')) {
   violations.push('Dashboard contest discovery bypasses the Contest query facade')
 }
+const organizationMember = fs.readFileSync(path.join(modulesRoot, 'organization/application/organization-member.service.ts'), 'utf8')
+if (!organizationMember.includes('listContestRuntimesForDashboard')) {
+  violations.push('Organization contest discovery bypasses the Contest query facade')
+}
 
 console.log(JSON.stringify({
   assignmentAuthorizationBoundary: !violations.some(item => item.startsWith('Assignment')),
