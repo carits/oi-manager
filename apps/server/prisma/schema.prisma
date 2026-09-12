@@ -2721,9 +2721,9 @@ model OrganizationMembership {
   @@index([organizationId, status])
 }
 
-/// Normalized, additive roles for one organization relationship. During the
-/// expand phase OrganizationMembership.memberRole remains the profile
-/// discriminator and compatibility source; authorization reads both.
+/// Normalized, additive authorization roles for one organization relationship.
+/// OrganizationMembership.memberRole remains only the profile discriminator;
+/// authorization reads this relation and explicit capability grants.
 model OrganizationMembershipRole {
   id           String                 @id
   membershipId String

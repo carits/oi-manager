@@ -1,9 +1,8 @@
 import { prisma } from '../../prisma'
 
 /**
- * Stable capability names used by domain policies. Membership roles are kept
- * as a compatibility input during the expand/backfill phase; callers must not
- * branch on memberRole directly.
+ * Stable capability names used by domain policies. Authorization is derived
+ * only from normalized role assignments and explicit capability grants.
  */
 export type OrganizationCapability =
   | 'assignment.create'
@@ -15,7 +14,7 @@ export type OrganizationCapability =
 
 export type TeamCapability = 'assignment.create' | 'assignment.manage' | 'contest.manage'
 
-const LEGACY_ORGANIZATION_ROLE_CAPABILITIES: Readonly<Record<string, ReadonlySet<OrganizationCapability>>> = {
+const ORGANIZATION_ROLE_CAPABILITIES: Readonly<Record<string, ReadonlySet<OrganizationCapability>>> = {
   teacher: new Set([
     'assignment.create',
     'assignment.manage',
@@ -34,7 +33,7 @@ const LEGACY_ORGANIZATION_ROLE_CAPABILITIES: Readonly<Record<string, ReadonlySet
 
 function capabilitiesFromRoles(roleKeys: string[]) {
   return new Set<OrganizationCapability>(roleKeys.flatMap(roleKey => [
-    ...(LEGACY_ORGANIZATION_ROLE_CAPABILITIES[roleKey] ?? []),
+    ...(ORGANIZATION_ROLE_CAPABILITIES[roleKey] ?? []),
   ]))
 }
 
@@ -57,7 +56,6 @@ export async function hasOrganizationCapability(
       where: { organizationId_userId: { organizationId, userId } },
       select: {
         status: true,
-        memberRole: true,
         RoleAssignments: { select: { roleKey: true } },
         CapabilityGrants: { select: { capabilityKey: true } },
         Organization: { select: { status: true, School: { select: { directoryStatus: true } } } },
@@ -70,18 +68,12 @@ export async function hasOrganizationCapability(
   if (!membership || membership.status !== 'active') return false
   if (membership.Organization.status !== 'active' || membership.Organization.School?.directoryStatus === 'legacy') return false
 
-  const roleSource = process.env.MEMBERSHIP_CAPABILITY_SOURCE || 'hybrid'
   const normalizedCapabilities = capabilitiesFromRoles(membership.RoleAssignments.map(item => item.roleKey))
   const explicitlyGranted = membership.CapabilityGrants.some(item => item.capabilityKey === capability)
-  const legacyGranted = LEGACY_ORGANIZATION_ROLE_CAPABILITIES[membership.memberRole]?.has(capability) ?? false
-  const allowed = roleSource === 'normalized'
-    ? normalizedCapabilities.has(capability) || explicitlyGranted
-    : roleSource === 'legacy'
-      ? legacyGranted
-      : legacyGranted || normalizedCapabilities.has(capability) || explicitlyGranted
+  const allowed = normalizedCapabilities.has(capability) || explicitlyGranted
   if (!allowed) return false
   const normalizedPrincipal = membership.RoleAssignments.some(item => item.roleKey === 'school_principal')
-  const teacherScoped = membership.memberRole === 'teacher' && !normalizedPrincipal
+  const teacherScoped = membership.RoleAssignments.some(item => item.roleKey === 'teacher') && !normalizedPrincipal
   if (
     teacherScoped
     && options.resourceCreatedByUserId
@@ -108,6 +100,6 @@ export async function hasTeamCapability(
   return Boolean(membership)
 }
 
-export function capabilitiesForLegacyOrganizationRole(memberRole: string): OrganizationCapability[] {
-  return [...(LEGACY_ORGANIZATION_ROLE_CAPABILITIES[memberRole] ?? [])]
+export function capabilitiesForOrganizationRole(roleKey: string): OrganizationCapability[] {
+  return [...(ORGANIZATION_ROLE_CAPABILITIES[roleKey] ?? [])]
 }

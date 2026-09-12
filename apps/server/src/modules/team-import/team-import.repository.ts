@@ -6,6 +6,7 @@ import crypto from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../../prisma'
 import type { ImportPlatform, ParsedRow, MatchResult } from './team-import.types'
+import { syncOrganizationMembershipBaseRole } from '../authorization/membership-role-assignment'
 
 export class TeamImportRepository {
   /**
@@ -407,8 +408,9 @@ export class TeamImportRepository {
     return prisma.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { id: uuidv4(), username: params.username, passwordHash: params.passwordHash, role: 'user', status: 'active' } })
       const membership = await tx.organizationMembership.create({
-        data: { id: uuidv4(), userId: user.id, organizationId: params.organizationId, memberRole: 'student', relationType: 'school_student', status: 'active' }
+        data: { id: uuidv4(), userId: user.id, organizationId: params.organizationId, memberRole: 'student', relationType: 'enrolled', status: 'active' }
       })
+      await syncOrganizationMembershipBaseRole(tx, membership.id, 'student', { source: 'team_import' })
       const student = await tx.organizationStudentProfile.create({
         data: { id: uuidv4(), membershipId: membership.id, name: params.name, headTeacherMembershipId: params.headTeacherMembershipId || null }
       })

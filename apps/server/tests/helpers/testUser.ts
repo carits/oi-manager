@@ -97,9 +97,12 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
         organizationId,
         userId: user.id,
         memberRole,
-        relationType: role === 'student' ? 'student' : 'employee',
+        relationType: role === 'student' ? 'enrolled' : 'employee',
         status: 'active',
         joinedAt: new Date(),
+        RoleAssignments: {
+          create: { id: crypto.randomUUID(), roleKey: memberRole, source: 'test_fixture' },
+        },
       },
     })
 

@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 475 |
+| Referenced environment keys | 474 |
 
 ## HTTP adapter ownership
 
@@ -639,7 +639,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MAX_REFERENCES`
 - `MAX_STICKERS`
 - `MAX_TAGS`
-- `MEMBERSHIP_CAPABILITY_SOURCE`
 - `MESSAGE`
 - `METRICS_CHECK`
 - `METRICS_SNAPSHOT_PATH`

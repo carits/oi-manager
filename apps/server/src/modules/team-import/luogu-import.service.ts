@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../../prisma'
 import { LuoguSession } from '../platform-binding/binders/luogu-session'
+import { syncOrganizationMembershipBaseRole } from '../authorization/membership-role-assignment'
 import { teamService } from '../team/team.service'
 import type {
   LuoguGroupPreview,
@@ -191,6 +192,7 @@ export class LuoguImportService {
                 joinedAt: new Date(),
               },
             })
+            await syncOrganizationMembershipBaseRole(tx, membership.id, 'student', { source: 'team_import', grantedBy: teacherId })
             const headTeacher = await tx.organizationMembership.findFirst({
               where: { organizationId, userId: teacherId, status: "active", memberRole: { in: ["teacher", "school_principal"] } },
               select: { id: true },

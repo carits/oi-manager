@@ -13,6 +13,7 @@ import bcrypt from 'bcryptjs'
 import fs from 'fs'
 import path from 'path'
 import { prisma } from '../../prisma'
+import { syncOrganizationMembershipBaseRole } from '../authorization/membership-role-assignment'
 import logger from '../../lib/logger'
 import { VJudgeSession } from '../platform-binding/binders/vjudge-session'
 import { teamService } from '../team/team.service'
@@ -375,6 +376,7 @@ export class VjudgeImportService {
           const student = await prisma.$transaction(async (tx) => {
             const newUser = await tx.user.create({ data: { id: uuidv4(), username: systemUsername, passwordHash, role: "user", status: "active" } })
             const membership = await tx.organizationMembership.create({ data: { id: uuidv4(), organizationId, userId: newUser.id, memberRole: "student", relationType: "enrolled", status: "active", joinedAt: new Date() } })
+            await syncOrganizationMembershipBaseRole(tx, membership.id, 'student', { source: 'team_import', grantedBy: teacherId })
             const headTeacher = await tx.organizationMembership.findFirst({ where: { organizationId, userId: teacherId, status: "active", memberRole: { in: ["teacher", "school_principal"] } }, select: { id: true } })
             const profile = await tx.organizationStudentProfile.create({ data: { id: uuidv4(), membershipId: membership.id, name: studentName, gender: member.gender || null, enrollmentYear: member.enrollmentYear || null, headTeacherMembershipId: headTeacher?.id || null } })
             return { id: newUser.id, profileId: profile.id }

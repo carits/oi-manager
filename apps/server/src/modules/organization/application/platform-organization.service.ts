@@ -4,6 +4,7 @@ import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
 import { createSchoolOrganizationCore, findLegacySchoolNameConflict, lockSchoolCreation, normalizeSchoolName, SchoolNameConflictError } from './school-creation.service'
 import { getSchoolReferenceSummaries, getSchoolReferenceSummary, SCHOOL_DIRECTORY_STATUSES, SchoolDirectoryGovernanceError, updateSchoolDirectoryStatus } from './school-directory-governance.service'
+import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
 
 export class PlatformOrganizationError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
@@ -136,10 +137,15 @@ export async function createPlatformOrganizationPrincipal(organizationId: string
     const userId = crypto.randomUUID()
     const membershipId = crypto.randomUUID()
     const user = await tx.user.create({ data: { id: userId, username, passwordHash: await bcrypt.hash(password, 10), role: 'user' } })
+    const formerPrincipals = await tx.organizationMembership.findMany({ where: { organizationId, memberRole: 'school_principal' }, select: { id: true } })
     await tx.organizationMembership.updateMany({ where: { organizationId, memberRole: 'school_principal' }, data: { memberRole: 'teacher' } })
+    for (const principal of formerPrincipals) {
+      await syncOrganizationMembershipBaseRole(tx, principal.id, 'teacher', { source: 'principal_transfer' })
+    }
     await tx.organizationMembership.create({
       data: { id: membershipId, organizationId, userId, memberRole: 'school_principal', relationType: 'employee', status: 'active', joinedAt: new Date() },
     })
+    await syncOrganizationMembershipBaseRole(tx, membershipId, 'school_principal', { source: 'principal_transfer' })
     const profile = await tx.organizationTeacherProfile.create({
       data: {
         id: crypto.randomUUID(), membershipId, name,
@@ -249,11 +255,16 @@ export async function transferPlatformOrganizationPrincipal(organizationId: stri
     where: { id: selectedMembershipId, organizationId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } },
   })
   if (!membership) badRequest('负责人必须是本校有效教师')
-  await prisma.$transaction([
-    prisma.organizationMembership.updateMany({ where: { organizationId, memberRole: 'school_principal' }, data: { memberRole: 'teacher' } }),
-    prisma.organizationMembership.update({ where: { id: selectedMembershipId }, data: { memberRole: 'school_principal' } }),
-    prisma.school.update({ where: { id: school.id }, data: { currentPrincipalMembershipId: selectedMembershipId } }),
-  ])
+  await prisma.$transaction(async tx => {
+    const formerPrincipals = await tx.organizationMembership.findMany({ where: { organizationId, memberRole: 'school_principal' }, select: { id: true } })
+    await tx.organizationMembership.updateMany({ where: { organizationId, memberRole: 'school_principal' }, data: { memberRole: 'teacher' } })
+    for (const principal of formerPrincipals) {
+      await syncOrganizationMembershipBaseRole(tx, principal.id, 'teacher', { source: 'principal_transfer' })
+    }
+    await tx.organizationMembership.update({ where: { id: selectedMembershipId }, data: { memberRole: 'school_principal' } })
+    await syncOrganizationMembershipBaseRole(tx, selectedMembershipId, 'school_principal', { source: 'principal_transfer' })
+    await tx.school.update({ where: { id: school.id }, data: { currentPrincipalMembershipId: selectedMembershipId } })
+  })
   const profile = await prisma.organizationTeacherProfile.findUnique({
     where: { membershipId: selectedMembershipId },
     include: { Membership: { include: { User: { select: { username: true } } } } },

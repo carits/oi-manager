@@ -50,9 +50,10 @@ describe('organization join workflow', () => {
 
     const approved = await request(app).post(`/api/organizations/${organizationId}/join-applications/${created.body.data.id}/approve`).set(auth(teacherToken)).set('X-OI-Organization-ID', organizationId).send({ profile: { name: '申请学生', enrollmentYear: 2026 } })
     expect(approved.status).toBe(200)
-    const membership = await prisma.organizationMembership.findUniqueOrThrow({ where: { organizationId_userId: { organizationId, userId: applicantId } }, include: { StudentProfile: true } })
+    const membership = await prisma.organizationMembership.findUniqueOrThrow({ where: { organizationId_userId: { organizationId, userId: applicantId } }, include: { StudentProfile: true, RoleAssignments: true } })
     expect(membership.status).toBe('active')
     expect(membership.StudentProfile?.headTeacherMembershipId).toBe(teacherMembershipId)
+    expect(membership.RoleAssignments.map(item => item.roleKey)).toEqual(['student'])
   })
 
   it('does not allow a teacher to approve a teacher application', async () => {

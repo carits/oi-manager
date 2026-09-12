@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import { notificationService } from '../notification/notification.service'
+import { syncOrganizationMembershipBaseRole } from '../authorization/membership-role-assignment'
 
 export class OrganizationJoinError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code: string) {
@@ -178,6 +179,7 @@ async function activateMembership(tx: Prisma.TransactionClient, input: { organiz
   const membership = existing
     ? await tx.organizationMembership.update({ where: { id: existing.id }, data: { memberRole: input.role, relationType: input.relationType, status: 'active', invitedBy: null, joinedAt: new Date() } })
     : await tx.organizationMembership.create({ data: { id: crypto.randomUUID(), organizationId: input.organizationId, userId: input.userId, memberRole: input.role, relationType: input.relationType, status: 'active', joinedAt: new Date() } })
+  await syncOrganizationMembershipBaseRole(tx, membership.id, input.role, { source: 'organization_join' })
   if (input.role === 'student') {
     await tx.organizationTeacherProfile.updateMany({ where: { membershipId: membership.id }, data: { status: 'archived' } })
     await tx.organizationStudentProfile.upsert({ where: { membershipId: membership.id }, create: {

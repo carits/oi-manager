@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { prisma } from '../../../prisma'
 import { notificationService } from '../../notification/notification.service'
 import { createOrganizationInvitation, respondToInvitation } from '../../organization-join/organization-join.service'
+import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
 
 const allModules = ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
 const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts']
@@ -96,6 +97,7 @@ export async function respondToOrganizationInvitation(actor: WorkspaceActor, inv
       data: { status: accept ? 'active' : 'rejected', joinedAt: accept ? new Date() : null },
     })
     if (!accept) return
+    await syncOrganizationMembershipBaseRole(tx, invitation.id, invitation.memberRole, { source: 'legacy_invitation' })
     const user = await tx.user.findUniqueOrThrow({
       where: { id: actor.userId },
       select: { username: true, avatar: true, email: true, phone: true, bio: true },

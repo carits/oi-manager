@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import type { Prisma } from '@prisma/client'
+import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
 
 const SCHOOL_CREATION_LOCK = 7832357088731n
 
@@ -67,6 +68,10 @@ export async function createSchoolOrganizationCore(
   }
   await tx.organizationMembership.create({
     data: { id: membershipId, organizationId, userId: principal.userId, memberRole: 'school_principal', relationType: 'employee', status: 'active', joinedAt: new Date() },
+  })
+  await syncOrganizationMembershipBaseRole(tx, membershipId, 'school_principal', {
+    source: 'school_creation',
+    grantedBy: principal.type === 'existing' ? principal.userId : null,
   })
   await tx.organizationTeacherProfile.create({
     data: {

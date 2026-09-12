@@ -5,6 +5,7 @@ import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
 import { defaultScoringRules, trackForFormat } from '../../rating/application/contest-rating.service'
 import { ensureContestAggregateTx } from '../../contest/contest-aggregate.service'
+import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
 
 export class OrganizationMemberError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
@@ -231,6 +232,7 @@ export async function createOrganizationStudent(actor: OrganizationActor, body: 
   return prisma.$transaction(async tx => {
     const user = await tx.user.create({ data: { id: crypto.randomUUID(), username, passwordHash: await bcrypt.hash(password, 10), role: 'user', avatar: body.avatar || null } })
     const membership = await tx.organizationMembership.create({ data: { id: crypto.randomUUID(), organizationId: actor.organizationId, userId: user.id, memberRole: 'student', relationType: 'enrolled', status: 'active', joinedAt: new Date() } })
+    await syncOrganizationMembershipBaseRole(tx, membership.id, 'student', { source: 'organization_member', grantedBy: actor.userId })
     const profile = await tx.organizationStudentProfile.create({ data: { id: crypto.randomUUID(), membershipId: membership.id, name, gender: body.gender || null, enrollmentYear: body.enrollmentYear ? Number(body.enrollmentYear) : null, targetContest: body.targetContest || null, headTeacherMembershipId: headTeacherMembershipId || null, tags: body.tags ? JSON.stringify(body.tags) : null, notes: body.notes || null, avatar: body.avatar || null } })
     return { id: profile.id, membershipId: membership.id, userId: user.id }
   })
@@ -282,6 +284,8 @@ export async function transferOrganizationPrincipal(actor: OrganizationActor, ne
   await prisma.$transaction(async tx => {
     await tx.organizationMembership.update({ where: { id: actor.organizationMembershipId! }, data: { memberRole: 'teacher' } })
     await tx.organizationMembership.update({ where: { id: target.id }, data: { memberRole: 'school_principal' } })
+    await syncOrganizationMembershipBaseRole(tx, actor.organizationMembershipId!, 'teacher', { source: 'principal_transfer', grantedBy: actor.userId })
+    await syncOrganizationMembershipBaseRole(tx, target.id, 'school_principal', { source: 'principal_transfer', grantedBy: actor.userId })
     await tx.school.update({ where: { id: school.id }, data: { currentPrincipalMembershipId: target.id } })
   })
   return { principalMembershipId: target.id }
@@ -297,6 +301,7 @@ export async function createOrganizationTeacher(actor: OrganizationActor, body: 
   return prisma.$transaction(async tx => {
     const user = await tx.user.create({ data: { id: crypto.randomUUID(), username, passwordHash: await bcrypt.hash(password, 10), role: 'user', avatar: body.avatar || null, email: body.email || null, phone: body.phone || null } })
     const membership = await tx.organizationMembership.create({ data: { id: crypto.randomUUID(), organizationId: actor.organizationId, userId: user.id, memberRole: 'teacher', relationType: 'employee', status: 'active', joinedAt: new Date() } })
+    await syncOrganizationMembershipBaseRole(tx, membership.id, 'teacher', { source: 'organization_member', grantedBy: actor.userId })
     const profile = await tx.organizationTeacherProfile.create({ data: { id: crypto.randomUUID(), membershipId: membership.id, name, email: body.email || null, phone: body.phone || null, title: body.title || null, avatar: body.avatar || null, bio: body.bio || null } })
     return { id: profile.id, membershipId: membership.id, userId: user.id }
   })

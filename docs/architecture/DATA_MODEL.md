@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-12
+last_verified: 2026-09-13
 source_of_truth: apps/server/prisma/schema.prisma, docs/architecture/generated/ARCHITECTURE_INVENTORY.md
 ---
 
@@ -37,7 +37,7 @@ erDiagram
   OrganizationMembership ||--o| OrganizationTeacherProfile : teacher_profile
 ```
 
-账号的全局角色与组织成员身份分离。学生、教师和负责人是组织关系，不修改普通账号的全局 `User.role`。`User.sessionVersion` 仅负责撤销旧 JWT，不表示组织或设备身份。`OrganizationMembership.memberRole` 仍决定学生/教师资料类型；授权调用稳定 Capability。迁移阶段 Resolver 默认 `hybrid`，同时读取规范化角色/显式 Capability 与旧角色映射；完成受保护回填并对账后才允许切换 `MEMBERSHIP_CAPABILITY_SOURCE=normalized`。
+账号的全局角色与组织成员身份分离。学生、教师和负责人是组织关系，不修改普通账号的全局 `User.role`。`User.sessionVersion` 仅负责撤销旧 JWT，不表示组织或设备身份。`OrganizationMembership.memberRole` 只决定学生/教师资料类型；授权唯一读取规范化 RoleAssignment 与显式 CapabilityGrant。所有成员写入口在同一事务同步基础 RoleAssignment，生产对账缺失与未知角色均为 0。
 
 ## 题目、Revision 与活动
 

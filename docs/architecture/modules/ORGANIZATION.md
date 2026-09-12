@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-12
+last_verified: 2026-09-13
 source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/organization, apps/server/src/modules/organization-join, apps/server/src/modules/organization-creation, apps/server/src/modules/authorization, apps/server/src/routes/workspaces.ts
 ---
 
@@ -66,12 +66,13 @@ Account Identity
 
 ## Capability 授权迁移
 
-岗位是资料和默认能力模板，Capability 才是授权事实。当前读取模式由
-`MEMBERSHIP_CAPABILITY_SOURCE=legacy|hybrid|normalized` 控制；迁移期默认 `hybrid`。受保护的
-`/api/admin/migration/membership-roles` check/apply 负责幂等回填 RoleAssignment 与 CapabilityGrant。
+岗位是资料和默认能力模板，Capability 才是授权事实。授权已经固定读取规范化
+`OrganizationMembershipRole` 与显式 `OrganizationMembershipCapability`，不再提供 legacy/hybrid fallback。
+`memberRole` 继续用于学生/教师资料分类和 UI 岗位展示，但不能直接授予业务权限。
 
-切换 `normalized` 前必须同时满足：未解析 Membership 为 0，角色与能力差异为 0，持续观察期无新拒绝差异。切换后禁止授权
-路径回退读取 `memberRole` 映射，但 `memberRole` 继续用于学生/教师资料分类和 UI 岗位展示。
+所有 Membership 创建、恢复、导入和负责人转移都在原业务事务内同步基础 RoleAssignment；附加岗位和显式能力不会因基础岗位
+变化而被误删。受保护的 `/api/admin/migration/membership-roles` check/apply 保留为一致性修复工具：未知角色 fail closed，
+缺失或冲突的基础角色按 `memberRole` 幂等修复。
 
 ## 通知与工作区
 

@@ -8,6 +8,7 @@ export default defineConfig({
       'tests/assignment-grading.test.ts',
       'tests/solution-similarity.test.ts',
       'tests/contest-scoring-rules.test.ts',
+      'tests/authorization-boundary.test.ts',
     ],
   },
 })

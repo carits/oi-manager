@@ -1,8 +1,8 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-12
-source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
+last_verified: 2026-09-13
+source_of_truth: packages/contracts/src/identity.ts, auth middleware, authorization capabilities, role layouts
 ---
 
 # 认证与权限
@@ -88,10 +88,11 @@ Bearer 仅供脚本、测试与旧客户端兼容。缺少、无效、过期或�
 
 服务端业务域不得互相导入对方的角色判断函数。稳定组织/团队能力集中在
 `modules/authorization/capabilities.ts`，Assignment 等领域再用自己的 policy 组合资源所有权、创建者和状态。
-当前 `OrganizationMembershipRole` 与 `OrganizationMembershipCapability` 是规范化授权来源；迁移期间默认
-`MEMBERSHIP_CAPABILITY_SOURCE=hybrid`，先读取规范化分配和显式能力，同时保留 `memberRole` 映射。受保护的
-`GET/POST /api/admin/migration/membership-roles` 对账并回填后，生产才可显式切到 `normalized`。切换不会改变
-`memberRole` 的学生/教师资料判别用途。
+`OrganizationMembershipRole` 与 `OrganizationMembershipCapability` 是组织授权的唯一事实源。生产已完成
+20,186 条 Membership 对账，授权路径不再读取 `memberRole` 的旧能力映射，也没有 hybrid/legacy 运行开关。
+所有创建、恢复、导入和负责人转移必须在同一事务调用
+`syncOrganizationMembershipBaseRole()`；`memberRole` 只保留学生/教师资料判别和岗位展示用途。受保护的
+`GET/POST /api/admin/migration/membership-roles` 继续作为幂等一致性检查和修复入口，并同时报告缺失、冲突基础角色和未知角色。
 
 资源所有权回归矩阵同时固定以下边界：平台管理员和超级管理员都可读取全局提交；组织活动只有负责人、
 创建者和超级管理员可管理，平台管理员仅有全局只读访问；校园团队同样只有 owner/admin 与超级管理员
