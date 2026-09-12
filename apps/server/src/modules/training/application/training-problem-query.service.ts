@@ -4,12 +4,10 @@ import {
   CURRENT_JUDGE_RUN_SELECT,
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
+import { findActivityRuntimeForAccess } from '../../contest/contest-query.facade'
 
-export function findTrainingForProblemAccess(id: number, includeTeam = false) {
-  return prisma.training.findUnique({
-    where: { id },
-    ...(includeTeam ? { include: { Team: { select: { organizationId: true, scope: true } } } } : {}),
-  })
+export async function findTrainingForProblemAccess(id: number, _includeTeam = false) {
+  return (await findActivityRuntimeForAccess(id))?.runtime || null
 }
 
 export function listTrainingProblems(trainingId: number) {

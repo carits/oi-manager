@@ -68,6 +68,10 @@ const trainingMisc = fs.readFileSync(path.join(modulesRoot, 'training/applicatio
 if (!trainingMisc.includes('findActivityRuntimeForAccess') || !trainingMisc.includes('findActivityRuntimeForOverview')) {
   violations.push('Activity overview or resource access bypasses the Contest query facade')
 }
+const trainingProblemQuery = fs.readFileSync(path.join(modulesRoot, 'training/application/training-problem-query.service.ts'), 'utf8')
+if (!trainingProblemQuery.includes('findActivityRuntimeForAccess')) {
+  violations.push('Activity problem access bypasses the Contest query facade')
+}
 if (!judgeRun.includes('holdContestFinalizationForRejudgeTx')) {
   violations.push('Judge rejudge finalization bypasses the Contest command service')
 }
