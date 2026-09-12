@@ -253,6 +253,13 @@ export async function listAssignments(userId: string, query: any) {
   const rawStatus = query?.status ? String(query.status).toUpperCase() : undefined
   if (rawStatus && !ASSIGNMENT_STATUSES.has(rawStatus)) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_STATUS', '作业状态筛选不受支持')
   const status = rawStatus as AssignmentStatus | undefined
+  const statusGroup = query?.statusGroup ? String(query.statusGroup).toLowerCase() : undefined
+  if (statusGroup && !['active', 'draft', 'finished', 'all'].includes(statusGroup)) {
+    throw new AssignmentError(422, 'INVALID_ASSIGNMENT_STATUS_GROUP', '作业状态分组不受支持')
+  }
+  if (status && statusGroup && statusGroup !== 'all') {
+    throw new AssignmentError(422, 'ASSIGNMENT_STATUS_FILTER_CONFLICT', '不能同时指定作业状态和状态分组')
+  }
   const [managedOrganizations, managedTeams, account] = await Promise.all([
     prisma.organizationMembership.findMany({
       where: { userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } },
@@ -268,8 +275,8 @@ export async function listAssignments(userId: string, query: any) {
   const teacherOrgIds = managedOrganizations.filter(item => item.memberRole === 'teacher').map(item => item.organizationId)
   const managedTeamIds = managedTeams.map(item => item.teamId)
   const now = new Date()
-  const where: Prisma.AssignmentWhereInput = {
-    ...(organizationId ? { organizationId } : {}), ...(teamId ? { teamId } : {}), ...(status ? { status } : {}),
+  const baseWhere: Prisma.AssignmentWhereInput = {
+    ...(organizationId ? { organizationId } : {}), ...(teamId ? { teamId } : {}),
     ...(account?.role === 'super_admin' ? {} : {
       OR: [
         { organizationId: { in: principalOrgIds } },
@@ -283,10 +290,23 @@ export async function listAssignments(userId: string, query: any) {
       ],
     }),
   }
+  const groupedStatuses: AssignmentStatus[] | undefined = statusGroup === 'active'
+    ? ['SCHEDULED', 'OPEN', 'OVERDUE']
+    : statusGroup === 'draft'
+      ? ['DRAFT']
+      : statusGroup === 'finished'
+        ? ['CLOSED', 'REVIEWING', 'RELEASED', 'ARCHIVED', 'CANCELLED']
+        : undefined
+  const where: Prisma.AssignmentWhereInput = {
+    AND: [
+      baseWhere,
+      ...(status ? [{ status }] : groupedStatuses ? [{ status: { in: groupedStatuses } }] : []),
+    ],
+  }
   const [total, rows, statusGroups] = await Promise.all([
     prisma.assignment.count({ where }),
     prisma.assignment.findMany({ where, include: ASSIGNMENT_INCLUDE, orderBy: [{ openAt: 'desc' }, { createdAt: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
-    prisma.assignment.groupBy({ by: ['status'], where, _count: { _all: true } }),
+    prisma.assignment.groupBy({ by: ['status'], where: baseWhere, _count: { _all: true } }),
   ])
   return {
     items: rows.map(row => serializeAssignment(row, 'none')),

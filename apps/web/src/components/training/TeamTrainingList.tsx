@@ -12,6 +12,7 @@ import { LoadError } from '@/components/ui/LoadError'
 import { TrainingFormModal } from './TrainingFormModal'
 import { typeLabel } from './types'
 import styles from './TrainingList.module.css'
+import { compareContestSchedules } from '@/lib/contestOrdering'
 
 interface Training { id: string; title: string; description: string | null; format: string; type: string; startTime: string; endTime: string; status: string; createdBy: string; problemCount: number; participantCount: number; createdAt: string }
 interface TeamTrainingListProps { teamId?: string; schoolId?: string; organizationId?: string; basePath: string; isAdmin: boolean; mode?: 'training' | 'contest' | 'homework'; schoolRole?: 'teacher' | 'student' }
@@ -19,7 +20,7 @@ const STATUS_MAP: Record<string, string> = { upcoming: '未开始', ongoing: '�
 const FORMAT_MAP: Record<string, string> = { oi: 'OI', ioi: 'IOI', icpc: 'ICPC' }
 function formatDuration(start: string, end: string) { const ms = new Date(end).getTime() - new Date(start).getTime(); const h = Math.floor(ms / 3600000); const m = Math.floor((ms % 3600000) / 60000); return h > 0 && m > 0 ? `${h}小时${m}分钟` : h > 0 ? `${h}小时` : `${m}分钟` }
 function formatDateTime(iso: string) { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
-function sortTrainings(trainings: Training[]) { const priority: Record<string, number> = { ongoing: 0, upcoming: 1, finished: 2 }; return [...trainings].sort((a, b) => priority[a.status] - priority[b.status] || new Date(b.startTime).getTime() - new Date(a.startTime).getTime()) }
+function sortTrainings(trainings: Training[]) { return [...trainings].sort(compareContestSchedules) }
 
 export default function TeamTrainingList({ teamId, schoolId, organizationId, basePath, isAdmin, mode = 'training', schoolRole = 'teacher' }: TeamTrainingListProps) {
   const { sessionKey } = useAuth(); const [showCreateModal, setShowCreateModal] = useState(false)

@@ -62,6 +62,7 @@ export interface Assignment {
 export interface AssignmentListPayload {
   items: Assignment[]
   pagination: { page: number; pageSize: number; total: number; totalPages: number }
+  statusCounts?: Partial<Record<AssignmentStatus, number>>
 }
 
 export const assignmentStatusMeta: Record<AssignmentStatus, { label: string; variant: 'neutral' | 'info' | 'success' | 'warning' | 'error' }> = {

@@ -67,7 +67,7 @@ DRAFT → SCHEDULED → OPEN → OVERDUE → CLOSED → REVIEWING
 
 主要接口为 `/api/assignments`，以及 `/:id` 下的 `workspace`、`problems`、`roster`、`validate`、`publish`、`submit`、`progress`、`corrections`、`feedback`、`score-adjustments`、`progress/:progressId/manual-completion` 和状态转换接口。题单通过 `POST /api/problem-lists/:id/create-assignment` 创建草稿；活动补题兼容路由仍使用 `POST /api/trainings/:id/create-makeup-homework`，但返回的也是 Assignment 身份。
 
-组织端 `/org/:organizationId/homeworks` 使用独立作业列表。教师在草稿工作台分别保存发布时间、开放/截止/关闭时间、评分策略、固定题目版本和学生名单，运行发布检查后冻结；每道题可显式配置类别、作业满分、目标分、权重和完成策略。学生在同一路径查看题目并提交；发布后教师看到服务端成绩矩阵。所有写接口都重新执行资源级权限、状态和 Revision 校验，前端隐藏按钮不是授权边界。
+组织端 `/org/:organizationId/homeworks` 使用独立作业列表。列表按进行中、草稿、已结束和全部由服务端分组筛选、计数并分页；学生默认进入进行中，当前无任务时可显式进入历史作业。教师在草稿工作台分别保存发布时间、开放/截止/关闭时间、评分策略、固定题目版本和学生名单，运行发布检查后冻结；每道题可显式配置类别、作业满分、目标分、权重和完成策略。学生在同一路径查看题目并提交；发布后教师看到服务端成绩矩阵。所有写接口都重新执行资源级权限、状态和 Revision 校验，前端隐藏按钮不是授权边界。
 
 草稿产品流程固定为“基本信息 → 选择题目 → 选择学生 → 检查并发布”。普通创建只暴露名称、截止时间、题目与学生，完整时间、计分、迟交、订正和题解策略属于可展开高级设置，已有草稿值不会被推荐默认覆盖。“下一步”先执行当前步骤的客户端约束并自动保存；发布检查和最终发布会拒绝仍有任一步骤本地草稿的状态，避免界面数据与发布事务读取的数据不一致。
 

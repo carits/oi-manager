@@ -412,7 +412,7 @@ B 题：...
           onClick={onGoToAttachments}
           className={unifiedStyles.u30}
         >
-          附件 ({selectedProblem?.attachmentCount ?? 0})
+          题目资料 ({selectedProblem?.attachmentCount ?? 0})
         </Button>
       )}
     </div>

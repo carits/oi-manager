@@ -264,3 +264,14 @@
 .reviewCard dt { color: var(--text-secondary); font-size: var(--text-sm); }
 .reviewCard dd { margin: var(--space-1) 0 0; font-weight: 600; }
 @media (max-width: 720px) { .reviewCard dl { grid-template-columns: 1fr; } .wizardSteps { overflow-x: auto; flex-wrap: nowrap; } }
+.sectionHeading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.headingActions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.picker { display: grid; gap: var(--space-4); }
+.pickerList { display: grid; gap: var(--space-2); }
+.pickerItem { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.pickerItem small { display: block; margin-top: var(--space-1); color: var(--text-secondary); }
+.pickerError { color: var(--error); }
+.selectedProblems { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-2); }
+.selectedProblemCard { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-subtle); }
+.selectedProblemCard strong { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius-sm); background: var(--primary-light); color: var(--primary); }
+.selectedProblemCard span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

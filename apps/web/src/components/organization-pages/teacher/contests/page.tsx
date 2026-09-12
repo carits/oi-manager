@@ -23,7 +23,10 @@ export default function TeacherContestsPage() {
   const { organizationId } = useParams<{ organizationId?: string }>()
   const pathPrefix = currentWorkspacePrefix(pathname, '/personal/contests', '/contests')
   const searchParams = useSearchParams()
-  const resource = useResource<TeamPayload | Team[]>('/api/teams?view=mine&pageSize=100', { sessionKey, isEmpty: data => normalizeTeams(data).length === 0 && !organizationId, dedupingInterval: 30000 })
+  const teamEndpoint = organizationId
+    ? `/api/teams?organizationId=${encodeURIComponent(organizationId)}&view=mine&pageSize=100`
+    : '/api/teams?view=mine&pageSize=100'
+  const resource = useResource<TeamPayload | Team[]>(teamEndpoint, { sessionKey, isEmpty: data => normalizeTeams(data).length === 0 && !organizationId, dedupingInterval: 30000 })
   const teams = normalizeTeams(resource.data)
   const scopeOptions = [...(organizationId ? [{ value: 'organization:' + organizationId, label: '校级比赛' }] : []), ...teams.map(team => ({ value: 'team:' + team.id, label: team.name }))]
   const requestedScope = searchParams.get('scope')

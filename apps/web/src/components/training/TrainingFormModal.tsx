@@ -8,7 +8,8 @@ import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { FormDialog } from '@/components/ui/Dialogs'
+import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
+import { Tabs } from '@/components/ui/Tabs'
 import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
 import { useAuth } from '@/components/AuthProvider'
 
@@ -26,6 +27,14 @@ interface ResolvedProblem {
   problemId: string
   title: string
   created: boolean
+}
+
+interface PickerProblem {
+  id: string
+  platform: string
+  problemId: string
+  title: string
+  difficulty?: string | null
 }
 
 interface ContentOption {
@@ -93,6 +102,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [ratingLocked, setRatingLocked] = useState(false)
   const [allowedRatingScopes, setAllowedRatingScopes] = useState<Array<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>>(['NONE'])
   const [wizardStep, setWizardStep] = useState(0)
+  const [advancedContestSettings, setAdvancedContestSettings] = useState(false)
+  const [problemPickerOpen, setProblemPickerOpen] = useState(false)
+  const [problemSource, setProblemSource] = useState<'school' | 'carits' | 'external'>(organizationId ? 'school' : 'carits')
+  const [problemQuery, setProblemQuery] = useState('')
+  const [problemPool, setProblemPool] = useState<PickerProblem[]>([])
+  const [problemPoolLoading, setProblemPoolLoading] = useState(false)
+  const [problemPoolError, setProblemPoolError] = useState('')
   const [recoveryTrainingId, setRecoveryTrainingId] = useState<string | null>(null)
   const [recoveryMessage, setRecoveryMessage] = useState('')
   const [originalStartTime, setOriginalStartTime] = useState<Date | null>(null)
@@ -110,6 +126,10 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     setWizardStep(0)
     setRecoveryTrainingId(null)
     setRecoveryMessage('')
+    setAdvancedContestSettings(false)
+    setProblemPickerOpen(false)
+    setProblemQuery('')
+    setProblemSource(organizationId ? 'school' : 'carits')
 
     if (isEdit && trainingId) {
       // 编辑模式：加载已有数据
@@ -225,6 +245,29 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   }, [isOpen, trainingId])
 
   useEffect(() => {
+    if (!isOpen || !problemPickerOpen || mode !== 'contest') return
+    const timer = window.setTimeout(async () => {
+      setProblemPoolLoading(true)
+      setProblemPoolError('')
+      const params = new URLSearchParams({ page: '1', pageSize: '30' })
+      if (problemQuery.trim()) params.set('keyword', problemQuery.trim())
+      if (problemSource === 'school') params.set('library', 'school')
+      else {
+        params.set('library', 'platform')
+        params.set('sourceGroup', problemSource)
+      }
+      const result = await apiClient.get<{ data: PickerProblem[] }>(`/api/problems?${params}`)
+      if (result.success) setProblemPool(result.data?.data || [])
+      else {
+        setProblemPool([])
+        setProblemPoolError(result.message || '题目列表加载失败')
+      }
+      setProblemPoolLoading(false)
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [isOpen, mode, problemPickerOpen, problemQuery, problemSource])
+
+  useEffect(() => {
     if (!isOpen || isEdit || mode !== 'contest') return
     if (teamId && format === 'icpc') setAllowedRatingScopes(['NONE'])
     else if (organizationId) setAllowedRatingScopes(['NONE', 'ORGANIZATION'])
@@ -269,6 +312,35 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const updateRow = (rowId: string, updates: Partial<ProblemRow>) => {
     setProblemRows(prev => prev.map(r => r.id === rowId ? { ...r, ...updates } : r))
     if (updates.ojName) localStorage.setItem('lastOjPlatform', updates.ojName)
+  }
+
+  const addPickedProblem = async (problem: PickerProblem) => {
+    if (problemRows.some(row => row.resolved?.problemId === problem.id)) return
+    const id = `picked-${++tempIdCounter}`
+    setProblemRows(current => [...current, {
+      id,
+      ojName: problem.platform,
+      problemCode: problem.problemId,
+      alias: '',
+      points: 100,
+      resolving: false,
+      resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
+      contentOptionsLoading: true,
+      statementOptions: [],
+      solutionOptions: [],
+    }])
+    const options = await apiClient.get<{ statement: ContentOption[]; solution: ContentOption[] }>(`/api/problems/${problem.id}/content-options`)
+    if (!options.success) {
+      updateRow(id, { contentOptionsLoading: false })
+      return
+    }
+    updateRow(id, {
+      contentOptionsLoading: false,
+      statementOptions: options.data?.statement || [],
+      solutionOptions: options.data?.solution || [],
+      statementOptionKey: options.data?.statement?.[0]?.key,
+      solutionOptionKey: options.data?.solution?.find(option => option.key !== 'none')?.key || 'none',
+    })
   }
 
   const removeRow = (rowId: string) => {
@@ -355,7 +427,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       // 编辑模式验证
       const isStarted = originalStartTime ? new Date() >= originalStartTime : false
       if (isStarted && startTime !== originalStartTimeStr) {
-        toast.error('训练已经开始，不能修改开始时间')
+        toast.error(`${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}已经开始，不能修改开始时间`)
         return
       }
       if (!isStarted && startTime !== originalStartTimeStr && new Date(startTime) <= new Date()) {
@@ -553,7 +625,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       if (!isEdit && createdTrainingId) {
         setRecoveryTrainingId(createdTrainingId)
         setRecoveryMessage(message)
-        setWizardStep(4)
+        setWizardStep(2)
         toast.error('比赛草稿已经创建，但后续配置未完成，请进入草稿继续处理')
       } else {
         toast.error(message)
@@ -568,8 +640,12 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     fontSize: '0.875rem', boxSizing: 'border-box',
   }
   const contestWizard = mode === 'contest'
-  const wizardSteps = ['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']
-  const canAdvance = wizardStep === 0 ? Boolean(title.trim() && startTime && endTime && new Date(endTime) > new Date(startTime)) : wizardStep === 1 ? Boolean(format) : wizardStep === 2 ? problemRows.length > 0 && problemRows.every(row => row.resolved?.found) : true
+  const wizardSteps = ['基本信息', '题目', '确认发布']
+  const canAdvance = wizardStep === 0
+    ? Boolean(title.trim() && startTime && endTime && new Date(endTime) > new Date(startTime) && format)
+    : wizardStep === 1
+      ? problemRows.length > 0 && problemRows.every(row => row.resolved?.found)
+      : true
   const contestValidationIssues = contestWizard ? [
     !title.trim() ? '请填写比赛标题' : '',
     !startTime || !endTime ? '请填写完整的开始与结束时间' : new Date(endTime) <= new Date(startTime) ? '结束时间必须晚于开始时间' : '',
@@ -580,6 +656,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   ].filter(Boolean) : []
 
   return (
+    <>
     <FormDialog
       isOpen={isOpen}
       onClose={onClose}
@@ -605,10 +682,10 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             {/* Basic Info */}
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>标题 *</label>
-              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="训练标题" style={inputStyle} />
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={mode === 'contest' ? '比赛名称' : mode === 'homework' ? '作业名称' : '训练名称'} style={inputStyle} />
             </div>}
 
-            {mode === 'contest' && wizardStep === 1 && (
+            {mode === 'contest' && wizardStep === 0 && advancedContestSettings && (
               <div className={unifiedStyles.u6}>
                 <div>
                   <label className={unifiedStyles.u5}>Rating 范围</label>
@@ -639,18 +716,18 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>公告</label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="训练公告（可选）" rows={2} style={inputStyle} className={unifiedStyles.descriptionInput} />
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={mode === 'contest' ? '比赛说明（可选）' : mode === 'homework' ? '作业说明（可选）' : '训练说明（可选）'} rows={2} style={inputStyle} className={unifiedStyles.descriptionInput} />
             </div>}
 
-            {(!contestWizard || wizardStep === 0 || wizardStep === 1) && <div className={unifiedStyles.u6}>
-              {(!contestWizard || wizardStep === 1) && <div>
+            {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u6}>
+              <div>
                 <label className={unifiedStyles.u5}>赛制</label>
                 <Select aria-label="选择" value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
                   <option value="ioi">IOI（即时反馈+部分分）</option>
                   <option value="icpc">ICPC（即时反馈+AC/罚时）</option>
                   <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
                 </Select>
-              </div>}
+              </div>
               {(!contestWizard || wizardStep === 0) && <div>
                 <label className={unifiedStyles.u5}>开始时间 *</label>
                 <Input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
@@ -661,8 +738,10 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
               </div>}
             </div>}
 
+            {contestWizard && wizardStep === 0 && <Button variant="secondary" aria-expanded={advancedContestSettings} onClick={() => setAdvancedContestSettings(value => !value)}>{advancedContestSettings ? '收起高级比赛设置' : '高级比赛设置'}</Button>}
+
             {/* 可见性设置 */}
-            {(!contestWizard || wizardStep === 3) && <div className={unifiedStyles.u6}>
+            {(!contestWizard || (wizardStep === 0 && advancedContestSettings)) && <div className={unifiedStyles.u6}>
               <div>
                 <label className={unifiedStyles.u5}>题目来源显示</label>
                 <Select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
@@ -687,11 +766,11 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             </div>}
 
             {/* Problems */}
-            {(!contestWizard || wizardStep === 2) && <div className={unifiedStyles.u10}>
-              <h3 className={unifiedStyles.u11}>题目列表</h3>
+            {(!contestWizard || wizardStep === 1) && <div className={unifiedStyles.u10}>
+              <div className={unifiedStyles.sectionHeading}><h3 className={unifiedStyles.u11}>{mode === 'contest' ? '比赛题目' : '题目列表'}</h3><div className={unifiedStyles.headingActions}>{contestWizard && <Button onClick={() => setProblemPickerOpen(true)}>选择题目</Button>}<Button variant="secondary" onClick={addProblemRow}>{contestWizard ? '按 OJ 题号快速添加' : '添加一道题目'}</Button></div></div>
 
               {problemRows.length > 0 && (
-                <div className={unifiedStyles.u12}>
+                <><div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved?.title || row.problemCode || '等待识别题目'}</span></div>)}</div><div className={unifiedStyles.u12}>
                   <TableRoot className={unifiedStyles.u13}>
                     <TableHead>
                       <TableRow className={unifiedStyles.u14}>
@@ -781,24 +860,39 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                       ))}
                     </TableBody>
                   </TableRoot>
-                </div>
+                </div></>
               )}
-
-              <Button variant="ghost" onClick={addProblemRow}
-                className={unifiedStyles.u38}>
-                + 添加一道题目
-              </Button>
 
               {problemRows.length === 0 && (
                 <div className={unifiedStyles.u39}>
-                  点击上方按钮添加题目到训练中
+                  {contestWizard ? '还没有选择比赛题目，请从题库选择，或按 OJ 题号快速添加。' : '还没有添加题目。'}
                 </div>
               )}
             </div>}
-            {contestWizard && wizardStep === 4 && <section className={unifiedStyles.reviewCard}><h3>发布前检查</h3>{contestValidationIssues.length > 0 ? <ul className={unifiedStyles.reviewIssues}>{contestValidationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p>所有必填项与 Rating 规则均已通过前端检查，提交后服务端会再次校验。</p>}<dl><div><dt>比赛</dt><dd>{title || '未填写标题'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 本校' : ratingScope === 'GLOBAL' ? '全局' : '本校'} · 标准强度的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道，发布后均使用固定测试数据</dd></div><div><dt>原题身份</dt><dd>{problemIdVisible ? '赛中显示' : '赛后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '赛中显示' : '赛后显示'}</dd></div></dl></section>}
+            {contestWizard && wizardStep === 2 && <section className={unifiedStyles.reviewCard}><h3>确认比赛信息</h3>{contestValidationIssues.length > 0 ? <ul className={unifiedStyles.reviewIssues}>{contestValidationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p>比赛信息完整。确认后将创建比赛，仍可在开始前继续编辑。</p>}<dl><div><dt>比赛</dt><dd>{title || '未填写名称'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 本校' : ratingScope === 'GLOBAL' ? '全局' : '本校'} · 标准比赛的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道</dd></div><div><dt>原题来源</dt><dd>{problemIdVisible ? '比赛期间显示' : '比赛结束后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '比赛期间显示' : '比赛结束后显示'}</dd></div></dl></section>}
           </>
         )}
       </div>
     </FormDialog>
+    <DetailDialog isOpen={problemPickerOpen} onClose={() => setProblemPickerOpen(false)} title="选择比赛题目" size="lg">
+      <div className={unifiedStyles.picker}>
+        <Tabs
+          label="题库来源"
+          value={problemSource}
+          onChange={value => setProblemSource(value)}
+          items={[
+            ...(organizationId ? [{ value: 'school' as const, label: '校内题库' }] : []),
+            { value: 'carits' as const, label: 'Carits 平台题库' },
+            { value: 'external' as const, label: '其他题库' },
+          ]}
+        />
+        <Input aria-label="搜索题目" value={problemQuery} onChange={event => setProblemQuery(event.target.value)} placeholder="搜索题号或标题" />
+        {problemPoolLoading ? <p>正在加载题目…</p> : problemPoolError ? <p role="alert" className={unifiedStyles.pickerError}>{problemPoolError}</p> : problemPool.length === 0 ? <p>当前范围没有找到题目。</p> : <div className={unifiedStyles.pickerList}>{problemPool.map(problem => {
+          const selected = problemRows.some(row => row.resolved?.problemId === problem.id)
+          return <div key={problem.id} className={unifiedStyles.pickerItem}><div><strong>{problem.problemId} · {problem.title}</strong><small>{problem.platform}{problem.difficulty ? ` · ${problem.difficulty}` : ''}</small></div><Button size="sm" variant={selected ? 'secondary' : 'primary'} disabled={selected} onClick={() => void addPickedProblem(problem)}>{selected ? '已选择' : '加入比赛'}</Button></div>
+        })}</div>}
+      </div>
+    </DetailDialog>
+    </>
   )
 }

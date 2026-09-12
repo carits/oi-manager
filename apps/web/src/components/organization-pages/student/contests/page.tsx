@@ -10,28 +10,13 @@ import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Tabs } from '@/components/ui/Tabs'
+import { compareContestSchedules, contestLifecycle } from '@/lib/contestOrdering'
 import styles from '@/components/TrainingIndex.module.css'
 
 interface ContestItem { id: number; title: string; startTime: string; endTime: string; status: string; problemCount: number; source: 'team' | 'school' }
 type StatusFilter = 'all' | 'ongoing' | 'upcoming' | 'finished'
-function runtimeStatus(item: ContestItem): Exclude<StatusFilter, 'all'> { const now = Date.now(); if (now < new Date(item.startTime).getTime()) return 'upcoming'; if (now <= new Date(item.endTime).getTime()) return 'ongoing'; return 'finished' }
+function runtimeStatus(item: ContestItem): Exclude<StatusFilter, 'all'> { return contestLifecycle(item) }
 const statusMeta = { ongoing: { label: '进行中', variant: 'success' as const }, upcoming: { label: '即将开始', variant: 'info' as const }, finished: { label: '已结束', variant: 'neutral' as const } }
-const STATUS_ORDER: Record<Exclude<StatusFilter, 'all'>, number> = { ongoing: 0, upcoming: 1, finished: 2 }
-
-function titleLevel(title: string) {
-  const match = title.match(/\d+/)
-  if (!match) return 0
-  const level = Number(match[0])
-  return Number.isFinite(level) ? level : 0
-}
-
-function compareContests(a: ContestItem, b: ContestItem) {
-  const statusDiff = STATUS_ORDER[runtimeStatus(a)] - STATUS_ORDER[runtimeStatus(b)]
-  if (statusDiff !== 0) return statusDiff
-  const levelDiff = titleLevel(b.title) - titleLevel(a.title)
-  if (levelDiff !== 0) return levelDiff
-  return new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-}
 
 const formatTime = (value: string) => new Date(value).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -45,7 +30,7 @@ export default function StudentContestsPage() {
   const activeStatus: StatusFilter = ['ongoing', 'upcoming', 'finished'].includes(rawStatus || '') ? rawStatus! : 'all'
   const resource = useResource<ContestItem[]>(organizationId ? `/api/organizations/${organizationId}/members/activities/contests` : '/api/activities/unavailable', { sessionKey, dedupingInterval: 30000 })
   const contests = resource.data || []
-  const visible = contests.filter(item => activeStatus === 'all' || runtimeStatus(item) === activeStatus).sort(compareContests)
+  const visible = contests.filter(item => activeStatus === 'all' || runtimeStatus(item) === activeStatus).sort(compareContestSchedules)
   const setStatus = (status: StatusFilter) => { const params = new URLSearchParams(searchParams.toString()); status === 'all' ? params.delete('status') : params.set('status', status); router.replace(`/org/${organizationId}/contests${params.size ? `?${params}` : ''}`, { scroll: false }) }
 
   return (

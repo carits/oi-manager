@@ -500,6 +500,6 @@ export function AssignmentWorkspace() {
         {canManage && assignment.status === 'DRAFT' ? <DraftEditor assignment={assignment} onChange={setLocal} /> : canManage ? <ManagerWorkspace assignment={assignment} progress={resource.data?.managerProgress || null} onChange={setLocal} onRefresh={() => void resource.retry()} /> : resource.data ? <StudentWorkspace assignment={assignment} workspace={resource.data} onSubmitted={() => void resource.retry()} /> : null}
       </div>}
     </AsyncRegion>
-    <ConfirmDialog isOpen={confirmCancel} onClose={() => setConfirmCancel(false)} onConfirm={() => void cancel()} loading={cancelling} danger title="取消这份作业？" message="取消后将立即停止提交，题目版本、名单、历史提交和评测事实仍会保留。此状态不可撤销。" confirmText="确认取消" />
+    <ConfirmDialog isOpen={confirmCancel} onClose={() => setConfirmCancel(false)} onConfirm={() => void cancel()} loading={cancelling} danger title="取消这份作业？" message="取消后将立即停止提交，已选题目、学生名单和历史成绩仍会保留。此状态不可撤销。" confirmText="确认取消" />
   </PageFrame>
 }

@@ -23,7 +23,6 @@ import { useTrainingRank } from './hooks/useTrainingRank'
 import { useTrainingSubmissions } from './hooks/useTrainingSubmissions'
 import { useTrainingActions } from './hooks/useTrainingActions'
 
-import { TrainingProblemList } from './components/TrainingProblemList'
 import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
 import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
 import { TrainingContentSelectionModal } from './components/TrainingContentSelectionModal'
@@ -95,9 +94,10 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     role: user?.organizationRole || 'teacher',
   }
 
-  const validTabs: TabType[] = ['problemList', 'problems', 'submissions', 'solutions', 'attachments', 'ranking']
+  const validTabs: TabType[] = ['problems', 'submissions', 'solutions', 'attachments', 'ranking']
   const requestedTab = searchParams.get('tab') as TabType | null
-  const [activeTab, setActiveTab] = useState<TabType>(requestedTab && validTabs.includes(requestedTab) ? requestedTab : 'problemList')
+  const initialTab = requestedTab === 'problemList' ? 'problems' : requestedTab && validTabs.includes(requestedTab) ? requestedTab : 'problems'
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab)
   const [announcementExpanded, setAnnouncementExpanded] = useState(false)
   const [timeDisplay, setTimeDisplay] = useState('')
   const [showMakeupModal, setShowMakeupModal] = useState(false)
@@ -128,13 +128,13 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
   useEffect(() => {
     const nextTab = searchParams.get('tab') as TabType | null
-    setActiveTab(nextTab && validTabs.includes(nextTab) ? nextTab : 'problemList')
+    setActiveTab(nextTab === 'problemList' ? 'problems' : nextTab && validTabs.includes(nextTab) ? nextTab : 'problems')
   }, [searchParams])
 
   const selectTab = (tab: TabType) => {
     setActiveTab(tab)
     const next = new URLSearchParams(searchParams.toString())
-    tab === 'problemList' ? next.delete('tab') : next.set('tab', tab)
+    tab === 'problems' ? next.delete('tab') : next.set('tab', tab)
     router.replace(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false })
   }
 
@@ -150,12 +150,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     recordContent, setRecordContent, recordSaving,
     recordLastSaved,
     recordEditMode, setRecordEditMode,
-    problemListState, loadProblemListData,
     saveNoteNow, saveRecordNow,
   } = useTrainingDetail(trainingId, activeTab, sessionKey)
 
   const canViewRanking = training ? training.type !== 'homework' || training.isAdmin : !pathname.includes('/homeworks/')
-  const rankingTab = canViewRanking ? activeTab : 'problemList'
+  const rankingTab = canViewRanking ? activeTab : 'problems'
   const { rankingData, rankingState, refreshRanking } = useTrainingRank(trainingId, rankingTab, sessionKey)
 
   const sub = useTrainingSubmissions(trainingId, activeTab)
@@ -181,11 +180,9 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const isUpcoming = training?.status === 'upcoming'
   const hideContent = isUpcoming && !training.isAdmin
   const tabItems = [
-    { value: 'problemList' as const, label: '题目列表' },
-    { value: 'problems' as const, label: '题面' },
-    { value: 'submissions' as const, label: '评测记录' },
+    { value: 'problems' as const, label: '题目' },
+    { value: 'submissions' as const, label: '提交记录' },
     { value: 'solutions' as const, label: '题解' },
-    { value: 'attachments' as const, label: '附件' },
     ...(canViewRanking ? [{ value: 'ranking' as const, label: '排名' }] : []),
   ]
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
@@ -194,7 +191,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     if (training && !canViewRanking && activeTab === 'ranking') {
       const next = new URLSearchParams(searchParams.toString())
       next.delete('tab')
-      setActiveTab('problemList')
+      setActiveTab('problems')
       router.replace(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false })
     }
   }, [activeTab, canViewRanking, pathname, router, searchParams, training])
@@ -249,9 +246,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
       if (activeTab === 'submissions') {
         sub.setSubmissionsPage(1)
       }
-      if (activeTab === 'problemList') {
-        loadProblemListData()
-      }
+      refresh()
       sub.setDetailSubmissionId(submissionId)
     }
   }
@@ -264,9 +259,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
       ? '比赛详情'
       : '训练详情'
   const initialTabs: Array<{ value: TabType; label: string }> = [
-    { value: 'problemList', label: '题目列表' }, { value: 'problems', label: '题面' },
-    { value: 'submissions', label: '评测记录' }, { value: 'solutions', label: '题解' },
-    { value: 'attachments', label: '附件' },
+    { value: 'problems', label: '题目' },
+    { value: 'submissions', label: '提交记录' }, { value: 'solutions', label: '题解' },
     ...(!pathname.includes('/homeworks/') ? [{ value: 'ranking' as TabType, label: '排名' }] : []),
   ]
   const initialListHref = pathname.includes('/homeworks/')
@@ -277,7 +271,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
   if (loading) {
     return (
-      <PageFrame width="workbench"><PageHeader title={initialTitle} breadcrumbs={[{ label: typeLabel(pathname.includes('/homeworks/') ? 'homework' : pathname.includes('/contests/') ? 'contest' : 'training'), href: initialListHref }, { label: '详情' }]} /><div className={styles.tabBar}><Tabs label="详情分区" value="problemList" onChange={() => undefined} items={initialTabs} /></div><SkeletonRegion rows={8} label="训练内容正在准备" /></PageFrame>
+      <PageFrame width="workbench"><PageHeader title={initialTitle} breadcrumbs={[{ label: typeLabel(pathname.includes('/homeworks/') ? 'homework' : pathname.includes('/contests/') ? 'contest' : 'training'), href: initialListHref }, { label: '详情' }]} /><div className={styles.tabBar}><Tabs label="详情分区" value="problems" onChange={() => undefined} items={initialTabs} /></div><SkeletonRegion rows={8} label="内容正在准备" /></PageFrame>
     )
   }
 
@@ -343,7 +337,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
       {/* Main Content */}
       <div className={styles.content}>
-        {refreshError && activeTab !== 'problemList' && (
+        {refreshError && (
           <LoadError
             compact
             message={refreshError.message}
@@ -365,25 +359,6 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           </div>
         ) : (
         <>
-        {activeTab === 'problemList' && (
-          <AsyncRegion
-            state={problemListState}
-            onRetry={loadProblemListData}
-            emptyText="暂无题目"
-            skeletonRows={6}
-          >
-            {(data) => (
-              <TrainingProblemList
-                problemListData={data}
-                training={training}
-                basePath={basePath}
-                onSelectProblem={(id) => setSelectedProblemId(id)}
-                onSwitchToProblemsTab={() => selectTab('problems')}
-              />
-            )}
-          </AsyncRegion>
-        )}
-
         {activeTab === 'problems' && (
           <TrainingProblemDetail
             problems={problems}

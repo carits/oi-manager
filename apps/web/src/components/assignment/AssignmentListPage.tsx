@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowRight, CalendarClock, ListChecks, Plus, Users } from 'lucide-react'
+import { ArrowRight, CalendarClock, History, ListChecks, Plus, Users } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useResource } from '@/hooks/useResource'
 import apiClient from '@/lib/apiClient'
@@ -46,11 +46,11 @@ function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { 
     const result = await apiClient.mutate<Assignment>('/api/assignments', 'POST', { organizationId, title, description, publishAt: publishAt || null, openAt, dueAt, closeAt, latePolicy, latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null })
     setSaving(false)
     if (!result.ok) return toast.error(result.error.message)
-    toast.success('作业草稿已创建，请继续配置题目和名单')
+    toast.success('作业已创建，请继续选择题目和学生')
     onCreated(result.data)
   }
 
-  return <FormDialog isOpen={open} onClose={onClose} onSubmit={() => void submit()} title="创建作业草稿" description="创建后进入独立作业工作台，配置题目版本、名单和发布规则。" submitText="创建并配置" loading={saving} dirty={Boolean(title || description)} submitDisabled={!title.trim()} size="lg">
+  return <FormDialog isOpen={open} onClose={onClose} onSubmit={() => void submit()} title="创建作业" description="先填写作业名称和截止时间，随后选择题目和学生。" submitText="创建并继续" loading={saving} dirty={Boolean(title || description)} submitDisabled={!title.trim()} size="lg">
     <div className={styles.dialogGrid}>
       <div className={styles.full}><FormField label="作业名称" required><Input value={title} onChange={event => setTitle(event.target.value)} maxLength={200} /></FormField></div>
       <FormField label="截止时间" required><Input type="datetime-local" value={dueAt} onChange={event => { setDueAt(event.target.value); if (!advancedOpen) setCloseAt(event.target.value) }} /></FormField>
@@ -67,37 +67,35 @@ function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { 
   </FormDialog>
 }
 
-function visibleByFilter(item: Assignment, filter: Filter) {
-  if (filter === 'draft') return item.status === 'DRAFT'
-  if (filter === 'active') return ['SCHEDULED', 'OPEN', 'OVERDUE'].includes(item.status)
-  if (filter === 'finished') return ['CLOSED', 'REVIEWING', 'RELEASED', 'ARCHIVED', 'CANCELLED'].includes(item.status)
-  return true
-}
-
 export function AssignmentListPage({ canManage }: { canManage: boolean }) {
   const { organizationId } = useParams<{ organizationId: string }>()
   const { sessionKey } = useAuth()
-  const [filter, setFilter] = useState<Filter>(canManage ? 'active' : 'all')
+  const [filter, setFilter] = useState<Filter>('active')
+  const [page, setPage] = useState(1)
   const [creating, setCreating] = useState(false)
-  const resource = useResource<AssignmentListPayload>(`/api/assignments?organizationId=${organizationId}&pageSize=100`, { sessionKey, isEmpty: data => data.items.length === 0, dedupingInterval: 15000 })
+  const resource = useResource<AssignmentListPayload>(`/api/assignments?organizationId=${organizationId}&statusGroup=${filter}&page=${page}&pageSize=20`, { sessionKey, isEmpty: () => false, dedupingInterval: 15000 })
   const assignments = resource.data?.items || []
-  const visible = assignments.filter(item => visibleByFilter(item, filter))
+  const visible = assignments
+  const counts = resource.data?.statusCounts || {}
+  const activeCount = (counts.SCHEDULED || 0) + (counts.OPEN || 0) + (counts.OVERDUE || 0)
+  const finishedCount = (counts.CLOSED || 0) + (counts.REVIEWING || 0) + (counts.RELEASED || 0) + (counts.ARCHIVED || 0) + (counts.CANCELLED || 0)
+  const allCount = Object.values(counts).reduce((sum, count) => sum + (count || 0), 0)
   const base = `/org/${organizationId}/homeworks`
   return <PageFrame>
-    <PageHeader title="作业" description={canManage ? '创建、发布和批改固定测试版本的独立作业。' : '查看作业要求、完成题目并跟踪订正反馈。'} actions={canManage ? <Button icon={<Plus size={17} />} onClick={() => setCreating(true)}>创建作业</Button> : undefined} />
-    <Tabs label="作业状态" value={filter} onChange={setFilter} items={[
-      { value: 'active', label: '进行中', count: assignments.filter(item => visibleByFilter(item, 'active')).length },
-      ...(canManage ? [{ value: 'draft' as const, label: '草稿', count: assignments.filter(item => item.status === 'DRAFT').length }] : []),
-      { value: 'finished', label: '已结束' }, { value: 'all', label: '全部', count: assignments.length },
+    <PageHeader title="作业" description={canManage ? '创建、布置和批改学生作业。' : '查看作业要求、完成题目并跟踪订正反馈。'} actions={canManage ? <Button icon={<Plus size={17} />} onClick={() => setCreating(true)}>创建作业</Button> : undefined} />
+    <Tabs label="作业状态" value={filter} onChange={value => { setFilter(value as Filter); setPage(1) }} items={[
+      { value: 'active', label: '进行中', count: activeCount },
+      ...(canManage ? [{ value: 'draft' as const, label: '草稿', count: counts.DRAFT || 0 }] : []),
+      { value: 'finished', label: '已结束', count: finishedCount }, { value: 'all', label: '全部', count: allCount },
     ]} />
     <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText="当前没有作业" skeletonRows={5}>
-      {() => visible.length ? <div className={styles.list}>{visible.map(item => {
+      {() => visible.length ? <><div className={styles.list}>{visible.map(item => {
         const status = assignmentStatusMeta[item.status as AssignmentStatus]
         return <Link key={item.id} href={`${base}/${item.id}`} className={styles.card}>
           <span className={styles.cardMain}><span className={styles.cardTitle}>{item.title}</span><span className={styles.cardMeta}><span><CalendarClock size={15} />{formatAssignmentTime(item.openAt)} 至 {formatAssignmentTime(item.closeAt)}</span><span><ListChecks size={15} />{item.problemCount} 题</span><span><Users size={15} />{item.recipientCount} 人</span></span></span>
           <span className={styles.cardEnd}><StatusBadge variant={status.variant}>{status.label}</StatusBadge><ArrowRight size={17} /></span>
         </Link>
-      })}</div> : <p className={styles.muted}>当前筛选下没有作业。</p>}
+      })}</div>{(resource.data?.pagination.totalPages || 0) > 1 && <div className={styles.actions}><Button variant="secondary" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>上一页</Button><span className={styles.muted}>第 {page} / {resource.data?.pagination.totalPages} 页</span><Button variant="secondary" disabled={page >= (resource.data?.pagination.totalPages || 1)} onClick={() => setPage(value => value + 1)}>下一页</Button></div>}</> : <div className={styles.stack}><p className={styles.muted}>{filter === 'active' ? '当前没有待完成作业。' : '当前筛选下没有作业。'}</p>{!canManage && filter === 'active' && allCount > 0 && <Button variant="secondary" icon={<History size={16} />} onClick={() => { setFilter('finished'); setPage(1) }}>查看历史作业</Button>}</div>}
     </AsyncRegion>
     <CreateAssignmentDialog open={creating} organizationId={organizationId} onClose={() => setCreating(false)} onCreated={item => { setCreating(false); window.location.assign(`${base}/${item.id}`) }} />
   </PageFrame>
