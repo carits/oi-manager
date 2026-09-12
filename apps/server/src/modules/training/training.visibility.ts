@@ -5,8 +5,8 @@
  * 核心原则：真实 result 和展示 result 分开，数据库保留真实值，API 返回时脱敏
  */
 
-import { prisma } from '../../prisma'
-import { isTeamAdmin } from './training.helpers'
+import { findActivityRuntimeForAccess } from '../contest/contest-query.facade'
+import { canManageTraining } from './training.helpers'
 
 /** 训练运行时状态（不依赖数据库 status） */
 export type TrainingRuntimeStatus = 'upcoming' | 'ongoing' | 'finished'
@@ -105,15 +105,9 @@ export function getTrainingRuntimeStatus(training: TrainingForVisibility): Train
  * 判断用户是否为训练管理员
  */
 export async function isTrainingAdmin(userId: string, trainingId: number): Promise<boolean> {
-  // 复用现有权限逻辑
-  const training = await prisma.training.findUnique({
-    where: { id: trainingId },
-    select: { teamId: true, organizationId: true }
-  })
+  const training = (await findActivityRuntimeForAccess(trainingId))?.runtime || null
   if (!training) return false
-
-  // 检查团队管理员权限
-  return training.teamId ? isTeamAdmin(userId, training.teamId) : false
+  return canManageTraining(userId, training)
 }
 
 /**

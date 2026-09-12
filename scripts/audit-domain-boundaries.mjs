@@ -72,6 +72,11 @@ const trainingProblemQuery = fs.readFileSync(path.join(modulesRoot, 'training/ap
 if (!trainingProblemQuery.includes('findActivityRuntimeForAccess')) {
   violations.push('Activity problem access bypasses the Contest query facade')
 }
+const trainingScope = fs.readFileSync(path.join(modulesRoot, 'training/application/training-scope.service.ts'), 'utf8')
+const trainingVisibility = fs.readFileSync(path.join(modulesRoot, 'training/training.visibility.ts'), 'utf8')
+if (!trainingScope.includes('findActivityRuntimeForAccess') || !trainingVisibility.includes('findActivityRuntimeForAccess')) {
+  violations.push('Activity scope or visibility bypasses the Contest query facade')
+}
 if (!judgeRun.includes('holdContestFinalizationForRejudgeTx')) {
   violations.push('Judge rejudge finalization bypasses the Contest command service')
 }
