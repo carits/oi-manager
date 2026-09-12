@@ -140,7 +140,7 @@ describe('rating domain HTTP and persistence', () => {
   it('finalizes one immutable standing and applies one organization batch idempotently', async () => {
     const contest = await createFinishedContest()
     const firstResponse = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`)
-    expect(firstResponse.status).toBe(200)
+    expect(firstResponse.status, JSON.stringify(firstResponse.body)).toBe(200)
     expect(firstResponse.body.data.finalizationStatus).toBe('FINALIZED')
     expect(firstResponse.body.data.standing.entries.map((item: any) => item.userId)).toEqual([first.user.id, second.user.id])
     expect(firstResponse.body.data.batches).toHaveLength(1)
