@@ -15,6 +15,7 @@ source_of_truth: Git history
 - 训练列表、训练题目池、作业学生/题目选择器和题单增加服务端搜索、分页及总数；学生跨页选择保持稳定，并支持年级、团队筛选。通知待处理筛选会扫描到真实可操作记录，完整消息中心与铃铛共同解析团队通知地址。
 - 浏览器 API 与聊天 SSE 改为 Cookie-only，不再附带 `localStorage` 中的历史 Bearer；启动时清理遗留 Token。训练名单职责拆入独立 application service，旧活动域新增明确冻结与 Contest facade 退出约束。
 - Axe 阻断门槛提高为 `critical + serious`，并覆盖通知、身份、账号菜单和训练创建 Dialog 等交互后状态。
+- 本批已以提交 `7e3c53c` 发布：生产备份 `oi_manager_20260912_205816.dump` 校验通过；生产同构隔离测试覆盖 Training Engine 16/16、通知 5/5，旧题单 53/53、旧训练 45/45。API 3302→3303，Web BUILD_ID `HQzz3qMMJO3jCIWAVQBLc` 经 canary 与正式双账号消息闭环（序号 124–127）后提升；全部运行服务和 readiness 正常，无数据库迁移或历史数据改写。
 
 ### 训练参与范围、团队上下文与通知一致性收口
 
