@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-10
+last_verified: 2026-09-13
 source_of_truth: problem modules, OJ routes, adapter registry
 ---
 
@@ -51,6 +51,12 @@ Carits 本地题和外部 OJ 题共用 `Problem`。题面、PDF、附件、测�
 
 `apps/server/src/oj-adapters` 的适配器统一输出标题、Markdown、样例、限制、来源 URL
 和附件信息。OJ 抓题任务只能创建或更新平台题，不能命中学校副本。
+
+平台标识、历史别名、显示名称、抓取能力、归档能力和原题 URL 模板由
+`packages/shared/src/oj-platforms.ts` 的 Canonical OJ Registry 唯一维护。Server 的已知平台、
+适配器查找以及 Web 的筛选项、标签和原题链接均从该注册表派生；`oj.uz → ojuz`、
+`loj → libreoj` 等历史值只在系统边界规范化，不再维护第二份平台清单。新增平台时必须先
+登记 canonical key 与能力，再注册适配器；不得在业务页面复制 URL `switch` 或平台数组。
 
 - Cookie 配置：仅超级管理员，响应脱敏。
 - 全局抓题任务：超级管理员和平台管理员。

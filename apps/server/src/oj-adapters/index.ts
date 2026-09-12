@@ -4,7 +4,8 @@
  * P0 可观测性增强：添加调用计时和 metrics
  */
 
-import { OjAdapter, OjPlatform, OjFetchError, OjErrorCode, KNOWN_OJ_PLATFORMS, OjProblem } from './types'
+import { OjAdapter, OjPlatform, OjFetchError, OjErrorCode, OjProblem } from './types'
+import { getOjPlatform, normalizeOjPlatformKey } from '@oi-manager/shared'
 import logger from '../lib/logger'
 import { metrics } from '../lib/metrics'
 import { LuoguAdapter } from './luogu'
@@ -129,8 +130,9 @@ const adapters = new Map<OjPlatform, OjAdapter>([
  * @returns 对应的适配器实例
  * @throws {OjFetchError} 当平台不支持时抛出
  */
-export function getAdapter(platform: OjPlatform): OjAdapter {
-  const adapter = adapters.get(platform)
+export function getAdapter(platform: string): OjAdapter {
+  const canonical = normalizeOjPlatformKey(platform) as OjPlatform | null
+  const adapter = canonical ? adapters.get(canonical) : undefined
   if (!adapter) {
     throw new OjFetchError(
       OjErrorCode.PLATFORM_NOT_SUPPORTED,
@@ -149,45 +151,12 @@ export function getSupportedPlatforms(): Array<{
   name: string
   supported: boolean
 }> {
-  return [
-    { platform: 'luogu', name: '洛谷', supported: true },
-    { platform: 'codeforces', name: 'CodeForces', supported: true },
-    { platform: 'atcoder', name: 'AtCoder', supported: true },
-    { platform: 'gym', name: 'Gym', supported: true },
-    { platform: 'qoj', name: 'QOJ', supported: true },
-    { platform: 'hdu', name: 'HDU', supported: true },
-    { platform: 'poj', name: 'POJ', supported: true },
-    { platform: 'ural', name: 'URAL', supported: true },
-    { platform: 'usaco', name: 'USACO', supported: true },
-    { platform: 'tlx', name: 'TLX', supported: true },
-    { platform: 'libreoj', name: 'LibreOJ', supported: true },
-    { platform: 'yosupo', name: 'Yosupo', supported: true },
-    { platform: '51nod', name: '51Nod', supported: true },
-    { platform: 'csacademy', name: 'CSAcademy', supported: true },
-    { platform: 'kattis', name: 'Kattis', supported: true },
-    { platform: 'yukicoder', name: 'yukicoder', supported: true },
-    { platform: 'vnoj', name: 'VNOJ', supported: true },
-    { platform: 'kilonova', name: 'Kilonova', supported: true },
-    { platform: 'ojuz', name: 'oj.uz', supported: true },
-    { platform: 'aizu', name: 'Aizu', supported: true },
-    { platform: 'openj_bailian', name: 'OpenJudge 百炼', supported: true },
-    { platform: 'openj_noi', name: 'OpenJudge NOI', supported: true },
-    { platform: 'openj_poj', name: 'OpenJudge POJ', supported: true },
-    { platform: 'uoj', name: 'UOJ', supported: true },
-    { platform: 'universaloj', name: 'UniversalOJ', supported: true },
-    { platform: 'csg', name: 'CSG', supported: true },
-    { platform: 'nowcoder', name: 'NowCoder', supported: true },
-    { platform: 'szkopul', name: 'Szkopuł', supported: true },
-    { platform: 'darkbzoj', name: 'DarkBZOJ', supported: true },
-    { platform: 'dmoj', name: 'DMOJ', supported: true },
-    { platform: 'cses', name: 'CSES', supported: true },
-    { platform: 'baekjoon', name: 'Baekjoon', supported: true },
-    { platform: 'spoj', name: 'SPOJ', supported: true },
-    { platform: 'uva', name: 'UVa', supported: false },
-    { platform: 'vijos', name: 'Vijos', supported: true },
-    { platform: 'eolymp', name: 'EOlymp', supported: true },
-    { platform: 'bzoj', name: 'BZOJ', supported: false },
-  ]
+  const keys = [...adapters.keys(), 'uva', 'bzoj'] as OjPlatform[]
+  return keys.map(platform => ({
+    platform,
+    name: getOjPlatform(platform)?.displayName || platform,
+    supported: adapters.has(platform),
+  }))
 }
 
 /**
@@ -195,8 +164,9 @@ export function getSupportedPlatforms(): Array<{
  * @param platform - OJ 平台标识
  * @returns 是否支持
  */
-export function isPlatformSupported(platform: OjPlatform): boolean {
-  return adapters.has(platform)
+export function isPlatformSupported(platform: string): boolean {
+  const canonical = normalizeOjPlatformKey(platform) as OjPlatform | null
+  return Boolean(canonical && adapters.has(canonical))
 }
 
 /**
@@ -205,7 +175,7 @@ export function isPlatformSupported(platform: OjPlatform): boolean {
  * @returns 是否为已知的 OJ 平台
  */
 export function isKnownPlatform(platform: string): boolean {
-  return KNOWN_OJ_PLATFORMS.some(p => p.value === platform)
+  return Boolean(getOjPlatform(platform))
 }
 
 /**

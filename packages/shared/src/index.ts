@@ -1,5 +1,7 @@
 import type { AccountRole, LegacyUserRole, OrganizationMembershipRole, WorkspaceContext } from '@oi-manager/contracts'
 
+export * from './oj-platforms'
+
 export type { AccountRole, OrganizationMembershipRole, WorkspaceContext }
 
 /** @deprecated Use AccountRole globally and OrganizationMembershipRole inside an organization. */
