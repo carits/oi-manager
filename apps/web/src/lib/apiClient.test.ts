@@ -7,7 +7,7 @@ afterEach(() => {
 })
 
 describe('parseApiResponse', () => {
-  it('keeps account-scoped chat requests out of the organization context', async () => {
+  it('uses cookie-only browser authentication and keeps account APIs out of the organization context', async () => {
     vi.stubGlobal('window', {
       localStorage: { getItem: () => 'account-token' },
       location: { pathname: '/org/org-school/overview' },
@@ -17,7 +17,7 @@ describe('parseApiResponse', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ success: true, data: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     await apiClient.get('/api/chat/unread', { accountScoped: true })
     const options = fetchMock.mock.calls[0][1] as RequestInit
-    expect(options.headers).toHaveProperty('Authorization', 'Bearer account-token')
+    expect(options.headers).not.toHaveProperty('Authorization')
     expect(options.headers).not.toHaveProperty('X-OI-Organization-ID')
   })
 

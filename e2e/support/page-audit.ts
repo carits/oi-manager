@@ -87,20 +87,23 @@ export async function assertPageHealth(
     overflow.viewport + 1,
   )
 
-  if (checkAccessibility) {
-    const criticalViolations = (await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
-      .analyze())
-      .violations
-      .filter(violation => violation.impact === 'critical')
+  if (checkAccessibility) await assertAccessibleState(page)
+}
 
-    expect(
-      criticalViolations.map(violation => ({
-        id: violation.id,
-        nodes: violation.nodes.map(node => node.target),
-      })),
-    ).toEqual([])
-  }
+/** Run the blocking accessibility gate after a dialog, picker, menu, or drawer opens. */
+export async function assertAccessibleState(page: Page) {
+  const blockingViolations = (await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze())
+    .violations
+    .filter(violation => violation.impact === 'critical' || violation.impact === 'serious')
+
+  expect(
+    blockingViolations.map(violation => ({
+      id: violation.id,
+      nodes: violation.nodes.map(node => node.target),
+    })),
+  ).toEqual([])
 }
 
 export async function assertVisibleControlsFit(page: Page) {

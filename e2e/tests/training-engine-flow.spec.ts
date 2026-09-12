@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { accounts } from '../fixtures/auth'
 import { loadFixtureIds } from '../fixtures/data'
+import { assertAccessibleState } from '../support/page-audit'
 
 const ids = loadFixtureIds()
 const base = `/org/org_${ids.school}/training-sessions/${ids.trainingSession}`
@@ -10,10 +11,12 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const coach = await coachContext.newPage()
     await coach.goto(`/org/org_${ids.school}/training-sessions`)
-    await coach.getByRole('button', { name: '创建并编排' }).click()
-    const dialog = coach.getByRole('dialog', { name: '创建训练草稿' })
+    await coach.getByRole('button', { name: '创建训练' }).click()
+    const dialog = coach.getByRole('dialog', { name: '创建训练' })
+    await assertAccessibleState(coach)
+    await dialog.getByRole('tab', { name: '教练带练模式' }).click()
     await dialog.getByLabel('训练名称').fill('E2E 顺序编排')
-    await dialog.getByRole('button', { name: '创建并编排' }).click()
+    await dialog.getByRole('button', { name: '创建草稿并编排' }).click()
     await expect(coach).toHaveURL(/\/training-sessions\/[^/]+\/design$/)
     await expect(coach.getByRole('region', { name: '阶段时间线' })).toBeVisible()
     await expect(coach.getByRole('region', { name: '当前阶段题目链' })).toBeVisible()

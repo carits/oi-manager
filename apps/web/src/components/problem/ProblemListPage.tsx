@@ -19,10 +19,11 @@ import { Table } from '@/components/ui/Table'
 import { Tabs } from '@/components/ui/Tabs'
 import { Toolbar, ToolbarGroup } from '@/components/ui/Toolbar'
 import { useToast } from '@/components/ui/Toast'
+import { Pagination } from '@/components/ui/Pagination'
 import styles from './ProblemList.module.css'
 
 interface ProblemListInfo { id: string; title: string; description: string | null; ownerId: string; createdAt: string; updatedAt: string; _count: { Entries: number }; _permission: 'admin' | 'edit' | 'view' }
-interface ProblemListPayload { lists?: ProblemListInfo[] }
+interface ProblemListPayload { lists?: ProblemListInfo[]; page: number; pageSize: number; total: number; totalPages: number }
 export interface ProblemListPageProps { canCreate?: boolean; displayMode?: 'table' | 'card' }
 
 function formatDate(dateString: string) {
@@ -43,19 +44,21 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   const activeTab: 'mine' | 'shared' = searchParams.get('tab') === 'shared' ? 'shared' : 'mine'
   const keyword = searchParams.get('keyword') || ''
   const teamId = searchParams.get('teamId') || ''
+  const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const [searchInput, setSearchInput] = useState(keyword)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  const query = new URLSearchParams({ tab: activeTab, pageSize: '50' })
+  const query = new URLSearchParams({ tab: activeTab, page: String(page), pageSize: '20' })
   if (keyword) query.set('keyword', keyword)
   if (teamId) query.set('teamId', teamId)
   const resource = useResource<ProblemListPayload>(`/api/problem-lists?${query}`, { sessionKey, isEmpty: data => (data.lists || []).length === 0, dedupingInterval: 15000 })
   const lists = resource.data?.lists || []
 
-  const updateLocation = (tab: 'mine' | 'shared', nextKeyword = keyword) => {
+  const updateLocation = (tab: 'mine' | 'shared', nextKeyword = keyword, nextPage = 1) => {
     const params = new URLSearchParams()
     if (teamId) params.set('teamId', teamId)
     if (tab === 'shared') params.set('tab', tab)
     if (nextKeyword.trim()) params.set('keyword', nextKeyword.trim())
+    if (nextPage > 1) params.set('page', String(nextPage))
     router.replace(`${pathPrefix}/problem-lists${params.size ? `?${params}` : ''}`, { scroll: false })
   }
 
@@ -101,6 +104,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
           />
         )}
       </AsyncRegion>
+      {resource.data && <Pagination currentPage={resource.data.page || page} totalPages={resource.data.totalPages || 1} total={resource.data.total || 0} pageSize={resource.data.pageSize || 20} onPageChange={next => updateLocation(activeTab, keyword, next)} showQuickJumper={false} />}
       <ConfirmModal isOpen={Boolean(deleteConfirm)} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm) void deleteList(deleteConfirm) }} title="删除题单" message="删除后无法恢复，确定继续吗？" confirmText="删除" danger />
     </PageFrame>
   )

@@ -66,7 +66,12 @@ export function notificationTeamHref(workspace: NavigationContext['workspace'], 
   if (!teamId) return null
   return workspace === 'personal' ? `/personal/teams/${teamId}` : workspace === 'organization' && organizationId ? `/org/${organizationId}/teams/${teamId}` : null
 }
-export const notificationHref = notificationTeamHref
+export function resolveNotificationHref(workspace: NavigationContext['workspace'], organizationId: string | undefined, notificationValue?: string | null) {
+  if (!notificationValue) return null
+  if (notificationValue.startsWith('/')) return notificationValue
+  return notificationTeamHref(workspace, organizationId, notificationValue)
+}
+export const notificationHref = resolveNotificationHref
 
 export function workspaceRoleLabel(label?: string | null) {
   if (label === '本校学生' || label === '预选学生') return '学生'

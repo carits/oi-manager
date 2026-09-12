@@ -572,6 +572,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/training-session-templates` | 获取内置教练训练模板 |
 | `GET` | `/api/training-sessions` | 查询独立教练训练 |
 | `POST` | `/api/training-sessions` | 创建独立教练训练 |
+| `POST` | `/api/training-sessions/participant-preview` | 使用与创建/发布相同的权限和学生边界解析训练对象及权威人数 |
 | `GET` | `/api/training-sessions/:id` | 获取权威训练工作区、进度和权限 |
 | `GET` | `/api/training-sessions/:id/design` | 管理员获取 DRAFT 设计 DTO、稳定 ID、固定/最新 Revision 和 Subtask |
 | `GET` | `/api/training-sessions/:id/design-problems/:problemId` | 校验题目归属并返回可固定的最新正式 Revision |

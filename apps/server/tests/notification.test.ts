@@ -7,7 +7,7 @@ import { notificationRouter } from '../src/modules/notification/notification.rou
 import { prisma } from '../src/prisma'
 import { createAuthenticatedRequest } from './helpers/testRequest'
 import { generateTokenFromUser } from './helpers/testToken'
-import { createTestSchoolWithPrincipal, createTestUser } from './helpers/testUser'
+import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from './helpers/testUser'
 
 const app = express()
 app.use(express.json())
@@ -68,6 +68,31 @@ describe('notification application service', () => {
     expect(first.body.data.hasMore).toBe(true)
     expect(second.body.data.notifications).toHaveLength(1)
     expect(second.body.data.hasMore).toBe(false)
+  })
+
+  it('finds actionable notifications after more than one raw notification page', async () => {
+    const teacher = await createTestUser({ role: 'teacher', schoolId: user.schoolId })
+    const team = await createTestTeam({ schoolId: user.schoolId, scope: 'campus', ownerId: teacher.user.id, ownerType: 'teacher' })
+    const invitation = await prisma.teamMember.create({ data: {
+      id: crypto.randomUUID(), teamId: team.id, userId: user.user.id, userType: 'student',
+      role: 'member', status: 'pending', invitedBy: teacher.user.id, joinedAt: new Date(Date.now() - 60_000),
+    } })
+    await prisma.userNotification.create({ data: {
+      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', type: 'team_invitation',
+      title: '团队邀请', body: '请处理邀请', sourceType: 'team_member', sourceId: invitation.id,
+      createdAt: new Date(Date.now() - 60_000),
+    } })
+    await prisma.userNotification.createMany({ data: Array.from({ length: 55 }, (_, index) => ({
+      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', type: 'info',
+      title: `普通通知 ${index}`, body: '通知正文', sourceType: 'actionable-pagination', sourceId: crypto.randomUUID(),
+      createdAt: new Date(),
+    })) })
+
+    const response = await createAuthenticatedRequest(app, token).get('/api/notifications?filter=actionable&page=1&pageSize=50')
+    expect(response.status).toBe(200)
+    expect(response.body.data.notifications).toHaveLength(1)
+    expect(response.body.data.notifications[0]).toMatchObject({ sourceId: invitation.id, actionable: true })
+    expect(response.body.data.hasMore).toBe(false)
   })
 
   it('read-all includes account notifications visible in the current workspace', async () => {

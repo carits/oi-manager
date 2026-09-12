@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { accounts, type AuthRole } from '../fixtures/auth'
-import { assertPageHealth, waitForPageReady, watchPage } from '../support/page-audit'
+import { assertAccessibleState, assertPageHealth, waitForPageReady, watchPage } from '../support/page-audit'
 
 const organizationBase = '/org/org_school-default'
 const roles: Array<{ account: AuthRole; home: string; navigation: string }> = [
@@ -72,6 +72,7 @@ test.describe('导航与顶栏交互巡检 @smoke', () => {
     for (const { button, panel } of headerPanels) {
       await button.click()
       await expect(panel).toBeVisible()
+      await assertAccessibleState(page)
       const box = await panel.boundingBox()
       expect(box).not.toBeNull()
       expect(box!.x).toBeGreaterThanOrEqual(0)
@@ -83,6 +84,7 @@ test.describe('导航与顶栏交互巡检 @smoke', () => {
     await page.getByRole('button', { name: '打开账号菜单' }).click()
     const accountMenu = page.getByRole('menu')
     await expect(accountMenu).toBeVisible()
+    await assertAccessibleState(page)
     const accountBox = await accountMenu.boundingBox()
     expect(accountBox).not.toBeNull()
     expect(accountBox!.x).toBeGreaterThanOrEqual(0)

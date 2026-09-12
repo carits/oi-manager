@@ -6,10 +6,10 @@ import { isOrganizationContestAdmin, isOrganizationMember, isTeamAdmin, isTeamMe
 import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
 import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { getBuiltinTrainingTemplate } from './training-engine.templates'
+import { TrainingEngineError } from './training-engine.errors'
+import { eligibleTrainingParticipantIds, validateTrainingParticipantTarget } from './application/training-roster.service'
 
-export class TrainingEngineError extends Error {
-  constructor(public statusCode: number, public code: string, message: string, public details?: unknown) { super(message) }
-}
+export { TrainingEngineError } from './training-engine.errors'
 
 type SessionShape = NonNullable<Awaited<ReturnType<typeof loadSession>>>
 type StructureStage = {
@@ -260,17 +260,6 @@ export async function createTrainingSession(userId: string, body: any) {
   const joinMode = enumValue(body?.joinMode, JOIN_MODES, 'CURRENT_STAGE', '迟到加入方式')
   const scheduledStartAt = optionalDate(body?.scheduledStartAt, '计划开始时间')
   const settings = normalizeSessionSettings(body?.settings, scheduledStartAt)
-  if (scope.organizationId && settings?.participantTarget === 'organization_students') {
-    const [membership, creator] = await Promise.all([
-      prisma.organizationMembership.findFirst({ where: { organizationId: scope.organizationId, userId, status: 'active' }, select: { memberRole: true } }),
-      globalRole(userId),
-    ])
-    if (membership?.memberRole !== 'school_principal' && creator?.role !== 'super_admin') throw new TrainingEngineError(403, 'TRAINING_SCHOOL_WIDE_FORBIDDEN', '只有学校负责人可以创建全校学生训练')
-  }
-  if (scope.organizationId && settings?.participantTarget === 'organization_students') {
-    const principal = await prisma.organizationMembership.findFirst({ where: { organizationId: scope.organizationId, userId, status: 'active', memberRole: 'school_principal' }, select: { id: true } })
-    if (!principal) throw new TrainingEngineError(403, 'TRAINING_SCHOOL_WIDE_FORBIDDEN', '只有学校负责人可以创建全校学生训练')
-  }
   const rawStages = Array.isArray(body?.stages) && body.stages.length ? body.stages : template?.stages || [{ name: '自由训练', mode: 'FREE', advanceMode: 'MANUAL', problems: [] }]
   const stages = rawStages.map((stage: StructureStage) => ({ ...stage, problemAccessMode: stage.problemAccessMode || defaultProblemAccessMode, submissionMode: stage.submissionMode || defaultSubmissionMode }))
   const hydrated = await hydrateStages(stages, await problemAccessContext(userId, scope.organizationId, scope.teamId))
@@ -278,11 +267,7 @@ export async function createTrainingSession(userId: string, body: any) {
   const id = crypto.randomUUID()
   const requestedParticipantIds = [...new Set<string>((Array.isArray(body?.participantUserIds) ? body.participantUserIds : []).map(String).filter(Boolean))]
   if (requestedParticipantIds.length > 5000) throw new TrainingEngineError(422, 'TRAINING_ROSTER_TOO_LARGE', '学员数量超过上限')
-  if (settings?.participantTarget === 'custom_students' && !requestedParticipantIds.length) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_REQUIRED', '自定义学生范围至少选择一名学生')
-  if (requestedParticipantIds.length) {
-    const eligible = new Set(await eligibleParticipantIds(scope))
-    if (requestedParticipantIds.some(participantId => !eligible.has(participantId))) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_OUT_OF_SCOPE', '名单中包含不属于当前训练范围的学生')
-  }
+  await validateTrainingParticipantTarget(userId, scope, settings?.participantTarget, requestedParticipantIds)
   await prisma.$transaction(async tx => {
     await tx.trainingSession.create({ data: {
       id, title, description: body?.description ? boundedText(body.description, 5000, '训练说明') : null,
@@ -301,6 +286,24 @@ export async function createTrainingSession(userId: string, body: any) {
     for (const participantUserId of requestedParticipantIds) await tx.trainingSessionParticipant.create({ data: { sessionId: id, userId: participantUserId } })
   })
   return loadSession(id)
+}
+
+export async function previewTrainingParticipants(userId: string, body: any) {
+  const scope = await assertScopeManagement(userId, body || {})
+  const participantIds = [...new Set<string>((Array.isArray(body?.participantUserIds) ? body.participantUserIds : []).map(String).filter(Boolean))]
+  if (participantIds.length > 5000) throw new TrainingEngineError(422, 'TRAINING_ROSTER_TOO_LARGE', '学员数量超过上限')
+  const target = await validateTrainingParticipantTarget(userId, scope, typeof body?.participantTarget === 'string' ? body.participantTarget : undefined, participantIds)
+  const resolvedIds = target === 'custom_students' ? participantIds : await eligibleTrainingParticipantIds(scope)
+  const targetRecord = scope.teamId
+    ? await prisma.team.findUnique({ where: { id: scope.teamId }, select: { name: true } })
+    : scope.organizationId
+      ? await prisma.organization.findUnique({ where: { id: scope.organizationId }, select: { name: true } })
+      : null
+  return {
+    participantTarget: target,
+    participantCount: resolvedIds.length,
+    targetName: target === 'organization_students' ? '全校学生' : target === 'custom_students' ? '自定义学生' : targetRecord?.name || '团队学生',
+  }
 }
 
 function structureIssues(stages: StructureStage[]) {
@@ -437,12 +440,6 @@ export async function replaceTrainingStructure(userId: string, sessionId: string
   return loadSession(sessionId)
 }
 
-async function eligibleParticipantIds(session: { organizationId: string | null; teamId: string | null }) {
-  if (session.teamId) return (await prisma.teamMember.findMany({ where: { teamId: session.teamId, status: 'active', userType: 'student' }, select: { userId: true } })).map(item => item.userId)
-  if (session.organizationId) return (await prisma.organizationMembership.findMany({ where: { organizationId: session.organizationId, status: 'active', memberRole: 'student' }, select: { userId: true } })).map(item => item.userId)
-  return []
-}
-
 async function appendEvent(tx: Prisma.TransactionClient, sessionId: string, type: string, targetType: TrainingEngineTargetType = 'ALL', targetId: string | null = null, payload?: unknown) {
   const session = await tx.trainingSession.update({ where: { id: sessionId }, data: { eventSeq: { increment: 1 } }, select: { eventSeq: true } })
   return tx.trainingSessionEvent.create({ data: { sessionId, seq: session.eventSeq, type, targetType, targetId, payload: asJson(payload), expiresAt: new Date(Date.now() + 7 * 24 * 3600_000) } })
@@ -455,7 +452,7 @@ export async function publishTrainingSession(userId: string, sessionId: string, 
   const issues = structureIssues(session.Stages.map(stage => ({ ...stage, problems: stage.Problems })) as unknown as StructureStage[])
   if (issues.some(issue => issue.severity === 'error')) throw new TrainingEngineError(422, 'TRAINING_STRUCTURE_INCOMPLETE', issues.map(issue => issue.message).join('；'))
   const assigned = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, select: { userId: true } })
-  const userIds = assigned.length ? assigned.map(item => item.userId) : await eligibleParticipantIds(session)
+  const userIds = assigned.length ? assigned.map(item => item.userId) : await eligibleTrainingParticipantIds(session)
   await prisma.$transaction(async tx => {
     const claimed = await tx.trainingSession.updateMany({ where: { id: sessionId, status: 'DRAFT', statusRevision: expectedRevision }, data: { status: 'SCHEDULED', statusRevision: { increment: 1 }, currentStageId: session.Stages[0].id } })
     if (!claimed.count) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练已被其他管理员修改，请刷新')
@@ -583,7 +580,7 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
 export async function joinTrainingSession(userId: string, sessionId: string) {
   const session = await loadSession(sessionId)
   if (!session || session.status === 'DRAFT' || session.status === 'ENDED' || session.status === 'ARCHIVED') throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不可加入')
-  const eligible = new Set(await eligibleParticipantIds(session)).has(userId)
+  const eligible = new Set(await eligibleTrainingParticipantIds(session)).has(userId)
   if (!eligible) throw new TrainingEngineError(403, 'TRAINING_SESSION_FORBIDDEN', '不在该训练的成员范围内')
   const existing = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
   if (existing?.status === 'active') return existing
@@ -614,12 +611,15 @@ export async function listTrainingSessions(userId: string, query: any) {
   const visibilityWhere: Prisma.TrainingSessionWhereInput = scopeManager
     ? {}
     : { OR: [{ createdBy: userId }, { Participants: { some: { userId, status: 'active' } } }, ...((teamId || organizationId) ? [{ status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] as any } }] : [])] }
+  const keyword = typeof query?.keyword === 'string' ? query.keyword.trim() : ''
+  const filterTeamId = typeof query?.filterTeamId === 'string' ? query.filterTeamId : ''
   const where: Prisma.TrainingSessionWhereInput = {
     AND: [scopeWhere, visibilityWhere],
-    ...(query?.status ? { status: String(query.status).toUpperCase() as any } : {}),
+    ...(keyword ? { OR: [{ title: { contains: keyword, mode: 'insensitive' } }, { description: { contains: keyword, mode: 'insensitive' } }] } : {}),
+    ...(filterTeamId ? filterTeamId === 'organization' ? { teamId: null } : { teamId: filterTeamId } : {}),
   }
-  const sessions = await prisma.trainingSession.findMany({ where, orderBy: [{ status: 'asc' }, { scheduledStartAt: 'desc' }, { createdAt: 'desc' }], include: { Participants: { where: { userId, status: 'active' }, select: { id: true } }, Team: { select: { name: true } }, Stages: { select: { _count: { select: { Problems: true } } } }, _count: { select: { Stages: true, Participants: true } } }, take: 100 })
-  return sessions.filter(item => {
+  const sessions = await prisma.trainingSession.findMany({ where, orderBy: [{ status: 'asc' }, { scheduledStartAt: 'desc' }, { createdAt: 'desc' }], include: { Participants: { where: { userId, status: 'active' }, select: { id: true } }, Team: { select: { name: true } }, Stages: { select: { _count: { select: { Problems: true } } } }, _count: { select: { Stages: true, Participants: true } } } })
+  const visible = sessions.filter(item => {
     if (scopeManager || item.createdBy === userId || item.Participants.length) return true
     return item.joinMode !== 'TEACHER_ASSIGN' && parseJsonObject(item.settings).rosterExplicit !== true
   }).map(({ Participants, Team, Stages, ...item }) => {
@@ -633,6 +633,16 @@ export async function listTrainingSessions(userId: string, query: any) {
       canJoin: !scopeManager && item.createdBy !== userId && !Participants.length,
     }
   })
+  const groupFor = (status: string) => status === 'RUNNING' || status === 'PAUSED' ? 'active' : status === 'SCHEDULED' ? 'upcoming' : status === 'DRAFT' ? 'draft' : 'completed'
+  const statusCounts = visible.reduce((counts, item) => ({ ...counts, [groupFor(item.status)]: counts[groupFor(item.status) as keyof typeof counts] + 1 }), { active: 0, upcoming: 0, draft: 0, completed: 0 })
+  const requestedGroup = ['active', 'upcoming', 'draft', 'completed'].includes(String(query?.statusGroup)) ? String(query.statusGroup) : null
+  const filtered = requestedGroup ? visible.filter(item => groupFor(item.status) === requestedGroup) : visible
+  const wantsPage = query?.page !== undefined || query?.pageSize !== undefined || requestedGroup !== null || keyword || filterTeamId
+  if (!wantsPage) return visible
+  const page = Math.max(1, Number(query?.page) || 1)
+  const pageSize = Math.min(100, Math.max(1, Number(query?.pageSize) || 20))
+  const start = (page - 1) * pageSize
+  return { items: filtered.slice(start, start + pageSize), statusCounts, pagination: { page, pageSize, total: filtered.length, totalPages: Math.ceil(filtered.length / pageSize) } }
 }
 
 export async function getTrainingWorkspace(userId: string, sessionId: string) {
@@ -668,7 +678,7 @@ export async function replaceTrainingRoster(userId: string, sessionId: string, b
   const groups = Array.isArray(body?.groups) ? body.groups : []
   const participants = Array.isArray(body?.participants) ? body.participants : []
   if (groups.length > 100 || participants.length > 5000) throw new TrainingEngineError(422, 'TRAINING_ROSTER_TOO_LARGE', '分组或学员数量超过上限')
-  const eligible = new Set(await eligibleParticipantIds(session))
+  const eligible = new Set(await eligibleTrainingParticipantIds(session))
   const userIds: string[] = [...new Set<string>(participants.map((item: any) => String(item.userId || '')))].filter(Boolean)
   const invalid = userIds.filter(id => !eligible.has(id))
   if (invalid.length) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_OUT_OF_SCOPE', '名单中包含不属于当前学校或团队的账号')

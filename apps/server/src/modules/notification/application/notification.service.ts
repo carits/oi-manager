@@ -14,17 +14,7 @@ function visibleNotificationWhere(user: AuthUser) {
   return { userId: user.userId, OR: [...contexts, { contextKey: 'legacy:campus', scope }] }
 }
 
-export async function listNotifications(user: AuthUser, query: Record<string, unknown> = {}) {
-  const page = Math.max(1, Number(query.page) || 1)
-  const pageSize = Math.min(50, Math.max(1, Number(query.pageSize || query.take) || 20))
-  const filter = ['all', 'unread', 'actionable'].includes(String(query.filter)) ? String(query.filter) : 'all'
-  const visible = visibleNotificationWhere(user)
-  const fetchedRows = await prisma.userNotification.findMany({
-    where: { ...visible, ...(filter === 'unread' ? { readAt: null } : {}) },
-    orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize + 1,
-  })
-  const hasMore = fetchedRows.length > pageSize
-  const rows = fetchedRows.slice(0, pageSize)
+async function resolveNotificationRows(user: AuthUser, rows: Awaited<ReturnType<typeof prisma.userNotification.findMany>>) {
   const scope = getResourceScope(user)
   const teamInvitationIds = rows.filter(row => row.type === 'team_invitation').map(row => row.sourceId)
   const joinRequestIds = rows.filter(row => row.type === 'team_join_request').map(row => row.sourceId)
@@ -105,9 +95,54 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
         ? [{ key: 'view', label: '查看', style: 'primary' }]
         : [{ key: 'reject', label: '拒绝', style: 'secondary' }, { key: 'approve', label: '同意', style: 'primary' }],
   }))
+  return notifications
+}
+
+export async function listNotifications(user: AuthUser, query: Record<string, unknown> = {}) {
+  const page = Math.max(1, Number(query.page) || 1)
+  const pageSize = Math.min(50, Math.max(1, Number(query.pageSize || query.take) || 20))
+  const filter = ['all', 'unread', 'actionable'].includes(String(query.filter)) ? String(query.filter) : 'all'
+  const visible = visibleNotificationWhere(user)
+  let notifications: Awaited<ReturnType<typeof resolveNotificationRows>> = []
+  let hasMore = false
+
+  if (filter === 'actionable') {
+    // Actionability depends on the live source record, so raw notification pages cannot be
+    // treated as actionable pages. Scan until this requested logical page is filled or the
+    // visible stream is exhausted; this prevents an actionable item after 50 ordinary rows
+    // from being hidden behind a false empty state.
+    const required = page * pageSize + 1
+    const actionable: Awaited<ReturnType<typeof resolveNotificationRows>> = []
+    let offset = 0
+    const batchSize = 100
+    while (actionable.length < required) {
+      const rows = await prisma.userNotification.findMany({
+        where: visible,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: offset,
+        take: batchSize,
+      })
+      if (!rows.length) break
+      const resolved = await resolveNotificationRows(user, rows)
+      actionable.push(...resolved.filter(row => row.actionable))
+      offset += rows.length
+      if (rows.length < batchSize) break
+    }
+    const start = (page - 1) * pageSize
+    notifications = actionable.slice(start, start + pageSize)
+    hasMore = actionable.length > start + pageSize
+  } else {
+    const fetchedRows = await prisma.userNotification.findMany({
+      where: { ...visible, ...(filter === 'unread' ? { readAt: null } : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize + 1,
+    })
+    hasMore = fetchedRows.length > pageSize
+    notifications = await resolveNotificationRows(user, fetchedRows.slice(0, pageSize))
+  }
   const unreadCount = await prisma.userNotification.count({ where: { ...visible, readAt: null } })
-  const filteredNotifications = filter === 'actionable' ? notifications.filter(row => row.actionable) : notifications
-  return { notifications: filteredNotifications, unreadCount, page, pageSize, hasMore }
+  return { notifications, unreadCount, page, pageSize, hasMore }
 }
 
 export async function readNotification(user: AuthUser, id: string) {

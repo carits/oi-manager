@@ -163,12 +163,7 @@ class ApiClient {
   private getHeaders(accountScoped = false): Record<string, string> {
     const headers: Record<string, string> = {}
 
-    // 从 localStorage 获取 token
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token')
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
       const organizationMatch = window.location.pathname.match(/^\/org\/([^/]+)/)
       if (!accountScoped && organizationMatch) headers['X-OI-Organization-ID'] = organizationMatch[1]
     }

@@ -158,14 +158,22 @@ export async function listOrganizationStudents(actor: OrganizationActor, query: 
   const requestedTeacher = typeof query.headTeacherMembershipId === 'string' && query.headTeacherMembershipId ? query.headTeacherMembershipId : undefined
   const headTeacherMembershipId = actor.role === 'teacher' ? actor.organizationMembershipId || undefined : requestedTeacher
   const school = await schoolFor(actor.organizationId)
-  const profiles = await prisma.organizationStudentProfile.findMany({
-    where: {
-      Membership: { organizationId: actor.organizationId, status: 'active', ...(q ? { OR: [{ User: { username: { contains: q, mode: 'insensitive' } } }, { StudentProfile: { name: { contains: q, mode: 'insensitive' } } }] } : {}) },
-      ...(status ? { status } : {}), ...(headTeacherMembershipId ? { headTeacherMembershipId } : {}),
-    },
+  const teamId = typeof query.teamId === 'string' && query.teamId ? query.teamId : undefined
+  if (teamId) {
+    const team = await prisma.team.findFirst({ where: { id: teamId, organizationId: actor.organizationId, scope: 'campus' }, select: { id: true } })
+    if (!team) badRequest('筛选团队不存在或不属于当前学校')
+  }
+  const profileWhere = {
+    Membership: { organizationId: actor.organizationId, status: 'active', ...(q ? { OR: [{ User: { username: { contains: q, mode: 'insensitive' as const } } }, { StudentProfile: { name: { contains: q, mode: 'insensitive' as const } } }] } : {}), ...(teamId ? { User: { TeamMember: { some: { teamId, status: 'active', userType: 'student' } } } } : {}) },
+    ...(status ? { status } : {}), ...(headTeacherMembershipId ? { headTeacherMembershipId } : {}),
+  }
+  const grade = typeof query.grade === 'string' && query.grade ? query.grade : undefined
+  const [profiles, unfilteredTotal] = await Promise.all([prisma.organizationStudentProfile.findMany({
+    where: profileWhere,
     orderBy: [{ enrollmentYear: 'desc' }, { name: 'asc' }],
+    ...(!grade ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
     include: { Membership: { include: { User: { select: { id: true, username: true, avatar: true, status: true } } } } },
-  })
+  }), grade ? Promise.resolve(0) : prisma.organizationStudentProfile.count({ where: profileWhere })])
   const teacherIds = [...new Set(profiles.map(item => item.headTeacherMembershipId).filter((id): id is string => Boolean(id)))]
   const teachers = teacherIds.length ? await prisma.organizationTeacherProfile.findMany({ where: { membershipId: { in: teacherIds } }, select: { membershipId: true, name: true } }) : []
   const names = new Map(teachers.map(item => [item.membershipId, item.name]))
@@ -176,12 +184,11 @@ export async function listOrganizationStudents(actor: OrganizationActor, query: 
     headTeacher: profile.headTeacherMembershipId ? { id: profile.headTeacherMembershipId, name: names.get(profile.headTeacherMembershipId) || '-' } : null,
     user: profile.Membership.User,
   }))
-  const grade = typeof query.grade === 'string' && query.grade ? query.grade : undefined
   const educationDetail = normalizeEducationSystemDetail(school.educationSystemDetail)
   const filtered = grade ? rows.filter(profile => calculateGrade({ enrollmentYear: profile.enrollmentYear, educationSystem: school.educationSystem, educationSystemDetail: educationDetail, schoolType: school.schoolType }) === grade) : rows
   const start = (page - 1) * pageSize
   return {
-    ...paginatedResponse(filtered.slice(start, start + pageSize), filtered.length, page, pageSize),
+    ...paginatedResponse(grade ? filtered.slice(start, start + pageSize) : filtered, grade ? filtered.length : unfilteredTotal, page, pageSize),
     filters: { grades: getAllGrades(school.schoolType, school.educationSystem, educationDetail).filter(Boolean) },
   }
 }

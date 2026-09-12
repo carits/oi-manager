@@ -86,7 +86,16 @@ describe('independent coach-directed training engine', () => {
       title: '学校学生训练', organizationId: school.organizationId,
       stages: [{ name: '训练任务', mode: 'FREE', advanceMode: 'MANUAL', problemAccessMode: 'ALL', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }] }],
     }
-    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send(body)
+    const implicit = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send(body)
+    expect(implicit.status).toBe(422)
+    expect(implicit.body.code).toBe('TRAINING_PARTICIPANT_TARGET_REQUIRED')
+
+    const principalMembership = await prisma.organizationMembership.findFirstOrThrow({ where: { organizationId: school.organizationId, userId: coach.user.id } })
+    await prisma.organizationMembership.update({ where: { id: principalMembership.id }, data: { memberRole: 'school_principal' } })
+    const preview = await createAuthenticatedRequest(app, token).post('/api/training-sessions/participant-preview').send({ organizationId: school.organizationId, participantTarget: 'organization_students' })
+    expect(preview.status).toBe(200)
+    expect(preview.body.data).toMatchObject({ participantTarget: 'organization_students', participantCount: 1, targetName: '全校学生' })
+    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({ ...body, settings: { productMode: 'coach', participantTarget: 'organization_students' } })
     expect(created.status).toBe(201)
     const published = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.body.data.id}/publish`).send({ expectedRevision: 0 })
     expect(published.status).toBe(200)
@@ -97,6 +106,18 @@ describe('independent coach-directed training engine', () => {
     const invalidCustom = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({ ...body, title: '非法自定义名单', participantUserIds: [coach.user.id], settings: { productMode: 'coach', participantTarget: 'custom_students' } })
     expect(invalidCustom.status).toBe(422)
     expect(invalidCustom.body.code).toBe('TRAINING_PARTICIPANT_OUT_OF_SCOPE')
+  })
+
+  it('allows an active super administrator to target a whole school without school membership', async () => {
+    const school = await prisma.school.findUniqueOrThrow({ where: { id: coach.schoolId! } })
+    const superAdmin = await createTestUser({ role: 'super_admin' })
+    const response = await createAuthenticatedRequest(app, generateTokenFromUser(superAdmin.user)).post('/api/training-sessions').send({
+      title: '平台全校训练',
+      organizationId: school.organizationId,
+      settings: { productMode: 'coach', participantTarget: 'organization_students' },
+      stages: [{ name: '训练任务', mode: 'FREE', advanceMode: 'MANUAL', problemAccessMode: 'ALL', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }] }],
+    })
+    expect(response.status).toBe(201)
   })
 
   it('lists school and school-team training with human card facts', async () => {
@@ -121,6 +142,17 @@ describe('independent coach-directed training engine', () => {
     expect(studentList.map(item => item.id)).toEqual(expect.arrayContaining([schoolSession.id, teamSession.id]))
     expect(studentList.every(item => item.canJoin)).toBe(true)
     expect((await listTrainingSessions(student.user.id, { organizationId: school.organizationId })).some(item => item.teamId === team.id)).toBe(false)
+
+    await prisma.trainingSession.createMany({ data: Array.from({ length: 25 }, (_, index) => ({
+      id: crypto.randomUUID(), title: `分页专项 ${String(index + 1).padStart(2, '0')}`,
+      organizationId: school.organizationId, createdBy: coach.user.id, status: 'DRAFT',
+    })) })
+    const firstPage = await listTrainingSessions(coach.user.id, { organizationId: school.organizationId, statusGroup: 'draft', keyword: '分页专项', page: 1, pageSize: 20 }) as any
+    const secondPage = await listTrainingSessions(coach.user.id, { organizationId: school.organizationId, statusGroup: 'draft', keyword: '分页专项', page: 2, pageSize: 20 }) as any
+    expect(firstPage.pagination).toMatchObject({ page: 1, pageSize: 20, total: 25, totalPages: 2 })
+    expect(firstPage.items).toHaveLength(20)
+    expect(secondPage.items).toHaveLength(5)
+    expect(firstPage.statusCounts.draft).toBeGreaterThanOrEqual(25)
   })
 
   it('returns the design DTO and preserves stable stage/problem ids while reordering', async () => {

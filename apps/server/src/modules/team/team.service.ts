@@ -270,15 +270,17 @@ export class TeamService {
     pageSize: number
     skip: number
     view?: string
+    keyword?: string
     user: JwtPayload
   }) {
-    const { organizationId, page, pageSize, skip, view, user } = params
+    const { organizationId, page, pageSize, skip, view, keyword, user } = params
 
     const userId = user.userId
     const userType = getMembershipType(user)
 
     const scope = this.getScopeForUser(user)
     const where: Record<string, unknown> = { scope }
+    if (keyword?.trim()) where.name = { contains: keyword.trim(), mode: 'insensitive' }
     if (scope === 'campus') {
       if (!user.organizationId) throw new Error('NO_ORGANIZATION')
       where.organizationId = user.organizationId
@@ -292,6 +294,9 @@ export class TeamService {
 
       const myTeamIds = await this.repo.findUserTeamIds(userId, userType, 'active', scope)
       where.id = { in: myTeamIds }
+    } else if (view === 'managed') {
+      if (!userId || userId === 'undefined' || userId === 'null') return paginatedResponse([], 0, page, pageSize)
+      where.TeamMember = { some: { userId, userType, status: 'active', role: { in: ['owner', 'admin'] } } }
     } else if (scope === 'campus' && organizationId && !view) {
       // 学校团队页面：显示该学校的所有团队
     } else {

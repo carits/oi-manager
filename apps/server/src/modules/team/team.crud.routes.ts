@@ -84,7 +84,7 @@ teamCrudRouter.get('/mine', authenticate, asyncHandler(async (req, res) => {
 teamCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
 
-  const { organizationId, view } = req.query
+  const { organizationId, view, keyword } = req.query
   const { page, pageSize, skip } = parsePagination(req.query, { defaultPageSize: 12 })
   const user = (req as any).user!
 
@@ -94,6 +94,7 @@ teamCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     pageSize,
     skip,
     view: view as string,
+    keyword: typeof keyword === 'string' ? keyword : undefined,
     user
   })
 

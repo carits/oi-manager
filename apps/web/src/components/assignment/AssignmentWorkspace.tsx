@@ -23,13 +23,12 @@ import { useToast } from '@/components/ui/Toast'
 import styles from './Assignment.module.css'
 import { type Assignment, type AssignmentProblem, assignmentStatusMeta, formatAssignmentTime } from './types'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
+import { StudentPicker } from '@/components/pickers/StudentPicker'
 
 interface ProblemListItem { id: string; platform: string; problemId: string; title: string; difficulty?: string | null }
 interface ProblemListResponse { data: ProblemListItem[]; total: number }
 interface RevisionSummary { id: string; revisionNumber: number; mode: 'acm' | 'oi'; judgeConfigHash: string }
 interface RevisionList { latestTestSetRevisionId: string | null; revisions: RevisionSummary[] }
-interface StudentItem { userId: string | null; name: string; user?: { username: string } | null }
-interface StudentList { items: StudentItem[] }
 interface ValidationResult { valid: boolean; issues: Array<{ path: string; code: string; message: string }> }
 interface ProgressItem { id?: string | null; assignmentProblemId: string; learningStatus: string; timelinessStatus: string; correctionStatus: string; attemptCount?: number; bestScore?: number | null; bestVerdict?: string | null; finalScore?: number | null; firstSubmissionId?: number | null; bestSubmissionId?: number | null; latestSubmissionId?: number | null; firstSubmittedAt?: string | null; lastSubmittedAt?: string | null; manualCompletionVersion?: number; manualCompletedAt?: string | null; manualCompletionReason?: string | null; manualCompletedBy?: { id: string; username: string } | null; states?: string[] }
 interface ProgressRecipient { id: string; user: { id: string; username: string }; score: number; rawScore: number; adjustment: number; completedProblems: number; lateProblems: number; correctionProblems: number; progress: ProgressItem[]; cells?: ProgressItem[] }
@@ -77,7 +76,9 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   const [problemDraft, setProblemDraft] = useState(assignment.Problems)
   const [rosterDraft, setRosterDraft] = useState(() => new Set(assignment.Recipients.map(item => item.userId)))
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [library, setLibrary] = useState<'school' | 'platform'>('school')
+  const [library, setLibrary] = useState<'school' | 'carits' | 'external'>('school')
+  const [problemPickerPage, setProblemPickerPage] = useState(1)
+  const [problemPickerQuery, setProblemPickerQuery] = useState('')
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [confirmPublish, setConfirmPublish] = useState(false)
   const [designStep, setDesignStep] = useState(0)
@@ -91,8 +92,10 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignment.id])
 
-  const problemResource = useResource<ProblemListResponse>(pickerOpen ? `/api/problems?library=${library}&${library === 'platform' ? 'sourceGroup=carits&' : ''}pageSize=100` : null, { sessionKey, isEmpty: data => data.data.length === 0 })
-  const studentResource = useResource<StudentList>(`/api/organizations/${organizationId}/members/students?pageSize=100`, { sessionKey, isEmpty: data => data.items.length === 0 })
+  const problemPickerParams = new URLSearchParams({ library: library === 'school' ? 'school' : 'platform', page: String(problemPickerPage), pageSize: '20' })
+  if (library !== 'school') problemPickerParams.set('sourceGroup', library)
+  if (problemPickerQuery.trim()) problemPickerParams.set('keyword', problemPickerQuery.trim())
+  const problemResource = useResource<ProblemListResponse>(pickerOpen ? `/api/problems?${problemPickerParams}` : null, { sessionKey, isEmpty: data => data.data.length === 0 })
 
   const mutate = async (endpoint: string, method: 'PATCH' | 'PUT' | 'POST', body: unknown, key: string) => {
     setSaving(key)
@@ -283,9 +286,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     </>}
     {designStep === 2 && <>
     <Section title="学生名单" description={rosterMode === 'DYNAMIC' ? '发布时自动选择当前学校或团队中的有效学生。' : `已选 ${rosterDraft.size} 人；发布后名单保持不变，之后的成员变化不会改写本次作业。`}>
-      {rosterMode === 'DYNAMIC' ? <p className={styles.muted}>无需在草稿中逐个勾选；发布时会固定当时符合范围的学生。</p> : <AsyncRegion state={studentResource.state} onRetry={studentResource.retry} emptyText="当前学校没有可分配学生" skeletonRows={4}>
-        {data => <div className={styles.rosterList}>{data.items.filter(item => item.userId).map(item => <Checkbox key={item.userId!} label={item.name || item.user?.username || '未命名学生'} description={item.user?.username} checked={rosterDraft.has(item.userId!)} onChange={event => setRosterDraft(current => { const next = new Set(current); event.target.checked ? next.add(item.userId!) : next.delete(item.userId!); return next })} />)}</div>}
-      </AsyncRegion>}
+      {rosterMode === 'DYNAMIC' ? <p className={styles.muted}>无需在草稿中逐个勾选；发布时会固定当时符合范围的学生。</p> : <StudentPicker organizationId={organizationId} selectedIds={[...rosterDraft]} onChange={ids => setRosterDraft(new Set(ids))} />}
     </Section>
     </>}
     {designStep === 3 && <>
@@ -298,9 +299,10 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
       {designStep < 3 && <Button loading={Boolean(saving)} onClick={() => void changeStep(designStep + 1)}>下一步</Button>}
     </div>
     <FormDialog isOpen={pickerOpen} onClose={() => setPickerOpen(false)} title="添加题目" description="将使用当前可用的测试数据；发布后不再跟随题库更新。" size="lg">
-      <Tabs label="题库范围" value={library} onChange={setLibrary} items={[{ value: 'school', label: '校内题库' }, { value: 'platform', label: 'Carits 平台题库' }]} />
+      <Tabs label="题库范围" value={library} onChange={value => { setLibrary(value); setProblemPickerPage(1) }} items={[{ value: 'school', label: '校内题库' }, { value: 'carits', label: 'Carits 平台题库' }, { value: 'external', label: '其他题库' }]} />
+      <Input aria-label="搜索题目" placeholder="搜索题号或标题" value={problemPickerQuery} onChange={event => { setProblemPickerQuery(event.target.value); setProblemPickerPage(1) }} />
       <AsyncRegion state={problemResource.state} onRetry={problemResource.retry} emptyText="当前题库没有可用题目" skeletonRows={5}>
-        {data => <div className={styles.pickerList}>{data.data.map(problem => <div className={styles.pickerItem} key={problem.id}><span className={styles.problemIdentity}><strong>{problem.problemId} · {problem.title}</strong><span>{problem.platform} · {problem.difficulty || '未标注难度'}</span></span><Button size="sm" variant="secondary" disabled={problemDraft.some(item => item.problemId === problem.id)} onClick={() => void addProblem(problem)}>{problemDraft.some(item => item.problemId === problem.id) ? '已添加' : '添加'}</Button></div>)}</div>}
+        {data => <><div className={styles.pickerList}>{data.data.map(problem => <div className={styles.pickerItem} key={problem.id}><span className={styles.problemIdentity}><strong>{problem.problemId} · {problem.title}</strong><span>{problem.platform} · {problem.difficulty || '未标注难度'}</span></span><Button size="sm" variant="secondary" disabled={problemDraft.some(item => item.problemId === problem.id)} onClick={() => void addProblem(problem)}>{problemDraft.some(item => item.problemId === problem.id) ? '已添加' : '添加'}</Button></div>)}</div><Pagination currentPage={problemPickerPage} totalPages={Math.max(1, Math.ceil(data.total / 20))} total={data.total} pageSize={20} onPageChange={setProblemPickerPage} showQuickJumper={false} /></>}
       </AsyncRegion>
     </FormDialog>
     <ConfirmDialog isOpen={confirmPublish} onClose={() => setConfirmPublish(false)} onConfirm={() => void publish()} loading={saving === 'publish'} title="发布并冻结作业？" message={`发布后将固定 ${problemDraft.length} 道题和${rosterMode === 'DYNAMIC' ? '发布时生成的学生名单' : ` ${rosterDraft.size} 名学生`}，不能再修改结构。请确认各配置区域均已保存。`} confirmText="确认发布" />

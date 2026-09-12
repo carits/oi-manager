@@ -22,6 +22,7 @@ import {
   listTrainingEvents,
   listTrainingSessions,
   openTrainingHint,
+  previewTrainingParticipants,
   publishTrainingSession,
   recordHeartbeat,
   recordStrategyDecision,
@@ -47,6 +48,10 @@ trainingEngineRouter.get('/training-sessions', authenticate, asyncHandler(async 
 
 trainingEngineRouter.post('/training-sessions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try { res.status(201).json({ success: true, data: await createTrainingSession(req.user!.userId, req.body) }) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/participant-preview', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { res.json({ success: true, data: await previewTrainingParticipants(req.user!.userId, req.body) }) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {

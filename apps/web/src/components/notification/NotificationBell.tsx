@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
-import { notificationTeamHref } from '@/components/workspace/workspaceRouting'
+import { resolveNotificationHref } from '@/components/workspace/workspaceRouting'
 import { resolveNavigationContext } from '@/lib/navigationContext'
 import styles from '@/components/AppShell.module.css'
 
@@ -64,7 +64,7 @@ export function NotificationBell() {
   }
   const openNotification = async (notification: UserNotification) => {
     await markRead(notification.id)
-    const href = notification.href?.startsWith('/') ? notification.href : notificationTeamHref(context, organizationId, notification.href)
+    const href = resolveNotificationHref(context, organizationId, notification.href)
     if (href) { setOpen(false); router.push(href) }
   }
   const act = async (notification: UserNotification, action: string) => {

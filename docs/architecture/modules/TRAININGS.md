@@ -55,7 +55,7 @@ TrainingSession
 ```
 
 - DRAFT 仅管理者可见。
-- 发布时，如果已显式配置名单则只加入名单；否则以当前学校或团队的有效学生为默认名单。学校教师、负责人和团队中的非学生成员永远不能被自动加入训练。
+- 新建校园训练必须显式声明参与范围；发布时，如果已显式配置名单则只加入名单，团队范围才允许从当前有效学生生成名单。历史上缺少范围元数据的旧记录只在兼容读取中保留，不得经公共创建 API 再产生。学校教师、负责人和团队中的非学生成员永远不能被自动加入训练。
 - 创建草稿时必须明确选择团队学生、全校学生或自定义学生。教师只能选择自己可管理的团队或自定义学生；只有学校负责人和超级管理员可以选择全校学生。前端隐藏选项、创建接口校验、发布名单解析和迟到加入资格使用同一套学生边界。
 - 未显式配置名单的已发布训练允许范围内迟到成员发现并加入；显式名单不能由手工 API 绕过。迟到加入遵循 `CURRENT_STAGE/FROM_BEGINNING/TEACHER_ASSIGN`。
 - 顺序模式默认要求前一题 AC，也可组合分数、时间、尝试次数或教练解锁条件。
@@ -78,6 +78,8 @@ TrainingSession
 
 主要接口为 `/api/training-sessions`、`/design`、`/structure/validate`、`/structure`、`/roster`、`/publish`、`/commands`、`/drafts`、`/heartbeat`、`/submit`、`/hints`、`/coach-dashboard`、`/peer-progress`、`/report` 和 `/events`。所有接口重新校验账号状态、学校/团队范围和训练身份。
 
+训练创建的对象确认使用 `/api/training-sessions/participant-preview`。该接口与创建、发布共享 `training-roster.service.ts`，前端不得自行估算全校、自定义名单或团队人数。训练列表、题目池、学生选择和题单均使用服务端搜索与分页，跨页选择由稳定 ID 保存，不能通过固定 `take` 或只过滤当前页制造静默截断。
+
 - `/personal/training-sessions`：账号参与的训练列表。
 - `/org/:organizationId/training-sessions`：校园训练管理与参与入口。
 - `.../training-sessions/:id`：学员训练工作台与教练控制台共用权威状态。
@@ -96,6 +98,13 @@ TrainingSession
 工作台提供阶段/题目导航、题面、代码草稿、提交、实时进度、名单管理和课堂命令。它不复用比赛榜单、比赛题面选择或比赛时间冻结行为。
 
 旧活动域中的比赛列表按真实开始和结束时间计算生命周期：进行中按最近结束优先，即将开始按开始时间升序，已结束按结束时间倒序；标题和标题中的数字不参与排序。校园比赛的团队选择必须显式限定当前 `organizationId`。团队进入比赛、训练和题单列表时统一使用 `teamId` 查询参数；旧团队比赛深层 URL 只负责重定向到个人或校园比赛的规范详情页，不再维护第二套详情。比赛创建使用三步流程和分区题目选择器，高级 Rating/可见性规则默认折叠。比赛详情把列表和题面合并为一个题目工作台，一级入口只保留题目、提交记录、题解和排名，附件由题目资料入口访问。
+
+### 旧活动域退出约束
+
+- `Training(type=training|homework)` 已冻结为只读兼容来源；新训练只写 `TrainingSession`，新作业只写 `Assignment`。
+- `Training(type=contest)` 暂时保留为比赛运行态，新增比赛能力必须先通过 Contest facade/aggregate service，不允许页面或其他领域直接新增旧 Training 写路径。
+- Contest facade 稳定后按“查询切换 → 命令切换 → 运行态迁移”的顺序逐步退出旧存储；当前阶段不做破坏性迁移，也不改历史外键。
+- 架构门禁持续禁止 `Contest/ContestProblem` 越界写入；旧活动 API 只接受兼容修复，不再承载训练、作业或全新产品能力。
 
 ## 迁移与回退
 

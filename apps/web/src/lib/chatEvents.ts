@@ -24,8 +24,8 @@ export function parseChatEventBlock(block: string): ChatEvent | null {
 
 /**
  * Connect to the account-scoped chat stream. Fetch streaming is used instead of
- * EventSource so legacy Bearer sessions can authenticate without putting a token
- * in the URL. No organization header is ever copied to this account-level API.
+ * EventSource so reconnect cursors and abort handling stay explicit. Browser
+ * authentication is cookie-only and no organization identity is copied here.
  */
 export function connectChatEvents(userId: string, onEvent: ChatEventHandler): () => void {
   const controller = new AbortController()
@@ -36,9 +36,7 @@ export function connectChatEvents(userId: string, onEvent: ChatEventHandler): ()
     let retryMs = 1_000
     while (!controller.signal.aborted) {
       try {
-        const token = typeof window === 'undefined' ? null : window.localStorage.getItem('token')
         const headers: Record<string, string> = { Accept: 'text/event-stream' }
-        if (token) headers.Authorization = `Bearer ${token}`
         if (lastEventId) headers['Last-Event-ID'] = lastEventId
 
         const response = await fetch(`${ENV.API_URL}/api/chat/events`, {

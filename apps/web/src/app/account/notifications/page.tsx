@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Bell } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
@@ -11,12 +11,16 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { useToast } from '@/components/ui/Toast'
 import type { UserNotification } from '@/components/notification/NotificationBell'
+import { useAuth } from '@/components/AuthProvider'
+import { resolveNavigationContext } from '@/lib/navigationContext'
+import { resolveNotificationHref } from '@/components/workspace/workspaceRouting'
 import styles from './page.module.css'
 
 type Payload = { notifications: UserNotification[]; unreadCount: number; hasMore: boolean }
 
 export default function NotificationCenterPage() {
-  const router = useRouter(), toast = useToast()
+  const router = useRouter(), pathname = usePathname(), toast = useToast(), { user } = useAuth()
+  const navigationContext = resolveNavigationContext(pathname, user)
   const [filter, setFilter] = useState('all')
   const [items, setItems] = useState<UserNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -32,7 +36,8 @@ export default function NotificationCenterPage() {
   useEffect(() => { void load(1) }, [filter])
   const open = async (item: UserNotification) => {
     if (!item.readAt) await apiClient.patch(`/api/notifications/${item.id}/read`)
-    if (item.href?.startsWith('/')) router.push(item.href)
+    const href = resolveNotificationHref(navigationContext.workspace, navigationContext.organizationId, item.href)
+    if (href) router.push(href)
     else await load(1)
   }
   const act = async (item: UserNotification, action: string) => {

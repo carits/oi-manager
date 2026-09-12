@@ -12,7 +12,7 @@ import {
 import { useSWRConfig } from 'swr'
 import { usePathname } from 'next/navigation'
 import apiClient, { AUTH_UNAUTHORIZED_EVENT, ORGANIZATION_UNAVAILABLE_EVENT } from '@/lib/apiClient'
-import { clearAuth, setAdminId, setRole, setUserId } from '@/lib/auth'
+import { clearAuth, clearLegacyBrowserToken, setAdminId, setRole, setUserId } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
 import type { WorkspaceSummary } from '@oi-manager/shared'
 
@@ -82,6 +82,7 @@ export function AuthProvider({
   )
 
   useEffect(() => {
+    clearLegacyBrowserToken()
     if (initialUser) storeAccountMetadata(initialUser)
   }, [initialUser])
 

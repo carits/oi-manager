@@ -5,15 +5,6 @@ const ROLE_KEY = 'role'
 const USER_ID_KEY = 'userId'
 const ADMIN_ID_KEY = 'adminId'
 
-export function getToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem(TOKEN_KEY)
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-}
-
 export function getRole(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem(ROLE_KEY)
@@ -46,6 +37,11 @@ export function clearAuth(): void {
   ;[TOKEN_KEY, ROLE_KEY, USER_ID_KEY, ADMIN_ID_KEY].forEach(key => localStorage.removeItem(key))
 }
 
+/** Browser authentication is cookie-only. Remove tokens left by pre-session clients. */
+export function clearLegacyBrowserToken(): void {
+  if (typeof window !== 'undefined') localStorage.removeItem(TOKEN_KEY)
+}
+
 function sidebarNavigationKey(userId: string, role: string, context: string): string {
   return `sidebarNavigation:${role}:${userId}:${context}`
 }
@@ -64,11 +60,6 @@ export function setSidebarNavigationOpen(userId: string, role: string, context: 
   localStorage.setItem(sidebarNavigationKey(userId, role, context), open ? 'open' : 'closed')
 }
 
-export function isAuthenticated(): boolean { return !!getToken() }
 export function hasRole(role: string): boolean { return getRole() === role }
 export function isAdmin(role: string | null): boolean { return role === 'super_admin' || role === 'platform_admin' }
 export function isSuperAdmin(role: string | null): boolean { return role === 'super_admin' }
-export function getAuthHeaders(): HeadersInit {
-  const token = getToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
