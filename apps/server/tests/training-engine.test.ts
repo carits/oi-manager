@@ -79,6 +79,30 @@ describe('independent coach-directed training engine', () => {
     expect(await prisma.trainingSessionEvent.count({ where: { sessionId: ended.id, type: 'training.session.ended' } })).toBe(1)
   })
 
+  it('lists school and school-team training with human card facts', async () => {
+    const school = await prisma.school.findUniqueOrThrow({ where: { id: coach.schoolId! } })
+    const campusTeam = await createTestTeam({ schoolId: school.id, scope: 'campus', ownerId: coach.user.id, ownerType: 'teacher', name: '提高组' })
+    await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: campusTeam.id, userId: student.user.id, userType: 'student', role: 'member', status: 'active', joinedAt: new Date() } })
+    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
+    const dueAt = new Date(Date.now() + 86_400_000).toISOString()
+    const schoolSession = await prisma.trainingSession.create({ data: { title: '全校基础训练', organizationId: school.organizationId, createdBy: coach.user.id, status: 'RUNNING', settings: { productMode: 'simple', dueAt } } })
+    const schoolStage = await prisma.trainingSessionStage.create({ data: { sessionId: schoolSession.id, name: '训练任务', orderIndex: 0 } })
+    await prisma.trainingSessionStageProblem.create({ data: { stageId: schoolStage.id, problemId: problem.id, testSetRevisionId: revision.id, orderIndex: 0 } })
+    const teamSession = await prisma.trainingSession.create({ data: { title: '提高组训练', teamId: campusTeam.id, createdBy: coach.user.id, status: 'RUNNING', settings: { productMode: 'coach' } } })
+    await prisma.trainingSessionStage.createMany({ data: [{ sessionId: teamSession.id, name: '热身', orderIndex: 0 }, { sessionId: teamSession.id, name: '提高', orderIndex: 1 }] })
+
+    const managerList = await listTrainingSessions(coach.user.id, { organizationId: school.organizationId })
+    const simple = managerList.find(item => item.id === schoolSession.id)
+    const coached = managerList.find(item => item.id === teamSession.id)
+    expect(simple).toMatchObject({ productMode: 'simple', problemCount: 1, dueAt, teamName: null })
+    expect(coached).toMatchObject({ productMode: 'coach', problemCount: 0, teamName: '提高组', _count: { Stages: 2 } })
+
+    const studentList = await listTrainingSessions(student.user.id, { organizationId: school.organizationId })
+    expect(studentList.map(item => item.id)).toEqual(expect.arrayContaining([schoolSession.id, teamSession.id]))
+    expect(studentList.every(item => item.canJoin)).toBe(true)
+    expect((await listTrainingSessions(student.user.id, { organizationId: school.organizationId })).some(item => item.teamId === team.id)).toBe(false)
+  })
+
   it('returns the design DTO and preserves stable stage/problem ids while reordering', async () => {
     const token = generateTokenFromUser(coach.user)
     const secondProblem = await configuredProblem(coach.user.id)

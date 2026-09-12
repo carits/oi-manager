@@ -55,6 +55,7 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     await expect(teacherPage.getByText('布置和管理学生练习。')).toBeVisible()
     await expect(teacherPage.getByRole('button', { name: '创建训练' })).toBeVisible()
     await expect(teacherPage.getByRole('tab', { name: /草稿/ })).toBeVisible()
+    await expect(teacherPage.getByLabel('筛选团队')).toBeVisible()
     await expect(teacherPage.getByLabel('搜索训练')).toBeVisible()
     await teacherContext.close()
   })

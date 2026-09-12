@@ -577,16 +577,40 @@ export async function listTrainingSessions(userId: string, query: any) {
   if (teamId && !await isTeamMember(userId, teamId)) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练范围不存在')
   if (organizationId && !await isOrganizationMember(userId, organizationId)) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练范围不存在')
   const scopeManager = role.role === 'super_admin' || Boolean(teamId && await isTeamAdmin(userId, teamId)) || Boolean(organizationId && await isOrganizationContestAdmin(userId, organizationId))
+  const scopeWhere: Prisma.TrainingSessionWhereInput = teamId
+    ? { teamId }
+    : organizationId
+      ? { OR: [
+          { organizationId },
+          role.role === 'super_admin'
+            ? { Team: { organizationId } }
+            : scopeManager
+              ? { Team: { organizationId }, OR: [{ createdBy: userId }, { Team: { TeamMember: { some: { userId, status: 'active', role: { in: ['owner', 'admin'] } } } } }] }
+              : { Team: { organizationId, TeamMember: { some: { userId, status: 'active' } } } },
+        ] }
+      : {}
+  const visibilityWhere: Prisma.TrainingSessionWhereInput = scopeManager
+    ? {}
+    : { OR: [{ createdBy: userId }, { Participants: { some: { userId, status: 'active' } } }, ...((teamId || organizationId) ? [{ status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] as any } }] : [])] }
   const where: Prisma.TrainingSessionWhereInput = {
-    ...(teamId ? { teamId } : organizationId ? { organizationId } : {}),
-    ...(!scopeManager ? { OR: [{ createdBy: userId }, { Participants: { some: { userId, status: 'active' } } }, ...((teamId || organizationId) ? [{ status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] as any } }] : [])] } : {}),
+    AND: [scopeWhere, visibilityWhere],
     ...(query?.status ? { status: String(query.status).toUpperCase() as any } : {}),
   }
-  const sessions = await prisma.trainingSession.findMany({ where, orderBy: [{ status: 'asc' }, { scheduledStartAt: 'desc' }, { createdAt: 'desc' }], include: { Participants: { where: { userId, status: 'active' }, select: { id: true } }, _count: { select: { Stages: true, Participants: true } } }, take: 100 })
+  const sessions = await prisma.trainingSession.findMany({ where, orderBy: [{ status: 'asc' }, { scheduledStartAt: 'desc' }, { createdAt: 'desc' }], include: { Participants: { where: { userId, status: 'active' }, select: { id: true } }, Team: { select: { name: true } }, Stages: { select: { _count: { select: { Problems: true } } } }, _count: { select: { Stages: true, Participants: true } } }, take: 100 })
   return sessions.filter(item => {
     if (scopeManager || item.createdBy === userId || item.Participants.length) return true
     return item.joinMode !== 'TEACHER_ASSIGN' && parseJsonObject(item.settings).rosterExplicit !== true
-  }).map(({ Participants, ...item }) => ({ ...item, canJoin: !scopeManager && item.createdBy !== userId && !Participants.length }))
+  }).map(({ Participants, Team, Stages, ...item }) => {
+    const settings = parseJsonObject(item.settings)
+    return {
+      ...item,
+      productMode: settings.productMode === 'simple' ? 'simple' : 'coach',
+      problemCount: Stages.reduce((total, stage) => total + stage._count.Problems, 0),
+      dueAt: typeof settings.dueAt === 'string' ? settings.dueAt : null,
+      teamName: Team?.name || null,
+      canJoin: !scopeManager && item.createdBy !== userId && !Participants.length,
+    }
+  })
 }
 
 export async function getTrainingWorkspace(userId: string, sessionId: string) {

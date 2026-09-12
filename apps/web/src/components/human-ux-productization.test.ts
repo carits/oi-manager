@@ -20,13 +20,24 @@ describe('human UX productization contract', () => {
     expect(source).toContain("user?.organizationRole === 'teacher'")
     expect(source).toContain("user?.organizationRole === 'school_principal'")
     expect(source).toContain("managerView ? '布置和管理学生练习。' : '查看老师安排的训练并继续练习。'")
-    expect(source).toContain("actions={managerView ?")
+    expect(source).toContain("actions={canCreateTraining ?")
     expect(source).toContain('目前老师还没有给你安排需要完成的训练')
     expect(source).toContain("label: '进行中'")
     expect(source).toContain("label: '即将开始'")
     expect(source).toContain("label: '已完成'")
     expect(source).not.toContain('title="训练场次"')
     expect(source).not.toContain('共 ${sessions.length} 场')
+  })
+
+  it('describes ordinary training with tasks and gives school managers a team filter', () => {
+    const source = read('./training-engine/TrainingSessionListPage.tsx')
+    expect(source).toContain("item.productMode !== 'simple'")
+    expect(source).toContain('`${item.problemCount || 0} 道题')
+    expect(source).toContain('全部训练范围')
+    expect(source).toContain('校级训练')
+    expect(source).toContain('选择题目、学生和截止时间即可发布。')
+    expect(source).not.toContain('系统自动固定题目版本并生成标准结构')
+    expect(source).not.toContain("managerView = canCreate")
   })
 
   it('keeps the sidebar account footer account-only and uses human workspace roles', () => {
