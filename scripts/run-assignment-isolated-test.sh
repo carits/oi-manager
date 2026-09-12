@@ -70,6 +70,7 @@ elif [[ -n "$BASE_SCHEMA" ]]; then
 else
   DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma migrate deploy --schema prisma/schema.prisma
 fi
+pnpm --dir "$ROOT_DIR" --filter @oi-manager/contracts build
 pnpm --dir "$ROOT_DIR" --filter @oi-manager/shared build
 DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma generate --schema prisma/schema.prisma
 if [[ "$TEST_SCOPE" == "full" ]]; then
