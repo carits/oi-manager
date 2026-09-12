@@ -103,7 +103,7 @@ test('school student sees only the learner training experience', async ({ page }
   await expect(page.getByText('包含作业、训练和比赛')).toBeVisible()
 
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.reload()
+  await page.goto('/org/org_school-default/training-sessions')
   await expect(page.getByRole('button', { name: '创建训练' })).toHaveCount(0)
   await expect(page.getByText('查看老师安排的训练并继续练习。')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
