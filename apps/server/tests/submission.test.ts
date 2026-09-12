@@ -14,6 +14,10 @@ import { prisma } from '../src/prisma'
 
 const app = createTestApp()
 
+function organizationRequest(token: string, organizationId: string) {
+  return createAuthenticatedRequest(app, token, { organizationId })
+}
+
 describe('提交记录学校数据隔离', () => {
   let schoolA: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>
   let schoolB: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>
@@ -168,7 +172,7 @@ describe('提交记录学校数据隔离', () => {
   })
 
   it('S1: 教师可以查看本校学生提交', async () => {
-    const res = await createAuthenticatedRequest(app, teacherAToken)
+    const res = await organizationRequest(teacherAToken, schoolA.school.organizationId!)
       .get('/api/submissions')
 
     expect(res.status).toBe(200)
@@ -180,7 +184,7 @@ describe('提交记录学校数据隔离', () => {
   })
 
   it('S2: 教师不能查看外校学生提交', async () => {
-    const res = await createAuthenticatedRequest(app, teacherAToken)
+    const res = await organizationRequest(teacherAToken, schoolA.school.organizationId!)
       .get('/api/submissions')
 
     expect(res.status).toBe(200)
@@ -193,7 +197,7 @@ describe('提交记录学校数据隔离', () => {
   })
 
   it('S3: 学生可以查看本校提交', async () => {
-    const res = await createAuthenticatedRequest(app, studentAToken)
+    const res = await organizationRequest(studentAToken, schoolA.school.organizationId!)
       .get('/api/submissions')
 
     expect(res.status).toBe(200)
@@ -205,7 +209,7 @@ describe('提交记录学校数据隔离', () => {
   })
 
   it('S4: 学生不能查看外校提交', async () => {
-    const res = await createAuthenticatedRequest(app, studentAToken)
+    const res = await organizationRequest(studentAToken, schoolA.school.organizationId!)
       .get('/api/submissions')
 
     expect(res.status).toBe(200)
@@ -218,7 +222,7 @@ describe('提交记录学校数据隔离', () => {
   })
 
   it('S4.1: 多校园用户不能在当前校园读取自己另一校园的提交详情', async () => {
-    const res = await createAuthenticatedRequest(app, studentAToken)
+    const res = await organizationRequest(studentAToken, schoolA.school.organizationId!)
       .get(`/api/submissions/${submissionSameUserOtherOrganization.id}`)
 
     expect(res.status).toBe(404)
@@ -239,19 +243,19 @@ describe('提交记录学校数据隔离', () => {
   })
 
   it('S6: 校园用户不能通过通用接口重评其他用户或其他组织的提交', async () => {
-    const teacherRes = await createAuthenticatedRequest(app, teacherAToken)
+    const teacherRes = await organizationRequest(teacherAToken, schoolA.school.organizationId!)
       .post('/api/submit/rejudge')
       .send({ submissionId: submissionA.id })
     expect(teacherRes.status).toBe(404)
 
-    const crossOrganizationRes = await createAuthenticatedRequest(app, studentAToken)
+    const crossOrganizationRes = await organizationRequest(studentAToken, schoolA.school.organizationId!)
       .post('/api/submit/rejudge')
       .send({ submissionId: submissionSameUserOtherOrganization.id })
     expect(crossOrganizationRes.status).toBe(404)
   })
 
   it('S7: 校园教师不能通过重新抓取接口清空学生代码', async () => {
-    const res = await createAuthenticatedRequest(app, teacherAToken)
+    const res = await organizationRequest(teacherAToken, schoolA.school.organizationId!)
       .post(`/api/submissions/${submissionA.id}/refetch-code`)
 
     expect(res.status).toBe(404)
@@ -354,7 +358,7 @@ describe('提交详情权限', () => {
   })
 
   it('D1: 学生可以查看自己的提交详情', async () => {
-    const res = await createAuthenticatedRequest(app, studentAToken)
+    const res = await organizationRequest(studentAToken, schoolA.school.organizationId!)
       .get(`/api/submissions/${submissionA.id}`)
 
     expect(res.status).toBe(200)
@@ -403,7 +407,7 @@ describe('提交详情权限', () => {
       },
     })
 
-    const accepted = await createAuthenticatedRequest(app, studentAToken)
+    const accepted = await organizationRequest(studentAToken, schoolA.school.organizationId!)
       .get('/api/submissions?result=accepted')
     expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
     expect(accepted.body.data.submissions).toContainEqual(expect.objectContaining({
@@ -414,12 +418,12 @@ describe('提交详情权限', () => {
       memoryUsed: 4096,
     }))
 
-    const compatibility = await createAuthenticatedRequest(app, studentAToken)
+    const compatibility = await organizationRequest(studentAToken, schoolA.school.organizationId!)
       .get('/api/submissions?result=wa')
     expect(compatibility.status).toBe(200)
     expect(compatibility.body.data.submissions.some((item: any) => item.id === submissionA.id)).toBe(false)
 
-    const detail = await createAuthenticatedRequest(app, studentAToken)
+    const detail = await organizationRequest(studentAToken, schoolA.school.organizationId!)
       .get(`/api/submissions/${submissionA.id}`)
     expect(detail.status, JSON.stringify(detail.body)).toBe(200)
     expect(detail.body.data).toMatchObject({
@@ -434,7 +438,7 @@ describe('提交详情权限', () => {
   })
 
   it('D2: 教师可以查看同校学生提交详情', async () => {
-    const res = await createAuthenticatedRequest(app, teacherAToken)
+    const res = await organizationRequest(teacherAToken, schoolA.school.organizationId!)
       .get(`/api/submissions/${submissionA.id}`)
 
     expect(res.status).toBe(200)
@@ -443,7 +447,7 @@ describe('提交详情权限', () => {
   })
 
   it('D3: 外校用户不能查看提交详情', async () => {
-    const res = await createAuthenticatedRequest(app, studentBToken)
+    const res = await organizationRequest(studentBToken, schoolB.school.organizationId!)
       .get(`/api/submissions/${submissionA.id}`)
 
     expect(res.status).toBe(404)
@@ -535,14 +539,14 @@ describe('训练提交隔离', () => {
 
     team = await createTestTeam({
       schoolId: schoolData.school.id,
-      ownerId: ownerUser.teacherId
+      ownerId: ownerUser.user.id
     })
 
     await prisma.teamMember.create({
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: studentUser.studentId!,
+        userId: studentUser.user.id,
         userType: 'student',
         role: 'member',
         status: 'active',
@@ -667,7 +671,7 @@ describe('训练提交隔离', () => {
         sourceProblemIdSnapshot: '1454E',
       },
     })
-    const res = await createAuthenticatedRequest(app, studentToken)
+    const res = await organizationRequest(studentToken, schoolData.school.organizationId!)
       .get(`/api/submissions/${trainingSubmission.id}`)
 
     expect(res.status).toBe(200)
@@ -690,7 +694,7 @@ describe('训练提交隔离', () => {
       `/api/submissions/${trainingSubmission.id}`,
       `/api/trainings/${training.id}/submissions/${trainingSubmission.id}`,
     ]) {
-      const res = await createAuthenticatedRequest(app, studentToken).get(path)
+      const res = await organizationRequest(studentToken, schoolData.school.organizationId!).get(path)
       expect(res.status, `${path}: ${JSON.stringify(res.body)}`).toBe(200)
       expect(res.body.data).toMatchObject({
         id: trainingSubmission.id,
@@ -709,7 +713,7 @@ describe('训练提交隔离', () => {
   })
 
   it('TI2: 训练提交可以通过训练端点访问', async () => {
-    const res = await createAuthenticatedRequest(app, studentToken)
+    const res = await organizationRequest(studentToken, schoolData.school.organizationId!)
       .get(`/api/trainings/${training.id}/submissions`)
 
     expect(res.status).toBe(200)
@@ -747,13 +751,13 @@ describe('训练提交隔离', () => {
       },
     })
 
-    const listRes = await createAuthenticatedRequest(app, ownerToken)
+    const listRes = await organizationRequest(ownerToken, schoolData.school.organizationId!)
       .get(`/api/trainings/${training.id}/submissions`)
     expect(listRes.status, JSON.stringify(listRes.body)).toBe(200)
     const listItem = listRes.body.data.submissions.find((item: any) => item.id === submission.id)
     expect(listItem).toMatchObject({ result: 'ole', trainingProblemId: trainingProblem.id })
 
-    const detailRes = await createAuthenticatedRequest(app, ownerToken)
+    const detailRes = await organizationRequest(ownerToken, schoolData.school.organizationId!)
       .get(`/api/trainings/${training.id}/submissions/${submission.id}`)
     expect(detailRes.status).toBe(200)
     expect(detailRes.body.data).toMatchObject({
@@ -806,7 +810,7 @@ describe('训练提交隔离', () => {
       },
     })
 
-    const acceptedList = await createAuthenticatedRequest(app, ownerToken)
+    const acceptedList = await organizationRequest(ownerToken, schoolData.school.organizationId!)
       .get(`/api/trainings/${training.id}/submissions?result=accepted`)
     expect(acceptedList.status, JSON.stringify(acceptedList.body)).toBe(200)
     expect(acceptedList.body.data.submissions).toContainEqual(expect.objectContaining({
@@ -817,12 +821,12 @@ describe('训练提交隔离', () => {
       memoryUsed: 2048,
     }))
 
-    const compatibilityFilter = await createAuthenticatedRequest(app, ownerToken)
+    const compatibilityFilter = await organizationRequest(ownerToken, schoolData.school.organizationId!)
       .get(`/api/trainings/${training.id}/submissions?result=wa`)
     expect(compatibilityFilter.status).toBe(200)
     expect(compatibilityFilter.body.data.submissions.some((item: any) => item.id === trainingSubmission.id)).toBe(false)
 
-    const detail = await createAuthenticatedRequest(app, ownerToken)
+    const detail = await organizationRequest(ownerToken, schoolData.school.organizationId!)
       .get(`/api/trainings/${training.id}/submissions/${trainingSubmission.id}`)
     expect(detail.status, JSON.stringify(detail.body)).toBe(200)
     expect(detail.body.data).toMatchObject({
@@ -836,7 +840,7 @@ describe('训练提交隔离', () => {
       metricSource: 'switch-read-test',
     })
 
-    const ranking = await createAuthenticatedRequest(app, ownerToken)
+    const ranking = await organizationRequest(ownerToken, schoolData.school.organizationId!)
       .get(`/api/trainings/${training.id}/ranking`)
     expect(ranking.status, JSON.stringify(ranking.body)).toBe(200)
     const studentRow = ranking.body.data.ranking.find((item: any) => item.userId === studentUser.user.id)
@@ -845,7 +849,7 @@ describe('训练提交隔离', () => {
   })
 
   it('TI3: 全局提交列表排除训练提交', async () => {
-    const res = await createAuthenticatedRequest(app, studentToken)
+    const res = await organizationRequest(studentToken, schoolData.school.organizationId!)
       .get('/api/submissions')
 
     expect(res.status).toBe(200)
