@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest Query Facade 第一阶段切换
+
+- 新增 Contest 查询 Facade：Rating 配置、参与、结算、重放等全链路与平台比赛列表优先从 `Contest.runtimeTrainingId` 进入规范聚合，再使用关联的 RuntimeTraining 执行既有评测逻辑；旧 `Training.type=contest` 回退被限制在 Facade 内并记录结构化告警。
+- 架构审计增加 Contest 查询边界，禁止 Rating 和平台列表重新绕过 Facade；当前阶段不混入 6 个没有 RuntimeTraining 的独立 Contest，后续消费者将按同一边界逐批迁移。
+- 生产只读一致性审计确认运行时比赛 767、已映射 767、标题/赛制/范围/组织/团队/时间核心字段差异 0；部署后 `contest_query_legacy_fallback` 计数为 0。
+- 测试夹具同步当前真实授权模型：校园 Rating 请求显式携带组织上下文，平台管理员的学校内管理能力通过规范化 RoleAssignment 授予，不再依赖旧账号角色或 `schoolId`。隔离 Contest/Rating/OJ 套件 23/23、Server 构建和文档/架构门禁通过。提交至 `f3f5101` 已推送 `main`，API 3303→3302；无 Prisma 迁移、业务数据改写或 Web 发布。
+
 ### Canonical OJ Registry 收口
 
 - 新增跨 Server/Web 的唯一 OJ 平台注册表，集中维护 canonical key、历史别名、显示名称、抓题/归档能力和原题 URL；Server 平台类型、适配器查找以及 Web 筛选、标签和原题链接均由注册表派生。
