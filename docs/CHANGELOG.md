@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Canonical OJ Registry 收口
+
+- 新增跨 Server/Web 的唯一 OJ 平台注册表，集中维护 canonical key、历史别名、显示名称、抓题/归档能力和原题 URL；Server 平台类型、适配器查找以及 Web 筛选、标签和原题链接均由注册表派生。
+- `oj.uz → ojuz`、`loj → libreoj` 等历史值在系统边界规范化；题目详情删除第二套 URL `switch`，未知平台不再生成无效的 `#` 链接。
+- 生产题目主来源只读审计为 Carits 44、洛谷 13、HDU 13、Codeforces 1，未发现需要迁移的历史别名；本轮不修改数据库或题目数据。
+- Shared/Server/Web 生产构建、Web 38 文件 159/159、生产同构隔离 OJ Registry 2/2、文档/API/架构门禁通过。提交 `524b44a`、`ad89345` 已推送 `main`；API 3302→3303，Web BUILD_ID `jA0UYtewh75g2X6fruE6X` 经 canary 与正式双账号消息闭环（序号 146–149）后提升。
+
 ### 组织授权规范化与账号角色边界
 
 - 组织能力只从 `OrganizationMembershipRole` 与显式 Capability Grant 计算，移除 `memberRole` 的 legacy/hybrid 授权回退；所有成员岗位写路径在同一事务同步规范化基础角色，同时保留附加角色和授权。

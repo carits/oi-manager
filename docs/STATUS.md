@@ -5,6 +5,8 @@ last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-13: OJ 平台元数据已收口为 `packages/shared/src/oj-platforms.ts` 的 Canonical Registry。Server 的平台类型、历史别名规范化和适配器能力，Web 的平台筛选、标签与原题 URL 均从该注册表派生；题目详情不再维护平行 URL 映射。生产题目平台键只读审计未发现历史别名，不需要数据迁移。Shared/Server/Web 构建、Web 159/159、隔离 Server Registry 2/2 和全部文档/架构门禁通过；API 3302→3303，Web BUILD_ID `jA0UYtewh75g2X6fruE6X` 经候选及正式消息探针（序号 146–149）后提升。生产服务和数据库 readiness 正常，端口继续仅监听 loopback。
+
 - 2026-09-13: 组织授权读取已从兼容混合模式切换为规范化 RoleAssignment/CapabilityGrant 单一来源，所有成员创建、恢复和岗位变更写路径在同一事务同步基础角色；`memberRole` 仅保留资料判别语义。生产 20,186 条 active Membership 审计为缺失 0、冲突 0、未知 0；生产同构隔离库的认证、组织创建/加入、平台组织边界和权限测试 80/80 通过。隔离测试脚本现会先构建 Contracts，避免运行陈旧契约产物。历史 `student/teacher/school_principal` 账号对外统一报告 `accountRole=user`，组织角色仍保持原工作区行为；API 已由 3303 蓝绿切换至 3302，数据库 readiness 正常。本批没有 Prisma 迁移、历史数据改写或 Web 提升，生产源树原有 7 个未跟踪维护文件未改动。
 
 - 2026-09-13: Human UX / Productization 最终缺口与运行契约已完成生产收口。知识广场在个人、校园和管理工作区统一作为全局 `/blog` 导航，账号菜单提供“我的文章”；最终比赛排名直接展示已应用且未被取代的个人 Rating 前后值和增量；统一 CodeMirror 提交编辑器补齐历史、括号匹配和自动闭合。账号/组织身份、认证、健康检查和 HTTP 响应同时收口到正式 contracts 包，前端账号、平台、组织请求使用显式客户端作用域。Web 37 文件/156 项、聚焦产品回归 6 文件/27 项、Shared/Contracts/Server/Judge/Web 生产构建、UI/路由/API/架构/文档门禁均通过；本机 PostgreSQL 未运行，数据库集成用例未执行且未伪造结果。本轮无 Prisma 迁移或历史数据改写。提交 `8263da8` 已推送 `main`，API 3302→3303；Web BUILD_ID `WtxrOgt8owvb4SdKXEsdd` 经 canary 与正式双账号消息闭环（序号 142–145）后提升。部署时修正旧 Web systemd unit 的 `0.0.0.0:3000` 偏差，当前仅监听 `127.0.0.1:3000`，网络暴露审计零违规；公网知识广场、健康检查、数据库 readiness、Worker、Executor、Judge 和外部监控工作流均正常。生产源树原有 7 个未跟踪维护文件未改动。
