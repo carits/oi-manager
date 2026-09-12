@@ -10,6 +10,7 @@ import {
   assertJudgeAttemptTransition,
   assertJudgeRunTransition,
 } from '../domain/judge-state'
+import { holdContestFinalizationForRejudgeTx } from '../../contest/contest-command.service'
 
 export interface CreateQueuedSubmissionOptions {
   runType?: JudgeRunType
@@ -493,16 +494,7 @@ export async function createRejudgeBatch(input: RejudgeRequest) {
       },
     })
     if (input.trainingId && queuedCount > 0) {
-      const contest = await tx.training.findUnique({
-        where: { id: input.trainingId },
-        select: { type: true, finalizationStatus: true, finalizedStandingId: true },
-      })
-      if (contest?.type === 'contest' && contest.finalizedStandingId && contest.finalizationStatus === 'FINALIZED') {
-        await tx.training.update({
-          where: { id: input.trainingId },
-          data: { finalizationStatus: 'HELD' },
-        })
-      }
+      await holdContestFinalizationForRejudgeTx(tx, input.trainingId)
     }
     return { batch, queuedCount, skippedCount }
   })

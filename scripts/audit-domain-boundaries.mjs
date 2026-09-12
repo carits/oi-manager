@@ -64,11 +64,15 @@ const submissionQuery = fs.readFileSync(path.join(modulesRoot, 'submission/appli
 if (!submissionQuery.includes('findActivityRuntimeForSubmission')) {
   violations.push('Submission contest detail bypasses the Contest query facade')
 }
+if (!judgeRun.includes('holdContestFinalizationForRejudgeTx')) {
+  violations.push('Judge rejudge finalization bypasses the Contest command service')
+}
 
 console.log(JSON.stringify({
   assignmentAuthorizationBoundary: !violations.some(item => item.startsWith('Assignment')),
   contestProjectionBoundary: !violations.some(item => item.includes('Contest projection')),
   contestQueryFacadeBoundary: !violations.some(item => item.includes('Contest query facade')),
+  contestCommandBoundary: !violations.some(item => item.includes('Contest command service')),
   localJudgeResultWriteBoundary: !violations.some(item => item.startsWith('JudgeRun')),
   violations,
 }, null, 2))
