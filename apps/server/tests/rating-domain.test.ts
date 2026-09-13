@@ -387,8 +387,8 @@ describe('rating domain HTTP and persistence', () => {
     expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`).set('X-OI-Organization-ID', organizationId)).status).toBe(200)
     const batches = await prisma.ratingBatch.findMany({ where: { contestId: { in: [earlier.canonicalContestId, later.canonicalContestId] } }, orderBy: { sequenceAt: 'asc' } })
     expect(batches).toHaveLength(2)
-    expect(batches[0].trainingId).toBe(earlier.id)
-    expect(batches[1].trainingId).toBe(later.id)
+    expect(batches[0].contestId).toBe(earlier.canonicalContestId)
+    expect(batches[1].contestId).toBe(later.canonicalContestId)
   })
 
   it('creates a new standing and superseding batch when a finalized contest is rebuilt', async () => {
