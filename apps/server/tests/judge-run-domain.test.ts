@@ -233,10 +233,12 @@ describe('Judge lifecycle ownership and retries', () => {
       scope: 'platform',
       finalizationStatus: 'FINALIZED',
     } })
+    const aggregate = await prisma.$transaction(tx => ensureContestAggregateTx(tx, contest.id))
+    if (!aggregate) throw new Error('Contest aggregate missing')
     const standingId = crypto.randomUUID()
     await prisma.contestStandingSnapshot.create({ data: {
       id: standingId,
-      trainingId: contest.id,
+      contestId: aggregate.id,
       revision: 1,
       scoringMode: 'IOI',
       rulesHash: 'judge-domain-rules',
@@ -249,7 +251,7 @@ describe('Judge lifecycle ownership and retries', () => {
       where: { id: contest.id },
       data: { finalizedStandingId: standingId },
     })
-    await prisma.$transaction(tx => ensureContestAggregateTx(tx, contest.id))
+    await prisma.contest.update({ where: { id: aggregate.id }, data: { finalizedStandingId: standingId } })
 
     const queued = await createRejudgeBatch({
       submissionIds: [fixture.submission.id],

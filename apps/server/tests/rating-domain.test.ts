@@ -15,8 +15,9 @@ const app = createTestApp()
 
 async function createContestRuntimeFixture(args: Prisma.TrainingCreateArgs) {
   const runtime = await prisma.training.create(args)
-  await prisma.$transaction(tx => ensureContestAggregateTx(tx, runtime.id))
-  return runtime
+  const aggregate = await prisma.$transaction(tx => ensureContestAggregateTx(tx, runtime.id))
+  if (!aggregate) throw new Error('Contest aggregate missing')
+  return { ...runtime, canonicalContestId: aggregate.id }
 }
 
 describe('Carits Multi-player Elo V1', () => {
@@ -141,7 +142,7 @@ describe('rating domain HTTP and persistence', () => {
     const trainingProblem = await prisma.trainingProblem.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 0, points: 100 } })
     const canonicalProblem = await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
     if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
-    await prisma.trainingRatingConfig.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
+    await prisma.contestRatingConfig.create({ data: { id: crypto.randomUUID(), contestId: contest.canonicalContestId, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
     for (const [index, user] of [first, second].entries()) {
       await prisma.submission.create({ data: { userId: user.user.id, oj: 'carits', problemId: problem.problemId, problemInternalId: problem.id, language: 'cpp', code: 'int main(){}', codeLength: 12, result: index === 0 ? 'accepted' : 'wrong_answer', score: index === 0 ? 100 : 20, submitMethod: 'local', submitScope: 'contest', workspaceScope: 'campus', organizationId, trainingId: contest.id, trainingProblemId: trainingProblem.id, canonicalContestId: canonicalProblem.contestId, canonicalContestProblemId: canonicalProblem.id, createdAt: new Date(contest.startTime.getTime() + (index + 1) * 60_000) } })
     }
@@ -159,10 +160,10 @@ describe('rating domain HTTP and persistence', () => {
 
     const again = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`).set('X-OI-Organization-ID', organizationId)
     expect(again.status).toBe(200)
-    expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: contest.id } })).toBe(1)
-    expect(await prisma.ratingBatch.count({ where: { trainingId: contest.id } })).toBe(1)
+    expect(await prisma.contestStandingSnapshot.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
+    expect(await prisma.ratingBatch.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
     const canonical = await prisma.contest.findUniqueOrThrow({ where: { runtimeTrainingId: contest.id } })
-    expect(await prisma.trainingRatingConfig.count({ where: { contestId: canonical.id } })).toBe(1)
+    expect(await prisma.contestRatingConfig.count({ where: { contestId: canonical.id } })).toBe(1)
     expect(await prisma.contestStandingSnapshot.count({ where: { contestId: canonical.id } })).toBe(1)
     expect(await prisma.ratingBatch.count({ where: { contestId: canonical.id } })).toBe(1)
     const accounts = await prisma.ratingAccount.findMany({ orderBy: { userId: 'asc' } })
@@ -176,7 +177,7 @@ describe('rating domain HTTP and persistence', () => {
     expect(global.status).toBe(403)
     const organization = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope: 'ORGANIZATION', expectedRevision: 0, organizationMinParticipants: 2 })
     expect(organization.status).toBe(200)
-    await prisma.trainingRatingConfig.update({ where: { trainingId: future.id }, data: { lockedAt: new Date() } })
+    await prisma.contestRatingConfig.update({ where: { contestId: future.canonicalContestId }, data: { lockedAt: new Date() } })
     const frozen = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope: 'NONE', expectedRevision: 1 })
     expect(frozen.status).toBe(409)
     expect(frozen.body.code).toBe('RATING_CONFIG_FROZEN')
@@ -233,8 +234,8 @@ describe('rating domain HTTP and persistence', () => {
       startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
       status: 'ongoing', createdBy: manager.user.id,
     } })
-    await prisma.trainingRatingConfig.create({ data: {
-      id: crypto.randomUUID(), trainingId: contest.id, scope: 'BOTH', track: 'IOI',
+    await prisma.contestRatingConfig.create({ data: {
+      id: crypto.randomUUID(), contestId: contest.canonicalContestId, scope: 'BOTH', track: 'IOI',
       scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'both-fixture', createdBy: manager.user.id,
     } })
     const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, role: first.user.role })
@@ -278,8 +279,8 @@ describe('rating domain HTTP and persistence', () => {
       startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
       status: 'ongoing', createdBy: manager.user.id,
     } })
-    await prisma.trainingRatingConfig.create({ data: {
-      id: crypto.randomUUID(), trainingId: globalContest.id, scope: 'GLOBAL', track: 'OI',
+    await prisma.contestRatingConfig.create({ data: {
+      id: crypto.randomUUID(), contestId: globalContest.canonicalContestId, scope: 'GLOBAL', track: 'OI',
       scoringRules: { problemPolicy: 'LAST_SUBMISSION' }, rulesHash: 'global-fixture', createdBy: manager.user.id,
     } })
     await prisma.$transaction(tx => lockRatingParticipantTx(tx, globalContest, first.user.id, new Date()))
@@ -291,8 +292,8 @@ describe('rating domain HTTP and persistence', () => {
       startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
       status: 'ongoing', createdBy: manager.user.id,
     } })
-    await prisma.trainingRatingConfig.create({ data: {
-      id: crypto.randomUUID(), trainingId: organizationContest.id, scope: 'ORGANIZATION', track: 'OI',
+    await prisma.contestRatingConfig.create({ data: {
+      id: crypto.randomUUID(), contestId: organizationContest.canonicalContestId, scope: 'ORGANIZATION', track: 'OI',
       scoringRules: { problemPolicy: 'LAST_SUBMISSION' }, rulesHash: 'organization-fixture', createdBy: manager.user.id,
     } })
     await prisma.$transaction(tx => lockRatingParticipantTx(tx, organizationContest, second.user.id, new Date()))
@@ -364,13 +365,13 @@ describe('rating domain HTTP and persistence', () => {
     const firstRun = await processDueContestRatings()
     expect(firstRun).toMatchObject({ scanned: 1, finalized: 1, waiting: 0, failed: 0 })
     expect((await prisma.training.findUniqueOrThrow({ where: { id: contest.id } })).finalizationStatus).toBe('FINALIZED')
-    expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: contest.id } })).toBe(1)
-    expect(await prisma.ratingBatch.count({ where: { trainingId: contest.id } })).toBe(1)
+    expect(await prisma.contestStandingSnapshot.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
+    expect(await prisma.ratingBatch.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
 
     const secondRun = await processDueContestRatings()
     expect(secondRun).toMatchObject({ scanned: 0, finalized: 0, waiting: 0, failed: 0 })
-    expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: contest.id } })).toBe(1)
-    expect(await prisma.ratingBatch.count({ where: { trainingId: contest.id } })).toBe(1)
+    expect(await prisma.contestStandingSnapshot.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
+    expect(await prisma.ratingBatch.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
   })
 
   it('blocks a later contest until the earlier contest in the same pool is settled', async () => {
@@ -380,11 +381,11 @@ describe('rating domain HTTP and persistence', () => {
     const blocked = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`).set('X-OI-Organization-ID', organizationId)
     expect(blocked.status).toBe(409)
     expect(blocked.body.code).toBe('EARLIER_RATED_CONTEST_PENDING')
-    expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: later.id } })).toBe(0)
+    expect(await prisma.contestStandingSnapshot.count({ where: { contestId: later.canonicalContestId } })).toBe(0)
 
     expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${earlier.id}/finalize`).set('X-OI-Organization-ID', organizationId)).status).toBe(200)
     expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`).set('X-OI-Organization-ID', organizationId)).status).toBe(200)
-    const batches = await prisma.ratingBatch.findMany({ where: { trainingId: { in: [earlier.id, later.id] } }, orderBy: { sequenceAt: 'asc' } })
+    const batches = await prisma.ratingBatch.findMany({ where: { contestId: { in: [earlier.canonicalContestId, later.canonicalContestId] } }, orderBy: { sequenceAt: 'asc' } })
     expect(batches).toHaveLength(2)
     expect(batches[0].trainingId).toBe(earlier.id)
     expect(batches[1].trainingId).toBe(later.id)
@@ -402,9 +403,9 @@ describe('rating domain HTTP and persistence', () => {
     expect(rebuilt.status).toBe(200)
     expect(rebuilt.body.data.finalizationStatus).toBe('FINALIZED')
     expect(rebuilt.body.data.standing.revision).toBe(2)
-    expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: contest.id } })).toBe(2)
-    expect(await prisma.ratingBatch.count({ where: { trainingId: contest.id, status: 'SUPERSEDED' } })).toBe(1)
-    const active = await prisma.ratingBatch.findMany({ where: { trainingId: contest.id, status: 'APPLIED' }, include: { Changes: true } })
+    expect(await prisma.contestStandingSnapshot.count({ where: { contestId: contest.canonicalContestId } })).toBe(2)
+    expect(await prisma.ratingBatch.count({ where: { contestId: contest.canonicalContestId, status: 'SUPERSEDED' } })).toBe(1)
+    const active = await prisma.ratingBatch.findMany({ where: { contestId: contest.canonicalContestId, status: 'APPLIED' }, include: { Changes: true } })
     expect(active).toHaveLength(1)
     expect(active[0].batchRevision).toBe(2)
     expect(active[0].Changes.every(change => change.appliedDelta === 0)).toBe(true)

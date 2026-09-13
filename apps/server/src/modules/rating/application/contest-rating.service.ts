@@ -212,10 +212,15 @@ export async function updateRatingParticipation(trainingId: number, userId: stri
 
   await withSerializableRetry(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rating-participant:${trainingId}:${userId}`}, 0)) IS NULL AS locked`
-    const currentTraining = await tx.training.findUniqueOrThrow({
-      where: { id: trainingId },
-      include: { RatingConfig: true, Team: { select: { organizationId: true } } },
+    const currentContest = await tx.contest.findUnique({
+      where: { runtimeTrainingId: trainingId },
+      include: {
+        RatingConfig: true,
+        RuntimeTraining: { include: { Team: { select: { organizationId: true } } } },
+      },
     })
+    if (!currentContest?.RuntimeTraining) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
+    const currentTraining = { ...currentContest.RuntimeTraining, RatingConfig: currentContest.RatingConfig }
     if (currentTraining.RatingConfig?.scope !== 'BOTH' || ratingContext(currentTraining) !== 'platform') {
       fail(409, 'RATING_ORGANIZATION_SELECTION_NOT_APPLICABLE', '只有平台 BOTH Rating 比赛需要选择参赛组织')
     }
@@ -302,7 +307,7 @@ export async function updateContestRatingConfig(trainingId: number, userId: stri
   const expectedRevision = Number(body.expectedRevision ?? training.RatingConfig?.revision ?? 0)
   const config = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rating-config:${trainingId}`}, 0)) IS NULL AS locked`
-    const current = await tx.trainingRatingConfig.findUnique({ where: { contestId: resolved.contest.id } })
+    const current = await tx.contestRatingConfig.findUnique({ where: { contestId: resolved.contest.id } })
     if (['GLOBAL', 'BOTH'].includes(scope) || current && ['GLOBAL', 'BOTH'].includes(current.scope)) {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rating-schedule:GLOBAL:${track}`}, 0)) IS NULL AS locked`
     }
@@ -313,8 +318,8 @@ export async function updateContestRatingConfig(trainingId: number, userId: stri
     if ((current?.revision ?? 0) !== expectedRevision) fail(409, 'RATING_CONFIG_STALE', 'Rating 配置已被其他管理员修改，请刷新后重试')
     await assertNoOverlap(tx, training, scope, track)
     return current
-      ? tx.trainingRatingConfig.update({ where: { id: current.id }, data: { contestId: resolved.contest.id, scope, track, weightBasisPoints: Math.round(weight * 10_000), organizationMinParticipants, globalMinParticipants, scoringRules, rulesHash, revision: { increment: 1 } } })
-      : tx.trainingRatingConfig.create({ data: { id: crypto.randomUUID(), trainingId, contestId: resolved.contest.id, scope, track, weightBasisPoints: Math.round(weight * 10_000), organizationMinParticipants, globalMinParticipants, scoringRules, rulesHash, createdBy: userId } })
+      ? tx.contestRatingConfig.update({ where: { id: current.id }, data: { scope, track, weightBasisPoints: Math.round(weight * 10_000), organizationMinParticipants, globalMinParticipants, scoringRules, rulesHash, revision: { increment: 1 } } })
+      : tx.contestRatingConfig.create({ data: { id: crypto.randomUUID(), contestId: resolved.contest.id, scope, track, weightBasisPoints: Math.round(weight * 10_000), organizationMinParticipants, globalMinParticipants, scoringRules, rulesHash, createdBy: userId } })
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
   return { ...configDto(config, training), allowedScopes, context: ratingContext(training) }
 }
@@ -322,13 +327,13 @@ export async function updateContestRatingConfig(trainingId: number, userId: stri
 export async function lockContestRatingConfigTx(tx: Prisma.TransactionClient, trainingId: number, actorUserId: string, format: string) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rating-config:${trainingId}`}, 0)) IS NULL AS locked`
   const contestId = await canonicalContestIdTx(tx, trainingId)
-  const existing = await tx.trainingRatingConfig.findUnique({ where: { contestId } })
+  const existing = await tx.contestRatingConfig.findUnique({ where: { contestId } })
   if (existing?.lockedAt) return existing
   const track = trackForFormat(format)
   const now = new Date()
   return existing
-    ? tx.trainingRatingConfig.update({ where: { id: existing.id }, data: { contestId, lockedAt: now } })
-    : tx.trainingRatingConfig.create({ data: { id: crypto.randomUUID(), trainingId, contestId, scope: 'NONE', track, scoringRules: defaultScoringRules(track), rulesHash: hash({ track, scoringRules: defaultScoringRules(track) }), createdBy: actorUserId, lockedAt: now } })
+    ? tx.contestRatingConfig.update({ where: { id: existing.id }, data: { lockedAt: now } })
+    : tx.contestRatingConfig.create({ data: { id: crypto.randomUUID(), contestId, scope: 'NONE', track, scoringRules: defaultScoringRules(track), rulesHash: hash({ track, scoringRules: defaultScoringRules(track) }), createdBy: actorUserId, lockedAt: now } })
 }
 
 async function organizationSnapshotTx(tx: Prisma.TransactionClient, training: any, userId: string, config: any, existing: any) {
@@ -420,7 +425,6 @@ async function buildStandingSnapshotTx(tx: Prisma.TransactionClient, training: a
   const snapshot = await tx.contestStandingSnapshot.create({
     data: {
       id: crypto.randomUUID(),
-      trainingId: training.id,
       contestId,
       revision: (previous?.revision || 0) + 1,
       scoringMode: config.track,
@@ -510,12 +514,12 @@ async function createAndApplyBatchTx(tx: Prisma.TransactionClient, input: {
   })
   const eligible = input.entries.filter(entry => entry.ratingEligible && (input.scopeType === 'GLOBAL' || entry.organizationIdSnapshot === input.organizationId))
   const inputHash = hash({ poolId: pool.id, snapshotId: input.snapshot.id, users: eligible.map(entry => [entry.userId, entry.rank, entry.ratingTieGroup]) })
-  if (eligible.length < input.minimum) return tx.ratingBatch.create({ data: { id: crypto.randomUUID(), trainingId: input.training.id, contestId: input.contestId, poolId: pool.id, standingSnapshotId: input.snapshot.id, algorithmCode: input.config.algorithmCode, algorithmVersion: input.config.algorithmVersion, fieldSize: eligible.length, status: 'SKIPPED', inputHash, sequenceAt: input.training.endTime, skipReason: 'NOT_ENOUGH_PARTICIPANTS', calculatedAt: new Date(), appliedAt: new Date() } })
+  if (eligible.length < input.minimum) return tx.ratingBatch.create({ data: { id: crypto.randomUUID(), contestId: input.contestId, poolId: pool.id, standingSnapshotId: input.snapshot.id, algorithmCode: input.config.algorithmCode, algorithmVersion: input.config.algorithmVersion, fieldSize: eligible.length, status: 'SKIPPED', inputHash, sequenceAt: input.training.endTime, skipReason: 'NOT_ENOUGH_PARTICIPANTS', calculatedAt: new Date(), appliedAt: new Date() } })
   const accounts = []
   for (const entry of eligible) accounts.push(await tx.ratingAccount.upsert({ where: { poolId_userId: { poolId: pool.id, userId: entry.userId } }, update: {}, create: { id: crypto.randomUUID(), poolId: pool.id, userId: entry.userId, rating: pool.baseRating, peakRating: pool.baseRating } }))
   const accountByUser = new Map(accounts.map(account => [account.userId, account]))
   const changes = calculateMultiElo(eligible.map(entry => ({ userId: entry.userId, rating: accountByUser.get(entry.userId)!.rating, tieGroup: entry.ratingTieGroup, rank: entry.rank })), { scale: pool.scale, kFactor: pool.kFactor, weightBasisPoints: input.config.weightBasisPoints })
-  const batch = await tx.ratingBatch.create({ data: { id: crypto.randomUUID(), trainingId: input.training.id, contestId: input.contestId, poolId: pool.id, standingSnapshotId: input.snapshot.id, algorithmCode: input.config.algorithmCode, algorithmVersion: input.config.algorithmVersion, fieldSize: eligible.length, status: 'CALCULATING', inputHash, sequenceAt: input.training.endTime } })
+  const batch = await tx.ratingBatch.create({ data: { id: crypto.randomUUID(), contestId: input.contestId, poolId: pool.id, standingSnapshotId: input.snapshot.id, algorithmCode: input.config.algorithmCode, algorithmVersion: input.config.algorithmVersion, fieldSize: eligible.length, status: 'CALCULATING', inputHash, sequenceAt: input.training.endTime } })
   for (const change of changes) {
     const account = accountByUser.get(change.userId)!
     await tx.ratingChange.create({ data: { id: crypto.randomUUID(), batchId: batch.id, accountId: account.id, userId: change.userId, ratingBefore: change.ratingBefore, expectedPerformance: change.expectedPerformance, actualPerformance: change.actualPerformance, rank: change.rank, fieldSize: eligible.length, rawDelta: change.rawDelta, appliedDelta: change.appliedDelta, ratingAfter: change.ratingAfter } })
@@ -534,7 +538,6 @@ async function finalizeContestRatingCore(trainingId: number, actorUserId: string
     const lockedAggregate = await tx.contest.findUnique({
       where: { runtimeTrainingId: trainingId },
       include: { RatingConfig: true, RuntimeTraining: { include: {
-        RatingConfig: true,
         Team: { select: { organizationId: true } },
         TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } },
       } } },
@@ -673,17 +676,17 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
       include: {
         RatingConfig: true,
         RuntimeTraining: { include: {
-        RatingConfig: true,
-        Team: { select: { organizationId: true } },
-        TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } },
-      } } },
+          Team: { select: { organizationId: true } },
+          TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } },
+        } },
+      },
     })
     const locked = lockedAggregate?.RuntimeTraining
     if (!locked) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
     if (lockedAggregate.finalizationStatus !== 'HELD') {
       fail(409, 'CONTEST_REBUILD_NOT_READY', '比赛重放状态已变化，请刷新后重试')
     }
-    const config = lockedAggregate.RatingConfig || locked.RatingConfig || await lockContestRatingConfigTx(tx, trainingId, userId, locked.format)
+    const config = lockedAggregate.RatingConfig || await lockContestRatingConfigTx(tx, trainingId, userId, locked.format)
     const newSnapshot = await buildStandingSnapshotTx(tx, locked, config, userId)
     const poolIds = [...new Set(affectedPools.map(item => item.poolId))]
     const report: Array<{ poolId: string; replayed: number; participants: number }> = []
@@ -695,7 +698,6 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
         where: { poolId, status: { in: ['APPLIED', 'SKIPPED'] } },
         orderBy: [{ sequenceAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
         include: {
-          Training: { include: { RatingConfig: true } },
           Contest: { include: { RatingConfig: true } },
           StandingSnapshot: { include: { Entries: { orderBy: [{ rank: 'asc' }, { userId: 'asc' }] } } },
         },
@@ -724,7 +726,7 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
         const eligible = snapshot.Entries.filter(entry => entry.ratingEligible && (
           pool.scopeType === 'GLOBAL' || entry.organizationIdSnapshot === pool.organizationId
         ))
-        const ratingConfig = old.Contest?.RatingConfig || old.Training.RatingConfig
+        const ratingConfig = old.Contest.RatingConfig
         const minimum = pool.scopeType === 'GLOBAL'
           ? ratingConfig?.globalMinParticipants ?? 20
           : ratingConfig?.organizationMinParticipants ?? 5
@@ -737,7 +739,7 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
         })
         if (eligible.length < minimum) {
           await tx.ratingBatch.create({ data: {
-            id: crypto.randomUUID(), trainingId: old.trainingId, contestId: old.contestId, poolId,
+            id: crypto.randomUUID(), contestId: old.contestId, poolId,
             standingSnapshotId: snapshot.id, algorithmCode: old.algorithmCode,
             algorithmVersion: old.algorithmVersion, batchRevision, fieldSize: eligible.length,
             status: 'SKIPPED', inputHash: replayInputHash, sequenceAt: old.sequenceAt,
@@ -767,7 +769,7 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
           weightBasisPoints: ratingConfig?.weightBasisPoints ?? 10_000,
         })
         const newBatch = await tx.ratingBatch.create({ data: {
-          id: crypto.randomUUID(), trainingId: old.trainingId, contestId: old.contestId, poolId,
+          id: crypto.randomUUID(), contestId: old.contestId, poolId,
           standingSnapshotId: snapshot.id, algorithmCode: old.algorithmCode,
           algorithmVersion: old.algorithmVersion, batchRevision, fieldSize: eligible.length,
           status: 'APPLIED', inputHash: replayInputHash, sequenceAt: old.sequenceAt,
@@ -827,7 +829,7 @@ async function loadContestRatingTx(tx: Prisma.TransactionClient, trainingId: num
           RatingBatches: { include: { Pool: true, Changes: true } },
         },
       },
-      RuntimeTraining: { include: { RatingConfig: true } },
+      RuntimeTraining: true,
     },
   })
   const training = aggregate?.RuntimeTraining
@@ -841,7 +843,7 @@ async function loadContestRatingTx(tx: Prisma.TransactionClient, trainingId: num
   const batchDtos = batches.map(batch => ({ id: batch.id, scope: batch.Pool.scopeType, organizationId: batch.Pool.organizationId, organization: batch.Pool.organizationId ? organizationMap.get(batch.Pool.organizationId) || null : null, track: batch.Pool.track, status: batch.status, fieldSize: batch.fieldSize, skipReason: batch.skipReason, changes: batch.Changes }))
   return {
     finalizationStatus: aggregate.finalizationStatus,
-    config: configDto(aggregate.RatingConfig || training.RatingConfig, training),
+    config: configDto(aggregate.RatingConfig, training),
     standing: aggregate.FinalizedStanding ? { id: aggregate.FinalizedStanding.id, revision: aggregate.FinalizedStanding.revision, finalizedAt: aggregate.FinalizedStanding.finalizedAt, entries: aggregate.FinalizedStanding.Entries.map(entry => ({ ...entry, totalScore: entry.totalScore === null ? null : Number(entry.totalScore), user: userMap.get(entry.userId) })) } : null,
     batches: batchDtos,
     myChanges: requestingUserId ? batchDtos.flatMap(batch => batch.changes.filter(change => change.userId === requestingUserId).map(change => ({ ...change, batchId: batch.id, scope: batch.scope, track: batch.track, organizationId: batch.organizationId, organization: batch.organization }))) : [],

@@ -50,10 +50,9 @@ export async function createContestRuntimeTx(
   const scoringRules = defaultScoringRules(track)
   const aggregate = await ensureContestAggregateTx(tx, runtime.id)
   if (!aggregate) throw new Error('Failed to create canonical Contest aggregate')
-  await tx.trainingRatingConfig.create({
+  await tx.contestRatingConfig.create({
     data: {
       id: crypto.randomUUID(),
-      trainingId: runtime.id,
       contestId: aggregate.id,
       scope: 'NONE',
       track,
@@ -141,7 +140,7 @@ export async function deleteContestRuntimeTx(
   // are intentionally RESTRICT so accidental historical deletion fails closed.
   await tx.ratingBatch.deleteMany({ where: { contestId: aggregate.id } })
   await tx.contestStandingSnapshot.deleteMany({ where: { contestId: aggregate.id } })
-  await tx.trainingRatingConfig.deleteMany({ where: { contestId: aggregate.id } })
+  await tx.contestRatingConfig.deleteMany({ where: { contestId: aggregate.id } })
   await tx.contest.delete({ where: { id: aggregate.id } })
   await tx.training.delete({ where: { id: runtimeTrainingId } })
   return { conflict: null }
@@ -306,15 +305,14 @@ export async function updateContestRuntimeTx(
   }
 
   if (input.patch.format !== undefined && input.patch.format !== aggregate.format) {
-    const existing = await tx.trainingRatingConfig.findUnique({ where: { trainingId: runtime.id } })
+    const existing = await tx.contestRatingConfig.findUnique({ where: { contestId: aggregate.id } })
     if (existing?.lockedAt) return { conflict: 'rating_locked' as const, runtime }
     if (existing) {
       const track = trackForFormat(input.patch.format)
       const scoringRules = defaultScoringRules(track)
-      await tx.trainingRatingConfig.update({
+      await tx.contestRatingConfig.update({
         where: { id: existing.id },
         data: {
-          contestId: existing.contestId || aggregate.id,
           track,
           scoringRules,
           rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),

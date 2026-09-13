@@ -34,10 +34,10 @@ Windows CRLF 与 Linux LF 使同一 Git 内容得到不同校验结果；Snapsho
 `20260913_v2` 是首次跨平台校验发现换行不稳定后保留的未启用审计产物，从未用于数据库 DDL；系统没有
 覆盖该目录，而是创建 `20260913_v2_lf` 并切换 `current.json`，继续遵守 Epoch 不可变规则。
 
-Baseline Snapshot 已包含原 supplement 中 Prisma 无法表达的 Check、部分唯一索引、函数和触发器，包括
-Contest Rating 规范身份触发器：兼容旧二进制先写 `TrainingRatingConfig`、后创建 Contest 的
-滚动发布顺序，并拒绝配置、榜单快照或 Rating Batch 指向与 `runtimeTrainingId` 不一致的 Contest。空库 bootstrap
-与备份升级路径必须生成同一组触发器、外键和索引，不能只在增量 migration 路径具备该保护。
+Baseline Snapshot 保留该 Epoch 当时 Prisma 无法表达的 Check、部分唯一索引、函数和触发器。Epoch 后的
+`20260914_contest_rating_identity_cutover` 会删除 Rating 的 Training 兼容键和四个双向回填触发器，并将
+`contestId` 设为唯一必填身份。空库 bootstrap 和备份升级路径都会在登记 Baseline 后真实执行该追加迁移，
+因此最终结构仍保持一致，不能从冻结 supplement 重新安装已经退役的触发器。
 
 2026-09-13 使用最新生产备份完成双路径验证：两边均生成 202 张表，完整 public schema（含约束、索引、函数与
 触发器）SHA-256 为 `de803187b4a0c99e30f6c5679ced341af8b5ce42187d0e4f114319b1c6edbb87`，比较结果为

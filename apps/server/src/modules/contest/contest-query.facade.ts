@@ -3,7 +3,6 @@ import { prisma } from '../../prisma'
 import logger from '../../lib/logger'
 
 const runtimeRatingInclude = {
-  RatingConfig: true,
   Team: { select: { organizationId: true } },
 } as const
 
@@ -31,7 +30,7 @@ export async function findContestRuntimeForRating(runtimeTrainingId: number) {
       contest: aggregate,
       runtime: {
         ...aggregate.RuntimeTraining,
-        RatingConfig: aggregate.RatingConfig || aggregate.RuntimeTraining.RatingConfig,
+        RatingConfig: aggregate.RatingConfig,
       },
       source: 'aggregate' as const,
     }
@@ -46,14 +45,13 @@ export async function listPlatformContestRuntimes() {
       RatingConfig: { select: { scope: true, track: true, lockedAt: true } },
       RuntimeTraining: {
         include: {
-          RatingConfig: { select: { scope: true, track: true, lockedAt: true } },
           _count: { select: { TrainingProblem: true, TrainingParticipant: true } },
         },
       },
     },
   })
   return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest'
-    ? [{ ...row.RuntimeTraining, RatingConfig: row.RatingConfig || row.RuntimeTraining.RatingConfig }]
+    ? [{ ...row.RuntimeTraining, RatingConfig: row.RatingConfig }]
     : [])
 }
 

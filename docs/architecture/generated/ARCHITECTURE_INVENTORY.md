@@ -154,6 +154,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `Contest`
 - `ContestProblem`
 - `ContestProblemScore`
+- `ContestRatingConfig`
 - `ContestRecord`
 - `ContestResource`
 - `ContestResult`
@@ -277,7 +278,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingProblemContentSnapshot`
 - `TrainingProblemStatementSet`
 - `TrainingProblemStatementSnapshot`
-- `TrainingRatingConfig`
 - `TrainingSession`
 - `TrainingSessionCommand`
 - `TrainingSessionEvent`

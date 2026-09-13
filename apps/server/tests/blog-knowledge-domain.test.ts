@@ -6,6 +6,7 @@ import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
+import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 
 const app = createTestApp()
 
@@ -308,13 +309,16 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       endTime: new Date(Date.now() - 1_800_000),
       status: 'finished',
       createdBy: author.user.id,
+      type: 'contest',
       scope: 'platform',
       finalizationStatus: 'FINALIZED',
     } })
+    const contest = await prisma.$transaction(tx => ensureContestAggregateTx(tx, training.id))
+    if (!contest) throw new Error('Contest aggregate missing')
     const standingId = crypto.randomUUID()
     await prisma.contestStandingSnapshot.create({ data: {
       id: standingId,
-      trainingId: training.id,
+      contestId: contest.id,
       revision: 1,
       scoringMode: 'IOI',
       rulesHash: 'standing-rules-v1',
@@ -331,6 +335,7 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       } },
     } })
     await prisma.training.update({ where: { id: training.id }, data: { finalizedStandingId: standingId } })
+    await prisma.contest.update({ where: { id: contest.id }, data: { finalizedStandingId: standingId } })
     const pool = await prisma.ratingPool.create({ data: {
       id: crypto.randomUUID(),
       scopeType: 'GLOBAL',
@@ -346,7 +351,7 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     } })
     const batch = await prisma.ratingBatch.create({ data: {
       id: crypto.randomUUID(),
-      trainingId: training.id,
+      contestId: contest.id,
       poolId: pool.id,
       standingSnapshotId: standingId,
       algorithmCode: 'CARITS_MULTI_ELO',

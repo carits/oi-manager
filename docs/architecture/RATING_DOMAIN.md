@@ -11,7 +11,7 @@ source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/ratin
 
 Rating 只消费比赛结束后的不可变 `ContestStandingSnapshot`，不直接读取实时榜单作为历史事实。`Contest` 是
 Rating 配置、榜单快照和结算批次的规范比赛身份；`Training(type=contest)` 仅暂时承载提交、参与者等历史运行子表，
-三类 Rating 事实会同时保存兼容 `trainingId` 与规范 `contestId`。旧 `Contest.countRating`、用户资料上的旧 rating
+三类 Rating 事实只保存规范 `contestId`，不再写入或保留运行 `trainingId`。旧 `Contest.countRating`、用户资料上的旧 rating
 字段不参与新链路。
 
 系统按赛制和范围建立相互独立的池：
@@ -72,16 +72,16 @@ delta = K(96) × weight × (actualPerformance - expectedPerformance)
 
 `Contest/ContestProblem` 是比赛及题目结构的规范聚合。`Contest.runtimeTrainingId` 与
 `ContestProblem.runtimeTrainingProblemId` 保留到旧运行子表的兼容桥接，并固定组织、时间、赛制、题目和
-TestSet Revision。`TrainingRatingConfig`、`ContestStandingSnapshot`、`RatingBatch` 均以 `contestId` 关联
-规范聚合；`trainingId` 只用于现有 API、提交关系和滚动升级期间的旧二进制兼容。
+TestSet Revision。`ContestRatingConfig`、`ContestStandingSnapshot`、`RatingBatch` 均只以 `contestId` 关联
+规范聚合。现有数字 `/trainings/:id` API 仅在入口通过 `Contest.runtimeTrainingId` 解析规范身份；数字 ID 不进入 Rating 事实。
 
-数据库迁移先按 `Contest.runtimeTrainingId` 回填全部 Rating 身份，并在任何缺失时 fail closed。滚动发布期间，
-新旧二进制的两种创建顺序由数据库触发器安全衔接：旧进程先创建 Training/Rating 配置时，随后创建 Contest 会
-补齐 `contestId`；新进程写入非空但不匹配的规范身份会被拒绝。删除未终结比赛必须显式清理 Rating 子事实，
-规范外键统一使用 `RESTRICT`，禁止删除 Contest 后留下孤儿历史。
+直接切换迁移先按 `Contest.runtimeTrainingId` 最后一次回填规范身份，并在任何缺失时 fail closed；随后删除三张
+Rating 表的 `trainingId`、运行外键和全部双向回填触发器。删除未终结比赛必须显式清理 Rating 子事实，规范外键
+统一使用 `RESTRICT`，禁止删除 Contest 后留下孤儿历史。
 
-受保护的 `contest-aggregates` check/apply 同时报告配置、快照和批次的缺失/错配数量；异常比赛进入报告且不猜测
-迁移。Rating 查询、结算、到期发现、同池先后顺序和重放均从 Contest 关系进入，不再按裸 `trainingId` 猜测比赛身份。
+受保护的 `contest-aggregates` check/apply 同时报告配置、快照和批次是否存在无效 Contest 外键；异常比赛进入报告
+且不猜测迁移。Rating 查询、结算、到期发现、同池先后顺序和重放均从 Contest 关系进入，不再按裸 `trainingId`
+猜测或修补比赛身份。
 
 ## 最终结算和重放
 
@@ -122,6 +122,7 @@ Serializable 事务遇到 PostgreSQL `P2034` 时有界重试，每次重试重�
 
 ## 发布与验证
 
-数据库迁移是只增不删：旧比赛默认 `LIVE` 且不补算 Rating，旧用户资料字段保持兼容。上线前必须在隔离 schema
+旧比赛默认 `LIVE` 且不补算 Rating，旧用户资料字段保持兼容。Rating 身份迁移属于开发期直接切换，会删除仅用于
+双写的列和触发器，但不删除任何 Rating 业务记录。上线前必须在隔离 schema
 执行全部迁移和 `scripts/run-rating-isolated-test.sh`，验证结算幂等、池零和、配置冻结和重放历史保留，再执行
 API 蓝绿和 Web canary/promote。上线不会自动为历史比赛生成榜单或 Rating。

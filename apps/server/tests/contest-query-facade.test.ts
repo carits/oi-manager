@@ -97,13 +97,13 @@ describe('Contest query facade', () => {
       startTime: new Date('2026-01-01T00:00:00.000Z'), endTime: new Date('2026-01-01T02:00:00.000Z'),
       createdBy: crypto.randomUUID(),
     } })
-    await prisma.contest.create({ data: {
+    const mappedContest = await prisma.contest.create({ data: {
       id: crypto.randomUUID(), runtimeTrainingId: mapped.id, title: mapped.title,
       contestDate: mapped.startTime, startAt: mapped.startTime, endAt: mapped.endTime,
       format: mapped.format, status: mapped.status, type: 'judged', scope: 'platform',
     } })
-    await prisma.trainingRatingConfig.create({ data: {
-      id: crypto.randomUUID(), trainingId: mapped.id, track: 'IOI', scope: 'NONE',
+    await prisma.contestRatingConfig.create({ data: {
+      id: crypto.randomUUID(), contestId: mappedContest.id, track: 'IOI', scope: 'NONE',
       scoringRules: {}, rulesHash: 'mapped-rules', createdBy: mapped.createdBy,
     } })
     const legacy = await prisma.training.create({ data: {
@@ -111,11 +111,6 @@ describe('Contest query facade', () => {
       startTime: new Date('2026-01-02T00:00:00.000Z'), endTime: new Date('2026-01-02T02:00:00.000Z'),
       createdBy: crypto.randomUUID(),
     } })
-    await prisma.trainingRatingConfig.create({ data: {
-      id: crypto.randomUUID(), trainingId: legacy.id, track: 'IOI', scope: 'NONE',
-      scoringRules: {}, rulesHash: 'legacy-rules', createdBy: legacy.createdBy,
-    } })
-
     const due = await listDueRatedContestRuntimes(new Date('2026-02-01T00:00:00.000Z'), 10)
     expect(due.map(row => row.id)).toEqual([mapped.id])
   })
@@ -240,8 +235,8 @@ describe('Contest query facade', () => {
       endAt: runtime.endTime, format: runtime.format, status: runtime.status,
       type: 'judged', scope: runtime.scope,
     } })
-    await prisma.trainingRatingConfig.create({ data: {
-      id: crypto.randomUUID(), trainingId: runtime.id, track: 'IOI', scope: 'NONE',
+    await prisma.contestRatingConfig.create({ data: {
+      id: crypto.randomUUID(), contestId: contest.id, track: 'IOI', scope: 'NONE',
       scoringRules: {}, rulesHash: 'canonical-command-rules', createdBy: runtime.createdBy,
     } })
 
@@ -293,7 +288,7 @@ describe('Contest query facade', () => {
     })
 
     const snapshot = await prisma.contestStandingSnapshot.create({ data: {
-      id: crypto.randomUUID(), trainingId: runtime.id, revision: 1, scoringMode: 'IOI',
+      id: crypto.randomUUID(), contestId: contest.id, revision: 1, scoringMode: 'IOI',
       rulesHash: 'canonical-command-rules', status: 'FINALIZED', inputHash: 'canonical-input',
       createdBy: runtime.createdBy, finalizedAt: new Date(),
     } })

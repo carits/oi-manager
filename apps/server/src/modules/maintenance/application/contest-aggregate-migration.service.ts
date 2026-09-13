@@ -7,7 +7,6 @@ async function loadRuntimeContests(db: typeof prisma | Prisma.TransactionClient 
     where: { type: 'contest' }, orderBy: { id: 'asc' },
     include: {
       TrainingProblem: { orderBy: { orderIndex: 'asc' }, include: { Problem: true, TestSetRevision: true } },
-      RatingConfig: { select: { scope: true, track: true, rulesHash: true } },
       ContestAggregate: { select: { id: true, statusRevision: true } },
     },
   })
@@ -18,7 +17,6 @@ function reportHash(rows: any[]) {
     id: row.id, updatedAt: row.updatedAt, type: row.type, title: row.title, format: row.format,
     startTime: row.startTime, endTime: row.endTime, status: row.status,
     problems: row.TrainingProblem.map((problem: any) => [problem.id, problem.problemId, problem.orderIndex, problem.testSetRevisionId, problem.updatedAt]),
-    rating: row.RatingConfig ? [row.RatingConfig.scope, row.RatingConfig.track, row.RatingConfig.rulesHash] : null,
   })))).digest('hex')
 }
 
@@ -35,22 +33,13 @@ async function inspectCanonicalRatingIdentities(db: typeof prisma | Prisma.Trans
       (SELECT COUNT(*) FROM "ContestStandingSnapshot") AS snapshots,
       (SELECT COUNT(*) FROM "RatingBatch") AS batches,
       (SELECT COUNT(*) FROM (
-        SELECT c."trainingId" FROM "TrainingRatingConfig" c WHERE c."contestId" IS NULL
+        SELECT c."id" FROM "TrainingRatingConfig" c LEFT JOIN "Contest" x ON x."id" = c."contestId" WHERE x."id" IS NULL
         UNION ALL
-        SELECT s."trainingId" FROM "ContestStandingSnapshot" s WHERE s."contestId" IS NULL
+        SELECT s."id" FROM "ContestStandingSnapshot" s LEFT JOIN "Contest" x ON x."id" = s."contestId" WHERE x."id" IS NULL
         UNION ALL
-        SELECT b."trainingId" FROM "RatingBatch" b WHERE b."contestId" IS NULL
+        SELECT b."id" FROM "RatingBatch" b LEFT JOIN "Contest" x ON x."id" = b."contestId" WHERE x."id" IS NULL
       ) missing_rows) AS missing,
-      (SELECT COUNT(*) FROM (
-        SELECT c."trainingId" FROM "TrainingRatingConfig" c JOIN "Contest" x ON x."id" = c."contestId"
-          WHERE x."runtimeTrainingId" IS DISTINCT FROM c."trainingId"
-        UNION ALL
-        SELECT s."trainingId" FROM "ContestStandingSnapshot" s JOIN "Contest" x ON x."id" = s."contestId"
-          WHERE x."runtimeTrainingId" IS DISTINCT FROM s."trainingId"
-        UNION ALL
-        SELECT b."trainingId" FROM "RatingBatch" b JOIN "Contest" x ON x."id" = b."contestId"
-          WHERE x."runtimeTrainingId" IS DISTINCT FROM b."trainingId"
-      ) mismatched_rows) AS mismatched
+      0::bigint AS mismatched
   `) as Array<{ configs: bigint; snapshots: bigint; batches: bigint; missing: bigint; mismatched: bigint }>
   const [row] = rows
   return {
@@ -140,7 +129,7 @@ export async function applyContestAggregateMigration(expectedReportHash: string,
         organizationId: row.organizationId,
         title: row.title, description: row.description, contestDate: row.startTime,
         startAt: row.startTime, endAt: row.endTime, format: row.format, status: row.status,
-        type: 'judged', teamId: row.teamId, countRating: Boolean(row.RatingConfig && row.RatingConfig.scope !== 'NONE'),
+        type: 'judged', teamId: row.teamId, countRating: false,
         scope: row.scope,
         problemIdVisible: row.problemIdVisible,
         solutionVisible: row.solutionVisible,
@@ -148,18 +137,6 @@ export async function applyContestAggregateMigration(expectedReportHash: string,
         finalizationStatus: row.finalizationStatus,
         finalizedStandingId: row.finalizedStandingId,
       } })
-      await tx.trainingRatingConfig.updateMany({
-        where: { trainingId: row.id, contestId: null },
-        data: { contestId: contest.id },
-      })
-      await tx.contestStandingSnapshot.updateMany({
-        where: { trainingId: row.id, contestId: null },
-        data: { contestId: contest.id },
-      })
-      await tx.ratingBatch.updateMany({
-        where: { trainingId: row.id, contestId: null },
-        data: { contestId: contest.id },
-      })
       for (const problem of row.TrainingProblem) {
         await tx.contestProblem.create({ data: {
           id: crypto.randomUUID(), contestId: contest.id, runtimeTrainingProblemId: problem.id,

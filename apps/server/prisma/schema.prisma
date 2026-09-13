@@ -581,7 +581,7 @@ model Contest {
   ContestRecords        ContestRecord[]            @relation("CanonicalContestRecords")
   ContestStatuses       ContestUserProblemStatus[] @relation("CanonicalContestStatuses")
   Submissions           Submission[]               @relation("CanonicalContestSubmissions")
-  RatingConfig          TrainingRatingConfig?      @relation("CanonicalContestRatingConfig")
+  RatingConfig          ContestRatingConfig?       @relation("CanonicalContestRatingConfig")
   StandingSnapshots     ContestStandingSnapshot[]  @relation("CanonicalContestStandingSnapshots")
   RatingBatches         RatingBatch[]              @relation("CanonicalContestRatingBatches")
   FinalizedStanding     ContestStandingSnapshot?   @relation("ContestFinalizedStanding", fields: [finalizedStandingId], references: [id], onDelete: SetNull)
@@ -734,10 +734,9 @@ model ContestUserProblemStatus {
   @@index([userId])
 }
 
-model TrainingRatingConfig {
+model ContestRatingConfig {
   id                          String      @id
-  trainingId                  Int         @unique
-  contestId                   String?     @unique
+  contestId                   String      @unique
   scope                       RatingScope @default(NONE)
   track                       RatingTrack
   weightBasisPoints           Int         @default(10000)
@@ -752,17 +751,16 @@ model TrainingRatingConfig {
   createdBy                   String
   createdAt                   DateTime    @default(now())
   updatedAt                   DateTime    @updatedAt
-  Training                    Training    @relation("RuntimeTrainingRatingConfig", fields: [trainingId], references: [id], onDelete: Cascade)
-  Contest                     Contest?    @relation("CanonicalContestRatingConfig", fields: [contestId], references: [id], onDelete: Restrict)
+  Contest                     Contest     @relation("CanonicalContestRatingConfig", fields: [contestId], references: [id], onDelete: Restrict)
 
   @@index([scope, track])
   @@index([lockedAt])
+  @@map("TrainingRatingConfig")
 }
 
 model ContestStandingSnapshot {
   id                   String                 @id
-  trainingId           Int
-  contestId            String?
+  contestId            String
   revision             Int
   scoringMode          RatingTrack
   rulesHash            String
@@ -772,17 +770,14 @@ model ContestStandingSnapshot {
   createdAt            DateTime               @default(now())
   finalizedAt          DateTime?
   supersededAt         DateTime?
-  Training             Training               @relation("RuntimeTrainingStandingSnapshots", fields: [trainingId], references: [id], onDelete: Cascade)
-  Contest              Contest?               @relation("CanonicalContestStandingSnapshots", fields: [contestId], references: [id], onDelete: Restrict)
+  Contest              Contest                @relation("CanonicalContestStandingSnapshots", fields: [contestId], references: [id], onDelete: Restrict)
   FinalizedForTraining Training?              @relation("TrainingFinalizedStanding")
   FinalizedForContest  Contest?               @relation("ContestFinalizedStanding")
   Entries              ContestStandingEntry[]
   RatingBatches        RatingBatch[]
   BlogReferences       BlogReference[]
 
-  @@unique([trainingId, revision])
   @@unique([contestId, revision])
-  @@index([trainingId, status])
   @@index([contestId, status])
 }
 
@@ -856,8 +851,7 @@ model RatingAccount {
 
 model RatingBatch {
   id                 String                  @id
-  trainingId         Int
-  contestId          String?
+  contestId          String
   poolId             String
   standingSnapshotId String
   algorithmCode      String
@@ -874,8 +868,7 @@ model RatingBatch {
   appliedAt          DateTime?
   supersededAt       DateTime?
   supersedesBatchId  String?
-  Training           Training                @relation("RuntimeTrainingRatingBatches", fields: [trainingId], references: [id], onDelete: Restrict)
-  Contest            Contest?                @relation("CanonicalContestRatingBatches", fields: [contestId], references: [id], onDelete: Restrict)
+  Contest            Contest                 @relation("CanonicalContestRatingBatches", fields: [contestId], references: [id], onDelete: Restrict)
   Pool               RatingPool              @relation(fields: [poolId], references: [id], onDelete: Restrict)
   StandingSnapshot   ContestStandingSnapshot @relation(fields: [standingSnapshotId], references: [id], onDelete: Restrict)
   SupersedesBatch    RatingBatch?            @relation("RatingBatchSupersession", fields: [supersedesBatchId], references: [id], onDelete: SetNull)
@@ -883,7 +876,6 @@ model RatingBatch {
   Changes            RatingChange[]
 
   @@unique([poolId, standingSnapshotId, algorithmCode, algorithmVersion, batchRevision])
-  @@index([trainingId, status])
   @@index([contestId, status])
   @@index([poolId, sequenceAt])
 }
@@ -4554,10 +4546,7 @@ model Training {
   TrainingProblem           TrainingProblem[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
   AssignmentLegacy          Assignment?
-  RatingConfig              TrainingRatingConfig?       @relation("RuntimeTrainingRatingConfig")
-  StandingSnapshots         ContestStandingSnapshot[]   @relation("RuntimeTrainingStandingSnapshots")
   FinalizedStanding         ContestStandingSnapshot?    @relation("TrainingFinalizedStanding", fields: [finalizedStandingId], references: [id], onDelete: SetNull)
-  RatingBatches             RatingBatch[]               @relation("RuntimeTrainingRatingBatches")
   BlogReferences            BlogReference[]
   DataPurchases             DataPurchase[]
   DataEntitlements          DataEntitlement[]

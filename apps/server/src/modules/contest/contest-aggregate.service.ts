@@ -9,7 +9,6 @@ import type { Prisma } from '@prisma/client'
 export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, trainingId: number) {
   const training = await tx.training.findUnique({
     where: { id: trainingId },
-    include: { RatingConfig: { select: { scope: true } } },
   })
   if (!training || training.type !== 'contest') return null
   const data = {
@@ -24,7 +23,6 @@ export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, tra
     status: training.status,
     type: 'judged',
     teamId: training.teamId,
-    countRating: Boolean(training.RatingConfig && training.RatingConfig.scope !== 'NONE'),
     scope: training.scope,
     problemIdVisible: training.problemIdVisible,
     solutionVisible: training.solutionVisible,
@@ -35,15 +33,8 @@ export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, tra
   }
   const contest = await tx.contest.upsert({
     where: { runtimeTrainingId: training.id },
-    create: { id: crypto.randomUUID(), runtimeTrainingId: training.id, ...data },
+    create: { id: crypto.randomUUID(), runtimeTrainingId: training.id, countRating: false, ...data },
     update: data,
-  })
-  // Repair/import is the only reverse bridge allowed after the aggregate
-  // cutover. Attach a pre-existing runtime Rating config to its canonical
-  // identity without changing the immutable Rating policy itself.
-  await tx.trainingRatingConfig.updateMany({
-    where: { trainingId, contestId: null },
-    data: { contestId: contest.id },
   })
   return contest
 }

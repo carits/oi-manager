@@ -58,8 +58,8 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `BlogFeature` | 可退役且带审计的社区精选事实 |
 | `CaritsAccount` | 用户、组织或系统的 Carits 账户；余额与不可变分录同事务更新 |
 | `ContestStandingEntry` | 最终榜单中带组织快照、并列组和 Rating 资格的参赛者事实 |
-| `ContestStandingSnapshot` | 以规范 `contestId` 归属比赛、同时保留运行 `trainingId` 兼容键的版本化不可变最终排名输入 |
-| `TrainingRatingConfig` | 一场规范 Contest 唯一的冻结 Rating 策略；`trainingId` 仅保留为运行兼容键 |
+| `ContestStandingSnapshot` | 只以规范 `contestId` 归属比赛的版本化不可变最终排名输入 |
+| `ContestRatingConfig` | 一场规范 Contest 唯一的冻结 Rating 策略；物理表沿用历史名称，但领域模型不再关联 Training |
 | `RatingBatch` | 以规范 `contestId` 归属比赛和 RatingPool 的不可变结算/重放批次 |
 | `CaritsLedgerEntry` | 交易内按账户聚合的双向分录；posted 后不得追加、修改或删除 |
 | `CaritsTransaction` | 平衡的 Carits 交易、幂等业务引用、请求指纹及冲正关系；同键差异载荷必须拒绝 |
@@ -208,7 +208,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TrainingProblemContentSnapshot` | 活动题面/题解不可变 revision 快照；当前版本取最大 revision |
 | `TrainingProblemStatementSet` | 活动一道题的一次多题面选择 revision |
 | `TrainingProblemStatementSnapshot` | 选择集合内不可变的题面副本、顺序和默认标记 |
-| `TrainingRatingConfig` | 比赛开始前可配置、开始或首交时冻结的 Rating 规则快照 |
+| `ContestRatingConfig` | 比赛开始前可配置、开始或首交时冻结的 Contest Rating 规则快照 |
 | `TrainingSolution` | 以 Prisma schema 为准 |
 | `TrainingUserProblemStatus` | 以 Prisma schema 为准 |
 | `User` | 全局账号、密码摘要、状态与会话撤销代数；不保存学校身份 |

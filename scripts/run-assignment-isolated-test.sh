@@ -57,12 +57,8 @@ if [[ "$SCHEMA_SETUP" == "current" ]]; then
   sed -n '/CREATE OR REPLACE FUNCTION reject_blog_submission_snapshot_mutation()/,$p' \
     "$ROOT_DIR/apps/server/prisma/migrations/20260910_blog_submission_snapshots/migration.sql" \
     | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
-  # `prisma db push` materializes the canonical Contest relations and indexes.
-  # Rating still has a legacy projection guard; submission/status identity is
-  # canonical-only and therefore needs no compatibility trigger.
-  sed -n '/CREATE OR REPLACE FUNCTION "set_canonical_contest_id_from_runtime"()/,/FOR EACH ROW EXECUTE FUNCTION "backfill_contest_rating_identity_from_aggregate"();/p' \
-    "$ROOT_DIR/apps/server/prisma/migrations/20260913_contest_canonical_rating_identity/migration.sql" \
-    | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
+  # `prisma db push` materializes the canonical Contest-only Rating relations.
+  # No Training/Contest compatibility triggers are installed in current-schema tests.
 elif [[ "$SCHEMA_SETUP" != "migrations" ]]; then
   echo "Invalid ASSIGNMENT_SCHEMA_SETUP: expected migrations or current" >&2
   exit 1

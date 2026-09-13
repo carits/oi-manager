@@ -3,6 +3,7 @@ import path from 'node:path'
 
 const root = process.cwd()
 const modulesRoot = path.join(root, 'apps/server/src/modules')
+const prismaSchema = fs.readFileSync(path.join(root, 'apps/server/prisma/schema.prisma'), 'utf8')
 
 function files(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -69,6 +70,15 @@ if (/clearedSubmissionProjection|data:\s*\{\s*(?:\.\.\.input\.projection|result:
 
 const contestRating = fs.readFileSync(path.join(modulesRoot, 'rating/application/contest-rating.service.ts'), 'utf8')
 const contestQueryFacade = fs.readFileSync(path.join(modulesRoot, 'contest/contest-query.facade.ts'), 'utf8')
+for (const modelName of ['ContestRatingConfig', 'ContestStandingSnapshot', 'RatingBatch']) {
+  const model = prismaSchema.match(new RegExp(`model\\s+${modelName}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] || ''
+  if (!model || /\btrainingId\b/.test(model) || !/\bcontestId\s+String\b/.test(model)) {
+    violations.push(`${modelName} is not exclusively owned by canonical Contest identity`)
+  }
+}
+if (/\btrainingRatingConfig\b/.test(contestRating + contestQueryFacade)) {
+  violations.push('Contest Rating application still uses the legacy TrainingRatingConfig client')
+}
 if (contestQueryFacade.includes("source: 'legacy'") || contestQueryFacade.includes('contest_query_legacy_fallback')) {
   violations.push('Contest query facade still returns legacy Training contest records')
 }
@@ -194,6 +204,8 @@ console.log(JSON.stringify({
   contestCanonicalStateBoundary: !violations.some(item => item.includes('authoritative write model')
     || item.includes('compatibility projection')
     || item.includes('Rating discovery still reads lifecycle')),
+  contestRatingIdentityBoundary: !violations.some(item => item.includes('canonical Contest identity')
+    || item.includes('legacy TrainingRatingConfig')),
   localJudgeResultWriteBoundary: !violations.some(item => item.startsWith('JudgeRun')),
   runtimeCompositionBoundary: !violations.some(item => item.includes('composition root') || item.includes('shadow route graph') || item.includes('implicit global HTTP server')),
   violations,
