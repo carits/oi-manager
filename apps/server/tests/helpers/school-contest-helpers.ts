@@ -5,6 +5,7 @@
 
 import crypto from 'node:crypto'
 import { prisma } from '../../src/prisma'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../../src/modules/contest/contest-aggregate.service'
 
 interface CreateTestSchoolContestOptions {
   schoolId: string
@@ -68,6 +69,10 @@ export async function createTestSchoolContest(options: CreateTestSchoolContestOp
       updatedAt: new Date(),
     },
   })
+
+  if (training.type === 'contest') {
+    await prisma.$transaction(tx => ensureContestAggregateTx(tx, training.id))
+  }
 
   return training
 }
@@ -137,6 +142,14 @@ export async function addProblemToContest(options: {
       points,
     },
   })
+
+  const training = await prisma.training.findUniqueOrThrow({
+    where: { id: trainingId },
+    select: { type: true },
+  })
+  if (training.type === 'contest') {
+    await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
+  }
 
   return trainingProblem
 }
