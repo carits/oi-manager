@@ -9,6 +9,7 @@ import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 import { lockRatingParticipantTx, processDueContestRatings } from '../src/modules/rating/application/contest-rating.service'
 import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { holdContestFinalizationForRejudgeTx } from '../src/modules/contest/contest-command.service'
 
 const app = createTestApp()
 
@@ -389,7 +390,7 @@ describe('rating domain HTTP and persistence', () => {
     expect(finalized.status).toBe(200)
     const secondSubmission = await prisma.submission.findFirstOrThrow({ where: { trainingId: contest.id, userId: second.user.id } })
     await prisma.submission.update({ where: { id: secondSubmission.id }, data: { score: 100, result: 'accepted' } })
-    await prisma.training.update({ where: { id: contest.id }, data: { finalizationStatus: 'HELD' } })
+    expect(await prisma.$transaction(tx => holdContestFinalizationForRejudgeTx(tx, contest.id))).toBe(true)
 
     const rebuilt = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/rating/rebuild`).set('X-OI-Organization-ID', organizationId)
     expect(rebuilt.status).toBe(200)

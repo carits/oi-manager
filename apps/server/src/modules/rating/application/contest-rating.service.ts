@@ -59,6 +59,12 @@ async function requireContest(trainingId: number) {
   return resolved.runtime
 }
 
+async function requireContestResolved(trainingId: number) {
+  const resolved = await findContestRuntimeForRating(trainingId)
+  if (!resolved) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
+  return resolved
+}
+
 function configDto(config: any, training: any) {
   const track = trackForFormat(training.format)
   return config ? {
@@ -449,24 +455,33 @@ async function assertNoEarlierRatedContestPendingTx(tx: Prisma.TransactionClient
   organizationId: string | null
   track: RatingTrack
 }) {
-  const candidates = await tx.trainingRatingConfig.findMany({
+  const candidates = await tx.contest.findMany({
     where: {
-      trainingId: { not: input.training.id },
-      track: input.track,
-      scope: input.scopeType === 'GLOBAL' ? { in: ['GLOBAL', 'BOTH'] } : { in: ['ORGANIZATION', 'BOTH'] },
-      Training: {
+      runtimeTrainingId: { not: input.training.id },
+      endAt: { lt: input.training.endTime },
+      finalizationStatus: { not: 'FINALIZED' },
+      RuntimeTraining: { is: {
         type: 'contest',
-        endTime: { lt: input.training.endTime },
-        finalizationStatus: { not: 'FINALIZED' },
-      },
+        RatingConfig: { is: {
+          track: input.track,
+          scope: input.scopeType === 'GLOBAL' ? { in: ['GLOBAL', 'BOTH'] } : { in: ['ORGANIZATION', 'BOTH'] },
+        } },
+      } },
     },
-    include: { Training: { select: { id: true, title: true, organizationId: true, Team: { select: { organizationId: true } } } } },
-    orderBy: { Training: { endTime: 'asc' } },
+    include: { RuntimeTraining: { select: {
+      id: true,
+      title: true,
+      organizationId: true,
+      Team: { select: { organizationId: true } },
+      RatingConfig: { select: { scope: true } },
+    } } },
+    orderBy: [{ endAt: 'asc' }, { runtimeTrainingId: 'asc' }],
   })
   const earlier = input.scopeType === 'GLOBAL'
     ? candidates[0]
-    : candidates.find(candidate => candidate.scope === 'BOTH' || fixedOrganizationId(candidate.Training) === input.organizationId)
-  if (earlier) fail(409, 'EARLIER_RATED_CONTEST_PENDING', `更早结束的同一 Rating 池比赛尚未结算：${earlier.Training.title}`)
+    : candidates.find(candidate => candidate.RuntimeTraining?.RatingConfig?.scope === 'BOTH'
+      || (candidate.RuntimeTraining && fixedOrganizationId(candidate.RuntimeTraining) === input.organizationId))
+  if (earlier?.RuntimeTraining) fail(409, 'EARLIER_RATED_CONTEST_PENDING', `更早结束的同一 Rating 池比赛尚未结算：${earlier.RuntimeTraining.title}`)
 }
 
 async function createAndApplyBatchTx(tx: Prisma.TransactionClient, input: {
@@ -496,15 +511,25 @@ async function createAndApplyBatchTx(tx: Prisma.TransactionClient, input: {
 }
 
 async function finalizeContestRatingCore(trainingId: number, actorUserId: string) {
-  const training = await requireContest(trainingId)
-  if (new Date() <= training.endTime && training.status !== 'finished') fail(409, 'CONTEST_NOT_ENDED', '比赛结束后才能生成最终榜单')
+  const resolved = await requireContestResolved(trainingId)
+  const training = resolved.runtime
+  if (new Date() <= resolved.contest.endAt && resolved.contest.status !== 'finished') fail(409, 'CONTEST_NOT_ENDED', '比赛结束后才能生成最终榜单')
   return withSerializableRetry(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-finalize:${trainingId}`}, 0)) IS NULL AS locked`
-    const locked = await tx.training.findUniqueOrThrow({ where: { id: trainingId }, include: { RatingConfig: true, Team: { select: { organizationId: true } }, TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } } } })
-    if (locked.finalizationStatus === 'FINALIZED' && locked.finalizedStandingId) return loadContestRatingTx(tx, trainingId, actorUserId)
+    const lockedAggregate = await tx.contest.findUnique({
+      where: { runtimeTrainingId: trainingId },
+      include: { RuntimeTraining: { include: {
+        RatingConfig: true,
+        Team: { select: { organizationId: true } },
+        TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } },
+      } } },
+    })
+    const locked = lockedAggregate?.RuntimeTraining
+    if (!locked) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
+    if (lockedAggregate.finalizationStatus === 'FINALIZED' && lockedAggregate.finalizedStandingId) return loadContestRatingTx(tx, trainingId, actorUserId)
     const activeRuns = await tx.judgeRun.count({ where: { status: { in: ['QUEUED', 'RUNNING'] }, Submission: { trainingId, submitScope: 'contest' } } })
     if (activeRuns > 0) fail(409, 'CONTEST_JUDGING_INCOMPLETE', `仍有 ${activeRuns} 个评测任务未完成`)
-    if (!await beginContestFinalizationTx(tx, trainingId, locked.finalizationStatus)) {
+    if (!await beginContestFinalizationTx(tx, trainingId, lockedAggregate.finalizationStatus)) {
       fail(409, 'CONTEST_FINALIZATION_STALE', '比赛结算状态已变化，请刷新后重试')
     }
     const config = await lockContestRatingConfigTx(tx, trainingId, actorUserId, locked.format)
@@ -607,11 +632,12 @@ export async function updateRatingParticipantDisposition(trainingId: number, tar
  * Existing batches and changes are retained as SUPERSEDED audit history.
  */
 export async function rebuildContestRating(trainingId: number, userId: string) {
-  const training = await requireContest(trainingId)
+  const resolved = await requireContestResolved(trainingId)
+  const training = resolved.runtime
   if (!await canManageTraining(userId, training)) fail(403, 'CONTEST_MANAGE_DENIED', '只有比赛管理员可以申请 Rating 重放')
-  if (!training.finalizedStandingId) fail(409, 'CONTEST_NOT_FINALIZED', '比赛尚未生成最终榜单')
-  if (training.finalizationStatus === 'FINALIZED') return getContestRating(trainingId, userId)
-  if (training.finalizationStatus !== 'HELD') fail(409, 'CONTEST_REBUILD_NOT_READY', '只有赛后重测完成并进入待重放状态后才能重放 Rating')
+  if (!resolved.contest.finalizedStandingId) fail(409, 'CONTEST_NOT_FINALIZED', '比赛尚未生成最终榜单')
+  if (resolved.contest.finalizationStatus === 'FINALIZED') return getContestRating(trainingId, userId)
+  if (resolved.contest.finalizationStatus !== 'HELD') fail(409, 'CONTEST_REBUILD_NOT_READY', '只有赛后重测完成并进入待重放状态后才能重放 Rating')
   const activeRuns = await prisma.judgeRun.count({ where: { status: { in: ['QUEUED', 'RUNNING'] }, Submission: { trainingId, submitScope: 'contest' } } })
   if (activeRuns > 0) fail(409, 'CONTEST_JUDGING_INCOMPLETE', `仍有 ${activeRuns} 个评测任务未完成`)
   const affectedPools = await prisma.ratingBatch.findMany({
@@ -627,15 +653,17 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
 
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-rebuild:${trainingId}`}, 0)) IS NULL AS locked`
-    const locked = await tx.training.findUniqueOrThrow({
-      where: { id: trainingId },
-      include: {
+    const lockedAggregate = await tx.contest.findUnique({
+      where: { runtimeTrainingId: trainingId },
+      include: { RuntimeTraining: { include: {
         RatingConfig: true,
         Team: { select: { organizationId: true } },
         TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } },
-      },
+      } } },
     })
-    if (locked.finalizationStatus !== 'HELD') {
+    const locked = lockedAggregate?.RuntimeTraining
+    if (!locked) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
+    if (lockedAggregate.finalizationStatus !== 'HELD') {
       fail(409, 'CONTEST_REBUILD_NOT_READY', '比赛重放状态已变化，请刷新后重试')
     }
     const config = locked.RatingConfig || await lockContestRatingConfigTx(tx, trainingId, userId, locked.format)
@@ -771,29 +799,31 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
 }
 
 async function loadContestRatingTx(tx: Prisma.TransactionClient, trainingId: number, requestingUserId?: string) {
-  const training = await tx.training.findUniqueOrThrow({
-    where: { id: trainingId },
+  const aggregate = await tx.contest.findUnique({
+    where: { runtimeTrainingId: trainingId },
     include: {
-      RatingConfig: true,
       FinalizedStanding: {
         include: {
           Entries: { orderBy: [{ rank: 'asc' }, { userId: 'asc' }] },
           RatingBatches: { include: { Pool: true, Changes: true } },
         },
       },
+      RuntimeTraining: { include: { RatingConfig: true } },
     },
   })
-  const users = await tx.user.findMany({ where: { id: { in: training.FinalizedStanding?.Entries.map(item => item.userId) || [] } }, select: { id: true, username: true, avatar: true } })
+  const training = aggregate?.RuntimeTraining
+  if (!aggregate || !training) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
+  const users = await tx.user.findMany({ where: { id: { in: aggregate.FinalizedStanding?.Entries.map(item => item.userId) || [] } }, select: { id: true, username: true, avatar: true } })
   const userMap = new Map(users.map(user => [user.id, user]))
-  const batches = training.FinalizedStanding?.RatingBatches || []
+  const batches = aggregate.FinalizedStanding?.RatingBatches || []
   const organizationIds = [...new Set(batches.map(batch => batch.Pool.organizationId).filter(Boolean) as string[])]
   const organizations = organizationIds.length ? await tx.organization.findMany({ where: { id: { in: organizationIds } }, select: { id: true, name: true, School: { select: { shortName: true } } } }) : []
   const organizationMap = new Map(organizations.map(organization => [organization.id, { id: organization.id, name: organization.name, shortName: organization.School?.shortName || null }]))
   const batchDtos = batches.map(batch => ({ id: batch.id, scope: batch.Pool.scopeType, organizationId: batch.Pool.organizationId, organization: batch.Pool.organizationId ? organizationMap.get(batch.Pool.organizationId) || null : null, track: batch.Pool.track, status: batch.status, fieldSize: batch.fieldSize, skipReason: batch.skipReason, changes: batch.Changes }))
   return {
-    finalizationStatus: training.finalizationStatus,
+    finalizationStatus: aggregate.finalizationStatus,
     config: configDto(training.RatingConfig, training),
-    standing: training.FinalizedStanding ? { id: training.FinalizedStanding.id, revision: training.FinalizedStanding.revision, finalizedAt: training.FinalizedStanding.finalizedAt, entries: training.FinalizedStanding.Entries.map(entry => ({ ...entry, totalScore: entry.totalScore === null ? null : Number(entry.totalScore), user: userMap.get(entry.userId) })) } : null,
+    standing: aggregate.FinalizedStanding ? { id: aggregate.FinalizedStanding.id, revision: aggregate.FinalizedStanding.revision, finalizedAt: aggregate.FinalizedStanding.finalizedAt, entries: aggregate.FinalizedStanding.Entries.map(entry => ({ ...entry, totalScore: entry.totalScore === null ? null : Number(entry.totalScore), user: userMap.get(entry.userId) })) } : null,
     batches: batchDtos,
     myChanges: requestingUserId ? batchDtos.flatMap(batch => batch.changes.filter(change => change.userId === requestingUserId).map(change => ({ ...change, batchId: batch.id, scope: batch.scope, track: batch.track, organizationId: batch.organizationId, organization: batch.organization }))) : [],
   }
