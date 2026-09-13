@@ -9,6 +9,12 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest 题目结构命令边界
+
+- 比赛题目的新增、编辑、排序和删除统一改由 Contest Command Service 执行，在比赛 advisory lock 内分配顺序，并在同一事务同步 Runtime TrainingProblem 与规范 ContestProblem；普通 Training 题目管理路径不变。
+- 架构门禁禁止 Training Problem Management 再直接调用 Contest Aggregate writer；新增 CT7 覆盖两题新增、分值修改、顺序交换和单题删除。
+- Linux Server 构建、生产同构 Contest 核心 3 文件 43/43 通过；提交 `6893111` 发布后 API 3303→3302。生产 199/199 个比赛题目映射，未映射和核心字段差异均为 0，部署后 fallback 为 0。
+
 ### Contest 可编辑元数据与删除命令边界
 
 - 赛前标题、说明、赛制、起止时间、题号/题解可见性和管理员排名配置，以及独立结束时间修改入口统一改由 `updateContestRuntimeTx()` 执行；命令使用比赛锁和状态/赛制/时间快照检查避免并发覆盖。
