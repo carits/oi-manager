@@ -1,17 +1,14 @@
 import { prisma } from '../../../prisma'
 import { TrainingEngineError } from '../training-engine.errors'
+import { hasOrganizationCapability } from '../../authorization/capabilities'
 
 export type TrainingScope = { organizationId: string | null; teamId: string | null }
 export type ParticipantTarget = 'team' | 'organization_students' | 'custom_students'
 
 async function assertCanTargetWholeSchool(userId: string, organizationId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, status: true } })
-  if (user?.role === 'super_admin' && user.status === 'active') return
-  const principal = await prisma.organizationMembership.findFirst({
-    where: { organizationId, userId, status: 'active', memberRole: 'school_principal' },
-    select: { id: true },
-  })
-  if (!principal) throw new TrainingEngineError(403, 'TRAINING_SCHOOL_WIDE_FORBIDDEN', '只有学校负责人可以创建全校学生训练')
+  if (!await hasOrganizationCapability(userId, organizationId, 'organization.settings')) {
+    throw new TrainingEngineError(403, 'TRAINING_SCHOOL_WIDE_FORBIDDEN', '当前身份无权创建全校学生训练')
+  }
 }
 
 export async function eligibleTrainingParticipantIds(scope: TrainingScope) {

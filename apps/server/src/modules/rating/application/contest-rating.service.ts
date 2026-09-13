@@ -11,6 +11,7 @@ import {
   completeContestRatingRebuildTx,
   failContestFinalizationTx,
 } from '../../contest/contest-finalization-command.service'
+import { resolveOrganizationAuthorizationsForOrganization } from '../../authorization/capabilities'
 
 export class ContestRatingError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) { super(message) }
@@ -454,8 +455,8 @@ async function excludedManagerIdsTx(tx: Prisma.TransactionClient, training: any)
     members.forEach(item => ids.add(item.userId))
   }
   if (training.organizationId) {
-    const members = await tx.organizationMembership.findMany({ where: { organizationId: training.organizationId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } }, select: { userId: true } })
-    members.forEach(item => ids.add(item.userId))
+    const managers = await resolveOrganizationAuthorizationsForOrganization(training.organizationId, tx as any)
+    managers.filter(item => item.capabilities.has('contest.manage')).forEach(item => ids.add(item.userId))
   }
   const admins = await tx.user.findMany({ where: { role: { in: ['super_admin', 'platform_admin'] } }, select: { id: true } })
   admins.forEach(item => ids.add(item.id))

@@ -66,13 +66,17 @@ Account Identity
 
 ## Capability 授权迁移
 
-岗位是资料和默认能力模板，Capability 才是授权事实。授权已经固定读取规范化
+岗位是资料和默认能力模板，Capability 才是授权事实。核心组织授权已经固定读取规范化
 `OrganizationMembershipRole` 与显式 `OrganizationMembershipCapability`，不再提供 legacy/hybrid fallback。
 `memberRole` 继续用于学生/教师资料分类和 UI 岗位展示，但不能直接授予业务权限。
 
 组织成员 HTTP 路由必须声明稳定 Capability；业务服务接收解析后的 Capability 集合，不接收并比较 `actor.role`。
 当前基础映射为：成员均可 `organization.view`；教师默认拥有学生查看/管理、作业和比赛能力；负责人额外拥有教师查看/管理与
 `organization.settings`。教师只能管理归属自己的学生这一资源范围同样从 Capability 派生，不能回退到 `memberRole` 分支。
+
+批量解析器为列表、通知和排名提供与详情策略相同的 Capability 投影；组织加入/邀请、作业范围、补题作业、全校训练名单、
+组织数据许可证、Candidate 管理预算和比赛管理员排除均不得再次查询 `memberRole` 决定权限。旧 Team/Problem HTTP 兼容层仍在
+逐项迁移，属于明确登记的退出工作，完成前不得把 `Request.user.role` 的校园岗位判断扩展到新代码。
 
 所有 Membership 创建、恢复、导入和负责人转移都在原业务事务内同步基础 RoleAssignment；附加岗位和显式能力不会因基础岗位
 变化而被误删。受保护的 `/api/admin/migration/membership-roles` check/apply 保留为一致性修复工具：未知角色 fail closed，

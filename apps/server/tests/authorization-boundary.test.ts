@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   capabilitiesForOrganizationRole,
   hasOrganizationCapability,
+  organizationCapabilityScope,
   resolveOrganizationAuthorization,
 } from '../src/modules/authorization/capabilities'
 import { ORGANIZATION_BASE_ROLE_KEYS, syncOrganizationMembershipBaseRole } from '../src/modules/authorization/membership-role-assignment'
@@ -48,6 +49,40 @@ describe('authorization boundary', () => {
     const legacyAuthorizationBranches = sourceFiles(path.resolve(__dirname, '../src/modules/organization'))
       .filter(file => /actor\.role\s*(?:===|!==)\s*['"](?:student|teacher|school_principal)['"]/.test(fs.readFileSync(file, 'utf8')))
     expect(legacyAuthorizationBranches.map(file => path.relative(path.resolve(__dirname, '../src'), file))).toEqual([])
+
+    const normalizedAuthorizationModules = [
+      '../src/modules/organization-join/organization-join.service.ts',
+      '../src/modules/assignment/assignment.service.ts',
+      '../src/modules/training/application/training-crud.service.ts',
+      '../src/modules/training/application/training-ranking.service.ts',
+      '../src/modules/training-engine/application/training-roster.service.ts',
+      '../src/modules/problem-list/application/problem-list-homework.service.ts',
+      '../src/modules/data-market/data-market.service.ts',
+      '../src/modules/problem/problem.candidate-evaluation.service.ts',
+      '../src/modules/rating/application/contest-rating.service.ts',
+    ]
+    const legacyPolicySources = normalizedAuthorizationModules.filter(file => {
+      const source = fs.readFileSync(path.resolve(__dirname, file), 'utf8')
+      return /manager\.memberRole|creatorMembership\.memberRole|principalMembership|memberRole:\s*\{\s*in:\s*\[['"]teacher['"],\s*['"]school_principal['"]\]\s*\}/.test(source)
+    })
+    expect(legacyPolicySources).toEqual([])
+
+    const capabilitySensitiveFiles = [
+      '../src/modules/organization-join/organization-join.service.ts',
+      '../src/modules/assignment/assignment.service.ts',
+      '../src/modules/problem-list/application/problem-list-homework.service.ts',
+      '../src/modules/training/application/training-crud.service.ts',
+      '../src/modules/training-engine/application/training-roster.service.ts',
+      '../src/modules/data-market/data-market.service.ts',
+      '../src/modules/problem/problem.candidate-evaluation.service.ts',
+      '../src/modules/rating/application/contest-rating.service.ts',
+      '../src/modules/training/application/training-ranking.service.ts',
+    ]
+    const forbidden = capabilitySensitiveFiles.filter(file => {
+      const source = fs.readFileSync(path.resolve(__dirname, file), 'utf8')
+      return /manager\.memberRole|creatorMembership\.memberRole|principalMembership|memberRole:\s*\{\s*in:\s*\['teacher',\s*'school_principal'\]\s*\}|memberRole:\s*'school_principal'/.test(source)
+    })
+    expect(forbidden).toEqual([])
   })
 
   it('does not contain a legacy or hybrid authorization fallback', () => {
@@ -78,6 +113,8 @@ describe('authorization boundary', () => {
     } })
     const authorization = await resolveOrganizationAuthorization(member.user.id, school.organizationId!)
     expect(authorization?.capabilities.has('membership.manage.teachers')).toBe(true)
+    expect(organizationCapabilityScope(authorization!, 'membership.manage.students')).toBe('own')
+    expect(organizationCapabilityScope(authorization!, 'membership.manage.teachers')).toBe('all')
   })
 
   it('updates the normalized base role without deleting additive roles', async () => {

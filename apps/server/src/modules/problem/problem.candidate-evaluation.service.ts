@@ -9,6 +9,7 @@ import { EVALUATION_LIMITS, reserveEvaluationCreditsInTransaction, settleEvaluat
 import { loadRevisionSpec } from './problem.testset-revision.service'
 import { parseSubtaskIds, resolveCorpusMode, uniqueSubtaskCases } from './problem.oi-candidate-policy'
 import { maybeAutoSelectCandidate } from './problem.candidate-selector.service'
+import { hasOrganizationCapability } from '../authorization/capabilities'
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 const STAGE_LIMIT = { l1: 24, l2: 96, holdout: 256 } as const
@@ -44,8 +45,10 @@ export async function queueCandidateEvaluation(candidateId: string) {
     prisma.problem.findUnique({ where: { id: candidate.problemId } }),
     prisma.user.findUnique({ where: { id: candidate.createdBy }, select: { role: true } }),
   ])
-  const principalMembership = problem?.organizationId ? await prisma.organizationMembership.findFirst({ where: { organizationId: problem.organizationId, userId: candidate.createdBy, status: 'active', memberRole: 'school_principal' }, select: { id: true } }) : null
-  const manager = Boolean(problem && (['platform_admin', 'super_admin'].includes(creator?.role || '') || problem.ownerId === candidate.createdBy || principalMembership))
+  const organizationManager = problem?.organizationId
+    ? await hasOrganizationCapability(candidate.createdBy, problem.organizationId, 'organization.settings')
+    : false
+  const manager = Boolean(problem && (['platform_admin', 'super_admin'].includes(creator?.role || '') || problem.ownerId === candidate.createdBy || organizationManager))
   const budgetCredits = candidate.source === 'generator' ? EVALUATION_LIMITS.generator.executions : EVALUATION_LIMITS.direct.executions
   const created = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`candidate-evaluation:${candidate.problemId}`}, 0)) IS NULL AS locked`

@@ -49,6 +49,7 @@ function capabilitiesFromRoles(roleKeys: string[]) {
 }
 
 export interface OrganizationAuthorization {
+  userId: string
   membershipId: string
   accountRole: string
   roleKeys: ReadonlySet<string>
@@ -68,16 +69,39 @@ const ORGANIZATION_CAPABILITY_KEYS = new Set<OrganizationCapability>([
 ])
 
 /** Resolve the normalized organization authorization facts for one active membership. */
+type AuthorizationClient = {
+  user: typeof prisma.user
+  organizationMembership: typeof prisma.organizationMembership
+}
+
+function authorizationFromMembership(accountRole: string, membership: {
+  id: string
+  userId: string
+  RoleAssignments: Array<{ roleKey: string }>
+  CapabilityGrants: Array<{ capabilityKey: string }>
+}): OrganizationAuthorization {
+  const roleKeys = new Set(membership.RoleAssignments.map(item => item.roleKey))
+  const capabilities = capabilitiesFromRoles([...roleKeys])
+  for (const grant of membership.CapabilityGrants) {
+    if (ORGANIZATION_CAPABILITY_KEYS.has(grant.capabilityKey as OrganizationCapability)) {
+      capabilities.add(grant.capabilityKey as OrganizationCapability)
+    }
+  }
+  return { userId: membership.userId, membershipId: membership.id, accountRole, roleKeys, capabilities }
+}
+
 export async function resolveOrganizationAuthorization(
   userId: string,
   organizationId: string,
+  client: AuthorizationClient = prisma as AuthorizationClient,
 ): Promise<OrganizationAuthorization | null> {
   const [account, membership] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true, status: true } }),
-    prisma.organizationMembership.findUnique({
+    client.user.findUnique({ where: { id: userId }, select: { role: true, status: true } }),
+    client.organizationMembership.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
       select: {
         id: true,
+        userId: true,
         status: true,
         RoleAssignments: { select: { roleKey: true } },
         CapabilityGrants: { select: { capabilityKey: true } },
@@ -87,15 +111,79 @@ export async function resolveOrganizationAuthorization(
   ])
   if (!account || account.status !== 'active' || !membership || membership.status !== 'active') return null
   if (membership.Organization.status !== 'active' || membership.Organization.School?.directoryStatus === 'legacy') return null
+  return authorizationFromMembership(account.role, membership)
+}
 
-  const roleKeys = new Set(membership.RoleAssignments.map(item => item.roleKey))
-  const capabilities = capabilitiesFromRoles([...roleKeys])
-  for (const grant of membership.CapabilityGrants) {
-    if (ORGANIZATION_CAPABILITY_KEYS.has(grant.capabilityKey as OrganizationCapability)) {
-      capabilities.add(grant.capabilityKey as OrganizationCapability)
-    }
-  }
-  return { membershipId: membership.id, accountRole: account.role, roleKeys, capabilities }
+/** Resolve every active organization authorization for one account in one query. */
+export async function resolveOrganizationAuthorizationsForUser(
+  userId: string,
+  organizationIds?: string[],
+  client: AuthorizationClient = prisma as AuthorizationClient,
+): Promise<Array<OrganizationAuthorization & { organizationId: string }>> {
+  const account = await client.user.findUnique({ where: { id: userId }, select: { role: true, status: true } })
+  if (!account || account.status !== 'active') return []
+  const memberships = await client.organizationMembership.findMany({
+    where: {
+      userId,
+      status: 'active',
+      ...(organizationIds ? { organizationId: { in: organizationIds } } : {}),
+      Organization: { status: 'active', School: { is: { directoryStatus: { not: 'legacy' } } } },
+    },
+    select: {
+      id: true,
+      userId: true,
+      organizationId: true,
+      RoleAssignments: { select: { roleKey: true } },
+      CapabilityGrants: { select: { capabilityKey: true } },
+    },
+  })
+  return memberships.map(membership => ({
+    ...authorizationFromMembership(account.role, membership),
+    organizationId: membership.organizationId,
+  }))
+}
+
+/** Resolve active members that hold a capability; used for notifications and policy projections. */
+export async function resolveOrganizationAuthorizationsForOrganization(
+  organizationId: string,
+  client: AuthorizationClient = prisma as AuthorizationClient,
+): Promise<OrganizationAuthorization[]> {
+  const memberships = await client.organizationMembership.findMany({
+    where: {
+      organizationId,
+      status: 'active',
+      User: { status: 'active' },
+      Organization: { status: 'active', School: { is: { directoryStatus: { not: 'legacy' } } } },
+    },
+    select: {
+      id: true,
+      userId: true,
+      User: { select: { role: true } },
+      RoleAssignments: { select: { roleKey: true } },
+      CapabilityGrants: { select: { capabilityKey: true } },
+    },
+  })
+  return memberships.map(membership => authorizationFromMembership(membership.User.role, membership))
+}
+
+const RESOURCE_SCOPED_CAPABILITIES = new Set<OrganizationCapability>([
+  'assignment.manage',
+  'contest.manage',
+  'membership.manage.students',
+])
+
+/** Default teacher roles manage their own resources; principals and explicit non-teacher grants are broad. */
+export function organizationCapabilityScope(
+  authorization: OrganizationAuthorization,
+  capability: OrganizationCapability,
+): 'none' | 'own' | 'all' {
+  if (!authorization.capabilities.has(capability)) return 'none'
+  if (
+    RESOURCE_SCOPED_CAPABILITIES.has(capability)
+    && authorization.roleKeys.has('teacher')
+    && !authorization.roleKeys.has('school_principal')
+  ) return 'own'
+  return 'all'
 }
 
 export interface OrganizationCapabilityOptions {
@@ -118,10 +206,8 @@ export async function hasOrganizationCapability(
   }
   if (authorization?.accountRole === 'super_admin' && !options.requireMembership) return true
   if (!authorization?.capabilities.has(capability)) return false
-  const normalizedPrincipal = authorization.roleKeys.has('school_principal')
-  const teacherScoped = authorization.roleKeys.has('teacher') && !normalizedPrincipal
   if (
-    teacherScoped
+    organizationCapabilityScope(authorization, capability) === 'own'
     && options.resourceCreatedByUserId
     && options.resourceCreatedByUserId !== userId
   ) return false

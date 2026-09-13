@@ -13,6 +13,7 @@ import { postCaritsTransaction } from '../carits/application/carits-ledger.servi
 import { notificationService } from '../notification/notification.service'
 import { canModifyProblem, canViewProblem, isPlatformManager } from '../problem/problem.access'
 import { getTestdataBlobStore, problemBlobKey } from '../storage/blob-store'
+import { hasOrganizationCapability, resolveOrganizationAuthorizationsForUser } from '../authorization/capabilities'
 
 const LICENSES = Object.values(DataLicenseType)
 const UPDATE_POLICIES = Object.values(DataProductUpdatePolicy)
@@ -225,8 +226,9 @@ async function purchaseScope(user: JwtPayload, licenseType: DataLicenseType, bod
   if (licenseType === 'ORGANIZATION') {
     const organizationId = text(body?.organizationId, 100)
     if (!organizationId) policyFail(422, 'DATA_LICENSE_SCOPE_REQUIRED', '组织许可证必须指定 organizationId')
-    const membership = await prisma.organizationMembership.findFirst({ where: { organizationId, userId: user.userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } } })
-    if (!membership) policyFail(403, 'DATA_LICENSE_SCOPE_FORBIDDEN', '只有当前组织的教师或负责人可以购买组织许可证')
+    if (!await hasOrganizationCapability(user.userId, organizationId, 'contest.manage')) {
+      policyFail(403, 'DATA_LICENSE_SCOPE_FORBIDDEN', '当前身份无权购买组织许可证')
+    }
     return { buyerOrganizationId: organizationId, contestId: null, payer: { ownerType: 'ORGANIZATION' as const, organizationId } }
   }
   const contestId = Number(body?.contestId)
@@ -234,9 +236,9 @@ async function purchaseScope(user: JwtPayload, licenseType: DataLicenseType, bod
   const resolved = await findContestRuntimeForLicense(contestId)
   const contest = resolved?.runtime || null
   const teamManager = contest?.Team?.TeamMember.some(member => member.userId === user.userId && member.status === 'active' && ['owner', 'admin'].includes(member.role))
-  const organizationManager = contest?.organizationId ? await prisma.organizationMembership.findFirst({ where: {
-    organizationId: contest.organizationId, userId: user.userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] },
-  } }) : null
+  const organizationManager = contest?.organizationId
+    ? await hasOrganizationCapability(user.userId, contest.organizationId, 'contest.manage')
+    : false
   if (!contest || (!isPlatformManager(user.role) && !teamManager && !organizationManager)) policyFail(403, 'DATA_LICENSE_SCOPE_FORBIDDEN', '只有真实比赛所属团队或组织的管理员可以购买比赛许可证')
   return { buyerOrganizationId: contest.organizationId || contest.Team?.organizationId || null, contestId, payer: { ownerType: 'USER' as const, userId: user.userId } }
 }
@@ -308,11 +310,13 @@ export async function purchaseDataProduct(user: JwtPayload, productId: string, b
 }
 
 async function accessibleScopeIds(user: JwtPayload) {
-  const [memberships, teamMemberships] = await Promise.all([
-    prisma.organizationMembership.findMany({ where: { userId: user.userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } }, select: { organizationId: true } }),
+  const [authorizations, teamMemberships] = await Promise.all([
+    resolveOrganizationAuthorizationsForUser(user.userId),
     prisma.teamMember.findMany({ where: { userId: user.userId, status: 'active', role: { in: ['owner', 'admin'] } }, select: { teamId: true } }),
   ])
-  const organizationIds = memberships.map(item => item.organizationId)
+  const organizationIds = authorizations
+    .filter(item => item.capabilities.has('contest.manage'))
+    .map(item => item.organizationId)
   const contests = await listContestRuntimeIdsForLicenseScopes({
     organizationIds,
     teamIds: teamMemberships.map(item => item.teamId),

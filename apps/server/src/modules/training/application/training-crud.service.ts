@@ -14,6 +14,7 @@ import {
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 import { listPlatformContestRuntimes } from '../../contest/contest-query.facade'
+import { resolveOrganizationAuthorization } from '../../authorization/capabilities'
 import {
   createContestRuntimeTx,
   deleteContestRuntimeTx,
@@ -499,12 +500,9 @@ export async function createMakeupHomework(id: number, userId: string, input: an
   const endTime = parseDate(input.endTime, '结束时间')
   if (endTime <= startTime) fail(400, 'INVALID_TIME_RANGE', '结束时间必须晚于开始时间')
   if (!training.organizationId) fail(422, 'ASSIGNMENT_SCOPE_REQUIRED', '补题作业必须属于学校组织')
-  const creatorMembership = await prisma.organizationMembership.findUnique({
-    where: { organizationId_userId: { organizationId: training.organizationId, userId } },
-    select: { id: true, status: true, memberRole: true },
-  })
-  if (!creatorMembership || creatorMembership.status !== 'active' || !['teacher', 'school_principal'].includes(creatorMembership.memberRole)) {
-    fail(403, 'ASSIGNMENT_CREATE_DENIED', '需要当前学校的有效教师或负责人身份')
+  const creatorAuthorization = await resolveOrganizationAuthorization(userId, training.organizationId)
+  if (!creatorAuthorization?.capabilities.has('assignment.create')) {
+    fail(403, 'ASSIGNMENT_CREATE_DENIED', '当前身份没有创建作业的权限')
   }
   if (!training.TrainingProblem.length) fail(422, 'ASSIGNMENT_PROBLEMS_REQUIRED', '原活动没有可加入补题作业的题目')
 
@@ -522,7 +520,7 @@ export async function createMakeupHomework(id: number, userId: string, input: an
       openAt: startTime,
       dueAt: endTime,
       closeAt: endTime,
-      createdByMembershipId: creatorMembership.id,
+      createdByMembershipId: creatorAuthorization.membershipId,
       eventSeq: 1,
     } })
     const seen = new Set<string>()

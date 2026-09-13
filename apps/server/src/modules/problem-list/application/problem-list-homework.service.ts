@@ -4,6 +4,7 @@ import { ensureInitialTestSetRevision } from '../../problem/problem.testset-revi
 import { getProblemListPermission } from './problem-list-access.service'
 import { ProblemListApplicationError } from './problem-list-crud.service'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
+import { resolveOrganizationAuthorization } from '../../authorization/capabilities'
 
 type AuthUser = NonNullable<Express.Request['user']>
 
@@ -13,7 +14,6 @@ function fail(statusCode: number, message: string, code?: string): never {
 
 export async function createAssignmentFromProblemList(user: AuthUser, problemListId: string, body: any) {
   if (isPersonalContext(user)) fail(403, '个人工作区不能发布校园作业', 'WORKSPACE_MODE_REQUIRED')
-  if (user.role === 'student') fail(403, '学生不能发布作业')
 
   const teamId = typeof body.teamId === 'string' ? body.teamId : ''
   const startTime = typeof body.startTime === 'string' ? body.startTime : ''
@@ -32,16 +32,13 @@ export async function createAssignmentFromProblemList(user: AuthUser, problemLis
   const team = await prisma.team.findUnique({ where: { id: teamId } })
   if (!team || !team.organizationId || team.scope !== getResourceScope(user)) fail(404, '团队不存在')
   const organizationId = team.organizationId
-  const [member, creatorMembership] = await Promise.all([prisma.teamMember.findFirst({
+  const [member, creatorAuthorization] = await Promise.all([prisma.teamMember.findFirst({
     where: { teamId, userId: user.userId, status: 'active', role: { in: ['owner', 'admin'] } },
     select: { id: true },
-  }), prisma.organizationMembership.findUnique({
-    where: { organizationId_userId: { organizationId, userId: user.userId } },
-    select: { id: true, status: true, memberRole: true },
-  })])
+  }), resolveOrganizationAuthorization(user.userId, organizationId)])
   if (!member) fail(403, '只有团队管理员可以创建作业')
-  if (!creatorMembership || creatorMembership.status !== 'active' || !['teacher', 'school_principal'].includes(creatorMembership.memberRole)) {
-    fail(403, '需要当前学校的有效教师或负责人身份')
+  if (!creatorAuthorization?.capabilities.has('assignment.create')) {
+    fail(403, '当前身份没有创建作业的权限')
   }
 
   const problemList = await prisma.problemList.findUnique({
@@ -86,7 +83,7 @@ export async function createAssignmentFromProblemList(user: AuthUser, problemLis
         openAt: start,
         dueAt: end,
         closeAt: end,
-        createdByMembershipId: creatorMembership.id,
+        createdByMembershipId: creatorAuthorization.membershipId,
         eventSeq: 1,
       },
     })

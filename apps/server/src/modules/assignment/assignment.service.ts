@@ -2,7 +2,12 @@ import crypto from 'node:crypto'
 import yaml from 'js-yaml'
 import { Prisma, type AssignmentStatus } from '@prisma/client'
 import { prisma } from '../../prisma'
-import { hasOrganizationCapability, hasTeamCapability } from '../authorization/capabilities'
+import {
+  hasOrganizationCapability,
+  hasTeamCapability,
+  organizationCapabilityScope,
+  resolveOrganizationAuthorizationsForUser,
+} from '../authorization/capabilities'
 import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
 import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { calculateAssignmentGrade, judgeMaxScoreFromSnapshot, mapJudgeScore } from './assignment-grading'
@@ -260,27 +265,28 @@ export async function listAssignments(userId: string, query: any) {
   if (status && statusGroup && statusGroup !== 'all') {
     throw new AssignmentError(422, 'ASSIGNMENT_STATUS_FILTER_CONFLICT', '不能同时指定作业状态和状态分组')
   }
-  const [managedOrganizations, managedTeams, account] = await Promise.all([
-    prisma.organizationMembership.findMany({
-      where: { userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } },
-      select: { organizationId: true, memberRole: true },
-    }),
+  const [organizationAuthorizations, managedTeams, account] = await Promise.all([
+    resolveOrganizationAuthorizationsForUser(userId),
     prisma.teamMember.findMany({
       where: { userId, status: 'active', role: { in: ['owner', 'admin'] } },
       select: { teamId: true },
     }),
     globalAccount(userId),
   ])
-  const principalOrgIds = managedOrganizations.filter(item => item.memberRole === 'school_principal').map(item => item.organizationId)
-  const teacherOrgIds = managedOrganizations.filter(item => item.memberRole === 'teacher').map(item => item.organizationId)
+  const broadlyManagedOrgIds = organizationAuthorizations
+    .filter(item => organizationCapabilityScope(item, 'assignment.manage') === 'all')
+    .map(item => item.organizationId)
+  const creatorScopedOrgIds = organizationAuthorizations
+    .filter(item => organizationCapabilityScope(item, 'assignment.manage') === 'own')
+    .map(item => item.organizationId)
   const managedTeamIds = managedTeams.map(item => item.teamId)
   const now = new Date()
   const baseWhere: Prisma.AssignmentWhereInput = {
     ...(organizationId ? { organizationId } : {}), ...(teamId ? { teamId } : {}),
     ...(account?.role === 'super_admin' ? {} : {
       OR: [
-        { organizationId: { in: principalOrgIds } },
-        { organizationId: { in: teacherOrgIds }, CreatorMembership: { userId } },
+        { organizationId: { in: broadlyManagedOrgIds } },
+        { organizationId: { in: creatorScopedOrgIds }, CreatorMembership: { userId } },
         { teamId: { in: managedTeamIds } },
         {
           Recipients: { some: { userId, status: { not: 'REMOVED' } } },

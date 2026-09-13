@@ -5,6 +5,8 @@ last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-13: Organization Capability 第二批收口完成代码与本地构建。统一批量授权投影已覆盖加入申请/邀请通知、审批范围、加入策略、Assignment 列表范围、补题作业、题单发布作业、全校训练名单、Data Market 组织/比赛许可证、Candidate 管理预算以及比赛/Rating 管理员排除；这些路径不再按 `OrganizationMembership.memberRole` 授权。新增旧岗位字段伪造不能提升审批或设置权限的回归，并扩展静态门禁。Server 生产构建通过；生产隔离测试与 API 蓝绿发布证据将在执行后补录。审计文档已纠正此前“全仓完成”的过度结论，旧 Team/Problem 适配器仍登记为下一退出批次。
+
 - 2026-09-13: 架构收口完成新一轮逐项复核。Shared 中已删除与 Contracts 漂移的旧 Login/API Response 类型，Server 中无人引用的浏览器式 API Client 已移除，Web 传输结果明确命名为 `ApiClientResponse`；门禁阻止重复契约重新出现。旧 2026-08-29 审计归档，新审计分别记录已完成、受控兼容、P2 维护债和必须依赖所有者资源的 TLS/告警/异机存储验收。Shared/Contracts/Server/Web 类型检查、Web 38 文件 159 项、Web 生产构建、架构和 Baseline 门禁通过；本地 PostgreSQL 未运行，Server 数据库测试未执行且未伪造结果。本批没有 Prisma、业务数据或运行时代码行为变化，生产服务无需重启或提升 Web。
 
 - 2026-09-13: 数据库安装体系已从动态 clean-bootstrap 收口到正式 Baseline Epoch。当前不可变 Epoch 为 `20260913_v2_lf`，固定 67 个历史 migration 的跨平台规范化校验和、Snapshot 哈希 `d55db415…1b2e47` 与已验证生产结构签名 `de803187…bb87`；bootstrap 只登记 Epoch 内历史，Epoch 后 migration 由标准 deploy 真实执行。首次 `20260913_v2` 在生产只读校验中暴露 CRLF/LF 哈希差异，未执行任何 DDL且未被覆盖，现已通过新 Epoch和统一 LF 规范化修正。生产主机 `db:baseline:check` 通过；独立空库完成 Snapshot、67/67 migration、202 张表、Seed 和非空拒绝验证；最新生产备份 `oi_manager_20260913_160601.dump` 的恢复升级库与空库路径均为 202 张表，完整 public schema SHA-256 同为 `de803187b4a0c99e30f6c5679ced341af8b5ce42187d0e4f114319b1c6edbb87`，`schema_match=true`。两项演练仅使用自动清理的隔离数据库，正式库未执行 Bootstrap DDL。

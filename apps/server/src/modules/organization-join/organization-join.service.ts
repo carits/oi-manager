@@ -3,6 +3,10 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import { notificationService } from '../notification/notification.service'
 import { syncOrganizationMembershipBaseRole } from '../authorization/membership-role-assignment'
+import {
+  resolveOrganizationAuthorization,
+  resolveOrganizationAuthorizationsForOrganization,
+} from '../authorization/capabilities'
 
 export class OrganizationJoinError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code: string) {
@@ -41,9 +45,14 @@ async function expireInvitations() {
 
 async function managerMembership(actor: JoinActor, organizationId: string) {
   if (actor.organizationId !== organizationId) error(403, 'ORGANIZATION_CONTEXT_REQUIRED', '请从对应校园身份进入')
-  const membership = await prisma.organizationMembership.findFirst({ where: { id: actor.organizationMembershipId || '', organizationId, userId: actor.userId, status: 'active', Organization: { School: { is: { directoryStatus: { not: 'legacy' } } } } } })
-  if (!membership || !['teacher', 'school_principal'].includes(membership.memberRole)) error(403, 'JOIN_APPLICATION_FORBIDDEN', '无权管理该学校的加入流程')
-  return membership
+  const authorization = await resolveOrganizationAuthorization(actor.userId, organizationId)
+  if (!authorization || authorization.membershipId !== actor.organizationMembershipId) {
+    error(403, 'JOIN_APPLICATION_FORBIDDEN', '无权管理该学校的加入流程')
+  }
+  const managesStudents = authorization.capabilities.has('membership.manage.students')
+  const managesTeachers = authorization.capabilities.has('membership.manage.teachers')
+  if (!managesStudents && !managesTeachers) error(403, 'JOIN_APPLICATION_FORBIDDEN', '无权管理该学校的加入流程')
+  return { id: authorization.membershipId, managesStudents, managesTeachers }
 }
 
 async function audit(tx: Prisma.TransactionClient, input: { organizationId: string; actor: JoinActor; action: string; targetUserId?: string; sourceType?: string; sourceId?: string; metadata?: Prisma.InputJsonValue }) {
@@ -119,10 +128,9 @@ export async function createJoinApplication(actor: JoinActor, body: Record<strin
   if (invitation) error(409, 'ORGANIZATION_INVITATION_PENDING', '该学校已邀请你加入，请先处理邀请')
   const existing = await prisma.organizationJoinApplication.findFirst({ where: { organizationId, userId: actor.userId, status: 'pending' } })
   if (existing) error(409, 'JOIN_APPLICATION_EXISTS', '你已有一条等待审核的申请')
-  const recipients = await prisma.organizationMembership.findMany({
-    where: { organizationId, status: 'active', memberRole: requestedRole === 'teacher' ? 'school_principal' : { in: ['teacher', 'school_principal'] } },
-    select: { userId: true },
-  })
+  const recipientCapability = requestedRole === 'teacher' ? 'membership.manage.teachers' : 'membership.manage.students'
+  const recipients = (await resolveOrganizationAuthorizationsForOrganization(organizationId))
+    .filter(item => item.capabilities.has(recipientCapability))
   return prisma.$transaction(async tx => {
     const application = await tx.organizationJoinApplication.create({ data: {
       id: crypto.randomUUID(), organizationId, userId: actor.userId, requestedRole, requestedRelationType,
@@ -154,20 +162,20 @@ export async function listJoinApplications(actor: JoinActor, organizationId: str
   const manager = await managerMembership(actor, organizationId)
   const page = Math.max(1, Number(query.page) || 1), pageSize = Math.min(50, Math.max(1, Number(query.pageSize) || 20))
   const status = ['pending', 'approved', 'rejected', 'cancelled'].includes(String(query.status)) ? String(query.status) : undefined
-  const requestedRole = manager.memberRole === 'teacher' ? 'student' : ['student', 'teacher'].includes(String(query.role)) ? String(query.role) : undefined
+  const requestedRole = !manager.managesTeachers ? 'student' : ['student', 'teacher'].includes(String(query.role)) ? String(query.role) : undefined
   const q = text(query.q, 100)
   const where: Prisma.OrganizationJoinApplicationWhereInput = { organizationId, ...(status ? { status } : {}), ...(requestedRole ? { requestedRole } : {}), ...(q ? { OR: [{ realName: { contains: q, mode: 'insensitive' } }, { User: { username: { contains: q, mode: 'insensitive' } } }] } : {}) }
   const [items, total, pending] = await Promise.all([
     prisma.organizationJoinApplication.findMany({ where, include: { User: { select: { username: true, avatar: true } } }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.organizationJoinApplication.count({ where }),
-    prisma.organizationJoinApplication.count({ where: { organizationId, status: 'pending', ...(manager.memberRole === 'teacher' ? { requestedRole: 'student' } : {}) } }),
+    prisma.organizationJoinApplication.count({ where: { organizationId, status: 'pending', ...(!manager.managesTeachers ? { requestedRole: 'student' } : {}) } }),
   ])
   return { items, total, pending, page, pageSize }
 }
 
 export async function getJoinApplication(actor: JoinActor, organizationId: string, id: string) {
   const manager = await managerMembership(actor, organizationId)
-  const application = await prisma.organizationJoinApplication.findFirst({ where: { id, organizationId, ...(manager.memberRole === 'teacher' ? { requestedRole: 'student' } : {}) }, include: { User: { select: { username: true, avatar: true } } } })
+  const application = await prisma.organizationJoinApplication.findFirst({ where: { id, organizationId, ...(!manager.managesTeachers ? { requestedRole: 'student' } : {}) }, include: { User: { select: { username: true, avatar: true } } } })
   if (!application) error(404, 'JOIN_APPLICATION_NOT_FOUND', '申请不存在')
   return application
 }
@@ -202,7 +210,7 @@ export async function decideJoinApplication(actor: JoinActor, organizationId: st
     const application = await tx.organizationJoinApplication.findFirst({ where: { id, organizationId } })
     if (!application) error(404, 'JOIN_APPLICATION_NOT_FOUND', '申请不存在')
     if (application.status !== 'pending') error(409, 'JOIN_APPLICATION_ALREADY_PROCESSED', '该申请已经被处理')
-    if (manager.memberRole === 'teacher' && application.requestedRole !== 'student') error(403, 'JOIN_APPLICATION_FORBIDDEN', '教师只能审批学生申请')
+    if (!manager.managesTeachers && application.requestedRole !== 'student') error(403, 'JOIN_APPLICATION_FORBIDDEN', '当前权限只能审批学生申请')
     const decisionMessage = text(body.decisionMessage, 500) || null
     const internalReviewNote = text(body.internalReviewNote, 1000) || null
     if (decision === 'reject') {
@@ -213,9 +221,9 @@ export async function decideJoinApplication(actor: JoinActor, organizationId: st
     }
     const relationType = relationForRole(application.requestedRole, body.relationType || application.requestedRelationType)
     let headTeacherMembershipId = application.requestedRole === 'student' ? text(body.headTeacherMembershipId, 100) || null : null
-    if (manager.memberRole === 'teacher') headTeacherMembershipId = manager.id
+    if (!manager.managesTeachers) headTeacherMembershipId = manager.id
     if (headTeacherMembershipId) {
-      const teacher = await tx.organizationMembership.findFirst({ where: { id: headTeacherMembershipId, organizationId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } } })
+      const teacher = await tx.organizationMembership.findFirst({ where: { id: headTeacherMembershipId, organizationId, status: 'active', TeacherProfile: { is: { status: 'active' } } } })
       if (!teacher) error(422, 'HEAD_TEACHER_INVALID', '指定教师不存在或不可用')
     }
     const baseProfile = application.profileData && typeof application.profileData === 'object' && !Array.isArray(application.profileData) ? application.profileData as Record<string, unknown> : {}
@@ -233,7 +241,7 @@ export async function decideJoinApplication(actor: JoinActor, organizationId: st
 export async function createOrganizationInvitation(actor: JoinActor, organizationId: string, body: Record<string, unknown>) {
   const manager = await managerMembership(actor, organizationId)
   const memberRole = text(body.memberRole, 20) === 'teacher' ? 'teacher' : 'student'
-  if (manager.memberRole === 'teacher' && memberRole !== 'student') error(403, 'ORGANIZATION_INVITATION_FORBIDDEN', '教师只能邀请学生')
+  if (!manager.managesTeachers && memberRole !== 'student') error(403, 'ORGANIZATION_INVITATION_FORBIDDEN', '当前权限只能邀请学生')
   const organization = await prisma.organization.findFirst({ where: { id: organizationId, type: 'school', status: 'active', School: { is: { directoryStatus: { not: 'legacy' } } } } })
   if (!organization) error(404, 'ORGANIZATION_NOT_FOUND', '学校不存在')
   if (organization.joinPolicy === 'closed') error(409, 'ORGANIZATION_JOIN_CLOSED', '该学校已关闭加入和邀请')
@@ -247,9 +255,9 @@ export async function createOrganizationInvitation(actor: JoinActor, organizatio
   if (application) error(409, 'JOIN_APPLICATION_PENDING', '该用户已有待审核申请，请直接处理申请')
   if (await prisma.organizationInvitation.findFirst({ where: { organizationId, userId: target.id, status: 'pending' } })) error(409, 'ORGANIZATION_INVITATION_EXISTS', '该用户已有待处理邀请')
   const relationType = relationForRole(memberRole, body.relationType)
-  const requestedHeadTeacherId = memberRole === 'student' ? manager.memberRole === 'teacher' ? manager.id : text(body.headTeacherMembershipId, 100) || null : null
+  const requestedHeadTeacherId = memberRole === 'student' ? !manager.managesTeachers ? manager.id : text(body.headTeacherMembershipId, 100) || null : null
   if (requestedHeadTeacherId) {
-    const assignedTeacher = await prisma.organizationMembership.findFirst({ where: { id: requestedHeadTeacherId, organizationId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } }, select: { id: true } })
+    const assignedTeacher = await prisma.organizationMembership.findFirst({ where: { id: requestedHeadTeacherId, organizationId, status: 'active', TeacherProfile: { is: { status: 'active' } } }, select: { id: true } })
     if (!assignedTeacher) error(422, 'HEAD_TEACHER_INVALID', '指定教师不存在或不可用')
   }
   const invitation = await prisma.$transaction(async tx => {
@@ -272,7 +280,7 @@ export async function listOrganizationInvitations(actor: JoinActor, organization
   await expireInvitations()
   const page = Math.max(1, Number(query.page) || 1), pageSize = Math.min(50, Math.max(1, Number(query.pageSize) || 20))
   const status = ['pending', 'accepted', 'declined', 'revoked', 'expired'].includes(String(query.status)) ? String(query.status) : undefined
-  const where: Prisma.OrganizationInvitationWhereInput = { organizationId, ...(status ? { status } : {}), ...(manager.memberRole === 'teacher' ? { memberRole: 'student', invitedByMembershipId: manager.id } : {}) }
+  const where: Prisma.OrganizationInvitationWhereInput = { organizationId, ...(status ? { status } : {}), ...(!manager.managesTeachers ? { memberRole: 'student', invitedByMembershipId: manager.id } : {}) }
   const [items, total, pending] = await Promise.all([
     prisma.organizationInvitation.findMany({ where, include: { User: { select: { username: true, avatar: true } } }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.organizationInvitation.count({ where }), prisma.organizationInvitation.count({ where: { ...where, status: 'pending' } }),
@@ -282,7 +290,7 @@ export async function listOrganizationInvitations(actor: JoinActor, organization
 
 export async function revokeOrganizationInvitation(actor: JoinActor, organizationId: string, id: string) {
   const manager = await managerMembership(actor, organizationId)
-  const invitation = await prisma.organizationInvitation.findFirst({ where: { id, organizationId, ...(manager.memberRole === 'teacher' ? { invitedByMembershipId: manager.id, memberRole: 'student' } : {}) } })
+  const invitation = await prisma.organizationInvitation.findFirst({ where: { id, organizationId, ...(!manager.managesTeachers ? { invitedByMembershipId: manager.id, memberRole: 'student' } : {}) } })
   if (!invitation) error(404, 'ORGANIZATION_INVITATION_NOT_FOUND', '邀请不存在')
   await prisma.$transaction(async tx => {
     const result = await tx.organizationInvitation.updateMany({ where: { id, status: 'pending' }, data: { status: 'revoked', respondedAt: new Date() } })
@@ -328,7 +336,10 @@ export async function updateJoinPolicy(actor: JoinActor, organizationId: string,
   if (!['invite_only', 'approval', 'closed'].includes(policy)) error(422, 'ORGANIZATION_JOIN_POLICY_INVALID', '加入策略无效')
   if (actor.role !== 'super_admin') {
     const manager = await managerMembership(actor, organizationId)
-    if (manager.memberRole !== 'school_principal') error(403, 'ORGANIZATION_JOIN_POLICY_FORBIDDEN', '只有学校负责人可以修改加入策略')
+    const authorization = await resolveOrganizationAuthorization(actor.userId, organizationId)
+    if (!authorization?.capabilities.has('organization.settings') || authorization.membershipId !== manager.id) {
+      error(403, 'ORGANIZATION_JOIN_POLICY_FORBIDDEN', '当前身份无权修改加入策略')
+    }
   }
   const organization = await prisma.organization.findFirst({ where: { id: organizationId, type: 'school', School: { is: { directoryStatus: { not: 'legacy' } } } } })
   if (!organization) error(404, 'ORGANIZATION_NOT_FOUND', '学校不存在')

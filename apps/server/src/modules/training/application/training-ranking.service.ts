@@ -12,6 +12,7 @@ import {
   requireTrainingStarted,
 } from '../training.helpers'
 import { findActivityRuntimeForRanking } from '../../contest/contest-query.facade'
+import { resolveOrganizationAuthorizationsForOrganization } from '../../authorization/capabilities'
 
 export class TrainingRankingError extends Error {
   constructor(
@@ -37,15 +38,8 @@ async function excludedManagerIds(training: any) {
     return members.map(member => member.userId)
   }
   if (!training.organizationId) return []
-  const [organizationAdmins, platformAdmins] = await Promise.all([
-    prisma.organizationMembership.findMany({
-      where: {
-        organizationId: training.organizationId,
-        status: 'active',
-        memberRole: 'school_principal',
-      },
-      select: { userId: true },
-    }),
+  const [organizationAuthorizations, platformAdmins] = await Promise.all([
+    resolveOrganizationAuthorizationsForOrganization(training.organizationId),
     prisma.user.findMany({
       where: { role: { in: ['super_admin', 'platform_admin'] } },
       select: { id: true },
@@ -53,7 +47,7 @@ async function excludedManagerIds(training: any) {
   ])
   return [...new Set([
     training.createdBy,
-    ...organizationAdmins.map(member => member.userId),
+    ...organizationAuthorizations.filter(item => item.capabilities.has('contest.manage')).map(item => item.userId),
     ...platformAdmins.map(user => user.id),
   ])]
 }

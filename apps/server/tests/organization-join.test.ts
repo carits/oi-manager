@@ -62,6 +62,17 @@ describe('organization join workflow', () => {
     expect(response.status).toBe(403)
   })
 
+  it('does not elevate join permissions when legacy memberRole is spoofed', async () => {
+    const teacher = await prisma.organizationMembership.findUniqueOrThrow({ where: { id: teacherMembershipId } })
+    await prisma.organizationMembership.update({ where: { id: teacher.id }, data: { memberRole: 'school_principal' } })
+    const created = await request(app).post('/api/organization-join-applications').set(auth(applicantToken)).send({ organizationId, requestedRole: 'teacher', requestedRelationType: 'employee', realName: '申请教师' })
+
+    const approval = await request(app).post(`/api/organizations/${organizationId}/join-applications/${created.body.data.id}/approve`).set(auth(teacherToken)).set('X-OI-Organization-ID', organizationId).send({})
+    expect(approval.status).toBe(403)
+    const policy = await request(app).patch(`/api/organizations/${organizationId}/join-policy`).set(auth(teacherToken)).set('X-OI-Organization-ID', organizationId).send({ joinPolicy: 'closed' })
+    expect(policy.status).toBe(403)
+  })
+
   it('delivers invitations as account notifications and activates membership on accept', async () => {
     const applicant = await prisma.user.findUniqueOrThrow({ where: { id: applicantId } })
     const invitation = await request(app).post(`/api/organizations/${organizationId}/invitations`).set(auth(principalToken)).set('X-OI-Organization-ID', organizationId).send({ username: applicant.username, memberRole: 'student', relationType: 'enrolled' })
