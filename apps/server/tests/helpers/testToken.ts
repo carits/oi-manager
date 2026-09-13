@@ -35,7 +35,9 @@ export function generateTokenFromUser(user: {
   workspaceMode?: 'work' | 'personal'
   studentMode?: 'campus' | 'personal'
 }): string {
-  const payload: JwtPayload = {
+  // Compatibility tests may deliberately include claims emitted by older
+  // clients. Production renewal must strip these fields.
+  const payload = {
     userId: user.id,
     sessionVersion: user.sessionVersion,
     role: user.role,

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
-import type { JwtPayload, UserRole } from '@oi-manager/shared'
+import type { JwtPayload, SessionJwtPayload, UserRole } from '@oi-manager/shared'
 import { accountRoleFromLegacy, LoginRequestSchema, LoginResponseDataSchema } from '@oi-manager/contracts'
 import { authenticate } from '../middleware/auth'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
@@ -36,13 +36,21 @@ function workspaceMode(value: unknown): WorkspaceMode | null {
   return value === 'personal' ? 'personal' : null
 }
 
-function renewablePayload(payload: JwtPayload): JwtPayload {
-  const { iat: _iat, exp: _exp, ...claims } = payload as JwtPayload & { iat?: number; exp?: number }
-  return claims
+function renewablePayload(payload: SessionJwtPayload): SessionJwtPayload {
+  const accountRole = accountRoleFromLegacy(payload.accountRole || payload.role)
+  return {
+    userId: payload.userId,
+    sessionVersion: payload.sessionVersion,
+    accountRole,
+    role: accountRole,
+    username: payload.username,
+    workspaceMode: payload.workspaceMode === 'personal' ? 'personal' : 'work',
+  }
 }
 
-function issueToken(res: Response, payload: JwtPayload) {
-  const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
+function issueToken(res: Response, payload: SessionJwtPayload) {
+  const claims = renewablePayload(payload)
+  const token = jwt.sign(claims, getJwtSecret(), { expiresIn: '7d' })
   setSessionCookie(res, token)
   return token
 }
@@ -72,6 +80,7 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
     issueToken(res, {
       userId: result.user.id,
       sessionVersion: result.user.sessionVersion,
+      accountRole: accountRoleFromLegacy(result.role),
       role: result.role,
       username: result.user.username,
       workspaceMode: result.workspaceMode,
@@ -111,7 +120,7 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     const user = await registerPersonalAccount(username, password)
     if (!user) return res.status(400).json({ success: false, message: '用户名已存在' })
     issueToken(res, {
-      userId: user.id, sessionVersion: user.sessionVersion, role: 'user' as UserRole, username: user.username, workspaceMode: 'personal',
+      userId: user.id, sessionVersion: user.sessionVersion, accountRole: 'user', role: 'user' as UserRole, username: user.username, workspaceMode: 'personal',
     })
     res.status(200).json({ success: true, data: LoginResponseDataSchema.parse({
       userId: user.id, accountRole: 'user', role: 'user', username: user.username,

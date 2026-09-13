@@ -82,6 +82,18 @@ describe('authorization boundary', () => {
     expect(next).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps persisted session claims account-only', () => {
+    const sharedSource = fs.readFileSync(path.resolve(__dirname, '../../../packages/shared/src/index.ts'), 'utf8')
+    const authRouteSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/auth.ts'), 'utf8')
+    const sessionShape = sharedSource.match(/export interface SessionJwtPayload \{([\s\S]*?)\n\}/)?.[1] || ''
+
+    expect(sessionShape).toContain('accountRole?: AccountRole')
+    expect(sessionShape).not.toMatch(/organizationId|organizationRole|organizationCapabilities|teacherId|studentId|schoolId|studentMode/)
+    expect(authRouteSource).toContain('function renewablePayload(payload: SessionJwtPayload): SessionJwtPayload')
+    expect(authRouteSource).toContain("role: accountRole")
+    expect(authRouteSource).not.toMatch(/function renewablePayload[\s\S]{0,300}\.\.\.claims/)
+  })
+
   it('does not let the compatibility role authorize school problem access', () => {
     const problem = { id: 'problem-1', libraryScope: 'school', organizationId: 'org-1', ownerId: 'owner-1', status: 'draft', visibility: 'private' }
     const forged = { userId: 'student-1', username: 'student', role: 'school_principal', accountRole: 'user', organizationId: 'org-1', organizationMembershipId: 'member-1', organizationRole: 'student', organizationCapabilities: ['organization.view'] } as any

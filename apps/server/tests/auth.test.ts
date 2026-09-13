@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import request from 'supertest'
+import jwt from 'jsonwebtoken'
 import { createTestApp } from './helpers/testRequest'
 import { createTestUser, createTestSchoolWithPrincipal } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
@@ -519,6 +520,43 @@ describe('Authentication Module', () => {
 
       const me = await agent.get('/api/auth/me')
       expect(me.body.data.workspaceMode).toBe('work')
+    })
+  })
+
+  describe('POST /api/auth/session/migrate', () => {
+    it('reissues legacy sessions with canonical account-only claims', async () => {
+      const { user } = await createTestUser({ role: 'teacher' })
+      const legacyToken = generateTestToken({
+        userId: user.id,
+        role: 'teacher',
+        username: user.username,
+        teacherId: user.id,
+        schoolId: 'school-from-legacy-token',
+        studentMode: 'campus',
+      })
+
+      const response = await request(app)
+        .post('/api/auth/session/migrate')
+        .set('Authorization', `Bearer ${legacyToken}`)
+
+      expect(response.status).toBe(200)
+      const cookieValue = response.headers['set-cookie']?.[0]?.split(';')[0]?.split('=')[1]
+      expect(cookieValue).toBeTruthy()
+      const claims = jwt.verify(decodeURIComponent(cookieValue!), process.env.JWT_SECRET!) as Record<string, unknown>
+      expect(claims).toMatchObject({
+        userId: user.id,
+        accountRole: 'user',
+        role: 'user',
+        username: user.username,
+        workspaceMode: 'work',
+      })
+      expect(claims).not.toHaveProperty('teacherId')
+      expect(claims).not.toHaveProperty('studentId')
+      expect(claims).not.toHaveProperty('schoolId')
+      expect(claims).not.toHaveProperty('studentMode')
+      expect(claims).not.toHaveProperty('organizationId')
+      expect(claims).not.toHaveProperty('organizationRole')
+      expect(claims).not.toHaveProperty('organizationCapabilities')
     })
   })
 

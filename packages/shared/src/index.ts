@@ -32,27 +32,29 @@ export type FileType = 'statement' | 'ranklist' | 'editorial' | 'solution' | 'sl
 // 任务状态
 export type TaskStatus = 'pending' | 'done' | 'review'
 
-// JWT Payload
-export interface JwtPayload {
+/** Minimal claims that may be persisted in a signed browser or Bearer session. */
+export interface SessionJwtPayload {
   userId: string
   /** Incremented whenever all existing sessions must be revoked. */
   sessionVersion?: number
   role: UserRole
   /** Canonical account-wide identity. `role` remains a compatibility view. */
   accountRole?: AccountRole
+  username: string
+  workspaceMode?: 'work' | 'personal'
+}
+
+/**
+ * Authenticated request identity. Organization facts are resolved from the
+ * explicit request header and never persisted in a signed session.
+ */
+export interface JwtPayload extends SessionJwtPayload {
   /** Canonical organization identity derived from normalized RoleAssignments. */
   organizationRole?: OrganizationMembershipRole
   /** Request-scoped authorization facts derived from roles and explicit grants. */
   organizationCapabilities?: string[]
-  username: string
-  adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）
   organizationId?: string
   organizationMembershipId?: string
-  workspaceMode?: 'work' | 'personal'
-  studentMode?: 'campus' | 'personal'
-  teacherId?: string
-  studentId?: string
-  schoolId?: string
 }
 
 export interface WorkspaceSummary {
