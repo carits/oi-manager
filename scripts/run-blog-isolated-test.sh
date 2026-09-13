@@ -43,6 +43,8 @@ sed -n '/CREATE OR REPLACE FUNCTION "blog_version_content_immutable"/,/^COMMIT;/
 sed -n '/CREATE OR REPLACE FUNCTION reject_blog_submission_snapshot_mutation()/,$p' \
   "$ROOT_DIR/apps/server/prisma/migrations/20260910_blog_submission_snapshots/migration.sql" \
   | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
+pnpm --dir "$ROOT_DIR" --filter @oi-manager/contracts build
 pnpm --dir "$ROOT_DIR" --filter @oi-manager/shared build
 DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma generate --schema prisma/schema.prisma
-TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/blog-knowledge-domain.test.ts
+TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
+  tests/api-contract-layer.test.ts tests/blog-knowledge-domain.test.ts

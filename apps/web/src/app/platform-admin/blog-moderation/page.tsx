@@ -1,2 +1,2 @@
-import { BlogModerationWorkbench } from '@/components/blog/BlogModerationWorkbench'
+import { BlogModerationWorkbench } from '@/features/blog'
 export default function PlatformBlogModerationPage() { return <BlogModerationWorkbench /> }

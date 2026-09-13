@@ -18,10 +18,10 @@ import TeacherRankingsPage from '@/components/organization-pages/teacher/ranking
 import CampusManagementPage from '@/components/organization-pages/teacher/management/page'
 import StudentRankingsPage from '@/components/organization-pages/student/rating/page'
 import { TrainingSessionListPage } from '@/components/training-engine/TrainingSessionListPage'
-import { SubmissionList } from '@/components/submission/SubmissionList'
+import { SubmissionList } from '@/features/submission'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
-import { BlogDiscovery } from '@/components/blog/BlogDiscovery'
+import { BlogDiscovery } from '@/features/blog'
 import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
 
 const studentModules = new Set(['overview', 'campus', 'teams', 'homeworks', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions', 'knowledge'])

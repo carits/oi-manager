@@ -1,6 +1,9 @@
-import { Router } from 'express'
-import { authenticate, optionalAuthenticate } from '../../middleware/auth'
+import { Router, type Response } from 'express'
+import { BlogDiscoveryContracts } from '@oi-manager/contracts'
+import { authenticate, optionalAuthenticate, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
+import type { JwtPayload } from '@oi-manager/shared'
 import {
   archiveBlogPost,
   BlogDomainError,
@@ -46,12 +49,30 @@ import {
 
 export const blogRouter = Router()
 
-function endpoint(handler: (req: any) => Promise<unknown>, status = 200) {
-  return asyncHandler(async (req: any, res: any) => {
+type AuthenticatedRequest = AuthRequest & { user: JwtPayload }
+
+function endpoint(handler: (req: AuthenticatedRequest) => Promise<unknown>, status = 200) {
+  return asyncHandler(async (req: AuthRequest, res: Response) => {
+    try {
+      const data = await handler(req as AuthenticatedRequest)
+      return res.status(status).json({ success: true, data })
+    } catch (error) {
+      if (sendContractError(error, res)) return
+      if (error instanceof BlogDomainError) {
+        return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }) })
+      }
+      throw error
+    }
+  })
+}
+
+function publicEndpoint(handler: (req: AuthRequest) => Promise<unknown>, status = 200) {
+  return asyncHandler(async (req: AuthRequest, res: Response) => {
     try {
       const data = await handler(req)
       return res.status(status).json({ success: true, data })
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof BlogDomainError) {
         return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }) })
       }
@@ -61,11 +82,24 @@ function endpoint(handler: (req: any) => Promise<unknown>, status = 200) {
 }
 
 blogRouter.post('/blogs', authenticate, endpoint(req => createBlogPost(req.user, req.body), 201))
-blogRouter.get('/blog-discovery', optionalAuthenticate, endpoint(req => listPublicBlogs(req.user, req.query)))
-blogRouter.get('/blog-discovery/:id', optionalAuthenticate, endpoint(req => getPublicBlogPost(req.user, req.params.id)))
-blogRouter.get('/blog-discovery/:id/community', optionalAuthenticate, endpoint(req => getPublicBlogCommunity(req.user, req.params.id)))
-blogRouter.get('/blog-discovery/:id/comments', optionalAuthenticate, endpoint(req => listBlogComments(req.user, req.params.id, req.query)))
-blogRouter.get('/blog-discovery/:id/comments/:commentId/replies', optionalAuthenticate, endpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, req.query)))
+blogRouter.get('/blog-discovery', optionalAuthenticate, publicEndpoint(async req => {
+  const query = parseContractQuery(BlogDiscoveryContracts.list, req.query)
+  return BlogDiscoveryContracts.list.data.parse(await listPublicBlogs(req.user, query))
+}))
+blogRouter.get('/blog-discovery/:id', optionalAuthenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  try {
+    return sendContractData(res, BlogDiscoveryContracts.detail, await getPublicBlogPost(req.user, req.params.id))
+  } catch (error) {
+    if (sendContractError(error, res)) return
+    if (error instanceof BlogDomainError) {
+      return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
+    }
+    throw error
+  }
+}))
+blogRouter.get('/blog-discovery/:id/community', optionalAuthenticate, publicEndpoint(req => getPublicBlogCommunity(req.user, req.params.id)))
+blogRouter.get('/blog-discovery/:id/comments', optionalAuthenticate, publicEndpoint(req => listBlogComments(req.user, req.params.id, req.query)))
+blogRouter.get('/blog-discovery/:id/comments/:commentId/replies', optionalAuthenticate, publicEndpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, req.query)))
 blogRouter.get('/blogs', authenticate, endpoint(req => listMyBlogPosts(req.user, req.query)))
 blogRouter.get('/blogs/:id', authenticate, endpoint(req => getBlogPost(req.user, req.params.id)))
 blogRouter.patch('/blogs/:id/draft', authenticate, endpoint(req => updateBlogDraft(req.user, req.params.id, req.body)))

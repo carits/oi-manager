@@ -1,4 +1,4 @@
-import { BlogSeriesManager } from '@/components/blog/BlogSeriesManager'
+import { BlogSeriesManager } from '@/features/blog'
 
 export default function PersonalBlogSeriesPage() {
   return <BlogSeriesManager />

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
 const SubmissionDetailPage = dynamic(
-  () => import('@/components/submission/SubmissionDetailPage').then(module => module.SubmissionDetailPage),
+  () => import('@/features/submission').then(module => module.SubmissionDetailPage),
   { loading: () => <PageLoadingFrame title="评测详情" rows={8} /> },
 )
 

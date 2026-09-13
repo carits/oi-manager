@@ -1,8 +1,8 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-09-12
-source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
+last_verified: 2026-09-14
+source_of_truth: packages/contracts/src and apps/web/src/lib/apiClient.ts
 ---
 
 # 字段契约
@@ -28,8 +28,13 @@ source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
 }
 ```
 
-前端 `ApiResponse<T>` 额外带客户端解析出的 `status`。网络错误或超时为 `0`，HTTP
+前端传输结果 `ApiClientResponse<T>` 额外带客户端解析出的 `status`。网络错误或超时为 `0`，HTTP
 响应保留真实状态。服务端不应把错误包在 `200 success:false` 中。
+
+服务端与浏览器不得分别手写请求/响应类型。`packages/contracts` 的 Endpoint Contract 是唯一事实源，
+同时提供 Runtime Schema、推导类型、HTTP 方法和作用域。已接入的 Assignment 进度/人工完成、Blog 公共发现、
+Contest Rating 和题解相似度接口在请求进入业务服务、响应离开服务端以及浏览器消费成功数据时都会执行同一 Schema。
+日期 Schema 同时接受服务端 `Date` 并序列化为 ISO 8601，浏览器契约输出永远是字符串。
 
 ## 组织加入
 

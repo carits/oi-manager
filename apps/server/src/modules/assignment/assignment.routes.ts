@@ -1,7 +1,9 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
+import { AssignmentContracts } from '@oi-manager/contracts'
 import type { AuthRequest } from '../../middleware/auth'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import {
   AssignmentError,
   adjustAssignmentScore,
@@ -25,7 +27,8 @@ import {
 
 export const assignmentRouter = Router()
 
-function sendError(error: unknown, res: any) {
+function sendError(error: unknown, res: Response) {
+  if (sendContractError(error, res)) return res
   if (error instanceof AssignmentError) {
     return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message, ...(error.details === undefined ? {} : { data: error.details }) })
   }
@@ -70,7 +73,7 @@ assignmentRouter.put('/assignments/:id/roster', asyncHandler(async (req: AuthReq
 }))
 
 assignmentRouter.post('/assignments/:id/validate', asyncHandler(async (req: AuthRequest, res) => {
-  try { return res.json({ success: true, data: await validateAssignmentStructure(req.user!.userId, req.params.id) }) }
+  try { return sendContractData(res, AssignmentContracts.validate, await validateAssignmentStructure(req.user!.userId, req.params.id)) }
   catch (error) { return sendError(error, res) }
 }))
 
@@ -85,12 +88,18 @@ assignmentRouter.post('/assignments/:id/submit', asyncHandler(async (req: AuthRe
 }))
 
 assignmentRouter.get('/assignments/:id/progress', asyncHandler(async (req: AuthRequest, res) => {
-  try { return res.json({ success: true, data: await getAssignmentProgress(req.user!.userId, req.params.id, req.query) }) }
+  try {
+    const query = parseContractQuery(AssignmentContracts.progress, req.query)
+    return sendContractData(res, AssignmentContracts.progress, await getAssignmentProgress(req.user!.userId, req.params.id, query))
+  }
   catch (error) { return sendError(error, res) }
 }))
 
 assignmentRouter.post('/assignments/:id/progress/:progressId/manual-completion', asyncHandler(async (req: AuthRequest, res) => {
-  try { return res.json({ success: true, data: await setManualAssignmentProblemCompletion(req.user!.userId, req.params.id, req.params.progressId, req.body) }) }
+  try {
+    const body = parseContractBody(AssignmentContracts.manualCompletion, req.body)
+    return sendContractData(res, AssignmentContracts.manualCompletion, await setManualAssignmentProblemCompletion(req.user!.userId, req.params.id, req.params.progressId, body))
+  }
   catch (error) { return sendError(error, res) }
 }))
 

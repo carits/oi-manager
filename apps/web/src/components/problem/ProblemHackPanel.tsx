@@ -10,11 +10,10 @@ import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { getLanguageLabel } from '@/lib/judge-constants'
 import styles from './ProblemHackPanel.module.css'
-import { SubmissionIoFields, type SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
+import { SubmissionIoFields, SubmissionCodeEditor, clearSubmissionDraft, type SubmissionIoValue } from '@/features/submission'
 import { getJudgeProgramTemplate } from '@oi-manager/shared'
 import type { WorkspaceSummary } from '@oi-manager/shared'
 import { buildContributionTimeline, candidateLifecyclePresentation, contributionStageLabel, hackCanonicalPresentation, type LifecycleTone } from './problem-contribution-display'
-import { SubmissionCodeEditor, clearSubmissionDraft } from '@/components/submission/SubmissionCodeEditor'
 
 type InputChoice = 'data' | 'cpp17' | 'python3'
 interface Attempt { id: string; username?: string; status: string; inputMode: string; generatorLanguage?: string | null; hackLanguage: string; inputFilename?: string | null; outputFilename?: string | null; baselineResult?: string | null; baselineScore?: number | null; candidateResult?: string | null; candidateScore?: number | null; scoreDelta?: number | null; affectedSubtaskIds?: number[]; failureStage?: string | null; message?: string | null; createdAt: string; inputData?: string | null; generatorSource?: string | null; hackSource?: string | null; canonicalStatus?: string | null; testcaseCandidateStatus?: string | null; baseTestSetRevision?: number | null; promotedRevision?: number | null; contributionOrganizationId?: string | null; contributionOrganizationName?: string | null }

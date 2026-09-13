@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { BlogDiscoveryDetail } from '@/components/blog/BlogDiscoveryDetail'
+import { BlogDiscoveryDetail } from '@/features/blog'
 import { readPublicBlogMetadata } from '@/lib/blogMetadata'
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {

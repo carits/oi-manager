@@ -76,7 +76,7 @@
     "docs:check": "node scripts/docs-check.mjs && node scripts/audit-api-auth.mjs && pnpm architecture:check",
     "architecture:inventory": "node scripts/generate-architecture-inventory.mjs",
     "architecture:routes:baseline": "node scripts/audit-route-boundaries.mjs --update",
-    "architecture:check": "node scripts/generate-architecture-inventory.mjs --check && node scripts/audit-route-boundaries.mjs && node scripts/audit-domain-state-writes.mjs && node scripts/audit-domain-boundaries.mjs && pnpm db:baseline:check",
+    "architecture:check": "node scripts/generate-architecture-inventory.mjs --check && node scripts/audit-route-boundaries.mjs && node scripts/audit-domain-state-writes.mjs && node scripts/audit-domain-boundaries.mjs && node scripts/audit-api-contract-layer.mjs && pnpm db:baseline:check",
     "judge:slo": "pnpm --filter server exec tsx scripts/check-judge-slo.ts",
     "judge:slo:check": "pnpm --filter server exec tsx scripts/check-judge-slo.ts --enforce",
     "judge:projection:audit": "pnpm --filter server exec tsx scripts/audit-judge-projection.ts",

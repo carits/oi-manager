@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-13
+last_verified: 2026-09-14
 source_of_truth: apps/web/src
 ---
 
@@ -39,13 +39,16 @@ Header、背景和最大宽度。
 | 层次 | 目录 | 职责 |
 |------|------|------|
 | 页面 | `app/` | 路由参数、页面编排 |
-| 业务组件 | `components/problem`, `team`, `training`, `submission` | 可复用业务交互 |
+| Feature Slice | `features/<feature>/{api,model,ui}` | 业务 API、状态模型和完整交互；只从 `index.ts` 导出 |
+| 组合组件 | `components/problem`, `team`, `training` | 跨 Feature 页面编排，不拥有已迁移领域事实 |
 | 通用业务 | `components/business` | 用户管理、地区等跨页面能力 |
 | UI | `components/ui` | Button、Pagination 等基础控件 |
 | 数据 Hooks | `hooks/data` | 缓存、加载、错误和刷新 |
-| API | `lib/apiClient.ts` | 认证、超时和响应解析 |
+| Contract Client | `lib/apiClient.ts` | 认证、作用域、超时及共享 Runtime Schema 校验 |
 
-大型组件按正在修改的业务区域渐进拆分，不进行无关的整体重写。
+Assignment、Blog、Submission、Contest Rating 与 Solution Review 已迁入 Feature Slice。路由和跨域组件只能
+从 `@/features/<feature>` 公共入口引用，不得深层导入 `api/model/ui`，也不得在 `components` 下重新建立同名
+业务目录。大型 Problem/Training 组合页继续按修改范围迁移，禁止为了目录整齐复制领域状态或 API 类型。
 
 普通题目页的多题面工作区以左侧版本栏作为版本名称、身份和创建入口的唯一展示位置；右侧
 只渲染题面正文，不重复标题、作者、语言、格式、来源或派生入口。只有用户自己的版本在右侧
@@ -56,19 +59,27 @@ Header、背景和最大宽度。
 当前题目的“题解选择”弹窗选择。只有 `training.isAdmin` 用户显示活动快照编辑入口，编辑
 Markdown 或替换 PDF 后必须刷新到新的不可变 revision。
 
-## API 响应
+## API 契约与响应
+
+跨端 DTO 的事实源位于 `packages/contracts`。一个 Endpoint Contract 同时声明方法、作用域、请求、查询和成功
+响应 Runtime Schema，并由 Zod 推导 TypeScript 类型。Server Route Adapter 使用 `parseContractBody()`、
+`parseContractQuery()`、`sendContractData()`；Feature API 使用 `queryContract()`、`mutateContract()`。
+契约不匹配必须显式失败：请求为 422，服务端生成错误响应为 500，浏览器收到不合规成功响应时抛出
+`invalid_response`，不得将其伪装成空状态。
 
 ```ts
-interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  message?: string
-  status: number
-  code?: string
-}
+const Contract = defineApiEndpoint({
+  key: 'assignment.progress',
+  method: 'GET',
+  scope: 'organization',
+  query: AssignmentProgressQuerySchema,
+  data: AssignmentProgressDataSchema,
+})
 ```
 
-客户端先读取文本，再尝试 JSON 解析，因此能处理 JSON、纯文本和空响应。HTTP 错误保留
+Wire Envelope 固定为 `{ success: true, data } | { success: false, code?, message, details? }`；
+`ApiClientResponse` 只是浏览器传输结果，不是另一套服务端 Contract。客户端先读取文本，再尝试 JSON 解析，
+因此能处理 JSON、纯文本和空响应。HTTP 错误保留
 真实 `status`；网络错误和超时使用 `status: 0`。页面不得把服务端错误显示为
 “网络错误”，也不得把失败显示为“暂无数据”。
 

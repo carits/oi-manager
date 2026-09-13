@@ -1,0 +1,106 @@
+import { z } from 'zod'
+import { DateTimeWireSchema, defineApiEndpoint, paginatedDataSchema, PaginationQuerySchema } from './http'
+
+export const BlogPostTypeSchema = z.enum([
+  'ARTICLE',
+  'SOLUTION_NOTE',
+  'CONTEST_REVIEW',
+  'TRAINING_LOG',
+  'LEARNING_LOG',
+  'TUTORIAL',
+  'COLLECTION',
+  'ANNOUNCEMENT',
+])
+export const BlogVisibilitySchema = z.enum(['PRIVATE', 'ORGANIZATION', 'PLATFORM', 'UNLISTED', 'PUBLIC'])
+
+export const BlogClassificationSchema = z.looseObject({
+  tags: z.array(z.looseObject({
+    id: z.string(),
+    name: z.string(),
+    kind: z.enum(['SYSTEM', 'USER']),
+  })),
+  series: z.looseObject({
+    id: z.string(),
+    title: z.string(),
+    visibility: BlogVisibilitySchema,
+    organizationId: z.string().nullable().optional(),
+  }).nullable(),
+})
+
+export const PublishedBlogReferenceSchema = z.looseObject({
+  id: z.string(),
+  type: z.enum(['PROBLEM', 'PROBLEM_REVISION', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT']),
+  relationType: z.string(),
+  displayMode: z.string(),
+  referenceId: z.string(),
+  referenceVersionId: z.string().nullable().optional(),
+  accessMode: BlogVisibilitySchema,
+  status: z.string(),
+  snapshot: z.unknown().optional(),
+})
+
+export const BlogDiscoveryItemSchema = z.looseObject({
+  id: z.string(),
+  slug: z.string(),
+  type: BlogPostTypeSchema,
+  visibility: BlogVisibilitySchema,
+  publishedAt: DateTimeWireSchema.nullable().optional(),
+  author: z.looseObject({ username: z.string(), avatar: z.string().nullable().optional() }),
+  currentVersion: z.looseObject({
+    title: z.string(),
+    summary: z.string().nullable().optional(),
+    version: z.number(),
+    classification: BlogClassificationSchema.nullable().optional(),
+  }).nullable(),
+})
+
+export const BlogDiscoveryListSchema = paginatedDataSchema(BlogDiscoveryItemSchema)
+
+export const BlogDiscoveryDetailSchema = z.looseObject({
+  id: z.string(),
+  type: BlogPostTypeSchema,
+  visibility: BlogVisibilitySchema,
+  publishedAt: DateTimeWireSchema.nullable().optional(),
+  author: z.looseObject({ username: z.string() }),
+  currentVersion: z.looseObject({
+    title: z.string(),
+    summary: z.string().nullable().optional(),
+    version: z.number(),
+    contentMarkdown: z.string(),
+    classification: BlogClassificationSchema.nullable().optional(),
+    references: z.array(PublishedBlogReferenceSchema),
+  }).nullable(),
+  seriesNavigation: z.looseObject({
+    seriesId: z.string(),
+    title: z.string(),
+    index: z.number(),
+    total: z.number(),
+    previous: z.looseObject({ id: z.string(), slug: z.string(), title: z.string() }).optional(),
+    next: z.looseObject({ id: z.string(), slug: z.string(), title: z.string() }).optional(),
+  }).optional(),
+})
+
+export const BlogDiscoveryContracts = {
+  list: defineApiEndpoint({
+    key: 'blog.discovery.list',
+    method: 'GET',
+    scope: 'account',
+    query: PaginationQuerySchema.extend({
+      q: z.string().trim().max(200).optional(),
+      type: BlogPostTypeSchema.optional(),
+    }),
+    data: BlogDiscoveryListSchema,
+  }),
+  detail: defineApiEndpoint({
+    key: 'blog.discovery.detail',
+    method: 'GET',
+    scope: 'account',
+    data: BlogDiscoveryDetailSchema,
+  }),
+} as const
+
+export type BlogDiscoveryItem = z.infer<typeof BlogDiscoveryItemSchema>
+export type BlogDiscoveryList = z.infer<typeof BlogDiscoveryListSchema>
+export type BlogDiscoveryDetail = z.infer<typeof BlogDiscoveryDetailSchema>
+export type BlogPostType = z.infer<typeof BlogPostTypeSchema>
+export type BlogVisibility = z.infer<typeof BlogVisibilitySchema>

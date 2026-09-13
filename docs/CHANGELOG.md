@@ -1,11 +1,21 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-13
+last_verified: 2026-09-14
 source_of_truth: Git history
 ---
 
 # 变更记录
+
+## 2026-09-14
+
+### Frontend Feature Slice 与统一 API Contract Layer
+
+- Assignment、Blog、Submission、Contest Rating、Solution Review 已迁入独立 Feature Slice；页面与跨领域组合组件只能从 Feature 公共入口使用，旧 `components/assignment|blog|submission` 目录不再作为业务入口。
+- `packages/contracts` 新增 Endpoint Contract、分页、字段错误与日期 Wire Schema，并为 Assignment 批改矩阵/人工完成、Blog 公共阅读、Rating 人类化展示和题解相似对照建立共享 Runtime Schema。
+- Server 新增请求、查询与成功响应 Contract Adapter；Web 新增 `queryContract/mutateContract`，无效请求在发出前阻断，不合规成功响应显式报错而不伪装为空数据。
+- `pnpm architecture:check` 新增 Contract/Feature Slice 防回退门禁，固定已迁移边界并拒绝旧目录、App 深层导入和 Feature 内 `any`；隔离测试脚本同步纳入 Contract Adapter 回归。
+- Contracts、Server、Web 类型检查与生产构建、Web 39 文件 165 项、UI/架构/文档门禁已通过；生产发布证据将在蓝绿与 canary 验收后补齐。
 
 ## 2026-09-13
 

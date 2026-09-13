@@ -29,7 +29,7 @@ describe('contest and assignment productization regressions', () => {
   })
 
   it('uses server assignment totals, pagination and an active student default', () => {
-    const source = read('./assignment/AssignmentListPage.tsx')
+    const source = read('../features/assignment/ui/AssignmentListPage.tsx')
     expect(source).toContain("useState<Filter>('active')")
     expect(source).toContain('statusCounts')
     expect(source).toContain('statusGroup=${filter}')

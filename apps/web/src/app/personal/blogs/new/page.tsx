@@ -1,4 +1,4 @@
-import { BlogWorkspace } from '@/components/blog/BlogWorkspace'
+import { BlogWorkspace } from '@/features/blog'
 
 export default function NewPersonalBlogPage() {
   return <BlogWorkspace />

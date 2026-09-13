@@ -6,7 +6,7 @@ import { saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import type { TrainingInfo, TrainingProblem, Attachment } from '../types'
 import { listHref } from '@/components/workspace/workspaceRouting'
-import type { SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
+import type { SubmissionIoValue } from '@/features/submission'
 
 export function useTrainingActions(
   trainingId: string,

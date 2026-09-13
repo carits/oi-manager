@@ -1,4 +1,4 @@
-import { BlogListPage } from '@/components/blog/BlogListPage'
+import { BlogListPage } from '@/features/blog'
 
 export default function PersonalBlogsPage() {
   return <BlogListPage />

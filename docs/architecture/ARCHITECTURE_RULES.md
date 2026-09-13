@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, architecture
-last_verified: 2026-09-13
+last_verified: 2026-09-14
 source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-boundaries.mjs, apps/server/src/modules, apps/server/prisma/schema.prisma
 ---
 
@@ -24,7 +24,8 @@ source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-bounda
 - `index.ts` 只负责环境初始化和启动组合，Socket、进程信号与优雅退出属于 Server Runtime；Judge WebSocket 必须显式接收 HTTP Server，不得读取进程全局变量。
 - HTTP Route Adapter 不得直接写 Prisma、开启事务、操作文件系统或调用 Judge Runtime。
 - 跨领域状态变化必须通过对方公开的 Application Service/Port，禁止直接更新对方聚合表。
-- 新请求和响应 DTO 优先定义在 `packages/contracts`，运行时 Schema 与 TypeScript 类型必须来自同一来源。
+- 新请求和响应 DTO 必须定义在 `packages/contracts`，运行时 Schema 与 TypeScript 类型必须来自同一来源；
+  Route Adapter 与浏览器 Feature API 必须共同执行该 Schema，不能只共享静态 interface。
 - 账号、平台和组织 API Client 作用域显式分离；账号级请求不得携带组织头。
 - 新增 Endpoint 必须声明认证策略和资源权限，公开接口必须进入匿名端点清单并说明暴露理由。
 
@@ -44,6 +45,8 @@ source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-bounda
 - 普通产品界面不得把 raw UUID、CAS、Revision、Snapshot 或内部 Enum 当作主要文案。
 - 数据库历史字段可以保留 `campus`，但新 Application Contract 使用 `organization`；禁止扩大历史术语。
 - 业务页面使用统一 UI、Dialog 和 SubmissionCodeEditor，不重新实现通用按钮、遮罩或提交编辑器。
+- 已迁移领域使用 `features/<feature>/{api,model,ui}`；App Route 只能引用 Feature 的 `index.ts` 公共 API，
+  不得深层导入或在 `components` 下重建同名领域目录。
 
 ## 运行与发布
 
@@ -51,6 +54,8 @@ source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-bounda
 - `/api/health` 只表达进程存活，`/api/readiness` 表达关键依赖，领域一致性进入受保护诊断与周期监控。
 - 蓝绿切换、数据库迁移、Revision 发布和经济账本必须使用现有 CAS、advisory lock、fencing 或幂等边界。
 - 架构债基线只能下降；任何新增例外都必须先更新本页、对应领域文档和自动门禁，不能只扩大白名单。
+- `pnpm architecture:check` 必须同时通过 API Contract/Feature Slice 门禁；契约边界数量和已迁移切片只能增加，
+  旧组件目录、App 深层导入和 Feature 内 `any` 均属于构建失败。
 - `pnpm db:baseline:check` 必须保持通过；新 migration 必须按名称位于当前 Epoch 之后，正式建立新 Epoch 前必须证明空库和生产备份升级库结构签名一致。
 
 ## 保留的架构决定

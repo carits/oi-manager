@@ -1,4 +1,4 @@
-import { BlogDiscoveryDetail } from '@/components/blog/BlogDiscoveryDetail'
+import { BlogDiscoveryDetail } from '@/features/blog'
 
 export default async function PlatformAdminKnowledgeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

@@ -27,15 +27,14 @@ import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
 import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
 import { TrainingContentSelectionModal } from './components/TrainingContentSelectionModal'
 import { TrainingContentSnapshotEditorModal, type EditableActivitySnapshot } from './components/TrainingContentSnapshotEditorModal'
-import { TrainingRatingPanel } from './components/TrainingRatingPanel'
+import { TrainingRatingPanel } from '@/features/contest-rating'
 import { Bell, BookOpenCheck, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Tabs } from '@/components/ui/Tabs'
-import { SubmissionIoFields } from '@/components/submission/SubmissionIoFields'
-import { SubmissionCodeEditor, clearSubmissionDraft } from '@/components/submission/SubmissionCodeEditor'
+import { SubmissionIoFields, SubmissionCodeEditor, clearSubmissionDraft } from '@/features/submission'
 import styles from './TrainingDetail.module.css'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 
@@ -60,7 +59,7 @@ const TrainingAttachmentPanel = dynamic(
   { loading: () => <SkeletonRegion rows={4} /> },
 )
 const SubmissionDetailModal = dynamic(
-  () => import('@/components/submission/SubmissionDetailModal').then(module => module.SubmissionDetailModal),
+  () => import('@/features/submission').then(module => module.SubmissionDetailModal),
 )
 const TrainingFormModal = dynamic(
   () => import('./TrainingFormModal').then(module => module.TrainingFormModal),

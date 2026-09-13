@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-13
+last_verified: 2026-09-14
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-09-14: Frontend Feature Slice 与统一 API Contract Layer 已完成第一批强制收口。Assignment、Blog、Submission、Contest Rating、Solution Review 从散落的业务组件迁入 `features/<feature>/{api,model,ui}`，App Route 只经公共 `index.ts` 使用；共享 Contracts 现覆盖 Auth、Health、Identity 及本轮四条 Human UX 数据链，Server 在请求/响应边界执行同一 Runtime Schema，Web 对成功响应再次 fail-closed 校验。架构门禁固定 8 个 Contract 文件、5 个 Feature Slice、9 条端到端契约边界，并拒绝旧组件目录回流、App 深层导入和 Feature 内 `any`。本地 Contracts/Server/Web 类型与生产构建、Web 39 文件 165 项、UI/架构/文档门禁已通过；生产隔离数据库与蓝绿/API、Web canary 验收待本批提交后执行。
 
 - 2026-09-13: Contest 提交身份已完成直接切换，不再为开发期兼容维持双写。新比赛 Submission 与 ContestUserProblemStatus 只写必填的 `canonicalContestId/canonicalContestProblemId`；旧整数比赛键改为可空且仅供历史读取。Submission 继续固化 `trainingId/trainingProblemId` 作为 Judge 运行路由。已删除三项写入改写触发器，并以复合外键、CHECK、事务和 CAS 保证 ContestProblem 归属一致。生产备份恢复库先完成两项迁移演练，聚合审计 767 场比赛、1178 条提交、702 条状态、3 条记录均为 0 缺失/0 错配；生产同构隔离套件 12 文件 119/119 通过。备份 `/data/backups/oi-manager/automatic/oi_manager_20260913_225148.dump`（35,206,899 bytes，SHA-256 `0034484cf738fec3dcb5f4178c10649d5851e44a4de3e356840b100eca61c143`）已验证；提交 `daa9900`、`9287273`、`cae934a`、`d311505` 已推送 `main`，Prisma 69/69，API 3302→3303。health/readiness 正常，数据库延迟约 1.9 ms，Router、API、Worker、Executor@1、Judge、Web 均 active；新 slot 启动后无约束、外键或规范身份错误，原有 7 个未跟踪维护文件未改动。本批无 Web 运行时变更。
 

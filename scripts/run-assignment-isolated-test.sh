@@ -80,7 +80,8 @@ if [[ "$TEST_SCOPE" == "full" ]]; then
 elif [[ "$TEST_SCOPE" == "release-invariants" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/economy-loop.test.ts tests/solution-editorial-domain.test.ts tests/blog-knowledge-domain.test.ts
 elif [[ "$TEST_SCOPE" == "assignment" ]]; then
-  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/assignment.test.ts tests/background-services.test.ts
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
+    tests/api-contract-layer.test.ts tests/assignment.test.ts tests/background-services.test.ts
 elif [[ "$TEST_SCOPE" == "authorization" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     tests/authorization-boundary.test.ts tests/auth.test.ts tests/organization-creation.test.ts \

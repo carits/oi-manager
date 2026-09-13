@@ -10,6 +10,11 @@
 
 import { ENV } from '@/config/env'
 import { humanErrorMessage } from './humanErrors'
+import type {
+  AnyApiEndpointContract,
+  EndpointBody,
+  EndpointData,
+} from '@oi-manager/contracts'
 
 export interface ApiClientOptions extends Omit<RequestInit, 'body'> {
   signal?: AbortSignal
@@ -330,6 +335,32 @@ export class ApiClient {
     })
   }
 
+  /**
+   * Read through a shared endpoint contract. A successful HTTP response that
+   * violates the contract is a visible transport error, never an empty state.
+   */
+  async queryContract<TContract extends AnyApiEndpointContract>(
+    contract: TContract,
+    endpoint: string,
+    options: ApiClientOptions & { retry?: boolean } = {},
+  ): Promise<EndpointData<TContract>> {
+    if (contract.method !== 'GET') {
+      throw new Error(`${contract.key} is ${contract.method}, not a query contract`)
+    }
+    const data = await this.query<unknown>(endpoint, options)
+    const parsed = contract.data.safeParse(data)
+    if (!parsed.success) {
+      throw new ApiError({
+        kind: 'invalid_response',
+        status: 200,
+        message: `服务器响应不符合 ${contract.key} 契约`,
+        data: parsed.error.issues,
+        retryable: false,
+      })
+    }
+    return parsed.data as EndpointData<TContract>
+  }
+
   async mutate<T>(
     endpoint: string,
     method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
@@ -353,6 +384,51 @@ export class ApiClient {
     }
 
     return { ok: false, error: apiErrorFromResponse(response) }
+  }
+
+  /** Execute a mutation whose request and response share one runtime schema. */
+  async mutateContract<TContract extends AnyApiEndpointContract>(
+    contract: TContract,
+    endpoint: string,
+    body: EndpointBody<TContract>,
+    options: ApiClientOptions = {},
+  ): Promise<MutationResult<EndpointData<TContract>>> {
+    if (contract.method === 'GET') {
+      throw new Error(`${contract.key} is a query contract, not a mutation contract`)
+    }
+    const bodyResult = contract.body.safeParse(body)
+    if (!bodyResult.success) {
+      return {
+        ok: false,
+        error: new ApiError({
+          kind: 'invalid_response',
+          status: 0,
+          message: `请求不符合 ${contract.key} 契约`,
+          data: bodyResult.error.issues,
+          retryable: false,
+        }),
+      }
+    }
+    const response = await this.mutate<unknown>(endpoint, contract.method, bodyResult.data, options)
+    if (!response.ok) return response
+    const dataResult = contract.data.safeParse(response.data)
+    if (!dataResult.success) {
+      return {
+        ok: false,
+        error: new ApiError({
+          kind: 'invalid_response',
+          status: response.status,
+          message: `服务器响应不符合 ${contract.key} 契约`,
+          requestId: response.requestId,
+          data: dataResult.error.issues,
+          retryable: false,
+        }),
+      }
+    }
+    return {
+      ...response,
+      data: dataResult.data as EndpointData<TContract>,
+    }
   }
 
   /** GET 请求 */

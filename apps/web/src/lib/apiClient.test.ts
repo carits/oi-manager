@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, accountClient, apiClient, organizationClient, parseApiResponse } from './apiClient'
+import { AssignmentContracts } from '@oi-manager/contracts'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -7,6 +8,40 @@ afterEach(() => {
 })
 
 describe('parseApiResponse', () => {
+  it('validates successful payloads against the shared endpoint contract', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { recipients: [], problems: [], statusCounts: {}, pagination: { page: 1, pageSize: 40, total: 0, totalPages: 0 } },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    await expect(apiClient.queryContract(
+      AssignmentContracts.progress,
+      '/api/assignments/a/progress',
+    )).resolves.toMatchObject({ recipients: [], problems: [] })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a successful HTTP payload that violates its endpoint contract', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { recipients: 'not-an-array', problems: [] },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    await expect(apiClient.queryContract(
+      AssignmentContracts.progress,
+      '/api/assignments/a/progress',
+      { retry: false },
+    )).rejects.toMatchObject({ name: 'ApiError', kind: 'invalid_response', retryable: false })
+  })
+
+  it('refuses an invalid mutation before issuing a network request', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const result = await apiClient.mutateContract(
+      AssignmentContracts.manualCompletion,
+      '/api/assignments/a/progress/p/manual-completion',
+      { completed: true, reason: '', expectedVersion: 0 },
+    )
+    expect(result.ok).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
   it('uses cookie-only browser authentication and keeps account APIs out of the organization context', async () => {
     vi.stubGlobal('window', {
       localStorage: { getItem: () => 'account-token' },

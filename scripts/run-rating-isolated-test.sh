@@ -44,13 +44,15 @@ else
   echo "Invalid RATING_SCHEMA_SETUP: expected push or migrate" >&2
   exit 1
 fi
+pnpm --dir "$ROOT_DIR" --filter @oi-manager/contracts build
 pnpm --dir "$ROOT_DIR" --filter @oi-manager/shared build
 DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma generate --schema prisma/schema.prisma
 
 if [[ "$TEST_SCOPE" == "full" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run
 elif [[ "$TEST_SCOPE" == "rating" ]]; then
-  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/rating-domain.test.ts
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
+    tests/api-contract-layer.test.ts tests/rating-domain.test.ts
 elif [[ "$TEST_SCOPE" == "contest-cutover" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     tests/rating-domain.test.ts tests/contest-aggregate-boundary.test.ts \

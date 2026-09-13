@@ -112,7 +112,7 @@ describe('human UX productization contract', () => {
   })
 
   it('keeps student views free of internal revision terminology', () => {
-    const assignment = read('./assignment/AssignmentWorkspace.tsx')
+    const assignment = read('../features/assignment/ui/AssignmentWorkspace.tsx')
     const training = read('./training-engine/TrainingSessionWorkspace.tsx')
     expect(assignment).toContain('作业发布时固定的数据评测')
     expect(training).toContain('使用训练发布时固定的数据评测')
@@ -138,7 +138,7 @@ describe('human UX productization contract', () => {
   })
 
   it('does not ask blog authors to paste internal database identifiers', () => {
-    const source = read('./blog/BlogReferenceEditor.tsx')
+    const source = read('../features/blog/ui/BlogReferenceEditor.tsx')
     expect(source).toContain('<ProblemReferencePicker')
     expect(source).toContain('请到对应的题解、比赛榜单或 Rating 记录页面')
     expect(source).not.toContain('内部 ID')

@@ -1,6 +1,9 @@
-import { Router } from 'express'
-import { authenticate } from '../../middleware/auth'
+import { Router, type Response } from 'express'
+import { SolutionReviewContracts } from '@oi-manager/contracts'
+import { authenticate, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { sendContractData, sendContractError } from '../../lib/api-contract'
+import type { JwtPayload } from '@oi-manager/shared'
 import {
   acceptSolutionContribution,
   createCorrectionContribution,
@@ -25,12 +28,15 @@ export const solutionContributionRouter = Router()
 export const solutionRouter = Router()
 export const solutionReviewRouter = Router()
 
-function command(handler: (req: any) => Promise<unknown>, successStatus = 200) {
-  return asyncHandler(async (req: any, res: any) => {
+type AuthenticatedRequest = AuthRequest & { user: JwtPayload }
+
+function command(handler: (req: AuthenticatedRequest) => Promise<unknown>, successStatus = 200) {
+  return asyncHandler(async (req: AuthRequest, res: Response) => {
     try {
-      const data = await handler(req)
+      const data = await handler(req as AuthenticatedRequest)
       return res.status(successStatus).json({ success: true, data })
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof SolutionDomainError) {
         return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
       }
@@ -78,9 +84,15 @@ solutionRouter.post('/:solutionId/corrections', authenticate, command(
 solutionReviewRouter.get('/', authenticate, command(
   req => listSolutionReviewQueue(req.user, String(req.query.status || '')),
 ))
-solutionReviewRouter.get('/:id/similarity-comparison', authenticate, command(
-  req => getSolutionSimilarityComparison(req.user, req.params.id),
-))
+solutionReviewRouter.get('/:id/similarity-comparison', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  try {
+    return sendContractData(res, SolutionReviewContracts.similarityComparison, await getSolutionSimilarityComparison(req.user!, req.params.id))
+  } catch (error) {
+    if (sendContractError(error, res)) return
+    if (error instanceof SolutionDomainError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
+    throw error
+  }
+}))
 solutionReviewRouter.post('/:id/reviews', authenticate, command(
   req => recordSolutionReview(req.user, req.params.id, req.body), 201,
 ))
