@@ -114,7 +114,6 @@ describe('authorization boundary', () => {
       '../src/modules/problem/problem.candidate-evaluation.service.ts',
       '../src/modules/rating/application/contest-rating.service.ts',
       '../src/modules/training/application/training-ranking.service.ts',
-      '../src/middleware/permissions.ts',
       '../src/modules/team-import/team-import.routes.ts',
       '../src/modules/team/team.crud.routes.ts',
       '../src/modules/team/application/team-problem-list.service.ts',
@@ -133,6 +132,11 @@ describe('authorization boundary', () => {
       return /user\.role\s*(?:===|!==)\s*['"](?:student|teacher|school_principal)['"]|\[[^\]]*['"]teacher['"][^\]]*\]\.includes\(user\.role\)/.test(source)
     })
     expect(roleAuthorized).toEqual([])
+
+    const permissionSource = fs.readFileSync(path.resolve(__dirname, '../src/middleware/permissions.ts'), 'utf8')
+    expect(permissionSource).toContain('resolveOrganizationAuthorization')
+    expect(permissionSource).toContain("organizationCapabilityScope(authorization, 'membership.manage.students')")
+    expect(permissionSource).not.toMatch(/req\.user\?\.role\s*(?:===|!==)\s*['"](?:student|teacher|school_principal)['"]/)
   })
 
   it('does not contain a legacy or hybrid authorization fallback', () => {
@@ -152,9 +156,7 @@ describe('authorization boundary', () => {
     await prisma.organizationMembership.update({ where: { id: membership.id }, data: { memberRole: 'school_principal' } })
     expect(await hasOrganizationCapability(member.user.id, school.organizationId!, 'organization.settings')).toBe(false)
 
-    await prisma.organizationMembershipRole.create({ data: {
-      id: crypto.randomUUID(), membershipId: membership.id, roleKey: 'teacher', source: 'authorization_test',
-    } })
+    await syncOrganizationMembershipBaseRole(prisma, membership.id, 'teacher', { source: 'authorization_test' })
     expect(await hasOrganizationCapability(member.user.id, school.organizationId!, 'membership.manage.students')).toBe(true)
     expect(await hasOrganizationCapability(member.user.id, school.organizationId!, 'membership.manage.teachers')).toBe(false)
 

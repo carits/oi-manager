@@ -39,7 +39,7 @@ describe('Authentication Module', () => {
       expect(res.body.data.accountRole).toBe('user')
       expect(res.body.data.token).toBeUndefined()
       expect(res.body.data.userId).toBe(user.id)
-      expect(res.body.data.role).toBe('student')
+      expect(res.body.data.role).toBe('user')
       expect(res.headers['set-cookie']?.[0]).toContain('oi_session=')
       expect(res.headers['set-cookie']?.[0]).toContain('HttpOnly')
       expect(res.headers['set-cookie']?.[0]).toContain('SameSite=Lax')
@@ -137,7 +137,7 @@ describe('Authentication Module', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      expect(res.body.data.role).toBe('school_principal')
+      expect(res.body.data.role).toBe('user')
       expect(res.body.data.accountRole).toBe('user')
     })
 
@@ -273,7 +273,7 @@ describe('Authentication Module', () => {
       expect(res.body.success).toBe(true)
       expect(res.body.data.userId).toBe(user.id)
       expect(res.body.data.username).toBe(user.username)
-      expect(res.body.data.role).toBe('student')
+      expect(res.body.data.role).toBe('user')
     })
 
     it('accepts the HttpOnly session cookie without a bearer token', async () => {
@@ -386,6 +386,9 @@ describe('Authentication Module', () => {
           relationType: 'enrolled',
           status: 'active',
           joinedAt: new Date(),
+          RoleAssignments: {
+            create: { id: crypto.randomUUID(), roleKey: 'student', source: 'test_fixture' },
+          },
         },
       })
       const token = generateTestToken({ userId: created.user.id, role: 'teacher', username: created.user.username })
@@ -439,7 +442,7 @@ describe('Authentication Module', () => {
       ['school_principal', 'teacher'],
       ['teacher', 'teacher'],
       ['student', 'student']
-    ] as const)('keeps the %s role while switching workspaces', async (role, loginRole) => {
+    ] as const)('keeps the %s membership while the account role remains normalized', async (role, loginRole) => {
       const { user, password } = await createTestUser({ role })
       const agent = request.agent(app)
 
@@ -448,7 +451,7 @@ describe('Authentication Module', () => {
         .send({ username: user.username, password, role: loginRole, workspaceMode: 'work' })
 
       expect(login.status).toBe(200)
-      expect(login.body.data.role).toBe(role)
+      expect(login.body.data.role).toBe('user')
       expect(login.body.data.accountRole).toBe('user')
       expect(login.body.data.workspaceMode).toBe('work')
 
@@ -463,7 +466,7 @@ describe('Authentication Module', () => {
 
       const me = await agent.get('/api/auth/me')
       expect(me.status).toBe(200)
-      expect(me.body.data.role).toBe(role)
+      expect(me.body.data.role).toBe('user')
       expect(me.body.data.workspaceMode).toBe('personal')
 
       const profile = await prisma.personalProfile.findUnique({ where: { userId: user.id } })

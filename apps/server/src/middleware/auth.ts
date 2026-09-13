@@ -6,7 +6,7 @@ import { getJwtSecret } from '../lib/jwtSecret'
 import { getSessionToken } from '../lib/sessionCookie'
 import { prisma } from '../prisma'
 import logger from '../lib/logger'
-import { organizationRoleFromRoleKeys, resolveOrganizationAuthorization } from '../modules/authorization/capabilities'
+import { isUnavailableLegacyOrganizationMember, organizationRoleFromRoleKeys, resolveOrganizationAuthorization } from '../modules/authorization/capabilities'
 
 // 全局类型扩展：让 Express Request.user 使用 JwtPayload 类型
 declare global {
@@ -74,7 +74,12 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     const organizationId = req.get('x-oi-organization-id')
     if (organizationId) {
       const authorization = await resolveOrganizationAuthorization(decoded.userId, organizationId)
-      if (!authorization) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
+      if (!authorization) {
+        if (await isUnavailableLegacyOrganizationMember(decoded.userId, organizationId)) {
+          return res.status(404).json({ success: false, code: 'ORGANIZATION_NOT_AVAILABLE', message: '组织不可用' })
+        }
+        return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
+      }
       const organizationRole = organizationRoleFromRoleKeys(authorization.roleKeys)
       if (!organizationRole) return res.status(403).json({ success: false, code: 'ORGANIZATION_AUTHORIZATION_INCOMPLETE', message: '组织权限尚未完成配置' })
       decoded.organizationId = organizationId
