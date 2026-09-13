@@ -15,6 +15,7 @@ source_of_truth: Git history
 - 安全增量迁移按 `Contest.runtimeTrainingId` 回填历史 Rating 事实；任何缺失都会使迁移 fail closed。数据库触发器兼容滚动发布期间旧二进制“先创建配置、后创建聚合”的顺序，并拒绝新写入的 Contest/Training 身份错配。
 - 比赛创建、配置更新、榜单快照、结算批次、重放和未终结草稿删除均完成规范身份双写；受保护的 Contest 聚合迁移报告增加三类 Rating 事实的缺失与错配统计。
 - 生产备份恢复库已应用全部 67 个 migration，缺失/错配为 0，旧二进制顺序探针通过；使用隔离 Linux Prisma Client 的 Rating/Contest 定向集成测试 7 文件 71/71 通过。提交 `6eaa7bf` 当前仅在隔离分支，正式生产发布信息将在提升后补录。
+- clean bootstrap supplement 同步补齐历史增量路径中的 Assignment、Blog、数据市场、题解和质量域 CHECK、partial index 与不可变触发器，并修正 Rating 排名索引的降序声明。空库 bootstrap 与生产备份升级库的 202 张表完整 public schema 签名现已一致（SHA-256 `de803187b4a0c99e30f6c5679ced341af8b5ce42187d0e4f114319b1c6edbb87`）。
 
 ### Contest 可变状态规范化
 

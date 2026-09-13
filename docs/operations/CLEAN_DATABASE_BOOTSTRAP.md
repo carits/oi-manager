@@ -22,6 +22,10 @@ pnpm --filter server exec prisma migrate deploy
 滚动发布顺序，并拒绝配置、榜单快照或 Rating Batch 指向与 `runtimeTrainingId` 不一致的 Contest。空库 bootstrap
 与备份升级路径必须生成同一组触发器、外键和索引，不能只在增量 migration 路径具备该保护。
 
+2026-09-13 使用最新生产备份完成双路径验证：两边均生成 202 张表，完整 public schema（含约束、索引、函数与
+触发器）SHA-256 为 `de803187b4a0c99e30f6c5679ced341af8b5ce42187d0e4f114319b1c6edbb87`，比较结果为
+`schema_match=true`。
+
 ## 安全规则
 
 - 默认 `db:bootstrap:check` 只检查，不写入。
