@@ -174,32 +174,48 @@ export async function findContestRuntimeForBlogReview(runtimeTrainingId: number)
     include: { RuntimeTraining: { select: blogReviewRuntimeSelect } },
   })
   if (aggregate?.RuntimeTraining) {
-    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
+    return {
+      contest: aggregate,
+      runtime: {
+        ...aggregate.RuntimeTraining,
+        status: aggregate.status,
+        finalizedStandingId: aggregate.finalizedStandingId,
+      },
+      source: 'aggregate' as const,
+    }
   }
   return null
 }
 
 /**
- * Discover due Rating work through Contest first. Runtime state remains on
- * Training during the cutover, but callers no longer scan the legacy table.
+ * Discover due Rating work from canonical Contest lifecycle state. Training
+ * is consulted only for the still-legacy RatingConfig relation and a creator
+ * fallback during the compatibility window.
  */
 export async function listDueRatedContestRuntimes(now = new Date(), limit = 20) {
-  const aggregateIds = (await prisma.contest.findMany({
-    where: { runtimeTrainingId: { not: null } },
-    select: { runtimeTrainingId: true },
-  })).flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
-  const runtimeWhere: Prisma.TrainingWhereInput = {
-    type: 'contest',
-    endTime: { lte: now },
-    finalizationStatus: { in: ['LIVE', 'JUDGING'] },
-    RatingConfig: { isNot: null },
-  }
-  return (aggregateIds.length ? await prisma.training.findMany({
-    where: { id: { in: aggregateIds }, ...runtimeWhere },
-    select: { id: true, createdBy: true, endTime: true },
-  }) : [])
-    .sort((a, b) => a.endTime.getTime() - b.endTime.getTime() || a.id - b.id)
-    .slice(0, Math.max(1, Math.min(100, Math.trunc(limit))))
+  const rows = await prisma.contest.findMany({
+    where: {
+      runtimeTrainingId: { not: null },
+      endAt: { lte: now },
+      finalizationStatus: { in: ['LIVE', 'JUDGING'] },
+      RuntimeTraining: { is: { type: 'contest', RatingConfig: { isNot: null } } },
+    },
+    select: {
+      runtimeTrainingId: true,
+      createdBy: true,
+      endAt: true,
+      RuntimeTraining: { select: { createdBy: true } },
+    },
+    orderBy: [{ endAt: 'asc' }, { runtimeTrainingId: 'asc' }],
+    take: Math.max(1, Math.min(100, Math.trunc(limit))),
+  })
+  return rows.flatMap(row => row.runtimeTrainingId === null || !row.endAt || !row.RuntimeTraining
+    ? []
+    : [{
+        id: row.runtimeTrainingId,
+        createdBy: row.createdBy || row.RuntimeTraining.createdBy,
+        endTime: row.endAt,
+      }])
 }
 
 const submissionContextRuntimeSelect = {

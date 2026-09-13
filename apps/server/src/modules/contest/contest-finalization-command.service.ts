@@ -1,6 +1,6 @@
 import type { ContestFinalizationStatus, Prisma } from '@prisma/client'
 import logger from '../../lib/logger'
-import { ensureContestAggregateTx } from './contest-aggregate.service'
+import { projectContestRuntimeTx } from './contest-aggregate.service'
 
 const finalizationRuntimeSelect = {
   id: true,
@@ -31,7 +31,7 @@ async function lockContestFinalizationRuntimeTx(
     })
     return null
   }
-  return runtime
+  return { aggregate, runtime }
 }
 
 export async function beginContestFinalizationTx(
@@ -39,17 +39,22 @@ export async function beginContestFinalizationTx(
   runtimeTrainingId: number,
   expectedStatus: ContestFinalizationStatus,
 ) {
-  const runtime = await lockContestFinalizationRuntimeTx(tx, runtimeTrainingId, 'rating_finalize_begin')
-  if (!runtime) return false
-  const updated = await tx.training.updateMany({
+  const locked = await lockContestFinalizationRuntimeTx(tx, runtimeTrainingId, 'rating_finalize_begin')
+  if (!locked) return false
+  const updated = await tx.contest.updateMany({
     where: {
-      id: runtimeTrainingId,
-      type: 'contest',
+      id: locked.aggregate.id,
       finalizationStatus: expectedStatus,
     },
-    data: { finalizationStatus: 'FINALIZING' },
+    data: {
+      finalizationStatus: 'FINALIZING',
+      statusRevision: { increment: 1 },
+      updatedAt: new Date(),
+    },
   })
-  return updated.count === 1
+  if (updated.count !== 1) return false
+  await projectContestRuntimeTx(tx, locked.aggregate.id)
+  return true
 }
 
 export async function completeContestFinalizationTx(
@@ -57,22 +62,23 @@ export async function completeContestFinalizationTx(
   runtimeTrainingId: number,
   standingSnapshotId: string,
 ) {
-  const runtime = await lockContestFinalizationRuntimeTx(tx, runtimeTrainingId, 'rating_finalize_complete')
-  if (!runtime) return false
-  const updated = await tx.training.updateMany({
+  const locked = await lockContestFinalizationRuntimeTx(tx, runtimeTrainingId, 'rating_finalize_complete')
+  if (!locked) return false
+  const updated = await tx.contest.updateMany({
     where: {
-      id: runtimeTrainingId,
-      type: 'contest',
+      id: locked.aggregate.id,
       finalizationStatus: 'FINALIZING',
     },
     data: {
       finalizationStatus: 'FINALIZED',
       finalizedStandingId: standingSnapshotId,
       status: 'finished',
+      statusRevision: { increment: 1 },
+      updatedAt: new Date(),
     },
   })
   if (!updated.count) return false
-  await ensureContestAggregateTx(tx, runtimeTrainingId)
+  await projectContestRuntimeTx(tx, locked.aggregate.id)
   return true
 }
 
@@ -80,17 +86,22 @@ export async function failContestFinalizationTx(
   tx: Prisma.TransactionClient,
   runtimeTrainingId: number,
 ) {
-  const runtime = await lockContestFinalizationRuntimeTx(tx, runtimeTrainingId, 'rating_finalize_failed')
-  if (!runtime) return false
-  const updated = await tx.training.updateMany({
+  const locked = await lockContestFinalizationRuntimeTx(tx, runtimeTrainingId, 'rating_finalize_failed')
+  if (!locked) return false
+  const updated = await tx.contest.updateMany({
     where: {
-      id: runtimeTrainingId,
-      type: 'contest',
+      id: locked.aggregate.id,
       finalizationStatus: { in: ['LIVE', 'JUDGING'] },
     },
-    data: { finalizationStatus: 'FAILED' },
+    data: {
+      finalizationStatus: 'FAILED',
+      statusRevision: { increment: 1 },
+      updatedAt: new Date(),
+    },
   })
-  return updated.count === 1
+  if (updated.count !== 1) return false
+  await projectContestRuntimeTx(tx, locked.aggregate.id)
+  return true
 }
 
 export async function completeContestRatingRebuildTx(
@@ -98,18 +109,21 @@ export async function completeContestRatingRebuildTx(
   runtimeTrainingId: number,
   standingSnapshotId: string,
 ) {
-  const runtime = await lockContestFinalizationRuntimeTx(tx, runtimeTrainingId, 'rating_rebuild_complete')
-  if (!runtime) return false
-  const updated = await tx.training.updateMany({
+  const locked = await lockContestFinalizationRuntimeTx(tx, runtimeTrainingId, 'rating_rebuild_complete')
+  if (!locked) return false
+  const updated = await tx.contest.updateMany({
     where: {
-      id: runtimeTrainingId,
-      type: 'contest',
+      id: locked.aggregate.id,
       finalizationStatus: 'HELD',
     },
     data: {
       finalizedStandingId: standingSnapshotId,
       finalizationStatus: 'FINALIZED',
+      statusRevision: { increment: 1 },
+      updatedAt: new Date(),
     },
   })
-  return updated.count === 1
+  if (updated.count !== 1) return false
+  await projectContestRuntimeTx(tx, locked.aggregate.id)
+  return true
 }

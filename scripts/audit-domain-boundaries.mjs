@@ -143,6 +143,17 @@ const contestFinalizationCommand = fs.readFileSync(path.join(modulesRoot, 'conte
 if ((contestCommand + contestFinalizationCommand).includes('contest_command_legacy_fallback')) {
   violations.push('Contest command service still mutates legacy Training contest records without a canonical aggregate')
 }
+if (contestFinalizationCommand.includes('ensureContestAggregateTx')
+  || /tx\.training\.(?:update|updateMany)\s*\(/.test(contestFinalizationCommand)) {
+  violations.push('Contest finalization still treats Training as the authoritative write model')
+}
+if (!contestFinalizationCommand.includes('projectContestRuntimeTx')
+  || !contestCommand.includes('projectContestRuntimeTx')) {
+  violations.push('Contest commands do not maintain the Training compatibility projection')
+}
+if (/prisma\.training\.findMany\([\s\S]{0,500}finalizationStatus/.test(contestQueryFacade)) {
+  violations.push('Contest Rating discovery still reads lifecycle state from Training')
+}
 const trainingProblemManagement = fs.readFileSync(path.join(modulesRoot, 'training/application/training-problem-management.service.ts'), 'utf8')
 for (const command of [
   'createContestProblemRuntimeTx',
@@ -171,6 +182,9 @@ console.log(JSON.stringify({
   contestProjectionBoundary: !violations.some(item => item.includes('Contest projection')),
   contestQueryFacadeBoundary: !violations.some(item => item.includes('Contest query facade')),
   contestCommandBoundary: !violations.some(item => item.includes('Contest command service')),
+  contestCanonicalStateBoundary: !violations.some(item => item.includes('authoritative write model')
+    || item.includes('compatibility projection')
+    || item.includes('Rating discovery still reads lifecycle')),
   localJudgeResultWriteBoundary: !violations.some(item => item.startsWith('JudgeRun')),
   runtimeCompositionBoundary: !violations.some(item => item.includes('composition root') || item.includes('shadow route graph') || item.includes('implicit global HTTP server')),
   violations,

@@ -19,7 +19,10 @@ import {
   transitionContestLifecycleTx,
   updateContestRuntimeTx,
 } from '../src/modules/contest/contest-command.service'
-import { beginContestFinalizationTx } from '../src/modules/contest/contest-finalization-command.service'
+import {
+  beginContestFinalizationTx,
+  completeContestFinalizationTx,
+} from '../src/modules/contest/contest-finalization-command.service'
 
 async function createRuntime(title: string) {
   return prisma.training.create({ data: {
@@ -165,6 +168,81 @@ describe('Contest query facade', () => {
     expect(await prisma.training.findUnique({ where: { id: runtime.id } })).toMatchObject({
       title: 'Unmapped command target',
       status: 'upcoming',
+    })
+  })
+
+  it('writes lifecycle and finalization state to Contest before projecting Training', async () => {
+    const runtime = await createRuntime('Canonical command source')
+    const contest = await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), runtimeTrainingId: runtime.id, createdBy: runtime.createdBy,
+      title: runtime.title, contestDate: runtime.startTime, startAt: runtime.startTime,
+      endAt: runtime.endTime, format: runtime.format, status: runtime.status,
+      type: 'judged', scope: runtime.scope,
+    } })
+    await prisma.trainingRatingConfig.create({ data: {
+      id: crypto.randomUUID(), trainingId: runtime.id, track: 'IOI', scope: 'NONE',
+      scoringRules: {}, rulesHash: 'canonical-command-rules', createdBy: runtime.createdBy,
+    } })
+
+    const metadata = await prisma.$transaction(tx => updateContestRuntimeTx(tx, {
+      runtimeTrainingId: runtime.id,
+      expected: {
+        status: runtime.status,
+        format: runtime.format,
+        startTime: runtime.startTime,
+        endTime: runtime.endTime,
+      },
+      patch: {
+        title: 'Canonical title',
+        problemIdVisible: true,
+        solutionVisible: true,
+        includeAdminInRanking: true,
+      },
+    }))
+    expect(metadata.conflict).toBeNull()
+    expect(await prisma.contest.findUniqueOrThrow({ where: { id: contest.id } })).toMatchObject({
+      title: 'Canonical title', problemIdVisible: true, solutionVisible: true,
+      includeAdminInRanking: true, statusRevision: 1,
+    })
+    expect(await prisma.training.findUniqueOrThrow({ where: { id: runtime.id } })).toMatchObject({
+      title: 'Canonical title', problemIdVisible: true, solutionVisible: true,
+      includeAdminInRanking: true,
+    })
+
+    const lifecycle = await prisma.$transaction(tx => transitionContestLifecycleTx(tx, {
+      runtimeTrainingId: runtime.id,
+      actorUserId: runtime.createdBy,
+      expectedStatus: 'upcoming',
+      targetStatus: 'ongoing',
+    }))
+    expect(lifecycle?.changed).toBe(true)
+    expect(await prisma.contest.findUniqueOrThrow({ where: { id: contest.id } })).toMatchObject({
+      status: 'ongoing', statusRevision: 2,
+    })
+    expect(await prisma.training.findUniqueOrThrow({ where: { id: runtime.id } })).toMatchObject({
+      status: 'ongoing',
+    })
+
+    expect(await prisma.$transaction(tx => beginContestFinalizationTx(tx, runtime.id, 'LIVE'))).toBe(true)
+    expect(await prisma.contest.findUniqueOrThrow({ where: { id: contest.id } })).toMatchObject({
+      finalizationStatus: 'FINALIZING', statusRevision: 3,
+    })
+    expect(await prisma.training.findUniqueOrThrow({ where: { id: runtime.id } })).toMatchObject({
+      finalizationStatus: 'FINALIZING',
+    })
+
+    const snapshot = await prisma.contestStandingSnapshot.create({ data: {
+      id: crypto.randomUUID(), trainingId: runtime.id, revision: 1, scoringMode: 'IOI',
+      rulesHash: 'canonical-command-rules', status: 'FINALIZED', inputHash: 'canonical-input',
+      createdBy: runtime.createdBy, finalizedAt: new Date(),
+    } })
+    expect(await prisma.$transaction(tx => completeContestFinalizationTx(tx, runtime.id, snapshot.id))).toBe(true)
+    expect(await prisma.contest.findUniqueOrThrow({ where: { id: contest.id } })).toMatchObject({
+      status: 'finished', finalizationStatus: 'FINALIZED', finalizedStandingId: snapshot.id,
+      statusRevision: 4,
+    })
+    expect(await prisma.training.findUniqueOrThrow({ where: { id: runtime.id } })).toMatchObject({
+      status: 'finished', finalizationStatus: 'FINALIZED', finalizedStandingId: snapshot.id,
     })
   })
 })

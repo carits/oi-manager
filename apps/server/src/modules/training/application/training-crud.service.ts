@@ -236,7 +236,7 @@ export async function synchronizeTrainingStatus(training: any, now: Date) {
         targetStatus: computedStatus as 'upcoming' | 'ongoing' | 'finished',
       })
       return {
-        status: result?.runtime.status || computedStatus,
+        status: result?.runtime?.status || computedStatus,
         visibleCount: result?.visibleSubmissionCount || 0,
       }
     }

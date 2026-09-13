@@ -51,11 +51,17 @@ export async function applyContestAggregateMigration(expectedReportHash: string,
       const reason = issue(row)
       if (reason) { blocked.push({ trainingId: row.id, reason }); continue }
       const contest = await tx.contest.create({ data: {
-        id: crypto.randomUUID(), runtimeTrainingId: row.id, organizationId: row.organizationId,
+        id: crypto.randomUUID(), runtimeTrainingId: row.id, createdBy: row.createdBy,
+        organizationId: row.organizationId,
         title: row.title, description: row.description, contestDate: row.startTime,
         startAt: row.startTime, endAt: row.endTime, format: row.format, status: row.status,
         type: 'judged', teamId: row.teamId, countRating: Boolean(row.RatingConfig && row.RatingConfig.scope !== 'NONE'),
         scope: row.scope,
+        problemIdVisible: row.problemIdVisible,
+        solutionVisible: row.solutionVisible,
+        includeAdminInRanking: row.includeAdminInRanking,
+        finalizationStatus: row.finalizationStatus,
+        finalizedStandingId: row.finalizedStandingId,
       } })
       for (const problem of row.TrainingProblem) {
         await tx.contestProblem.create({ data: {

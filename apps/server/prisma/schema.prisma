@@ -548,30 +548,37 @@ model AiGenerationRequest {
 }
 
 model Contest {
-  id                  String                @id
-  runtimeTrainingId   Int?                  @unique
-  organizationId      String?
-  title               String
-  description         String?
-  contestDate         DateTime
-  startAt             DateTime?
-  endAt               DateTime?
-  format              String?
-  statusRevision      Int                   @default(0)
-  status              String                @default("upcoming")
-  type                String                @default("mock")
-  teamId              String?
-  countRating         Boolean               @default(false)
-  scope               String                @default("public")
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @default(now())
-  Team                Team?                 @relation(fields: [teamId], references: [id])
-  RuntimeTraining     Training?             @relation("ContestRuntimeTraining", fields: [runtimeTrainingId], references: [id], onDelete: Restrict)
-  Organization        Organization?         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  ContestProblem      ContestProblem[]
-  ContestProblemScore ContestProblemScore[]
-  ContestResource     ContestResource[]
-  ContestResult       ContestResult[]
+  id                    String                    @id
+  runtimeTrainingId     Int?                      @unique
+  createdBy             String?
+  organizationId        String?
+  title                 String
+  description           String?
+  contestDate           DateTime
+  startAt               DateTime?
+  endAt                 DateTime?
+  format                String?
+  statusRevision        Int                       @default(0)
+  status                String                    @default("upcoming")
+  type                  String                    @default("mock")
+  teamId                String?
+  countRating           Boolean                   @default(false)
+  scope                 String                    @default("public")
+  problemIdVisible      Boolean                   @default(false)
+  solutionVisible       Boolean                   @default(false)
+  includeAdminInRanking Boolean                   @default(false)
+  finalizationStatus    ContestFinalizationStatus @default(LIVE)
+  finalizedStandingId   String?                   @unique
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @default(now())
+  Team                  Team?                     @relation(fields: [teamId], references: [id])
+  RuntimeTraining       Training?                 @relation("ContestRuntimeTraining", fields: [runtimeTrainingId], references: [id], onDelete: Restrict)
+  Organization          Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  ContestProblem        ContestProblem[]
+  ContestProblemScore   ContestProblemScore[]
+  ContestResource       ContestResource[]
+  ContestResult         ContestResult[]
+  FinalizedStanding     ContestStandingSnapshot?  @relation("ContestFinalizedStanding", fields: [finalizedStandingId], references: [id], onDelete: SetNull)
 
   @@index([contestDate])
   @@index([scope])
@@ -579,6 +586,8 @@ model Contest {
   @@index([teamId])
   @@index([teamId, status])
   @@index([organizationId, status])
+  @@index([createdBy])
+  @@index([finalizationStatus])
 }
 
 model ContestProblem {
@@ -744,6 +753,7 @@ model ContestStandingSnapshot {
   supersededAt         DateTime?
   Training             Training               @relation(fields: [trainingId], references: [id], onDelete: Cascade)
   FinalizedForTraining Training?              @relation("TrainingFinalizedStanding")
+  FinalizedForContest  Contest?               @relation("ContestFinalizedStanding")
   Entries              ContestStandingEntry[]
   RatingBatches        RatingBatch[]
   BlogReferences       BlogReference[]
@@ -2690,28 +2700,28 @@ model Organization {
 }
 
 model OrganizationMembership {
-  id                       String                        @id
+  id                       String                             @id
   organizationId           String
   userId                   String
   memberRole               String
   relationType             String
-  status                   String                        @default("active")
+  status                   String                             @default("active")
   invitedBy                String?
   joinedAt                 DateTime?
-  createdAt                DateTime                      @default(now())
-  updatedAt                DateTime                      @updatedAt
-  Organization             Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  User                     User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt                DateTime                           @default(now())
+  updatedAt                DateTime                           @updatedAt
+  Organization             Organization                       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  User                     User                               @relation(fields: [userId], references: [id], onDelete: Restrict)
   StudentProfile           OrganizationStudentProfile?
   TeacherProfile           OrganizationTeacherProfile?
-  StudentMilestones        Milestone[]                   @relation("MilestoneStudentMembership")
-  TeacherMilestones        Milestone[]                   @relation("MilestoneTeacherMembership")
-  FormerPrincipalTransfers PrincipalTransferLog[]        @relation("FormerPrincipalMembership")
-  NewPrincipalTransfers    PrincipalTransferLog[]        @relation("NewPrincipalMembership")
-  ReviewedJoinApplications OrganizationJoinApplication[] @relation("JoinApplicationReviewerMembership")
-  SentInvitations          OrganizationInvitation[]      @relation("InvitationSenderMembership")
-  AssignedInvitations      OrganizationInvitation[]      @relation("InvitationHeadTeacherMembership")
-  CreatedAssignments       Assignment[]                  @relation("AssignmentCreatorMembership")
+  StudentMilestones        Milestone[]                        @relation("MilestoneStudentMembership")
+  TeacherMilestones        Milestone[]                        @relation("MilestoneTeacherMembership")
+  FormerPrincipalTransfers PrincipalTransferLog[]             @relation("FormerPrincipalMembership")
+  NewPrincipalTransfers    PrincipalTransferLog[]             @relation("NewPrincipalMembership")
+  ReviewedJoinApplications OrganizationJoinApplication[]      @relation("JoinApplicationReviewerMembership")
+  SentInvitations          OrganizationInvitation[]           @relation("InvitationSenderMembership")
+  AssignedInvitations      OrganizationInvitation[]           @relation("InvitationHeadTeacherMembership")
+  CreatedAssignments       Assignment[]                       @relation("AssignmentCreatorMembership")
   AssignmentRecipients     AssignmentRecipient[]
   RoleAssignments          OrganizationMembershipRole[]
   CapabilityGrants         OrganizationMembershipCapability[]
@@ -4719,7 +4729,7 @@ model User {
   TrainingUserProblemStatus                TrainingUserProblemStatus[]
   TrainingSessionParticipants              TrainingSessionParticipant[]
   AssignmentRecipients                     AssignmentRecipient[]
-  ManuallyCompletedAssignmentProgress       AssignmentProblemProgress[]       @relation("AssignmentProgressManualCompleter")
+  ManuallyCompletedAssignmentProgress      AssignmentProblemProgress[]       @relation("AssignmentProgressManualCompleter")
   RatingAccounts                           RatingAccount[]
   RatingChanges                            RatingChange[]
   ContestStandingEntries                   ContestStandingEntry[]

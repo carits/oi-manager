@@ -2,9 +2,9 @@ import crypto from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 
 /**
- * Keeps the normalized Contest aggregate in the same transaction as its
- * runtime Training compatibility row. The operation is deliberately
- * idempotent while both read models coexist.
+ * Creates or repairs the canonical Contest aggregate from a legacy runtime.
+ * Normal contest commands must mutate Contest first and project back to
+ * Training; this reverse bridge is limited to creation, migration and repair.
  */
 export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, trainingId: number) {
   const training = await tx.training.findUnique({
@@ -13,6 +13,7 @@ export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, tra
   })
   if (!training || training.type !== 'contest') return null
   const data = {
+    createdBy: training.createdBy,
     organizationId: training.organizationId,
     title: training.title,
     description: training.description,
@@ -25,6 +26,11 @@ export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, tra
     teamId: training.teamId,
     countRating: Boolean(training.RatingConfig && training.RatingConfig.scope !== 'NONE'),
     scope: training.scope,
+    problemIdVisible: training.problemIdVisible,
+    solutionVisible: training.solutionVisible,
+    includeAdminInRanking: training.includeAdminInRanking,
+    finalizationStatus: training.finalizationStatus,
+    finalizedStandingId: training.finalizedStandingId,
     updatedAt: new Date(),
   }
   return tx.contest.upsert({
@@ -34,13 +40,44 @@ export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, tra
   })
 }
 
+/**
+ * Mirrors canonical contest state to the temporary Training compatibility
+ * runtime. Callers must already hold the contest transaction lock.
+ */
+export async function projectContestRuntimeTx(tx: Prisma.TransactionClient, contestId: string) {
+  const contest = await tx.contest.findUnique({ where: { id: contestId } })
+  if (!contest?.runtimeTrainingId) return null
+  return tx.training.update({
+    where: { id: contest.runtimeTrainingId },
+    data: {
+      title: contest.title,
+      description: contest.description,
+      format: contest.format || 'ioi',
+      startTime: contest.startAt || contest.contestDate,
+      endTime: contest.endAt || contest.contestDate,
+      status: contest.status,
+      scope: contest.scope,
+      teamId: contest.teamId,
+      organizationId: contest.organizationId,
+      problemIdVisible: contest.problemIdVisible,
+      solutionVisible: contest.solutionVisible,
+      includeAdminInRanking: contest.includeAdminInRanking,
+      finalizationStatus: contest.finalizationStatus,
+      finalizedStandingId: contest.finalizedStandingId,
+      updatedAt: new Date(),
+    },
+  })
+}
+
 export async function syncContestProblemAggregateTx(tx: Prisma.TransactionClient, trainingProblemId: string) {
   const runtimeProblem = await tx.trainingProblem.findUnique({
     where: { id: trainingProblemId },
     include: { Training: true, Problem: true },
   })
   if (!runtimeProblem || runtimeProblem.Training.type !== 'contest') return null
-  const contest = await ensureContestAggregateTx(tx, runtimeProblem.trainingId)
+  const contest = await tx.contest.findUnique({
+    where: { runtimeTrainingId: runtimeProblem.trainingId },
+  })
   if (!contest) return null
   const data = {
     contestId: contest.id,

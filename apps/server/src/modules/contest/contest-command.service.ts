@@ -4,6 +4,7 @@ import logger from '../../lib/logger'
 import {
   deleteContestProblemAggregateTx,
   ensureContestAggregateTx,
+  projectContestRuntimeTx,
   stageContestProblemOrderProjectionTx,
   syncContestProblemAggregateTx,
 } from './contest-aggregate.service'
@@ -125,7 +126,7 @@ export async function deleteContestRuntimeTx(
     reportMissingCanonicalContest(runtimeTrainingId, 'delete', aggregate?.id)
     return { conflict: 'missing' as const }
   }
-  if (runtime.finalizedStandingId) return { conflict: 'finalized' as const }
+  if (aggregate.finalizedStandingId) return { conflict: 'finalized' as const }
 
   await tx.contest.delete({ where: { id: aggregate.id } })
   await tx.training.delete({ where: { id: runtimeTrainingId } })
@@ -266,7 +267,7 @@ const lifecycleRuntimeSelect = {
   finalizedStandingId: true,
 } as const
 
-/** Update editable contest metadata and its aggregate as one command. */
+/** Update canonical contest metadata and its compatibility projection. */
 export async function updateContestRuntimeTx(
   tx: Prisma.TransactionClient,
   input: UpdateContestRuntimeInput,
@@ -281,14 +282,16 @@ export async function updateContestRuntimeTx(
     reportMissingCanonicalContest(input.runtimeTrainingId, 'metadata_update', aggregate?.id)
     return { conflict: 'missing' as const, runtime: null }
   }
-  if (runtime.status !== input.expected.status
-    || runtime.format !== input.expected.format
-    || runtime.startTime.getTime() !== input.expected.startTime.getTime()
-    || runtime.endTime.getTime() !== input.expected.endTime.getTime()) {
+  const aggregateStartTime = aggregate.startAt || aggregate.contestDate
+  const aggregateEndTime = aggregate.endAt || aggregate.contestDate
+  if (aggregate.status !== input.expected.status
+    || aggregate.format !== input.expected.format
+    || aggregateStartTime.getTime() !== input.expected.startTime.getTime()
+    || aggregateEndTime.getTime() !== input.expected.endTime.getTime()) {
     return { conflict: 'stale' as const, runtime }
   }
 
-  if (input.patch.format !== undefined && input.patch.format !== runtime.format) {
+  if (input.patch.format !== undefined && input.patch.format !== aggregate.format) {
     const existing = await tx.trainingRatingConfig.findUnique({ where: { trainingId: runtime.id } })
     if (existing?.lockedAt) return { conflict: 'rating_locked' as const, runtime }
     if (existing) {
@@ -306,18 +309,38 @@ export async function updateContestRuntimeTx(
     }
   }
 
-  const updated = await tx.training.update({
-    where: { id: runtime.id },
-    data: input.patch,
+  await tx.contest.update({
+    where: { id: aggregate.id },
+    data: {
+      ...(input.patch.title !== undefined && { title: input.patch.title }),
+      ...(input.patch.description !== undefined && { description: input.patch.description }),
+      ...(input.patch.format !== undefined && { format: input.patch.format }),
+      ...(input.patch.startTime !== undefined && {
+        startAt: input.patch.startTime,
+        contestDate: input.patch.startTime,
+      }),
+      ...(input.patch.endTime !== undefined && { endAt: input.patch.endTime }),
+      ...(input.patch.problemIdVisible !== undefined && { problemIdVisible: input.patch.problemIdVisible }),
+      ...(input.patch.solutionVisible !== undefined && { solutionVisible: input.patch.solutionVisible }),
+      ...(input.patch.includeAdminInRanking !== undefined && {
+        includeAdminInRanking: input.patch.includeAdminInRanking,
+      }),
+      statusRevision: { increment: 1 },
+      updatedAt: new Date(),
+    },
   })
-  await ensureContestAggregateTx(tx, runtime.id)
+  const updated = await projectContestRuntimeTx(tx, aggregate.id)
+  if (!updated) {
+    reportMissingCanonicalContest(input.runtimeTrainingId, 'metadata_projection', aggregate.id)
+    return { conflict: 'missing' as const, runtime: null }
+  }
   return { conflict: null, runtime: updated }
 }
 
 /**
  * Apply a contest clock/status transition behind the canonical command
- * boundary. The Training row remains the compatibility runtime for now, but
- * callers cannot update it and then separately attempt to repair Contest.
+ * boundary. Contest is authoritative; Training is updated in the same
+ * transaction as a temporary compatibility projection.
  *
  * `expectedStatus` is a small CAS guard. A concurrent command wins cleanly;
  * the loser receives the current runtime instead of overwriting newer state.
@@ -338,17 +361,26 @@ export async function transitionContestLifecycleTx(
     return null
   }
 
-  const update = await tx.training.updateMany({
+  if (aggregate.status !== input.expectedStatus) {
+    return {
+      changed: false,
+      visibleSubmissionCount: 0,
+      runtime,
+    }
+  }
+
+  const update = await tx.contest.updateMany({
     where: {
-      id: input.runtimeTrainingId,
-      type: 'contest',
+      id: aggregate.id,
       status: input.expectedStatus,
     },
     data: {
       status: input.targetStatus,
-      ...(input.startTime ? { startTime: input.startTime } : {}),
-      ...(input.endTime ? { endTime: input.endTime } : {}),
+      ...(input.startTime ? { startAt: input.startTime, contestDate: input.startTime } : {}),
+      ...(input.endTime ? { endAt: input.endTime } : {}),
       ...(input.targetStatus === 'finished' ? { finalizationStatus: 'JUDGING' as const } : {}),
+      statusRevision: { increment: 1 },
+      updatedAt: new Date(),
     },
   })
 
@@ -356,9 +388,7 @@ export async function transitionContestLifecycleTx(
     return {
       changed: false,
       visibleSubmissionCount: 0,
-      runtime: await tx.training.findUniqueOrThrow({
-        where: { id: input.runtimeTrainingId },
-      }),
+      runtime,
     }
   }
 
@@ -366,8 +396,8 @@ export async function transitionContestLifecycleTx(
     await lockContestRatingConfigTx(
       tx,
       input.runtimeTrainingId,
-      input.actorUserId || runtime.createdBy,
-      runtime.format,
+      input.actorUserId || aggregate.createdBy || runtime.createdBy,
+      aggregate.format || runtime.format,
     )
   }
 
@@ -382,13 +412,11 @@ export async function transitionContestLifecycleTx(
       })).count
     : 0
 
-  await ensureContestAggregateTx(tx, input.runtimeTrainingId)
+  const projectedRuntime = await projectContestRuntimeTx(tx, aggregate.id)
   return {
     changed: true,
     visibleSubmissionCount,
-    runtime: await tx.training.findUniqueOrThrow({
-      where: { id: input.runtimeTrainingId },
-    }),
+    runtime: projectedRuntime,
   }
 }
 
@@ -402,10 +430,8 @@ const rejudgeRuntimeSelect = {
 /**
  * Put a finalized contest into the explicit post-rejudge hold state.
  *
- * Training still owns the runtime/finalization columns during the Contest
- * strangler migration, but callers must not interpret or mutate those columns
- * directly. This command is the single compatibility boundary until the
- * fields move onto the canonical Contest aggregate.
+ * Contest owns finalization state. Training is updated only as a compatibility
+ * projection for consumers that have not yet moved to the aggregate.
  */
 export async function holdContestFinalizationForRejudgeTx(
   tx: Prisma.TransactionClient,
@@ -430,18 +456,22 @@ export async function holdContestFinalizationForRejudgeTx(
     })
     return false
   }
-  if (!runtime.finalizedStandingId || runtime.finalizationStatus !== 'FINALIZED') return false
+  if (!aggregate.finalizedStandingId || aggregate.finalizationStatus !== 'FINALIZED') return false
 
-  const updated = await tx.training.updateMany({
+  const updated = await tx.contest.updateMany({
     where: {
-      id: runtimeTrainingId,
-      type: 'contest',
-      finalizedStandingId: runtime.finalizedStandingId,
+      id: aggregate.id,
+      finalizedStandingId: aggregate.finalizedStandingId,
       finalizationStatus: 'FINALIZED',
     },
-    data: { finalizationStatus: 'HELD' },
+    data: {
+      finalizationStatus: 'HELD',
+      statusRevision: { increment: 1 },
+      updatedAt: new Date(),
+    },
   })
   if (!updated.count) return false
 
+  await projectContestRuntimeTx(tx, aggregate.id)
   return true
 }
