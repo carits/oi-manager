@@ -11,14 +11,13 @@ import {
   isTeamMember,
   sortTrainingListForDisplay,
 } from '../training.helpers'
-import { defaultScoringRules, trackForFormat } from '../../rating/application/contest-rating.service'
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
-import { ensureContestAggregateTx } from '../../contest/contest-aggregate.service'
 import { listPlatformContestRuntimes } from '../../contest/contest-query.facade'
 import {
   createContestRuntimeTx,
   transitionContestLifecycleTx,
+  updateContestRuntimeTx,
 } from '../../contest/contest-command.service'
 
 export class TrainingCrudError extends Error {
@@ -331,7 +330,7 @@ export async function updateTraining(id: number, userId: string, input: any) {
   if (newEndTime <= now) fail(400, 'END_TIME_IN_PAST', '结束时间不能早于当前时间')
 
   const updated = await prisma.$transaction(async tx => {
-    const row = await tx.training.update({ where: { id }, data: {
+    const patch = {
       ...(input.title !== undefined && { title: input.title }),
       ...(input.description !== undefined && { description: input.description }),
       ...(input.format !== undefined && { format: input.format }),
@@ -342,22 +341,23 @@ export async function updateTraining(id: number, userId: string, input: any) {
       ...(input.includeAdminInRanking !== undefined && {
         includeAdminInRanking: input.includeAdminInRanking,
       }),
-    } })
-    if (training.type === 'contest' && input.format !== undefined && input.format !== training.format) {
-      const existing = await tx.trainingRatingConfig.findUnique({ where: { trainingId: id } })
-      if (existing) {
-        const track = trackForFormat(input.format)
-        const scoringRules = defaultScoringRules(track)
-        await tx.trainingRatingConfig.update({ where: { id: existing.id }, data: {
-          track,
-          scoringRules,
-          rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
-          revision: { increment: 1 },
-        } })
-      }
     }
-    if (training.type === 'contest') await ensureContestAggregateTx(tx, id)
-    return row
+    if (training.type === 'contest') {
+      const result = await updateContestRuntimeTx(tx, {
+        runtimeTrainingId: id,
+        expected: {
+          status: training.status,
+          format: training.format,
+          startTime: training.startTime,
+          endTime: training.endTime,
+        },
+        patch,
+      })
+      if (result.conflict === 'rating_locked') fail(409, 'RATING_CONFIG_FROZEN', '比赛开始后不能修改赛制或 Rating Track')
+      if (result.conflict) fail(409, 'CONTEST_UPDATE_STALE', '比赛配置已被其他管理员修改，请刷新后重试')
+      return result.runtime!
+    }
+    return tx.training.update({ where: { id }, data: patch })
   })
   logger.info('training_updated', { action: 'trainings', metadata: { trainingId: id } })
   return updated
@@ -370,9 +370,21 @@ export async function updateTrainingEndTime(id: number, userId: string, endTime:
   if (end <= new Date()) fail(400, 'END_TIME_IN_PAST', '结束时间不能早于当前时间')
   if (end <= training.startTime) fail(400, 'INVALID_TIME_RANGE', '结束时间必须晚于开始时间')
   return prisma.$transaction(async tx => {
-    const updated = await tx.training.update({ where: { id }, data: { endTime: end } })
-    if (training.type === 'contest') await ensureContestAggregateTx(tx, id)
-    return updated
+    if (training.type === 'contest') {
+      const result = await updateContestRuntimeTx(tx, {
+        runtimeTrainingId: id,
+        expected: {
+          status: training.status,
+          format: training.format,
+          startTime: training.startTime,
+          endTime: training.endTime,
+        },
+        patch: { endTime: end },
+      })
+      if (result.conflict) fail(409, 'CONTEST_UPDATE_STALE', '比赛配置已被其他管理员修改，请刷新后重试')
+      return result.runtime!
+    }
+    return tx.training.update({ where: { id }, data: { endTime: end } })
   })
 }
 

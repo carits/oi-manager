@@ -66,6 +66,26 @@ export interface ContestLifecycleMutation {
   endTime?: Date
 }
 
+export interface UpdateContestRuntimeInput {
+  runtimeTrainingId: number
+  expected: {
+    status: string
+    format: string
+    startTime: Date
+    endTime: Date
+  }
+  patch: {
+    title?: string
+    description?: string | null
+    format?: string
+    startTime?: Date
+    endTime?: Date
+    problemIdVisible?: boolean
+    solutionVisible?: boolean
+    includeAdminInRanking?: boolean
+  }
+}
+
 const lifecycleRuntimeSelect = {
   id: true,
   type: true,
@@ -77,6 +97,59 @@ const lifecycleRuntimeSelect = {
   finalizationStatus: true,
   finalizedStandingId: true,
 } as const
+
+/** Update editable contest metadata and its aggregate as one command. */
+export async function updateContestRuntimeTx(
+  tx: Prisma.TransactionClient,
+  input: UpdateContestRuntimeInput,
+) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${input.runtimeTrainingId}`}, 0)) IS NULL AS locked`
+  const aggregate = await tx.contest.findUnique({
+    where: { runtimeTrainingId: input.runtimeTrainingId },
+    include: { RuntimeTraining: true },
+  })
+  const runtime = aggregate?.RuntimeTraining || await tx.training.findFirst({
+    where: { id: input.runtimeTrainingId, type: 'contest' },
+  })
+  if (!runtime) return { conflict: 'missing' as const, runtime: null }
+  if (!aggregate) {
+    logger.warn('contest_command_legacy_fallback', {
+      action: 'contest_command',
+      metadata: { runtimeTrainingId: input.runtimeTrainingId, consumer: 'metadata_update' },
+    })
+  }
+  if (runtime.status !== input.expected.status
+    || runtime.format !== input.expected.format
+    || runtime.startTime.getTime() !== input.expected.startTime.getTime()
+    || runtime.endTime.getTime() !== input.expected.endTime.getTime()) {
+    return { conflict: 'stale' as const, runtime }
+  }
+
+  if (input.patch.format !== undefined && input.patch.format !== runtime.format) {
+    const existing = await tx.trainingRatingConfig.findUnique({ where: { trainingId: runtime.id } })
+    if (existing?.lockedAt) return { conflict: 'rating_locked' as const, runtime }
+    if (existing) {
+      const track = trackForFormat(input.patch.format)
+      const scoringRules = defaultScoringRules(track)
+      await tx.trainingRatingConfig.update({
+        where: { id: existing.id },
+        data: {
+          track,
+          scoringRules,
+          rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
+          revision: { increment: 1 },
+        },
+      })
+    }
+  }
+
+  const updated = await tx.training.update({
+    where: { id: runtime.id },
+    data: input.patch,
+  })
+  await ensureContestAggregateTx(tx, runtime.id)
+  return { conflict: null, runtime: updated }
+}
 
 /**
  * Apply a contest clock/status transition behind the canonical command

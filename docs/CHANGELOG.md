@@ -9,10 +9,16 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest 可编辑元数据命令边界
+
+- 赛前标题、说明、赛制、起止时间、题号/题解可见性和管理员排名配置，以及独立结束时间修改入口统一改由 `updateContestRuntimeTx()` 执行；命令使用比赛锁和状态/赛制/时间快照检查避免并发覆盖。
+- 赛制变化时 Rating Track、默认规则和规则哈希与 Runtime/Contest 聚合同事务更新。普通 Training 保持原路径，并补充真实 HTTP 契约回归。
+
 ### Contest Rating Finalization 命令边界
 
 - 新增独立 Finalization Command，将人工/定时结算、失败标记和赛后 Rating 重放完成的比赛状态写入统一置于 Contest 锁与期望状态 CAS 下；Rating Service 保留排名与 Rating 算法职责，不再直接更新兼容 Training 的终结状态。
 - 命令在旧比赛映射缺失时记录告警并同事务修复聚合；架构门禁禁止 Rating 再次绕过命令边界。
+- Linux 构建和隔离 Rating 19/19 通过；提交 `c6c37f7` 发布后 API 3302→3303，生产 767/767 映射且核心差异、重复、未映射及 Query/Command fallback 均为 0。
 
 ### Contest 生命周期命令边界
 

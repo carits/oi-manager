@@ -674,4 +674,40 @@ describe('比赛类型区分测试', () => {
     expect(afterFinish.endAt?.getTime()).toBe(afterFinish.RuntimeTraining?.endTime.getTime())
     expect(afterFinish.RuntimeTraining?.finalizationStatus).toBe('JUDGING')
   })
+
+  it('CT5: 比赛基本信息、赛制和结束时间通过统一命令同步', async () => {
+    const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .post(`/api/teams/${team.id}/trainings`)
+      .send({
+        title: '待编辑比赛',
+        format: 'oi',
+        type: 'contest',
+        startTime: new Date(Date.now() + 86400000).toISOString(),
+        endTime: new Date(Date.now() + 86400000 * 2).toISOString(),
+      })
+
+    expect(created.status).toBe(200)
+    const contestId = created.body.data.id as number
+    const renamedEndTime = new Date(Date.now() + 86400000 * 3)
+    const updated = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .put(`/api/trainings/${contestId}`)
+      .send({ title: '已编辑比赛', format: 'ioi' })
+    expect(updated.status).toBe(200)
+    expect(updated.body.data.title).toBe('已编辑比赛')
+    expect(updated.body.data.format).toBe('ioi')
+
+    const extended = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .put(`/api/trainings/${contestId}/end-time`)
+      .send({ endTime: renamedEndTime.toISOString() })
+    expect(extended.status).toBe(200)
+
+    const aggregate = await prisma.contest.findUniqueOrThrow({
+      where: { runtimeTrainingId: contestId },
+      include: { RuntimeTraining: { include: { RatingConfig: true } } },
+    })
+    expect(aggregate.title).toBe('已编辑比赛')
+    expect(aggregate.format).toBe('ioi')
+    expect(aggregate.endAt?.getTime()).toBe(renamedEndTime.getTime())
+    expect(aggregate.RuntimeTraining?.RatingConfig?.track).toBe('IOI')
+  })
 })
