@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest 提交身份停止双写
+
+- 比赛 `Submission` 与 `ContestUserProblemStatus` 已切换为只写必填的 `canonicalContestId/canonicalContestProblemId`；旧整数 `contestId/contestProblemId` 改为可空历史读取字段，新提交与新状态不再写入。
+- 删除 Submission、比赛题目状态和比赛记录的写入改写触发器，新增 Contest/ContestProblem 复合外键和身份 CHECK；比赛提交仍保存 `trainingId/trainingProblemId` 作为实际 Judge 运行路由，不再把它们当作业务身份。
+- 提交创建、Judge 终结同步、比赛结束 AC 汇总、可见性修复和维护迁移均改从规范 Contest 身份查询。生产备份恢复库应用两项迁移后，767 场比赛、1178 条提交、702 条题目状态和 3 条记录均为 0 缺失、0 错配；生产同构隔离套件 12 文件 119/119 通过。
+- 发布前备份 `/data/backups/oi-manager/automatic/oi_manager_20260913_225148.dump` 已校验（35,206,899 bytes，SHA-256 `0034484cf738fec3dcb5f4178c10649d5851e44a4de3e356840b100eca61c143`）。提交 `daa9900`、`9287273`、`cae934a`、`d311505` 已推送 `main`；生产 Prisma 69/69，API 3302→3303，health/readiness 和 Router、Worker、Executor、Judge、Web 均正常。本批无 Web 代码，现有 BUILD_ID 保持不变。
+
 ### 最小浏览器 Session Claims
 
 - 新增与请求期 `JwtPayload` 分离的 `SessionJwtPayload`；签名 Cookie 只携带账号 ID、Session Version、规范 AccountRole、用户名和工作区模式。

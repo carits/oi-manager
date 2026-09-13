@@ -16,7 +16,7 @@ source_of_truth: apps/server/prisma/schema.prisma, docs/architecture/generated/A
 | 账号与组织 | `User`、`Organization`、`School`、`OrganizationMembership`、成员资料、加入/邀请/创建申请与审计 |
 | 授权 | `OrganizationMembershipRole`、`OrganizationMembershipCapability`；旧 `memberRole` 在迁移期仅作为资料身份和兼容输入 |
 | 团队与教学 | `Team`、`Assignment`、`TrainingSession` 及其题目、名单、进度、提示、反馈和事件 |
-| 比赛运行与 Rating | `Contest/ContestProblem` 是比赛元数据、生命周期、Rating 身份、终结状态、发现与跨域查询的规范入口；关联的 `Training(type=contest)` 暂承载提交等子表兼容关系并保存同事务投影；Rating 配置、最终榜单和批次均关联规范 Contest，快照与批次不可变 |
+| 比赛运行与 Rating | `Contest/ContestProblem` 是比赛元数据、生命周期、提交身份、Rating 身份、终结状态、发现与跨域查询的规范入口；关联的 `Training(type=contest)` 只承载参与者及 Judge 运行路由；Rating 配置、最终榜单和批次均关联规范 Contest，快照与批次不可变 |
 | 题目与评测资产 | `Problem`、`ProblemTestSetRevision`、Test Graph、测试点、Blob、Judge Program、Validator/Feature/Classifier |
 | Candidate 与贡献经济 | Candidate、生成任务、Wrong Corpus、Selector、Evaluation Budget、Contribution、Carits 和 Credits 账本 |
 | 提交与 Judge | `Submission` 保存提交意图与远端归档结果；本地执行结果唯一来自 `JudgeRun`，物理执行来自 `JudgeAttempt` |
@@ -56,7 +56,7 @@ flowchart LR
 - 已创建活动固定 Revision，题库 Hack/Candidate 的新 Revision 不直接传播到活动。
 - `Contest/ContestProblem` 是比赛发现、跨领域查询和命令定位的规范入口；运行比赛必须先通过 `Contest.runtimeTrainingId` 定位兼容执行对象，缺失映射时查询和写入均 fail closed，不再读取或修改裸 `Training(type=contest)`，也不会由普通业务请求自动补建聚合。
 - `Contest` 保存标题、说明、赛制、范围、时间、可见性、生命周期、Rating 终结状态与最终榜单指针；Rating 结算、重放和更早比赛阻塞判断均读取这些规范字段。
-- `Training(type=contest)` 暂时保留历史整数路由和参与者等运行子表关系，并保存由 Contest Command Service 在同一事务生成的兼容投影。`TrainingRatingConfig`、`ContestStandingSnapshot`、`RatingBatch`、比赛 `Submission`、`ContestUserProblemStatus` 与比赛记录均保存规范 Contest 身份，同时保留整数运行键兼容旧 API；数据库迁移与触发器保证双写一致并拒绝身份分叉。所有比赛创建、编辑、生命周期、题目结构、提交和终结写入必须经过规范边界。
+- `Training(type=contest)` 暂时保留参与者、Judge 路由等运行关系。新比赛 `Submission` 与 `ContestUserProblemStatus` 只写 `canonicalContestId/canonicalContestProblemId`；旧整数 `contestId/contestProblemId` 已改为可空历史读取字段，应用和数据库不再为新记录双写。数据库 CHECK、复合外键与 CAS 保证规范 ContestProblem 必须属于同一 Contest。`ContestRecord` 因同时承载普通训练记录而继续保存运行 `trainingId`，比赛记录必须同时保存规范 `canonicalContestId`。Rating 三类事实仍处在独立兼容阶段。所有比赛创建、编辑、生命周期、题目结构、提交和终结写入必须经过规范边界。
 
 ## Submission 与 Judge
 
@@ -68,7 +68,7 @@ erDiagram
   JudgeRun ||--o| JudgeAttempt : current
 ```
 
-- 本地提交：`Submission` 保存代码、来源、作用域、固定 Revision、IO 意图和 `currentJudgeRunId`；比赛提交另保存 `canonicalContestId/canonicalContestProblemId`，旧 `contestId/contestProblemId` 仅作整数路由兼容。状态、分数、测试点与资源指标只读取 `JudgeRun`。
+- 本地提交：`Submission` 保存代码、来源、作用域、固定 Revision、IO 意图和 `currentJudgeRunId`；比赛提交必须保存 `canonicalContestId/canonicalContestProblemId`，并以 `trainingId/trainingProblemId` 固化实际 Judge 运行对象。旧 `contestId/contestProblemId` 仅供既有历史记录读取，新提交保持为空。状态、分数、测试点与资源指标只读取 `JudgeRun`。
 - 远端归档：没有本地 Run，其来源平台结果保存在 `Submission` 的归档快照字段。
 - `JudgeAttempt` 使用租约和 fencing token；终态 Attempt 不重新打开，基础设施重试创建新 Attempt，人工重测创建新 Run。
 - 投影审计只比较 Run 与 Attempt，并强制本地提交均有 Run；不再要求本地 Run 回写 Submission 结果列。

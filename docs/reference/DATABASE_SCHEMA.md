@@ -66,10 +66,10 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `Contest` | 规范比赛聚合；通过唯一 `runtimeTrainingId` 桥接兼容运行态，并直接拥有 Rating 配置、最终榜单快照和结算批次 |
 | `ContestProblem` | 既有比赛题目；桥接运行题目并固定 Canonical Problem 与 TestSet Revision |
 | `ContestProblemScore` | 以 Prisma schema 为准 |
-| `ContestRecord` | 比赛/训练记录；比赛记录保存规范 `canonicalContestId`，`trainingId` 暂作运行兼容键 |
+| `ContestRecord` | 比赛/训练共用记录；普通训练只保存 `trainingId`，比赛记录同时保存规范 `canonicalContestId` |
 | `ContestResource` | 以 Prisma schema 为准 |
 | `ContestResult` | 以 Prisma schema 为准 |
-| `ContestUserProblemStatus` | 比赛用户题目状态；同时保存规范 Contest/ContestProblem 身份与旧整数运行键 |
+| `ContestUserProblemStatus` | 比赛用户题目状态；新记录只写必填的规范 Contest/ContestProblem 身份，旧整数键仅供历史读取且可空 |
 | `ContributionEvent` | Candidate/Hack 正式晋升产生的版本化声誉事实及证据快照 |
 | `ContributionRewardDelivery` | 贡献事件的 Carits 奖励投递，含租约、fencing、按毛发放统计的日预算、有界重试、入账与冲正引用 |
 | `ContributionProject` | 以 Prisma schema 为准 |
@@ -174,7 +174,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `RatingPool` | 全局或指定组织的独立 OI、IOI、ACM Rating 参数空间 |
 | `RatingRebuildJob` | 赛后重测引起的 Rating 池重放审计与结果报告 |
 | `SolutionSimilarityCheck` | 题解投稿 Revision 的正文/代码相似度风险提示、来源声明和审核匹配证据 |
-| `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，以提交级 IO 固化 stdin/stdout 或文件名，并通过 `currentJudgeRunId` 指向当前逻辑评测 |
+| `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，以提交级 IO 固化 stdin/stdout 或文件名，并通过 `currentJudgeRunId` 指向当前逻辑评测；比赛提交以规范 Contest/ContestProblem 为身份、以 Training/TrainingProblem 为 Judge 运行路由，旧整数比赛键仅作历史读取 |
 | `Team` | 以 Prisma schema 为准 |
 | `TeamJoinRequest` | 以 Prisma schema 为准 |
 | `TeamMember` | 以 Prisma schema 为准 |
