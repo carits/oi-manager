@@ -11,11 +11,12 @@ import {
   isTeamMember,
   sortTrainingListForDisplay,
 } from '../training.helpers'
-import { lockContestRatingConfigTx, trackForFormat, defaultScoringRules } from '../../rating/application/contest-rating.service'
+import { defaultScoringRules, lockContestRatingConfigTx, trackForFormat } from '../../rating/application/contest-rating.service'
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 import { ensureContestAggregateTx } from '../../contest/contest-aggregate.service'
 import { listPlatformContestRuntimes } from '../../contest/contest-query.facade'
+import { createContestRuntimeTx } from '../../contest/contest-command.service'
 
 export class TrainingCrudError extends Error {
   constructor(
@@ -35,20 +36,6 @@ function parseDate(value: unknown, field: string) {
   const parsed = new Date(String(value))
   if (Number.isNaN(parsed.getTime())) fail(400, 'INVALID_DATE', `${field}格式无效`)
   return parsed
-}
-
-function defaultRatingConfigData(trainingId: number, format: string, createdBy: string) {
-  const track = trackForFormat(format)
-  const scoringRules = defaultScoringRules(track)
-  return {
-    id: crypto.randomUUID(),
-    trainingId,
-    scope: 'NONE' as const,
-    track,
-    scoringRules,
-    rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
-    createdBy,
-  }
 }
 
 export async function listTeamTrainings(params: {
@@ -127,6 +114,23 @@ export async function createTeamTraining(params: {
 
   const activityType = type || 'training'
   const training = await prisma.$transaction(async tx => {
+    if (activityType === 'contest') {
+      return createContestRuntimeTx(tx, {
+        teamId: params.teamId,
+        organizationId: null,
+        scope: team.scope,
+        title,
+        description: description || null,
+        format: format || 'ioi',
+        startTime: start,
+        endTime: end,
+        status: 'upcoming',
+        createdBy: params.user.userId,
+        problemIdVisible: problemIdVisible ?? false,
+        solutionVisible: solutionVisible ?? false,
+        includeAdminInRanking: includeAdminInRanking ?? false,
+      })
+    }
     const row = await tx.training.create({ data: {
       teamId: params.teamId,
       organizationId: null,
@@ -144,10 +148,6 @@ export async function createTeamTraining(params: {
       type: activityType,
       updatedAt: new Date(),
     } })
-    if (activityType === 'contest') {
-      await tx.trainingRatingConfig.create({ data: defaultRatingConfigData(row.id, row.format, params.user.userId) })
-      await ensureContestAggregateTx(tx, row.id)
-    }
     return row
   })
   logger.info('training_created', {
@@ -195,7 +195,7 @@ export async function createPlatformContest(params: { user: any; input: any }) {
   if (startTime <= new Date()) fail(400, 'START_TIME_IN_PAST', '开始时间不能早于当前时间')
 
   const contest = await prisma.$transaction(async tx => {
-    const row = await tx.training.create({ data: {
+    const row = await createContestRuntimeTx(tx, {
       teamId: null,
       organizationId: null,
       scope: 'platform',
@@ -209,11 +209,7 @@ export async function createPlatformContest(params: { user: any; input: any }) {
       problemIdVisible: params.input.problemIdVisible ?? false,
       solutionVisible: params.input.solutionVisible ?? false,
       includeAdminInRanking: params.input.includeAdminInRanking ?? false,
-      type: 'contest',
-      updatedAt: new Date(),
-    } })
-    await tx.trainingRatingConfig.create({ data: defaultRatingConfigData(row.id, row.format, params.user.userId) })
-    await ensureContestAggregateTx(tx, row.id)
+    })
     await tx.platformAuditLog.create({ data: {
       id: crypto.randomUUID(), actorUserId: params.user.userId,
       action: 'platform_contest_created', targetType: 'training', targetId: String(row.id),

@@ -9,6 +9,18 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### 生产依赖与安全基线修复
+
+- 修复 Next、Sharp、js-yaml 与 qs 的已知安全公告版本；生产原生 Sharp、三端构建、128 项核心服务端回归和依赖审计全部通过。
+- 为每个安全基线子检查增加硬超时，并为不稳定的 npm advisory 请求增加总时长受限的完整重试；外部服务持续不可用或发现漏洞时仍 fail closed。
+- 解除安全基线与 Monitor 结果之间的自引用失败：仅基线内的 Runtime Audit 延迟检查旧 Monitor 结果，基线成功后重新执行 Monitor，再由严格 Runtime Audit 复核完整运行约束。
+- API 蓝绿切至 3302；Web BUILD_ID `yfKCYt_RhRI2pj5ffyeMi` 已通过候选和正式消息闭环探针。最终安全基线、Monitor、Runtime Audit、六项服务、Contest 767/767 映射和零 fallback 均通过。
+
+### Contest 创建命令边界
+
+- 新增 `createContestRuntimeTx()`，将兼容 RuntimeTraining、默认 Rating 配置和规范 Contest 聚合的创建收进同一事务命令；团队、平台和学校三条比赛创建路径不再各自拼装双写。
+- 架构门禁要求 Training 与 Organization 创建入口显式调用 Contest Command Service。普通 Training 创建流程、既有 API、ID、赛制、权限和 Rating 默认值保持不变。
+
 ### Contest Query Facade 第二批与 Command Boundary
 
 - 新增并扩展 Contest 查询 Facade：Rating 配置、参与、结算、重放等全链路、到期调度、平台比赛列表、数据市场的比赛许可证绑定和可见范围，个人/校园 Dashboard 的比赛发现、组织成员页的学校/团队比赛列表、Blog 比赛引用审核、Submission 比赛上下文、比赛概览/资料/题解/附件、题目访问、可见范围与内容读取均优先从 `Contest.runtimeTrainingId` 进入规范聚合，再使用关联的 RuntimeTraining 执行既有评测逻辑；旧 `Training.type=contest` 回退被限制在 Facade 内并记录结构化告警。

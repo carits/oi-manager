@@ -84,6 +84,9 @@ if (!trainingContent.includes('findActivityRuntimeForAccess')) {
 if (!judgeRun.includes('holdContestFinalizationForRejudgeTx')) {
   violations.push('Judge rejudge finalization bypasses the Contest command service')
 }
+if (!trainingCrud.includes('createContestRuntimeTx') || !organizationMember.includes('createContestRuntimeTx')) {
+  violations.push('Contest creation bypasses the Contest command service')
+}
 
 console.log(JSON.stringify({
   assignmentAuthorizationBoundary: !violations.some(item => item.startsWith('Assignment')),

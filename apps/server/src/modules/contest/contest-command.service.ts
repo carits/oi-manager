@@ -1,6 +1,57 @@
 import type { Prisma } from '@prisma/client'
+import crypto from 'node:crypto'
 import logger from '../../lib/logger'
 import { ensureContestAggregateTx } from './contest-aggregate.service'
+import { defaultScoringRules, trackForFormat } from '../rating/application/contest-rating.service'
+
+export interface CreateContestRuntimeInput {
+  teamId: string | null
+  organizationId: string | null
+  scope: string
+  title: string
+  description: string | null
+  format: string
+  startTime: Date
+  endTime: Date
+  status: string
+  createdBy: string
+  problemIdVisible: boolean
+  solutionVisible: boolean
+  includeAdminInRanking: boolean
+}
+
+/**
+ * Create the compatibility runtime and canonical Contest identity as one
+ * command. Until lifecycle execution moves off Training, callers receive the
+ * runtime row, but they must not assemble the dual write themselves.
+ */
+export async function createContestRuntimeTx(
+  tx: Prisma.TransactionClient,
+  input: CreateContestRuntimeInput,
+) {
+  const runtime = await tx.training.create({
+    data: {
+      ...input,
+      type: 'contest',
+      updatedAt: new Date(),
+    },
+  })
+  const track = trackForFormat(runtime.format)
+  const scoringRules = defaultScoringRules(track)
+  await tx.trainingRatingConfig.create({
+    data: {
+      id: crypto.randomUUID(),
+      trainingId: runtime.id,
+      scope: 'NONE',
+      track,
+      scoringRules,
+      rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
+      createdBy: runtime.createdBy,
+    },
+  })
+  await ensureContestAggregateTx(tx, runtime.id)
+  return runtime
+}
 
 const rejudgeRuntimeSelect = {
   id: true,
