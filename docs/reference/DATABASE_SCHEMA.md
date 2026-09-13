@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-12
+last_verified: 2026-09-13
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -58,10 +58,12 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `BlogFeature` | 可退役且带审计的社区精选事实 |
 | `CaritsAccount` | 用户、组织或系统的 Carits 账户；余额与不可变分录同事务更新 |
 | `ContestStandingEntry` | 最终榜单中带组织快照、并列组和 Rating 资格的参赛者事实 |
-| `ContestStandingSnapshot` | 一场比赛版本化且不可变的最终排名输入 |
+| `ContestStandingSnapshot` | 以规范 `contestId` 归属比赛、同时保留运行 `trainingId` 兼容键的版本化不可变最终排名输入 |
+| `TrainingRatingConfig` | 一场规范 Contest 唯一的冻结 Rating 策略；`trainingId` 仅保留为运行兼容键 |
+| `RatingBatch` | 以规范 `contestId` 归属比赛和 RatingPool 的不可变结算/重放批次 |
 | `CaritsLedgerEntry` | 交易内按账户聚合的双向分录；posted 后不得追加、修改或删除 |
 | `CaritsTransaction` | 平衡的 Carits 交易、幂等业务引用、请求指纹及冲正关系；同键差异载荷必须拒绝 |
-| `Contest` | 既有比赛聚合；可通过唯一 `runtimeTrainingId` 桥接当前 Training 比赛运行态 |
+| `Contest` | 规范比赛聚合；通过唯一 `runtimeTrainingId` 桥接兼容运行态，并直接拥有 Rating 配置、最终榜单快照和结算批次 |
 | `ContestProblem` | 既有比赛题目；桥接运行题目并固定 Canonical Problem 与 TestSet Revision |
 | `ContestProblemScore` | 以 Prisma schema 为准 |
 | `ContestRecord` | 以 Prisma schema 为准 |

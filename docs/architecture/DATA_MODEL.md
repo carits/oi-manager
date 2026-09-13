@@ -16,7 +16,7 @@ source_of_truth: apps/server/prisma/schema.prisma, docs/architecture/generated/A
 | 账号与组织 | `User`、`Organization`、`School`、`OrganizationMembership`、成员资料、加入/邀请/创建申请与审计 |
 | 授权 | `OrganizationMembershipRole`、`OrganizationMembershipCapability`；旧 `memberRole` 在迁移期仅作为资料身份和兼容输入 |
 | 团队与教学 | `Team`、`Assignment`、`TrainingSession` 及其题目、名单、进度、提示、反馈和事件 |
-| 比赛运行与 Rating | `Contest/ContestProblem` 是比赛元数据、生命周期、终结状态、发现与跨域查询的规范入口；关联的 `Training(type=contest)` 暂承载提交等子表兼容关系并保存同事务投影；最终榜单和 Rating 批次不可变 |
+| 比赛运行与 Rating | `Contest/ContestProblem` 是比赛元数据、生命周期、Rating 身份、终结状态、发现与跨域查询的规范入口；关联的 `Training(type=contest)` 暂承载提交等子表兼容关系并保存同事务投影；Rating 配置、最终榜单和批次均关联规范 Contest，快照与批次不可变 |
 | 题目与评测资产 | `Problem`、`ProblemTestSetRevision`、Test Graph、测试点、Blob、Judge Program、Validator/Feature/Classifier |
 | Candidate 与贡献经济 | Candidate、生成任务、Wrong Corpus、Selector、Evaluation Budget、Contribution、Carits 和 Credits 账本 |
 | 提交与 Judge | `Submission` 保存提交意图与远端归档结果；本地执行结果唯一来自 `JudgeRun`，物理执行来自 `JudgeAttempt` |
@@ -56,7 +56,7 @@ flowchart LR
 - 已创建活动固定 Revision，题库 Hack/Candidate 的新 Revision 不直接传播到活动。
 - `Contest/ContestProblem` 是比赛发现、跨领域查询和命令定位的规范入口；运行比赛必须先通过 `Contest.runtimeTrainingId` 定位兼容执行对象，缺失映射时查询和写入均 fail closed，不再读取或修改裸 `Training(type=contest)`，也不会由普通业务请求自动补建聚合。
 - `Contest` 保存标题、说明、赛制、范围、时间、可见性、生命周期、Rating 终结状态与最终榜单指针；Rating 结算、重放和更早比赛阻塞判断均读取这些规范字段。
-- `Training(type=contest)` 暂时保留历史外键、提交、参与者、Rating 配置等运行子表关系，并保存由 Contest Command Service 在同一事务生成的兼容投影。所有比赛创建、编辑、生命周期、题目结构和终结写入必须经过命令边界，普通领域禁止直接写双模型。
+- `Training(type=contest)` 暂时保留历史外键、提交和参与者等运行子表关系，并保存由 Contest Command Service 在同一事务生成的兼容投影。`TrainingRatingConfig`、`ContestStandingSnapshot`、`RatingBatch` 以 `contestId` 作为规范身份，同时保留 `trainingId` 兼容旧 API；数据库迁移与触发器保证双写一致，Rating 查询和结算只从 Contest 关系进入。所有比赛创建、编辑、生命周期、题目结构和终结写入必须经过命令边界，普通领域禁止直接写双模型。
 
 ## Submission 与 Judge
 

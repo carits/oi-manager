@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest Rating 规范身份
+
+- `TrainingRatingConfig`、`ContestStandingSnapshot` 与 `RatingBatch` 新增规范 `contestId`，并由 Contest 直接拥有。Rating 配置、到期发现、结算、同池排序与重放不再仅靠兼容 `trainingId` 判断比赛身份。
+- 安全增量迁移按 `Contest.runtimeTrainingId` 回填历史 Rating 事实；任何缺失都会使迁移 fail closed。数据库触发器兼容滚动发布期间旧二进制“先创建配置、后创建聚合”的顺序，并拒绝新写入的 Contest/Training 身份错配。
+- 比赛创建、配置更新、榜单快照、结算批次、重放和未终结草稿删除均完成规范身份双写；受保护的 Contest 聚合迁移报告增加三类 Rating 事实的缺失与错配统计。
+- 生产备份恢复库已应用全部 67 个 migration，缺失/错配为 0，旧二进制顺序探针通过；使用隔离 Linux Prisma Client 的 Rating/Contest 定向集成测试 7 文件 71/71 通过。提交 `6eaa7bf` 当前仅在隔离分支，正式生产发布信息将在提升后补录。
+
 ### Contest 可变状态规范化
 
 - `Contest` 现在是比赛元数据、生命周期、可见性、Rating Finalization 与最终榜单指针的权威来源；所有命令先以 advisory lock 和 CAS 写 Contest，再在同一事务生成 `Training` 兼容投影。

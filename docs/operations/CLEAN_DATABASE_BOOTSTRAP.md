@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-08-27
+last_verified: 2026-09-13
 source_of_truth: apps/server/scripts/bootstrap-clean-database.ts, scripts/verify-clean-database-bootstrap.sh, Prisma schema and migration directory
 ---
 
@@ -17,6 +17,10 @@ pnpm --filter server exec prisma migrate deploy
 `prisma/bootstrap/supplement.sql` 中 Prisma 无法表达的 Check、部分唯一索引、函数和触发器，最后把
 仓库内每个历史 migration 按原始文件 SHA-256 登记为已执行。Bootstrap 不修改历史 migration，也不用于
 升级、修复或覆盖已有数据库。
+
+补充结构同时包含 Contest Rating 规范身份触发器：兼容旧二进制先写 `TrainingRatingConfig`、后创建 Contest 的
+滚动发布顺序，并拒绝配置、榜单快照或 Rating Batch 指向与 `runtimeTrainingId` 不一致的 Contest。空库 bootstrap
+与备份升级路径必须生成同一组触发器、外键和索引，不能只在增量 migration 路径具备该保护。
 
 ## 安全规则
 

@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, product, operations
-last_verified: 2026-09-09
+last_verified: 2026-09-13
 source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/rating, apps/server/src/modules/training
 ---
 
@@ -9,8 +9,10 @@ source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/ratin
 
 ## 领域边界
 
-Rating 只消费比赛结束后的不可变 `ContestStandingSnapshot`，不直接读取实时榜单作为历史事实。当前活动模型仍为
-`Training(type=contest)`；旧 `Contest.countRating`、用户资料上的旧 rating 字段不参与新链路。
+Rating 只消费比赛结束后的不可变 `ContestStandingSnapshot`，不直接读取实时榜单作为历史事实。`Contest` 是
+Rating 配置、榜单快照和结算批次的规范比赛身份；`Training(type=contest)` 仅暂时承载提交、参与者等历史运行子表，
+三类 Rating 事实会同时保存兼容 `trainingId` 与规范 `contestId`。旧 `Contest.countRating`、用户资料上的旧 rating
+字段不参与新链路。
 
 系统按赛制和范围建立相互独立的池：
 
@@ -66,9 +68,20 @@ delta = K(96) × weight × (actualPerformance - expectedPerformance)
 
 比赛端默认用自然语言显示计分范围、赛制 Track、影响强度、组织归属冻结以及未结算原因；底层 `GLOBAL/ORGANIZATION/BOTH` 和权重只放在规则详情。读取比赛 Rating 时为当前用户返回 `myChanges`，最终榜单可直接显示各范围的 `before → after (delta)`，不会改变不可变 Batch 或结算算法。
 
-## 现有 Contest 聚合桥接
+## Contest 规范身份与兼容桥接
 
-仓库已有 `Contest/ContestProblem/ContestResult` 方案，本轮不再创建重复比赛模型。当前判题运行态仍由 `Training(type=contest)` 承载；`Contest.runtimeTrainingId` 与 `ContestProblem.runtimeTrainingProblemId` 提供一对一桥接，并固定组织、时间、赛制、题目和 TestSet Revision。受保护的 `contest-aggregates` check/apply 迁移只为能可靠固定全部 Revision 的历史比赛建立映射，异常比赛进入报告且不猜测迁移。该桥接为后续逐步切换聚合事实源提供身份，不改变现有提交、榜单或 Rating 外键。
+`Contest/ContestProblem` 是比赛及题目结构的规范聚合。`Contest.runtimeTrainingId` 与
+`ContestProblem.runtimeTrainingProblemId` 保留到旧运行子表的兼容桥接，并固定组织、时间、赛制、题目和
+TestSet Revision。`TrainingRatingConfig`、`ContestStandingSnapshot`、`RatingBatch` 均以 `contestId` 关联
+规范聚合；`trainingId` 只用于现有 API、提交关系和滚动升级期间的旧二进制兼容。
+
+数据库迁移先按 `Contest.runtimeTrainingId` 回填全部 Rating 身份，并在任何缺失时 fail closed。滚动发布期间，
+新旧二进制的两种创建顺序由数据库触发器安全衔接：旧进程先创建 Training/Rating 配置时，随后创建 Contest 会
+补齐 `contestId`；新进程写入非空但不匹配的规范身份会被拒绝。删除未终结比赛必须显式清理 Rating 子事实，
+规范外键统一使用 `RESTRICT`，禁止删除 Contest 后留下孤儿历史。
+
+受保护的 `contest-aggregates` check/apply 同时报告配置、快照和批次的缺失/错配数量；异常比赛进入报告且不猜测
+迁移。Rating 查询、结算、到期发现、同池先后顺序和重放均从 Contest 关系进入，不再按裸 `trainingId` 猜测比赛身份。
 
 ## 最终结算和重放
 

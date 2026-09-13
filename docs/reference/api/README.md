@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-12
+last_verified: 2026-09-13
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -74,8 +74,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/platform/blog-reports/:id` | 填写原因并写平台审计后读取固化证据 |
 | `POST` | `/api/platform/blog-reports/:id/decision` | 处理举报并可隐藏评论、暂停或移除文章 |
 | `PUT` | `/api/platform/blogs/:id/featured` | 平台治理人员设置或退役社区精选 |
-| `GET` | `/api/admin/migration/contest-aggregates` | 超管检查现有 Training 比赛到既有 Contest 聚合的一对一桥接迁移 |
-| `POST` | `/api/admin/migration/contest-aggregates` | 超管按 reportHash 幂等建立可确认的比赛与题目 Revision 桥接 |
+| `GET` | `/api/admin/migration/contest-aggregates` | 超管检查 Training 比赛、题目 Revision 桥接及 Rating 配置/榜单/批次的规范 Contest 身份 |
+| `POST` | `/api/admin/migration/contest-aggregates` | 超管按 reportHash 幂等建立可确认的比赛、题目 Revision 与 Rating 身份桥接 |
 | `GET` | `/api/admin/migration/membership-roles` | 超管检查组织成员规范化角色回填并返回 reportHash |
 | `POST` | `/api/admin/migration/membership-roles` | 超管按 reportHash 幂等创建旧 memberRole 对应的角色分配 |
 | `GET` | `/api/ratings/me` | 读取本人全部全局/组织 OI、IOI、ACM Rating 账户 |
