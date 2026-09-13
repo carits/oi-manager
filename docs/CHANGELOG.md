@@ -14,6 +14,7 @@ source_of_truth: Git history
 - 修复 UI 静态门禁只识别 `style={{ ... }}`、未识别 `style={formStyles.field}` 和 `style={cardStyle}` 的漏洞；新增引用式静态样式规则，遗留基线保持全部分类为 0。
 - 将评测设置、训练表单、题单、资料与密码、学生和教师管理、学校资料、团队导入及平台题库管理中的静态样式对象迁入统一控件和 CSS Modules；动态头像、坐标、资源 URL 与 CSS 自定义变量例外保持不变。
 - Web 类型检查、38 个测试文件 159 项、生产构建和 UI 状态/组件门禁通过；未修改 API、Prisma、评分、权限、冻结规则或历史数据。
+- 提交 `bce1956` 已推送 `main`；Web BUILD_ID `1kvYd8OhjbDDxJz6_jBfY` 经 canary 与正式双账号消息闭环（序号 154–157）验证后提升。
 
 ## 2026-09-13
 
