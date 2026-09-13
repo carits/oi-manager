@@ -156,7 +156,17 @@ describe('authorization boundary', () => {
     const permissionSource = fs.readFileSync(path.resolve(__dirname, '../src/middleware/permissions.ts'), 'utf8')
     expect(permissionSource).toContain('resolveOrganizationAuthorization')
     expect(permissionSource).toContain("organizationCapabilityScope(authorization, 'membership.manage.students')")
-    expect(permissionSource).not.toMatch(/req\.user\?\.role\s*(?:===|!==)\s*['"](?:student|teacher|school_principal)['"]/)
+    const legacyRequestRoleCheck = /req\.user\?\.role\s*(?:===|!==)\s*['"](?:student|teacher|school_principal)['"]/
+    expect(permissionSource).not.toMatch(legacyRequestRoleCheck)
+
+    for (const file of [
+      '../src/modules/submission/application/submission-command.service.ts',
+      '../src/modules/submission/application/submission-query.service.ts',
+    ]) {
+      const source = fs.readFileSync(path.resolve(__dirname, file), 'utf8')
+      expect(source).not.toContain('context.role')
+      expect(source).toContain('context.organizationRole')
+    }
   })
 
   it('does not contain a legacy or hybrid authorization fallback', () => {

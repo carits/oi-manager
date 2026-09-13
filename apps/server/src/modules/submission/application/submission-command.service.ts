@@ -16,7 +16,7 @@ import { normalizeSubmissionIo, SubmissionIoError } from '../../judge/domain/sub
 
 export interface SubmissionCommandContext {
   userId: string
-  role: string
+  organizationRole?: 'student' | 'teacher' | 'school_principal' | null
   workspaceScope: string
   organizationId?: string | null
   isGlobalAdmin: boolean
@@ -56,7 +56,7 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
   if (input.submitMethod === 'archive') {
     throw new SubmissionCommandError(400, 'USE_ARCHIVE_SYNC', '远程记录请使用平台绑定中的同步归档功能')
   }
-  if (context.role === 'student' && context.workspaceScope !== 'personal') {
+  if (context.organizationRole === 'student' && context.workspaceScope !== 'personal') {
     throw new SubmissionCommandError(403, 'TEACHER_ONLY', '校园学生请从作业或比赛提交')
   }
 

@@ -14,7 +14,7 @@ export const submitRouter = Router()
 function commandContext(req: any): SubmissionCommandContext {
   return {
     userId: req.user.userId,
-    role: req.user.role,
+    organizationRole: req.user.organizationRole || null,
     workspaceScope: getResourceScope(req.user),
     organizationId: req.user.organizationId || null,
     isGlobalAdmin: isAdmin(getAccountRole(req.user)!),

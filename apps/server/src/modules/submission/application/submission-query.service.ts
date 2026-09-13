@@ -21,7 +21,7 @@ import { findActivityRuntimeForSubmission } from '../../contest/contest-query.fa
 
 export interface SubmissionQueryContext {
   userId: string
-  role: string
+  organizationRole?: 'student' | 'teacher' | 'school_principal' | null
   workspaceScope: string
   organizationId?: string | null
   isGlobalAdmin: boolean
@@ -67,9 +67,9 @@ export async function listSubmissions(context: SubmissionQueryContext, input: Su
   // dedicated, audited review surface instead.
   where.submitScope = { not: 'solution_verification' }
 
-  if (!context.isGlobalAdmin && (context.isPersonal || context.role === 'student')) {
+  if (!context.isGlobalAdmin && (context.isPersonal || context.organizationRole === 'student')) {
     where.userId = context.userId
-  } else if (!context.isGlobalAdmin && (context.role === 'teacher' || context.role === 'school_principal')) {
+  } else if (!context.isGlobalAdmin && (context.organizationRole === 'teacher' || context.organizationRole === 'school_principal')) {
     if (!context.organizationId) {
       return { submissions: [], page, totalPages: 0, total: 0, scope: context.workspaceScope }
     }
@@ -224,9 +224,9 @@ async function requireVisibleSubmission(
     ) throw notFound()
     if (context.isPersonal) {
       if (submission.userId !== context.userId) throw notFound()
-    } else if (context.role === 'student' && submission.userId !== context.userId) {
+    } else if (context.organizationRole === 'student' && submission.userId !== context.userId) {
       throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看该提交记录')
-    } else if (context.role === 'teacher' || context.role === 'school_principal') {
+    } else if (context.organizationRole === 'teacher' || context.organizationRole === 'school_principal') {
       if (!context.organizationId) throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看该提交记录')
       const membership = await prisma.organizationMembership.findFirst({
         where: { organizationId: context.organizationId, userId: submission.userId, status: 'active' },
@@ -267,7 +267,7 @@ export async function getSubmissionDetail(
     if (
       problem?.libraryScope === 'school'
       && !context.isGlobalAdmin
-      && (context.role === 'teacher' || context.role === 'school_principal')
+      && (context.organizationRole === 'teacher' || context.organizationRole === 'school_principal')
       && problem.organizationId !== context.organizationId
     ) throw notFound()
     problemTitle = problem?.title || null

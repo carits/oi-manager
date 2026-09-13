@@ -258,7 +258,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
     const user = req.user!
     const context: SubmissionQueryContext = {
       userId: user.userId,
-      role: user.role,
+      organizationRole: user.organizationRole || null,
       workspaceScope: getResourceScope(user),
       organizationId: user.organizationId || null,
       isGlobalAdmin: isAdmin(getAccountRole(user)!),

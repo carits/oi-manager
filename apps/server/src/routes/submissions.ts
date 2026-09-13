@@ -17,7 +17,7 @@ function contextOf(req: any): SubmissionQueryContext {
   const user = req.user
   return {
     userId: user.userId,
-    role: user.role,
+    organizationRole: user.organizationRole || null,
     workspaceScope: getResourceScope(user),
     organizationId: user.organizationId || null,
     isGlobalAdmin: isAdmin(getAccountRole(user)!),
