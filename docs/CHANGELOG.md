@@ -15,6 +15,7 @@ source_of_truth: Git history
 - Clean bootstrap 现在先原子应用 Snapshot，只登记 Epoch 内 migration，再通过标准 `prisma migrate deploy` 真实执行 Epoch 后增量；历史 SQL、Snapshot、冻结 supplement 和乱序 migration 均由 `pnpm db:baseline:check` 拒绝。
 - Baseline 检查进入架构与文档门禁；生成器、校验器和 bootstrap 均先将文本换行规范化为 LF，确保 Windows 与 Linux 计算一致。首次生成的 `20260913_v2` 校验失败后作为未启用审计产物保留，未覆盖、未执行 DDL，改由新 Epoch 修正。
 - 后续 Epoch 必须携带生产备份升级路径的完整 public schema 签名，已有 Epoch 不可覆盖。
+- 生产 Linux 已完成 `db:baseline:check`、独立空库安装/Seed/非空拒绝，以及空库与最新生产备份恢复升级的双路径对账；两边均为 202 张表，完整 public schema SHA-256 均为 `de803187b4a0c99e30f6c5679ced341af8b5ce42187d0e4f114319b1c6edbb87`，临时数据库自动清理，正式数据库未执行 Baseline DDL。
 
 ## 2026-09-13
 
