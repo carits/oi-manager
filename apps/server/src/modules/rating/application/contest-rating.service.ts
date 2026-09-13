@@ -513,6 +513,7 @@ async function createAndApplyBatchTx(tx: Prisma.TransactionClient, input: {
 async function finalizeContestRatingCore(trainingId: number, actorUserId: string) {
   const resolved = await requireContestResolved(trainingId)
   const training = resolved.runtime
+  if (!resolved.contest.endAt) fail(409, 'CONTEST_CANONICAL_STATE_INCOMPLETE', '比赛规范结束时间缺失，请联系管理员修复')
   if (new Date() <= resolved.contest.endAt && resolved.contest.status !== 'finished') fail(409, 'CONTEST_NOT_ENDED', '比赛结束后才能生成最终榜单')
   return withSerializableRetry(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-finalize:${trainingId}`}, 0)) IS NULL AS locked`
