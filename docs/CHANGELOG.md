@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest 可变状态规范化
+
+- `Contest` 现在是比赛元数据、生命周期、可见性、Rating Finalization 与最终榜单指针的权威来源；所有命令先以 advisory lock 和 CAS 写 Contest，再在同一事务生成 `Training` 兼容投影。
+- Rating 结算、定时发现、更早比赛阻塞和赛后重放不再读取 Training 的兼容状态。重放回归改为通过正式 Rejudge Hold 命令进入 `HELD`，避免测试绕过真实业务边界。
+- 新增 `20260913_contest_canonical_runtime_state` 安全增量迁移。生产备份恢复演练和正式迁移均成功，767 场运行比赛的 15 个核心字段对账差异为 0，Prisma 66 个迁移全部为最新。
+- 隔离 Rating 19/19、Contest cutover 11 文件 115/115、Server 构建和架构门禁通过；提交 `7db3d8a`、`ea326cc`、`cfad64d` 发布后 API 3303→3302，Worker/Executor/Judge 已重启，六项服务与 health/readiness 正常。本批没有 Web 或历史比赛结果改写。
+
 ### Contest Command Legacy Fallback 退役
 
 - 比赛元数据、生命周期、题目增删改排、删除、重测后的结算回退，以及人工/定时/重放 Finalization 命令，现均从规范 `Contest.runtimeTrainingId` 聚合进入运行态；不存在映射时记录 `contest_aggregate_missing` 并 fail closed。

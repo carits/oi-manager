@@ -15,19 +15,20 @@ source_of_truth: apps/server/src/modules/training-engine, apps/server/src/module
 |---|---|---|
 | 教练训练 | `TrainingSession` | 阶段、聚焦、课堂控制、草稿、提示、过程报告 |
 | 独立作业 | `Assignment` | 固定 Revision、名单快照、迟交、订正、反馈与成绩发布 |
-| 比赛 | `Training` 运行态 + `Contest` 规范聚合 | 固定时间活动、题目 Revision、榜单、Rating 和赛后结果 |
+| 比赛 | `Contest` 规范聚合 + `Training` 子表兼容投影 | 固定时间活动、题目 Revision、榜单、Rating 和赛后结果 |
 
 旧训练使用受保护的 `/api/admin/migration/training-engine` check/apply 幂等迁移为一个自由训练阶段；旧作业使用 `/api/admin/migration/assignments` 幂等迁移为独立作业。两条迁移都不删除旧记录、不改历史成绩。
 
 比赛发现与跨领域查询只有一个规范入口：`Contest/ContestProblem`。每个运行比赛通过唯一
-`Contest.runtimeTrainingId` 关联暂存于 `Training(type=contest)` 的执行状态；Rating、平台与组织列表、榜单、
+`Contest.runtimeTrainingId` 关联暂存于 `Training(type=contest)` 的提交、参与者与 Rating 配置等运行子表；Rating、平台与组织列表、榜单、
 Submission Context、Data Market、Dashboard、Blog 引用和比赛详情均必须经过
 `modules/contest/contest-query.facade.ts`。生产 767 个运行比赛已全部建立映射，查询 Facade 不再返回裸
 `Training(type=contest)`；映射缺失会记录 `contest_aggregate_missing` 并 fail closed。普通 Training 仍可由共享
 活动读取方法返回，不会被误判成比赛。
 
 比赛创建、基本信息、状态、起止时间、题目增删改排和 Rating 终结状态统一经 Contest Command Service，
-在比赛 advisory lock、CAS 与数据库事务中同步兼容运行态和 `Contest/ContestProblem`。除首次创建外，命令必须
+在比赛 advisory lock、CAS 与数据库事务中先写 `Contest/ContestProblem`，再生成兼容 Training 投影。Rating
+结算、赛后重放和待结算顺序只读取 Contest 的规范时间与终结状态，不再解释 Training 投影。除首次创建外，命令必须
 从已存在的规范 Contest 聚合定位 RuntimeTraining；映射缺失时 fail closed，不修改裸 `Training(type=contest)`，
 也不在请求路径中自动补聚合。Training 之外的业务域不得直接写双模型，静态架构门禁同时禁止查询回退、
 命令回退和越界写入。题目聚合保存相同的固定 TestSet Revision。
@@ -110,7 +111,7 @@ TrainingSession
 ### 旧活动域退出约束
 
 - `Training(type=training|homework)` 已冻结为只读兼容来源；新训练只写 `TrainingSession`，新作业只写 `Assignment`。
-- `Training(type=contest)` 暂时保留为比赛运行态，新增比赛能力必须先通过 Contest facade/aggregate service，不允许页面或其他领域直接新增旧 Training 写路径。
+- `Training(type=contest)` 暂时保留为比赛运行子表宿主与兼容投影，新增比赛能力必须先通过 Contest facade/command service，不允许页面或其他领域直接新增旧 Training 状态写路径。
 - Contest 查询与命令兼容回退均已移除，生产代码不存在 `source: legacy`、`contest_query_legacy_fallback` 或 `contest_command_legacy_fallback`；下一阶段只继续收口运行态存储，不恢复任何裸比赛读写路径，也不改历史外键。
 - 架构门禁持续禁止 `Contest/ContestProblem` 越界写入；旧活动 API 只接受兼容修复，不再承载训练、作业或全新产品能力。
 
