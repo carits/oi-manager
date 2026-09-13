@@ -5,6 +5,12 @@ import { canAccessTraining, canManageTraining } from '../../training/training.he
 import { buildStanding, defaultScoringRules, normalizeScoringRules, type ScoringParticipant, type ScoringSubmission } from '../domain/contest-scoring'
 import { calculateMultiElo, RATING_ALGORITHM } from '../domain/multi-elo'
 import { findContestRuntimeForRating, listDueRatedContestRuntimes } from '../../contest/contest-query.facade'
+import {
+  beginContestFinalizationTx,
+  completeContestFinalizationTx,
+  completeContestRatingRebuildTx,
+  failContestFinalizationTx,
+} from '../../contest/contest-finalization-command.service'
 
 export class ContestRatingError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) { super(message) }
@@ -498,7 +504,9 @@ async function finalizeContestRatingCore(trainingId: number, actorUserId: string
     if (locked.finalizationStatus === 'FINALIZED' && locked.finalizedStandingId) return loadContestRatingTx(tx, trainingId, actorUserId)
     const activeRuns = await tx.judgeRun.count({ where: { status: { in: ['QUEUED', 'RUNNING'] }, Submission: { trainingId, submitScope: 'contest' } } })
     if (activeRuns > 0) fail(409, 'CONTEST_JUDGING_INCOMPLETE', `仍有 ${activeRuns} 个评测任务未完成`)
-    await tx.training.update({ where: { id: trainingId }, data: { finalizationStatus: 'FINALIZING' } })
+    if (!await beginContestFinalizationTx(tx, trainingId, locked.finalizationStatus)) {
+      fail(409, 'CONTEST_FINALIZATION_STALE', '比赛结算状态已变化，请刷新后重试')
+    }
     const config = await lockContestRatingConfigTx(tx, trainingId, actorUserId, locked.format)
     const snapshot = await buildStandingSnapshotTx(tx, locked, config, actorUserId)
     const persistedEntries = await tx.contestStandingEntry.findMany({ where: { snapshotId: snapshot.id }, orderBy: [{ rank: 'asc' }, { userId: 'asc' }] })
@@ -513,7 +521,9 @@ async function finalizeContestRatingCore(trainingId: number, actorUserId: string
       where: { trainingId, submitScope: 'contest', isGlobalVisible: false },
       data: { isGlobalVisible: true },
     })
-    await tx.training.update({ where: { id: trainingId }, data: { finalizationStatus: 'FINALIZED', finalizedStandingId: snapshot.id, status: 'finished' } })
+    if (!await completeContestFinalizationTx(tx, trainingId, snapshot.id)) {
+      fail(409, 'CONTEST_FINALIZATION_STALE', '比赛结算状态已变化，请刷新后重试')
+    }
     return loadContestRatingTx(tx, trainingId, actorUserId)
   }, { timeout: 30_000 })
 }
@@ -544,10 +554,7 @@ export async function processDueContestRatings(limit = 20) {
       else {
         result.failed++
         result.failures.push({ trainingId: contest.id, code })
-        await prisma.training.updateMany({
-          where: { id: contest.id, finalizationStatus: { in: ['LIVE', 'JUDGING'] } },
-          data: { finalizationStatus: 'FAILED' },
-        })
+        await prisma.$transaction(tx => failContestFinalizationTx(tx, contest.id))
       }
     }
   }
@@ -628,6 +635,9 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
         TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } },
       },
     })
+    if (locked.finalizationStatus !== 'HELD') {
+      fail(409, 'CONTEST_REBUILD_NOT_READY', '比赛重放状态已变化，请刷新后重试')
+    }
     const config = locked.RatingConfig || await lockContestRatingConfigTx(tx, trainingId, userId, locked.format)
     const newSnapshot = await buildStandingSnapshotTx(tx, locked, config, userId)
     const poolIds = [...new Set(affectedPools.map(item => item.poolId))]
@@ -753,10 +763,9 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
         startedAt: new Date(), completedAt: new Date(),
       } })
     }
-    await tx.training.update({ where: { id: trainingId }, data: {
-      finalizedStandingId: newSnapshot.id,
-      finalizationStatus: 'FINALIZED',
-    } })
+    if (!await completeContestRatingRebuildTx(tx, trainingId, newSnapshot.id)) {
+      fail(409, 'CONTEST_FINALIZATION_STALE', '比赛重放状态已变化，请刷新后重试')
+    }
     return { ...(await loadContestRatingTx(tx, trainingId, userId)), rebuild: report }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 120_000 })
 }

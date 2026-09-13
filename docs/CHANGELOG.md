@@ -9,10 +9,16 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest Rating Finalization 命令边界
+
+- 新增独立 Finalization Command，将人工/定时结算、失败标记和赛后 Rating 重放完成的比赛状态写入统一置于 Contest 锁与期望状态 CAS 下；Rating Service 保留排名与 Rating 算法职责，不再直接更新兼容 Training 的终结状态。
+- 命令在旧比赛映射缺失时记录告警并同事务修复聚合；架构门禁禁止 Rating 再次绕过命令边界。
+
 ### Contest 生命周期命令边界
 
 - 新增 `transitionContestLifecycleTx()`，将比赛自动时钟状态同步、立即开始和提前结束统一置于 Contest advisory lock 与旧状态 CAS 下；Rating 配置锁定、终场提交公开、RuntimeTraining 更新和 Contest 聚合刷新在同一事务完成。
 - 普通 Training 仍沿用原生命周期路径；比赛 API 的返回结构与业务规则不变。补充“创建、开始、Rating 锁定、结束、JUDGING、聚合同步”数据库契约测试，并扩展架构门禁阻止 Training CRUD 恢复比赛生命周期直写。
+- Linux Server 构建和 Contest cutover 10 文件 108/108 通过；提交 `77467cd` 发布后 API 3303→3302，生产 767 个比赛运行态全部映射且核心字段差异、重复、未映射和 fallback 均为 0。本批不需要 Web 提升或数据库迁移。
 
 ### 生产依赖与安全基线修复
 

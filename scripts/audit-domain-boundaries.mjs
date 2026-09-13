@@ -60,6 +60,15 @@ if (!blog.includes('findContestRuntimeForBlogReview')) {
 if (!contestRating.includes('listDueRatedContestRuntimes')) {
   violations.push('Rating scheduler bypasses the Contest query facade')
 }
+if (!contestRating.includes('beginContestFinalizationTx')
+  || !contestRating.includes('completeContestFinalizationTx')
+  || !contestRating.includes('completeContestRatingRebuildTx')
+  || !contestRating.includes('failContestFinalizationTx')) {
+  violations.push('Contest Rating finalization bypasses the Contest command service')
+}
+if (/training\.(?:update|updateMany)\([\s\S]{0,220}(?:finalizationStatus|finalizedStandingId)/.test(contestRating)) {
+  violations.push('Contest Rating writes finalization state outside the Contest command service')
+}
 const submissionQuery = fs.readFileSync(path.join(modulesRoot, 'submission/application/submission-query.service.ts'), 'utf8')
 if (!submissionQuery.includes('findActivityRuntimeForSubmission')) {
   violations.push('Submission contest detail bypasses the Contest query facade')
