@@ -27,8 +27,10 @@ Submission Context、Data Market、Dashboard、Blog 引用和比赛详情均必�
 活动读取方法返回，不会被误判成比赛。
 
 比赛创建、基本信息、状态、起止时间、题目增删改排和 Rating 终结状态统一经 Contest Command Service，
-在比赛 advisory lock、CAS 与数据库事务中同步兼容运行态和 `Contest/ContestProblem`。Training 之外的业务域
-不得直接写双模型，静态架构门禁同时禁止查询回退和越界写入。题目聚合保存相同的固定 TestSet Revision。
+在比赛 advisory lock、CAS 与数据库事务中同步兼容运行态和 `Contest/ContestProblem`。除首次创建外，命令必须
+从已存在的规范 Contest 聚合定位 RuntimeTraining；映射缺失时 fail closed，不修改裸 `Training(type=contest)`，
+也不在请求路径中自动补聚合。Training 之外的业务域不得直接写双模型，静态架构门禁同时禁止查询回退、
+命令回退和越界写入。题目聚合保存相同的固定 TestSet Revision。
 受保护的 `/api/admin/migration/contest-aggregates` check/apply 仅用于幂等回填和一致性审计，不重写比赛结果。
 
 ## 训练结构
@@ -109,7 +111,7 @@ TrainingSession
 
 - `Training(type=training|homework)` 已冻结为只读兼容来源；新训练只写 `TrainingSession`，新作业只写 `Assignment`。
 - `Training(type=contest)` 暂时保留为比赛运行态，新增比赛能力必须先通过 Contest facade/aggregate service，不允许页面或其他领域直接新增旧 Training 写路径。
-- Contest 查询切换已完成，Facade 内不存在 `source: legacy` 或 `contest_query_legacy_fallback`；下一阶段只继续收口剩余命令/运行态存储，不恢复任何裸比赛读取路径，也不改历史外键。
+- Contest 查询与命令兼容回退均已移除，生产代码不存在 `source: legacy`、`contest_query_legacy_fallback` 或 `contest_command_legacy_fallback`；下一阶段只继续收口运行态存储，不恢复任何裸比赛读写路径，也不改历史外键。
 - 架构门禁持续禁止 `Contest/ContestProblem` 越界写入；旧活动 API 只接受兼容修复，不再承载训练、作业或全新产品能力。
 
 ## 迁移与回退

@@ -9,6 +9,12 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest Command Legacy Fallback 退役
+
+- 比赛元数据、生命周期、题目增删改排、删除、重测后的结算回退，以及人工/定时/重放 Finalization 命令，现均从规范 `Contest.runtimeTrainingId` 聚合进入运行态；不存在映射时记录 `contest_aggregate_missing` 并 fail closed。
+- 命令不再对裸 `Training(type=contest)` 自动创建 Contest 聚合。已有规范比赛继续在 advisory lock、CAS 和同一数据库事务内同步运行态与聚合；普通 Training 的命令行为不变。
+- 新增裸比赛运行态无法被更新、终结或删除的数据库契约，并扩展架构门禁禁止重新引入 `contest_command_legacy_fallback`。本批不需要 Prisma 迁移、历史数据改写或 Web 发布。
+
 ### Contest Query Legacy Fallback 退役
 
 - 移除 Contest Query Facade 中全部裸 `Training(type=contest)` 兼容返回；Rating、平台/组织列表、Data Market、Dashboard、Blog、Submission、榜单和比赛详情现在只从规范 `Contest.runtimeTrainingId` 进入执行对象。

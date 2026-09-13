@@ -54,7 +54,7 @@ flowchart LR
 
 - TestSet Revision 是正式评测数据的不可变事实；YAML 只允许由结构化模型单向生成。
 - 已创建活动固定 Revision，题库 Hack/Candidate 的新 Revision 不直接传播到活动。
-- `Contest/ContestProblem` 是比赛发现和跨领域查询的规范入口；运行比赛必须先通过 `Contest.runtimeTrainingId` 定位兼容执行对象，缺失映射时 fail closed，不再读取裸 `Training(type=contest)` 作为比赛回退。
+- `Contest/ContestProblem` 是比赛发现、跨领域查询和命令定位的规范入口；运行比赛必须先通过 `Contest.runtimeTrainingId` 定位兼容执行对象，缺失映射时查询和写入均 fail closed，不再读取或修改裸 `Training(type=contest)`，也不会由普通业务请求自动补建聚合。
 - `Training(type=contest)` 暂时保留比赛的可变执行状态；所有比赛创建、编辑、生命周期、题目结构和终结写入必须经过 Contest Command Service，在同一锁与事务中同步规范聚合，普通领域禁止直接写双模型。
 
 ## Submission 与 Judge
