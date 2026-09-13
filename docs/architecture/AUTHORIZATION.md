@@ -45,6 +45,12 @@ Bearer 仅供脚本、测试与旧客户端兼容。缺少、无效、过期或�
 
 `User.sessionVersion` 是账号级会话代数。修改密码、管理员重置密码或“退出其他设备”会原子递增；当前浏览器同时获得新 Cookie，其他旧 Token 在下一次请求返回 `401 SESSION_REVOKED`。迁移前未携带该声明的 Token 按第 1 代兼容。
 
+新签名 Session 使用独立的 `SessionJwtPayload`，只持久化 `userId/sessionVersion/accountRole/username/workspaceMode`；
+组织 ID、Membership ID、组织岗位与 Capability 都是请求期事实，绝不能写入 Cookie。历史 Token 中的
+`studentId/teacherId/schoolId/studentMode` 在剩余有效期内仅被 JWT 解析器容忍，不参与身份或权限计算；登录、切换工作区、
+会话迁移、改密或退出其他设备任一续签动作都会通过字段白名单移除这些旧 Claims。服务端业务消费的是认证中间件重建后的
+`JwtPayload` 请求身份，不得直接把解码前的 Session Claims 传入领域服务。
+
 ## 工作区模式
 
 - `role` 是账号平台身份；普通账号通常为 `user`。学校学生/教师/负责人身份只从当前 URL 对应的有效 Membership 解析。
@@ -53,8 +59,8 @@ Bearer 仅供脚本、测试与旧客户端兼容。缺少、无效、过期或�
 - 管理员工作区是严格独立的：超级管理员只进入 `/admin`，平台管理员只进入 `/platform-admin`；管理员不创建或切换个人/校园工作区。
 - 全局管理员查看训练/比赛时不受当前工作区 scope 预过滤限制；仍由 `canAccessTraining`、组织关系和比赛管理权限决定最终可见范围。普通账号继续只能访问当前 `resourceScope` 的资源。
 - `POST /api/auth/switch-workspace` 为旧客户端保留并刷新 Cookie；响应不返回 Token。当前 Web 以 URL 与工作区目录切换身份。
-- 旧 `studentMode` 与 `POST /api/auth/switch-mode` 仅保留一个开发周期，分别映射至 `workspaceMode` 和新切换接口。
-- 旧 JWT 中的 `schoolId` 只作为兼容声明保留，不再隐式选择组织。校园请求必须显式携带
+- 旧 `studentMode` 仅作为尚未过期的历史 JWT 输入被容忍；新 Session 不再写入，也没有运行时工作区语义。
+- 旧 JWT 中的 `schoolId` 仅在历史 Token 自然过期前被容忍且不会续签，不再隐式选择组织。校园请求必须显式携带
   `X-OI-Organization-ID`，服务端再按该组织校验当前活动 Membership；账号级请求因此不会漂移到“最早加入的学校”。
 - 个人工作区只输出用户名、头像、公开简介和个人 Rating，不输出实名、学校、职称或后台岗位。
 

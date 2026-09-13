@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### 最小浏览器 Session Claims
+
+- 新增与请求期 `JwtPayload` 分离的 `SessionJwtPayload`；签名 Cookie 只携带账号 ID、Session Version、规范 AccountRole、用户名和工作区模式。
+- 登录、工作区切换、会话迁移、改密和退出其他设备统一经过白名单式 Claim 构造，不再把旧 Token 的 `studentId/teacherId/schoolId/studentMode` 或请求解析出的组织 ID、岗位和 Capability 原样续签。
+- 旧 Session 在有效期内继续兼容，认证中间件仍从数据库重建账号身份、从显式组织请求头重建组织身份；一旦续签即自动净化，无需强制全员登出。
+- 提交 `68f8724` 已推送 `main`；Shared/Server 构建与生产同构权限/提交套件 8 文件 113/113 通过。API 3303→3302，health/readiness 与六项运行服务正常；无 Prisma、业务数据或 Web 变更。
+
 ### Account / Organization 身份运行时边界
 
 - 全局授权中间件现在只接受规范 `AccountRole`，组织中的学生、教师和负责人身份不能再通过兼容 `role` 参与平台管理员判断；旧账号角色仅在认证边界规范化，不再成为新业务授权输入。
