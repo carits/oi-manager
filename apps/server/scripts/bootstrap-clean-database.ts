@@ -47,6 +47,14 @@ function sqlLiteral(value: string) {
   return `'${value.replaceAll("'", "''")}'`
 }
 
+function canonicalText(value: string) {
+  return value.replace(/\r\n?/g, '\n')
+}
+
+function sha256Text(value: string) {
+  return crypto.createHash('sha256').update(canonicalText(value), 'utf8').digest('hex')
+}
+
 function resolveMigrations() {
   return fs.readdirSync(migrationsRoot, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && /^[A-Za-z0-9_]+$/.test(entry.name))
@@ -55,7 +63,7 @@ function resolveMigrations() {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(entry => ({
       ...entry,
-      checksum: crypto.createHash('sha256').update(fs.readFileSync(entry.file)).digest('hex'),
+      checksum: sha256Text(fs.readFileSync(entry.file, 'utf8')),
     }))
 }
 
@@ -68,12 +76,12 @@ function resolveBaseline(migrations: MigrationFile[]) {
   const snapshotPath = path.join(baselineRoot, 'schema.sql')
   if (!fs.existsSync(manifestPath) || !fs.existsSync(snapshotPath)) throw new Error(`Incomplete database baseline ${pointer.epoch}`)
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as BaselineManifest
-  const snapshotSql = fs.readFileSync(snapshotPath, 'utf8')
+  const snapshotSql = canonicalText(fs.readFileSync(snapshotPath, 'utf8'))
   if (manifest.schemaVersion !== 1 || manifest.epoch !== pointer.epoch) throw new Error('Database baseline identity mismatch')
   if (manifest.migrations.length !== manifest.migrationCount || manifest.migrations.at(-1)?.name !== manifest.latestMigration) {
     throw new Error('Database baseline migration manifest is inconsistent')
   }
-  const actualSnapshotHash = crypto.createHash('sha256').update(snapshotSql).digest('hex')
+  const actualSnapshotHash = sha256Text(snapshotSql)
   if (actualSnapshotHash !== manifest.snapshotSha256) throw new Error('Database baseline snapshot checksum mismatch')
   const byName = new Map(migrations.map(migration => [migration.name, migration]))
   for (const migration of manifest.migrations) {

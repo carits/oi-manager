@@ -7,7 +7,8 @@ const serverRoot = path.join(root, 'apps/server')
 const migrationsRoot = path.join(serverRoot, 'prisma/migrations')
 const baselinesRoot = path.join(serverRoot, 'prisma/baselines')
 const currentPath = path.join(baselinesRoot, 'current.json')
-const sha256 = value => crypto.createHash('sha256').update(value).digest('hex')
+const canonicalText = value => String(value).replace(/\r\n?/g, '\n')
+const sha256Text = value => crypto.createHash('sha256').update(canonicalText(value), 'utf8').digest('hex')
 
 if (!fs.existsSync(currentPath)) throw new Error('Missing prisma/baselines/current.json')
 const pointer = JSON.parse(fs.readFileSync(currentPath, 'utf8'))
@@ -20,9 +21,9 @@ const manifestPath = path.join(baselineRoot, 'manifest.json')
 const snapshotPath = path.join(baselineRoot, 'schema.sql')
 if (!fs.existsSync(manifestPath) || !fs.existsSync(snapshotPath)) throw new Error(`Incomplete database baseline ${pointer.epoch}`)
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-const snapshot = fs.readFileSync(snapshotPath)
+const snapshot = fs.readFileSync(snapshotPath, 'utf8')
 if (manifest.schemaVersion !== 1 || manifest.epoch !== pointer.epoch) throw new Error('Baseline manifest identity does not match current pointer')
-if (sha256(snapshot) !== manifest.snapshotSha256) throw new Error(`Baseline snapshot checksum mismatch for ${pointer.epoch}`)
+if (sha256Text(snapshot) !== manifest.snapshotSha256) throw new Error(`Baseline snapshot checksum mismatch for ${pointer.epoch}`)
 
 const known = new Map(manifest.migrations.map(migration => [migration.name, migration.checksum]))
 if (known.size !== manifest.migrationCount || manifest.migrations.length !== manifest.migrationCount) {
@@ -39,7 +40,7 @@ const currentMigrations = fs.readdirSync(migrationsRoot, { withFileTypes: true }
 for (const [name, checksum] of known) {
   const current = currentMigrations.find(migration => migration.name === name)
   if (!current) throw new Error(`Baseline migration is missing: ${name}`)
-  if (sha256(fs.readFileSync(current.file)) !== checksum) throw new Error(`Historical migration checksum changed: ${name}`)
+  if (sha256Text(fs.readFileSync(current.file, 'utf8')) !== checksum) throw new Error(`Historical migration checksum changed: ${name}`)
 }
 const future = currentMigrations.filter(migration => !known.has(migration.name))
 for (const migration of future) {
@@ -48,8 +49,8 @@ for (const migration of future) {
   }
 }
 
-const supplement = fs.readFileSync(path.join(serverRoot, 'prisma/bootstrap/supplement.sql'))
-if (sha256(supplement) !== manifest.supplementSha256) {
+const supplement = fs.readFileSync(path.join(serverRoot, 'prisma/bootstrap/supplement.sql'), 'utf8')
+if (sha256Text(supplement) !== manifest.supplementSha256) {
   throw new Error('Frozen bootstrap supplement changed; express new invariants in an append-only migration')
 }
 

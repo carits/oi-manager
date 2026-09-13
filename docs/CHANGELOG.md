@@ -11,9 +11,10 @@ source_of_truth: Git history
 
 ### Database Baseline Epoch V2
 
-- 建立不可变 `20260913_v2` 数据库 Baseline Snapshot，固定 67 个历史 migration 的名称与原始 SHA-256、Snapshot 哈希和已验证的生产结构签名；全新安装不再运行时从当前 Schema 与可变 supplement 动态伪装完整历史链。
+- 建立不可变 `20260913_v2_lf` 数据库 Baseline Snapshot，固定 67 个历史 migration 的名称与规范化 SHA-256、Snapshot 哈希 `d55db415735298142456926de0b306de678adb9d9061e8cab8c58738a81b2e47` 和已验证的生产结构签名；全新安装不再运行时从当前 Schema 与可变 supplement 动态伪装完整历史链。
 - Clean bootstrap 现在先原子应用 Snapshot，只登记 Epoch 内 migration，再通过标准 `prisma migrate deploy` 真实执行 Epoch 后增量；历史 SQL、Snapshot、冻结 supplement 和乱序 migration 均由 `pnpm db:baseline:check` 拒绝。
-- Baseline 检查进入架构与文档门禁；后续 Epoch 必须携带生产备份升级路径的完整 public schema 签名，已有 Epoch 不可覆盖。
+- Baseline 检查进入架构与文档门禁；生成器、校验器和 bootstrap 均先将文本换行规范化为 LF，确保 Windows 与 Linux 计算一致。首次生成的 `20260913_v2` 校验失败后作为未启用审计产物保留，未覆盖、未执行 DDL，改由新 Epoch 修正。
+- 后续 Epoch 必须携带生产备份升级路径的完整 public schema 签名，已有 Epoch 不可覆盖。
 
 ## 2026-09-13
 

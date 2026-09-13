@@ -13,7 +13,7 @@ source_of_truth: apps/server/prisma/baselines/current.json, apps/server/scripts/
 pnpm --filter server exec prisma migrate deploy
 ```
 
-早期 `20260429_rename_to_id_v2` 不能在全新空库顺序重放。自 `20260913_v2` 起，全新安装不再运行时从
+早期 `20260429_rename_to_id_v2` 不能在全新空库顺序重放。自 `20260913_v2_lf` 起，全新安装不再运行时从
 “当前 Prisma Schema + 可变 supplement”临时合成最终结构，而是应用经过生产备份升级路径对账的不可变
 Baseline Snapshot，再顺序执行该 Epoch 之后的新 migration。
 
@@ -21,14 +21,18 @@ Baseline Snapshot，再顺序执行该 Epoch 之后的新 migration。
 
 ```text
 prisma/baselines/current.json
-→ prisma/baselines/20260913_v2/manifest.json
-→ prisma/baselines/20260913_v2/schema.sql
+→ prisma/baselines/20260913_v2_lf/manifest.json
+→ prisma/baselines/20260913_v2_lf/schema.sql
 ```
 
 Manifest 固定 Snapshot 哈希、进入 Epoch 的 67 个历史 migration 名称与原始 SHA-256，以及创建时的生产
 结构签名。Bootstrap 只把 Manifest 中的历史 migration 登记为已执行；新 migration 必须按名称排在 Epoch
 末项之后，并由标准 `prisma migrate deploy` 真实执行。任何历史 SQL、Snapshot 或冻结 supplement 被改写，
-`pnpm db:baseline:check` 都会失败。
+`pnpm db:baseline:check` 都会失败。SQL、Prisma Schema 和 supplement 的哈希在计算前统一规范化为 LF，避免
+Windows CRLF 与 Linux LF 使同一 Git 内容得到不同校验结果；Snapshot 本身也固定写为 LF。
+
+`20260913_v2` 是首次跨平台校验发现换行不稳定后保留的未启用审计产物，从未用于数据库 DDL；系统没有
+覆盖该目录，而是创建 `20260913_v2_lf` 并切换 `current.json`，继续遵守 Epoch 不可变规则。
 
 Baseline Snapshot 已包含原 supplement 中 Prisma 无法表达的 Check、部分唯一索引、函数和触发器，包括
 Contest Rating 规范身份触发器：兼容旧二进制先写 `TrainingRatingConfig`、后创建 Contest 的

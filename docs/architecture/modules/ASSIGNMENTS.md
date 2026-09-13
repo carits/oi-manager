@@ -83,4 +83,4 @@ DRAFT → SCHEDULED → OPEN → OVERDUE → CLOSED → REVIEWING
 4. 旧 `Training`、活动题目、提交、成绩和排行榜保持不变，提交只补充 Assignment 上下文；
 5. 迁移验证完成后 Web 切到新域，旧写入口再单独退役。
 
-隔离升级测试必须用当前生产 Baseline Epoch 加后续 migration 执行，不得在生产库试跑。全新安装从不可变 `20260913_v2` Snapshot 启动，Assignment 约束已进入该 Snapshot；后续变更仍必须使用真实增量 migration，不能通过重建 Baseline 跳过。
+隔离升级测试必须用当前生产 Baseline Epoch 加后续 migration 执行，不得在生产库试跑。全新安装从 `current.json` 指向的不可变 `20260913_v2_lf` Snapshot 启动，Assignment 约束已进入该 Snapshot；后续变更仍必须使用真实增量 migration，不能通过重建 Baseline 跳过。

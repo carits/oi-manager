@@ -5,7 +5,7 @@ last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-13: 数据库安装体系开始从动态 clean-bootstrap 进入正式 Baseline Epoch。新增不可变 `20260913_v2` Snapshot 和 Manifest，固定 67 个历史 migration 校验和、Snapshot 哈希 `da79c106…a432f35` 与已验证生产结构签名 `de803187…6090c0f`；bootstrap 只登记 Epoch 内历史，Epoch 后 migration 由标准 deploy 真实执行。新增 `db:baseline:check` 并接入架构门禁，Server 类型检查通过。待在生产隔离库完成空库、最新备份升级双路径签名复验后再提交发布结论。
+- 2026-09-13: 数据库安装体系开始从动态 clean-bootstrap 进入正式 Baseline Epoch。当前不可变 Epoch 为 `20260913_v2_lf`，固定 67 个历史 migration 的跨平台规范化校验和、Snapshot 哈希 `d55db415…1b2e47` 与已验证生产结构签名 `de803187…bb87`；bootstrap 只登记 Epoch 内历史，Epoch 后 migration 由标准 deploy 真实执行。首次 `20260913_v2` 在生产只读校验中暴露 CRLF/LF 哈希差异，未执行任何 DDL且未被覆盖，现已通过新 Epoch 和统一 LF 规范化修正。本地 Baseline 门禁与 Server 构建通过，待在生产隔离库完成空库、最新备份升级双路径签名复验后再提交发布结论。
 
 - 2026-09-13: Human UX 收口后的 UI 契约复核完成。静态门禁此前只识别对象字面量，无法阻止 `style={formStyles.field}`、`style={cardStyle}` 等引用式内联样式；现已新增独立规则，并将评测设置、训练表单、题单、账号资料、学生/教师/学校管理、团队导入和平台题库管理的遗留对象全部迁到统一组件与 CSS Modules。全部 UI 遗留基线仍为 0；Web 类型检查、38 文件 159 项测试、生产构建和 UI 门禁通过。提交 `bce1956` 已推送 `main`；Web BUILD_ID `1kvYd8OhjbDDxJz6_jBfY` 在 canary 和正式端口通过真实双账号消息发送、SSE、已读与回复闭环（序号 154–157）后提升，公网 health/readiness 正常。原有 7 个未跟踪维护文件未改动；本批无 API、Prisma、业务规则或历史数据变更。
 
