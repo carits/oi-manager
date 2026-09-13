@@ -1,6 +1,7 @@
 import { prisma } from '../../prisma'
 import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
 import { lockRatingParticipantTx } from '../rating/application/contest-rating.service'
+import { findCanonicalContestSubmissionIdentity } from '../contest/contest-query.facade'
 
 export interface QueuedTrainingSubmissionInput {
   userId: string
@@ -34,6 +35,12 @@ export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmis
   // visible in the personal account history while the Training itself retains
   // the explicit `platform` ownership scope.
   const workspaceScope = input.training.scope === 'platform' ? 'personal' : input.training.scope
+  const canonicalContestIdentity = input.training.type === 'contest'
+    ? await findCanonicalContestSubmissionIdentity(input.training.id, input.trainingProblem.id)
+    : null
+  if (input.training.type === 'contest' && !canonicalContestIdentity) {
+    throw new Error('Contest submission cannot be queued before its canonical identity is available')
+  }
   const submission = await createQueuedSubmissionWithRun({
       userId: input.userId,
       workspaceScope,
@@ -57,6 +64,7 @@ export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmis
       outputFilename: input.outputFilename || null,
       ioAdapterVersion: input.ioAdapterVersion ?? 1,
       ...(input.training.type === 'contest' ? { contestId: input.training.id, contestProblemId: input.trainingProblem.id } : {}),
+      ...(canonicalContestIdentity || {}),
       isGlobalVisible: input.training.type === 'contest' ? false : true,
       ...(input.createdAt ? { createdAt: input.createdAt, updatedAt: input.createdAt } : {}),
       ...(input.sourceId ? { sourceId: input.sourceId, submitSource: 'demo_scenario' } : {}),

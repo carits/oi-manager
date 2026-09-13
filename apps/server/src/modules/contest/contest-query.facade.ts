@@ -285,6 +285,36 @@ const submissionContextRuntimeSelect = {
 } as const
 
 /**
+ * Resolve the immutable aggregate/problem identity stored on a new contest
+ * submission. Numeric ids remain in the payload only for route compatibility.
+ */
+export async function findCanonicalContestSubmissionIdentity(
+  runtimeTrainingId: number,
+  runtimeTrainingProblemId: string,
+) {
+  const contest = await prisma.contest.findUnique({
+    where: { runtimeTrainingId },
+    select: {
+      id: true,
+      ContestProblem: {
+        where: { runtimeTrainingProblemId },
+        select: { id: true },
+        take: 1,
+      },
+    },
+  })
+  const problem = contest?.ContestProblem[0]
+  if (!contest || !problem) {
+    logger.error('contest_submission_identity_missing', new Error('Contest submission identity is not mapped'), {
+      action: 'contest_query',
+      metadata: { runtimeTrainingId, runtimeTrainingProblemId },
+    })
+    return null
+  }
+  return { canonicalContestId: contest.id, canonicalContestProblemId: problem.id }
+}
+
+/**
  * Submission detail is shared by training and contest routes. Resolve mapped
  * contests through the aggregate while leaving ordinary training untouched.
  */

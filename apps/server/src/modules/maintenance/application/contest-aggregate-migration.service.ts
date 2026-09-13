@@ -60,10 +60,59 @@ async function inspectCanonicalRatingIdentities(db: typeof prisma | Prisma.Trans
   }
 }
 
+async function inspectCanonicalSubmissionIdentities(db: typeof prisma | Prisma.TransactionClient | any) {
+  const rows = await db.$queryRaw(Prisma.sql`
+    SELECT
+      (SELECT COUNT(*) FROM "Submission" WHERE "submitScope" = 'contest') AS submissions,
+      (SELECT COUNT(*) FROM "ContestUserProblemStatus") AS statuses,
+      (SELECT COUNT(*) FROM "ContestRecord" r JOIN "Training" t ON t."id" = r."trainingId" WHERE t."type" = 'contest') AS records,
+      (SELECT COUNT(*) FROM (
+        SELECT s."id"::text FROM "Submission" s
+          WHERE s."submitScope" = 'contest'
+            AND (s."canonicalContestId" IS NULL OR s."canonicalContestProblemId" IS NULL)
+        UNION ALL
+        SELECT s."id" FROM "ContestUserProblemStatus" s
+          WHERE s."canonicalContestId" IS NULL OR s."canonicalContestProblemId" IS NULL
+        UNION ALL
+        SELECT r."id" FROM "ContestRecord" r JOIN "Training" t ON t."id" = r."trainingId"
+          WHERE t."type" = 'contest' AND r."canonicalContestId" IS NULL
+      ) missing_rows) AS missing,
+      (SELECT COUNT(*) FROM (
+        SELECT s."id"::text FROM "Submission" s
+          JOIN "Contest" c ON c."id" = s."canonicalContestId"
+          JOIN "ContestProblem" p ON p."id" = s."canonicalContestProblemId"
+          WHERE s."submitScope" <> 'contest'
+             OR c."runtimeTrainingId" IS DISTINCT FROM COALESCE(s."contestId", s."trainingId")
+             OR p."contestId" IS DISTINCT FROM c."id"
+             OR p."runtimeTrainingProblemId" IS DISTINCT FROM COALESCE(s."contestProblemId", s."trainingProblemId")
+        UNION ALL
+        SELECT s."id" FROM "ContestUserProblemStatus" s
+          JOIN "Contest" c ON c."id" = s."canonicalContestId"
+          JOIN "ContestProblem" p ON p."id" = s."canonicalContestProblemId"
+          WHERE c."runtimeTrainingId" IS DISTINCT FROM s."contestId"
+             OR p."contestId" IS DISTINCT FROM c."id"
+             OR p."runtimeTrainingProblemId" IS DISTINCT FROM s."contestProblemId"
+        UNION ALL
+        SELECT r."id" FROM "ContestRecord" r
+          JOIN "Training" t ON t."id" = r."trainingId"
+          LEFT JOIN "Contest" c ON c."id" = r."canonicalContestId"
+          WHERE (t."type" = 'contest' AND c."runtimeTrainingId" IS DISTINCT FROM r."trainingId")
+             OR (t."type" <> 'contest' AND r."canonicalContestId" IS NOT NULL)
+      ) mismatched_rows) AS mismatched
+  `) as Array<{ submissions: bigint; statuses: bigint; records: bigint; missing: bigint; mismatched: bigint }>
+  const [row] = rows
+  return {
+    submissions: Number(row?.submissions || 0), statuses: Number(row?.statuses || 0),
+    records: Number(row?.records || 0), missing: Number(row?.missing || 0),
+    mismatched: Number(row?.mismatched || 0),
+  }
+}
+
 export async function inspectContestAggregateMigration() {
-  const [rows, ratingIdentity] = await Promise.all([
+  const [rows, ratingIdentity, submissionIdentity] = await Promise.all([
     loadRuntimeContests(prisma),
     inspectCanonicalRatingIdentities(prisma),
+    inspectCanonicalSubmissionIdentities(prisma),
   ])
   const issues = rows.map((row: any) => ({ trainingId: row.id, title: row.title, reason: issue(row) })).filter((item: any) => item.reason)
   return {
@@ -71,7 +120,7 @@ export async function inspectContestAggregateMigration() {
     alreadyMapped: rows.filter((row: any) => row.ContestAggregate).length,
     migratable: rows.filter((row: any) => !row.ContestAggregate && !issue(row)).length,
     blocked: issues.length, issues: issues.slice(0, 100), issuesOmitted: Math.max(0, issues.length - 100),
-    ratingIdentity,
+    ratingIdentity, submissionIdentity,
   }
 }
 
@@ -129,6 +178,12 @@ export async function applyContestAggregateMigration(expectedReportHash: string,
       targetType: 'contest_aggregate', targetId: 'runtime-training-v1',
       metadata: { reportHash: expectedReportHash, created, blocked },
     } })
-    return { total: rows.length, created, blocked, ratingIdentity: await inspectCanonicalRatingIdentities(tx) }
+    return {
+      total: rows.length,
+      created,
+      blocked,
+      ratingIdentity: await inspectCanonicalRatingIdentities(tx),
+      submissionIdentity: await inspectCanonicalSubmissionIdentities(tx),
+    }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }

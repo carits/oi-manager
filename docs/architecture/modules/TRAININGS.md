@@ -20,8 +20,8 @@ source_of_truth: apps/server/src/modules/training-engine, apps/server/src/module
 旧训练使用受保护的 `/api/admin/migration/training-engine` check/apply 幂等迁移为一个自由训练阶段；旧作业使用 `/api/admin/migration/assignments` 幂等迁移为独立作业。两条迁移都不删除旧记录、不改历史成绩。
 
 比赛发现与跨领域查询只有一个规范入口：`Contest/ContestProblem`。每个运行比赛通过唯一
-`Contest.runtimeTrainingId` 关联暂存于 `Training(type=contest)` 的提交、参与者等运行子表；Rating 配置、榜单快照和结算批次已通过
-规范 `contestId` 直接归属 Contest，同时保留 `trainingId` 作为滚动升级兼容键。Rating、平台与组织列表、榜单、
+`Contest.runtimeTrainingId` 关联暂存于 `Training(type=contest)` 的整数路由、参与者等运行子表；Rating 配置、榜单快照、结算批次、比赛提交、用户题目状态和比赛记录已保存
+规范 Contest 身份，同时保留 `trainingId/contestId(Int)` 作为滚动升级兼容键。Rating、平台与组织列表、榜单、
 Submission Context、Data Market、Dashboard、Blog 引用和比赛详情均必须经过
 `modules/contest/contest-query.facade.ts`。生产 767 个运行比赛已全部建立映射，查询 Facade 不再返回裸
 `Training(type=contest)`；映射缺失会记录 `contest_aggregate_missing` 并 fail closed。普通 Training 仍可由共享
@@ -33,11 +33,11 @@ Submission Context、Data Market、Dashboard、Blog 引用和比赛详情均必�
 从已存在的规范 Contest 聚合定位 RuntimeTraining；映射缺失时 fail closed，不修改裸 `Training(type=contest)`，
 也不在请求路径中自动补聚合。Training 之外的业务域不得直接写双模型，静态架构门禁同时禁止查询回退、
 命令回退和越界写入。题目聚合保存相同的固定 TestSet Revision。
-受保护的 `/api/admin/migration/contest-aggregates` check/apply 仅用于幂等回填和一致性审计，并报告 Rating 三类事实的
-缺失/错配数量，不重写比赛结果。
+受保护的 `/api/admin/migration/contest-aggregates` check/apply 仅用于幂等回填和一致性审计，并同时报告 Rating 与提交/状态/记录事实的
+规范身份缺失和错配数量，不重写比赛结果。
 
 日常发布与巡检使用只读 `pnpm contest:aggregate:check`。它要求所有 `Training(type=contest)` 均存在规范 Contest 映射、
-不存在待迁移或阻断记录，并要求 Rating 配置、榜单快照和结算批次的 `contestId` 与运行关系一致；任一不变量不满足时
+不存在待迁移或阻断记录，并要求 Rating 配置、榜单快照、结算批次、比赛提交、用户题目状态和比赛记录的规范身份与运行关系一致；任一不变量不满足时
 以非零状态退出。该命令不执行迁移、不修复数据，也不更新业务记录。
 
 维护功能同样不能绕过该边界。演示比赛的时间重置先对整批目标校验规范映射和未终结状态，再在同一事务内写 Contest

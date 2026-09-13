@@ -64,6 +64,9 @@ if [[ "$SCHEMA_SETUP" == "current" ]]; then
   sed -n '/CREATE OR REPLACE FUNCTION "set_canonical_contest_id_from_runtime"()/,/FOR EACH ROW EXECUTE FUNCTION "backfill_contest_rating_identity_from_aggregate"();/p' \
     "$ROOT_DIR/apps/server/prisma/migrations/20260913_contest_canonical_rating_identity/migration.sql" \
     | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
+  sed -n '/CREATE OR REPLACE FUNCTION "set_submission_canonical_contest_identity"()/,$p' \
+    "$ROOT_DIR/apps/server/prisma/migrations/20260913_contest_canonical_submission_identity/migration.sql" \
+    | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
 elif [[ "$SCHEMA_SETUP" != "migrations" ]]; then
   echo "Invalid ASSIGNMENT_SCHEMA_SETUP: expected migrations or current" >&2
   exit 1
@@ -96,6 +99,7 @@ elif [[ "$TEST_SCOPE" == "contest-cutover" ]]; then
     --no-file-parallelism \
     tests/application-composition.test.ts \
     tests/oj-adapters-registry.test.ts tests/contest-query-facade.test.ts \
+    tests/contest-canonical-submission-identity.test.ts \
     tests/rating-domain.test.ts tests/data-market.test.ts tests/dashboard-workspace.test.ts \
     tests/school-contest.test.ts tests/contest.test.ts tests/blog-knowledge-domain.test.ts \
     tests/submission.test.ts tests/judge-run-domain.test.ts
@@ -103,6 +107,7 @@ elif [[ "$TEST_SCOPE" == "contest-core" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     --no-file-parallelism \
     tests/application-composition.test.ts tests/contest-query-facade.test.ts \
+    tests/contest-canonical-submission-identity.test.ts \
     tests/school-contest.test.ts tests/contest.test.ts
 else
   echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, authorization, release-invariants, contest-core, contest-cutover or full" >&2

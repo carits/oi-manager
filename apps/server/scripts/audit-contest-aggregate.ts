@@ -24,6 +24,12 @@ async function main() {
       ...(report.ratingIdentity.mismatched > 0
         ? [`rating rows with mismatched runtime identity: ${report.ratingIdentity.mismatched}`]
         : []),
+      ...(report.submissionIdentity.missing > 0
+        ? [`submission rows missing canonical contest identity: ${report.submissionIdentity.missing}`]
+        : []),
+      ...(report.submissionIdentity.mismatched > 0
+        ? [`submission rows with mismatched runtime identity: ${report.submissionIdentity.mismatched}`]
+        : []),
     ]
 
     console.log(JSON.stringify({

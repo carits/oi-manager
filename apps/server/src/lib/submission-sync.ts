@@ -158,7 +158,8 @@ export async function syncContestProblemStatus(
   contestId: number,
   contestProblemId: string,
   result: string | null,
-  score: number | null
+  score: number | null,
+  canonicalIdentity?: { canonicalContestId: string; canonicalContestProblemId: string } | null,
 ): Promise<void> {
   try {
     const isAc = isAcceptedResult(result)
@@ -176,6 +177,7 @@ export async function syncContestProblemStatus(
         contestId,
         userId,
         contestProblemId,
+        ...(canonicalIdentity || {}),
         bestScore: score,
         bestResult: result,
         attemptCount: 1,
@@ -233,6 +235,8 @@ export async function onSubmissionJudged(submission: {
   trainingProblemId: string | null
   contestId: number | null
   contestProblemId: string | null
+  canonicalContestId?: string | null
+  canonicalContestProblemId?: string | null
   trainingSessionId?: string | null
   trainingStageProblemId?: string | null
   assignmentId?: string | null
@@ -260,7 +264,7 @@ export async function onSubmissionJudged(submission: {
         submission.trainingId,
         submission.trainingProblemId,
         submission.result,
-        submission.score
+        submission.score,
       )
     }
     if (isAcceptedResult(submission.result)) {
@@ -274,7 +278,13 @@ export async function onSubmissionJudged(submission: {
         submission.contestId,
         submission.contestProblemId,
         submission.result,
-        submission.score
+        submission.score,
+        submission.canonicalContestId && submission.canonicalContestProblemId
+          ? {
+              canonicalContestId: submission.canonicalContestId,
+              canonicalContestProblemId: submission.canonicalContestProblemId,
+            }
+          : null,
       )
     }
     // 比赛期间不同步题库 AC，等比赛结束后由 syncContestEndAC 处理

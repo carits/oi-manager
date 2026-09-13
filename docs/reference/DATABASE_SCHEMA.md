@@ -66,10 +66,10 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `Contest` | 规范比赛聚合；通过唯一 `runtimeTrainingId` 桥接兼容运行态，并直接拥有 Rating 配置、最终榜单快照和结算批次 |
 | `ContestProblem` | 既有比赛题目；桥接运行题目并固定 Canonical Problem 与 TestSet Revision |
 | `ContestProblemScore` | 以 Prisma schema 为准 |
-| `ContestRecord` | 以 Prisma schema 为准 |
+| `ContestRecord` | 比赛/训练记录；比赛记录保存规范 `canonicalContestId`，`trainingId` 暂作运行兼容键 |
 | `ContestResource` | 以 Prisma schema 为准 |
 | `ContestResult` | 以 Prisma schema 为准 |
-| `ContestUserProblemStatus` | 以 Prisma schema 为准 |
+| `ContestUserProblemStatus` | 比赛用户题目状态；同时保存规范 Contest/ContestProblem 身份与旧整数运行键 |
 | `ContributionEvent` | Candidate/Hack 正式晋升产生的版本化声誉事实及证据快照 |
 | `ContributionRewardDelivery` | 贡献事件的 Carits 奖励投递，含租约、fencing、按毛发放统计的日预算、有界重试、入账与冲正引用 |
 | `ContributionProject` | 以 Prisma schema 为准 |

@@ -37,15 +37,24 @@ export async function getTrainingRecord(trainingId: number, userId: string, user
   })) || { content: '' }
 }
 
-export function saveTrainingRecord(
+export async function saveTrainingRecord(
   trainingId: number, userId: string, userType: string, content: unknown,
 ) {
+  const runtime = await prisma.training.findUnique({
+    where: { id: trainingId },
+    select: { type: true, ContestAggregate: { select: { id: true } } },
+  })
+  if (!runtime) return null
+  if (runtime.type === 'contest' && !runtime.ContestAggregate) {
+    throw new Error('Contest record cannot be saved before its canonical identity is available')
+  }
+  const canonicalContestId = runtime.type === 'contest' ? runtime.ContestAggregate!.id : null
   return prisma.contestRecord.upsert({
     where: { trainingId_userId_userType: { trainingId, userId, userType } },
     create: {
       id: `cr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      trainingId, userId, userType, content: typeof content === 'string' ? content : '',
+      trainingId, canonicalContestId, userId, userType, content: typeof content === 'string' ? content : '',
     },
-    update: { content: typeof content === 'string' ? content : '' },
+    update: { canonicalContestId, content: typeof content === 'string' ? content : '' },
   })
 }

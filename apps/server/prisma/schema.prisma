@@ -548,8 +548,8 @@ model AiGenerationRequest {
 }
 
 model Contest {
-  id                    String                    @id
-  runtimeTrainingId     Int?                      @unique
+  id                    String                     @id
+  runtimeTrainingId     Int?                       @unique
   createdBy             String?
   organizationId        String?
   title                 String
@@ -558,30 +558,33 @@ model Contest {
   startAt               DateTime?
   endAt                 DateTime?
   format                String?
-  statusRevision        Int                       @default(0)
-  status                String                    @default("upcoming")
-  type                  String                    @default("mock")
+  statusRevision        Int                        @default(0)
+  status                String                     @default("upcoming")
+  type                  String                     @default("mock")
   teamId                String?
-  countRating           Boolean                   @default(false)
-  scope                 String                    @default("public")
-  problemIdVisible      Boolean                   @default(false)
-  solutionVisible       Boolean                   @default(false)
-  includeAdminInRanking Boolean                   @default(false)
-  finalizationStatus    ContestFinalizationStatus @default(LIVE)
-  finalizedStandingId   String?                   @unique
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @default(now())
-  Team                  Team?                     @relation(fields: [teamId], references: [id])
-  RuntimeTraining       Training?                 @relation("ContestRuntimeTraining", fields: [runtimeTrainingId], references: [id], onDelete: Restrict)
-  Organization          Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  countRating           Boolean                    @default(false)
+  scope                 String                     @default("public")
+  problemIdVisible      Boolean                    @default(false)
+  solutionVisible       Boolean                    @default(false)
+  includeAdminInRanking Boolean                    @default(false)
+  finalizationStatus    ContestFinalizationStatus  @default(LIVE)
+  finalizedStandingId   String?                    @unique
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @default(now())
+  Team                  Team?                      @relation(fields: [teamId], references: [id])
+  RuntimeTraining       Training?                  @relation("ContestRuntimeTraining", fields: [runtimeTrainingId], references: [id], onDelete: Restrict)
+  Organization          Organization?              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   ContestProblem        ContestProblem[]
   ContestProblemScore   ContestProblemScore[]
   ContestResource       ContestResource[]
   ContestResult         ContestResult[]
+  ContestRecords        ContestRecord[]            @relation("CanonicalContestRecords")
+  ContestStatuses       ContestUserProblemStatus[] @relation("CanonicalContestStatuses")
+  Submissions           Submission[]               @relation("CanonicalContestSubmissions")
   RatingConfig          TrainingRatingConfig?      @relation("CanonicalContestRatingConfig")
   StandingSnapshots     ContestStandingSnapshot[]  @relation("CanonicalContestStandingSnapshots")
-  RatingBatches         RatingBatch[]               @relation("CanonicalContestRatingBatches")
-  FinalizedStanding     ContestStandingSnapshot?  @relation("ContestFinalizedStanding", fields: [finalizedStandingId], references: [id], onDelete: SetNull)
+  RatingBatches         RatingBatch[]              @relation("CanonicalContestRatingBatches")
+  FinalizedStanding     ContestStandingSnapshot?   @relation("ContestFinalizedStanding", fields: [finalizedStandingId], references: [id], onDelete: SetNull)
 
   @@index([contestDate])
   @@index([scope])
@@ -594,9 +597,9 @@ model Contest {
 }
 
 model ContestProblem {
-  id                       String                  @id
+  id                       String                     @id
   contestId                String
-  runtimeTrainingProblemId String?                 @unique
+  runtimeTrainingProblemId String?                    @unique
   canonicalProblemId       String?
   testSetRevisionId        String?
   orderIndex               Int
@@ -604,22 +607,24 @@ model ContestProblem {
   description              String?
   ojName                   String?
   problemId                String?
-  isCustom                 Boolean                 @default(false)
+  isCustom                 Boolean                    @default(false)
   difficulty               String?
   points                   Int?
-  statementType            String                  @default("none")
+  statementType            String                     @default("none")
   statementMarkdown        String?
-  solutionType             String                  @default("none")
+  solutionType             String                     @default("none")
   solutionMarkdown         String?
-  solutionVisible          Boolean                 @default(false)
-  createdAt                DateTime                @default(now())
-  updatedAt                DateTime                @default(now())
-  Contest                  Contest                 @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  RuntimeTrainingProblem   TrainingProblem?        @relation("ContestRuntimeProblem", fields: [runtimeTrainingProblemId], references: [id], onDelete: Restrict)
-  CanonicalProblem         Problem?                @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
-  TestSetRevision          ProblemTestSetRevision? @relation("ContestProblemTestSetRevision", fields: [testSetRevisionId], references: [id], onDelete: Restrict)
+  solutionVisible          Boolean                    @default(false)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @default(now())
+  Contest                  Contest                    @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  RuntimeTrainingProblem   TrainingProblem?           @relation("ContestRuntimeProblem", fields: [runtimeTrainingProblemId], references: [id], onDelete: Restrict)
+  CanonicalProblem         Problem?                   @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
+  TestSetRevision          ProblemTestSetRevision?    @relation("ContestProblemTestSetRevision", fields: [testSetRevisionId], references: [id], onDelete: Restrict)
   ContestProblemScore      ContestProblemScore[]
   ContestResource          ContestResource[]
+  ContestStatuses          ContestUserProblemStatus[] @relation("CanonicalContestProblemStatuses")
+  Submissions              Submission[]               @relation("CanonicalContestProblemSubmissions")
 
   @@unique([contestId, orderIndex])
   @@index([canonicalProblemId])
@@ -646,16 +651,20 @@ model ContestProblemScore {
 }
 
 model ContestRecord {
-  id         String   @id
-  trainingId Int
-  userId     String
-  userType   String
-  content    String   @default("")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now())
-  Training   Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  id                 String   @id
+  trainingId         Int
+  canonicalContestId String?
+  userId             String
+  userType           String
+  content            String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now())
+  Training           Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  CanonicalContest   Contest? @relation("CanonicalContestRecords", fields: [canonicalContestId], references: [id], onDelete: Restrict)
 
   @@unique([trainingId, userId, userType])
+  @@unique([canonicalContestId, userId, userType])
+  @@index([canonicalContestId])
   @@index([updatedAt])
   @@index([userId])
 }
@@ -698,24 +707,30 @@ model ContestResult {
 }
 
 model ContestUserProblemStatus {
-  id               String          @id
-  contestId        Int
-  userId           String
-  contestProblemId String
-  bestScore        Int?
-  bestResult       String?
-  attemptCount     Int             @default(0)
-  acAt             DateTime?
-  frozenScore      Int?
-  frozenResult     String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @default(now())
-  Training         Training        @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  TrainingProblem  TrainingProblem @relation(fields: [contestProblemId], references: [id], onDelete: Cascade)
-  User             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                        String          @id
+  contestId                 Int
+  canonicalContestId        String?
+  userId                    String
+  contestProblemId          String
+  canonicalContestProblemId String?
+  bestScore                 Int?
+  bestResult                String?
+  attemptCount              Int             @default(0)
+  acAt                      DateTime?
+  frozenScore               Int?
+  frozenResult              String?
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @default(now())
+  Training                  Training        @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  TrainingProblem           TrainingProblem @relation(fields: [contestProblemId], references: [id], onDelete: Cascade)
+  CanonicalContest          Contest?        @relation("CanonicalContestStatuses", fields: [canonicalContestId], references: [id], onDelete: Restrict)
+  CanonicalContestProblem   ContestProblem? @relation("CanonicalContestProblemStatuses", fields: [canonicalContestProblemId], references: [id], onDelete: Restrict)
+  User                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, userId, contestProblemId])
+  @@unique([canonicalContestId, userId, canonicalContestProblemId])
   @@index([contestId, userId])
+  @@index([canonicalContestId, userId])
   @@index([userId])
 }
 
@@ -3203,71 +3218,77 @@ model JudgeAttempt {
 }
 
 model Submission {
-  id                      Int                          @id @default(autoincrement())
-  userId                  String
-  oj                      String
-  problemId               String
-  language                String
-  code                    String
-  codeLength              Int
-  result                  String                       @default("queuing")
-  timeUsed                Int?
-  wallTimeUsed            Int?
-  memoryUsed              Int?
-  timeoutReason           String?
-  metricSource            String?
-  submitMethod            String
-  ojAccountId             String?
-  ojRemoteId              String?
-  errorMessage            String?
-  createdAt               DateTime                     @default(now())
-  updatedAt               DateTime                     @default(now())
-  problemInternalId       String?
-  cases                   String?
-  score                   Int?
-  subtasks                String?
-  isGlobalVisible         Boolean                      @default(true)
-  sourceId                String?
-  submitSource            String?
-  judgeId                 String?
-  judgeStarted            DateTime?
-  submitScope             String                       @default("problem")
-  workspaceScope          String                       @default("campus")
-  organizationId          String?
-  trainingId              Int?
-  trainingProblemId       String?
-  trainingSessionId       String?
-  trainingStageProblemId  String?
-  assignmentId            String?
-  assignmentProblemId     String?
-  assignmentRecipientId   String?
-  submissionPhase         String?
-  contestId               Int?
-  contestProblemId        String?
-  testSetRevisionId       String?
-  judgeConfigHash         String?
-  judgeConfigSnapshot     String?                      @db.Text
-  inputFilename           String?
-  outputFilename          String?
-  ioAdapterVersion        Int                          @default(1)
-  currentJudgeRunId       String?                      @unique
-  OjAccount               OjAccount?                   @relation(fields: [ojAccountId], references: [id])
-  Training                Training?                    @relation(fields: [trainingId], references: [id])
-  TrainingSession         TrainingSession?             @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
-  TrainingStageProblem    TrainingSessionStageProblem? @relation(fields: [trainingStageProblemId], references: [id], onDelete: SetNull)
-  Assignment              Assignment?                  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  AssignmentProblem       AssignmentProblem?           @relation(fields: [assignmentProblemId], references: [id], onDelete: SetNull)
-  AssignmentRecipient     AssignmentRecipient?         @relation(fields: [assignmentRecipientId], references: [id], onDelete: SetNull)
-  Organization            Organization?                @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  User                    User                         @relation(fields: [userId], references: [id])
-  TestSetRevision         ProblemTestSetRevision?      @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
-  JudgeRuns               JudgeRun[]                   @relation("SubmissionJudgeRuns")
-  CurrentJudgeRun         JudgeRun?                    @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
-  SolutionVerification    SolutionVerification?
-  QualitySolutionProfiles ProblemSolutionProfile[]
-  BlogSubmissionSnapshots BlogSubmissionSnapshot[]
+  id                        Int                          @id @default(autoincrement())
+  userId                    String
+  oj                        String
+  problemId                 String
+  language                  String
+  code                      String
+  codeLength                Int
+  result                    String                       @default("queuing")
+  timeUsed                  Int?
+  wallTimeUsed              Int?
+  memoryUsed                Int?
+  timeoutReason             String?
+  metricSource              String?
+  submitMethod              String
+  ojAccountId               String?
+  ojRemoteId                String?
+  errorMessage              String?
+  createdAt                 DateTime                     @default(now())
+  updatedAt                 DateTime                     @default(now())
+  problemInternalId         String?
+  cases                     String?
+  score                     Int?
+  subtasks                  String?
+  isGlobalVisible           Boolean                      @default(true)
+  sourceId                  String?
+  submitSource              String?
+  judgeId                   String?
+  judgeStarted              DateTime?
+  submitScope               String                       @default("problem")
+  workspaceScope            String                       @default("campus")
+  organizationId            String?
+  trainingId                Int?
+  trainingProblemId         String?
+  trainingSessionId         String?
+  trainingStageProblemId    String?
+  assignmentId              String?
+  assignmentProblemId       String?
+  assignmentRecipientId     String?
+  submissionPhase           String?
+  contestId                 Int?
+  contestProblemId          String?
+  canonicalContestId        String?
+  canonicalContestProblemId String?
+  testSetRevisionId         String?
+  judgeConfigHash           String?
+  judgeConfigSnapshot       String?                      @db.Text
+  inputFilename             String?
+  outputFilename            String?
+  ioAdapterVersion          Int                          @default(1)
+  currentJudgeRunId         String?                      @unique
+  OjAccount                 OjAccount?                   @relation(fields: [ojAccountId], references: [id])
+  Training                  Training?                    @relation(fields: [trainingId], references: [id])
+  TrainingSession           TrainingSession?             @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
+  TrainingStageProblem      TrainingSessionStageProblem? @relation(fields: [trainingStageProblemId], references: [id], onDelete: SetNull)
+  Assignment                Assignment?                  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  AssignmentProblem         AssignmentProblem?           @relation(fields: [assignmentProblemId], references: [id], onDelete: SetNull)
+  AssignmentRecipient       AssignmentRecipient?         @relation(fields: [assignmentRecipientId], references: [id], onDelete: SetNull)
+  Organization              Organization?                @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  CanonicalContest          Contest?                     @relation("CanonicalContestSubmissions", fields: [canonicalContestId], references: [id], onDelete: Restrict)
+  CanonicalContestProblem   ContestProblem?              @relation("CanonicalContestProblemSubmissions", fields: [canonicalContestProblemId], references: [id], onDelete: Restrict)
+  User                      User                         @relation(fields: [userId], references: [id])
+  TestSetRevision           ProblemTestSetRevision?      @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
+  JudgeRuns                 JudgeRun[]                   @relation("SubmissionJudgeRuns")
+  CurrentJudgeRun           JudgeRun?                    @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
+  SolutionVerification      SolutionVerification?
+  QualitySolutionProfiles   ProblemSolutionProfile[]
+  BlogSubmissionSnapshots   BlogSubmissionSnapshot[]
 
   @@index([contestId])
+  @@index([canonicalContestId])
+  @@index([canonicalContestProblemId])
   @@index([createdAt])
   @@index([createdAt, result])
   @@index([isGlobalVisible])
@@ -4536,7 +4557,7 @@ model Training {
   RatingConfig              TrainingRatingConfig?       @relation("RuntimeTrainingRatingConfig")
   StandingSnapshots         ContestStandingSnapshot[]   @relation("RuntimeTrainingStandingSnapshots")
   FinalizedStanding         ContestStandingSnapshot?    @relation("TrainingFinalizedStanding", fields: [finalizedStandingId], references: [id], onDelete: SetNull)
-  RatingBatches             RatingBatch[]                @relation("RuntimeTrainingRatingBatches")
+  RatingBatches             RatingBatch[]               @relation("RuntimeTrainingRatingBatches")
   BlogReferences            BlogReference[]
   DataPurchases             DataPurchase[]
   DataEntitlements          DataEntitlement[]
