@@ -250,7 +250,7 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 # 当前状态
 
-- 2026-09-13: 组织成员 HTTP 与业务服务的最后一段岗位硬编码已收口：校园资料、活动、比赛、学生和教师接口全部声明规范化 Capability；服务层的数据范围、联系方式和负责人保护只读取解析后的 Capability/负责人指针，不再读取 `actor.role` 或依赖 `memberRole` 授权。新增 `organization.view`、成员查看能力与运行时回归，证明伪造 `memberRole=school_principal` 不会获得设置权，RoleAssignment/显式 Grant 才能授权。Server 生产构建通过；本机 PostgreSQL 未启动，因此数据库集成用例在连接阶段被明确阻断，未伪造测试结果。本批不修改 Prisma、业务数据、前端或既有岗位默认能力。
+- 2026-09-13: 组织成员 HTTP 与业务服务的最后一段岗位硬编码已收口：校园资料、活动、比赛、学生和教师接口全部声明规范化 Capability；服务层的数据范围、联系方式和负责人保护只读取解析后的 Capability/负责人指针，不再读取 `actor.role` 或依赖 `memberRole` 授权。新增 `organization.view`、成员查看能力与运行时回归，证明伪造 `memberRole=school_principal` 不会获得设置权，RoleAssignment/显式 Grant 才能授权。Server 生产构建、文档/架构门禁通过；生产主机独立 Schema 的授权、认证、组织创建/加入、平台组织与权限套件 6 文件 82/82 通过，临时 Schema 已删除。提交 `3981f67` 推送并将 API 3302→3303 蓝绿提升；Router、API、Worker、Executor、Judge、Web 与 health/readiness 正常，数据库延迟 1.5 ms，原有 7 个未跟踪维护文件保持不变。本批不修改 Prisma、业务数据、前端或既有岗位默认能力。
 
 ## 阶段
 
