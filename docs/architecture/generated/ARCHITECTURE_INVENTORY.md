@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 478 |
+| Referenced environment keys | 479 |
 
 ## HTTP adapter ownership
 
@@ -495,6 +495,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `BROWSER_PROXY_LIST`
 - `BUILD_ID`
 - `BUILD_ID_FILE`
+- `C`
 - `CANARY_LOG_FILE`
 - `CANARY_PID_FILE`
 - `CANDIDATE`

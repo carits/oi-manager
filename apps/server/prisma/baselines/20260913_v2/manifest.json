@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "epoch": "20260913_v2",
+  "createdOn": "2026-09-13",
+  "latestMigration": "20260913_contest_canonical_runtime_state",
+  "migrationCount": 67,
+  "migrations": [
+    {
+      "name": "20260425_baseline_init",
+      "checksum": "2244a3841aa61aa1a476b0437aa18124a991ca4d3cd15a777a158289ac26eb11"
+    },
+    {
+      "name": "20260428_user_id_unification",
+      "checksum": "99196d367533704eb269a2011a5a32f29228be1adca9487b785826207ebbbcd9"
+    },
+    {
+      "name": "20260429_pk_rename_to_id",
+      "checksum": "2d27fb0618861304acae14869ef7828a61a1afeb7832b97c7c505767e3cf54af"
+    },
+    {
+      "name": "20260429_rename_to_id_v2",
+      "checksum": "5a684feac194c6830e8e8db1f6e29424ba27b9d1b6403da5a66d2d79936837bb"
+    },
+    {
+      "name": "20260429_rename_to_id_v3",
+      "checksum": "186782225a65767e3a06847f858472595e29144ba1842d66c5a908eba846c33f"
+    },
+    {
+      "name": "20260731_team_scope",
+      "checksum": "25feca495a677738c846bf54a812d5fa70058fc60722a8fef6944c89f7d01765"
+    },
+    {
+      "name": "20260801_universal_personal_workspace",
+      "checksum": "8e7e85af4f648eb2f26e15b3de3a2f6ac69746c94a30c086b097c439f1ec7331"
+    },
+    {
+      "name": "20260802_school_problem_library",
+      "checksum": "dab05e3b97ca5b0799d55dfe2380ea2ec111c90cc50827398a6efb440894707e"
+    },
+    {
+      "name": "20260806_submission_metrics",
+      "checksum": "f750c9a2a3de4dbbe69c59e5fb5fb320cab82ede1585e105c5645d8ecb737e36"
+    },
+    {
+      "name": "20260806_testdata_sha256",
+      "checksum": "335d7c9f9da5e6500d947d1fd8678d2e94218bcca15dbb090e9868c672643123"
+    },
+    {
+      "name": "20260811_campus_profile",
+      "checksum": "9dc4efe5e298d31943892d599fdfbd07c6282c91136813808a6bee719350e600"
+    },
+    {
+      "name": "20260812_add_user_notifications",
+      "checksum": "002282d2319d7ee9afc50caf63610d44273493d0b4b20b504fcb37fb666b9033"
+    },
+    {
+      "name": "20260812_multi_organization_workspaces",
+      "checksum": "88b1a5d74e761bf4332492661c6c4f6cece609a0983677a9e6eac2d01fe1ae52"
+    },
+    {
+      "name": "20260813_organization_profiles_and_global_users",
+      "checksum": "fb8c39857a08e598eebc6f049f64dce0259e5955745f712cb6bdf58595af5931"
+    },
+    {
+      "name": "20260815_carits_contribution_foundation",
+      "checksum": "3ba38c04067ffc0efe375a81a3a2c74f182f165147ca6998f3fee8ce9c226244"
+    },
+    {
+      "name": "20260816_organization_membership_archive",
+      "checksum": "4b037ae6ce98c2c0719ca8b21af0c8586cbc829a8e8fa70e33495f67183c7740"
+    },
+    {
+      "name": "20260816_organization_only_archive",
+      "checksum": "7b3f1efbed00f411984e34478cb8aca7871a1b35833c4201609182e0ca6991e0"
+    },
+    {
+      "name": "20260816_organization_profile_history_refs",
+      "checksum": "0ca5e51ff8cd8d187c5100d321d0c04cb58449c4781a0ba5ab746a9a039c5618"
+    },
+    {
+      "name": "20260816_resource_organization_context",
+      "checksum": "31a3a7d57e6b5ff10b5e33e56f8d01fe0f3d56b114ea8c737a2f67233dc03b9d"
+    },
+    {
+      "name": "20260816_school_principal_membership",
+      "checksum": "8e784058fe6ebfbb5b13685d2eab3ebd7e5947640c02428ced58fb574921a91f"
+    },
+    {
+      "name": "20260818_problem_checkers",
+      "checksum": "be0edc5a2122d8422e830fe5bab664700aa863cb19729c94379af284d64d5f85"
+    },
+    {
+      "name": "20260821_user_problem_content",
+      "checksum": "7bc3da46d5b4798f3b3911244cb8fb295003dd7d4d647761d5cbfb093bac42b4"
+    },
+    {
+      "name": "20260821_vjudge_statement_versions",
+      "checksum": "03f4822104b7df3a0bf9f7b58f5cf7b98c01ba0da5579e5246caec882dec3ad7"
+    },
+    {
+      "name": "20260823_problem_acm_hack",
+      "checksum": "4d5a7f3e329e0a1e13cc3ee00c76f896af7f7232a7a55ba0a5b9af7eb538c8b5"
+    },
+    {
+      "name": "20260824_problem_hack_failure_stage",
+      "checksum": "64f6294ff8880dc8c7381018e2fd5dd4640ae544b08927acd63a00b3067aa50a"
+    },
+    {
+      "name": "20260824_submission_organization_scope",
+      "checksum": "8e8acb00128c0aa6a9e58cd7e2790fa04a01414cf81e3cb67fafa969a95cab56"
+    },
+    {
+      "name": "20260825_oi_hack_test_graph",
+      "checksum": "793d89676eae16574b83b13c4708ee3fe7ad6e2bd567faae7a8c47691a3f7f53"
+    },
+    {
+      "name": "20260826_testset_revision_consistency",
+      "checksum": "a526bf7f89d02a134434b1808cee7e1aa1e26a350078f9b1c40bcacd5ede2f20"
+    },
+    {
+      "name": "20260827_hack_finalizing_claim",
+      "checksum": "c1b554aeca873c8fe1f20d8c82ada80ebabc6175f7f61f9f74f17b764d6de3d0"
+    },
+    {
+      "name": "20260828_judge_attempt_phase_metrics",
+      "checksum": "deb7ff38a89340b349e72d8295f60bfca101993ec92a816e51f738acd2281836"
+    },
+    {
+      "name": "20260828_judge_run_domain",
+      "checksum": "692520535818ec5ae724e2bd6f335aacc62f3fd86bc5394f2d92444b7c96af40"
+    },
+    {
+      "name": "20260828_judge_run_dual_write_reconcile",
+      "checksum": "5e1730eeb3a5c69a5b35d829f69f597b1411334cba08c2531e9247279e92cdc2"
+    },
+    {
+      "name": "20260828_testcase_candidate_blob_store",
+      "checksum": "0406b8ba6613d0ad1517b3f97c53509165d074a6714b86c3bf089853b128aa04"
+    },
+    {
+      "name": "20260829_judge_assets_ai_validator",
+      "checksum": "cdb8c46ed1185fc408e1929b7eab51c2f97a017c9f3771a55f074caab90b8c66"
+    },
+    {
+      "name": "20260830_bounded_candidate_pipeline",
+      "checksum": "f99b936007edaf7b0428dd7868e8d2dd4bf120cf641dd5ed13924f1d85c2307f"
+    },
+    {
+      "name": "20260830_candidate_selector_auto_default",
+      "checksum": "00e72a41c3a70f205d1d777fc32d65b2bf9ef40bc8a2c6301e2bdbd2a8828b66"
+    },
+    {
+      "name": "20260831_submission_io_adapter",
+      "checksum": "64ec90a6216db46c7018f1b58da7c65ce2c4902178deb0919ae57e50309cb73b"
+    },
+    {
+      "name": "20260904_organization_join_workflow",
+      "checksum": "a53e90b7f61022d5c4bae5c41f491b5599c29bd03cce4faed625e397d8c88cd5"
+    },
+    {
+      "name": "20260905_direct_chat",
+      "checksum": "70e559def6a7f395614603b0d6d32103b045cd7223f0ee279563922f44423e1c"
+    },
+    {
+      "name": "20260905_organization_creation_applications",
+      "checksum": "0a08806146579ff51904cfbd13f7c0b2fc15c77aa00e8f5a21ddaf3777855520"
+    },
+    {
+      "name": "20260905_school_directory_governance",
+      "checksum": "6d645d9af4351eead595967188834ffaf95adc1621638697987e57b597e96c8e"
+    },
+    {
+      "name": "20260905_z_chat_correctness",
+      "checksum": "6368402915581c87c3ed98d59cb5aed571e11e4f56a2013ab9b30b0be7ddc0af"
+    },
+    {
+      "name": "20260906_chat_stickers",
+      "checksum": "b224da88971e14790e01f1561e2c2ca41aba87c01d3929653339ef63c859b42e"
+    },
+    {
+      "name": "20260906_judge_program_protocols",
+      "checksum": "4e751e31f03ea022e479dc0bda8b122e83d4d1c88dc5081d3c8b3c4ee44d4334"
+    },
+    {
+      "name": "20260906_judge_program_verification_workflow",
+      "checksum": "365ff0f8f21fbf45115963ef12d3e6a6411b933093d01876f15287e074ff1323"
+    },
+    {
+      "name": "20260907_oi_candidate_selection_bounds",
+      "checksum": "7a9e0aca101b39cc5a66ddb026c0e5f97e24d476cf1eb3210b9fcc8dab82f7a2"
+    },
+    {
+      "name": "20260908_contribution_carits_evaluation_loop",
+      "checksum": "69f0d06e841e782503279f285668c4576e7eda934b88c58e75d9eeac430cd13b"
+    },
+    {
+      "name": "20260908_training_engine_domain",
+      "checksum": "54b2b17c50fce8f48e17f705c023815669a894f2b8cb81a52a759d5594bf0e1a"
+    },
+    {
+      "name": "20260909_assignment_domain",
+      "checksum": "548dba4b25ac2cb90676c278cdb042fd2ebdc6089663b9ff303fcd83d616d87b"
+    },
+    {
+      "name": "20260909_quality_foundation",
+      "checksum": "27dcc0dd0ad9a5209d57fc4417e2748693b1947eddc799c638c3b39952bae3a6"
+    },
+    {
+      "name": "20260909_rating_domain",
+      "checksum": "80cf72ff762a5e799f60fffa3627eff31ea1575982d90d846f2892bff4061ae9"
+    },
+    {
+      "name": "20260909_solution_editorial_domain",
+      "checksum": "2c2739adcb410efc2148a9b98175abee3ecde91922100c55031f69cd98853ec5"
+    },
+    {
+      "name": "20260909_z_blog_knowledge_domain",
+      "checksum": "8a93203035510bcbbb39fcf56de4d1d78014b50f0b0c494c88674bb14eca70a0"
+    },
+    {
+      "name": "20260909_zz_data_product_marketplace",
+      "checksum": "4275ba2a413e9bc7a9adee355d6b0c442ed9b91113f5df0f534b465f40ec4902"
+    },
+    {
+      "name": "20260909_zzz_solution_version_visibility",
+      "checksum": "c1277c30d6672d5897acf8336382319f51eb5b711514141da33164c9de16fd10"
+    },
+    {
+      "name": "20260909_zzzz_assignment_grading_semantics",
+      "checksum": "38e52ab4dff496dbe445e802bfbd586b4a27a3a51140e22c0d39328ceee17637"
+    },
+    {
+      "name": "20260909_zzzzz_solution_similarity_risk",
+      "checksum": "f83e15720725a39ebb741aafc436fdf7e2ad6795903d3208b081479b3db201a6"
+    },
+    {
+      "name": "20260909_zzzzzz_blog_community",
+      "checksum": "d9da5be6b882a65d7541830e694f5adfc8fc31ba5411a904ce9cc2f19467c3f2"
+    },
+    {
+      "name": "20260909_zzzzzzz_contest_aggregate_bridge",
+      "checksum": "e6eb09af8d06d6345d65e75c3b5a79ad14bc0569209de672b2b1cc0d777bf395"
+    },
+    {
+      "name": "20260910_assignment_visibility_and_correction",
+      "checksum": "b10561235ebfcdabc8b84fe1c242590014705a3e3ede3de1b40cad912168e245"
+    },
+    {
+      "name": "20260910_blog_platform_visibility",
+      "checksum": "49bea40064d5ab35c8ddba1729e65e0752f792a2069c08b4a4e8c45883811192"
+    },
+    {
+      "name": "20260910_blog_submission_snapshots",
+      "checksum": "083e8f322d8a733e4f6f369b4771a4b2ea9ca9ab4adf23d39da92bb46a397120"
+    },
+    {
+      "name": "20260910_membership_roles_and_capabilities",
+      "checksum": "3813301f1e5150776c01a379cf40f827a6dc429c404dfd39730d2bab0f74bc2b"
+    },
+    {
+      "name": "20260910_solution_similarity_jobs",
+      "checksum": "e503046fa1514ab60d8ea7ecd20bee8856a9ef862a48771c904bcc2d5b763298"
+    },
+    {
+      "name": "20260912_auth_session_version",
+      "checksum": "562d0b1a6c9f3569a09b35a80951e8bc801ba539223563affa74c6840a3738cd"
+    },
+    {
+      "name": "20260913_contest_canonical_rating_identity",
+      "checksum": "4d553ff806c6b54be28cab8a0053b9942cec9ae6235e553f67aed3335ebe17de"
+    },
+    {
+      "name": "20260913_contest_canonical_runtime_state",
+      "checksum": "f3bd91d69034f9f404454cb6098ef770314f37c30f93bc53b9f5ff6c6fe19ffc"
+    }
+  ],
+  "prismaSchemaSha256": "c839d196cd55967abf9494791ff692301f10d56729ed378c42b9222c1b802a5a",
+  "generatedSchemaSqlSha256": "518a1721c36a42d82bd03b3cadc25e0a07abbfa72c57d74a6dc993d6da1cd91f",
+  "supplementSha256": "cd5f8d2d46d2c246012c533f6e3d78cf85d594c606041e432fa425fda87ac58d",
+  "snapshotSha256": "da79c10636d8cfa410446da73f85ce731e01c2d2a2d01717355ecc299a432f35",
+  "productionSchemaSignatureSha256": "de803187b4a0c99e30f6c5679ced341af8b5ce42187d0e4f114319b1c6edbb87"
+}

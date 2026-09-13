@@ -9,6 +9,14 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Database Baseline Epoch V2
+
+- 建立不可变 `20260913_v2` 数据库 Baseline Snapshot，固定 67 个历史 migration 的名称与原始 SHA-256、Snapshot 哈希和已验证的生产结构签名；全新安装不再运行时从当前 Schema 与可变 supplement 动态伪装完整历史链。
+- Clean bootstrap 现在先原子应用 Snapshot，只登记 Epoch 内 migration，再通过标准 `prisma migrate deploy` 真实执行 Epoch 后增量；历史 SQL、Snapshot、冻结 supplement 和乱序 migration 均由 `pnpm db:baseline:check` 拒绝。
+- Baseline 检查进入架构与文档门禁；后续 Epoch 必须携带生产备份升级路径的完整 public schema 签名，已有 Epoch 不可覆盖。
+
+## 2026-09-13
+
 ### UI 契约引用式样式收口
 
 - 修复 UI 静态门禁只识别 `style={{ ... }}`、未识别 `style={formStyles.field}` 和 `style={cardStyle}` 的漏洞；新增引用式静态样式规则，遗留基线保持全部分类为 0。

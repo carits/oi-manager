@@ -2,7 +2,7 @@
 status: current
 audience: operations, development
 last_verified: 2026-09-13
-source_of_truth: apps/server/scripts/bootstrap-clean-database.ts, scripts/verify-clean-database-bootstrap.sh, Prisma schema and migration directory
+source_of_truth: apps/server/prisma/baselines/current.json, apps/server/scripts/bootstrap-clean-database.ts, scripts/verify-database-baseline.mjs
 ---
 
 # 全新空库 Bootstrap
@@ -13,12 +13,25 @@ source_of_truth: apps/server/scripts/bootstrap-clean-database.ts, scripts/verify
 pnpm --filter server exec prisma migrate deploy
 ```
 
-早期 `20260429_rename_to_id_v2` 不能在全新空库顺序重放，因此全新安装使用当前 Schema 原子建库，再应用
-`prisma/bootstrap/supplement.sql` 中 Prisma 无法表达的 Check、部分唯一索引、函数和触发器，最后把
-仓库内每个历史 migration 按原始文件 SHA-256 登记为已执行。Bootstrap 不修改历史 migration，也不用于
-升级、修复或覆盖已有数据库。
+早期 `20260429_rename_to_id_v2` 不能在全新空库顺序重放。自 `20260913_v2` 起，全新安装不再运行时从
+“当前 Prisma Schema + 可变 supplement”临时合成最终结构，而是应用经过生产备份升级路径对账的不可变
+Baseline Snapshot，再顺序执行该 Epoch 之后的新 migration。
 
-补充结构同时包含 Contest Rating 规范身份触发器：兼容旧二进制先写 `TrainingRatingConfig`、后创建 Contest 的
+当前 Epoch 位于：
+
+```text
+prisma/baselines/current.json
+→ prisma/baselines/20260913_v2/manifest.json
+→ prisma/baselines/20260913_v2/schema.sql
+```
+
+Manifest 固定 Snapshot 哈希、进入 Epoch 的 67 个历史 migration 名称与原始 SHA-256，以及创建时的生产
+结构签名。Bootstrap 只把 Manifest 中的历史 migration 登记为已执行；新 migration 必须按名称排在 Epoch
+末项之后，并由标准 `prisma migrate deploy` 真实执行。任何历史 SQL、Snapshot 或冻结 supplement 被改写，
+`pnpm db:baseline:check` 都会失败。
+
+Baseline Snapshot 已包含原 supplement 中 Prisma 无法表达的 Check、部分唯一索引、函数和触发器，包括
+Contest Rating 规范身份触发器：兼容旧二进制先写 `TrainingRatingConfig`、后创建 Contest 的
 滚动发布顺序，并拒绝配置、榜单快照或 Rating Batch 指向与 `runtimeTrainingId` 不一致的 Contest。空库 bootstrap
 与备份升级路径必须生成同一组触发器、外键和索引，不能只在增量 migration 路径具备该保护。
 
@@ -29,8 +42,9 @@ pnpm --filter server exec prisma migrate deploy
 ## 安全规则
 
 - 默认 `db:bootstrap:check` 只检查，不写入。
+- `db:baseline:check` 校验 Epoch 指针、Snapshot、历史 migration 和冻结 supplement；该检查已进入架构/文档门禁。
 - 只允许没有业务表、Enum 和 migration 记录的数据库；非空目标 fail-closed。
-- 应用 Schema、标准 `_prisma_migrations` 表和全部 checksum 记录在同一个 PostgreSQL 事务中完成。
+- 应用 Snapshot、标准 `_prisma_migrations` 表和 Epoch checksum 记录在同一个 PostgreSQL 事务中完成。
 - 事务内再次获取 advisory lock 并复查空库，避免并发调用绕过第一次检查。
 - 建库后立即运行 `prisma migrate deploy` 与 `prisma migrate status`；任一失败均视为安装失败。
 - `--seed` 仅用于新环境初始化或隔离验收，不应在已有数据环境运行。
@@ -43,6 +57,17 @@ pnpm --filter server exec prisma migrate deploy
 pnpm db:bootstrap:check
 pnpm db:bootstrap
 ```
+
+创建后续 Epoch 不是普通 migration 的替代品。只有在当前 Schema 已与最新生产备份升级路径完成完整结构签名
+对账后，才能显式执行：
+
+```bash
+pnpm db:baseline:create -- \
+  --epoch=YYYYMMDD_name \
+  --production-signature=<public-schema-signature-sha256>
+```
+
+已有 Epoch 不允许覆盖；新 Epoch 必须作为独立目录评审和提交。
 
 服务器上的完整隔离演练使用唯一临时数据库，执行建库、迁移状态、Seed 和非空拒绝检查，结束后自动删除：
 

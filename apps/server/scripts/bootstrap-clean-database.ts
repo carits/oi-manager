@@ -10,7 +10,18 @@ const apply = process.argv.includes('--apply')
 const seed = process.argv.includes('--seed')
 const serverRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const migrationsRoot = path.join(serverRoot, 'prisma/migrations')
-const supplementPath = path.join(serverRoot, 'prisma/bootstrap/supplement.sql')
+const baselinesRoot = path.join(serverRoot, 'prisma/baselines')
+const baselinePointerPath = path.join(baselinesRoot, 'current.json')
+
+type MigrationFile = { name: string; file: string; checksum: string }
+type BaselineManifest = {
+  schemaVersion: number
+  epoch: string
+  latestMigration: string
+  migrationCount: number
+  migrations: Array<{ name: string; checksum: string }>
+  snapshotSha256: string
+}
 
 function redact(value: string) {
   return value.replace(/postgres(?:ql)?:\/\/[^@\s]+@/gi, 'postgresql://***@')
@@ -46,6 +57,38 @@ function resolveMigrations() {
       ...entry,
       checksum: crypto.createHash('sha256').update(fs.readFileSync(entry.file)).digest('hex'),
     }))
+}
+
+function resolveBaseline(migrations: MigrationFile[]) {
+  if (!fs.existsSync(baselinePointerPath)) throw new Error('Missing current database baseline pointer')
+  const pointer = JSON.parse(fs.readFileSync(baselinePointerPath, 'utf8')) as { schemaVersion?: number; epoch?: string }
+  if (pointer.schemaVersion !== 1 || !/^\d{8}_[a-z0-9_]+$/.test(pointer.epoch || '')) throw new Error('Invalid current database baseline pointer')
+  const baselineRoot = path.join(baselinesRoot, pointer.epoch!)
+  const manifestPath = path.join(baselineRoot, 'manifest.json')
+  const snapshotPath = path.join(baselineRoot, 'schema.sql')
+  if (!fs.existsSync(manifestPath) || !fs.existsSync(snapshotPath)) throw new Error(`Incomplete database baseline ${pointer.epoch}`)
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as BaselineManifest
+  const snapshotSql = fs.readFileSync(snapshotPath, 'utf8')
+  if (manifest.schemaVersion !== 1 || manifest.epoch !== pointer.epoch) throw new Error('Database baseline identity mismatch')
+  if (manifest.migrations.length !== manifest.migrationCount || manifest.migrations.at(-1)?.name !== manifest.latestMigration) {
+    throw new Error('Database baseline migration manifest is inconsistent')
+  }
+  const actualSnapshotHash = crypto.createHash('sha256').update(snapshotSql).digest('hex')
+  if (actualSnapshotHash !== manifest.snapshotSha256) throw new Error('Database baseline snapshot checksum mismatch')
+  const byName = new Map(migrations.map(migration => [migration.name, migration]))
+  for (const migration of manifest.migrations) {
+    const current = byName.get(migration.name)
+    if (!current) throw new Error(`Baseline migration is missing: ${migration.name}`)
+    if (current.checksum !== migration.checksum) throw new Error(`Historical migration checksum changed: ${migration.name}`)
+  }
+  const baselineNames = new Set(manifest.migrations.map(migration => migration.name))
+  const futureMigrations = migrations.filter(migration => !baselineNames.has(migration.name))
+  for (const migration of futureMigrations) {
+    if (migration.name.localeCompare(manifest.latestMigration) <= 0) {
+      throw new Error(`Post-baseline migration must sort after ${manifest.latestMigration}: ${migration.name}`)
+    }
+  }
+  return { manifest, snapshotSql, futureMigrations }
 }
 
 async function assertEmptyDatabase(prisma: PrismaClient) {
@@ -96,21 +139,23 @@ async function main() {
     await assertEmptyDatabase(prisma)
     const migrations = resolveMigrations()
     if (!migrations.length) throw new Error('No migration files found')
-    const schemaSql = runPrisma(['migrate', 'diff', '--from-empty', '--to-schema-datamodel', 'prisma/schema.prisma', '--script'])
-    if (!schemaSql.includes('CREATE TABLE')) throw new Error('Generated schema SQL is unexpectedly empty')
-    if (!fs.existsSync(supplementPath)) throw new Error('Missing Prisma-unrepresentable bootstrap supplement')
-    const supplementSql = fs.readFileSync(supplementPath, 'utf8')
+    const baseline = resolveBaseline(migrations)
+    if (!baseline.snapshotSql.includes('CREATE TABLE')) throw new Error('Database baseline snapshot is unexpectedly empty')
 
     if (!apply) {
       console.log(JSON.stringify({
-        mode: 'check', database: databaseName, empty: true, migrationCount: migrations.length,
-        schemaSha256: crypto.createHash('sha256').update(schemaSql).digest('hex'),
-        supplementSha256: crypto.createHash('sha256').update(supplementSql).digest('hex'), ready: true,
+        mode: 'check', database: databaseName, empty: true,
+        baselineEpoch: baseline.manifest.epoch,
+        baselineMigrationCount: baseline.manifest.migrationCount,
+        postBaselineMigrationCount: baseline.futureMigrations.length,
+        migrationCount: migrations.length,
+        snapshotSha256: baseline.manifest.snapshotSha256,
+        ready: true,
       }, null, 2))
       return
     }
 
-    const migrationRows = migrations.map(migration => `(
+    const migrationRows = baseline.manifest.migrations.map(migration => `(
       ${sqlLiteral(crypto.randomUUID())}, ${sqlLiteral(migration.checksum)}, CURRENT_TIMESTAMP,
       ${sqlLiteral(migration.name)}, NULL, NULL, CURRENT_TIMESTAMP, 1
     )`).join(',\n')
@@ -140,9 +185,7 @@ BEGIN
 END
 $bootstrap$;
 
-${schemaSql}
-
-${supplementSql}
+${baseline.snapshotSql}
 
 CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
   "id" VARCHAR(36) PRIMARY KEY NOT NULL,
@@ -167,8 +210,12 @@ COMMIT;
 
     const migrationCount = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>('SELECT count(*) AS count FROM public."_prisma_migrations"')
     const tableCount = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT count(*) AS count FROM pg_tables WHERE schemaname = 'public'`)
+    if (Number(migrationCount[0].count) !== migrations.length) throw new Error('Migration count does not match repository after baseline bootstrap')
     console.log(JSON.stringify({
-      mode: 'apply', database: databaseName, migrationCount: Number(migrationCount[0].count),
+      mode: 'apply', database: databaseName, baselineEpoch: baseline.manifest.epoch,
+      baselineMigrationCount: baseline.manifest.migrationCount,
+      postBaselineMigrationCount: baseline.futureMigrations.length,
+      migrationCount: Number(migrationCount[0].count),
       tableCount: Number(tableCount[0].count), seeded: seed, migrateDeployVerified: true,
     }, null, 2))
   } finally {

@@ -36,6 +36,7 @@ source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-bounda
 - 新 Assignment 和 TrainingSession 不得写入旧 `Training(type=homework|training)`。
 - 新 Contest 能力必须通过 Contest Facade/Command 边界；不得新增直接依赖旧 Training 比赛事实的路径。
 - Posted Ledger、不可变内容版本、举报证据和历史 Revision 不得原地修改或删除。
+- 数据库新装只从 `prisma/baselines/current.json` 指向的不可变 Epoch 启动，再真实执行后续 migration；历史 migration、Baseline Snapshot 和冻结 supplement 不得改写。
 
 ## 浏览器与展示
 
@@ -50,6 +51,7 @@ source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-bounda
 - `/api/health` 只表达进程存活，`/api/readiness` 表达关键依赖，领域一致性进入受保护诊断与周期监控。
 - 蓝绿切换、数据库迁移、Revision 发布和经济账本必须使用现有 CAS、advisory lock、fencing 或幂等边界。
 - 架构债基线只能下降；任何新增例外都必须先更新本页、对应领域文档和自动门禁，不能只扩大白名单。
+- `pnpm db:baseline:check` 必须保持通过；新 migration 必须按名称位于当前 Epoch 之后，正式建立新 Epoch 前必须证明空库和生产备份升级库结构签名一致。
 
 ## 保留的架构决定
 
