@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-11
+last_verified: 2026-09-13
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
@@ -25,7 +25,8 @@ source_of_truth: apps/web/src/styles/globals.css and UI components
 新增统一组件包括 Input、Textarea、Select、Checkbox、RadioGroup、Switch、SearchField、Combobox、
 IconButton、Popover、Menu、DataTable、TableToolbar、Section、FormDialog、ConfirmDialog 和
 DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`；`pnpm ui:state-check` 阻止任意
-文件增加静态内联样式、原生控件、自定义 Dialog、任意 Modal 宽度和硬编码视觉值。
+文件增加静态内联样式、静态样式对象引用、原生控件、自定义 Dialog、任意 Modal 宽度和硬编码视觉值。
+门禁同时识别 `style={{ ... }}`、`style={formStyles.field}` 和 `style={cardStyle}`，不能通过把对象移到常量中绕过。
 组件选择和调用约束见[UI 组件契约](UI_COMPONENTS.md)。
 
 ### 紧凑密度与页面顺序

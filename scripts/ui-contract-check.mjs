@@ -18,6 +18,14 @@ const count = (source, expression) => [...source.matchAll(expression)].length
 
 const rules = {
   staticInlineStyle: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /\bstyle=\{\{/g },
+  // Object-literal styles were already gated, but references such as
+  // `style={formStyles.field}` or `style={cardStyle}` could silently bypass
+  // the contract. Dynamic layout values are intentionally named separately
+  // and remain allowed; static business-level style objects are legacy debt.
+  staticInlineStyleReference: {
+    files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)),
+    expression: /\bstyle=\{(?!(?:avatarStyle|chartStyle|matrixStyle|tableStyle|floatingPosition)\})(?:[A-Za-z_$][\w$]*Styles?\.[\w$]+|[A-Za-z_$][\w$]*(?:Style|Styles))\}/g,
+  },
   nativeButton: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /<button\b/g },
   nativeInput: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /<(?:input|textarea|select)\b/g },
   nativeTable: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /<table\b/g },

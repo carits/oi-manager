@@ -11,6 +11,7 @@ import { Table } from '@/components/ui/Table'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { FormDialog } from '@/components/ui/Dialogs'
+import { FormField } from '@/components/ui/FormField'
 import { Pagination } from '@/components/ui/Pagination'
 import { useStudents, Student } from '@/hooks/data/useStudents'
 import { useModal } from '@/hooks/form/useModal'
@@ -19,7 +20,6 @@ import { useForm } from '@/hooks/form/useForm'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { calculateStudentGrade } from '@/lib/grade'
-import { formStyles } from '@/lib/styles'
 import { Badge } from '@/components/ui/Badge'
 import { ActionMenu, ActionMenuItem, IdentityCell, ManagementToolbar, managementListStyles } from '@/components/management/ManagementList'
 
@@ -351,56 +351,47 @@ function StudentFormModal({
   return (
     <FormDialog isOpen={true} onClose={onClose} title={student ? '编辑学生' : '添加学生'} size="md">
       <form onSubmit={form.handleSubmit} className={unifiedStyles.u4}>
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>姓名 *</label>
+        <FormField label="姓名" required>
           <Input
             type="text"
             value={form.values.name}
             onChange={(e) => form.handleChange('name', e.target.value)}
             required
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>性别</label>
+        <FormField label="性别">
           <Select aria-label="选择"
             value={form.values.gender}
             onChange={(e) => form.handleChange('gender', e.target.value)}
-            style={formStyles.select}
           >
             <option value="">请选择</option>
             <option value="男">男</option>
             <option value="女">女</option>
           </Select>
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>用户名 *</label>
+        <FormField label="用户名" required>
           <Input
             type="text"
             value={form.values.username}
             onChange={(e) => form.handleChange('username', e.target.value)}
             required
             disabled={!!student}
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>密码 {!student && '*'}</label>
+        <FormField label="密码" required={!student}>
           <Input
             type="password"
             value={form.values.password}
             onChange={(e) => form.handleChange('password', e.target.value)}
             required={!student}
             placeholder={student ? '留空则不修改' : ''}
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>入学年份</label>
+        <FormField label="入学年份">
           <Input
             type="number"
             value={form.values.enrollmentYear}
@@ -408,9 +399,8 @@ function StudentFormModal({
             placeholder="如：2024"
             min="2000"
             max="2030"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
         <div className={unifiedStyles.u5}>
           <Button type="submit" disabled={submitting} className={unifiedStyles.u6}>

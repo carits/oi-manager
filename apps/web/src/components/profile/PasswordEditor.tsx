@@ -4,8 +4,8 @@ import { useState } from 'react'
 import unifiedStyles from './PasswordEditor.unified.module.css'
 import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
+import { FormField } from '@/components/ui/FormField'
 import apiClient from '@/lib/apiClient'
-import { formStyles } from '@/lib/styles'
 
 export function PasswordEditor() {
   const [form, setForm] = useState({
@@ -92,38 +92,32 @@ export function PasswordEditor() {
       )}
 
       <form onSubmit={handleSubmit} className={unifiedStyles.u5}>
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>当前密码</label>
+        <FormField label="当前密码">
           <Input
             type="password"
             value={form.currentPassword}
             onChange={(e) => handleChange('currentPassword', e.target.value)}
             placeholder="请输入当前密码"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>新密码</label>
+        <FormField label="新密码">
           <Input
             type="password"
             value={form.newPassword}
             onChange={(e) => handleChange('newPassword', e.target.value)}
             placeholder="请输入新密码（至少6位）"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>确认新密码</label>
+        <FormField label="确认新密码">
           <Input
             type="password"
             value={form.confirmPassword}
             onChange={(e) => handleChange('confirmPassword', e.target.value)}
             placeholder="请再次输入新密码"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
         <div className={unifiedStyles.u6}>
           <Button variant="primary"

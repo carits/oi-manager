@@ -249,3 +249,12 @@
   font-size: 0.875rem;
 }
 .batchFetchSeparated { border-top: 1px solid var(--border); padding-top: 1rem; }
+.filterSelect { min-width: 150px; }
+.tabButton { padding: 0.75rem 1.5rem; border-bottom: 2px solid transparent; border-radius: 0; color: var(--gray-500); font-weight: 400; }
+.tabButton[data-active='true'] { border-bottom-color: var(--primary); color: var(--primary); font-weight: 600; }
+.statusText { color: var(--text-secondary); }
+.statusText[data-status='pending'] { color: var(--text-muted); }
+.statusText[data-status='fetching'] { color: var(--primary); }
+.statusText[data-status='success'] { color: var(--success); }
+.statusText[data-status='failed'] { color: var(--error); }
+.statusText[data-status='duplicate'], .statusText[data-status='skipped'] { color: var(--warning); }

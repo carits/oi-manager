@@ -8,7 +8,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import apiClient from '@/lib/apiClient'
-import { formStyles } from '@/lib/styles'
+import { FormField } from '@/components/ui/FormField'
 
 export default function NewProblemListPage() {
   const router = useRouter()
@@ -55,8 +55,7 @@ export default function NewProblemListPage() {
         <h2 className={unifiedStyles.u5}>新建题单</h2>
 
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.field}>
-            <label style={formStyles.label}>题单标题 *</label>
+          <FormField label="题单标题" required>
             <Input
               type="text"
               value={title}
@@ -64,20 +63,17 @@ export default function NewProblemListPage() {
               placeholder="请输入题单标题"
               required
               autoFocus
-              style={formStyles.input}
             />
-          </div>
+          </FormField>
 
-          <div style={formStyles.field}>
-            <label style={formStyles.label}>题单描述</label>
+          <FormField label="题单描述">
             <Textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={4}
               placeholder="请输入题单描述（选填）"
-              style={formStyles.textarea}
             />
-          </div>
+          </FormField>
 
           <div className={unifiedStyles.u6}>
             <Button variant="primary"

@@ -64,24 +64,6 @@ const JOB_STATUS_OPTIONS = [
   { value: 'duplicate', label: '已存在' },
 ]
 
-const selectStyle: React.CSSProperties = {
-  padding: '0.5rem',
-  border: '1px solid var(--border)',
-  borderRadius: '6px',
-  fontSize: '0.875rem',
-  minWidth: '150px',
-}
-
-const smallBtnStyle = (variant: 'default' | 'primary' | 'danger' = 'default'): React.CSSProperties => ({
-  padding: '0.25rem 0.5rem',
-  background: variant === 'primary' ? 'var(--primary)' : variant === 'danger' ? 'var(--error-light)' : 'var(--gray-100)',
-  color: variant === 'primary' ? 'white' : variant === 'danger' ? 'var(--error)' : 'inherit',
-  border: variant === 'primary' ? 'none' : '1px solid var(--border)',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '0.75rem',
-})
-
 export default function PlatformAdminProblemsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -368,29 +350,25 @@ export default function PlatformAdminProblemsPage() {
   // ==================== 渲染辅助 ====================
 
   const renderStatus = (status: string) => {
-    const map: Record<string, { text: string; color: string }> = {
-      pending: { text: '⏳ 等待中', color: 'var(--text-muted)' },
-      fetching: { text: '🔄 拉取中', color: 'var(--primary)' },
-      success: { text: '成功', color: 'var(--success)' },
-      failed: { text: '失败', color: 'var(--error)' },
-      duplicate: { text: '已存在', color: 'var(--warning)' },
+    const map: Record<string, string> = {
+      pending: '⏳ 等待中',
+      fetching: '🔄 拉取中',
+      success: '成功',
+      failed: '失败',
+      duplicate: '已存在',
     }
-    const s = map[status] || { text: status, color: 'var(--text-secondary)' }
-    const statusStyle = { color: s.color }
-    return <span style={statusStyle}>{s.text}</span>
+    return <span className={unifiedStyles.statusText} data-status={status}>{map[status] || status}</span>
   }
 
   const renderAttachmentStatus = (status: string | null) => {
     if (!status) return <span className={unifiedStyles.u1}>-</span>
-    const map: Record<string, { text: string; color: string }> = {
-      pending: { text: '⏳ 待处理', color: 'var(--text-muted)' },
-      success: { text: '成功', color: 'var(--success)' },
-      failed: { text: '失败', color: 'var(--error)' },
-      skipped: { text: '跳过', color: 'var(--warning)' },
+    const map: Record<string, string> = {
+      pending: '⏳ 待处理',
+      success: '成功',
+      failed: '失败',
+      skipped: '跳过',
     }
-    const s = map[status] || { text: status, color: 'var(--text-secondary)' }
-    const statusStyle = { color: s.color }
-    return <span style={statusStyle}>{s.text}</span>
+    return <span className={unifiedStyles.statusText} data-status={status}>{map[status] || status}</span>
   }
 
   // 渲染附件列：区分"无附件"和"有附件但xxx"
@@ -436,12 +414,12 @@ export default function PlatformAdminProblemsPage() {
                     {showPlatform && <TableCell className={unifiedStyles.u9}>{source}</TableCell>}
                     <TableCell className={unifiedStyles.u7}>
                       <div className={unifiedStyles.u10}>
-                        <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} style={smallBtnStyle()}>查看</Button>
-                        <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${problem.id}/edit`)} style={smallBtnStyle()}>编辑</Button>
+                        <Button variant="secondary" size="sm" onClick={() => router.push(`/platform-admin/problems/${problem.id}`)}>查看</Button>
+                        <Button variant="secondary" size="sm" onClick={() => router.push(`/platform-admin/problems/${problem.id}/edit`)}>编辑</Button>
                         {showRefetch && problem.ojBindings && (
-                          <Button variant="ghost" onClick={() => handleRefetchProblem(problem)} style={smallBtnStyle('primary')}>重新拉取</Button>
+                          <Button variant="primary" size="sm" onClick={() => handleRefetchProblem(problem)}>重新拉取</Button>
                         )}
-                        <Button variant="ghost" onClick={() => handleDeleteProblem(problem.id)} style={smallBtnStyle('danger')}>删除</Button>
+                        <Button variant="danger" size="sm" onClick={() => handleDeleteProblem(problem.id)}>删除</Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -462,18 +440,6 @@ export default function PlatformAdminProblemsPage() {
     </>
   )
 
-  // Tab 按钮样式
-  const tabButtonStyle = (isActive: boolean): React.CSSProperties => ({
-    padding: '0.75rem 1.5rem',
-    border: 'none',
-    borderBottom: isActive ? '2px solid var(--primary)' : '2px solid transparent',
-    background: 'transparent',
-    cursor: 'pointer',
-    fontSize: '0.875rem',
-    fontWeight: isActive ? 600 : 400,
-    color: isActive ? 'var(--primary)' : 'var(--gray-500)',
-  })
-
   // ==================== 渲染 ====================
 
   return (
@@ -483,8 +449,8 @@ export default function PlatformAdminProblemsPage() {
 
         {/* Tab 切换 */}
         <div className={unifiedStyles.u13}>
-          <Button variant="ghost" onClick={() => handleTabChange('fetch')} style={tabButtonStyle(activeTab === 'fetch')}>拉取队列</Button>
-          <Button variant="ghost" onClick={() => handleTabChange('public')} style={tabButtonStyle(activeTab === 'public')}>平台题库</Button>
+          <Button variant="ghost" className={unifiedStyles.tabButton} data-active={activeTab === 'fetch'} onClick={() => handleTabChange('fetch')}>拉取队列</Button>
+          <Button variant="ghost" className={unifiedStyles.tabButton} data-active={activeTab === 'public'} onClick={() => handleTabChange('public')}>平台题库</Button>
         </div>
 
         {/* ==================== 拉取队列 Tab ==================== */}
@@ -498,7 +464,7 @@ export default function PlatformAdminProblemsPage() {
               <div className={unifiedStyles.u16}>
                 <label className={unifiedStyles.u17}>选择平台</label>
                 <div className={unifiedStyles.u18}>
-                  <Select aria-label="选择" value={fetchPlatform} onChange={(e) => setFetchPlatform(e.target.value)} style={selectStyle}>
+                  <Select aria-label="选择" value={fetchPlatform} onChange={(e) => setFetchPlatform(e.target.value)} className={unifiedStyles.filterSelect}>
                     {OJ_PLATFORMS_NO_ALL.map(p => (
                       <option key={p.value} value={p.value}>{p.label}</option>
                     ))}
@@ -563,10 +529,10 @@ export default function PlatformAdminProblemsPage() {
 
               {/* 任务筛选栏 */}
               <div className={unifiedStyles.u32}>
-                <Select aria-label="选择" value={jobsPlatformFilter} onChange={(e) => { setJobsPlatformFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
+                <Select aria-label="选择" value={jobsPlatformFilter} onChange={(e) => { setJobsPlatformFilter(e.target.value); setJobsPage(1) }} className={unifiedStyles.filterSelect}>
                   {OJ_PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </Select>
-                <Select aria-label="选择" value={jobsStatusFilter} onChange={(e) => { setJobsStatusFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
+                <Select aria-label="选择" value={jobsStatusFilter} onChange={(e) => { setJobsStatusFilter(e.target.value); setJobsPage(1) }} className={unifiedStyles.filterSelect}>
                   {JOB_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
                 {(jobsPlatformFilter || jobsStatusFilter) && (
@@ -604,13 +570,12 @@ export default function PlatformAdminProblemsPage() {
                         <TableCell className={unifiedStyles.u7}>
                           <div className={unifiedStyles.u10}>
                             {job.createdProblemId && (
-                              <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${job.createdProblemId}`)} style={smallBtnStyle()}>查看</Button>
+                              <Button variant="secondary" size="sm" onClick={() => router.push(`/platform-admin/problems/${job.createdProblemId}`)}>查看</Button>
                             )}
-                            <Button variant="ghost" onClick={() => handleRetry(job.id)}
-                              style={smallBtnStyle((job.status === 'failed' || job.status === 'duplicate') ? 'primary' : 'default')}>
+                            <Button variant={job.status === 'failed' || job.status === 'duplicate' ? 'primary' : 'secondary'} size="sm" onClick={() => handleRetry(job.id)}>
                               {job.status === 'failed' || job.status === 'duplicate' ? '重试' : '重新拉取'}
                             </Button>
-                            <Button variant="ghost" onClick={() => handleDelete(job.id)} style={smallBtnStyle()}>删除</Button>
+                            <Button variant="secondary" size="sm" onClick={() => handleDelete(job.id)}>删除</Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -635,7 +600,7 @@ export default function PlatformAdminProblemsPage() {
             <div className={unifiedStyles.u35}>
               <div>
                 <label className={unifiedStyles.u17}>平台</label>
-                <Select aria-label="选择" value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)} style={selectStyle}>
+                <Select aria-label="选择" value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)} className={unifiedStyles.filterSelect}>
                   {OJ_PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </Select>
               </div>

@@ -119,11 +119,6 @@ export function TrainingContentSelectionModal({
     setSaving(false)
   }
 
-  const selectStyle: React.CSSProperties = {
-    width: '100%', padding: '0.65rem 0.75rem', border: '1px solid var(--border)', borderRadius: '8px',
-    background: 'white', fontSize: '0.9rem',
-  }
-
   return (
     <FormDialog
       isOpen={isOpen}
@@ -153,7 +148,7 @@ export function TrainingContentSelectionModal({
                 {item.revision && <span className={unifiedStyles.u8}>当前 revision {item.revision}</span>}
               </div>
               <div className={unifiedStyles.u9}>
-                <Select aria-label={item.label} value={item.value} onChange={event => item.setValue(event.target.value)} style={selectStyle}>
+                <Select aria-label={item.label} value={item.value} onChange={event => item.setValue(event.target.value)}>
                   {item.options.map(option => <option key={option.key} value={option.key}>{optionLabel(option)}</option>)}
                 </Select>
                 <Button variant="ghost" onClick={() => showPreview(item.kind)} className={unifiedStyles.u10}>预览</Button>

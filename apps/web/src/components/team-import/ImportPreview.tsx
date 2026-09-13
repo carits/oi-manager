@@ -24,12 +24,10 @@ const conflictColorStyle = (color: string): React.CSSProperties => ({ '--conflic
 function EditableField({
   value,
   onChange,
-  style,
   error,
 }: {
   value: string
   onChange: (v: string) => void
-  style?: React.CSSProperties
   error?: boolean
 }) {
   const [local, setLocal] = useState(value)
@@ -50,8 +48,7 @@ function EditableField({
         focused.current = false
         if (local !== value) onChange(local)
       }}
-      style={style}
-      className={error ? unifiedStyles.editableError : undefined}
+      className={`${unifiedStyles.editableField} ${error ? unifiedStyles.editableError : ''}`.trim()}
     />
   )
 }
@@ -304,7 +301,7 @@ export default function ImportPreview({
   // ── 结果页 ──
   if (importResult) {
     return (
-      <div style={cardStyle} className={unifiedStyles.resultCard}>
+      <div className={`${unifiedStyles.card} ${unifiedStyles.resultCard}`}>
         <h2 className={unifiedStyles.u1}>
           导入完成
         </h2>
@@ -341,10 +338,10 @@ export default function ImportPreview({
             <TableRoot className={unifiedStyles.u9}>
               <TableHead>
                 <TableRow className={unifiedStyles.u10}>
-                  <TableHeaderCell style={thStyle}>学生姓名</TableHeaderCell>
-                  <TableHeaderCell style={thStyle}>登录用户名</TableHeaderCell>
-                  <TableHeaderCell style={thStyle}>初始密码</TableHeaderCell>
-                  <TableHeaderCell style={thStyle}>{platformUsernameLabel}</TableHeaderCell>
+                  <TableHeaderCell className={unifiedStyles.tableHeaderCell}>学生姓名</TableHeaderCell>
+                  <TableHeaderCell className={unifiedStyles.tableHeaderCell}>登录用户名</TableHeaderCell>
+                  <TableHeaderCell className={unifiedStyles.tableHeaderCell}>初始密码</TableHeaderCell>
+                  <TableHeaderCell className={unifiedStyles.tableHeaderCell}>{platformUsernameLabel}</TableHeaderCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -352,10 +349,10 @@ export default function ImportPreview({
                   .filter((d: ImportResultDetail) => d.action === 'created')
                   .map((d: ImportResultDetail, i: number) => (
                     <TableRow key={i}>
-                      <TableCell style={tdStyle}>{d.studentName || d.nickname}</TableCell>
-                      <TableCell style={tdStyle} className={unifiedStyles.monospace}>{d.systemUsername}</TableCell>
-                      <TableCell style={tdStyle} className={unifiedStyles.monospace}>{d.tempPassword}</TableCell>
-                      <TableCell style={tdStyle}>{d.username}</TableCell>
+                      <TableCell className={unifiedStyles.tableCell}>{d.studentName || d.nickname}</TableCell>
+                      <TableCell className={`${unifiedStyles.tableCell} ${unifiedStyles.monospace}`}>{d.systemUsername}</TableCell>
+                      <TableCell className={`${unifiedStyles.tableCell} ${unifiedStyles.monospace}`}>{d.tempPassword}</TableCell>
+                      <TableCell className={unifiedStyles.tableCell}>{d.username}</TableCell>
                     </TableRow>
                   ))}
               </TableBody>
@@ -379,18 +376,18 @@ export default function ImportPreview({
 
   // ── 预览页 ──
   return (
-    <div style={cardStyle}>
-      <h2 style={h2Style}>成员列表 (共 {members.length} 人，已选 {selectedMembers.length} 人)</h2>
+    <div className={unifiedStyles.card}>
+      <h2 className={unifiedStyles.sectionHeading}>成员列表 (共 {members.length} 人，已选 {selectedMembers.length} 人)</h2>
 
       {/* 批量设置入学年份 */}
-      <div style={batchBarStyle}>
+      <div className={unifiedStyles.batchBar}>
         <span>批量设置入学年份:</span>
-        <Select aria-label="选择" value={batchEnrollmentYear} disabled style={smallSelectStyle}>
+        <Select aria-label="选择" value={batchEnrollmentYear} disabled className={unifiedStyles.compactControl}>
           {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map(year => (
             <option key={year} value={year}>{year}</option>
           ))}
         </Select>
-        <Button variant="ghost" onClick={batchSetEnrollmentYear} style={smallBtnOutline}>应用</Button>
+        <Button variant="outline" size="sm" onClick={batchSetEnrollmentYear}>应用</Button>
       </div>
 
       {/* 团队标识（仅创建新团队时显示） */}
@@ -486,14 +483,13 @@ export default function ImportPreview({
                 <div className={unifiedStyles.u24}>
                   {/* 用户名 */}
                   <div className={unifiedStyles.u25}>
-                    <span style={fieldLabelStyle}>用户名:</span>
+                    <span className={unifiedStyles.fieldLabel}>用户名:</span>
                     <EditableField
                       value={member.username}
                       onChange={v => {
                         updateMember(index, { username: v, conflictStatus: 'unchecked' })
                         setValidated(false)
                       }}
-                      style={inputStyle}
                       error={!!(member.username && !isValidUsername(member.username))}
                     />
                     {member.username && !isValidUsername(member.username) && (
@@ -505,24 +501,23 @@ export default function ImportPreview({
 
                   {/* 学生姓名 */}
                   <div className={unifiedStyles.u25}>
-                    <span style={fieldLabelStyle}>姓名:</span>
+                    <span className={unifiedStyles.fieldLabel}>姓名:</span>
                     <EditableField
                       value={member.studentName}
                       onChange={v => {
                         updateMember(index, { studentName: v, conflictStatus: 'unchecked' })
                         setValidated(false)
                       }}
-                      style={inputStyle}
                     />
                   </div>
 
                   {/* 性别 */}
                   <div className={unifiedStyles.u25}>
-                    <span style={fieldLabelStyle}>性别:</span>
+                    <span className={unifiedStyles.fieldLabel}>性别:</span>
                     <Select aria-label="选择"
                       value={member.gender}
                       onChange={e => updateMember(index, { gender: e.target.value })}
-                      style={smallSelectStyle}
+                      className={unifiedStyles.compactControl}
                     >
                       <option value="男">男</option>
                       <option value="女">女</option>
@@ -531,11 +526,11 @@ export default function ImportPreview({
 
                   {/* 入学年份 */}
                   <div className={unifiedStyles.u25}>
-                    <span style={fieldLabelStyle}>入学年份:</span>
+                    <span className={unifiedStyles.fieldLabel}>入学年份:</span>
                     <Select aria-label="选择"
                       value={member.enrollmentYear || ''}
                       onChange={e => updateMember(index, { enrollmentYear: Number(e.target.value) })}
-                      style={smallSelectStyle}
+                      className={unifiedStyles.compactControl}
                     >
                       <option value="">请选择</option>
                       {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map(year => (
@@ -617,7 +612,7 @@ export default function ImportPreview({
 
       {/* 底部操作栏 */}
       <div className={unifiedStyles.u36}>
-        <Button variant="ghost" onClick={onBack} style={btnSecondary}>上一步</Button>
+        <Button variant="secondary" onClick={onBack}>上一步</Button>
         <div className={unifiedStyles.u37}>
           <Button variant="outline"
             onClick={handleValidate}
@@ -637,60 +632,4 @@ export default function ImportPreview({
       </div>
     </div>
   )
-}
-
-// ── 样式常量 ──
-
-const cardStyle: React.CSSProperties = {
-  background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border)'
-}
-
-const h2Style: React.CSSProperties = {
-  fontSize: '1.125rem', fontWeight: 'bold', marginBottom: '1rem'
-}
-
-const btnPrimary: React.CSSProperties = {
-  padding: '0.5rem 1rem', border: 'none', borderRadius: '6px',
-  background: 'var(--primary)', color: 'white', cursor: 'pointer'
-}
-
-const btnSecondary: React.CSSProperties = {
-  padding: '0.5rem 1rem', border: '1px solid var(--border)', borderRadius: '6px',
-  background: 'white', cursor: 'pointer'
-}
-
-const btnOutline: React.CSSProperties = {
-  padding: '0.5rem 1rem', border: '1px solid var(--primary)', borderRadius: '6px',
-  background: 'white', color: 'var(--primary)', cursor: 'pointer'
-}
-
-const inputStyle: React.CSSProperties = {
-  padding: '0.25rem 0.5rem', border: '1px solid var(--border)',
-  borderRadius: '4px', flex: 1, fontSize: '0.875rem'
-}
-
-const smallSelectStyle: React.CSSProperties = {
-  padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px'
-}
-
-const smallBtnOutline: React.CSSProperties = {
-  padding: '0.25rem 0.5rem', border: '1px solid var(--primary)', borderRadius: '4px',
-  background: 'white', color: 'var(--primary)', cursor: 'pointer'
-}
-
-const batchBarStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem',
-  padding: '0.75rem', background: 'var(--gray-50)', borderRadius: '6px'
-}
-
-const fieldLabelStyle: React.CSSProperties = {
-  color: 'var(--gray-500)', minWidth: '70px', fontSize: '0.875rem'
-}
-
-const thStyle: React.CSSProperties = {
-  padding: '0.5rem', border: '1px solid var(--border)', textAlign: 'left'
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: '0.5rem', border: '1px solid var(--border)'
 }

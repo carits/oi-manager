@@ -458,6 +458,10 @@
 .optionButton { padding: 0.5rem 1rem; font-size: 0.8125rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--gray-600); font-weight: 400; }
 .optionButton[aria-selected='true'] { border: 2px solid var(--primary); background: var(--primary-tint); color: var(--primary); font-weight: 600; }
 .optionButtonSmall { padding: 0.375rem 0.75rem; }
+.settingsCard { padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); margin-bottom: var(--space-5); }
+.sectionHeading { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+.settingsGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); }
+.fieldLabel { display: block; margin-bottom: var(--space-1); color: var(--text-secondary); font-size: var(--text-sm); font-weight: 500; }
 .twoToOneGrid { grid-template-columns: 2fr 1fr; }
 .languageOption { display: flex; align-items: center; gap: 0.25rem; font-size: 0.8125rem; cursor: pointer; padding: 0.25rem 0.625rem; border-radius: 6px; border: 1px solid var(--border); color: var(--gray-600); }
 .languageOption[data-selected='true'] { border-color: var(--primary); background: var(--primary-tint-subtle); color: var(--primary); }
@@ -471,3 +475,8 @@
 .testdataName { color: var(--gray-700); }
 .testdataName[data-kind='input'] { color: var(--primary); }
 .testdataName[data-kind='output'] { color: var(--success); }
+
+@media (max-width: 720px) {
+  .settingsGrid,
+  .twoToOneGrid { grid-template-columns: 1fr; }
+}

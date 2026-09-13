@@ -2,8 +2,7 @@
 
 import { getProvinces, getCities, getDistricts } from '@/lib/regionData'
 import unifiedStyles from './RegionSelector.unified.module.css'
-import { Input, Select, Textarea } from '@/components/ui/FormControls'
-import { formStyles } from '@/lib/styles'
+import { Select } from '@/components/ui/FormControls'
 
 interface RegionSelectorProps {
   province: string
@@ -42,7 +41,6 @@ export function RegionSelector({
       <Select aria-label="省份"
         value={province}
         onChange={(e) => handleProvinceChange(e.target.value)}
-        style={formStyles.select}
       >
         <option value="">请选择省</option>
         {provinces.map((p) => (
@@ -55,7 +53,6 @@ export function RegionSelector({
       <Select aria-label="城市"
         value={city}
         onChange={(e) => handleCityChange(e.target.value)}
-        style={formStyles.select}
         disabled={!province}
       >
         <option value="">请选择市</option>
@@ -69,7 +66,6 @@ export function RegionSelector({
       <Select aria-label="区县"
         value={district}
         onChange={(e) => onDistrictChange(e.target.value)}
-        style={formStyles.select}
         disabled={!city}
       >
         <option value="">请选择区</option>

@@ -633,10 +633,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px',
-    fontSize: '0.875rem', boxSizing: 'border-box',
-  }
   const contestWizard = mode === 'contest'
   const wizardSteps = ['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']
   const ratingConfigurationValid = ratingScope === 'NONE' || (
@@ -690,14 +686,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             {/* Basic Info */}
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>标题 *</label>
-              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={mode === 'contest' ? '比赛名称' : mode === 'homework' ? '作业名称' : '训练名称'} style={inputStyle} />
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={mode === 'contest' ? '比赛名称' : mode === 'homework' ? '作业名称' : '训练名称'} />
             </div>}
 
             {mode === 'contest' && wizardStep === 1 && (
               <div className={unifiedStyles.u6}>
                 <div>
                   <label className={unifiedStyles.u5}>赛制</label>
-                  <Select aria-label="比赛赛制" value={format} disabled={ratingLocked} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
+                  <Select aria-label="比赛赛制" value={format} disabled={ratingLocked} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')}>
                     <option value="ioi">IOI（即时反馈 + 部分分）</option>
                     <option value="icpc">ICPC（即时反馈 + AC / 罚时）</option>
                     <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
@@ -705,7 +701,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                 </div>
                 <div>
                   <label className={unifiedStyles.u5}>Rating 范围</label>
-                  <Select aria-label="Rating 范围" value={ratingScope} disabled={ratingLocked} onChange={event => setRatingScope(event.target.value as typeof ratingScope)} style={inputStyle}>
+                  <Select aria-label="Rating 范围" value={ratingScope} disabled={ratingLocked} onChange={event => setRatingScope(event.target.value as typeof ratingScope)}>
                     {allowedRatingScopes.includes('NONE') && <option value="NONE">不计 Rating</option>}
                     {allowedRatingScopes.includes('ORGANIZATION') && <option value="ORGANIZATION">本校 Rating</option>}
                     {allowedRatingScopes.includes('GLOBAL') && <option value="GLOBAL">全局 Rating</option>}
@@ -717,14 +713,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                 </div>
                 {ratingScope !== 'NONE' && <div>
                   <label className={unifiedStyles.u5}>Rating 权重</label>
-                  <Input aria-label="Rating 权重" type="number" min="0.1" max="1" step="0.1" value={ratingWeight} disabled={ratingLocked} onChange={event => setRatingWeight(event.target.value)} style={inputStyle} />
+                  <Input aria-label="Rating 权重" type="number" min="0.1" max="1" step="0.1" value={ratingWeight} disabled={ratingLocked} onChange={event => setRatingWeight(event.target.value)} />
                   <small>影响强度：标准比赛的 {Math.round((Number(ratingWeight) || 0) * 100)}%</small>
                 </div>}
                 {ratingScope !== 'NONE' && <div>
                   <label className={unifiedStyles.u5}>本校 / 全局最低人数</label>
                   <div className={unifiedStyles.u1}>
-                    <Input aria-label="本校 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={ratingLocked} onChange={event => setOrganizationRatingMinimum(event.target.value)} style={inputStyle} />
-                    <Input aria-label="全局 Rating 最低人数" type="number" min="2" value={globalRatingMinimum} disabled={ratingLocked} onChange={event => setGlobalRatingMinimum(event.target.value)} style={inputStyle} />
+                    <Input aria-label="本校 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={ratingLocked} onChange={event => setOrganizationRatingMinimum(event.target.value)} />
+                    <Input aria-label="全局 Rating 最低人数" type="number" min="2" value={globalRatingMinimum} disabled={ratingLocked} onChange={event => setGlobalRatingMinimum(event.target.value)} />
                   </div>
                 </div>}
               </div>
@@ -732,13 +728,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>公告</label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={mode === 'contest' ? '比赛说明（可选）' : mode === 'homework' ? '作业说明（可选）' : '训练说明（可选）'} rows={2} style={inputStyle} className={unifiedStyles.descriptionInput} />
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={mode === 'contest' ? '比赛说明（可选）' : mode === 'homework' ? '作业说明（可选）' : '训练说明（可选）'} rows={2} className={unifiedStyles.descriptionInput} />
             </div>}
 
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u6}>
               {!contestWizard && <div>
                 <label className={unifiedStyles.u5}>赛制</label>
-                <Select aria-label="选择" value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
+                <Select aria-label="选择" value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')}>
                   <option value="ioi">IOI（即时反馈+部分分）</option>
                   <option value="icpc">ICPC（即时反馈+AC/罚时）</option>
                   <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
@@ -746,11 +742,11 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
               </div>}
               {(!contestWizard || wizardStep === 0) && <div>
                 <label className={unifiedStyles.u5}>开始时间 *</label>
-                <Input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
+                <Input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} />
               </div>}
               {(!contestWizard || wizardStep === 0) && <div>
                 <label className={unifiedStyles.u5}>结束时间 *</label>
-                <Input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} style={inputStyle} />
+                <Input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} />
               </div>}
             </div>}
 
@@ -758,14 +754,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             {(!contestWizard || wizardStep === 3) && <div className={unifiedStyles.u6}>
               <div>
                 <label className={unifiedStyles.u5}>题目来源显示</label>
-                <Select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
+                <Select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')}>
                   <option value="after">赛后显示</option>
                   <option value="always">始终显示</option>
                 </Select>
               </div>
               <div>
                 <label className={unifiedStyles.u5}>题解显示</label>
-                <Select aria-label="选择" value={solutionVisible ? 'always' : 'after'} onChange={e => setSolutionVisible(e.target.value === 'always')} style={inputStyle}>
+                <Select aria-label="选择" value={solutionVisible ? 'always' : 'after'} onChange={e => setSolutionVisible(e.target.value === 'always')}>
                   <option value="after">赛后显示</option>
                   <option value="always">始终显示</option>
                 </Select>

@@ -6,12 +6,12 @@ import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
+import { FormField } from '@/components/ui/FormField'
 import { Pagination } from '@/components/ui/Pagination'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import { useModal } from '@/hooks/form/useModal'
 import { useForm } from '@/hooks/form/useForm'
-import { formStyles } from '@/lib/styles'
 import apiClient from '@/lib/apiClient'
 import { Badge } from '@/components/ui/Badge'
 import { ActionMenu, ActionMenuItem, IdentityCell, ManagementToolbar, managementListStyles } from '@/components/management/ManagementList'
@@ -275,12 +275,10 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
             <p className={unifiedStyles.u3}>
               选择新的学校负责人。转移后，您将失去学校负责人权限，新负责人将获得管理本校教师的权限。
             </p>
-            <div style={formStyles.field}>
-              <label style={formStyles.label}>选择新负责人 *</label>
+            <FormField label="选择新负责人" required>
               <Select aria-label="选择"
                 value={selectedNewPrincipal}
                 onChange={(e) => setSelectedNewPrincipal(e.target.value)}
-                style={formStyles.select}
               >
                 <option value="">请选择</option>
                 {transferableTeachers.map((teacher) => (
@@ -289,7 +287,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
                   </option>
                 ))}
               </Select>
-            </div>
+            </FormField>
           </div>
           <div className={unifiedStyles.u4}>
             <Button onClick={handleTransferPrincipal} disabled={transferring || !selectedNewPrincipal}>
@@ -384,73 +382,61 @@ function TeacherFormModal({
   return (
     <FormDialog isOpen={true} onClose={onClose} title={teacher ? '编辑教师' : '添加教师'} size="md">
       <form onSubmit={form.handleSubmit} className={unifiedStyles.u5}>
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>姓名 *</label>
+        <FormField label="姓名" required>
           <Input
             type="text"
             value={form.values.name}
             onChange={(e) => form.handleChange('name', e.target.value)}
             required
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>用户名 *</label>
+        <FormField label="用户名" required>
           <Input
             type="text"
             value={form.values.username}
             onChange={(e) => form.handleChange('username', e.target.value)}
             required
             disabled={!!teacher}
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>密码 {!teacher && '*'}</label>
+        <FormField label="密码" required={!teacher}>
           <Input
             type="password"
             value={form.values.password}
             onChange={(e) => form.handleChange('password', e.target.value)}
             required={!teacher}
             placeholder={teacher ? '留空则不修改' : ''}
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>职称</label>
+        <FormField label="职称">
           <Input
             type="text"
             value={form.values.title}
             onChange={(e) => form.handleChange('title', e.target.value)}
             placeholder="如：高级教师"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>邮箱 *</label>
+        <FormField label="邮箱">
           <Input
             type="email"
             value={form.values.email}
             onChange={(e) => form.handleChange('email', e.target.value)}
             placeholder="如：teacher@example.com"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>联系电话 *</label>
+        <FormField label="联系电话">
           <Input
             type="tel"
             value={form.values.phone}
             onChange={(e) => form.handleChange('phone', e.target.value)}
             placeholder="如：13900000000"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
         <div className={unifiedStyles.u6}>
           * 邮箱和电话至少填写一个

@@ -5,9 +5,9 @@ import collisionStyles from './ProfileEditor.collision.module.css'
 import unifiedStyles from './ProfileEditor.unified.module.css'
 import { Input, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
+import { FormField } from '@/components/ui/FormField'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
-import { formStyles } from '@/lib/styles'
 import { getAssetUrl } from '@/lib/assets'
 import { useToast } from '@/components/ui/Toast'
 
@@ -138,50 +138,40 @@ export function ProfileEditor({ userType: _userType }: ProfileEditorProps) {
 
       {/* 表单区域 */}
       <form onSubmit={handleSubmit} className={unifiedStyles.u7}>
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>用户名</label>
+        <FormField label="用户名" hint="账号用户名不可在这里修改；校园真实姓名由各学校身份资料独立管理。">
           <Input
             type="text"
             value={user?.username || ''}
             readOnly
-            aria-describedby="account-username-help"
-            style={formStyles.input}
           />
-          <p id="account-username-help" className={unifiedStyles.u6}>账号用户名不可在这里修改；校园真实姓名由各学校身份资料独立管理。</p>
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>邮箱</label>
+        <FormField label="邮箱">
           <Input
             type="email"
             value={form.email}
             onChange={(e) => handleChange('email', e.target.value)}
             placeholder="请输入邮箱"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>手机号</label>
+        <FormField label="手机号">
           <Input
             type="tel"
             value={form.phone}
             onChange={(e) => handleChange('phone', e.target.value)}
             placeholder="请输入手机号"
-            style={formStyles.input}
           />
-        </div>
+        </FormField>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>个人简介</label>
+        <FormField label="个人简介">
           <Textarea
             value={form.bio}
             onChange={(e) => handleChange('bio', e.target.value)}
             placeholder="请输入个人简介"
-            style={formStyles.input}
             className={unifiedStyles.bioInput}
           />
-        </div>
+        </FormField>
 
         <div className={unifiedStyles.u8}>
           <Button variant="primary"

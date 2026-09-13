@@ -100,90 +100,6 @@ const SUBTASK_TYPES = [
   { value: 'sum', label: 'Sum（求和）' },
 ] as const
 
-// ==================== 样式常量 ====================
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.625rem',
-  border: '1px solid var(--border)',
-  borderRadius: '6px',
-  fontSize: '0.875rem',
-  boxSizing: 'border-box',
-  outline: 'none',
-}
-
-const selectStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.625rem',
-  border: '1px solid var(--border)',
-  borderRadius: '6px',
-  fontSize: '0.875rem',
-  boxSizing: 'border-box',
-  outline: 'none',
-}
-
-const gridRow: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '1rem',
-}
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  color: 'var(--gray-800)',
-  marginBottom: '0.75rem',
-  paddingBottom: '0.5rem',
-  borderBottom: '1px solid var(--border)',
-}
-
-const cardStyle: React.CSSProperties = {
-  padding: '1.25rem',
-  border: '1px solid var(--border)',
-  borderRadius: '8px',
-  background: 'white',
-  marginBottom: '1.25rem',
-}
-
-const fieldLabel: React.CSSProperties = {
-  display: 'block',
-  fontSize: '0.8125rem',
-  fontWeight: 500,
-  marginBottom: '0.375rem',
-  color: 'var(--gray-700)',
-}
-
-const btnPrimary: React.CSSProperties = {
-  padding: '0.5rem 1.25rem',
-  background: 'var(--primary)',
-  color: 'white',
-  border: 'none',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  fontSize: '0.875rem',
-  fontWeight: 500,
-}
-
-const btnOutline: React.CSSProperties = {
-  padding: '0.375rem 0.75rem',
-  background: 'white',
-  color: 'var(--gray-700)',
-  border: '1px solid var(--border)',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  fontSize: '0.8125rem',
-}
-
-const btnDanger: React.CSSProperties = {
-  padding: '0.25rem 0.5rem',
-  background: 'transparent',
-  color: 'var(--error)',
-  border: '1px solid var(--error)',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '0.75rem',
-}
-
 // ==================== 主组件 ====================
 
 export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettingsTabProps>(
@@ -823,17 +739,17 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         <div className={unifiedStyles.u3}>
           <label className={unifiedStyles.u4}>时间限制</label>
           <Input type="number" value={timeLimit} onChange={(e) => onTimeLimitChange(e.target.value)}
-            placeholder="1000" style={inputStyle} className={unifiedStyles.limitInput} />
+            placeholder="1000" className={unifiedStyles.limitInput} />
           <span className={unifiedStyles.u5}>ms</span>
         </div>
         <div className={unifiedStyles.u3}>
           <label className={unifiedStyles.u4}>内存限制</label>
           <Input type="number" value={memoryLimit} onChange={(e) => onMemoryLimitChange(e.target.value)}
-            placeholder="256" style={inputStyle} className={unifiedStyles.limitInput} />
+            placeholder="256" className={unifiedStyles.limitInput} />
           <span className={unifiedStyles.u5}>MB</span>
         </div>
         <div className={unifiedStyles.u6}>
-          <Button variant="ghost" type="button" onClick={() => setYamlCollapsed(!yamlCollapsed)} style={btnOutline}>
+          <Button variant="outline" size="sm" type="button" onClick={() => setYamlCollapsed(!yamlCollapsed)}>
             {yamlCollapsed ? '查看 YAML' : '收起 YAML'}
           </Button>
           <Button variant="primary" type="button" onClick={() => handleSaveConfig()} disabled={saving}>
@@ -882,8 +798,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       {activeTab === 'basic' && (
         <div>
           {/* 评测赛制 */}
-          <div style={cardStyle}>
-            <div style={sectionTitle}>评测赛制</div>
+          <div className={unifiedStyles.settingsCard}>
+            <div className={unifiedStyles.sectionHeading}>评测赛制</div>
             <div className={unifiedStyles.u11}>
               {([['acm', 'ACM 赛制'], ['oi', 'OI 赛制']] as const).map(([mode, label]) => (
                 <Button variant="ghost" type="button" key={mode} onClick={() => {
@@ -912,8 +828,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           </div>
 
           {/* 题目类型 */}
-          <div style={cardStyle}>
-            <div style={sectionTitle}>题目类型</div>
+          <div className={unifiedStyles.settingsCard}>
+            <div className={unifiedStyles.sectionHeading}>题目类型</div>
             <div className={unifiedStyles.u11}>
               {PROBLEM_TYPES.map(pt => (
                 <Button variant="ghost" type="button" key={pt.value} onClick={() => setProblemType(pt.value)}
@@ -927,8 +843,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
           {/* 传统题: Checker 配置 */}
           {problemType === 'default' && (
-            <div style={cardStyle}>
-              <div style={sectionTitle}>比较器 (Checker)</div>
+            <div className={unifiedStyles.settingsCard}>
+              <div className={unifiedStyles.sectionHeading}>比较器 (Checker)</div>
 
               <div className={unifiedStyles.u13}>
                 {[{ v: 'default', l: '默认' }, { v: 'testlib', l: 'testlib' }, ...(judgeMode === 'oi' ? [{ v: 'lemon', l: 'Lemon' }] : []), { v: 'other', l: '其他' }].map(o => (
@@ -947,18 +863,18 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               )}
 
               {checkerType === 'testlib' && (
-                <div style={gridRow}>
+                <div className={unifiedStyles.settingsGrid}>
                   <div>
-                    <label style={fieldLabel}>类型</label>
-                    <Select aria-label="选择" value={checkerCategory} onChange={(e) => setCheckerCategory(e.target.value as 'preset' | 'custom')} style={selectStyle}>
+                    <label className={unifiedStyles.fieldLabel}>类型</label>
+                    <Select aria-label="选择" value={checkerCategory} onChange={(e) => setCheckerCategory(e.target.value as 'preset' | 'custom')}>
                       <option value="preset">预设</option>
                       <option value="custom">自定义</option>
                     </Select>
                   </div>
                   {checkerCategory === 'preset' ? (
                     <div>
-                      <label style={fieldLabel}>Checker</label>
-                      <Select aria-label="选择" value={checkerPreset} onChange={(e) => setCheckerPreset(e.target.value)} style={selectStyle}>
+                      <label className={unifiedStyles.fieldLabel}>Checker</label>
+                      <Select aria-label="选择" value={checkerPreset} onChange={(e) => setCheckerPreset(e.target.value)}>
                         <option value="acmp">acmp</option>
                         <option value="ncmp">ncmp (整数比较)</option>
                         <option value="rcmp4">rcmp4 (浮点 1e-4)</option>
@@ -970,24 +886,24 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     </div>
                   ) : (
                     <div>
-                      <label style={fieldLabel}>Checker 文件</label>
-                      <Input type="text" value={checkerFile} onChange={(e) => setCheckerFile(e.target.value)} placeholder="如: checker.cpp" style={inputStyle} />
+                      <label className={unifiedStyles.fieldLabel}>Checker 文件</label>
+                      <Input type="text" value={checkerFile} onChange={(e) => setCheckerFile(e.target.value)} placeholder="如: checker.cpp" />
                     </div>
                   )}
                 </div>
               )}
 
               {checkerType === 'other' && (
-                <div style={gridRow}>
+                <div className={unifiedStyles.settingsGrid}>
                   <div>
-                    <label style={fieldLabel}>接口类型</label>
-                    <Select aria-label="选择" value={checkerPreset} onChange={(e) => setCheckerPreset(e.target.value)} style={selectStyle}>
+                    <label className={unifiedStyles.fieldLabel}>接口类型</label>
+                    <Select aria-label="选择" value={checkerPreset} onChange={(e) => setCheckerPreset(e.target.value)}>
                       {CHECKER_INTERFACES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </Select>
                   </div>
                   <div>
-                    <label style={fieldLabel}>Checker 文件</label>
-                    <Input type="text" value={checkerFile} onChange={(e) => setCheckerFile(e.target.value)} placeholder="如: checker.cpp" style={inputStyle} />
+                    <label className={unifiedStyles.fieldLabel}>Checker 文件</label>
+                    <Input type="text" value={checkerFile} onChange={(e) => setCheckerFile(e.target.value)} placeholder="如: checker.cpp" />
                   </div>
                 </div>
               )}
@@ -996,16 +912,16 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
           {/* 交互题 */}
           {problemType === 'interactive' && (
-            <div style={cardStyle}>
-              <div style={sectionTitle}>交互器 (Interactor)</div>
-              <div style={gridRow} className={unifiedStyles.twoToOneGrid}>
+            <div className={unifiedStyles.settingsCard}>
+              <div className={unifiedStyles.sectionHeading}>交互器 (Interactor)</div>
+              <div className={`${unifiedStyles.settingsGrid} ${unifiedStyles.twoToOneGrid}`}>
                 <div>
-                  <label style={fieldLabel}>Interactor 文件</label>
-                  <Input type="text" value={interactorFile} onChange={(e) => setInteractorFile(e.target.value)} placeholder="如: interactor.cpp" style={inputStyle} />
+                  <label className={unifiedStyles.fieldLabel}>Interactor 文件</label>
+                  <Input type="text" value={interactorFile} onChange={(e) => setInteractorFile(e.target.value)} placeholder="如: interactor.cpp" />
                 </div>
                 <div>
-                  <label style={fieldLabel}>语言</label>
-                  <Select aria-label="选择" value={interactorLang} onChange={(e) => setInteractorLang(e.target.value)} style={selectStyle}>
+                  <label className={unifiedStyles.fieldLabel}>语言</label>
+                  <Select aria-label="选择" value={interactorLang} onChange={(e) => setInteractorLang(e.target.value)}>
                     <option value="auto">自动</option><option value="cpp">C++</option><option value="c">C</option><option value="python">Python</option>
                   </Select>
                 </div>
@@ -1015,39 +931,39 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
           {/* 通信题 */}
           {problemType === 'communication' && (
-            <div style={cardStyle}>
-              <div style={sectionTitle}>管理器 (Manager)</div>
-              <div style={gridRow} className={unifiedStyles.twoToOneGrid}>
+            <div className={unifiedStyles.settingsCard}>
+              <div className={unifiedStyles.sectionHeading}>管理器 (Manager)</div>
+              <div className={`${unifiedStyles.settingsGrid} ${unifiedStyles.twoToOneGrid}`}>
                 <div>
-                  <label style={fieldLabel}>Manager 文件</label>
-                  <Input type="text" value={managerFile} onChange={(e) => setManagerFile(e.target.value)} placeholder="如: manager.cpp" style={inputStyle} />
+                  <label className={unifiedStyles.fieldLabel}>Manager 文件</label>
+                  <Input type="text" value={managerFile} onChange={(e) => setManagerFile(e.target.value)} placeholder="如: manager.cpp" />
                 </div>
                 <div>
-                  <label style={fieldLabel}>语言</label>
-                  <Select aria-label="选择" value={managerLang} onChange={(e) => setManagerLang(e.target.value)} style={selectStyle}>
+                  <label className={unifiedStyles.fieldLabel}>语言</label>
+                  <Select aria-label="选择" value={managerLang} onChange={(e) => setManagerLang(e.target.value)}>
                     <option value="auto">自动</option><option value="cpp">C++</option><option value="c">C</option><option value="python">Python</option>
                   </Select>
                 </div>
               </div>
               <div className={unifiedStyles.u15}>
-                <label style={fieldLabel}>进程数</label>
-                <Input type="number" value={numProcesses} onChange={(e) => setNumProcesses(parseInt(e.target.value) || 2)} min={2} max={10} style={inputStyle} />
+                <label className={unifiedStyles.fieldLabel}>进程数</label>
+                <Input type="number" value={numProcesses} onChange={(e) => setNumProcesses(parseInt(e.target.value) || 2)} min={2} max={10} />
               </div>
             </div>
           )}
 
           {/* 提交答案题 */}
           {problemType === 'submit_answer' && (
-            <div style={cardStyle}>
-              <div style={sectionTitle}>提交答案题配置</div>
+            <div className={unifiedStyles.settingsCard}>
+              <div className={unifiedStyles.sectionHeading}>提交答案题配置</div>
               <label className={unifiedStyles.u16}>
                 <Input type="checkbox" checked={submitAnswerMulti} onChange={(e) => setSubmitAnswerMulti(e.target.checked)} />
                 Multi-file（多文件提交）
               </label>
               {submitAnswerMulti && (
                 <div className={unifiedStyles.u17}>
-                  <label style={fieldLabel}>文件名模板</label>
-                  <Input type="text" value={submitAnswerFilename} onChange={(e) => setSubmitAnswerFilename(e.target.value)} placeholder="#.txt" style={inputStyle} />
+                  <label className={unifiedStyles.fieldLabel}>文件名模板</label>
+                  <Input type="text" value={submitAnswerFilename} onChange={(e) => setSubmitAnswerFilename(e.target.value)} placeholder="#.txt" />
                 </div>
               )}
             </div>
@@ -1055,8 +971,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
           {/* FileIO */}
           {problemType === 'default' && (
-            <div style={cardStyle}>
-              <div style={sectionTitle}>提交级文件 IO</div>
+            <div className={unifiedStyles.settingsCard}>
+              <div className={unifiedStyles.sectionHeading}>提交级文件 IO</div>
               <div className={unifiedStyles.u18}>{fileioPrefix
                 ? <span>旧配置 <strong>{fileioPrefix}.in / {fileioPrefix}.out</strong> 仅用于历史迁移和提交框预填；新评测由每次提交自行选择。</span>
                 : <span>文件名由每次提交单独配置；题目和测试版本只保存标准 input / answer。</span>}
@@ -1066,20 +982,20 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
           {/* 额外文件 */}
           {!['submit_answer', 'objective'].includes(problemType) && (
-            <div style={cardStyle}>
-              <div style={sectionTitle}>额外文件</div>
-              <div style={gridRow}>
+            <div className={unifiedStyles.settingsCard}>
+              <div className={unifiedStyles.sectionHeading}>额外文件</div>
+              <div className={unifiedStyles.settingsGrid}>
                 <div>
-                  <label style={fieldLabel}>用户额外文件（提交时可访问）</label>
+                  <label className={unifiedStyles.fieldLabel}>用户额外文件（提交时可访问）</label>
                   <Input type="text" value={userExtraFiles.join(', ')}
                     onChange={(e) => setUserExtraFiles(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                    placeholder="如: in.txt, data.csv（逗号分隔）" style={inputStyle} />
+                    placeholder="如: in.txt, data.csv（逗号分隔）" />
                 </div>
                 <div>
-                  <label style={fieldLabel}>评测额外文件（评测时可访问）</label>
+                  <label className={unifiedStyles.fieldLabel}>评测额外文件（评测时可访问）</label>
                   <Input type="text" value={judgeExtraFiles.join(', ')}
                     onChange={(e) => setJudgeExtraFiles(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                    placeholder="如: judge.txt（逗号分隔）" style={inputStyle} />
+                    placeholder="如: judge.txt（逗号分隔）" />
                 </div>
               </div>
             </div>
@@ -1087,8 +1003,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
           {/* 语言限制 */}
           {!['submit_answer', 'objective'].includes(problemType) && (
-            <div style={cardStyle}>
-              <div style={sectionTitle}>语言限制</div>
+            <div className={unifiedStyles.settingsCard}>
+              <div className={unifiedStyles.sectionHeading}>语言限制</div>
               <div className={unifiedStyles.u20}>
                 {LANGUAGE_OPTIONS.filter(o => o.value).map(lang => (
                   <label key={lang.value} className={unifiedStyles.languageOption} data-selected={langs.includes(lang.value)}>
@@ -1109,10 +1025,10 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         <div>
           {/* 操作栏 */}
           <div className={unifiedStyles.u22}>
-            <Button variant="ghost" type="button" onClick={autoConfigure} style={btnOutline}>⚡ 自动配置</Button>
-            <Button variant="ghost" type="button" onClick={addSubtask} style={btnOutline}>＋ 添加子任务</Button>
+            <Button variant="outline" size="sm" type="button" onClick={autoConfigure}>⚡ 自动配置</Button>
+            <Button variant="outline" size="sm" type="button" onClick={addSubtask}>＋ 添加子任务</Button>
             {subtasks.length > 0 && (
-              <Button variant="ghost" type="button" onClick={deleteAllSubtasks} style={btnDanger}>删除全部子任务</Button>
+              <Button variant="danger" size="sm" type="button" onClick={deleteAllSubtasks}>删除全部子任务</Button>
             )}
             <span className={unifiedStyles.u23}>
               全局 {globalTime} / {globalMemory} · {subtasks.reduce((sum, st) => sum + st.cases.length, 0)} 测试点 · {subtasks.length} 子任务
@@ -1121,8 +1037,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
           {/* 未分配测试点 */}
           {unassignedCases.length > 0 && (
-            <div style={cardStyle}>
-              <div style={sectionTitle} className={unifiedStyles.warningTitle}>未分配测试点 ({unassignedCases.length})</div>
+            <div className={unifiedStyles.settingsCard}>
+              <div className={`${unifiedStyles.sectionHeading} ${unifiedStyles.warningTitle}`}>未分配测试点 ({unassignedCases.length})</div>
               <div className={unifiedStyles.u24}>
                 {unassignedCases.map((c, i) => (
                   <span key={i} className={unifiedStyles.u25}>
@@ -1132,7 +1048,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                 {subtasks.length > 0 && (
                   <div className={unifiedStyles.u26}>
                     <span className={unifiedStyles.u5}>全部分配到:</span>
-                    <Select aria-label="选择" onChange={(e) => { const sid = parseInt(e.target.value); if (sid) assignCasesToSubtask(sid, unassignedCases); e.target.value = '' }} style={selectStyle} className={unifiedStyles.assignmentSelect} defaultValue="">
+                    <Select aria-label="选择" onChange={(e) => { const sid = parseInt(e.target.value); if (sid) assignCasesToSubtask(sid, unassignedCases); e.target.value = '' }} className={unifiedStyles.assignmentSelect} defaultValue="">
                       <option value="" disabled>选择子任务...</option>
                       {subtasks.map(st => <option key={st.id} value={st.id}>子任务 {st.id}</option>)}
                     </Select>
@@ -1147,7 +1063,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             const isExpanded = expandedSubtasks.has(st.id)
             const isEditing = editingSubtaskId === st.id
             return (
-              <div key={st.id} style={cardStyle}>
+              <div key={st.id} className={unifiedStyles.settingsCard}>
                 {/* 头部 */}
                 <div className={unifiedStyles.u27}
                   onClick={() => {
@@ -1173,29 +1089,29 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     {isEditing ? (
                       <div className={unifiedStyles.u35}>
                         <div>
-                          <label style={fieldLabel}>分值</label>
-                          <Input type="number" value={editForm.score} onChange={(e) => setEditForm({ ...editForm, score: e.target.value })} style={inputStyle} />
+                          <label className={unifiedStyles.fieldLabel}>分值</label>
+                          <Input type="number" value={editForm.score} onChange={(e) => setEditForm({ ...editForm, score: e.target.value })} />
                         </div>
                         <div>
-                          <label style={fieldLabel}>时间覆盖</label>
-                          <Input type="text" value={editForm.time} placeholder={globalTime} onChange={(e) => setEditForm({ ...editForm, time: e.target.value })} style={inputStyle} />
+                          <label className={unifiedStyles.fieldLabel}>时间覆盖</label>
+                          <Input type="text" value={editForm.time} placeholder={globalTime} onChange={(e) => setEditForm({ ...editForm, time: e.target.value })} />
                         </div>
                         <div>
-                          <label style={fieldLabel}>内存覆盖</label>
-                          <Input type="text" value={editForm.memory} placeholder={globalMemory} onChange={(e) => setEditForm({ ...editForm, memory: e.target.value })} style={inputStyle} />
+                          <label className={unifiedStyles.fieldLabel}>内存覆盖</label>
+                          <Input type="text" value={editForm.memory} placeholder={globalMemory} onChange={(e) => setEditForm({ ...editForm, memory: e.target.value })} />
                         </div>
                         <div>
-                          <label style={fieldLabel}>评分方式</label>
-                          <Select aria-label="选择" value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })} style={selectStyle}>
+                          <label className={unifiedStyles.fieldLabel}>评分方式</label>
+                          <Select aria-label="选择" value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}>
                             {SUBTASK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                           </Select>
                         </div>
                         <div className={unifiedStyles.u36}>
-                          <label style={fieldLabel}>依赖 (子任务ID, 逗号分隔)</label>
-                          <Input type="text" value={editForm.deps} onChange={(e) => setEditForm({ ...editForm, deps: e.target.value })} placeholder="如: 1, 2" style={inputStyle} />
+                          <label className={unifiedStyles.fieldLabel}>依赖 (子任务ID, 逗号分隔)</label>
+                          <Input type="text" value={editForm.deps} onChange={(e) => setEditForm({ ...editForm, deps: e.target.value })} placeholder="如: 1, 2" />
                         </div>
                         <div className={unifiedStyles.u37}>
-                          <Button variant="ghost" type="button" onClick={saveEditSubtask} style={btnPrimary}>保存</Button>
+                          <Button size="sm" type="button" onClick={saveEditSubtask}>保存</Button>
                         </div>
                       </div>
                     ) : (
@@ -1259,8 +1175,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
       {/* ===== 测试数据 Tab ===== */}
       {activeTab === 'basic' && problemId && (
-        <div style={cardStyle}>
-          <div style={sectionTitle}>Checker 文件</div>
+        <div className={unifiedStyles.settingsCard}>
+          <div className={unifiedStyles.sectionHeading}>Checker 文件</div>
           <div className={unifiedStyles.u48}>
             <label className={unifiedStyles.uploadButton} data-disabled={checkerUploading}>
               {checkerUploading ? '上传中...' : '上传 Checker'}
@@ -1297,8 +1213,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           {(() => {
             const pairs = !problemId ? stagedPairs : testdataPairs
             return pairs.length > 0 ? (
-              <div style={cardStyle} className={unifiedStyles.recognizedCard}>
-                <div style={sectionTitle} className={unifiedStyles.successTitle}>已识别测试点 ({pairs.length})</div>
+              <div className={`${unifiedStyles.settingsCard} ${unifiedStyles.recognizedCard}`}>
+                <div className={`${unifiedStyles.sectionHeading} ${unifiedStyles.successTitle}`}>已识别测试点 ({pairs.length})</div>
                 <div className={unifiedStyles.u20}>
                   {pairs.map((pair, i) => (
                     <span key={i} className={unifiedStyles.u54}>
@@ -1340,7 +1256,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                             <span className={unifiedStyles.u68}>待上传</span>
                           </TableCell>
                           <TableCell className={unifiedStyles.u69}>
-                            <Button variant="ghost" type="button" onClick={() => handleDeleteFile('', file.name)} style={btnDanger}>
+                            <Button variant="danger" size="sm" type="button" onClick={() => handleDeleteFile('', file.name)}>
                               删除
                             </Button>
                           </TableCell>
