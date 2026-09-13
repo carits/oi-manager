@@ -14,6 +14,7 @@ source_of_truth: Git history
 - 新增批量 Organization Authorization 解析和统一的 `none/own/all` 资源范围投影，列表、详情、通知接收人和事务内策略使用同一份 RoleAssignment/CapabilityGrant 事实。
 - 组织加入/邀请、加入策略、Assignment、Training、Rating、Data Market、题单发布作业和 Candidate 预算不再查询教师/负责人 `memberRole` 决定权限；`memberRole` 仅保留资料类型、目标身份和历史兼容语义。
 - 新增伪造旧 `memberRole` 不得提升教师审批教师申请或修改加入策略的数据库回归，并扩大静态防回退范围。
+- 生产同构临时 Schema 权限套件 6 文件 83/83 通过；提交 `a26192d` 已推送并将 API 从 3303 蓝绿提升到 3302，全部运行服务及 health/readiness 正常。本批无 Prisma、业务数据或 Web 变更。
 
 ### 组织成员 Capability 路由与服务边界
 
