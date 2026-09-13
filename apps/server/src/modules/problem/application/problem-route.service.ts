@@ -70,7 +70,7 @@ async function noteIdentity(user: JwtPayload, problemId: string) {
   if (!problem) return { error: 'not_found' as const }
   const owner = await getOwnerInfo(user.userId, user.role)
   if (!owner) return { error: 'owner_missing' as const }
-  return { ownerId: owner.ownerId, userType: user.role === 'student' ? 'student' : 'teacher' }
+  return { ownerId: owner.ownerId, userType: user.organizationRole === 'student' ? 'student' : 'teacher' }
 }
 
 export async function getProblemNote(user: JwtPayload, problemId: string) {

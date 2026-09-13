@@ -156,7 +156,7 @@ export class TeamService {
     })
 
     // 如果是学生，检查申请状态（统一从 TeamMember 查询）
-    if (user.role === 'student') {
+    if (user.organizationRole === 'student') {
       const memberRecords = await this.repo.findMembersByUser(user.userId, 'student')
 
       // 区分：已加入(active)、邀请(pending + invitedBy!=null)、申请(pending + invitedBy==null)

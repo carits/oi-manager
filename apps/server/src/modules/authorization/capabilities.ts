@@ -14,6 +14,10 @@ export type OrganizationCapability =
   | 'membership.manage.students'
   | 'membership.manage.teachers'
   | 'organization.settings'
+  | 'team.create'
+  | 'problem.create'
+  | 'problem.manage'
+  | 'organization.finance.view'
 
 export type TeamCapability = 'assignment.create' | 'assignment.manage' | 'contest.manage'
 
@@ -28,6 +32,10 @@ const ORGANIZATION_ROLE_CAPABILITIES: Readonly<Record<string, ReadonlySet<Organi
     'assignment.manage',
     'contest.manage',
     'membership.manage.students',
+    'team.create',
+    'problem.create',
+    'problem.manage',
+    'organization.finance.view',
   ]),
   school_principal: new Set([
     'organization.view',
@@ -39,6 +47,10 @@ const ORGANIZATION_ROLE_CAPABILITIES: Readonly<Record<string, ReadonlySet<Organi
     'membership.manage.students',
     'membership.manage.teachers',
     'organization.settings',
+    'team.create',
+    'problem.create',
+    'problem.manage',
+    'organization.finance.view',
   ]),
 }
 
@@ -66,6 +78,10 @@ const ORGANIZATION_CAPABILITY_KEYS = new Set<OrganizationCapability>([
   'membership.manage.students',
   'membership.manage.teachers',
   'organization.settings',
+  'team.create',
+  'problem.create',
+  'problem.manage',
+  'organization.finance.view',
 ])
 
 /** Resolve the normalized organization authorization facts for one active membership. */
@@ -111,6 +127,7 @@ export async function resolveOrganizationAuthorization(
   ])
   if (!account || account.status !== 'active' || !membership || membership.status !== 'active') return null
   if (membership.Organization.status !== 'active' || membership.Organization.School?.directoryStatus === 'legacy') return null
+  if (!organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey))) return null
   return authorizationFromMembership(account.role, membership)
 }
 
@@ -137,7 +154,7 @@ export async function resolveOrganizationAuthorizationsForUser(
       CapabilityGrants: { select: { capabilityKey: true } },
     },
   })
-  return memberships.map(membership => ({
+  return memberships.filter(membership => organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey))).map(membership => ({
     ...authorizationFromMembership(account.role, membership),
     organizationId: membership.organizationId,
   }))
@@ -163,14 +180,52 @@ export async function resolveOrganizationAuthorizationsForOrganization(
       CapabilityGrants: { select: { capabilityKey: true } },
     },
   })
-  return memberships.map(membership => authorizationFromMembership(membership.User.role, membership))
+  return memberships
+    .filter(membership => organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey)))
+    .map(membership => authorizationFromMembership(membership.User.role, membership))
 }
 
 const RESOURCE_SCOPED_CAPABILITIES = new Set<OrganizationCapability>([
   'assignment.manage',
   'contest.manage',
   'membership.manage.students',
+  'problem.manage',
 ])
+
+export function organizationRoleFromRoleKeys(
+  roleKeys: Iterable<string>,
+): 'student' | 'teacher' | 'school_principal' | null {
+  const keys = new Set(roleKeys)
+  const baseRoles = (['student', 'teacher', 'school_principal'] as const).filter(role => keys.has(role))
+  return baseRoles.length === 1 ? baseRoles[0] : null
+}
+
+/** Synchronous request policy over facts resolved by authenticate(). */
+export function requestHasOrganizationCapability(
+  user: { organizationCapabilities?: string[] },
+  capability: OrganizationCapability,
+): boolean {
+  return Boolean(user.organizationCapabilities?.includes(capability))
+}
+
+export function requestOrganizationCapabilityScope(
+  user: {
+    userId: string
+    organizationMembershipId?: string
+    accountRole?: string
+    organizationRole?: string
+    organizationCapabilities?: string[]
+  },
+  capability: OrganizationCapability,
+): 'none' | 'own' | 'all' {
+  return organizationCapabilityScope({
+    userId: user.userId,
+    membershipId: user.organizationMembershipId || '',
+    accountRole: user.accountRole || 'user',
+    roleKeys: new Set(user.organizationRole ? [user.organizationRole] : []),
+    capabilities: new Set((user.organizationCapabilities || []).filter(key => ORGANIZATION_CAPABILITY_KEYS.has(key as OrganizationCapability)) as OrganizationCapability[]),
+  }, capability)
+}
 
 /** Default teacher roles manage their own resources; principals and explicit non-teacher grants are broad. */
 export function organizationCapabilityScope(

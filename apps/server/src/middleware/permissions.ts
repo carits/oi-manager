@@ -7,6 +7,10 @@
 import { prisma } from '../prisma'
 import { AuthRequest, isPersonalContextForTeams } from './auth'
 import logger from '../lib/logger'
+import {
+  organizationCapabilityScope,
+  resolveOrganizationAuthorization,
+} from '../modules/authorization/capabilities'
 
 function logPermissionDenied(req: AuthRequest, action: string, resourceType: string, resourceId: string, reason?: string): void {
   logger.security('permission_denied', {
@@ -22,7 +26,7 @@ async function getActiveMembership(req: AuthRequest) {
   if (!organizationId || !req.user) return null
   return prisma.organizationMembership.findFirst({
     where: { organizationId, userId: req.user.userId, status: 'active' },
-    select: { id: true, organizationId: true, memberRole: true, Organization: { select: { School: { select: { id: true } } } } }
+    select: { id: true, organizationId: true, Organization: { select: { School: { select: { id: true } } } } }
   })
 }
 
@@ -49,28 +53,32 @@ async function findTeacherProfile(req: AuthRequest, profileId: string) {
 }
 
 export async function canViewStudent(req: AuthRequest, profileId: string): Promise<boolean> {
-  const role = req.user?.role
-  if (!isPersonalContextForTeams(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
+  if (!req.user) return false
+  if (!isPersonalContextForTeams(req.user) && ['super_admin', 'platform_admin'].includes(req.user.accountRole || req.user.role)) return true
   const student = await findStudentProfile(req, profileId)
   if (!student) {
     logPermissionDenied(req, 'view_student', 'student', profileId, '学生档案不存在或不在当前校园')
     return false
   }
-  const hasAccess = role !== 'student' || student.Membership.userId === req.user?.userId
+  const authorization = await resolveOrganizationAuthorization(req.user.userId, req.user.organizationId!)
+  const hasAccess = student.Membership.userId === req.user.userId
+    || Boolean(authorization?.capabilities.has('membership.view.students'))
   if (!hasAccess) logPermissionDenied(req, 'view_student', 'student', profileId, '学生只能查看自己的组织档案')
   return hasAccess
 }
 
 export async function canManageStudent(req: AuthRequest, profileId: string): Promise<boolean> {
-  const role = req.user?.role
-  if (!isPersonalContextForTeams(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
+  if (!req.user) return false
+  if (!isPersonalContextForTeams(req.user) && (req.user.accountRole || req.user.role) === 'super_admin') return true
   const student = await findStudentProfile(req, profileId)
   if (!student) {
     logPermissionDenied(req, 'manage_student', 'student', profileId, '学生档案不存在或不在当前校园')
     return false
   }
-  if (role === 'school_principal') return true
-  if (role !== 'teacher') {
+  const authorization = await resolveOrganizationAuthorization(req.user.userId, req.user.organizationId!)
+  const scope = authorization ? organizationCapabilityScope(authorization, 'membership.manage.students') : 'none'
+  if (scope === 'all') return true
+  if (scope === 'none') {
     logPermissionDenied(req, 'manage_student', 'student', profileId, '需要教师或负责人权限')
     return false
   }
@@ -81,18 +89,22 @@ export async function canManageStudent(req: AuthRequest, profileId: string): Pro
 }
 
 export async function canViewTeacher(req: AuthRequest, profileId: string): Promise<boolean> {
-  const role = req.user?.role
-  if (!isPersonalContextForTeams(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
+  if (!req.user) return false
+  if (!isPersonalContextForTeams(req.user) && ['super_admin', 'platform_admin'].includes(req.user.accountRole || req.user.role)) return true
   const teacher = await findTeacherProfile(req, profileId)
-  const hasAccess = !!teacher && ['student', 'teacher', 'school_principal'].includes(role ?? '')
+  const authorization = await resolveOrganizationAuthorization(req.user.userId, req.user.organizationId!)
+  const hasAccess = Boolean(teacher && authorization?.capabilities.has('organization.view'))
   if (!hasAccess) logPermissionDenied(req, 'view_teacher', 'teacher', profileId, '教师档案不存在或不在当前校园')
   return hasAccess
 }
 
 export async function canManageTeacher(req: AuthRequest, profileId: string): Promise<boolean> {
-  const role = req.user?.role
-  if (role === 'super_admin') return true
-  if (role !== 'school_principal') {
+  if (!req.user) return false
+  if ((req.user.accountRole || req.user.role) === 'super_admin') return true
+  const authorization = req.user.organizationId
+    ? await resolveOrganizationAuthorization(req.user.userId, req.user.organizationId)
+    : null
+  if (!authorization?.capabilities.has('membership.manage.teachers')) {
     logPermissionDenied(req, 'manage_teacher', 'teacher', profileId, '需要校园负责人权限')
     return false
   }

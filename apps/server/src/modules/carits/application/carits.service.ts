@@ -1,4 +1,5 @@
 import { prisma } from '../../../prisma'
+import { hasOrganizationCapability } from '../../authorization/capabilities'
 
 type Account = { id: string; balance: bigint; createdAt: Date; updatedAt: Date }
 
@@ -41,17 +42,9 @@ async function transactionsFor(accountId?: string) {
 }
 
 async function requireOrganizationManager(userId: string, organizationId: string) {
-  const membership = await prisma.organizationMembership.findFirst({
-    where: {
-      organizationId, userId, status: 'active', memberRole: { in: ['school_principal', 'teacher'] },
-      Organization: {
-        status: 'active',
-        School: { is: { status: 'active', directoryStatus: { not: 'legacy' } } },
-      },
-    },
-    select: { id: true },
-  })
-  if (!membership) throw new CaritsApplicationError(403, '无权访问该校园的 Carits币信息')
+  if (!await hasOrganizationCapability(userId, organizationId, 'organization.finance.view', { requireMembership: true })) {
+    throw new CaritsApplicationError(403, '无权访问该校园的 Carits币信息')
+  }
 }
 
 export async function getPersonalCaritsAccount(userId: string, includeTransactions = false) {

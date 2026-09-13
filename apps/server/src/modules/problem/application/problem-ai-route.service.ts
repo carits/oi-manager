@@ -21,7 +21,7 @@ function fail(statusCode: number, code: string, message: string): never {
 }
 
 function isGlobalAdmin(user: JwtPayload) {
-  return user.role === 'super_admin' || user.role === 'platform_admin'
+  return user.accountRole === 'super_admin' || user.accountRole === 'platform_admin'
 }
 
 async function requireManageableProblem(user: JwtPayload, problemId: string) {

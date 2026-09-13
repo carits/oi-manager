@@ -3,6 +3,7 @@ import { prisma } from '../../../prisma'
 import { notificationService } from '../../notification/notification.service'
 import { createOrganizationInvitation, respondToInvitation } from '../../organization-join/organization-join.service'
 import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
+import { organizationRoleFromRoleKeys } from '../../authorization/capabilities'
 
 const allModules = ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
 const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts']
@@ -17,6 +18,7 @@ export class WorkspaceError extends Error {
 export interface WorkspaceActor {
   userId: string
   role: string
+  accountRole?: string
   organizationId?: string | null
   organizationMembershipId?: string | null
 }
@@ -35,12 +37,13 @@ function relationLabel(memberRole: string, relationType: string) {
 }
 
 export async function listWorkspaces(actor: WorkspaceActor) {
-  if (actor.role === 'super_admin' || actor.role === 'platform_admin') {
+  const accountRole = actor.accountRole || actor.role
+  if (accountRole === 'super_admin' || accountRole === 'platform_admin') {
     return [{
       type: 'platform' as const,
-      organizationName: actor.role === 'super_admin' ? '超级管理员' : '平台管理',
+      organizationName: accountRole === 'super_admin' ? '超级管理员' : '平台管理',
       memberRole: 'platform_admin',
-      relationLabel: actor.role === 'super_admin' ? '超级管理员' : '平台管理员',
+      relationLabel: accountRole === 'super_admin' ? '超级管理员' : '平台管理员',
       availableModules: platformModules,
     }]
   }
@@ -49,21 +52,28 @@ export async function listWorkspaces(actor: WorkspaceActor) {
       { type: { not: 'school' } },
       { School: { is: { directoryStatus: { not: 'legacy' } } } },
     ] } },
-    include: { Organization: { include: { School: { select: { id: true, shortName: true } } } } },
+    include: {
+      Organization: { include: { School: { select: { id: true, shortName: true } } } },
+      RoleAssignments: { select: { roleKey: true } },
+    },
     orderBy: { joinedAt: 'asc' },
   })
-  const organizations = rows.map(row => ({
+  const organizations = rows.flatMap(row => {
+    const organizationRole = organizationRoleFromRoleKeys(row.RoleAssignments.map(item => item.roleKey))
+    if (!organizationRole) return []
+    return [{
     organizationMembershipId: row.id,
     type: 'organization' as const,
     organizationId: row.organizationId,
     organizationName: row.Organization.name,
     organizationType: row.Organization.type,
     shortName: row.Organization.School?.shortName || null,
-    memberRole: row.memberRole,
+    memberRole: organizationRole,
     relationType: row.relationType,
-    relationLabel: relationLabel(row.memberRole, row.relationType),
-    availableModules: modulesForRole(row.memberRole),
-  }))
+    relationLabel: relationLabel(organizationRole, row.relationType),
+    availableModules: modulesForRole(organizationRole),
+  }]
+  })
   const personal = {
     type: 'personal' as const,
     availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'],

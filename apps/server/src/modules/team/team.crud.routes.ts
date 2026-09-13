@@ -20,6 +20,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import logger from '../../lib/logger'
 import { isTeamIdAvailable, uploadTeamAvatar } from './application/team-route-operations.service'
 import { cleanupTeamAvatarTemporaryFile, teamAvatarUpload } from './infrastructure/team-avatar-upload'
+import { requestHasOrganizationCapability } from '../authorization/capabilities'
 
 export const teamCrudRouter = Router()
 
@@ -141,7 +142,7 @@ teamCrudRouter.post('/', authenticate, validateBody(createTeamSchema), asyncHand
   const user = (req as any).user!
 
   // 校园模式：学生不能创建团队；个人模式可以
-  if (user.role === 'student' && !isPersonalContextForTeams(user)) {
+  if (!isPersonalContextForTeams(user) && !requestHasOrganizationCapability(user, 'team.create')) {
     return res.status(403).json({ success: false, message: '校园模式下学生不能创建团队' })
   }
 
@@ -151,7 +152,7 @@ teamCrudRouter.post('/', authenticate, validateBody(createTeamSchema), asyncHand
   } catch (error) {
     if (error instanceof Error && error.message === 'TEAM_LIMIT_EXCEEDED') {
       const user = (req as any).user!
-      const maxTeams = (user.role === 'teacher' || user.role === 'school_principal') ? 50 : 5
+      const maxTeams = !isPersonalContextForTeams(user) && requestHasOrganizationCapability(user, 'team.create') ? 50 : 5
       return res.status(400).json({ success: false, message: `您创建的团队数量已达上限（${maxTeams}个）` })
     }
     if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {

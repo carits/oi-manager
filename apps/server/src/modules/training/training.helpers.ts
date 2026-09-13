@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '../../prisma'
-import { hasOrganizationCapability, hasTeamCapability } from '../authorization/capabilities'
+import { hasOrganizationCapability, hasTeamCapability, organizationRoleFromRoleKeys, resolveOrganizationAuthorization } from '../authorization/capabilities'
 
 /** 按比赛所属组织解析参赛者展示名；不读取旧 Student/Teacher 档案。 */
 export async function getParticipantNames(
@@ -23,7 +23,8 @@ export async function getParticipantNames(
   const memberships = await prisma.organizationMembership.findMany({
     where: { organizationId, userId: { in: userIds }, status: 'active' },
     select: {
-      userId: true, memberRole: true,
+      userId: true,
+      RoleAssignments: { select: { roleKey: true } },
       StudentProfile: { select: { name: true, avatar: true } },
       TeacherProfile: { select: { name: true, avatar: true } }
     }
@@ -32,7 +33,9 @@ export async function getParticipantNames(
   for (const membership of memberships) {
     const user = userMap.get(membership.userId)
     if (!user) continue
-    const isTeacher = membership.memberRole === 'teacher' || membership.memberRole === 'school_principal'
+    const organizationRole = organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey))
+    if (!organizationRole) continue
+    const isTeacher = organizationRole === 'teacher' || organizationRole === 'school_principal'
     const profile = isTeacher ? membership.TeacherProfile : membership.StudentProfile
     result.set(user.id, { name: profile?.name || user.username, username: user.username, avatar: user.avatar || profile?.avatar || null, userType: isTeacher ? 'teacher' : 'student' })
   }
@@ -77,10 +80,7 @@ export async function isOrganizationMember(userId: string, organizationId: strin
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
   if (!user) return false
   if (user.role === 'super_admin' || user.role === 'platform_admin') return true
-  return Boolean(await prisma.organizationMembership.findFirst({
-    where: { organizationId, userId, status: 'active' },
-    select: { id: true },
-  }))
+  return Boolean(await resolveOrganizationAuthorization(userId, organizationId))
 }
 
 /** 训练访问模式：team、organization 或平台公开活动。 */

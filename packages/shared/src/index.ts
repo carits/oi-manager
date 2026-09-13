@@ -38,6 +38,12 @@ export interface JwtPayload {
   /** Incremented whenever all existing sessions must be revoked. */
   sessionVersion?: number
   role: UserRole
+  /** Canonical account-wide identity. `role` remains a compatibility view. */
+  accountRole?: AccountRole
+  /** Canonical organization identity derived from normalized RoleAssignments. */
+  organizationRole?: OrganizationMembershipRole
+  /** Request-scoped authorization facts derived from roles and explicit grants. */
+  organizationCapabilities?: string[]
   username: string
   adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）
   organizationId?: string

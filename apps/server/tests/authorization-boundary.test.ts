@@ -5,11 +5,14 @@ import {
   capabilitiesForOrganizationRole,
   hasOrganizationCapability,
   organizationCapabilityScope,
+  organizationRoleFromRoleKeys,
+  requestHasOrganizationCapability,
   resolveOrganizationAuthorization,
 } from '../src/modules/authorization/capabilities'
 import { ORGANIZATION_BASE_ROLE_KEYS, syncOrganizationMembershipBaseRole } from '../src/modules/authorization/membership-role-assignment'
 import { prisma } from '../src/prisma'
 import { createTestSchool, createTestUser } from './helpers/testUser'
+import { canModifyProblem, canViewProblem } from '../src/modules/problem/problem.access'
 
 function sourceFiles(root: string): string[] {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => {
@@ -28,6 +31,9 @@ describe('authorization boundary', () => {
       'assignment.manage',
       'contest.manage',
       'membership.manage.students',
+      'team.create',
+      'problem.create',
+      'problem.manage',
     ]))
     expect(capabilitiesForOrganizationRole('teacher')).not.toContain('organization.settings')
     expect(capabilitiesForOrganizationRole('school_principal')).toEqual(expect.arrayContaining([
@@ -36,7 +42,38 @@ describe('authorization boundary', () => {
       'contest.manage',
       'membership.manage.teachers',
       'organization.settings',
+      'team.create',
+      'problem.create',
+      'problem.manage',
     ]))
+  })
+
+  it('builds request identity and authorization only from normalized facts', () => {
+    expect(organizationRoleFromRoleKeys(['teacher', 'training_coach'])).toBe('teacher')
+    expect(organizationRoleFromRoleKeys(['teacher', 'school_principal'])).toBeNull()
+    expect(organizationRoleFromRoleKeys([])).toBeNull()
+    expect(requestHasOrganizationCapability({ organizationCapabilities: ['problem.manage'] }, 'problem.manage')).toBe(true)
+    expect(requestHasOrganizationCapability({ organizationCapabilities: [] }, 'problem.manage')).toBe(false)
+
+    const authSource = fs.readFileSync(path.resolve(__dirname, '../src/middleware/auth.ts'), 'utf8')
+    expect(authSource).toContain('resolveOrganizationAuthorization')
+    expect(authSource).toContain('organizationRoleFromRoleKeys')
+    expect(authSource).not.toContain('decoded.role = membership.memberRole')
+    expect(authSource).not.toMatch(/select:\s*\{[\s\S]{0,120}memberRole:\s*true/)
+  })
+
+  it('does not let the compatibility role authorize school problem access', () => {
+    const problem = { id: 'problem-1', libraryScope: 'school', organizationId: 'org-1', ownerId: 'owner-1', status: 'draft', visibility: 'private' }
+    const forged = { userId: 'student-1', username: 'student', role: 'school_principal', accountRole: 'user', organizationId: 'org-1', organizationMembershipId: 'member-1', organizationRole: 'student', organizationCapabilities: ['organization.view'] } as any
+    expect(canViewProblem(forged, problem)).toBe(false)
+    expect(canModifyProblem(forged, problem)).toBe(false)
+
+    const teacher = { ...forged, userId: 'owner-1', role: 'teacher', organizationRole: 'teacher', organizationCapabilities: ['organization.view', 'problem.create', 'problem.manage'] }
+    expect(canModifyProblem(teacher, problem)).toBe(true)
+    expect(canModifyProblem({ ...teacher, userId: 'other-teacher' }, problem)).toBe(false)
+
+    const principal = { ...teacher, userId: 'principal-1', role: 'school_principal', organizationRole: 'school_principal' }
+    expect(canModifyProblem(principal, problem)).toBe(true)
   })
 
   it('does not authorize organization member routes or service scopes from memberRole', () => {
@@ -77,12 +114,25 @@ describe('authorization boundary', () => {
       '../src/modules/problem/problem.candidate-evaluation.service.ts',
       '../src/modules/rating/application/contest-rating.service.ts',
       '../src/modules/training/application/training-ranking.service.ts',
+      '../src/middleware/permissions.ts',
+      '../src/modules/team-import/team-import.routes.ts',
+      '../src/modules/team/team.crud.routes.ts',
+      '../src/modules/team/application/team-problem-list.service.ts',
+      '../src/modules/problem/problem.access.ts',
+      '../src/modules/problem/application/problem-crud.service.ts',
+      '../src/modules/solution/solution.service.ts',
     ]
     const forbidden = capabilitySensitiveFiles.filter(file => {
       const source = fs.readFileSync(path.resolve(__dirname, file), 'utf8')
       return /manager\.memberRole|creatorMembership\.memberRole|principalMembership|memberRole:\s*\{\s*in:\s*\['teacher',\s*'school_principal'\]\s*\}|memberRole:\s*'school_principal'/.test(source)
     })
     expect(forbidden).toEqual([])
+
+    const roleAuthorized = capabilitySensitiveFiles.filter(file => {
+      const source = fs.readFileSync(path.resolve(__dirname, file), 'utf8')
+      return /user\.role\s*(?:===|!==)\s*['"](?:student|teacher|school_principal)['"]|\[[^\]]*['"]teacher['"][^\]]*\]\.includes\(user\.role\)/.test(source)
+    })
+    expect(roleAuthorized).toEqual([])
   })
 
   it('does not contain a legacy or hybrid authorization fallback', () => {

@@ -10,13 +10,13 @@ import {
   canModifyProblem,
   canViewProblem,
   isPlatformManager,
-  isSchoolStaff,
   problemLibraryKey,
   problemPermissions,
 } from '../problem.access'
 import { copyPlatformProblemToSchool } from '../problem.copy'
 import { isHackableJudgeConfig, parseJudgeConfig, resolveJudgeMode } from '../problem.hack.service'
 import { legacySubmissionIoSuggestion } from '../../judge/domain/submission-io'
+import { requestHasOrganizationCapability, requestOrganizationCapabilityScope } from '../../authorization/capabilities'
 
 export class ProblemCrudError extends Error {
   constructor(
@@ -52,16 +52,13 @@ function resolveRequestedLibrary(
 ): 'platform' | 'school' {
   if (query.library === 'platform' || query.visibility === 'public') return 'platform'
   if (query.library === 'school' || query.visibility === 'private') return 'school'
-  return isPersonalContext(user) || isPlatformManager(user.role) ? 'platform' : 'school'
+  return isPersonalContext(user) || isPlatformManager(user.accountRole || user.role) ? 'platform' : 'school'
 }
 
 function requireLibraryAccess(user: JwtPayload, library: 'platform' | 'school') {
   const personalWorkspace = isPersonalContext(user)
-  if (user.role === 'student' && !personalWorkspace) {
-    fail(403, 'TEACHER_ONLY', '校内题库仅对教师开放')
-  }
   if (library !== 'school') return
-  if (!isSchoolStaff(user.role)) fail(403, 'TEACHER_ONLY', '校内题库仅对教师开放')
+  if (!requestHasOrganizationCapability(user, 'problem.create')) fail(403, 'TEACHER_ONLY', '校内题库仅对获授权教师开放')
   if (!user.organizationId) {
     fail(403, 'ORGANIZATION_REQUIRED', 'Current identity is not assigned to an organization')
   }
@@ -79,12 +76,12 @@ export async function listProblems(input: {
   const where: any = library === 'platform'
     ? {
         libraryScope: 'platform',
-        ...(isPlatformManager(input.user.role) && !personalWorkspace ? {} : { status: 'published' }),
+        ...(isPlatformManager(input.user.accountRole || input.user.role) && !personalWorkspace ? {} : { status: 'published' }),
       }
     : {
         libraryScope: 'school',
         organizationId: input.user.organizationId,
-        ...(input.user.role === 'school_principal'
+        ...(requestOrganizationCapabilityScope(input.user, 'problem.manage') === 'all'
           ? {}
           : { OR: [{ status: 'published' }, { ownerId: input.user.userId }] }),
         status: { not: 'archived' },
@@ -178,11 +175,10 @@ function validateVersion(version: any) {
 }
 
 export async function createProblem(user: JwtPayload, body: any) {
-  if (!isSchoolStaff(user.role) && !isPlatformManager(user.role)) {
+  const platformManager = isPlatformManager(user.accountRole || user.role)
+  const organizationCreator = Boolean(user.organizationId && requestHasOrganizationCapability(user, 'problem.create'))
+  if (!organizationCreator && !platformManager) {
     fail(403, 'TEACHER_ONLY', '只有教师或平台管理员可以创建题目')
-  }
-  if (isSchoolStaff(user.role) && !user.organizationId) {
-    fail(403, 'ORGANIZATION_REQUIRED', 'Current identity is not assigned to an organization')
   }
 
   const title = typeof body?.title === 'string' ? body.title.trim() : ''
@@ -193,7 +189,7 @@ export async function createProblem(user: JwtPayload, body: any) {
   const solutions = body?.solutions ?? []
   const versions = normalizeVersions(statements, solutions)
 
-  const libraryScope = isSchoolStaff(user.role) ? 'school' : 'platform'
+  const libraryScope = organizationCreator ? 'school' : 'platform'
   const organizationId = libraryScope === 'school' ? user.organizationId! : null
   const libraryKey = problemLibraryKey(libraryScope, user.organizationId)
   let platform = 'carits'
@@ -350,7 +346,7 @@ export async function copyProblemIntoSchool(user: JwtPayload, problemId: string)
 }
 
 export async function listSchoolProblemCreators(user: JwtPayload) {
-  if (!isSchoolStaff(user.role)) fail(403, 'TEACHER_ONLY', '校内题库仅对教师开放')
+  if (!requestHasOrganizationCapability(user, 'problem.create')) fail(403, 'TEACHER_ONLY', '校内题库仅对获授权教师开放')
   if (!user.organizationId) {
     fail(403, 'SCHOOL_MEMBERSHIP_REQUIRED', '当前账号未关联学校')
   }
@@ -358,7 +354,7 @@ export async function listSchoolProblemCreators(user: JwtPayload) {
     libraryScope: 'school',
     organizationId: user.organizationId,
     status: { not: 'archived' },
-    ...(user.role === 'school_principal'
+    ...(requestOrganizationCapabilityScope(user, 'problem.manage') === 'all'
       ? {}
       : { OR: [{ status: 'published' }, { ownerId: user.userId }] }),
   }

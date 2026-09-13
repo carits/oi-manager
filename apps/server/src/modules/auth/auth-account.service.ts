@@ -4,6 +4,8 @@ import type { JwtPayload, UserRole } from '@oi-manager/shared'
 import { prisma } from '../../prisma'
 import { fileService } from '../../lib/storage'
 import logger from '../../lib/logger'
+import { accountRoleFromLegacy } from '@oi-manager/contracts'
+import { organizationRoleFromRoleKeys } from '../authorization/capabilities'
 
 export type WorkspaceMode = 'work' | 'personal'
 
@@ -79,7 +81,7 @@ export async function loginAccount(params: {
   return {
     ok: true,
     user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar, sessionVersion: user.sessionVersion },
-    role: user.role as UserRole,
+    role: accountRoleFromLegacy(user.role as UserRole) as UserRole,
     workspaceMode: isGlobalAdmin ? 'work' : params.workspaceMode,
     isGlobalAdmin,
   }
@@ -114,9 +116,10 @@ export async function loadCurrentAccount(
   const membership = isGlobalAdmin || !requestedOrganizationId ? null
     : await prisma.organizationMembership.findFirst({
         where: { organizationId: requestedOrganizationId, userId, status: 'active' },
-        include: { StudentProfile: true, TeacherProfile: true },
+        include: { StudentProfile: true, TeacherProfile: true, RoleAssignments: { select: { roleKey: true } } },
       })
   const organizationId = membership?.organizationId
+  const organizationRole = membership ? organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey)) : null
   let profile: any = null
   if (membership?.memberRole === 'student' && membership.StudentProfile) {
     profile = {
@@ -127,7 +130,7 @@ export async function loadCurrentAccount(
   } else if (membership && membership.memberRole !== 'student' && membership.TeacherProfile) {
     profile = {
       id: membership.TeacherProfile.id, name: membership.TeacherProfile.name,
-      avatar: membership.TeacherProfile.avatar, organizationRole: membership.memberRole,
+      avatar: membership.TeacherProfile.avatar, organizationRole,
       title: membership.TeacherProfile.title,
     }
   } else if (isGlobalAdmin) profile = { id: user.id, name: user.username }
@@ -135,6 +138,7 @@ export async function loadCurrentAccount(
     status: 'ok' as const,
     user,
     membership,
+    organizationRole,
     organizationId,
     schoolId: await resolveSchoolId(organizationId),
     profile,

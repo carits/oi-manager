@@ -16,6 +16,7 @@ import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { canModifyProblem, canViewProblem } from '../problem/problem.access'
 import { resolveContributionOrganization } from '../contribution/application/contribution.service'
 import { compareSolutionFingerprints, createSolutionContentFingerprint, similarityRisk, type SolutionContentFingerprint } from './solution-similarity'
+import { requestHasOrganizationCapability, requestOrganizationCapabilityScope } from '../authorization/capabilities'
 
 const MAX_MARKDOWN_BYTES = 1024 * 1024
 const MAX_CODE_BYTES = 512 * 1024
@@ -218,7 +219,10 @@ export async function updateSolutionContribution(user: JwtPayload, id: string, b
 }
 
 async function assertSubmissionEligibility(user: JwtPayload, contribution: { problemId: string; targetTestSetRevisionId: string; type: SolutionType }) {
-  if (!FULL_TYPES.includes(contribution.type) || ['teacher', 'school_principal', 'platform_admin', 'super_admin'].includes(user.role)) return
+  if (!FULL_TYPES.includes(contribution.type)
+    || user.accountRole === 'platform_admin'
+    || user.accountRole === 'super_admin'
+    || requestHasOrganizationCapability(user, 'problem.create')) return
   const solved = await prisma.submission.findFirst({ where: {
     userId: user.userId, problemInternalId: contribution.problemId, testSetRevisionId: contribution.targetTestSetRevisionId,
     OR: [
@@ -757,11 +761,12 @@ export async function listSolutionReviewQueue(user: JwtPayload, status?: string)
   // Express the same ownership policy as canModifyProblem in SQL. Loading the
   // complete problem catalogue merely to filter it in memory makes the review
   // queue grow with the whole platform and can expose a trivial DoS surface.
-  const managedProblems: Prisma.ProblemWhereInput = ['platform_admin', 'super_admin'].includes(user.role)
+  const organizationScope = requestOrganizationCapabilityScope(user, 'problem.manage')
+  const managedProblems: Prisma.ProblemWhereInput = user.accountRole === 'platform_admin' || user.accountRole === 'super_admin'
     ? { libraryScope: 'platform' }
-    : user.organizationId && user.role === 'school_principal'
+    : user.organizationId && organizationScope === 'all'
       ? { libraryScope: 'school', organizationId: user.organizationId }
-      : user.organizationId && user.role === 'teacher'
+      : user.organizationId && organizationScope === 'own'
         ? { libraryScope: 'school', organizationId: user.organizationId, ownerId: user.userId }
         : { id: '__no_managed_problem__' }
   return prisma.solutionContribution.findMany({

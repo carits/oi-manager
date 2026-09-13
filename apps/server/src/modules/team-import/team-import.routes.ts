@@ -10,9 +10,15 @@ import { luoguImportService } from './luogu-import.service'
 import { memberMatchService } from './member-match.service'
 import type { ImportPlatform } from './team-import.types'
 import { classifyClientError } from '../../lib/asyncHandler'
+import { hasOrganizationCapability } from '../authorization/capabilities'
 
 export const teamImportRouter = Router()
 const service = new TeamImportService()
+
+async function canUseTeamImport(userId: string, organizationId: string) {
+  return await hasOrganizationCapability(userId, organizationId, 'team.create', { requireMembership: true })
+    && await hasOrganizationCapability(userId, organizationId, 'membership.manage.students', { requireMembership: true })
+}
 
 function sendKnownTeamImportError(res: Response, error: unknown): boolean {
   const clientError = classifyClientError(error)
@@ -138,7 +144,7 @@ teamImportRouter.post('/vjudge/preview', authenticate, async (req: Request, res:
 teamImportRouter.post('/vjudge/validate', authenticate, async (req: Request, res: Response) => {
   try {
     const user = req.user
-    if (!user || (user.role !== 'teacher' && user.role !== 'school_principal')) {
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
       return res.status(403).json({ success: false, message: '只有教师可以使用此功能' })
     }
 
@@ -171,7 +177,7 @@ teamImportRouter.post('/vjudge/validate', authenticate, async (req: Request, res
 teamImportRouter.post('/vjudge/import', authenticate, async (req: Request, res: Response) => {
   try {
     const user = req.user
-    if (!user || (user.role !== 'teacher' && user.role !== 'school_principal')) {
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
       return res.status(403).json({
         success: false,
         message: '只有教师可以使用此功能'
@@ -289,7 +295,7 @@ teamImportRouter.post('/luogu/preview', authenticate, async (req: Request, res: 
 teamImportRouter.post('/luogu/validate', authenticate, async (req: Request, res: Response) => {
   try {
     const user = req.user
-    if (!user || (user.role !== 'teacher' && user.role !== 'school_principal')) {
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
       return res.status(403).json({ success: false, message: '只有教师可以使用此功能' })
     }
 
@@ -322,7 +328,7 @@ teamImportRouter.post('/luogu/validate', authenticate, async (req: Request, res:
 teamImportRouter.post('/luogu/import', authenticate, async (req: Request, res: Response) => {
   try {
     const user = req.user
-    if (!user || (user.role !== 'teacher' && user.role !== 'school_principal')) {
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
       return res.status(403).json({ success: false, message: '只有教师可以使用此功能' })
     }
 
@@ -366,7 +372,7 @@ teamImportRouter.post('/luogu/import', authenticate, async (req: Request, res: R
 teamImportRouter.get('/teams', authenticate, async (req: Request, res: Response) => {
   try {
     const user = req.user
-    if (!user || (user.role !== 'teacher' && user.role !== 'school_principal')) {
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
       return res.status(403).json({
         success: false,
         message: '只有教师可以使用此功能',
@@ -433,7 +439,7 @@ teamImportRouter.get('/platforms', authenticate, async (req: Request, res: Respo
 teamImportRouter.post('/start', authenticate, async (req: Request, res: Response) => {
   try {
     const user = req.user
-    if (!user || (user.role !== 'teacher' && user.role !== 'school_principal')) {
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
       return res.status(403).json({
         success: false,
         message: '只有教师可以使用此功能',
@@ -526,7 +532,7 @@ teamImportRouter.get('/:batchId/preview', authenticate, async (req: Request, res
 teamImportRouter.post('/:batchId/confirm', authenticate, async (req: Request, res: Response) => {
   try {
     const user = req.user
-    if (!user || (user.role !== 'teacher' && user.role !== 'school_principal')) {
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
       return res.status(403).json({
         success: false,
         message: '只有教师可以使用此功能',

@@ -13,7 +13,7 @@ import { OrganizationJoinError } from '../modules/organization-join/organization
 export const workspaceRouter = Router()
 
 function actor(req: AuthRequest): WorkspaceActor {
-  return { userId: req.user!.userId, role: req.user!.role, organizationId: req.user!.organizationId, organizationMembershipId: req.user!.organizationMembershipId }
+  return { userId: req.user!.userId, role: req.user!.role, accountRole: req.user!.accountRole, organizationId: req.user!.organizationId, organizationMembershipId: req.user!.organizationMembershipId }
 }
 
 function endpoint(label: string, handler: (req: AuthRequest, res: Response) => Promise<unknown>) {

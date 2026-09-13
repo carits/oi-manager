@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { JwtPayload, UserRole, ResourceScope } from '@oi-manager/shared'
+import { accountRoleFromLegacy } from '@oi-manager/contracts'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { getSessionToken } from '../lib/sessionCookie'
 import { prisma } from '../prisma'
 import logger from '../lib/logger'
+import { organizationRoleFromRoleKeys, resolveOrganizationAuthorization } from '../modules/authorization/capabilities'
 
 // 全局类型扩展：让 Express Request.user 使用 JwtPayload 类型
 declare global {
@@ -58,33 +60,31 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       return res.status(401).json({ success: false, code: 'SESSION_REVOKED', message: '登录状态已失效，请重新登录' })
     }
     decoded.sessionVersion = account.sessionVersion
-    decoded.role = account.role as UserRole
+    const accountRole = accountRoleFromLegacy(account.role as UserRole)
+    decoded.accountRole = accountRole
+    decoded.role = accountRole as UserRole
     delete decoded.organizationId
     delete decoded.organizationMembershipId
-    if (account.role === 'super_admin' || account.role === 'platform_admin') {
+    delete decoded.organizationRole
+    delete decoded.organizationCapabilities
+    if (accountRole === 'super_admin' || accountRole === 'platform_admin') {
       decoded.workspaceMode = 'work'
     }
 
     const organizationId = req.get('x-oi-organization-id')
     if (organizationId) {
-      const membership = await prisma.organizationMembership.findFirst({
-        where: { organizationId, userId: decoded.userId, status: 'active', Organization: { status: 'active' } },
-        select: {
-          id: true,
-          memberRole: true,
-          Organization: { select: { type: true, School: { select: { directoryStatus: true } } } },
-        }
-      })
-      if (!membership) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
-      if (membership.Organization.type === 'school' && membership.Organization.School?.directoryStatus === 'legacy') {
-        return res.status(404).json({ success: false, code: 'ORGANIZATION_NOT_AVAILABLE', message: '该组织不可用' })
-      }
+      const authorization = await resolveOrganizationAuthorization(decoded.userId, organizationId)
+      if (!authorization) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
+      const organizationRole = organizationRoleFromRoleKeys(authorization.roleKeys)
+      if (!organizationRole) return res.status(403).json({ success: false, code: 'ORGANIZATION_AUTHORIZATION_INCOMPLETE', message: '组织权限尚未完成配置' })
       decoded.organizationId = organizationId
-      decoded.organizationMembershipId = membership.id
+      decoded.organizationMembershipId = authorization.membershipId
+      decoded.organizationRole = organizationRole
+      decoded.organizationCapabilities = [...authorization.capabilities].sort()
       // 平台管理员/超级管理员是全局身份，进入学校上下文时仍须保留管理员权限。
       // 普通账号才根据当前校园成员关系切换为老师/学生身份。
-      if (decoded.role !== 'super_admin' && decoded.role !== 'platform_admin') {
-        decoded.role = membership.memberRole as UserRole
+      if (accountRole !== 'super_admin' && accountRole !== 'platform_admin') {
+        decoded.role = organizationRole as UserRole
       }
     }
     req.user = decoded
@@ -170,7 +170,7 @@ export function getResourceScope(user?: JwtPayload): ResourceScope {
 }
 
 export function getMembershipType(user: JwtPayload): 'teacher' | 'student' | 'user' {
-  return isPersonalContext(user) ? 'user' : getUserType(user.role)
+  return isPersonalContext(user) ? 'user' : user.organizationRole === 'student' ? 'student' : 'teacher'
 }
 
 export function requireOrganizationContext(req: AuthRequest, res: Response, next: NextFunction) {

@@ -667,7 +667,7 @@ async function parseSolutionProfileDefinition(user: JwtPayload, problemId: strin
     prisma.submission.findFirst({
       where: {
         id: submissionId, problemInternalId: problemId, submitMethod: 'local',
-        ...(!isPlatformManager(user.role) ? { userId: user.userId } : {}),
+        ...(!isPlatformManager(user.accountRole || user.role) ? { userId: user.userId } : {}),
       },
       select: { id: true, testSetRevisionId: true, result: true, CurrentJudgeRun: { select: { status: true, testSetRevisionId: true, result: true } } },
     }),
@@ -1414,7 +1414,7 @@ export async function getProblemQuality(user: JwtPayload, problemId: string) {
     ? await Promise.all(historyRows.map(async item => ({ ...item, ...await staleness(item) })))
     : []
   return {
-    permissions: { canManage: manager, canExpertReview: isPlatformManager(user.role) },
+    permissions: { canManage: manager, canExpertReview: isPlatformManager(user.accountRole || user.role) },
     latestTestSetRevisionId: problem.latestTestSetRevisionId,
     testSetQuality: snapshot ? { ...(manager ? snapshot : publicSnapshot(snapshot)), isStale: stale.isStale, ...(manager ? { reasons: stale.reasons } : {}) } : null,
     problemQuality: assessment ? {
@@ -1517,7 +1517,7 @@ function integerScore(value: unknown, name: string, maximum: number) {
 }
 
 export async function submitExpertProblemQualityReview(user: JwtPayload, problemId: string, assessmentId: string, body: unknown) {
-  if (!isPlatformManager(user.role)) fail(403, 'PLATFORM_QUALITY_EXPERT_REQUIRED', '仅平台质量审核员可提交专家评估')
+  if (!isPlatformManager(user.accountRole || user.role)) fail(403, 'PLATFORM_QUALITY_EXPERT_REQUIRED', '仅平台质量审核员可提交专家评估')
   const problem = await prisma.problem.findUnique({ where: { id: problemId } })
   if (!problem) fail(404, 'PROBLEM_NOT_FOUND', '题目不存在')
   const assessment = await prisma.problemQualityAssessment.findFirst({ where: { id: assessmentId, problemId } })
@@ -1543,7 +1543,7 @@ export async function submitExpertProblemQualityReview(user: JwtPayload, problem
 
 export async function listProblemQualityAssessments(user: JwtPayload, problemId: string) {
   const problem = await visibleProblem(user, problemId)
-  const manager = canModifyProblem(user, problem) || isPlatformManager(user.role)
+  const manager = canModifyProblem(user, problem) || isPlatformManager(user.accountRole || user.role)
   const rows = await prisma.problemQualityAssessment.findMany({ where: { problemId }, orderBy: { evaluatedAt: 'desc' }, take: 100 })
   return manager ? rows : rows.map(publicProblemQualityAssessment)
 }

@@ -301,7 +301,7 @@ export function extractUserIdentity(user: JwtPayload): UserIdentity | null {
   const userId = user.userId
   const userType = !user.organizationId
     ? 'user'
-    : user.role === 'student' ? 'student' : 'teacher'
+    : user.organizationRole === 'student' ? 'student' : 'teacher'
 
   if (!userId) return null
 
@@ -316,6 +316,6 @@ export function extractUserIdentity(user: JwtPayload): UserIdentity | null {
 export function getUserIdentity(user: JwtPayload): { id: string; type: MemberType } | null {
   const type = !user.organizationId
     ? 'user'
-    : user.role === 'student' ? 'student' : 'teacher'
+    : user.organizationRole === 'student' ? 'student' : 'teacher'
   return { id: user.userId, type }
 }

@@ -3,6 +3,7 @@ import { prisma } from '../../../prisma'
 import type { AuthRequest } from '../../../middleware/auth'
 import { isPersonalContextForTeams } from '../../../middleware/auth'
 import { teamService } from '../team.service'
+import { requestHasOrganizationCapability } from '../../authorization/capabilities'
 
 type AuthUser = NonNullable<AuthRequest['user']>
 
@@ -25,16 +26,16 @@ async function scopedTeam(teamId: string, user: AuthUser) {
 }
 
 async function managementRole(user: AuthUser, teamId: string) {
-  if (!isPersonalContextForTeams(user) && user.role === 'super_admin') return 'super_admin'
+  if (!isPersonalContextForTeams(user) && user.accountRole === 'super_admin') return 'super_admin'
   const member = await prisma.teamMember.findFirst({ where: { teamId, userId: user.userId, status: 'active' } })
   if (member?.role === 'owner' || member?.role === 'admin') return member.role
-  if (member?.userType === 'teacher') return 'teacher'
+  if (member?.userType === 'teacher' && requestHasOrganizationCapability(user, 'team.create')) return 'teacher'
   return null
 }
 
 export async function listTeamProblemLists(user: AuthUser, teamId: string) {
   const team = await scopedTeam(teamId, user)
-  if (isPersonalContextForTeams(user) || (user.role !== 'super_admin' && user.role !== 'platform_admin')) {
+  if (isPersonalContextForTeams(user) || (user.accountRole !== 'super_admin' && user.accountRole !== 'platform_admin')) {
     const member = await prisma.teamMember.findFirst({ where: { teamId, userId: user.userId, status: 'active' } })
     if (!member) fail(403, '无权限查看该团队题单')
   }
@@ -96,7 +97,7 @@ export async function listTeamProblemLists(user: AuthUser, teamId: string) {
 
 export async function addTeamProblemList(user: AuthUser, teamId: string, problemListId: unknown) {
   await scopedTeam(teamId, user)
-  if (user.role === 'student' && !isPersonalContextForTeams(user)) fail(403, '校园模式下学生不能添加团队题单')
+  if (!isPersonalContextForTeams(user) && !requestHasOrganizationCapability(user, 'team.create')) fail(403, '当前校园权限不能添加团队题单')
   if (typeof problemListId !== 'string' || !problemListId) fail(400, '缺少 problemListId')
   const teamRole = await managementRole(user, teamId)
   if (!teamRole) fail(403, '只有团队管理员或教师成员可添加题单')
@@ -119,11 +120,11 @@ export async function addTeamProblemList(user: AuthUser, teamId: string, problem
 
 export async function removeTeamProblemList(user: AuthUser, teamId: string, id: string) {
   await scopedTeam(teamId, user)
-  if (user.role === 'student' && !isPersonalContextForTeams(user)) fail(403, '校园模式下学生不能移除团队题单')
+  if (!isPersonalContextForTeams(user) && !requestHasOrganizationCapability(user, 'team.create')) fail(403, '当前校园权限不能移除团队题单')
   const item = await prisma.teamProblemList.findUnique({ where: { id } })
   if (!item) fail(404, '记录不存在')
   if (item.teamId !== teamId) fail(400, '题单不属于该团队')
-  if (isPersonalContextForTeams(user) || user.role !== 'super_admin') {
+  if (isPersonalContextForTeams(user) || user.accountRole !== 'super_admin') {
     const member = await prisma.teamMember.findFirst({ where: { teamId, userId: user.userId, status: 'active' } })
     if (member?.role !== 'owner' && item.addedBy !== user.userId) fail(403, '只能移除自己添加的题单')
   }

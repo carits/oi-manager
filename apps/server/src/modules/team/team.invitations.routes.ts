@@ -15,6 +15,10 @@ import { processInvitation } from './application/team-route-operations.service'
 
 export const teamInvitationsRouter = Router()
 
+function isOrganizationTeacherIdentity(user: { organizationRole?: string }) {
+  return user.organizationRole === 'teacher' || user.organizationRole === 'school_principal'
+}
+
 // ==================== 邀请列表 ====================
 
 teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req, res) => {
@@ -86,7 +90,7 @@ teamInvitationsRouter.get('/my-admin-teams', authenticate, asyncHandler(async (r
 
 teamInvitationsRouter.get('/my-member-teams', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
-  if (user.role !== 'teacher' && user.role !== 'school_principal') {
+  if (!isOrganizationTeacherIdentity(user)) {
     return res.json({ success: true, data: [] })
   }
 
@@ -198,7 +202,7 @@ teamInvitationsRouter.post('/admin-invitations/:invitationId/reject', authentica
 teamInvitationsRouter.get('/member-invitations', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
 
-  if (user.role !== 'teacher' && user.role !== 'school_principal') {
+  if (!isOrganizationTeacherIdentity(user)) {
     return res.json({ success: true, data: [] })
   }
 
@@ -230,7 +234,7 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/accept', authentic
   const { invitationId } = req.params
   const user = (req as any).user!
 
-  if (user.role !== 'teacher' && user.role !== 'school_principal') {
+  if (!isOrganizationTeacherIdentity(user)) {
     return res.status(400).json({ success: false, message: '只有教师可以处理成员邀请' })
   }
 
@@ -253,7 +257,7 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/reject', authentic
   const { invitationId } = req.params
   const user = (req as any).user!
 
-  if (user.role !== 'teacher' && user.role !== 'school_principal') {
+  if (!isOrganizationTeacherIdentity(user)) {
     return res.status(400).json({ success: false, message: '只有教师可以处理成员邀请' })
   }
 
