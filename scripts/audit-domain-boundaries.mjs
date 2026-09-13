@@ -138,6 +138,11 @@ if (!trainingCrud.includes('updateContestRuntimeTx')) {
 if (!trainingCrud.includes('deleteContestRuntimeTx')) {
   violations.push('Contest deletion bypasses the Contest command service')
 }
+const contestCommand = fs.readFileSync(path.join(modulesRoot, 'contest/contest-command.service.ts'), 'utf8')
+const contestFinalizationCommand = fs.readFileSync(path.join(modulesRoot, 'contest/contest-finalization-command.service.ts'), 'utf8')
+if ((contestCommand + contestFinalizationCommand).includes('contest_command_legacy_fallback')) {
+  violations.push('Contest command service still mutates legacy Training contest records without a canonical aggregate')
+}
 const trainingProblemManagement = fs.readFileSync(path.join(modulesRoot, 'training/application/training-problem-management.service.ts'), 'utf8')
 for (const command of [
   'createContestProblemRuntimeTx',

@@ -13,6 +13,13 @@ import {
   listContestRuntimesForDashboard,
   listPlatformContestRuntimes,
 } from '../src/modules/contest/contest-query.facade'
+import {
+  deleteContestRuntimeTx,
+  holdContestFinalizationForRejudgeTx,
+  transitionContestLifecycleTx,
+  updateContestRuntimeTx,
+} from '../src/modules/contest/contest-command.service'
+import { beginContestFinalizationTx } from '../src/modules/contest/contest-finalization-command.service'
 
 async function createRuntime(title: string) {
   return prisma.training.create({ data: {
@@ -125,6 +132,39 @@ describe('Contest query facade', () => {
     })
     expect(await findActivityRuntimeForOverview(training.id)).toMatchObject({
       source: 'training', contest: null, runtime: { id: training.id, type: 'training' },
+    })
+  })
+
+  it('rejects every canonical contest command when only a legacy runtime exists', async () => {
+    const runtime = await createRuntime('Unmapped command target')
+
+    const updated = await prisma.$transaction(tx => updateContestRuntimeTx(tx, {
+      runtimeTrainingId: runtime.id,
+      expected: {
+        status: runtime.status,
+        format: runtime.format,
+        startTime: runtime.startTime,
+        endTime: runtime.endTime,
+      },
+      patch: { title: 'Must not be written' },
+    }))
+    expect(updated).toEqual({ conflict: 'missing', runtime: null })
+
+    const transitioned = await prisma.$transaction(tx => transitionContestLifecycleTx(tx, {
+      runtimeTrainingId: runtime.id,
+      actorUserId: runtime.createdBy,
+      expectedStatus: runtime.status,
+      targetStatus: 'ongoing',
+    }))
+    expect(transitioned).toBeNull()
+    expect(await prisma.$transaction(tx => beginContestFinalizationTx(tx, runtime.id, 'LIVE'))).toBe(false)
+    expect(await prisma.$transaction(tx => holdContestFinalizationForRejudgeTx(tx, runtime.id))).toBe(false)
+
+    const deleted = await prisma.$transaction(tx => deleteContestRuntimeTx(tx, runtime.id))
+    expect(deleted.conflict).toBe('missing')
+    expect(await prisma.training.findUnique({ where: { id: runtime.id } })).toMatchObject({
+      title: 'Unmapped command target',
+      status: 'upcoming',
     })
   })
 })

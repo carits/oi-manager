@@ -20,17 +20,16 @@ async function lockContestFinalizationRuntimeTx(
     where: { runtimeTrainingId },
     include: { RuntimeTraining: { select: finalizationRuntimeSelect } },
   })
-  const runtime = aggregate?.RuntimeTraining || await tx.training.findFirst({
-    where: { id: runtimeTrainingId, type: 'contest' },
-    select: finalizationRuntimeSelect,
-  })
-  if (!runtime) return null
-  if (!aggregate) {
-    logger.warn('contest_command_legacy_fallback', {
+  const runtime = aggregate?.RuntimeTraining
+  if (!runtime) {
+    const message = aggregate
+      ? 'Contest aggregate has no runtime'
+      : 'Contest runtime has no canonical aggregate'
+    logger.error(aggregate ? 'contest_runtime_missing' : 'contest_aggregate_missing', new Error(message), {
       action: 'contest_command',
-      metadata: { runtimeTrainingId, consumer },
+      metadata: { runtimeTrainingId, consumer, ...(aggregate ? { contestId: aggregate.id } : {}) },
     })
-    await ensureContestAggregateTx(tx, runtimeTrainingId)
+    return null
   }
   return runtime
 }

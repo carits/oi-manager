@@ -91,6 +91,20 @@ export interface UpdateContestRuntimeInput {
   }
 }
 
+function reportMissingCanonicalContest(
+  runtimeTrainingId: number,
+  consumer: string,
+  aggregateId?: string,
+) {
+  const message = aggregateId
+    ? 'Contest aggregate has no runtime'
+    : 'Contest runtime has no canonical aggregate'
+  logger.error(aggregateId ? 'contest_runtime_missing' : 'contest_aggregate_missing', new Error(message), {
+    action: 'contest_command',
+    metadata: { runtimeTrainingId, consumer, ...(aggregateId ? { contestId: aggregateId } : {}) },
+  })
+}
+
 /**
  * Delete an unfinalized contest aggregate and its compatibility runtime in
  * dependency order. The canonical Contest owns projection rows that still
@@ -106,21 +120,14 @@ export async function deleteContestRuntimeTx(
     where: { runtimeTrainingId },
     include: { RuntimeTraining: { select: lifecycleRuntimeSelect } },
   })
-  const runtime = aggregate?.RuntimeTraining || await tx.training.findFirst({
-    where: { id: runtimeTrainingId, type: 'contest' },
-    select: lifecycleRuntimeSelect,
-  })
-  if (!runtime) return { conflict: 'missing' as const }
+  const runtime = aggregate?.RuntimeTraining
+  if (!runtime) {
+    reportMissingCanonicalContest(runtimeTrainingId, 'delete', aggregate?.id)
+    return { conflict: 'missing' as const }
+  }
   if (runtime.finalizedStandingId) return { conflict: 'finalized' as const }
 
-  if (!aggregate) {
-    logger.warn('contest_command_legacy_fallback', {
-      action: 'contest_command',
-      metadata: { runtimeTrainingId, consumer: 'delete' },
-    })
-  } else {
-    await tx.contest.delete({ where: { id: aggregate.id } })
-  }
+  await tx.contest.delete({ where: { id: aggregate.id } })
   await tx.training.delete({ where: { id: runtimeTrainingId } })
   return { conflict: null }
 }
@@ -131,10 +138,12 @@ export async function createContestProblemRuntimeTx(
   data: Omit<Prisma.TrainingProblemUncheckedCreateInput, 'trainingId' | 'orderIndex'>,
 ) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
-  const runtime = await tx.training.findFirst({
-    where: { id: runtimeTrainingId, type: 'contest' },
-    select: { id: true },
+  const aggregate = await tx.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { select: { id: true } } },
   })
+  const runtime = aggregate?.RuntimeTraining
+  if (!runtime) reportMissingCanonicalContest(runtimeTrainingId, 'problem_create', aggregate?.id)
   if (!runtime) return { conflict: 'missing' as const, problem: null }
   const maxOrder = await tx.trainingProblem.aggregate({
     where: { trainingId: runtimeTrainingId },
@@ -157,6 +166,14 @@ export async function reorderContestProblemRuntimesTx(
   orders: Array<{ id: string; orderIndex: number }>,
 ) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+  const aggregate = await tx.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { select: { id: true } } },
+  })
+  if (!aggregate?.RuntimeTraining) {
+    reportMissingCanonicalContest(runtimeTrainingId, 'problem_reorder', aggregate?.id)
+    return { conflict: 'scope' as const }
+  }
   const existing = await tx.trainingProblem.findMany({
     where: { trainingId: runtimeTrainingId, Training: { type: 'contest' } },
     select: { id: true },
@@ -189,6 +206,14 @@ export async function updateContestProblemRuntimeTx(
   patch: { alias?: string | null; points?: number | null },
 ) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+  const aggregate = await tx.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { select: { id: true } } },
+  })
+  if (!aggregate?.RuntimeTraining) {
+    reportMissingCanonicalContest(runtimeTrainingId, 'problem_update', aggregate?.id)
+    return { conflict: 'scope' as const, problem: null }
+  }
   const existing = await tx.trainingProblem.findFirst({
     where: { id: trainingProblemId, trainingId: runtimeTrainingId, Training: { type: 'contest' } },
     select: { id: true },
@@ -211,6 +236,14 @@ export async function deleteContestProblemRuntimeTx(
   trainingProblemId: string,
 ) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+  const aggregate = await tx.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { select: { id: true } } },
+  })
+  if (!aggregate?.RuntimeTraining) {
+    reportMissingCanonicalContest(runtimeTrainingId, 'problem_delete', aggregate?.id)
+    return { conflict: 'scope' as const }
+  }
   const existing = await tx.trainingProblem.findFirst({
     where: { id: trainingProblemId, trainingId: runtimeTrainingId, Training: { type: 'contest' } },
     select: { id: true },
@@ -243,15 +276,10 @@ export async function updateContestRuntimeTx(
     where: { runtimeTrainingId: input.runtimeTrainingId },
     include: { RuntimeTraining: true },
   })
-  const runtime = aggregate?.RuntimeTraining || await tx.training.findFirst({
-    where: { id: input.runtimeTrainingId, type: 'contest' },
-  })
-  if (!runtime) return { conflict: 'missing' as const, runtime: null }
-  if (!aggregate) {
-    logger.warn('contest_command_legacy_fallback', {
-      action: 'contest_command',
-      metadata: { runtimeTrainingId: input.runtimeTrainingId, consumer: 'metadata_update' },
-    })
+  const runtime = aggregate?.RuntimeTraining
+  if (!runtime) {
+    reportMissingCanonicalContest(input.runtimeTrainingId, 'metadata_update', aggregate?.id)
+    return { conflict: 'missing' as const, runtime: null }
   }
   if (runtime.status !== input.expected.status
     || runtime.format !== input.expected.format
@@ -304,17 +332,10 @@ export async function transitionContestLifecycleTx(
     where: { runtimeTrainingId: input.runtimeTrainingId },
     include: { RuntimeTraining: { select: lifecycleRuntimeSelect } },
   })
-  const runtime = aggregate?.RuntimeTraining || await tx.training.findFirst({
-    where: { id: input.runtimeTrainingId, type: 'contest' },
-    select: lifecycleRuntimeSelect,
-  })
-  if (!runtime) return null
-
-  if (!aggregate) {
-    logger.warn('contest_command_legacy_fallback', {
-      action: 'contest_command',
-      metadata: { runtimeTrainingId: input.runtimeTrainingId, consumer: 'lifecycle' },
-    })
+  const runtime = aggregate?.RuntimeTraining
+  if (!runtime) {
+    reportMissingCanonicalContest(input.runtimeTrainingId, 'lifecycle', aggregate?.id)
+    return null
   }
 
   const update = await tx.training.updateMany({
@@ -397,31 +418,17 @@ export async function holdContestFinalizationForRejudgeTx(
     include: { RuntimeTraining: { select: rejudgeRuntimeSelect } },
   })
 
-  if (aggregate && !aggregate.RuntimeTraining) {
-    logger.error('contest_runtime_missing', new Error('Contest aggregate has no runtime'), {
-      action: 'contest_command',
-      metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'rejudge' },
-    })
+  const runtime = aggregate?.RuntimeTraining
+  if (!runtime) {
+    reportMissingCanonicalContest(runtimeTrainingId, 'rejudge', aggregate?.id)
     return false
   }
-
-  const runtime = aggregate?.RuntimeTraining || await tx.training.findFirst({
-    where: { id: runtimeTrainingId, type: 'contest' },
-    select: rejudgeRuntimeSelect,
-  })
-  if (!runtime) return false
   if (runtime.type !== 'contest') {
     logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
       action: 'contest_command',
       metadata: { contestId: aggregate?.id, runtimeTrainingId, consumer: 'rejudge' },
     })
     return false
-  }
-  if (!aggregate) {
-    logger.warn('contest_command_legacy_fallback', {
-      action: 'contest_command',
-      metadata: { runtimeTrainingId, consumer: 'rejudge' },
-    })
   }
   if (!runtime.finalizedStandingId || runtime.finalizationStatus !== 'FINALIZED') return false
 
@@ -436,8 +443,5 @@ export async function holdContestFinalizationForRejudgeTx(
   })
   if (!updated.count) return false
 
-  // A legacy fallback write heals the aggregate mapping in the same
-  // transaction, so subsequent contest commands no longer need the fallback.
-  if (!aggregate) await ensureContestAggregateTx(tx, runtimeTrainingId)
   return true
 }
