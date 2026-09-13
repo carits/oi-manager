@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Server 运行时组合根
+
+- 新增唯一的 `createApplication()`，生产入口与测试辅助层共用完整 Express 组合；删除测试中的平行路由挂载和伪造 `/api/health`，避免测试通过但生产路由缺失。
+- 监听、Chat SSE、Judge WebSocket 和退出清理集中到 `startServerRuntime()`；Judge WebSocket 显式接收 HTTP Server，不再通过全局变量耦合启动顺序。环境文件也在其余生产模块导入前显式加载。
+- 架构门禁新增运行时组合约束。首轮生产同构隔离回归在流量切换前真实捕获遗漏的个人路由导入，修复后 Contest 全域 11 文件 113/113、Server 构建及架构/文档门禁通过。
+- 提交 `a1b5242`、`b83cd16` 发布后 API 3302→3303；六项服务 active，数据库 readiness 延迟 2.2 ms。生产 767/767 场比赛、199/199 个比赛题目保持映射，未映射和部署后 fallback 为 0。本批无 Prisma、业务数据或 Web 变更。
+
 ### Contest 题目结构命令边界
 
 - 比赛题目的新增、编辑、排序和删除统一改由 Contest Command Service 执行，在比赛 advisory lock 内分配顺序，并在同一事务同步 Runtime TrainingProblem 与规范 ContestProblem；普通 Training 题目管理路径不变。
