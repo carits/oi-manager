@@ -632,4 +632,46 @@ describe('比赛类型区分测试', () => {
       expect(item.type).toBe('contest')
     })
   })
+
+  it('CT4: 比赛开始和结束通过统一命令同步聚合、Rating 锁和终态', async () => {
+    const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .post(`/api/teams/${team.id}/trainings`)
+      .send({
+        title: '生命周期比赛',
+        format: 'oi',
+        type: 'contest',
+        startTime: new Date(Date.now() + 86400000).toISOString(),
+        endTime: new Date(Date.now() + 86400000 * 2).toISOString(),
+      })
+
+    expect(created.status).toBe(200)
+    const contestId = created.body.data.id as number
+
+    const started = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .post(`/api/trainings/${contestId}/start`)
+    expect(started.status).toBe(200)
+    expect(started.body.data.status).toBe('ongoing')
+    expect(started.body.data.title).toBe('生命周期比赛')
+
+    const afterStart = await prisma.contest.findUniqueOrThrow({
+      where: { runtimeTrainingId: contestId },
+      include: { RuntimeTraining: { include: { RatingConfig: true } } },
+    })
+    expect(afterStart.status).toBe('ongoing')
+    expect(afterStart.RuntimeTraining?.RatingConfig?.lockedAt).not.toBeNull()
+
+    const finished = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .post(`/api/trainings/${contestId}/finish`)
+    expect(finished.status).toBe(200)
+    expect(finished.body.data.status).toBe('finished')
+    expect(finished.body.data.finalizationStatus).toBe('JUDGING')
+
+    const afterFinish = await prisma.contest.findUniqueOrThrow({
+      where: { runtimeTrainingId: contestId },
+      include: { RuntimeTraining: true },
+    })
+    expect(afterFinish.status).toBe('finished')
+    expect(afterFinish.endAt?.getTime()).toBe(afterFinish.RuntimeTraining?.endTime.getTime())
+    expect(afterFinish.RuntimeTraining?.finalizationStatus).toBe('JUDGING')
+  })
 })

@@ -11,12 +11,15 @@ import {
   isTeamMember,
   sortTrainingListForDisplay,
 } from '../training.helpers'
-import { defaultScoringRules, lockContestRatingConfigTx, trackForFormat } from '../../rating/application/contest-rating.service'
+import { defaultScoringRules, trackForFormat } from '../../rating/application/contest-rating.service'
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 import { ensureContestAggregateTx } from '../../contest/contest-aggregate.service'
 import { listPlatformContestRuntimes } from '../../contest/contest-query.facade'
-import { createContestRuntimeTx } from '../../contest/contest-command.service'
+import {
+  createContestRuntimeTx,
+  transitionContestLifecycleTx,
+} from '../../contest/contest-command.service'
 
 export class TrainingCrudError extends Error {
   constructor(
@@ -224,35 +227,35 @@ export async function createPlatformContest(params: { user: any; input: any }) {
 export async function synchronizeTrainingStatus(training: any, now: Date) {
   const computedStatus = getComputedTrainingStatus(training, now)
   if (computedStatus === training.status) return computedStatus
-  const visibleCount = await prisma.$transaction(async tx => {
+  const synchronization = await prisma.$transaction(async tx => {
+    if (training.type === 'contest') {
+      const result = await transitionContestLifecycleTx(tx, {
+        runtimeTrainingId: training.id,
+        actorUserId: training.createdBy,
+        expectedStatus: training.status,
+        targetStatus: computedStatus as 'upcoming' | 'ongoing' | 'finished',
+      })
+      return {
+        status: result?.runtime.status || computedStatus,
+        visibleCount: result?.visibleSubmissionCount || 0,
+      }
+    }
     await tx.training.update({ where: { id: training.id }, data: {
       status: computedStatus,
-      ...(training.type === 'contest' && computedStatus === 'finished' ? { finalizationStatus: 'JUDGING' as const } : {}),
     } })
-    if (training.type === 'contest' && computedStatus !== 'upcoming') {
-      await lockContestRatingConfigTx(tx, training.id, training.createdBy, training.format)
-    }
-    if (training.type === 'contest') await ensureContestAggregateTx(tx, training.id)
-    if (computedStatus !== 'finished' || training.type !== 'contest') return 0
-    const result = await tx.submission.updateMany({
-      where: {
-        submitScope: 'contest', contestId: training.id, isGlobalVisible: false,
-      },
-      data: { isGlobalVisible: true },
-    })
-    return result.count
+    return { status: computedStatus, visibleCount: 0 }
   })
-  if (computedStatus === 'finished' && training.type === 'contest') {
+  if (synchronization.status === 'finished' && training.type === 'contest') {
     logger.info('contest_submissions_visible', {
       action: 'training',
       metadata: {
         contestId: training.id,
-        updatedCount: visibleCount,
+        updatedCount: synchronization.visibleCount,
         message: '比赛结束，提交记录已公开',
       },
     })
   }
-  return computedStatus
+  return synchronization.status
 }
 
 export async function getTrainingDetail(id: number, userId: string) {
@@ -383,11 +386,17 @@ export async function startTraining(id: number, userId: string) {
     return { training, message: '比赛已经开始' }
   }
   const started = await prisma.$transaction(async tx => {
-    const row = await tx.training.update({ where: { id }, data: { status: 'ongoing', startTime: now } })
     if (training.type === 'contest') {
-      await lockContestRatingConfigTx(tx, id, userId, training.format)
-      await ensureContestAggregateTx(tx, id)
+      const result = await transitionContestLifecycleTx(tx, {
+        runtimeTrainingId: id,
+        actorUserId: userId,
+        expectedStatus: training.status,
+        targetStatus: 'ongoing',
+        startTime: now,
+      })
+      return result?.runtime || training
     }
+    const row = await tx.training.update({ where: { id }, data: { status: 'ongoing', startTime: now } })
     return row
   })
   logger.info('training_started_early', { action: 'trainings', metadata: { trainingId: id, userId } })
@@ -402,17 +411,19 @@ export async function finishTraining(id: number, userId: string) {
   }
   if (now < training.startTime) fail(400, 'TRAINING_NOT_STARTED', '比赛尚未开始，不能提前结束')
   const finished = await prisma.$transaction(async tx => {
-    const updated = await tx.training.update({
-      where: { id }, data: { status: 'finished', endTime: now, ...(training.type === 'contest' ? { finalizationStatus: 'JUDGING' as const } : {}) },
-    })
     if (training.type === 'contest') {
-      await lockContestRatingConfigTx(tx, id, userId, training.format)
-      await tx.submission.updateMany({
-        where: { submitScope: 'contest', contestId: id, isGlobalVisible: false },
-        data: { isGlobalVisible: true },
+      const result = await transitionContestLifecycleTx(tx, {
+        runtimeTrainingId: id,
+        actorUserId: userId,
+        expectedStatus: training.status,
+        targetStatus: 'finished',
+        endTime: now,
       })
-      await ensureContestAggregateTx(tx, id)
+      return result?.runtime || training
     }
+    const updated = await tx.training.update({
+      where: { id }, data: { status: 'finished', endTime: now },
+    })
     return updated
   })
   logger.info('training_finished_early', { action: 'trainings', metadata: { trainingId: id, userId } })

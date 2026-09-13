@@ -87,6 +87,17 @@ if (!judgeRun.includes('holdContestFinalizationForRejudgeTx')) {
 if (!trainingCrud.includes('createContestRuntimeTx') || !organizationMember.includes('createContestRuntimeTx')) {
   violations.push('Contest creation bypasses the Contest command service')
 }
+if (!trainingCrud.includes('transitionContestLifecycleTx')) {
+  violations.push('Contest lifecycle bypasses the Contest command service')
+}
+for (const directLifecyclePattern of [
+  /training\.type\s*===\s*['"]contest['"][\s\S]{0,240}tx\.training\.update\([^)]*status:/,
+  /tx\.training\.update\([^)]*finalizationStatus:\s*['"]JUDGING['"]/,
+]) {
+  if (directLifecyclePattern.test(trainingCrud)) {
+    violations.push('Training CRUD writes contest lifecycle outside the Contest command service')
+  }
+}
 
 console.log(JSON.stringify({
   assignmentAuthorizationBoundary: !violations.some(item => item.startsWith('Assignment')),

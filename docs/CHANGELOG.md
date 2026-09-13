@@ -9,6 +9,11 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest 生命周期命令边界
+
+- 新增 `transitionContestLifecycleTx()`，将比赛自动时钟状态同步、立即开始和提前结束统一置于 Contest advisory lock 与旧状态 CAS 下；Rating 配置锁定、终场提交公开、RuntimeTraining 更新和 Contest 聚合刷新在同一事务完成。
+- 普通 Training 仍沿用原生命周期路径；比赛 API 的返回结构与业务规则不变。补充“创建、开始、Rating 锁定、结束、JUDGING、聚合同步”数据库契约测试，并扩展架构门禁阻止 Training CRUD 恢复比赛生命周期直写。
+
 ### 生产依赖与安全基线修复
 
 - 修复 Next、Sharp、js-yaml 与 qs 的已知安全公告版本；生产原生 Sharp、三端构建、128 项核心服务端回归和依赖审计全部通过。

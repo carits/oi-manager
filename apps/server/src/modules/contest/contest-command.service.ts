@@ -2,7 +2,11 @@ import type { Prisma } from '@prisma/client'
 import crypto from 'node:crypto'
 import logger from '../../lib/logger'
 import { ensureContestAggregateTx } from './contest-aggregate.service'
-import { defaultScoringRules, trackForFormat } from '../rating/application/contest-rating.service'
+import {
+  defaultScoringRules,
+  lockContestRatingConfigTx,
+  trackForFormat,
+} from '../rating/application/contest-rating.service'
 
 export interface CreateContestRuntimeInput {
   teamId: string | null
@@ -51,6 +55,112 @@ export async function createContestRuntimeTx(
   })
   await ensureContestAggregateTx(tx, runtime.id)
   return runtime
+}
+
+export interface ContestLifecycleMutation {
+  runtimeTrainingId: number
+  actorUserId: string
+  expectedStatus: string
+  targetStatus: 'upcoming' | 'ongoing' | 'finished'
+  startTime?: Date
+  endTime?: Date
+}
+
+const lifecycleRuntimeSelect = {
+  id: true,
+  type: true,
+  status: true,
+  format: true,
+  createdBy: true,
+  startTime: true,
+  endTime: true,
+  finalizationStatus: true,
+  finalizedStandingId: true,
+} as const
+
+/**
+ * Apply a contest clock/status transition behind the canonical command
+ * boundary. The Training row remains the compatibility runtime for now, but
+ * callers cannot update it and then separately attempt to repair Contest.
+ *
+ * `expectedStatus` is a small CAS guard. A concurrent command wins cleanly;
+ * the loser receives the current runtime instead of overwriting newer state.
+ */
+export async function transitionContestLifecycleTx(
+  tx: Prisma.TransactionClient,
+  input: ContestLifecycleMutation,
+) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${input.runtimeTrainingId}`}, 0)) IS NULL AS locked`
+
+  const aggregate = await tx.contest.findUnique({
+    where: { runtimeTrainingId: input.runtimeTrainingId },
+    include: { RuntimeTraining: { select: lifecycleRuntimeSelect } },
+  })
+  const runtime = aggregate?.RuntimeTraining || await tx.training.findFirst({
+    where: { id: input.runtimeTrainingId, type: 'contest' },
+    select: lifecycleRuntimeSelect,
+  })
+  if (!runtime) return null
+
+  if (!aggregate) {
+    logger.warn('contest_command_legacy_fallback', {
+      action: 'contest_command',
+      metadata: { runtimeTrainingId: input.runtimeTrainingId, consumer: 'lifecycle' },
+    })
+  }
+
+  const update = await tx.training.updateMany({
+    where: {
+      id: input.runtimeTrainingId,
+      type: 'contest',
+      status: input.expectedStatus,
+    },
+    data: {
+      status: input.targetStatus,
+      ...(input.startTime ? { startTime: input.startTime } : {}),
+      ...(input.endTime ? { endTime: input.endTime } : {}),
+      ...(input.targetStatus === 'finished' ? { finalizationStatus: 'JUDGING' as const } : {}),
+    },
+  })
+
+  if (!update.count) {
+    return {
+      changed: false,
+      visibleSubmissionCount: 0,
+      runtime: await tx.training.findUniqueOrThrow({
+        where: { id: input.runtimeTrainingId },
+      }),
+    }
+  }
+
+  if (input.targetStatus !== 'upcoming') {
+    await lockContestRatingConfigTx(
+      tx,
+      input.runtimeTrainingId,
+      input.actorUserId || runtime.createdBy,
+      runtime.format,
+    )
+  }
+
+  const visibleSubmissionCount = input.targetStatus === 'finished'
+    ? (await tx.submission.updateMany({
+        where: {
+          submitScope: 'contest',
+          contestId: input.runtimeTrainingId,
+          isGlobalVisible: false,
+        },
+        data: { isGlobalVisible: true },
+      })).count
+    : 0
+
+  await ensureContestAggregateTx(tx, input.runtimeTrainingId)
+  return {
+    changed: true,
+    visibleSubmissionCount,
+    runtime: await tx.training.findUniqueOrThrow({
+      where: { id: input.runtimeTrainingId },
+    }),
+  }
 }
 
 const rejudgeRuntimeSelect = {
