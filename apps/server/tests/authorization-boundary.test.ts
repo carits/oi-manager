@@ -1,8 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { capabilitiesForOrganizationRole } from '../src/modules/authorization/capabilities'
+import {
+  capabilitiesForOrganizationRole,
+  hasOrganizationCapability,
+  resolveOrganizationAuthorization,
+} from '../src/modules/authorization/capabilities'
 import { ORGANIZATION_BASE_ROLE_KEYS, syncOrganizationMembershipBaseRole } from '../src/modules/authorization/membership-role-assignment'
+import { prisma } from '../src/prisma'
+import { createTestSchool, createTestUser } from './helpers/testUser'
 
 function sourceFiles(root: string): string[] {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => {
@@ -13,8 +19,10 @@ function sourceFiles(root: string): string[] {
 
 describe('authorization boundary', () => {
   it('maps normalized organization roles to stable domain capabilities', () => {
-    expect(capabilitiesForOrganizationRole('student')).toEqual([])
+    expect(capabilitiesForOrganizationRole('student')).toEqual(['organization.view'])
     expect(capabilitiesForOrganizationRole('teacher')).toEqual(expect.arrayContaining([
+      'organization.view',
+      'membership.view.students',
       'assignment.create',
       'assignment.manage',
       'contest.manage',
@@ -22,6 +30,7 @@ describe('authorization boundary', () => {
     ]))
     expect(capabilitiesForOrganizationRole('teacher')).not.toContain('organization.settings')
     expect(capabilitiesForOrganizationRole('school_principal')).toEqual(expect.arrayContaining([
+      'membership.view.teachers',
       'assignment.create',
       'contest.manage',
       'membership.manage.teachers',
@@ -29,11 +38,46 @@ describe('authorization boundary', () => {
     ]))
   })
 
+  it('does not authorize organization member routes or service scopes from memberRole', () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/organization-members.ts'), 'utf8')
+    const serviceSource = fs.readFileSync(path.resolve(__dirname, '../src/modules/organization/application/organization-member.service.ts'), 'utf8')
+    expect(routeSource).not.toMatch(/authorize\((?:'student'|'teacher'|'school_principal')/)
+    expect(routeSource).toContain('resolveOrganizationAuthorization')
+    expect(serviceSource).not.toContain('actor.role')
+
+    const legacyAuthorizationBranches = sourceFiles(path.resolve(__dirname, '../src/modules/organization'))
+      .filter(file => /actor\.role\s*(?:===|!==)\s*['"](?:student|teacher|school_principal)['"]/.test(fs.readFileSync(file, 'utf8')))
+    expect(legacyAuthorizationBranches.map(file => path.relative(path.resolve(__dirname, '../src'), file))).toEqual([])
+  })
+
   it('does not contain a legacy or hybrid authorization fallback', () => {
     const source = fs.readFileSync(path.resolve(__dirname, '../src/modules/authorization/capabilities.ts'), 'utf8')
     expect(source).not.toContain('MEMBERSHIP_CAPABILITY_SOURCE')
     expect(source).not.toContain('legacyGranted')
     expect(source).not.toContain("roleSource === 'hybrid'")
+  })
+
+  it('uses normalized roles and explicit grants instead of memberRole at runtime', async () => {
+    const school = await createTestSchool()
+    const member = await createTestUser({ role: 'student', schoolId: school.id })
+    const membership = await prisma.organizationMembership.findUniqueOrThrow({
+      where: { organizationId_userId: { organizationId: school.organizationId!, userId: member.user.id } },
+    })
+
+    await prisma.organizationMembership.update({ where: { id: membership.id }, data: { memberRole: 'school_principal' } })
+    expect(await hasOrganizationCapability(member.user.id, school.organizationId!, 'organization.settings')).toBe(false)
+
+    await prisma.organizationMembershipRole.create({ data: {
+      id: crypto.randomUUID(), membershipId: membership.id, roleKey: 'teacher', source: 'authorization_test',
+    } })
+    expect(await hasOrganizationCapability(member.user.id, school.organizationId!, 'membership.manage.students')).toBe(true)
+    expect(await hasOrganizationCapability(member.user.id, school.organizationId!, 'membership.manage.teachers')).toBe(false)
+
+    await prisma.organizationMembershipCapability.create({ data: {
+      id: crypto.randomUUID(), membershipId: membership.id, capabilityKey: 'membership.manage.teachers', source: 'authorization_test',
+    } })
+    const authorization = await resolveOrganizationAuthorization(member.user.id, school.organizationId!)
+    expect(authorization?.capabilities.has('membership.manage.teachers')).toBe(true)
   })
 
   it('updates the normalized base role without deleting additive roles', async () => {

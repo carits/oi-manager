@@ -250,6 +250,8 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 # 当前状态
 
+- 2026-09-13: 组织成员 HTTP 与业务服务的最后一段岗位硬编码已收口：校园资料、活动、比赛、学生和教师接口全部声明规范化 Capability；服务层的数据范围、联系方式和负责人保护只读取解析后的 Capability/负责人指针，不再读取 `actor.role` 或依赖 `memberRole` 授权。新增 `organization.view`、成员查看能力与运行时回归，证明伪造 `memberRole=school_principal` 不会获得设置权，RoleAssignment/显式 Grant 才能授权。Server 生产构建通过；本机 PostgreSQL 未启动，因此数据库集成用例在连接阶段被明确阻断，未伪造测试结果。本批不修改 Prisma、业务数据、前端或既有岗位默认能力。
+
 ## 阶段
 
 OI Manager 已使用生产式 systemd/蓝绿运行拓扑承载公网流量。公网 `3000` 运行已发布的 Next.js 优化构建；稳定 API Router

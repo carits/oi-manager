@@ -70,6 +70,10 @@ Account Identity
 `OrganizationMembershipRole` 与显式 `OrganizationMembershipCapability`，不再提供 legacy/hybrid fallback。
 `memberRole` 继续用于学生/教师资料分类和 UI 岗位展示，但不能直接授予业务权限。
 
+组织成员 HTTP 路由必须声明稳定 Capability；业务服务接收解析后的 Capability 集合，不接收并比较 `actor.role`。
+当前基础映射为：成员均可 `organization.view`；教师默认拥有学生查看/管理、作业和比赛能力；负责人额外拥有教师查看/管理与
+`organization.settings`。教师只能管理归属自己的学生这一资源范围同样从 Capability 派生，不能回退到 `memberRole` 分支。
+
 所有 Membership 创建、恢复、导入和负责人转移都在原业务事务内同步基础 RoleAssignment；附加岗位和显式能力不会因基础岗位
 变化而被误删。受保护的 `/api/admin/migration/membership-roles` check/apply 保留为一致性修复工具：未知角色 fail closed，
 缺失或冲突的基础角色按 `memberRole` 幂等修复。

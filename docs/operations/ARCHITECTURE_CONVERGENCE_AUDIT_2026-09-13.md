@@ -22,7 +22,7 @@ source_of_truth: remote main, production runtime, Prisma baselines/current.json,
 | 公网 HTTPS / TLS | 外部资源待完成 | TLS 模板、证书校验、严格 CSRF、nonce CSP 与发布检查已经入库；公网仍为 HTTP 兼容模式 | 提供域名、DNS 控制权和证书签发许可后执行 report-only → enforce、Secure Cookie、HSTS 和浏览器回归 |
 | External Uptime Health Contract | 已完成 | `/api/health` 返回版本化 `status=ok/service=api`；Workflow 使用结构化 JSON 校验；生产公网探针正常 | 保持 Contracts、Server、发布探针和外部 Workflow 共用同一 Schema |
 | Web 3000 公网入口 | 已完成 | systemd 只监听 `127.0.0.1:3000`，网络暴露审计为 0；公网只经 Nginx | TLS 到位后 80 仅跳转 443 |
-| Organization hybrid 权限 | 已完成核心切换 | 20,186 条 Membership 已规范化，缺失 0；授权只读 RoleAssignment/CapabilityGrant，hybrid 开关已移除；写路径同步基础角色 | `memberRole` 继续仅承担资料类型/岗位展示；新增权限必须定义 Capability，不增加岗位硬编码授权 |
+| Organization hybrid 权限 | 已完成 | 20,186 条 Membership 已规范化，缺失 0；hybrid 开关已移除；组织成员 HTTP 路由和业务数据范围均只读 RoleAssignment/CapabilityGrant，写路径同步基础角色，静态门禁拒绝 `actor.role` 回退 | `memberRole` 继续仅承担资料类型/岗位展示；新增权限必须定义 Capability，不增加岗位硬编码授权 |
 | Account/Membership/Workspace 类型 | 已完成核心契约 | `packages/contracts/src/identity.ts` 分离三类身份，登录输出固定 `accountRole`，Web 工作区保存 `organizationRole` | JWT 和旧客户端的 `role/studentMode/schoolId` 仅按兼容窗口渐退，不作为新 API 设计依据 |
 | API Contract 漂移 | 核心契约完成，领域渐进迁移 | Auth、Health、Identity 与 HTTP Envelope 使用 Zod + TS 单一来源；已删除 Shared 中重复的 Login/API Response 和 Server 中无人引用的浏览器 API Client，门禁阻止回退 | 新增/修改 Endpoint 必须先进入 Contracts；既有 619 个 Endpoint 按业务变更渐进迁移，不进行高风险一次性重写 |
 | Contest 双事实源 | 已完成规范读写切换 | 767/767 运行比赛、199/199 比赛题映射；查询、命令、生命周期、题目、Rating 与终结均从 Contest 进入，裸 Training 缺映射 fail closed，生产 fallback 0 | `Training(type=contest)` 暂为历史提交/参与者等子表宿主和同事务投影；只有全部外键迁出后才能物理退役，不以删表作为当前正确性条件 |

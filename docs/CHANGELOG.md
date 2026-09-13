@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### 组织成员 Capability 路由与服务边界
+
+- 组织成员路由不再通过 `authorize('teacher' | 'school_principal')` 授权，校园资料、活动、比赛、学生和教师操作统一声明并解析 `OrganizationCapability`。
+- 新增 `organization.view`、`membership.view.students`、`membership.view.teachers`；学生、教师和负责人岗位仅作为规范化 RoleAssignment 的默认能力模板，显式 Capability Grant 继续叠加。
+- 组织业务服务删除 `actor.role` 分支，教师的学生范围和负责人全校范围从 Capability 派生；负责人删除保护改用 `School.currentPrincipalMembershipId`，不再把展示字段 `memberRole` 当授权事实。
+- 增加静态防回退与真实数据库授权回归。Server 生产构建通过；本机 PostgreSQL 未启动，数据库测试诚实记录为环境阻断。
+
 ### 架构收口复核与契约残留清理
 
 - 删除 Shared 中无人使用且与运行时契约重复的 `ApiResponse/LoginRequest/LoginResponse`，删除 Server 中无人引用的浏览器式 API Client；Web 的传输层结果更名为 `ApiClientResponse`，明确它不是线上 Wire Envelope。

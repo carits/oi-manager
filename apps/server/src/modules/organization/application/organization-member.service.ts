@@ -6,6 +6,7 @@ import { prisma } from '../../../prisma'
 import { listContestRuntimesForDashboard } from '../../contest/contest-query.facade'
 import { createContestRuntimeTx } from '../../contest/contest-command.service'
 import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
+import type { OrganizationCapability } from '../../authorization/capabilities'
 
 export class OrganizationMemberError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
@@ -17,8 +18,12 @@ export class OrganizationMemberError extends Error {
 export interface OrganizationActor {
   organizationId: string
   userId: string
-  role: string
-  organizationMembershipId?: string | null
+  organizationMembershipId: string
+  capabilities: ReadonlySet<OrganizationCapability>
+}
+
+function canManageAllStudents(actor: OrganizationActor) {
+  return actor.capabilities.has('membership.manage.teachers') || actor.capabilities.has('organization.settings')
 }
 
 function notFound(message: string): never { throw new OrganizationMemberError(404, message) }
@@ -68,7 +73,7 @@ export async function getCampus(actor: OrganizationActor) {
   const principal = school.currentPrincipalMembershipId
     ? await prisma.organizationTeacherProfile.findUnique({ where: { membershipId: school.currentPrincipalMembershipId }, select: { name: true, title: true } })
     : null
-  const canViewContact = actor.role === 'school_principal'
+  const canViewContact = actor.capabilities.has('organization.settings')
   return {
     ...school,
     joinPolicy: organization?.joinPolicy || 'invite_only',
@@ -148,7 +153,7 @@ export async function listOrganizationStudents(actor: OrganizationActor, query: 
   const q = typeof query.q === 'string' ? query.q.trim() : ''
   const status = ['active', 'disabled'].includes(query.status) ? query.status : undefined
   const requestedTeacher = typeof query.headTeacherMembershipId === 'string' && query.headTeacherMembershipId ? query.headTeacherMembershipId : undefined
-  const headTeacherMembershipId = actor.role === 'teacher' ? actor.organizationMembershipId || undefined : requestedTeacher
+  const headTeacherMembershipId = canManageAllStudents(actor) ? requestedTeacher : actor.organizationMembershipId
   const school = await schoolFor(actor.organizationId)
   const teamId = typeof query.teamId === 'string' && query.teamId ? query.teamId : undefined
   if (teamId) {
@@ -207,7 +212,7 @@ async function validateTeacher(organizationId: string, membershipId?: string | n
 async function studentAccess(actor: OrganizationActor, profileId: string) {
   const profile = await prisma.organizationStudentProfile.findUnique({ where: { id: profileId }, include: { Membership: true } })
   if (!profile || profile.Membership.organizationId !== actor.organizationId || profile.Membership.status !== 'active') notFound('学生档案不存在')
-  if (actor.role !== 'school_principal' && profile.headTeacherMembershipId !== actor.organizationMembershipId) forbidden('无权管理该学生')
+  if (!canManageAllStudents(actor) && profile.headTeacherMembershipId !== actor.organizationMembershipId) forbidden('无权管理该学生')
   return profile
 }
 
@@ -217,7 +222,7 @@ export async function createOrganizationStudent(actor: OrganizationActor, body: 
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   if (!username || !password || !name) badRequest('请填写用户名、密码和姓名')
   if (password.length < 6) badRequest('密码至少 6 位')
-  const headTeacherMembershipId = actor.role === 'school_principal' && typeof body.headTeacherMembershipId === 'string' ? body.headTeacherMembershipId : actor.organizationMembershipId
+  const headTeacherMembershipId = canManageAllStudents(actor) && typeof body.headTeacherMembershipId === 'string' ? body.headTeacherMembershipId : actor.organizationMembershipId
   await validateTeacher(actor.organizationId, headTeacherMembershipId)
   if (await prisma.user.findUnique({ where: { username }, select: { id: true } })) throw new OrganizationMemberError(409, '用户名已存在')
   return prisma.$transaction(async tx => {
@@ -231,7 +236,7 @@ export async function createOrganizationStudent(actor: OrganizationActor, body: 
 
 export async function updateOrganizationStudent(actor: OrganizationActor, profileId: string, body: any) {
   const profile = await studentAccess(actor, profileId)
-  const requestedTeacher = actor.role === 'school_principal' && typeof body.headTeacherMembershipId === 'string' ? body.headTeacherMembershipId : undefined
+  const requestedTeacher = canManageAllStudents(actor) && typeof body.headTeacherMembershipId === 'string' ? body.headTeacherMembershipId : undefined
   if (requestedTeacher !== undefined) await validateTeacher(actor.organizationId, requestedTeacher)
   if (typeof body.password === 'string' && body.password && body.password.length < 6) badRequest('密码至少 6 位')
   await prisma.$transaction(async tx => {
@@ -330,7 +335,8 @@ export async function setOrganizationTeacherStatus(actor: OrganizationActor, pro
 
 export async function archiveOrganizationTeacher(actor: OrganizationActor, profileId: string) {
   const profile = await teacherProfile(actor, profileId)
-  if (profile.Membership.memberRole === 'school_principal') badRequest('不能删除学校负责人')
+  const school = await schoolFor(actor.organizationId)
+  if (school.currentPrincipalMembershipId === profile.Membership.id) badRequest('不能删除学校负责人')
   await prisma.$transaction([
     prisma.organizationTeacherProfile.update({ where: { id: profile.id }, data: { status: 'archived' } }),
     prisma.organizationMembership.update({ where: { id: profile.membershipId }, data: { status: 'archived' } }),
