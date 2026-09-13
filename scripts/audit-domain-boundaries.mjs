@@ -12,6 +12,15 @@ function files(dir) {
 }
 
 const violations = []
+const sharedTypes = fs.readFileSync(path.join(root, 'packages/shared/src/index.ts'), 'utf8')
+for (const obsoleteContract of ['ApiResponse', 'LoginRequest', 'LoginResponse']) {
+  if (new RegExp(`export\\s+interface\\s+${obsoleteContract}\\b`).test(sharedTypes)) {
+    violations.push(`Shared package redefines ${obsoleteContract}; use @oi-manager/contracts`)
+  }
+}
+if (fs.existsSync(path.join(root, 'apps/server/src/lib/api.ts'))) {
+  violations.push('Server contains a browser-style API client outside the contracts/client boundary')
+}
 const serverIndex = fs.readFileSync(path.join(root, 'apps/server/src/index.ts'), 'utf8')
 const applicationRoot = fs.readFileSync(path.join(root, 'apps/server/src/app.ts'), 'utf8')
 const serverRuntime = fs.readFileSync(path.join(root, 'apps/server/src/server-runtime.ts'), 'utf8')

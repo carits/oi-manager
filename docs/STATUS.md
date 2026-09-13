@@ -5,6 +5,8 @@ last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-13: 架构收口完成新一轮逐项复核。Shared 中已删除与 Contracts 漂移的旧 Login/API Response 类型，Server 中无人引用的浏览器式 API Client 已移除，Web 传输结果明确命名为 `ApiClientResponse`；门禁阻止重复契约重新出现。旧 2026-08-29 审计归档，新审计分别记录已完成、受控兼容、P2 维护债和必须依赖所有者资源的 TLS/告警/异机存储验收。Shared/Contracts/Server/Web 类型检查、Web 38 文件 159 项、Web 生产构建、架构和 Baseline 门禁通过；本地 PostgreSQL 未运行，Server 数据库测试未执行且未伪造结果。本批没有 Prisma、业务数据或运行时代码行为变化，生产服务无需重启或提升 Web。
+
 - 2026-09-13: 数据库安装体系已从动态 clean-bootstrap 收口到正式 Baseline Epoch。当前不可变 Epoch 为 `20260913_v2_lf`，固定 67 个历史 migration 的跨平台规范化校验和、Snapshot 哈希 `d55db415…1b2e47` 与已验证生产结构签名 `de803187…bb87`；bootstrap 只登记 Epoch 内历史，Epoch 后 migration 由标准 deploy 真实执行。首次 `20260913_v2` 在生产只读校验中暴露 CRLF/LF 哈希差异，未执行任何 DDL且未被覆盖，现已通过新 Epoch和统一 LF 规范化修正。生产主机 `db:baseline:check` 通过；独立空库完成 Snapshot、67/67 migration、202 张表、Seed 和非空拒绝验证；最新生产备份 `oi_manager_20260913_160601.dump` 的恢复升级库与空库路径均为 202 张表，完整 public schema SHA-256 同为 `de803187b4a0c99e30f6c5679ced341af8b5ce42187d0e4f114319b1c6edbb87`，`schema_match=true`。两项演练仅使用自动清理的隔离数据库，正式库未执行 Bootstrap DDL。
 
 - 2026-09-13: Human UX 收口后的 UI 契约复核完成。静态门禁此前只识别对象字面量，无法阻止 `style={formStyles.field}`、`style={cardStyle}` 等引用式内联样式；现已新增独立规则，并将评测设置、训练表单、题单、账号资料、学生/教师/学校管理、团队导入和平台题库管理的遗留对象全部迁到统一组件与 CSS Modules。全部 UI 遗留基线仍为 0；Web 类型检查、38 文件 159 项测试、生产构建和 UI 门禁通过。提交 `bce1956` 已推送 `main`；Web BUILD_ID `1kvYd8OhjbDDxJz6_jBfY` 在 canary 和正式端口通过真实双账号消息发送、SSE、已读与回复闭环（序号 154–157）后提升，公网 health/readiness 正常。原有 7 个未跟踪维护文件未改动；本批无 API、Prisma、业务规则或历史数据变更。

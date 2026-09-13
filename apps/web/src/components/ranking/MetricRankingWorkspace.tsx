@@ -8,7 +8,7 @@ import { Pagination } from '@/components/ui/Pagination'
 import { Table } from '@/components/ui/Table'
 import { useAuth } from '@/components/AuthProvider'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
-import apiClient, { type ApiResponse } from '@/lib/apiClient'
+import apiClient, { type ApiClientResponse } from '@/lib/apiClient'
 import styles from './MetricRankingWorkspace.module.css'
 
 export type RankingMetric = 'rating' | 'solved' | 'contribution'
@@ -26,7 +26,7 @@ interface RankingRow {
   contributionScore?: number
 }
 
-interface RankingResponse extends ApiResponse<RankingRow[]> {
+interface RankingResponse extends ApiClientResponse<RankingRow[]> {
   page?: number
   pageSize?: number
   total?: number

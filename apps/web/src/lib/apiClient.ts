@@ -28,7 +28,8 @@ export type ApiErrorKind =
   | 'invalid_response'
   | 'cancelled'
 
-export interface ApiResponse<T> {
+/** Transport-aware client result. Wire envelopes are defined in @oi-manager/contracts. */
+export interface ApiClientResponse<T> {
   success: boolean
   data?: T
   message?: string
@@ -85,7 +86,7 @@ function isRetryableStatus(status: number, kind: ApiErrorKind): boolean {
   return status >= 500
 }
 
-function apiErrorFromResponse<T>(response: ApiResponse<T>): ApiError {
+function apiErrorFromResponse<T>(response: ApiClientResponse<T>): ApiError {
   const kind = response.errorKind || (response.status === 0 ? 'network' : 'http')
   return new ApiError({
     kind,
@@ -97,7 +98,7 @@ function apiErrorFromResponse<T>(response: ApiResponse<T>): ApiError {
   })
 }
 
-export async function parseApiResponse<T>(res: Response): Promise<ApiResponse<T>> {
+export async function parseApiResponse<T>(res: Response): Promise<ApiClientResponse<T>> {
   const text = await res.text()
   let payload: Record<string, unknown> = {}
   let invalidJson = false
@@ -150,7 +151,7 @@ export async function parseApiResponse<T>(res: Response): Promise<ApiResponse<T>
     code: typeof payload.code === 'string' ? payload.code : undefined,
     requestId,
     errorKind: success ? undefined : 'http',
-  } as ApiResponse<T>
+  } as ApiClientResponse<T>
 }
 
 type ApiClientScope =
@@ -187,7 +188,7 @@ export class ApiClient {
   async request<T>(
     endpoint: string,
     options: ApiClientOptions = {}
-  ): Promise<ApiResponse<T>> {
+  ): Promise<ApiClientResponse<T>> {
     const { signal, body, timeout, anonymous = false, accountScoped = false, ...fetchOptions } = options
     const url = `${this.baseURL}${endpoint}`
 
@@ -355,7 +356,7 @@ export class ApiClient {
   }
 
   /** GET 请求 */
-  get<T>(endpoint: string, options?: ApiClientOptions): Promise<ApiResponse<T>> {
+  get<T>(endpoint: string, options?: ApiClientOptions): Promise<ApiClientResponse<T>> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'GET',
@@ -364,27 +365,27 @@ export class ApiClient {
   }
 
   /** POST 请求 */
-  post<T>(endpoint: string, body?: unknown, options?: ApiClientOptions): Promise<ApiResponse<T>> {
+  post<T>(endpoint: string, body?: unknown, options?: ApiClientOptions): Promise<ApiClientResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'POST', body })
   }
 
   /** POST 文件请求（FormData 便捷方法） */
-  postFile<T>(endpoint: string, formData: FormData, options?: ApiClientOptions): Promise<ApiResponse<T>> {
+  postFile<T>(endpoint: string, formData: FormData, options?: ApiClientOptions): Promise<ApiClientResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'POST', body: formData })
   }
 
   /** PUT 请求 */
-  put<T>(endpoint: string, body?: unknown, options?: ApiClientOptions): Promise<ApiResponse<T>> {
+  put<T>(endpoint: string, body?: unknown, options?: ApiClientOptions): Promise<ApiClientResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'PUT', body })
   }
 
   /** PATCH 请求 */
-  patch<T>(endpoint: string, body?: unknown, options?: ApiClientOptions): Promise<ApiResponse<T>> {
+  patch<T>(endpoint: string, body?: unknown, options?: ApiClientOptions): Promise<ApiClientResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'PATCH', body })
   }
 
   /** DELETE 请求 */
-  delete<T>(endpoint: string, options?: ApiClientOptions): Promise<ApiResponse<T>> {
+  delete<T>(endpoint: string, options?: ApiClientOptions): Promise<ApiClientResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' })
   }
 

@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 479 |
+| Referenced environment keys | 478 |
 
 ## HTTP adapter ownership
 
@@ -714,7 +714,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `NETWORK_AUDIT_INPUT_FILE`
 - `NETWORK_EXPOSURE_CHECK`
 - `NETWORK_PUBLIC_PORTS`
-- `NEXT_PUBLIC_API_URL`
 - `NODE_ENV`
 - `OI_API_BASE`
 - `OI_CANDIDATE_LIMITS`

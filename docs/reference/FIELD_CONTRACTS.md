@@ -53,31 +53,28 @@ source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
 ## 登录
 
 ```ts
-interface LoginRequest {
-  username: string
-  password: string
-  workspaceMode?: 'work' | 'personal'
-  mode?: 'campus' | 'personal' // deprecated compatibility
-}
+const LoginRequestSchema = z.object({
+  username: z.string().trim().min(1).max(64),
+  password: z.string().min(1).max(256),
+  workspaceMode: z.enum(['work', 'personal']).optional(),
+  mode: z.enum(['campus', 'personal']).optional(), // deprecated compatibility
+})
 
-interface LoginResponse {
-  userId: string
-  role: UserRole
-  username: string
-  adminId?: string
-  teacherId?: string
-  studentId?: string
-  schoolId?: string
-  workspaceMode: 'work' | 'personal'
-  studentMode?: 'campus' | 'personal'
-}
+const LoginResponseDataSchema = z.object({
+  userId: z.string(),
+  accountRole: z.enum(['user', 'platform_admin', 'super_admin']),
+  role: LegacyUserRoleSchema, // 当前请求上下文展示角色，兼容旧客户端
+  username: z.string(),
+  workspaceMode: z.enum(['work', 'personal']),
+  avatar: z.string().nullable().optional(),
+  next: z.string().startsWith('/'),
+})
 ```
 
-`adminId/teacherId/studentId` 是扩展实体 ID；当前 schema 中通常与 User ID 对齐，
-调用方仍应根据字段语义使用。身份判断统一使用 `userId + role`。
+Schema 与 TypeScript 类型均来自 `packages/contracts/src/auth.ts`。登录响应不返回 JWT、管理员/教师/学生
+扩展实体 ID 或学校 ID；账号身份使用 `accountRole`，组织岗位在进入明确组织上下文后单独解析。
 
-`workspaceMode` 是会话工作区，所有角色均支持。`role`、岗位扩展 ID 和学校关系在切换时
-保持不变；旧 `studentMode` 仅用于一个开发周期内兼容旧客户端。
+`workspaceMode` 是会话工作区。旧请求字段 `mode` 仅用于兼容旧客户端，不出现在响应中。
 
 `schoolId` 始终是 `School.id`，仅在当前组织关联学校时出现；`organizationId` 是
 `Organization.id`，用于成员关系与 `X-OI-Organization-ID`。调用方不得用组织 ID 填充

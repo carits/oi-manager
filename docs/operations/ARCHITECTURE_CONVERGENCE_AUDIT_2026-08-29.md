@@ -1,11 +1,13 @@
 ---
-status: current
+status: reference
 audience: development, operations
 last_verified: 2026-08-29
-source_of_truth: remote main, Prisma schema, generated architecture inventory, production runtime and current test reports
+source_of_truth: historical audit; superseded by ARCHITECTURE_CONVERGENCE_AUDIT_2026-09-13.md
 ---
 
 # 架构收口逐项完成审计（2026-08-29）
+
+> 本文是 2026-08-29 的历史快照，已由 [2026-09-13 收口复核](ARCHITECTURE_CONVERGENCE_AUDIT_2026-09-13.md) 取代，不再代表当前未完成项。
 
 本文把 2026-08-29 架构评审中的每一项建议映射到当前代码、测试和线上证据。它不是新的实施计划；仍未完成且必须依赖外部输入的事项继续以
 [未完成事项执行总表](REMAINING_WORK_2026-08-27.md)和

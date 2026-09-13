@@ -11,10 +11,6 @@ export type ResourceScope = 'campus' | 'personal'
 export type ProblemLibraryScope = 'platform' | 'school'
 export type ProblemStatus = 'draft' | 'published' | 'archived'
 
-// 简化的角色类型（用于权限判断）
-/** @deprecated Select AccountRole or OrganizationMembershipRole at the authorization boundary. */
-export type SimpleRole = Exclude<UserRole, 'user'>
-
 // 学校状态
 export type SchoolStatus = 'active' | 'disabled'
 
@@ -65,36 +61,10 @@ export interface WorkspaceSummary {
   availableModules: string[]
 }
 
-// API 响应类型
-export interface ApiResponse<T = unknown> {
-  success: boolean
-  data?: T
-  message?: string
-  error?: string
-}
-
 // 分页参数
 export interface PaginationParams {
   page?: number
   pageSize?: number
-}
-
-// 用户登录请求
-export interface LoginRequest {
-  username: string
-  password: string
-  workspaceMode?: 'work' | 'personal'
-  mode?: 'campus' | 'personal'
-}
-
-// 用户登录响应
-export interface LoginResponse {
-  userId: string
-  accountRole: AccountRole
-  role: UserRole
-  username: string
-  workspaceMode: 'work' | 'personal'
-  adminId?: string
 }
 
 // ========== 学校管理 DTO ==========

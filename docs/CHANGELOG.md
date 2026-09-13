@@ -9,6 +9,12 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### 架构收口复核与契约残留清理
+
+- 删除 Shared 中无人使用且与运行时契约重复的 `ApiResponse/LoginRequest/LoginResponse`，删除 Server 中无人引用的浏览器式 API Client；Web 的传输层结果更名为 `ApiClientResponse`，明确它不是线上 Wire Envelope。
+- 架构门禁禁止重新在 Shared 定义登录/响应契约或在 Server 引入浏览器 API Client；登录字段文档改为直接引用 Contracts 的 Zod Schema，监控文档与版本化 Health Contract 对齐。
+- 归档 2026-08-29 旧审计并新增 2026-09-13 逐项复核，分别标记已完成、受控兼容、P2 维护债和外部资源待验收项；Human UX 十项交付均映射到已发布证据。
+
 ### Database Baseline Epoch V2
 
 - 建立不可变 `20260913_v2_lf` 数据库 Baseline Snapshot，固定 67 个历史 migration 的名称与规范化 SHA-256、Snapshot 哈希 `d55db415735298142456926de0b306de678adb9d9061e8cab8c58738a81b2e47` 和已验证的生产结构签名；全新安装不再运行时从当前 Schema 与可变 supplement 动态伪装完整历史链。
