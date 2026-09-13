@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest 维护路径边界
+
+- 演示场景准备不再直接批量修改 `Training(type=contest)`：所有目标先完成规范 Contest 映射与终结状态预检，再在同一事务、advisory lock 下更新 Contest 并生成 Training 兼容投影；任一目标缺映射或已经终结时整批回滚。
+- 后台提交可见性修复只从规范 Contest 状态发现已结束比赛，不再把裸 Training 记录当成比赛事实。演示场景列表同样只返回具有 `Contest.runtimeTrainingId` 映射的运行时。
+- 领域状态门禁新增 Training 聚合写入约束，除普通 Training CRUD 和 Contest 投影边界外禁止直接写入；隔离 current-schema 测试同步安装 Contest Rating 身份触发器，避免测试库弱于生产契约。
+- 生产同构隔离 Contest core 4 文件 49/49 通过，其中新增维护发现、规范双写和批量回滚测试；本批不修改 Prisma Schema、历史比赛或 Web。
+
 ### Contest Rating 规范身份
 
 - `TrainingRatingConfig`、`ContestStandingSnapshot` 与 `RatingBatch` 新增规范 `contestId`，并由 Contest 直接拥有。Rating 配置、到期发现、结算、同池排序与重放不再仅靠兼容 `trainingId` 判断比赛身份。
