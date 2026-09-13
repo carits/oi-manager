@@ -15,7 +15,10 @@ const runtimeRatingInclude = {
 export async function findContestRuntimeForRating(runtimeTrainingId: number) {
   const aggregate = await prisma.contest.findUnique({
     where: { runtimeTrainingId },
-    include: { RuntimeTraining: { include: runtimeRatingInclude } },
+    include: {
+      RatingConfig: true,
+      RuntimeTraining: { include: runtimeRatingInclude },
+    },
   })
   if (aggregate?.RuntimeTraining) {
     if (aggregate.RuntimeTraining.type !== 'contest') {
@@ -24,7 +27,14 @@ export async function findContestRuntimeForRating(runtimeTrainingId: number) {
       })
       return null
     }
-    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
+    return {
+      contest: aggregate,
+      runtime: {
+        ...aggregate.RuntimeTraining,
+        RatingConfig: aggregate.RatingConfig || aggregate.RuntimeTraining.RatingConfig,
+      },
+      source: 'aggregate' as const,
+    }
   }
   return null
 }
@@ -33,6 +43,7 @@ export async function listPlatformContestRuntimes() {
   const aggregates = await prisma.contest.findMany({
     where: { scope: 'platform', teamId: null, organizationId: null, runtimeTrainingId: { not: null } },
     include: {
+      RatingConfig: { select: { scope: true, track: true, lockedAt: true } },
       RuntimeTraining: {
         include: {
           RatingConfig: { select: { scope: true, track: true, lockedAt: true } },
@@ -41,7 +52,9 @@ export async function listPlatformContestRuntimes() {
       },
     },
   })
-  return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
+  return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest'
+    ? [{ ...row.RuntimeTraining, RatingConfig: row.RatingConfig || row.RuntimeTraining.RatingConfig }]
+    : [])
 }
 
 const licenseRuntimeInclude = {
@@ -189,8 +202,8 @@ export async function findContestRuntimeForBlogReview(runtimeTrainingId: number)
 
 /**
  * Discover due Rating work from canonical Contest lifecycle state. Training
- * is consulted only for the still-legacy RatingConfig relation and a creator
- * fallback during the compatibility window.
+ * is consulted only for execution ownership and a creator fallback during the
+ * compatibility window. Rating eligibility is read from canonical Contest.
  */
 export async function listDueRatedContestRuntimes(now = new Date(), limit = 20) {
   const rows = await prisma.contest.findMany({
@@ -198,7 +211,8 @@ export async function listDueRatedContestRuntimes(now = new Date(), limit = 20) 
       runtimeTrainingId: { not: null },
       endAt: { lte: now },
       finalizationStatus: { in: ['LIVE', 'JUDGING'] },
-      RuntimeTraining: { is: { type: 'contest', RatingConfig: { isNot: null } } },
+      RatingConfig: { isNot: null },
+      RuntimeTraining: { is: { type: 'contest' } },
     },
     select: {
       runtimeTrainingId: true,

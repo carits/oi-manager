@@ -33,11 +33,19 @@ export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, tra
     finalizedStandingId: training.finalizedStandingId,
     updatedAt: new Date(),
   }
-  return tx.contest.upsert({
+  const contest = await tx.contest.upsert({
     where: { runtimeTrainingId: training.id },
     create: { id: crypto.randomUUID(), runtimeTrainingId: training.id, ...data },
     update: data,
   })
+  // Repair/import is the only reverse bridge allowed after the aggregate
+  // cutover. Attach a pre-existing runtime Rating config to its canonical
+  // identity without changing the immutable Rating policy itself.
+  await tx.trainingRatingConfig.updateMany({
+    where: { trainingId, contestId: null },
+    data: { contestId: contest.id },
+  })
+  return contest
 }
 
 /**

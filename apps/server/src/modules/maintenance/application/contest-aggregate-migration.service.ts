@@ -28,14 +28,50 @@ function issue(row: any) {
   return null
 }
 
+async function inspectCanonicalRatingIdentities(db: typeof prisma | Prisma.TransactionClient | any) {
+  const rows = await db.$queryRaw(Prisma.sql`
+    SELECT
+      (SELECT COUNT(*) FROM "TrainingRatingConfig") AS configs,
+      (SELECT COUNT(*) FROM "ContestStandingSnapshot") AS snapshots,
+      (SELECT COUNT(*) FROM "RatingBatch") AS batches,
+      (SELECT COUNT(*) FROM (
+        SELECT c."trainingId" FROM "TrainingRatingConfig" c WHERE c."contestId" IS NULL
+        UNION ALL
+        SELECT s."trainingId" FROM "ContestStandingSnapshot" s WHERE s."contestId" IS NULL
+        UNION ALL
+        SELECT b."trainingId" FROM "RatingBatch" b WHERE b."contestId" IS NULL
+      ) missing_rows) AS missing,
+      (SELECT COUNT(*) FROM (
+        SELECT c."trainingId" FROM "TrainingRatingConfig" c JOIN "Contest" x ON x."id" = c."contestId"
+          WHERE x."runtimeTrainingId" IS DISTINCT FROM c."trainingId"
+        UNION ALL
+        SELECT s."trainingId" FROM "ContestStandingSnapshot" s JOIN "Contest" x ON x."id" = s."contestId"
+          WHERE x."runtimeTrainingId" IS DISTINCT FROM s."trainingId"
+        UNION ALL
+        SELECT b."trainingId" FROM "RatingBatch" b JOIN "Contest" x ON x."id" = b."contestId"
+          WHERE x."runtimeTrainingId" IS DISTINCT FROM b."trainingId"
+      ) mismatched_rows) AS mismatched
+  `) as Array<{ configs: bigint; snapshots: bigint; batches: bigint; missing: bigint; mismatched: bigint }>
+  const [row] = rows
+  return {
+    configs: Number(row?.configs || 0), snapshots: Number(row?.snapshots || 0),
+    batches: Number(row?.batches || 0), missing: Number(row?.missing || 0),
+    mismatched: Number(row?.mismatched || 0),
+  }
+}
+
 export async function inspectContestAggregateMigration() {
-  const rows = await loadRuntimeContests(prisma)
+  const [rows, ratingIdentity] = await Promise.all([
+    loadRuntimeContests(prisma),
+    inspectCanonicalRatingIdentities(prisma),
+  ])
   const issues = rows.map((row: any) => ({ trainingId: row.id, title: row.title, reason: issue(row) })).filter((item: any) => item.reason)
   return {
     reportHash: reportHash(rows), total: rows.length,
     alreadyMapped: rows.filter((row: any) => row.ContestAggregate).length,
     migratable: rows.filter((row: any) => !row.ContestAggregate && !issue(row)).length,
     blocked: issues.length, issues: issues.slice(0, 100), issuesOmitted: Math.max(0, issues.length - 100),
+    ratingIdentity,
   }
 }
 
@@ -63,6 +99,18 @@ export async function applyContestAggregateMigration(expectedReportHash: string,
         finalizationStatus: row.finalizationStatus,
         finalizedStandingId: row.finalizedStandingId,
       } })
+      await tx.trainingRatingConfig.updateMany({
+        where: { trainingId: row.id, contestId: null },
+        data: { contestId: contest.id },
+      })
+      await tx.contestStandingSnapshot.updateMany({
+        where: { trainingId: row.id, contestId: null },
+        data: { contestId: contest.id },
+      })
+      await tx.ratingBatch.updateMany({
+        where: { trainingId: row.id, contestId: null },
+        data: { contestId: contest.id },
+      })
       for (const problem of row.TrainingProblem) {
         await tx.contestProblem.create({ data: {
           id: crypto.randomUUID(), contestId: contest.id, runtimeTrainingProblemId: problem.id,
@@ -81,6 +129,6 @@ export async function applyContestAggregateMigration(expectedReportHash: string,
       targetType: 'contest_aggregate', targetId: 'runtime-training-v1',
       metadata: { reportHash: expectedReportHash, created, blocked },
     } })
-    return { total: rows.length, created, blocked }
+    return { total: rows.length, created, blocked, ratingIdentity: await inspectCanonicalRatingIdentities(tx) }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }

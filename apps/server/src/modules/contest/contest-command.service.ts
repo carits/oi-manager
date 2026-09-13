@@ -48,10 +48,13 @@ export async function createContestRuntimeTx(
   })
   const track = trackForFormat(runtime.format)
   const scoringRules = defaultScoringRules(track)
+  const aggregate = await ensureContestAggregateTx(tx, runtime.id)
+  if (!aggregate) throw new Error('Failed to create canonical Contest aggregate')
   await tx.trainingRatingConfig.create({
     data: {
       id: crypto.randomUUID(),
       trainingId: runtime.id,
+      contestId: aggregate.id,
       scope: 'NONE',
       track,
       scoringRules,
@@ -59,7 +62,6 @@ export async function createContestRuntimeTx(
       createdBy: runtime.createdBy,
     },
   })
-  await ensureContestAggregateTx(tx, runtime.id)
   return runtime
 }
 
@@ -128,6 +130,12 @@ export async function deleteContestRuntimeTx(
   }
   if (aggregate.finalizedStandingId) return { conflict: 'finalized' as const }
 
+  // An unfinalized draft has no durable Rating history. Remove compatibility
+  // rows explicitly before the canonical aggregate; their Contest foreign keys
+  // are intentionally RESTRICT so accidental historical deletion fails closed.
+  await tx.ratingBatch.deleteMany({ where: { contestId: aggregate.id } })
+  await tx.contestStandingSnapshot.deleteMany({ where: { contestId: aggregate.id } })
+  await tx.trainingRatingConfig.deleteMany({ where: { contestId: aggregate.id } })
   await tx.contest.delete({ where: { id: aggregate.id } })
   await tx.training.delete({ where: { id: runtimeTrainingId } })
   return { conflict: null }
@@ -300,6 +308,7 @@ export async function updateContestRuntimeTx(
       await tx.trainingRatingConfig.update({
         where: { id: existing.id },
         data: {
+          contestId: existing.contestId || aggregate.id,
           track,
           scoringRules,
           rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),

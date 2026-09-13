@@ -184,3 +184,65 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "EvaluationCreditLedgerEntry_prevent_mutation"
 BEFORE UPDATE OR DELETE ON "EvaluationCreditLedgerEntry"
 FOR EACH ROW EXECUTE FUNCTION "evaluation_credit_ledger_entry_immutable"();
+
+-- Contest owns the durable Rating identity while Training remains the numeric
+-- route/runtime projection. These triggers keep old blue/green binaries and
+-- clean-bootstrap databases on the same dual-write contract.
+CREATE OR REPLACE FUNCTION "set_canonical_contest_id_from_runtime"()
+RETURNS trigger AS $$
+DECLARE
+  expected_contest_id TEXT;
+BEGIN
+  SELECT "id" INTO expected_contest_id FROM "Contest"
+  WHERE "runtimeTrainingId" = NEW."trainingId";
+  IF expected_contest_id IS NULL THEN
+    IF NEW."contestId" IS NOT NULL THEN
+      RAISE EXCEPTION 'rating row references an unmapped contest runtime: %', NEW."trainingId";
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF NEW."contestId" IS NOT NULL AND NEW."contestId" <> expected_contest_id THEN
+    RAISE EXCEPTION 'rating row contest identity does not match runtime: %', NEW."trainingId";
+  END IF;
+  NEW."contestId" := expected_contest_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "TrainingRatingConfig_canonical_contest_identity"
+BEFORE INSERT OR UPDATE OF "trainingId", "contestId" ON "TrainingRatingConfig"
+FOR EACH ROW EXECUTE FUNCTION "set_canonical_contest_id_from_runtime"();
+CREATE TRIGGER "ContestStandingSnapshot_canonical_contest_identity"
+BEFORE INSERT OR UPDATE OF "trainingId", "contestId" ON "ContestStandingSnapshot"
+FOR EACH ROW EXECUTE FUNCTION "set_canonical_contest_id_from_runtime"();
+CREATE TRIGGER "RatingBatch_canonical_contest_identity"
+BEFORE INSERT OR UPDATE OF "trainingId", "contestId" ON "RatingBatch"
+FOR EACH ROW EXECUTE FUNCTION "set_canonical_contest_id_from_runtime"();
+
+CREATE OR REPLACE FUNCTION "backfill_contest_rating_identity_from_aggregate"()
+RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND OLD."runtimeTrainingId" IS DISTINCT FROM NEW."runtimeTrainingId"
+     AND (
+       EXISTS (SELECT 1 FROM "TrainingRatingConfig" WHERE "contestId" = NEW."id")
+       OR EXISTS (SELECT 1 FROM "ContestStandingSnapshot" WHERE "contestId" = NEW."id")
+       OR EXISTS (SELECT 1 FROM "RatingBatch" WHERE "contestId" = NEW."id")
+     ) THEN
+    RAISE EXCEPTION 'cannot remap canonical contest with rating history: %', NEW."id";
+  END IF;
+  IF NEW."runtimeTrainingId" IS NOT NULL THEN
+    UPDATE "TrainingRatingConfig" SET "contestId" = NEW."id"
+      WHERE "trainingId" = NEW."runtimeTrainingId" AND "contestId" IS NULL;
+    UPDATE "ContestStandingSnapshot" SET "contestId" = NEW."id"
+      WHERE "trainingId" = NEW."runtimeTrainingId" AND "contestId" IS NULL;
+    UPDATE "RatingBatch" SET "contestId" = NEW."id"
+      WHERE "trainingId" = NEW."runtimeTrainingId" AND "contestId" IS NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "Contest_backfill_rating_identity"
+AFTER INSERT OR UPDATE OF "runtimeTrainingId" ON "Contest"
+FOR EACH ROW EXECUTE FUNCTION "backfill_contest_rating_identity_from_aggregate"();
