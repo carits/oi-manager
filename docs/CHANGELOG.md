@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Account / Organization 身份运行时边界
+
+- 全局授权中间件现在只接受规范 `AccountRole`，组织中的学生、教师和负责人身份不能再通过兼容 `role` 参与平台管理员判断；旧账号角色仅在认证边界规范化，不再成为新业务授权输入。
+- Submission Command/Query Context 将含混的 `role` 拆为 `accountRole + organizationRole`，提交列表、详情、训练脱敏、重测和远程代码读取分别按平台身份与当前组织身份判断。
+- OJ 的普通读取端点改为“已认证即可进入、业务服务继续校验平台与资源”，修复普通个人 `user` 账号被旧学生/教师白名单错误返回 403 的问题；删除无人使用的宽角色辅助函数。
+- 提交 `c056b14`、`f31136b` 已推送 `main`；本地 Server 生产构建通过，生产同构隔离权限/提交套件 8 文件 111/111 通过并清理临时 Schema。API 从 3302 提升到 3303，health/readiness、数据库和 Router/API/Worker/Executor@1/Judge/Web 均正常；无 Prisma、业务数据或 Web 运行时变更。
+
 ### Organization Capability 请求上下文与 Team/Problem 收口
 
 - 认证中间件不再把 `OrganizationMembership.memberRole` 复制为请求权限身份；组织角色与能力统一从 RoleAssignment/CapabilityGrant 解析，缺失或冲突基础角色 fail closed。

@@ -93,6 +93,12 @@ Bearer 仅供脚本、测试与旧客户端兼容。缺少、无效、过期或�
 
 服务端业务域不得互相导入对方的角色判断函数。稳定组织/团队能力集中在
 `modules/authorization/capabilities.ts`，Assignment 等领域再用自己的 policy 组合资源所有权、创建者和状态。
+全局路由中间件 `authorize()` 只接受并校验 `AccountRole=user|platform_admin|super_admin`；不得把
+`organizationRole`、兼容 `role` 或 Membership 展示岗位传给全局管理员判断。需要同时处理平台与组织范围的应用服务，
+上下文必须显式携带 `accountRole` 和 `organizationRole` 两个字段（Submission Command/Query 即采用此契约），禁止再定义
+一个含混的 `role` 后按取值猜测身份来源。普通“登录即可读取”的路由只使用 `authenticate`，资源、平台和组织范围继续由领域
+Policy 校验，不能用学生/教师/负责人枚举代替登录态。
+
 `OrganizationMembershipRole` 与 `OrganizationMembershipCapability` 是组织授权的唯一事实源。认证中间件先把持久化兼容角色规范为
 `accountRole`，再按请求中的组织 ID 解析唯一基础 RoleAssignment 和 CapabilityGrant；缺少基础角色或同时存在多个基础角色时返回
 `403 ORGANIZATION_AUTHORIZATION_INCOMPLETE`，不会猜测或按更高岗位兜底。生产已完成 20,186 条 Membership 对账，授权路径不再读取
