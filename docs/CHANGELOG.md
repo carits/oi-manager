@@ -13,7 +13,7 @@ source_of_truth: Git history
 
 - 比赛元数据、生命周期、题目增删改排、删除、重测后的结算回退，以及人工/定时/重放 Finalization 命令，现均从规范 `Contest.runtimeTrainingId` 聚合进入运行态；不存在映射时记录 `contest_aggregate_missing` 并 fail closed。
 - 命令不再对裸 `Training(type=contest)` 自动创建 Contest 聚合。已有规范比赛继续在 advisory lock、CAS 和同一数据库事务内同步运行态与聚合；普通 Training 的命令行为不变。
-- 新增裸比赛运行态无法被更新、终结或删除的数据库契约，并扩展架构门禁禁止重新引入 `contest_command_legacy_fallback`。本批不需要 Prisma 迁移、历史数据改写或 Web 发布。
+- 新增裸比赛运行态无法被更新、终结或删除的数据库契约，并扩展架构门禁禁止重新引入 `contest_command_legacy_fallback`。生产同构隔离 Contest core 4 文件 40/40、完整 cutover 11 文件 114/114、Server 构建和全部门禁通过；提交 `d014a15`、`f503090` 发布后 API 3302→3303。生产 767/767 场比赛、199/199 个比赛题目保持映射，6 个独立 Contest 正确保留，部署后缺聚合/旧回退日志为 0。本批不需要 Prisma 迁移、历史数据改写或 Web 发布。
 
 ### Contest Query Legacy Fallback 退役
 
