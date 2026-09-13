@@ -20,6 +20,8 @@ source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-bounda
 
 ## HTTP 与领域边界
 
+- 生产与集成测试必须共享 `createApplication()` 这一唯一 HTTP 组合根；测试不得另建简化路由图、健康响应或错误处理副本。
+- `index.ts` 只负责环境初始化和启动组合，Socket、进程信号与优雅退出属于 Server Runtime；Judge WebSocket 必须显式接收 HTTP Server，不得读取进程全局变量。
 - HTTP Route Adapter 不得直接写 Prisma、开启事务、操作文件系统或调用 Judge Runtime。
 - 跨领域状态变化必须通过对方公开的 Application Service/Port，禁止直接更新对方聚合表。
 - 新请求和响应 DTO 优先定义在 `packages/contracts`，运行时 Schema 与 TypeScript 类型必须来自同一来源。

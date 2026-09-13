@@ -81,9 +81,12 @@ const routeFiles = walk(serverRoot).filter(file => {
   return file.endsWith('.ts') &&
     (relative === 'apps/server/src/index.ts' || relative.includes('/routes/') || relative.endsWith('.routes.ts'))
 })
-const indexSource = fs.readFileSync(path.join(serverRoot, 'index.ts'), 'utf8')
+// Authentication may be applied at the application composition root rather
+// than inside an individual router. Read the same root used by production and
+// integration tests so moving bootstrap code cannot silently weaken the audit.
+const applicationSource = fs.readFileSync(path.join(serverRoot, 'app.ts'), 'utf8')
 const protectedMounts = new Set(
-  [...indexSource.matchAll(/app\.use\(\s*(['"])[^'"]+\1\s*,\s*authenticate\s*,\s*([A-Za-z][A-Za-z0-9_]*)/g)]
+  [...applicationSource.matchAll(/app\.use\(\s*(['"])[^'"]+\1\s*,\s*authenticate\s*,\s*([A-Za-z][A-Za-z0-9_]*)/g)]
     .map(match => match[2]),
 )
 

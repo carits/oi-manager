@@ -377,7 +377,7 @@ type DispatchTask = JudgeTask | HackTask | DataGenerationTask | CandidateEvaluat
 /**
  * 初始化 WebSocket 服务器
  */
-export function initJudgeWebSocket() {
+export function initJudgeWebSocket(server: import('node:http').Server) {
   acceptingJudgeTasks = true
   const judgeToken = process.env.JUDGE_TOKEN?.trim()
   const allowUnauthenticatedLocalJudge =
@@ -388,13 +388,6 @@ export function initJudgeWebSocket() {
       message: 'JUDGE_TOKEN must be set unless loopback-only development is explicitly enabled'
     })
     throw new Error('JUDGE_TOKEN is required')
-  }
-
-  // 使用已有的 HTTP 服务器
-  const server = (global as any).httpServer
-  if (!server) {
-    logger.error('judge_ws_no_server', { message: 'HTTP server not found' })
-    return
   }
 
   wss = new WebSocketServer({ server, path: '/ws/judge' })

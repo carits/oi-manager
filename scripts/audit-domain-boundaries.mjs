@@ -12,6 +12,33 @@ function files(dir) {
 }
 
 const violations = []
+const serverIndex = fs.readFileSync(path.join(root, 'apps/server/src/index.ts'), 'utf8')
+const applicationRoot = fs.readFileSync(path.join(root, 'apps/server/src/app.ts'), 'utf8')
+const serverRuntime = fs.readFileSync(path.join(root, 'apps/server/src/server-runtime.ts'), 'utf8')
+const testRequestHelper = fs.readFileSync(path.join(root, 'apps/server/tests/helpers/testRequest.ts'), 'utf8')
+const judgeWebSocket = fs.readFileSync(path.join(root, 'apps/server/src/ws/judge.ts'), 'utf8')
+if (!serverIndex.includes('createApplication()') || !serverIndex.includes('startServerRuntime(app)')) {
+  violations.push('Server bootstrap bypasses the runtime composition root')
+}
+if (/\bapp\.(?:use|get|post|put|patch|delete|listen)\s*\(/.test(serverIndex)) {
+  violations.push('Server bootstrap defines HTTP routes or sockets outside the runtime composition root')
+}
+if (!applicationRoot.includes("app.use('/api', healthRouter)") || !applicationRoot.includes("app.use('/api/chat', chatRouter)")) {
+  violations.push('Application composition root is missing required production routes')
+}
+if (!serverRuntime.includes('initJudgeWebSocket(httpServer)')) {
+  violations.push('Server runtime does not inject the HTTP server into Judge WebSocket')
+}
+if (!testRequestHelper.includes("from '../../src/app'") || !testRequestHelper.includes('createApplication({')) {
+  violations.push('Integration tests bypass the production application composition root')
+}
+if (/from ['"]\.\.\/\.\.\/src\/(?:routes|modules\/[^'"]+\.routes)/.test(testRequestHelper)
+  || /\/api\/health/.test(testRequestHelper)) {
+  violations.push('Integration test helper maintains a shadow route graph')
+}
+if (/global\s+as\s+any\)\.httpServer|global\.httpServer/.test(judgeWebSocket + serverIndex)) {
+  violations.push('Judge WebSocket depends on an implicit global HTTP server')
+}
 const assignment = fs.readFileSync(path.join(modulesRoot, 'assignment/assignment.service.ts'), 'utf8')
 if (/\.\.\/training\/training\.helpers/.test(assignment)) violations.push('Assignment imports Training authorization helpers')
 
@@ -134,6 +161,7 @@ console.log(JSON.stringify({
   contestQueryFacadeBoundary: !violations.some(item => item.includes('Contest query facade')),
   contestCommandBoundary: !violations.some(item => item.includes('Contest command service')),
   localJudgeResultWriteBoundary: !violations.some(item => item.startsWith('JudgeRun')),
+  runtimeCompositionBoundary: !violations.some(item => item.includes('composition root') || item.includes('shadow route graph') || item.includes('implicit global HTTP server')),
   violations,
 }, null, 2))
 
