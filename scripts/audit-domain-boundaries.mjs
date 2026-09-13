@@ -23,7 +23,9 @@ if (!serverIndex.includes('createApplication()') || !serverIndex.includes('start
 if (/\bapp\.(?:use|get|post|put|patch|delete|listen)\s*\(/.test(serverIndex)) {
   violations.push('Server bootstrap defines HTTP routes or sockets outside the runtime composition root')
 }
-if (!applicationRoot.includes("app.use('/api', healthRouter)") || !applicationRoot.includes("app.use('/api/chat', chatRouter)")) {
+if (!applicationRoot.includes("app.use('/api', healthRouter)")
+  || !applicationRoot.includes("app.use('/api/chat', chatRouter)")
+  || !applicationRoot.includes("import { meRouter } from './routes/me'")) {
   violations.push('Application composition root is missing required production routes')
 }
 if (!serverRuntime.includes('initJudgeWebSocket(httpServer)')) {
