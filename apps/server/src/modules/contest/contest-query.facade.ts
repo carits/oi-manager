@@ -57,6 +57,44 @@ export async function listPlatformContestRuntimes() {
     : [])
 }
 
+/**
+ * Resolve disposable demo fixtures through the canonical Contest identity.
+ * Maintenance code must not rediscover contests by querying
+ * `Training.type = contest` directly.
+ */
+export async function listCanonicalContestRuntimesForMaintenance(input: {
+  runtimeTrainingIds?: number[]
+  teamId?: string
+  titlePrefix?: string
+  scope?: string
+}) {
+  if (input.runtimeTrainingIds && input.runtimeTrainingIds.length === 0) return []
+  const aggregates = await prisma.contest.findMany({
+    where: {
+      runtimeTrainingId: input.runtimeTrainingIds ? { in: input.runtimeTrainingIds } : { not: null },
+      ...(input.teamId !== undefined && { teamId: input.teamId }),
+      ...(input.titlePrefix !== undefined && { title: { startsWith: input.titlePrefix } }),
+      ...(input.scope !== undefined && { scope: input.scope }),
+    },
+    include: { RuntimeTraining: true },
+    orderBy: { runtimeTrainingId: 'asc' },
+  })
+  return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
+}
+
+/** Canonical finished-contest identities for administrative visibility repair. */
+export async function listFinishedContestRuntimeIds() {
+  const rows = await prisma.contest.findMany({
+    where: {
+      status: 'finished',
+      runtimeTrainingId: { not: null },
+      RuntimeTraining: { is: { type: 'contest' } },
+    },
+    select: { runtimeTrainingId: true },
+  })
+  return rows.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
+}
+
 const licenseRuntimeInclude = {
   Team: { include: { TeamMember: true } },
 } as const

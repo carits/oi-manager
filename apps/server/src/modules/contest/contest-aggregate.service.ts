@@ -114,7 +114,7 @@ export async function deleteContestProblemAggregateTx(tx: Prisma.TransactionClie
 
 /**
  * Temporary negative ordering is part of Training's two-phase reorder. Keep
- * even this projection-only write behind the aggregate boundary so Training
+ * even this projection-only write behind the aggregate boundary so Contest
  * remains the sole mutable source of contest structure.
  */
 export async function stageContestProblemOrderProjectionTx(

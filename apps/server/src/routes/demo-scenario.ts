@@ -10,7 +10,7 @@ import {
   findDemoTrainingsByIds,
   findDemoUsers,
   normalizeDemoSubmission,
-  updateDemoTrainings,
+  prepareDemoContestRuntimes,
 } from '../modules/maintenance/application/demo-scenario-persistence.service'
 
 export const demoScenarioRouter = Router()
@@ -110,7 +110,7 @@ demoScenarioRouter.post('/v2/prepare', authenticate, asyncHandler(async (req: Au
   const active = trainings.filter(item => item.title.endsWith('进行中') || item.title.endsWith('已结束'))
   const existing = await countDemoSubmissions('demo-v2:')
   if (existing === 0) {
-    await updateDemoTrainings(active.map(item=>item.id), {status:'ongoing',startTime:new Date(now-130*60000),endTime:new Date(now+130*60000),updatedAt:new Date()})
+    await prepareDemoContestRuntimes(active.map(item => item.id), new Date(now - 130 * 60000), new Date(now + 130 * 60000))
   }
   // Existing V2 events are normalized from their immutable event definition.
   // This repairs an interrupted run without exposing a generic time-edit API.
@@ -154,7 +154,11 @@ demoScenarioRouter.post('/v3/prepare', authenticate, asyncHandler(async (req: Au
   if (!allowed(req, res)) return
   const { trainings } = await v3Resources()
   const now = Date.now()
-  await updateDemoTrainings(trainings.map(item => item.id), { status: 'ongoing', startTime: new Date(now - 6 * 60 * 60 * 1000), endTime: new Date(now + 14 * 60 * 60 * 1000), updatedAt: new Date() })
+  await prepareDemoContestRuntimes(
+    trainings.map(item => item.id),
+    new Date(now - 6 * 60 * 60 * 1000),
+    new Date(now + 14 * 60 * 60 * 1000),
+  )
   const refreshed = await findDemoTrainingsByIds(trainings.map(item => item.id))
   let normalized = 0
   for (const training of refreshed) {

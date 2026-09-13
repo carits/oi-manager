@@ -94,6 +94,12 @@ export interface UpdateContestRuntimeInput {
   }
 }
 
+export interface PrepareDemoContestRuntimesInput {
+  runtimeTrainingIds: number[]
+  startTime: Date
+  endTime: Date
+}
+
 function reportMissingCanonicalContest(
   runtimeTrainingId: number,
   consumer: string,
@@ -427,6 +433,60 @@ export async function transitionContestLifecycleTx(
     visibleSubmissionCount,
     runtime: projectedRuntime,
   }
+}
+
+/**
+ * Re-open isolated development demo contests without bypassing the canonical
+ * aggregate. The caller is still protected by the demo-only route guard.
+ * Finalized contests are immutable and must be recreated instead of reset.
+ */
+export async function prepareDemoContestRuntimesTx(
+  tx: Prisma.TransactionClient,
+  input: PrepareDemoContestRuntimesInput,
+) {
+  const ids = [...new Set(input.runtimeTrainingIds)]
+  if (!ids.length) return []
+
+  const aggregates = await tx.contest.findMany({
+    where: { runtimeTrainingId: { in: ids } },
+    include: { RuntimeTraining: { select: lifecycleRuntimeSelect } },
+  })
+  const byRuntimeId = new Map(aggregates.flatMap(aggregate => aggregate.runtimeTrainingId === null
+    ? []
+    : [[aggregate.runtimeTrainingId, aggregate] as const]))
+
+  for (const runtimeTrainingId of ids) {
+    const aggregate = byRuntimeId.get(runtimeTrainingId)
+    if (!aggregate?.RuntimeTraining || aggregate.RuntimeTraining.type !== 'contest') {
+      reportMissingCanonicalContest(runtimeTrainingId, 'demo_prepare', aggregate?.id)
+      throw new Error(`Demo contest ${runtimeTrainingId} has no canonical aggregate`)
+    }
+    if (aggregate.finalizedStandingId || aggregate.finalizationStatus === 'FINALIZED') {
+      throw new Error(`Demo contest ${runtimeTrainingId} is finalized and cannot be reset`)
+    }
+  }
+
+  const runtimes = []
+  for (const runtimeTrainingId of ids) {
+    const aggregate = byRuntimeId.get(runtimeTrainingId)!
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+    await tx.contest.update({
+      where: { id: aggregate.id },
+      data: {
+        status: 'ongoing',
+        startAt: input.startTime,
+        contestDate: input.startTime,
+        endAt: input.endTime,
+        finalizationStatus: 'LIVE',
+        statusRevision: { increment: 1 },
+        updatedAt: new Date(),
+      },
+    })
+    const runtime = await projectContestRuntimeTx(tx, aggregate.id)
+    if (!runtime) throw new Error(`Demo contest ${runtimeTrainingId} projection failed`)
+    runtimes.push(runtime)
+  }
+  return runtimes
 }
 
 const rejudgeRuntimeSelect = {

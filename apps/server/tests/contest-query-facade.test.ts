@@ -11,11 +11,14 @@ import {
   findContestRuntimeForBlogReview,
   listDueRatedContestRuntimes,
   listContestRuntimesForDashboard,
+  listCanonicalContestRuntimesForMaintenance,
+  listFinishedContestRuntimeIds,
   listPlatformContestRuntimes,
 } from '../src/modules/contest/contest-query.facade'
 import {
   deleteContestRuntimeTx,
   holdContestFinalizationForRejudgeTx,
+  prepareDemoContestRuntimesTx,
   transitionContestLifecycleTx,
   updateContestRuntimeTx,
 } from '../src/modules/contest/contest-command.service'
@@ -115,6 +118,64 @@ describe('Contest query facade', () => {
 
     const due = await listDueRatedContestRuntimes(new Date('2026-02-01T00:00:00.000Z'), 10)
     expect(due.map(row => row.id)).toEqual([mapped.id])
+  })
+
+  it('keeps maintenance discovery and visibility repair on canonical contests', async () => {
+    const finished = await prisma.training.create({ data: {
+      title: 'Canonical maintenance contest', format: 'ioi', type: 'contest', scope: 'campus',
+      status: 'finished',
+      startTime: new Date('2026-01-01T00:00:00.000Z'), endTime: new Date('2026-01-01T02:00:00.000Z'),
+      createdBy: crypto.randomUUID(),
+    } })
+    await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), runtimeTrainingId: finished.id, title: finished.title,
+      contestDate: finished.startTime, startAt: finished.startTime, endAt: finished.endTime,
+      format: finished.format, status: finished.status, type: 'judged', scope: finished.scope,
+    } })
+    const unmapped = await prisma.training.create({ data: {
+      title: 'Canonical maintenance legacy', format: 'ioi', type: 'contest', scope: 'campus',
+      status: 'finished',
+      startTime: new Date('2026-01-02T00:00:00.000Z'), endTime: new Date('2026-01-02T02:00:00.000Z'),
+      createdBy: crypto.randomUUID(),
+    } })
+
+    const discovered = await listCanonicalContestRuntimesForMaintenance({
+      titlePrefix: 'Canonical maintenance',
+      scope: 'campus',
+    })
+    expect(discovered.map(row => row.id)).toEqual([finished.id])
+    expect(await listFinishedContestRuntimeIds()).toContain(finished.id)
+    expect(await listFinishedContestRuntimeIds()).not.toContain(unmapped.id)
+  })
+
+  it('updates demo time through Contest first and rolls the whole batch back on invalid targets', async () => {
+    const mapped = await createRuntime('Demo canonical update')
+    const contest = await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), runtimeTrainingId: mapped.id, title: mapped.title,
+      contestDate: mapped.startTime, startAt: mapped.startTime, endAt: mapped.endTime,
+      format: mapped.format, status: mapped.status, type: 'judged', scope: 'platform',
+    } })
+    const nextStart = new Date('2027-02-01T00:00:00.000Z')
+    const nextEnd = new Date('2027-02-01T05:00:00.000Z')
+    await prisma.$transaction(tx => prepareDemoContestRuntimesTx(tx, {
+      runtimeTrainingIds: [mapped.id], startTime: nextStart, endTime: nextEnd,
+    }))
+    const [updatedContest, updatedRuntime] = await Promise.all([
+      prisma.contest.findUniqueOrThrow({ where: { id: contest.id } }),
+      prisma.training.findUniqueOrThrow({ where: { id: mapped.id } }),
+    ])
+    expect(updatedContest).toMatchObject({ status: 'ongoing', startAt: nextStart, endAt: nextEnd })
+    expect(updatedRuntime).toMatchObject({ status: 'ongoing', startTime: nextStart, endTime: nextEnd })
+
+    const unmapped = await createRuntime('Demo unmapped target')
+    const rejectedStart = new Date('2028-01-01T00:00:00.000Z')
+    await expect(prisma.$transaction(tx => prepareDemoContestRuntimesTx(tx, {
+      runtimeTrainingIds: [mapped.id, unmapped.id],
+      startTime: rejectedStart,
+      endTime: new Date('2028-01-01T02:00:00.000Z'),
+    }))).rejects.toThrow('has no canonical aggregate')
+    expect((await prisma.contest.findUniqueOrThrow({ where: { id: contest.id } })).startAt).toEqual(nextStart)
+    expect((await prisma.training.findUniqueOrThrow({ where: { id: mapped.id } })).startTime).toEqual(nextStart)
   })
 
   it('keeps ordinary training ranking reads outside contest fallback semantics', async () => {
