@@ -1,7 +1,12 @@
 import type { Prisma } from '@prisma/client'
 import crypto from 'node:crypto'
 import logger from '../../lib/logger'
-import { ensureContestAggregateTx } from './contest-aggregate.service'
+import {
+  deleteContestProblemAggregateTx,
+  ensureContestAggregateTx,
+  stageContestProblemOrderProjectionTx,
+  syncContestProblemAggregateTx,
+} from './contest-aggregate.service'
 import {
   defaultScoringRules,
   lockContestRatingConfigTx,
@@ -117,6 +122,102 @@ export async function deleteContestRuntimeTx(
     await tx.contest.delete({ where: { id: aggregate.id } })
   }
   await tx.training.delete({ where: { id: runtimeTrainingId } })
+  return { conflict: null }
+}
+
+export async function createContestProblemRuntimeTx(
+  tx: Prisma.TransactionClient,
+  runtimeTrainingId: number,
+  data: Omit<Prisma.TrainingProblemUncheckedCreateInput, 'trainingId' | 'orderIndex'>,
+) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+  const runtime = await tx.training.findFirst({
+    where: { id: runtimeTrainingId, type: 'contest' },
+    select: { id: true },
+  })
+  if (!runtime) return { conflict: 'missing' as const, problem: null }
+  const maxOrder = await tx.trainingProblem.aggregate({
+    where: { trainingId: runtimeTrainingId },
+    _max: { orderIndex: true },
+  })
+  const problem = await tx.trainingProblem.create({
+    data: {
+      ...data,
+      trainingId: runtimeTrainingId,
+      orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
+    },
+  })
+  await syncContestProblemAggregateTx(tx, problem.id)
+  return { conflict: null, problem }
+}
+
+export async function reorderContestProblemRuntimesTx(
+  tx: Prisma.TransactionClient,
+  runtimeTrainingId: number,
+  orders: Array<{ id: string; orderIndex: number }>,
+) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+  const existing = await tx.trainingProblem.findMany({
+    where: { trainingId: runtimeTrainingId, Training: { type: 'contest' } },
+    select: { id: true },
+  })
+  const valid = new Set(existing.map(problem => problem.id))
+  if (orders.length !== existing.length || orders.some(order => !valid.has(order.id))) {
+    return { conflict: 'scope' as const }
+  }
+  const expectedIndexes = new Set(existing.map((_, index) => index))
+  if (new Set(orders.map(order => order.id)).size !== orders.length
+    || new Set(orders.map(order => order.orderIndex)).size !== orders.length
+    || orders.some(order => !Number.isInteger(order.orderIndex) || !expectedIndexes.has(order.orderIndex))) {
+    return { conflict: 'order' as const }
+  }
+  for (const order of orders) {
+    await tx.trainingProblem.update({ where: { id: order.id }, data: { orderIndex: -(order.orderIndex + 1) } })
+    await stageContestProblemOrderProjectionTx(tx, order.id, -(order.orderIndex + 1))
+  }
+  for (const order of orders) {
+    await tx.trainingProblem.update({ where: { id: order.id }, data: { orderIndex: order.orderIndex } })
+    await syncContestProblemAggregateTx(tx, order.id)
+  }
+  return { conflict: null }
+}
+
+export async function updateContestProblemRuntimeTx(
+  tx: Prisma.TransactionClient,
+  runtimeTrainingId: number,
+  trainingProblemId: string,
+  patch: { alias?: string | null; points?: number | null },
+) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+  const existing = await tx.trainingProblem.findFirst({
+    where: { id: trainingProblemId, trainingId: runtimeTrainingId, Training: { type: 'contest' } },
+    select: { id: true },
+  })
+  if (!existing) return { conflict: 'scope' as const, problem: null }
+  const problem = await tx.trainingProblem.update({
+    where: { id: trainingProblemId },
+    data: {
+      ...(patch.alias !== undefined && { alias: patch.alias }),
+      ...(patch.points !== undefined && { points: patch.points }),
+    },
+  })
+  await syncContestProblemAggregateTx(tx, trainingProblemId)
+  return { conflict: null, problem }
+}
+
+export async function deleteContestProblemRuntimeTx(
+  tx: Prisma.TransactionClient,
+  runtimeTrainingId: number,
+  trainingProblemId: string,
+) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+  const existing = await tx.trainingProblem.findFirst({
+    where: { id: trainingProblemId, trainingId: runtimeTrainingId, Training: { type: 'contest' } },
+    select: { id: true },
+  })
+  if (!existing) return { conflict: 'scope' as const }
+  await deleteContestProblemAggregateTx(tx, trainingProblemId)
+  await tx.trainingProblem.delete({ where: { id: trainingProblemId } })
   return { conflict: null }
 }
 

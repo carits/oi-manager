@@ -12,6 +12,12 @@ import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from '.
 import { generateTestToken } from './helpers/testToken'
 import { createTestProblem } from './helpers/problemListHelpers'
 import { prisma } from '../src/prisma'
+import {
+  createContestProblemRuntimeTx,
+  deleteContestProblemRuntimeTx,
+  reorderContestProblemRuntimesTx,
+  updateContestProblemRuntimeTx,
+} from '../src/modules/contest/contest-command.service'
 
 const app = createTestApp()
 
@@ -735,5 +741,55 @@ describe('比赛类型区分测试', () => {
     expect(deleted.status).toBe(200)
     expect(await prisma.training.findUnique({ where: { id: contestId } })).toBeNull()
     expect(await prisma.contest.findUnique({ where: { id: aggregateBefore.id } })).toBeNull()
+  })
+
+  it('CT7: 比赛题目的增改排序删除只通过统一命令同步', async () => {
+    const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .post(`/api/teams/${team.id}/trainings`)
+      .send({
+        title: '题目命令比赛',
+        format: 'oi',
+        type: 'contest',
+        startTime: new Date(Date.now() + 86400000).toISOString(),
+        endTime: new Date(Date.now() + 86400000 * 2).toISOString(),
+      })
+    expect(created.status).toBe(200)
+    const contestId = created.body.data.id as number
+    const [problemA, problemB] = await Promise.all([
+      createTestProblem({ ownerId: ownerUser.user.id, title: '命令题 A' }),
+      createTestProblem({ ownerId: ownerUser.user.id, title: '命令题 B' }),
+    ])
+
+    const [runtimeA, runtimeB] = await prisma.$transaction(async tx => {
+      const a = await createContestProblemRuntimeTx(tx, contestId, {
+        id: crypto.randomUUID(), problemId: problemA.id, alias: 'A', points: 40,
+      })
+      const b = await createContestProblemRuntimeTx(tx, contestId, {
+        id: crypto.randomUUID(), problemId: problemB.id, alias: 'B', points: 60,
+      })
+      return [a.problem!, b.problem!]
+    })
+
+    await prisma.$transaction(tx => updateContestProblemRuntimeTx(tx, contestId, runtimeA.id, {
+      alias: 'X', points: 50,
+    }))
+    await prisma.$transaction(tx => reorderContestProblemRuntimesTx(tx, contestId, [
+      { id: runtimeB.id, orderIndex: 0 },
+      { id: runtimeA.id, orderIndex: 1 },
+    ]))
+
+    const aggregateProblems = await prisma.contestProblem.findMany({
+      where: { Contest: { runtimeTrainingId: contestId } },
+      orderBy: { orderIndex: 'asc' },
+    })
+    expect(aggregateProblems.map(problem => [problem.runtimeTrainingProblemId, problem.orderIndex]))
+      .toEqual([[runtimeB.id, 0], [runtimeA.id, 1]])
+    expect(aggregateProblems[1]).toMatchObject({ points: 50 })
+
+    await prisma.$transaction(tx => deleteContestProblemRuntimeTx(tx, contestId, runtimeA.id))
+    expect(await prisma.trainingProblem.findUnique({ where: { id: runtimeA.id } })).toBeNull()
+    expect(await prisma.contestProblem.findUnique({
+      where: { runtimeTrainingProblemId: runtimeA.id },
+    })).toBeNull()
   })
 })

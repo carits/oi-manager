@@ -105,6 +105,20 @@ if (!trainingCrud.includes('updateContestRuntimeTx')) {
 if (!trainingCrud.includes('deleteContestRuntimeTx')) {
   violations.push('Contest deletion bypasses the Contest command service')
 }
+const trainingProblemManagement = fs.readFileSync(path.join(modulesRoot, 'training/application/training-problem-management.service.ts'), 'utf8')
+for (const command of [
+  'createContestProblemRuntimeTx',
+  'reorderContestProblemRuntimesTx',
+  'updateContestProblemRuntimeTx',
+  'deleteContestProblemRuntimeTx',
+]) {
+  if (!trainingProblemManagement.includes(command)) {
+    violations.push(`Contest problem management bypasses ${command}`)
+  }
+}
+if (trainingProblemManagement.includes("from '../../contest/contest-aggregate.service'")) {
+  violations.push('Training problem management imports the Contest aggregate writer directly')
+}
 for (const directLifecyclePattern of [
   /training\.type\s*===\s*['"]contest['"][\s\S]{0,240}tx\.training\.update\([^)]*status:/,
   /tx\.training\.update\([^)]*finalizationStatus:\s*['"]JUDGING['"]/,

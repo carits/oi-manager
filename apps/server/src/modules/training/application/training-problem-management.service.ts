@@ -9,10 +9,11 @@ import {
 } from '../../problem/problem.content.service'
 import { populateSnapshotData } from '../training.helpers'
 import {
-  deleteContestProblemAggregateTx,
-  stageContestProblemOrderProjectionTx,
-  syncContestProblemAggregateTx,
-} from '../../contest/contest-aggregate.service'
+  createContestProblemRuntimeTx,
+  deleteContestProblemRuntimeTx,
+  reorderContestProblemRuntimesTx,
+  updateContestProblemRuntimeTx,
+} from '../../contest/contest-command.service'
 
 export class TrainingProblemManagementError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) { super(message) }
@@ -52,12 +53,25 @@ export async function addManagedTrainingProblem(params: {
     if (!problem) throw new TrainingProblemManagementError(404, 'PROBLEM_NOT_FOUND', '题目不存在')
   }
 
-  const maxOrder = await prisma.trainingProblem.aggregate({
-    where: { trainingId: training.id }, _max: { orderIndex: true },
-  })
   let created
   try {
-    created = await prisma.$transaction(async tx => {
+    if (training.type === 'contest') {
+      const result = await prisma.$transaction(tx => createContestProblemRuntimeTx(tx, training.id, {
+        id: uuidv4(),
+        problemId,
+        alias: params.alias || null,
+        points: params.points || null,
+        ...populateSnapshotData(problem),
+      }))
+      if (result.conflict || !result.problem) {
+        throw new TrainingProblemManagementError(404, 'TRAINING_NOT_FOUND', '比赛不存在')
+      }
+      created = result.problem
+    } else {
+      created = await prisma.$transaction(async tx => {
+        const maxOrder = await tx.trainingProblem.aggregate({
+          where: { trainingId: training.id }, _max: { orderIndex: true },
+        })
       const row = await tx.trainingProblem.create({
         data: {
           id: uuidv4(),
@@ -69,9 +83,9 @@ export async function addManagedTrainingProblem(params: {
           ...populateSnapshotData(problem),
         },
       })
-      await syncContestProblemAggregateTx(tx, row.id)
       return row
-    })
+      })
+    }
   } catch (error: any) {
     if (error.code === 'P2002') throw new TrainingProblemManagementError(400, 'DUPLICATE_PROBLEM', '别名或题号已存在')
     throw error
@@ -87,15 +101,27 @@ export async function addManagedTrainingProblem(params: {
     })
     return created
   } catch (error) {
-    await prisma.$transaction(async tx => {
-      await deleteContestProblemAggregateTx(tx, created.id)
-      await tx.trainingProblem.delete({ where: { id: created.id } })
-    })
+    if (training.type === 'contest') {
+      await prisma.$transaction(tx => deleteContestProblemRuntimeTx(tx, training.id, created.id))
+    } else {
+      await prisma.trainingProblem.delete({ where: { id: created.id } })
+    }
     throw error
   }
 }
 
 export async function reorderManagedTrainingProblems(trainingId: number, orders: Array<{ id: string; orderIndex: number }>) {
+  const training = await prisma.training.findUnique({ where: { id: trainingId }, select: { type: true } })
+  if (training?.type === 'contest') {
+    const result = await prisma.$transaction(tx => reorderContestProblemRuntimesTx(tx, trainingId, orders))
+    if (result.conflict === 'scope') {
+      throw new TrainingProblemManagementError(400, 'INVALID_PROBLEM_SCOPE', '部分题目ID不属于该比赛')
+    }
+    if (result.conflict === 'order') {
+      throw new TrainingProblemManagementError(400, 'INVALID_PROBLEM_ORDER', '必须提交全部题目且排序值连续、不重复')
+    }
+    return
+  }
   const existing = await prisma.trainingProblem.findMany({
     where: { trainingId }, select: { id: true },
   })
@@ -112,11 +138,9 @@ export async function reorderManagedTrainingProblems(trainingId: number, orders:
   await prisma.$transaction(async tx => {
     for (const order of orders) {
       await tx.trainingProblem.update({ where: { id: order.id }, data: { orderIndex: -(order.orderIndex + 1) } })
-      await stageContestProblemOrderProjectionTx(tx, order.id, -(order.orderIndex + 1))
     }
     for (const order of orders) {
       await tx.trainingProblem.update({ where: { id: order.id }, data: { orderIndex: order.orderIndex } })
-      await syncContestProblemAggregateTx(tx, order.id)
     }
   })
 }
@@ -126,6 +150,16 @@ export async function updateManagedTrainingProblem(
   trainingProblemId: string,
   patch: { alias?: string | null; points?: number | null },
 ) {
+  const training = await prisma.training.findUnique({ where: { id: trainingId }, select: { type: true } })
+  if (training?.type === 'contest') {
+    const result = await prisma.$transaction(tx => updateContestProblemRuntimeTx(
+      tx, trainingId, trainingProblemId, patch,
+    ))
+    if (result.conflict || !result.problem) {
+      throw new TrainingProblemManagementError(403, 'INVALID_PROBLEM_SCOPE', '题目不属于该比赛')
+    }
+    return result.problem
+  }
   const existing = await prisma.trainingProblem.findUnique({
     where: { id: trainingProblemId }, select: { trainingId: true },
   })
@@ -140,12 +174,12 @@ export async function updateManagedTrainingProblem(
         ...(patch.points !== undefined && { points: patch.points }),
       },
     })
-    await syncContestProblemAggregateTx(tx, trainingProblemId)
     return updated
   })
 }
 
 export async function deleteManagedTrainingProblem(trainingId: number, trainingProblemId: string) {
+  const training = await prisma.training.findUnique({ where: { id: trainingId }, select: { type: true } })
   const existing = await prisma.trainingProblem.findUnique({
     where: { id: trainingProblemId }, select: { trainingId: true },
   })
@@ -155,10 +189,14 @@ export async function deleteManagedTrainingProblem(trainingId: number, trainingP
   const files = await prisma.trainingProblemContentSnapshot.findMany({
     where: { trainingProblemId, snapshotFileId: { not: null } }, select: { snapshotFileId: true },
   })
-  await prisma.$transaction(async tx => {
-    await deleteContestProblemAggregateTx(tx, trainingProblemId)
-    await tx.trainingProblem.delete({ where: { id: trainingProblemId } })
-  })
+  if (training?.type === 'contest') {
+    const result = await prisma.$transaction(tx => deleteContestProblemRuntimeTx(tx, trainingId, trainingProblemId))
+    if (result.conflict) {
+      throw new TrainingProblemManagementError(403, 'INVALID_PROBLEM_SCOPE', '题目不属于该比赛')
+    }
+  } else {
+    await prisma.trainingProblem.delete({ where: { id: trainingProblemId } })
+  }
   await Promise.all(files.map(file => file.snapshotFileId
     ? fileService.softDelete(file.snapshotFileId).catch(() => {})
     : Promise.resolve()))
