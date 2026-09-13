@@ -671,8 +671,10 @@ RETURNS trigger AS $$
 DECLARE
   expected_contest_id TEXT;
 BEGIN
-  SELECT "id" INTO expected_contest_id FROM "Contest"
+  SELECT "id" INTO expected_contest_id
+  FROM "Contest"
   WHERE "runtimeTrainingId" = NEW."trainingId";
+
   IF expected_contest_id IS NULL THEN
     IF NEW."contestId" IS NOT NULL THEN
       RAISE EXCEPTION 'rating row references an unmapped contest runtime: %', NEW."trainingId";

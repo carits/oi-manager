@@ -835,7 +835,7 @@ model RatingAccount {
   Changes           RatingChange[]
 
   @@unique([poolId, userId])
-  @@index([poolId, rating])
+  @@index([poolId, rating(sort: Desc)])
   @@index([userId, updatedAt])
 }
 
