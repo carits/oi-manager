@@ -51,7 +51,15 @@ if [[ "$TEST_SCOPE" == "full" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run
 elif [[ "$TEST_SCOPE" == "rating" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/rating-domain.test.ts
+elif [[ "$TEST_SCOPE" == "contest-cutover" ]]; then
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
+    tests/rating-domain.test.ts tests/contest-aggregate-boundary.test.ts \
+    tests/contest-canonical-submission-identity.test.ts tests/contest-query-facade.test.ts \
+    tests/contest-scoring-rules.test.ts tests/contest.test.ts \
+    tests/blog-knowledge-domain.test.ts tests/judge-run-domain.test.ts \
+    tests/data-market.test.ts tests/dashboard-workspace.test.ts \
+    tests/platform-contests.test.ts tests/school-contest.test.ts
 else
-  echo "Invalid RATING_TEST_SCOPE: expected rating or full" >&2
+  echo "Invalid RATING_TEST_SCOPE: expected rating, contest-cutover or full" >&2
   exit 1
 fi
