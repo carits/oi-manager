@@ -41,6 +41,15 @@ afterEach(async () => {
 })
 
 describe('sensitive route boundaries', () => {
+  it('lets an authenticated regular account use non-admin OJ reads', async () => {
+    const response = await request(app)
+      .get('/api/oj-fetcher/not-a-platform/1000')
+      .set('Authorization', `Bearer ${tokenFor('student')}`)
+
+    expect(response.status).toBe(400)
+    expect(response.body.error?.code).toBe('PLATFORM_NOT_SUPPORTED')
+  })
+
   it('rejects anonymous and non-admin access to global OJ jobs', async () => {
     const anonymous = await request(app).get('/api/oj-fetcher/jobs')
     expect(anonymous.status).toBe(401)

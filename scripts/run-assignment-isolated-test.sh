@@ -89,7 +89,8 @@ elif [[ "$TEST_SCOPE" == "assignment" ]]; then
 elif [[ "$TEST_SCOPE" == "authorization" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     tests/authorization-boundary.test.ts tests/auth.test.ts tests/organization-creation.test.ts \
-    tests/organization-join.test.ts tests/platform-organization-access.test.ts tests/permissions.test.ts
+    tests/organization-join.test.ts tests/platform-organization-access.test.ts tests/permissions.test.ts \
+    tests/security-boundaries.test.ts
 elif [[ "$TEST_SCOPE" == "contest-cutover" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     --no-file-parallelism \

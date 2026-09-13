@@ -13,6 +13,7 @@ import { ORGANIZATION_BASE_ROLE_KEYS, syncOrganizationMembershipBaseRole } from 
 import { prisma } from '../src/prisma'
 import { createTestSchool, createTestUser } from './helpers/testUser'
 import { canModifyProblem, canViewProblem } from '../src/modules/problem/problem.access'
+import { authorize, getAccountRole } from '../src/middleware/auth'
 
 function sourceFiles(root: string): string[] {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => {
@@ -60,6 +61,25 @@ describe('authorization boundary', () => {
     expect(authSource).toContain('organizationRoleFromRoleKeys')
     expect(authSource).not.toContain('decoded.role = membership.memberRole')
     expect(authSource).not.toMatch(/select:\s*\{[\s\S]{0,120}memberRole:\s*true/)
+  })
+
+  it('keeps global account authorization separate from the current organization role', () => {
+    const organizationPrincipal = {
+      userId: 'member-1', username: 'principal', role: 'school_principal', accountRole: 'user',
+      organizationId: 'org-1', organizationRole: 'school_principal',
+    } as any
+    expect(getAccountRole(organizationPrincipal)).toBe('user')
+
+    const status = vi.fn().mockReturnThis()
+    const json = vi.fn()
+    const next = vi.fn()
+    authorize('super_admin')({ user: organizationPrincipal } as any, { status, json } as any, next)
+    expect(status).toHaveBeenCalledWith(403)
+    expect(next).not.toHaveBeenCalled()
+
+    const platformAdmin = { ...organizationPrincipal, role: 'platform_admin', accountRole: 'platform_admin' }
+    authorize('platform_admin')({ user: platformAdmin } as any, { status, json } as any, next)
+    expect(next).toHaveBeenCalledTimes(1)
   })
 
   it('does not let the compatibility role authorize school problem access', () => {

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate, isAdmin, type AuthRequest } from '../middleware/auth'
+import { authenticate, getAccountRole, isAdmin, type AuthRequest } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import { createQueuedTrainingSubmission } from '../modules/training/training.submission.service'
 import {
@@ -95,7 +95,7 @@ const icpcEvents: Event[] = [
 function eventKey(event: Event, index: number) { return event.id || String(index) }
 function allowed(req: AuthRequest, res: any) {
   if (process.env.APP_ENV !== 'development' || process.env.ENABLE_DEMO_SCENARIO_API !== 'true' || !process.env.DEMO_SCENARIO_KEY || req.header('x-demo-scenario-key') !== process.env.DEMO_SCENARIO_KEY) { res.status(404).json({success:false,message:'接口不存在'}); return false }
-  if (!req.user || !isAdmin(req.user.role)) { res.status(403).json({success:false,message:'仅平台管理员可执行演示场景'}); return false }
+  if (!req.user || !isAdmin(getAccountRole(req.user)!)) { res.status(403).json({success:false,message:'仅平台管理员可执行演示场景'}); return false }
   return true
 }
 async function resources() {

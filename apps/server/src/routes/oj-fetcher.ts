@@ -33,13 +33,7 @@ export {
 export const ojFetcherRouter = Router()
 const adminOnly = [authenticate, authorize('super_admin' as const, 'platform_admin' as const)]
 const superAdminOnly = [authenticate, authorize('super_admin' as const)]
-const authenticatedUsers = [
-  authenticate,
-  authorize(
-    'super_admin' as const, 'platform_admin' as const, 'school_principal' as const,
-    'teacher' as const, 'student' as const,
-  ),
-]
+const authenticatedUsers = [authenticate]
 
 function adminEndpoint(handler: (req: Request, res: Response) => Promise<unknown>) {
   return asyncHandler(async (req, res) => {

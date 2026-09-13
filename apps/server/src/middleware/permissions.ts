@@ -5,7 +5,7 @@
  * 旧校园档案不参与任何权限判断。
  */
 import { prisma } from '../prisma'
-import { AuthRequest, isPersonalContextForTeams } from './auth'
+import { AuthRequest, getAccountRole, isPersonalContextForTeams } from './auth'
 import logger from '../lib/logger'
 import {
   organizationCapabilityScope,
@@ -54,7 +54,7 @@ async function findTeacherProfile(req: AuthRequest, profileId: string) {
 
 export async function canViewStudent(req: AuthRequest, profileId: string): Promise<boolean> {
   if (!req.user) return false
-  if (!isPersonalContextForTeams(req.user) && ['super_admin', 'platform_admin'].includes(req.user.accountRole || req.user.role)) return true
+  if (!isPersonalContextForTeams(req.user) && ['super_admin', 'platform_admin'].includes(getAccountRole(req.user)!)) return true
   const student = await findStudentProfile(req, profileId)
   if (!student) {
     logPermissionDenied(req, 'view_student', 'student', profileId, '学生档案不存在或不在当前校园')
@@ -69,7 +69,7 @@ export async function canViewStudent(req: AuthRequest, profileId: string): Promi
 
 export async function canManageStudent(req: AuthRequest, profileId: string): Promise<boolean> {
   if (!req.user) return false
-  if (!isPersonalContextForTeams(req.user) && (req.user.accountRole || req.user.role) === 'super_admin') return true
+  if (!isPersonalContextForTeams(req.user) && getAccountRole(req.user) === 'super_admin') return true
   const student = await findStudentProfile(req, profileId)
   if (!student) {
     logPermissionDenied(req, 'manage_student', 'student', profileId, '学生档案不存在或不在当前校园')
@@ -90,7 +90,7 @@ export async function canManageStudent(req: AuthRequest, profileId: string): Pro
 
 export async function canViewTeacher(req: AuthRequest, profileId: string): Promise<boolean> {
   if (!req.user) return false
-  if (!isPersonalContextForTeams(req.user) && ['super_admin', 'platform_admin'].includes(req.user.accountRole || req.user.role)) return true
+  if (!isPersonalContextForTeams(req.user) && ['super_admin', 'platform_admin'].includes(getAccountRole(req.user)!)) return true
   const teacher = await findTeacherProfile(req, profileId)
   const authorization = await resolveOrganizationAuthorization(req.user.userId, req.user.organizationId!)
   const hasAccess = Boolean(teacher && authorization?.capabilities.has('organization.view'))
@@ -100,7 +100,7 @@ export async function canViewTeacher(req: AuthRequest, profileId: string): Promi
 
 export async function canManageTeacher(req: AuthRequest, profileId: string): Promise<boolean> {
   if (!req.user) return false
-  if ((req.user.accountRole || req.user.role) === 'super_admin') return true
+  if (getAccountRole(req.user) === 'super_admin') return true
   const authorization = req.user.organizationId
     ? await resolveOrganizationAuthorization(req.user.userId, req.user.organizationId)
     : null
@@ -116,7 +116,7 @@ export async function canManageTeacher(req: AuthRequest, profileId: string): Pro
 }
 
 export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boolean> {
-  const role = req.user?.role
+  const accountRole = getAccountRole(req.user)
   const team = await prisma.team.findUnique({
     where: { id: teamId },
     select: { organizationId: true, scope: true, isPublic: true }
@@ -130,7 +130,7 @@ export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boo
     logPermissionDenied(req, 'view_team', 'team', teamId, '团队不属于当前上下文')
     return false
   }
-  if (!isPersonalContextForTeams(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
+  if (!isPersonalContextForTeams(req.user) && (accountRole === 'super_admin' || accountRole === 'platform_admin')) return true
   if (team.isPublic) return true
   const member = await prisma.teamMember.findFirst({ where: { teamId, userId: req.user?.userId, status: 'active' } })
   const hasAccess = !!member
@@ -139,22 +139,18 @@ export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boo
 }
 
 export async function canManageTeam(req: AuthRequest, teamId: string): Promise<boolean> {
-  const role = req.user?.role
+  const accountRole = getAccountRole(req.user)
   const team = await prisma.team.findUnique({ where: { id: teamId }, select: { scope: true, organizationId: true } })
   const expectedScope = isPersonalContextForTeams(req.user) ? 'personal' : 'campus'
   if (!team || team.scope !== expectedScope || (team.scope === 'campus' && team.organizationId !== req.user?.organizationId)) {
     logPermissionDenied(req, 'manage_team', 'team', teamId, '团队不属于当前上下文')
     return false
   }
-  if (!isPersonalContextForTeams(req.user) && role === 'super_admin') return true
+  if (!isPersonalContextForTeams(req.user) && accountRole === 'super_admin') return true
   const member = await prisma.teamMember.findFirst({ where: { teamId, userId: req.user?.userId, status: 'active' } })
   const hasAccess = member?.role === 'owner' || member?.role === 'admin'
   if (!hasAccess) logPermissionDenied(req, 'manage_team', 'team', teamId, '需要团队所有者或管理员权限')
   return hasAccess
-}
-
-export function canAccessProblemBank(role: string): boolean {
-  return role !== 'student'
 }
 
 export async function getTeamMemberRole(teamId: string, userId: string): Promise<'owner' | 'admin' | 'member' | null> {

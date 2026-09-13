@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate, getResourceScope, isAdmin } from '../middleware/auth'
+import { authenticate, getAccountRole, getResourceScope, isAdmin } from '../middleware/auth'
 import { logger } from '../lib/logger'
 import { readIdempotencyKey } from '../lib/idempotency'
 import {
@@ -17,7 +17,7 @@ function commandContext(req: any): SubmissionCommandContext {
     role: req.user.role,
     workspaceScope: getResourceScope(req.user),
     organizationId: req.user.organizationId || null,
-    isGlobalAdmin: isAdmin(req.user.role),
+    isGlobalAdmin: isAdmin(getAccountRole(req.user)!),
     authUser: req.user,
   }
 }

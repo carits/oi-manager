@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { JwtPayload, UserRole, ResourceScope } from '@oi-manager/shared'
-import { accountRoleFromLegacy } from '@oi-manager/contracts'
+import { accountRoleFromLegacy, type AccountRole } from '@oi-manager/contracts'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { getSessionToken } from '../lib/sessionCookie'
 import { prisma } from '../prisma'
@@ -120,13 +120,19 @@ export function getActiveOrganizationId(user?: JwtPayload): string | undefined {
   return user?.organizationId
 }
 
-export function authorize(...roles: UserRole[]) {
+export function getAccountRole(user?: Pick<JwtPayload, 'accountRole' | 'role'>): AccountRole | undefined {
+  if (!user) return undefined
+  return user.accountRole || accountRoleFromLegacy(user.role)
+}
+
+/** Global account authorization. Organization permissions must use capabilities. */
+export function authorize(...roles: AccountRole[]) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: '未授权' })
     }
 
-    if (!roles.includes(req.user.role)) {
+    if (!roles.includes(getAccountRole(req.user)!)) {
       return res.status(403).json({ success: false, message: '权限不足' })
     }
 
@@ -135,35 +141,14 @@ export function authorize(...roles: UserRole[]) {
 }
 
 // 检查是否为管理员（super_admin 或 platform_admin）
-export function isAdmin(role: UserRole): boolean {
-  return role === 'super_admin' || role === 'platform_admin'
+export function isAdmin(role: UserRole | AccountRole): boolean {
+  const accountRole = accountRoleFromLegacy(role)
+  return accountRole === 'super_admin' || accountRole === 'platform_admin'
 }
 
 // 检查是否为超级管理员
-export function isSuperAdmin(role: UserRole): boolean {
-  return role === 'super_admin'
-}
-
-// 权限检查中间件 - 允许多个角色中的任意一个
-export function authorizeAny(...roles: UserRole[]) {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: '未授权' })
-    }
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: '权限不足' })
-    }
-    next()
-  }
-}
-
-/**
- * 从用户角色推导用户类型
- * student → 'student'
- * teacher/school_principal/super_admin/platform_admin → 'teacher'
- */
-export function getUserType(role: string): 'teacher' | 'student' {
-  return role === 'student' ? 'student' : 'teacher'
+export function isSuperAdmin(role: UserRole | AccountRole): boolean {
+  return accountRoleFromLegacy(role) === 'super_admin'
 }
 
 export function isPersonalContext(user?: JwtPayload): boolean {

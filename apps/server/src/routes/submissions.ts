@@ -1,6 +1,6 @@
 /** 评测记录 HTTP API。授权与持久化由 application service 负责。 */
 import { Router } from 'express'
-import { authenticate, getResourceScope, isAdmin, isPersonalContext } from '../middleware/auth'
+import { authenticate, getAccountRole, getResourceScope, isAdmin, isPersonalContext } from '../middleware/auth'
 import { logger } from '../lib/logger'
 import {
   getSubmissionDetail,
@@ -20,7 +20,7 @@ function contextOf(req: any): SubmissionQueryContext {
     role: user.role,
     workspaceScope: getResourceScope(user),
     organizationId: user.organizationId || null,
-    isGlobalAdmin: isAdmin(user.role),
+    isGlobalAdmin: isAdmin(getAccountRole(user)!),
     isPersonal: isPersonalContext(user),
   }
 }

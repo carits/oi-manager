@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canAccessProblemBank,
   canManageStudent,
   canManageTeacher,
   canManageTeam,
@@ -199,11 +198,4 @@ describe('current organization permission model', () => {
     })
   })
 
-  it('keeps students out of the problem bank while allowing staff and administrators', () => {
-    expect(canAccessProblemBank('student')).toBe(false)
-    expect(canAccessProblemBank('teacher')).toBe(true)
-    expect(canAccessProblemBank('school_principal')).toBe(true)
-    expect(canAccessProblemBank('platform_admin')).toBe(true)
-    expect(canAccessProblemBank('super_admin')).toBe(true)
-  })
 })

@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 import yaml from 'js-yaml'
-import { authenticate, getResourceScope, isAdmin, isPersonalContext } from '../../middleware/auth'
+import { authenticate, getAccountRole, getResourceScope, isAdmin, isPersonalContext } from '../../middleware/auth'
 import { logger } from '../../lib/logger'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { asyncHandler } from '../../lib/asyncHandler'
@@ -261,7 +261,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
       role: user.role,
       workspaceScope: getResourceScope(user),
       organizationId: user.organizationId || null,
-      isGlobalAdmin: isAdmin(user.role),
+      isGlobalAdmin: isAdmin(getAccountRole(user)!),
       isPersonal: isPersonalContext(user),
     }
 
