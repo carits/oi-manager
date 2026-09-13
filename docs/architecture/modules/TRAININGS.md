@@ -36,6 +36,10 @@ Submission Context、Data Market、Dashboard、Blog 引用和比赛详情均必�
 受保护的 `/api/admin/migration/contest-aggregates` check/apply 仅用于幂等回填和一致性审计，并报告 Rating 三类事实的
 缺失/错配数量，不重写比赛结果。
 
+日常发布与巡检使用只读 `pnpm contest:aggregate:check`。它要求所有 `Training(type=contest)` 均存在规范 Contest 映射、
+不存在待迁移或阻断记录，并要求 Rating 配置、榜单快照和结算批次的 `contestId` 与运行关系一致；任一不变量不满足时
+以非零状态退出。该命令不执行迁移、不修复数据，也不更新业务记录。
+
 维护功能同样不能绕过该边界。演示比赛的时间重置先对整批目标校验规范映射和未终结状态，再在同一事务内写 Contest
 并投影 Training；后台提交可见性修复只从 Contest 的规范终态发现比赛。领域状态门禁只允许普通 Training CRUD 与 Contest
 Command/Projection Service 写入 Training 聚合，迁移、演示和管理工具不得自行增加例外。

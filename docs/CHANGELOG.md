@@ -14,7 +14,8 @@ source_of_truth: Git history
 - 演示场景准备不再直接批量修改 `Training(type=contest)`：所有目标先完成规范 Contest 映射与终结状态预检，再在同一事务、advisory lock 下更新 Contest 并生成 Training 兼容投影；任一目标缺映射或已经终结时整批回滚。
 - 后台提交可见性修复只从规范 Contest 状态发现已结束比赛，不再把裸 Training 记录当成比赛事实。演示场景列表同样只返回具有 `Contest.runtimeTrainingId` 映射的运行时。
 - 领域状态门禁新增 Training 聚合写入约束，除普通 Training CRUD 和 Contest 投影边界外禁止直接写入；隔离 current-schema 测试同步安装 Contest Rating 身份触发器，避免测试库弱于生产契约。
-- 生产同构隔离 Contest core 4 文件 49/49 通过，其中新增维护发现、规范双写和批量回滚测试；本批不修改 Prisma Schema、历史比赛或 Web。
+- 新增 `pnpm contest:aggregate:check` 只读运维探针，将运行比赛映射、迁移阻断以及 Rating 规范身份缺失/错配统一成可阻断的 JSON 契约。生产实测 767/767 已映射，待迁移、阻断、Rating 缺失和错配均为 0。
+- 生产同构隔离 Contest core 4 文件 49/49、Human UX 现行 Web 契约 8 文件 50/50 通过；API 已由 3303 切换到 3302，Worker、Executor、Judge、Web 与 Router 均 active，health/readiness 正常。本批不修改 Prisma Schema、历史比赛或 Web。
 
 ### Contest Rating 规范身份
 
