@@ -19,7 +19,7 @@ import {
   reorderContestProblemRuntimesTx,
   updateContestProblemRuntimeTx,
 } from '../src/modules/contest/contest-command.service'
-import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 
 const app = createTestApp()
 
@@ -140,6 +140,7 @@ describe('比赛赛制可见性测试', () => {
           orderIndex: 0,
         },
       })
+      await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
       await prisma.submission.createMany({
         data: [
           {
@@ -253,6 +254,7 @@ describe('比赛赛制可见性测试', () => {
           orderIndex: 0,
         },
       })
+      await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
       await prisma.submission.createMany({
         data: [
           {

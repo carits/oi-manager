@@ -11,7 +11,7 @@ import { createTestApp } from './helpers/testRequest'
 import { generateTestToken } from './helpers/testToken'
 import { createTestSchoolContest, createTestSubmission } from './helpers/school-contest-helpers'
 import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from './helpers/testUser'
-import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 
 const app = createTestApp()
 
@@ -220,6 +220,7 @@ describe('organization contest contract', () => {
       const trainingProblem = await prisma.trainingProblem.create({
         data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 1, points: 100 },
       })
+      await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
       await createTestSubmission({
         userId: student.user.id,
         trainingId: contest.id,
