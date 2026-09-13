@@ -6,6 +6,7 @@ import type {
   EndpointQuery,
 } from '@oi-manager/contracts'
 import type { ZodIssue, ZodType } from 'zod'
+import logger from './logger'
 
 export class ApiContractError extends Error {
   readonly statusCode: 422 | 500
@@ -60,6 +61,12 @@ export function sendContractData<TContract extends Contract>(
 
 export function sendContractError(error: unknown, response: Response): boolean {
   if (!(error instanceof ApiContractError)) return false
+  if (error.statusCode === 500) {
+    logger.error('api_contract_response_invalid', error, {
+      action: 'api_contract',
+      metadata: { issues: error.issues },
+    })
+  }
   response.status(error.statusCode).json({
     success: false,
     code: error.code,

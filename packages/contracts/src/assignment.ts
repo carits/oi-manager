@@ -3,21 +3,18 @@ import { DateTimeWireSchema, defineApiEndpoint, FieldIssueSchema, PaginationMeta
 
 export const AssignmentProblemContractSchema = z.looseObject({
   id: z.string(),
-  problemId: z.string(),
-  testSetRevisionId: z.string(),
   orderIndex: z.number(),
   category: z.string(),
-  required: z.boolean(),
   maxScore: z.number(),
   targetScore: z.number(),
   weight: z.number(),
   completionPolicy: z.string(),
-  Problem: z.looseObject({
+  problem: z.looseObject({
     id: z.string(),
     platform: z.string(),
     problemId: z.string(),
     title: z.string(),
-  }).optional(),
+  }),
 })
 
 export const AssignmentProgressCellSchema = z.looseObject({

@@ -21,6 +21,42 @@ describe('feature slice contracts', () => {
     }).success).toBe(false)
   })
 
+  it('accepts the assignment matrix projection returned by the application service', () => {
+    expect(AssignmentProgressDataSchema.safeParse({
+      problems: [{
+        id: 'assignment-problem-1',
+        orderIndex: 0,
+        category: 'REQUIRED',
+        maxScore: 100,
+        targetScore: 100,
+        weight: 100,
+        completionPolicy: 'MANUAL',
+        problem: { id: 'problem-1', platform: 'carits', problemId: '1041', title: '整数求和' },
+      }],
+      recipients: [{
+        id: 'recipient-1',
+        user: { id: 'user-1', username: 'student' },
+        score: 0,
+        rawScore: 0,
+        adjustment: 0,
+        completedProblems: 0,
+        lateProblems: 0,
+        correctionProblems: 0,
+        progress: [],
+        cells: [{
+          id: null,
+          assignmentProblemId: 'assignment-problem-1',
+          learningStatus: 'NOT_STARTED',
+          timelinessStatus: 'ON_TIME',
+          correctionStatus: 'NONE',
+          attemptCount: 0,
+          manualCompletionVersion: 0,
+        }],
+      }],
+      pagination: { page: 1, pageSize: 40, total: 1, totalPages: 1 },
+    }).success).toBe(true)
+  })
+
   it('keeps public blog metadata and review excerpts in shared runtime schemas', () => {
     expect(BlogDiscoveryDetailSchema.safeParse({
       id: 'post-1',
