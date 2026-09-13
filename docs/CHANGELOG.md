@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Organization Capability 请求上下文与 Team/Problem 收口
+
+- 认证中间件不再把 `OrganizationMembership.memberRole` 复制为请求权限身份；组织角色与能力统一从 RoleAssignment/CapabilityGrant 解析，缺失或冲突基础角色 fail closed。
+- 新增 `team.create`、`problem.create`、`problem.manage` 和 `organization.finance.view` 能力，题库 own/all 范围、团队导入、团队题单、组织钱包、成员档案管理和题解审核队列均使用规范能力。
+- 登录账号身份统一规范为 `user | platform_admin | super_admin`，工作区目录使用规范 RoleAssignment 展示组织岗位；兼容 `role` 只保留旧调用视图。
+- 代码提交 `3f0ea56`、测试修正 `45319a6` 已推送 `main`；Server 与 Web 生产构建通过，生产同构权限套件 6 文件 85/85 通过。API 3302→3303，health/readiness 与全部实际服务正常；本批无 Prisma、业务数据或 Web 运行时变更。
+
 ### Organization Capability 跨领域授权收口
 
 - 新增批量 Organization Authorization 解析和统一的 `none/own/all` 资源范围投影，列表、详情、通知接收人和事务内策略使用同一份 RoleAssignment/CapabilityGrant 事实。

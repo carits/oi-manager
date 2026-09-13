@@ -12,7 +12,7 @@ source_of_truth: packages/contracts/src/identity.ts, auth middleware, authorizat
 登录 API 使用唯一的用户名和密码入口。`POST /api/auth/login` 接收 `workspaceMode`；缺省或旧
 `mode: "campus"` 等价于 `work`，`mode: "personal"` 保持兼容。非法模式返回 `400`。
 
-成功登录响应中的岗位使用数据库全局角色；普通账号的组织成员关系只用于当前校园工作区的成员身份。
+成功登录响应中的账号身份将历史持久化角色规范为 `user | platform_admin | super_admin`；普通账号的组织成员关系只用于当前校园工作区的成员身份。
 `super_admin` 和 `platform_admin` 永远保留全局角色，不会被学校成员关系覆盖。
 
 登录失败保护使用“规范化用户名五分钟失败桶 + 高阈值 IP 一分钟失败洪泛桶”；机房共享网络中的成功登录不会占用失败额度。注册保留较高的共享 IP 上限，已登录密码操作按 `userId` 分桶。API 反向代理只信任 loopback，客户端不能伪造转发 IP。
@@ -23,7 +23,12 @@ source_of_truth: packages/contracts/src/identity.ts, auth middleware, authorizat
 interface JwtPayload {
   userId: string
   sessionVersion?: number
+  accountRole: 'user' | 'super_admin' | 'platform_admin'
   role: 'user' | 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
+  organizationRole?: 'student' | 'teacher' | 'school_principal'
+  organizationCapabilities?: string[]
+  organizationId?: string
+  organizationMembershipId?: string
   username: string
   adminId?: string
   teacherId?: string
@@ -83,13 +88,16 @@ Bearer 仅供脚本、测试与旧客户端兼容。缺少、无效、过期或�
 | 团队、比赛、题单和提交 | 管理范围 | 管理范围 | 本校/参与 | 自有/参与 | 参与 | 个人作用域内相同规则 |
 | 维护迁移 API | 开关开启时 | 否 | 否 | 否 | 否 | 否 |
 
-具体业务接口还会检查学校、团队、创建者、成员角色和可见性。前端隐藏按钮只是体验，
+具体业务接口还会检查学校、团队、创建者、Capability、资源范围和可见性。前端隐藏按钮只是体验，
 不能替代后端权限校验。
 
 服务端业务域不得互相导入对方的角色判断函数。稳定组织/团队能力集中在
 `modules/authorization/capabilities.ts`，Assignment 等领域再用自己的 policy 组合资源所有权、创建者和状态。
-`OrganizationMembershipRole` 与 `OrganizationMembershipCapability` 是组织授权的唯一事实源。生产已完成
-20,186 条 Membership 对账，授权路径不再读取 `memberRole` 的旧能力映射，也没有 hybrid/legacy 运行开关。
+`OrganizationMembershipRole` 与 `OrganizationMembershipCapability` 是组织授权的唯一事实源。认证中间件先把持久化兼容角色规范为
+`accountRole`，再按请求中的组织 ID 解析唯一基础 RoleAssignment 和 CapabilityGrant；缺少基础角色或同时存在多个基础角色时返回
+`403 ORGANIZATION_AUTHORIZATION_INCOMPLETE`，不会猜测或按更高岗位兜底。生产已完成 20,186 条 Membership 对账，授权路径不再读取
+`memberRole` 的旧能力映射，也没有 hybrid/legacy 运行开关。成员、题库、团队导入、组织钱包、Assignment、Training、Rating、
+Data Market 与 Candidate 预算均消费规范 Capability；`problem.manage` 保留教师 own、负责人 all 的资源范围。
 所有创建、恢复、导入和负责人转移必须在同一事务调用
 `syncOrganizationMembershipBaseRole()`；`memberRole` 只保留学生/教师资料判别和岗位展示用途。受保护的
 `GET/POST /api/admin/migration/membership-roles` 继续作为幂等一致性检查和修复入口，并同时报告缺失、冲突基础角色和未知角色。

@@ -5,6 +5,8 @@ last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-13: Organization Capability 第三批已发布。认证请求上下文改为从 RoleAssignment/CapabilityGrant 生成 `organizationRole` 和 `organizationCapabilities`，冲突/缺失基础角色 fail closed；Team Import、Team Problem List、Problem、Solution 审核范围、成员档案与组织 Carits 钱包不再按 actor 的 `memberRole` 或校园 `role` 授权。代码提交 `3f0ea56`、测试修正 `45319a6` 已推送 `main`；Server 与 Web 生产构建通过，生产同构临时 Schema 的权限套件 6 文件 85/85 通过且已自动删除。API 3302→3303，生产 HEAD `45319a6`；health/readiness 正常，数据库延迟约 2.3 ms，Router、API、Worker、Executor@1、Judge、Web 均 active。原有 7 个未跟踪维护文件保持不变。本批无 Prisma、业务数据或 Web 运行时变更，因此无需提升 Web。
+
 - 2026-09-13: Organization Capability 第二批收口已发布。统一批量授权投影覆盖加入申请/邀请通知、审批范围、加入策略、Assignment 列表范围、补题作业、题单发布作业、全校训练名单、Data Market 组织/比赛许可证、Candidate 管理预算以及比赛/Rating 管理员排除；这些路径不再按 `OrganizationMembership.memberRole` 授权。新增旧岗位字段伪造不能提升审批或设置权限的回归并扩展静态门禁。Server 生产构建与文档/架构门禁通过，生产同构临时 Schema 的权限套件 6 文件 83/83 通过且已删除。提交 `a26192d` 已推送 `main`，API 3303→3302；Router、API、Worker、Executor@1、Judge、Web 均 active，health/readiness 正常，数据库延迟约 63 ms。原有 7 个未跟踪维护文件保持不变。本批无 Prisma、业务数据或 Web 变更。审计文档已纠正此前“全仓完成”的过度结论，旧 Team/Problem 适配器仍登记为下一退出批次。
 
 - 2026-09-13: 架构收口完成新一轮逐项复核。Shared 中已删除与 Contracts 漂移的旧 Login/API Response 类型，Server 中无人引用的浏览器式 API Client 已移除，Web 传输结果明确命名为 `ApiClientResponse`；门禁阻止重复契约重新出现。旧 2026-08-29 审计归档，新审计分别记录已完成、受控兼容、P2 维护债和必须依赖所有者资源的 TLS/告警/异机存储验收。Shared/Contracts/Server/Web 类型检查、Web 38 文件 159 项、Web 生产构建、架构和 Baseline 门禁通过；本地 PostgreSQL 未运行，Server 数据库测试未执行且未伪造结果。本批没有 Prisma、业务数据或运行时代码行为变化，生产服务无需重启或提升 Web。
