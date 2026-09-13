@@ -26,18 +26,7 @@ export async function findContestRuntimeForRating(runtimeTrainingId: number) {
     }
     return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
   }
-
-  // Read-only compatibility for records not yet backfilled. Production audits
-  // require this path to remain at zero before it can be removed.
-  const legacy = await prisma.training.findFirst({
-    where: { id: runtimeTrainingId, type: 'contest' },
-    include: runtimeRatingInclude,
-  })
-  if (!legacy) return null
-  logger.warn('contest_query_legacy_fallback', {
-    action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'rating' },
-  })
-  return { contest: null, runtime: legacy, source: 'legacy' as const }
+  return null
 }
 
 export async function listPlatformContestRuntimes() {
@@ -52,28 +41,7 @@ export async function listPlatformContestRuntimes() {
       },
     },
   })
-  const mappedRuntimeIds = new Set(aggregates.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId]))
-  const mapped = aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
-
-  const legacy = await prisma.training.findMany({
-    where: {
-      type: 'contest', scope: 'platform', teamId: null, organizationId: null,
-      ...(mappedRuntimeIds.size ? { id: { notIn: [...mappedRuntimeIds] } } : {}),
-    },
-    include: {
-      RatingConfig: { select: { scope: true, track: true, lockedAt: true } },
-      _count: { select: { TrainingProblem: true, TrainingParticipant: true } },
-    },
-  })
-  if (legacy.length) {
-    logger.warn('contest_query_legacy_fallback', {
-      action: 'contest_query', metadata: {
-        consumer: 'platform_list', count: legacy.length,
-        runtimeTrainingIds: legacy.slice(0, 20).map(row => row.id),
-      },
-    })
-  }
-  return [...mapped, ...legacy]
+  return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
 }
 
 const licenseRuntimeInclude = {
@@ -89,15 +57,7 @@ export async function findContestRuntimeForLicense(runtimeTrainingId: number) {
   if (aggregate?.RuntimeTraining?.type === 'contest') {
     return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
   }
-  const legacy = await prisma.training.findFirst({
-    where: { id: runtimeTrainingId, type: 'contest' },
-    include: licenseRuntimeInclude,
-  })
-  if (!legacy) return null
-  logger.warn('contest_query_legacy_fallback', {
-    action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'data_license' },
-  })
-  return { contest: null, runtime: legacy, source: 'legacy' as const }
+  return null
 }
 
 /** Contest license visibility remains keyed by the public runtime id during cutover. */
@@ -116,23 +76,7 @@ export async function listContestRuntimeIdsForLicenseScopes(input: {
     where: { runtimeTrainingId: { not: null }, ...scopeFilter },
     select: { runtimeTrainingId: true },
   })
-  const mappedIds = aggregates.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
-  const legacy = await prisma.training.findMany({
-    where: {
-      type: 'contest', ...scopeFilter,
-      ...(mappedIds.length ? { id: { notIn: mappedIds } } : {}),
-    },
-    select: { id: true },
-  })
-  if (legacy.length) {
-    logger.warn('contest_query_legacy_fallback', {
-      action: 'contest_query', metadata: {
-        consumer: 'data_license_scope', count: legacy.length,
-        runtimeTrainingIds: legacy.slice(0, 20).map(row => row.id),
-      },
-    })
-  }
-  return [...mappedIds, ...legacy.map(row => row.id)]
+  return aggregates.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
 }
 
 const dashboardRuntimeInclude = {
@@ -164,34 +108,7 @@ export async function listContestRuntimesForDashboard(input: {
     where: { runtimeTrainingId: { not: null }, OR: aggregateScopes },
     include: { RuntimeTraining: { include: dashboardRuntimeInclude } },
   })
-  const mappedIds = aggregates.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
-  const mapped = aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
-
-  const runtimeScopes: Prisma.TrainingWhereInput[] = [
-    ...(input.teamIds.length ? [{ teamId: { in: input.teamIds }, scope: input.resourceScope }] : []),
-    ...(input.resourceScope === 'campus' && input.organizationId
-      ? [{ organizationId: input.organizationId, teamId: null, scope: 'campus' }]
-      : []),
-    ...(input.resourceScope === 'personal'
-      ? [{ teamId: null, organizationId: null, scope: 'platform' }]
-      : []),
-  ]
-  const legacy = await prisma.training.findMany({
-    where: {
-      type: 'contest', OR: runtimeScopes,
-      ...(mappedIds.length ? { id: { notIn: mappedIds } } : {}),
-    },
-    include: dashboardRuntimeInclude,
-  })
-  if (legacy.length) {
-    logger.warn('contest_query_legacy_fallback', {
-      action: 'contest_query', metadata: {
-        consumer: 'dashboard', count: legacy.length,
-        runtimeTrainingIds: legacy.slice(0, 20).map(row => row.id),
-      },
-    })
-  }
-  return [...mapped, ...legacy]
+  return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
 }
 
 const rankingRuntimeInclude = {
@@ -234,11 +151,11 @@ export async function findActivityRuntimeForRanking(runtimeTrainingId: number) {
   })
   if (!runtime) return null
   if (runtime.type === 'contest') {
-    logger.warn('contest_query_legacy_fallback', {
+    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
       action: 'contest_query',
       metadata: { runtimeTrainingId, consumer: 'ranking' },
     })
-    return { contest: null, runtime, source: 'legacy' as const }
+    return null
   }
   return { contest: null, runtime, source: 'training' as const }
 }
@@ -259,15 +176,7 @@ export async function findContestRuntimeForBlogReview(runtimeTrainingId: number)
   if (aggregate?.RuntimeTraining) {
     return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
   }
-  const legacy = await prisma.training.findFirst({
-    where: { id: runtimeTrainingId, type: 'contest' },
-    select: blogReviewRuntimeSelect,
-  })
-  if (!legacy) return null
-  logger.warn('contest_query_legacy_fallback', {
-    action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'blog_review' },
-  })
-  return { contest: null, runtime: legacy, source: 'legacy' as const }
+  return null
 }
 
 /**
@@ -285,23 +194,10 @@ export async function listDueRatedContestRuntimes(now = new Date(), limit = 20) 
     finalizationStatus: { in: ['LIVE', 'JUDGING'] },
     RatingConfig: { isNot: null },
   }
-  const mapped = aggregateIds.length ? await prisma.training.findMany({
+  return (aggregateIds.length ? await prisma.training.findMany({
     where: { id: { in: aggregateIds }, ...runtimeWhere },
     select: { id: true, createdBy: true, endTime: true },
-  }) : []
-  const legacy = await prisma.training.findMany({
-    where: { ...runtimeWhere, ...(aggregateIds.length ? { id: { notIn: aggregateIds } } : {}) },
-    select: { id: true, createdBy: true, endTime: true },
-  })
-  if (legacy.length) {
-    logger.warn('contest_query_legacy_fallback', {
-      action: 'contest_query', metadata: {
-        consumer: 'rating_scheduler', count: legacy.length,
-        runtimeTrainingIds: legacy.slice(0, 20).map(row => row.id),
-      },
-    })
-  }
-  return [...mapped, ...legacy]
+  }) : [])
     .sort((a, b) => a.endTime.getTime() - b.endTime.getTime() || a.id - b.id)
     .slice(0, Math.max(1, Math.min(100, Math.trunc(limit))))
 }
@@ -345,10 +241,10 @@ export async function findActivityRuntimeForSubmission(runtimeTrainingId: number
   })
   if (!runtime) return null
   if (runtime.type === 'contest') {
-    logger.warn('contest_query_legacy_fallback', {
+    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
       action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'submission_detail' },
     })
-    return { contest: null, runtime, source: 'legacy' as const }
+    return null
   }
   return { contest: null, runtime, source: 'training' as const }
 }
@@ -377,10 +273,10 @@ export async function findActivityRuntimeForAccess(runtimeTrainingId: number) {
   })
   if (!runtime) return null
   if (runtime.type === 'contest') {
-    logger.warn('contest_query_legacy_fallback', {
+    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
       action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'activity_access' },
     })
-    return { contest: null, runtime, source: 'legacy' as const }
+    return null
   }
   return { contest: null, runtime, source: 'training' as const }
 }
@@ -425,10 +321,10 @@ export async function findActivityRuntimeForOverview(runtimeTrainingId: number) 
   })
   if (!runtime) return null
   if (runtime.type === 'contest') {
-    logger.warn('contest_query_legacy_fallback', {
+    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
       action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'activity_overview' },
     })
-    return { contest: null, runtime, source: 'legacy' as const }
+    return null
   }
   return { contest: null, runtime, source: 'training' as const }
 }

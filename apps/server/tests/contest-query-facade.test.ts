@@ -53,7 +53,7 @@ describe('Contest query facade', () => {
     })
   })
 
-  it('contains legacy fallback inside the facade and returns each platform contest once', async () => {
+  it('fails closed for an unmapped contest and lists only canonical aggregates', async () => {
     const mapped = await createRuntime('Mapped')
     await prisma.contest.create({ data: {
       id: crypto.randomUUID(), runtimeTrainingId: mapped.id, title: mapped.title,
@@ -61,25 +61,24 @@ describe('Contest query facade', () => {
       format: mapped.format, status: mapped.status, type: 'judged', scope: 'platform',
     } })
     const legacy = await createRuntime('Legacy')
-    expect(await findContestRuntimeForRating(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
-    expect(await findContestRuntimeForLicense(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
-    expect(await findActivityRuntimeForRanking(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
-    expect(await findContestRuntimeForBlogReview(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
-    expect(await findActivityRuntimeForSubmission(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
-    expect(await findActivityRuntimeForAccess(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
-    expect(await findActivityRuntimeForOverview(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
+    expect(await findContestRuntimeForRating(legacy.id)).toBeNull()
+    expect(await findContestRuntimeForLicense(legacy.id)).toBeNull()
+    expect(await findActivityRuntimeForRanking(legacy.id)).toBeNull()
+    expect(await findContestRuntimeForBlogReview(legacy.id)).toBeNull()
+    expect(await findActivityRuntimeForSubmission(legacy.id)).toBeNull()
+    expect(await findActivityRuntimeForAccess(legacy.id)).toBeNull()
+    expect(await findActivityRuntimeForOverview(legacy.id)).toBeNull()
     const rows = await listPlatformContestRuntimes()
-    expect(rows.map(row => row.id).sort((a, b) => a - b)).toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
+    expect(rows.map(row => row.id)).toEqual([mapped.id])
     const dashboardRows = await listContestRuntimesForDashboard({
       teamIds: [],
       resourceScope: 'personal',
       organizationId: null,
     })
-    expect(dashboardRows.map(row => row.id).sort((a, b) => a - b))
-      .toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
+    expect(dashboardRows.map(row => row.id)).toEqual([mapped.id])
   })
 
-  it('discovers due Rating work through mapped aggregates and bounded legacy fallback', async () => {
+  it('discovers due Rating work only through mapped aggregates', async () => {
     const mapped = await prisma.training.create({ data: {
       title: 'Due mapped', format: 'ioi', type: 'contest', scope: 'platform', status: 'finished',
       startTime: new Date('2026-01-01T00:00:00.000Z'), endTime: new Date('2026-01-01T02:00:00.000Z'),
@@ -105,7 +104,7 @@ describe('Contest query facade', () => {
     } })
 
     const due = await listDueRatedContestRuntimes(new Date('2026-02-01T00:00:00.000Z'), 10)
-    expect(due.map(row => row.id)).toEqual([mapped.id, legacy.id])
+    expect(due.map(row => row.id)).toEqual([mapped.id])
   })
 
   it('keeps ordinary training ranking reads outside contest fallback semantics', async () => {

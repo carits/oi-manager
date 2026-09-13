@@ -59,6 +59,10 @@ if (/clearedSubmissionProjection|data:\s*\{\s*(?:\.\.\.input\.projection|result:
 }
 
 const contestRating = fs.readFileSync(path.join(modulesRoot, 'rating/application/contest-rating.service.ts'), 'utf8')
+const contestQueryFacade = fs.readFileSync(path.join(modulesRoot, 'contest/contest-query.facade.ts'), 'utf8')
+if (contestQueryFacade.includes("source: 'legacy'") || contestQueryFacade.includes('contest_query_legacy_fallback')) {
+  violations.push('Contest query facade still returns legacy Training contest records')
+}
 if (!contestRating.includes("from '../../contest/contest-query.facade'")) {
   violations.push('Contest Rating bypasses the Contest query facade')
 }
