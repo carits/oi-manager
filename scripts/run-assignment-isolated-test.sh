@@ -90,7 +90,11 @@ elif [[ "$TEST_SCOPE" == "contest-cutover" ]]; then
     tests/rating-domain.test.ts tests/data-market.test.ts tests/dashboard-workspace.test.ts \
     tests/school-contest.test.ts tests/contest.test.ts tests/blog-knowledge-domain.test.ts \
     tests/submission.test.ts tests/judge-run-domain.test.ts
+elif [[ "$TEST_SCOPE" == "contest-core" ]]; then
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
+    --no-file-parallelism \
+    tests/contest-query-facade.test.ts tests/school-contest.test.ts tests/contest.test.ts
 else
-  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, authorization, release-invariants, contest-cutover or full" >&2
+  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, authorization, release-invariants, contest-core, contest-cutover or full" >&2
   exit 1
 fi

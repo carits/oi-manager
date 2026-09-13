@@ -20,6 +20,7 @@ function createOrganizationRequest(token: string, organizationId: string) {
   return {
     get: (url: string) => agent.get(url).set('x-oi-organization-id', organizationId),
     post: (url: string) => agent.post(url).set('x-oi-organization-id', organizationId),
+    put: (url: string) => agent.put(url).set('x-oi-organization-id', organizationId),
   }
 }
 
