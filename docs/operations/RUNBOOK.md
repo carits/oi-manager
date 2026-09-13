@@ -137,6 +137,11 @@ the monitor fail while the replacement baseline waits for that monitor to be hea
 container limits and every other runtime check remain mandatory. Standalone `pnpm runtime:audit` does not set this
 override and still requires the latest monitor operation to have succeeded; run it after the new baseline and monitor
 have both completed.
+The production dependency audit is also bounded independently. It retries the complete registry request with
+`SECURITY_DEPENDENCY_AUDIT_ATTEMPTS` (3 by default), and each attempt is limited by
+`SECURITY_DEPENDENCY_AUDIT_ATTEMPT_TIMEOUT_SECONDS` (180 seconds by default). This tolerates transient npm advisory
+endpoint failures while still failing closed when the registry remains unavailable or reports a vulnerability. Keep
+the total retry duration below `SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS`.
 The optimized production preview has no HMR listener; development environments may explicitly set
 `MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. The current host has no SLS Logtail,
 CloudMonitor Agent or ECS RAM Role, so cloud contacts, thresholds and log delivery must be provisioned explicitly.

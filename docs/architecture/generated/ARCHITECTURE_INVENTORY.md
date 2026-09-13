@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 476 |
+| Referenced environment keys | 478 |
 
 ## HTTP adapter ownership
 
@@ -811,6 +811,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SECURITY_BASELINE_MAX_AGE_HOURS`
 - `SECURITY_BASELINE_SCHEDULE`
 - `SECURITY_BASELINE_STATE_FILE`
+- `SECURITY_DEPENDENCY_AUDIT_ATTEMPTS`
+- `SECURITY_DEPENDENCY_AUDIT_ATTEMPT_TIMEOUT_SECONDS`
 - `SERVER_PID`
 - `SERVER_ROOT`
 - `SERVICE_GROUP`

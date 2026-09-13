@@ -57,7 +57,7 @@ run_check operation-timers pnpm --silent operations:timers:verify
 run_check external-uptime-workflow pnpm --silent monitor:external:verify
 run_check asset-backup-contract pnpm --silent backup:assets:test
 run_check tls-tooling pnpm --silent tls:verify
-run_check production-dependencies pnpm audit --prod --audit-level low
+run_check production-dependencies bash scripts/audit-production-dependencies.sh
 
 {
   printf 'schema_version=1\n'
