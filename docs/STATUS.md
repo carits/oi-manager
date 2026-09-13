@@ -5,7 +5,7 @@ last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-13: Contest 可编辑元数据开始统一走命令边界。赛前标题、说明、赛制、开始/结束时间、题号/题解可见性和管理员排名配置，以及独立的延长结束时间入口，均在比赛 advisory lock 下校验调用方读取的状态/赛制/时间快照后更新；赛制变化与默认 Rating Track、规则哈希同事务更新，最后刷新 Contest 聚合。普通 Training 保持原路径，新增“赛制/基本信息/结束时间/Rating Track/聚合”契约回归。
+- 2026-09-13: Contest 可编辑元数据与删除已统一走命令边界。赛前标题、说明、赛制、开始/结束时间、题号/题解可见性和管理员排名配置，以及独立的延长结束时间入口，均在比赛 advisory lock 下校验调用方读取的状态/赛制/时间快照后更新；赛制变化与默认 Rating Track、规则哈希同事务更新，最后刷新 Contest 聚合。删除未终结比赛按规范 Contest → 兼容 Training 的依赖顺序在同一锁和事务中完成，终结比赛仍被永久保留；普通 Training 保持原路径。提交 `96412af`、`1702a2e`、`28d34a7` 已推送 `main`，Linux Server 构建、Contest 核心 3 文件 42/42 与全部架构/文档门禁通过，API 3302→3303。生产仍为 767/767 映射、6 个独立 Contest、未映射/重复/核心字段差异及部署后 fallback 均为 0；六项服务 active，原有 7 个未跟踪维护文件未改动。本批无 Prisma、业务数据或 Web 变更。
 
 - 2026-09-13: Contest Rating 的终结状态写入已进入独立 Finalization Command 边界。人工/定时结算的 `FINALIZING → FINALIZED`、调度失败的 `FAILED` 与赛后重放完成不再由 Rating Service 直接更新兼容 Training；命令统一锁定 Contest、校验期望状态、按 CAS 写入并在需要时修复/刷新规范聚合。Rating Service 继续只负责排名快照、Rating Batch 和账户算法，架构门禁禁止再次直接写比赛终结状态。Linux 构建和隔离 Rating 19/19 通过；提交 `c6c37f7` 已推送并将 API 3302→3303，六项服务 active、生产 767/767 映射且核心差异、未映射、重复及 Query/Command fallback 均为 0。本批无 Prisma、业务数据或 Web 变更。
 

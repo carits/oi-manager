@@ -9,10 +9,12 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
-### Contest 可编辑元数据命令边界
+### Contest 可编辑元数据与删除命令边界
 
 - 赛前标题、说明、赛制、起止时间、题号/题解可见性和管理员排名配置，以及独立结束时间修改入口统一改由 `updateContestRuntimeTx()` 执行；命令使用比赛锁和状态/赛制/时间快照检查避免并发覆盖。
 - 赛制变化时 Rating Track、默认规则和规则哈希与 Runtime/Contest 聚合同事务更新。普通 Training 保持原路径，并补充真实 HTTP 契约回归。
+- 未终结比赛删除改由 `deleteContestRuntimeTx()` 执行，在同一比赛锁和事务内先删除规范 Contest 及其投影，再删除兼容 Training，避免 Restrict 外键或单边残留；终结比赛的永久保留规则不变。架构门禁禁止删除路径重新绕过命令服务。
+- Linux Server 构建、Contest 核心 3 文件 42/42 与文档/架构门禁通过；提交 `96412af`、`1702a2e`、`28d34a7` 发布后 API 3302→3303。生产 767/767 映射，6 个独立 Contest，未映射、重复、核心字段差异和部署后 fallback 均为 0。
 
 ### Contest Rating Finalization 命令边界
 
