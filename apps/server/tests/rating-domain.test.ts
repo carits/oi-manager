@@ -8,7 +8,7 @@ import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from '.
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 import { lockRatingParticipantTx, processDueContestRatings } from '../src/modules/rating/application/contest-rating.service'
-import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 import { holdContestFinalizationForRejudgeTx } from '../src/modules/contest/contest-command.service'
 
 const app = createTestApp()
@@ -139,6 +139,7 @@ describe('rating domain HTTP and persistence', () => {
     const problem = await prisma.problem.create({ data: { id: crypto.randomUUID(), platform: 'carits', problemId: `RATING_${crypto.randomUUID()}`, title: 'Rating test', ownerId: manager.user.id, visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', publishedAt: new Date() } })
     const contest = await createContestRuntimeFixture({ data: { title: options.title || 'Rated IOI contest', format: 'ioi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() - startHoursAgo * 3600_000), endTime: new Date(Date.now() - endHoursAgo * 3600_000), status: 'finished', finalizationStatus: 'JUDGING', createdBy: manager.user.id } })
     const trainingProblem = await prisma.trainingProblem.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 0, points: 100 } })
+    await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
     await prisma.trainingRatingConfig.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
     for (const [index, user] of [first, second].entries()) {
       await prisma.submission.create({ data: { userId: user.user.id, oj: 'carits', problemId: problem.problemId, problemInternalId: problem.id, language: 'cpp', code: 'int main(){}', codeLength: 12, result: index === 0 ? 'accepted' : 'wrong_answer', score: index === 0 ? 100 : 20, submitMethod: 'local', submitScope: 'contest', workspaceScope: 'campus', organizationId, trainingId: contest.id, trainingProblemId: trainingProblem.id, contestId: contest.id, contestProblemId: trainingProblem.id, createdAt: new Date(contest.startTime.getTime() + (index + 1) * 60_000) } })
