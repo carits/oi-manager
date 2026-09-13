@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
+import type { Prisma } from '@prisma/client'
 import request from 'supertest'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
@@ -18,8 +19,15 @@ import {
   reorderContestProblemRuntimesTx,
   updateContestProblemRuntimeTx,
 } from '../src/modules/contest/contest-command.service'
+import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 
 const app = createTestApp()
+
+async function createContestRuntimeFixture(args: Prisma.TrainingCreateArgs) {
+  const runtime = await prisma.training.create(args)
+  await prisma.$transaction(tx => ensureContestAggregateTx(tx, runtime.id))
+  return runtime
+}
 
 function createOrganizationRequest(token: string, organizationId: string) {
   const agent = createAuthenticatedRequest(app, token)
@@ -85,7 +93,7 @@ describe('比赛赛制可见性测试', () => {
 
     beforeEach(async () => {
       const now = Date.now()
-      ioiContest = await prisma.training.create({
+      ioiContest = await createContestRuntimeFixture({
         data: {
           teamId: team.id,
           title: 'IOI 模拟赛',
@@ -187,7 +195,7 @@ describe('比赛赛制可见性测试', () => {
 
     beforeEach(async () => {
       const now = Date.now()
-      icpcContest = await prisma.training.create({
+      icpcContest = await createContestRuntimeFixture({
         data: {
           teamId: team.id,
           title: 'ICPC 模拟赛',
@@ -301,7 +309,7 @@ describe('比赛赛制可见性测试', () => {
 
     beforeEach(async () => {
       const now = Date.now()
-      oiContest = await prisma.training.create({
+      oiContest = await createContestRuntimeFixture({
         data: {
           teamId: team.id,
           title: 'OI 模拟赛',
@@ -353,7 +361,7 @@ describe('比赛赛制可见性测试', () => {
 
     beforeEach(async () => {
       const now = Date.now()
-      finishedOiContest = await prisma.training.create({
+      finishedOiContest = await createContestRuntimeFixture({
         data: {
           teamId: team.id,
           title: '已结束 OI 比赛',
@@ -615,7 +623,7 @@ describe('比赛类型区分测试', () => {
       }
     })
 
-    await prisma.training.create({
+    await createContestRuntimeFixture({
       data: {
         teamId: team.id,
         title: '比赛',

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { calculateMultiElo } from '../src/modules/rating/domain/multi-elo'
 import { buildStanding } from '../src/modules/rating/domain/contest-scoring'
@@ -7,8 +8,15 @@ import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from '.
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 import { lockRatingParticipantTx, processDueContestRatings } from '../src/modules/rating/application/contest-rating.service'
+import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 
 const app = createTestApp()
+
+async function createContestRuntimeFixture(args: Prisma.TrainingCreateArgs) {
+  const runtime = await prisma.training.create(args)
+  await prisma.$transaction(tx => ensureContestAggregateTx(tx, runtime.id))
+  return runtime
+}
 
 describe('Carits Multi-player Elo V1', () => {
   it('is balanced, deterministic and tie aware', () => {
@@ -128,7 +136,7 @@ describe('rating domain HTTP and persistence', () => {
     const startHoursAgo = options.startHoursAgo ?? 2
     const endHoursAgo = options.endHoursAgo ?? 1
     const problem = await prisma.problem.create({ data: { id: crypto.randomUUID(), platform: 'carits', problemId: `RATING_${crypto.randomUUID()}`, title: 'Rating test', ownerId: manager.user.id, visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', publishedAt: new Date() } })
-    const contest = await prisma.training.create({ data: { title: options.title || 'Rated IOI contest', format: 'ioi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() - startHoursAgo * 3600_000), endTime: new Date(Date.now() - endHoursAgo * 3600_000), status: 'finished', finalizationStatus: 'JUDGING', createdBy: manager.user.id } })
+    const contest = await createContestRuntimeFixture({ data: { title: options.title || 'Rated IOI contest', format: 'ioi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() - startHoursAgo * 3600_000), endTime: new Date(Date.now() - endHoursAgo * 3600_000), status: 'finished', finalizationStatus: 'JUDGING', createdBy: manager.user.id } })
     const trainingProblem = await prisma.trainingProblem.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 0, points: 100 } })
     await prisma.trainingRatingConfig.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
     for (const [index, user] of [first, second].entries()) {
@@ -156,7 +164,7 @@ describe('rating domain HTTP and persistence', () => {
   })
 
   it('freezes config after the contest starts and rejects ordinary users from global rating', async () => {
-    const future = await prisma.training.create({ data: { title: 'Future contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: manager.user.id } })
+    const future = await createContestRuntimeFixture({ data: { title: 'Future contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: manager.user.id } })
     const global = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope: 'GLOBAL', expectedRevision: 0 })
     expect(global.status).toBe(403)
     const organization = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope: 'ORGANIZATION', expectedRevision: 0, organizationMinParticipants: 2 })
@@ -178,7 +186,7 @@ describe('rating domain HTTP and persistence', () => {
       source: 'test', grantedBy: manager.user.id,
     } })
     const platformToken = generateTestToken({ userId: platformAdmin.user.id, username: platformAdmin.user.username, role: platformAdmin.user.role })
-    const future = await prisma.training.create({ data: { title: 'Organization-only rating contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: platformAdmin.user.id } })
+    const future = await createContestRuntimeFixture({ data: { title: 'Organization-only rating contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: platformAdmin.user.id } })
 
     for (const scope of ['GLOBAL', 'BOTH']) {
       const response = await createAuthenticatedRequest(app, platformToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope, expectedRevision: 0 })
@@ -193,7 +201,7 @@ describe('rating domain HTTP and persistence', () => {
 
   it('allows only NONE for a personal-team contest', async () => {
     const team = await createTestTeam({ schoolId: null, ownerId: manager.user.id, ownerType: 'teacher', scope: 'personal' })
-    const future = await prisma.training.create({ data: { title: 'Personal team contest', format: 'icpc', type: 'contest', scope: 'personal', teamId: team.id, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: manager.user.id } })
+    const future = await createContestRuntimeFixture({ data: { title: 'Personal team contest', format: 'icpc', type: 'contest', scope: 'personal', teamId: team.id, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: manager.user.id } })
     const personalToken = generateTestToken({ userId: manager.user.id, username: manager.user.username, role: manager.user.role })
     const config = await createAuthenticatedRequest(app, personalToken).get(`/api/trainings/${future.id}/rating-config`)
     expect(config.status, JSON.stringify(config.body)).toBe(200)
@@ -213,7 +221,7 @@ describe('rating domain HTTP and persistence', () => {
         memberRole: 'student', relationType: 'enrolled', status: 'active', joinedAt: new Date(),
       } })
     }
-    const contest = await prisma.training.create({ data: {
+    const contest = await createContestRuntimeFixture({ data: {
       title: 'Platform BOTH contest', format: 'ioi', type: 'contest', scope: 'platform',
       startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
       status: 'ongoing', createdBy: manager.user.id,
@@ -258,7 +266,7 @@ describe('rating domain HTTP and persistence', () => {
   })
 
   it('allows GLOBAL participation without an organization and fixes organization contests automatically', async () => {
-    const globalContest = await prisma.training.create({ data: {
+    const globalContest = await createContestRuntimeFixture({ data: {
       title: 'Platform GLOBAL contest', format: 'oi', type: 'contest', scope: 'platform',
       startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
       status: 'ongoing', createdBy: manager.user.id,
@@ -271,7 +279,7 @@ describe('rating domain HTTP and persistence', () => {
     expect(await prisma.trainingParticipant.findFirst({ where: { trainingId: globalContest.id, userId: first.user.id } }))
       .toMatchObject({ organizationIdSnapshot: null, ratingStatus: 'RATING_LOCKED' })
 
-    const organizationContest = await prisma.training.create({ data: {
+    const organizationContest = await createContestRuntimeFixture({ data: {
       title: 'Fixed organization contest', format: 'oi', type: 'contest', scope: 'campus', organizationId,
       startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
       status: 'ongoing', createdBy: manager.user.id,
