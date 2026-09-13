@@ -16,6 +16,7 @@ source_of_truth: Git history
 - 比赛创建、配置更新、榜单快照、结算批次、重放和未终结草稿删除均完成规范身份双写；受保护的 Contest 聚合迁移报告增加三类 Rating 事实的缺失与错配统计。
 - 生产备份恢复库已应用全部 67 个 migration，缺失/错配为 0，旧二进制顺序探针通过；使用隔离 Linux Prisma Client 的 Rating/Contest 定向集成测试 7 文件 71/71 通过。提交 `6eaa7bf` 当前仅在隔离分支，正式生产发布信息将在提升后补录。
 - clean bootstrap supplement 同步补齐历史增量路径中的 Assignment、Blog、数据市场、题解和质量域 CHECK、partial index 与不可变触发器，并修正 Rating 排名索引的降序声明。空库 bootstrap 与生产备份升级库的 202 张表完整 public schema 签名现已一致（SHA-256 `de803187b4a0c99e30f6c5679ced341af8b5ce42187d0e4f114319b1c6edbb87`）。
+- 提交 `6eaa7bf`、`b594d4b`、`42a80b9`、`8e76d70` 已发布生产：Prisma 67/67，API 3302→3303，四个 Rating 身份触发器与 post-deploy 对账通过；Worker、Executor、Judge 重新接入，Web BUILD_ID 保持 `yfKCYt_RhRI2pj5ffyeMi`。
 
 ### Contest 可变状态规范化
 
