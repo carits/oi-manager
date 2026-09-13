@@ -155,29 +155,27 @@ export async function syncTrainingProblemStatus(
  */
 export async function syncContestProblemStatus(
   userId: string,
-  contestId: number,
-  contestProblemId: string,
+  canonicalContestId: string,
+  canonicalContestProblemId: string,
   result: string | null,
   score: number | null,
-  canonicalIdentity?: { canonicalContestId: string; canonicalContestProblemId: string } | null,
 ): Promise<void> {
   try {
     const isAc = isAcceptedResult(result)
 
     await prisma.contestUserProblemStatus.upsert({
       where: {
-        contestId_userId_contestProblemId: {
-          contestId,
+        canonicalContestId_userId_canonicalContestProblemId: {
+          canonicalContestId,
           userId,
-          contestProblemId,
+          canonicalContestProblemId,
         },
       },
       create: {
         id: crypto.randomUUID(),
-        contestId,
+        canonicalContestId,
         userId,
-        contestProblemId,
-        ...(canonicalIdentity || {}),
+        canonicalContestProblemId,
         bestScore: score,
         bestResult: result,
         attemptCount: 1,
@@ -201,16 +199,16 @@ export async function syncContestProblemStatus(
 
     logger.info('Contest problem status synced', {
       userId,
-      contestId,
-      contestProblemId,
+      canonicalContestId,
+      canonicalContestProblemId,
       result,
       isAc,
     })
   } catch (error) {
     logger.error('Failed to sync contest problem status', {
       userId,
-      contestId,
-      contestProblemId,
+      canonicalContestId,
+      canonicalContestProblemId,
       error: String(error),
     })
   }
@@ -233,8 +231,6 @@ export async function onSubmissionJudged(submission: {
   submitScope: string
   trainingId: number | null
   trainingProblemId: string | null
-  contestId: number | null
-  contestProblemId: string | null
   canonicalContestId?: string | null
   canonicalContestProblemId?: string | null
   trainingSessionId?: string | null
@@ -272,19 +268,13 @@ export async function onSubmissionJudged(submission: {
     }
   } else if (submitScope === 'contest') {
     // 比赛提交：更新比赛状态 + **不**同步题库 AC
-    if (submission.contestId && submission.contestProblemId) {
+    if (submission.canonicalContestId && submission.canonicalContestProblemId) {
       await syncContestProblemStatus(
         submission.userId,
-        submission.contestId,
-        submission.contestProblemId,
+        submission.canonicalContestId,
+        submission.canonicalContestProblemId,
         submission.result,
         submission.score,
-        submission.canonicalContestId && submission.canonicalContestProblemId
-          ? {
-              canonicalContestId: submission.canonicalContestId,
-              canonicalContestProblemId: submission.canonicalContestProblemId,
-            }
-          : null,
       )
     }
     // 比赛期间不同步题库 AC，等比赛结束后由 syncContestEndAC 处理
@@ -344,10 +334,16 @@ export async function syncContestEndAC(contestId: number): Promise<void> {
   try {
     logger.info('Starting contest end AC sync', { contestId })
 
+    const contest = await prisma.contest.findUnique({
+      where: { runtimeTrainingId: contestId },
+      select: { id: true },
+    })
+    if (!contest) throw new Error('Contest runtime has no canonical aggregate')
+
     // 获取比赛所有 AC 提交
     const acSubmissions = await prisma.submission.findMany({
       where: {
-        contestId,
+        canonicalContestId: contest.id,
         submitScope: 'contest',
         result: { in: ['Accepted', 'AC'] },
       },
@@ -365,7 +361,7 @@ export async function syncContestEndAC(contestId: number): Promise<void> {
 
     // 冻结比赛成绩
     const contestStatuses = await prisma.contestUserProblemStatus.findMany({
-      where: { contestId },
+      where: { canonicalContestId: contest.id },
     })
 
     for (const status of contestStatuses) {

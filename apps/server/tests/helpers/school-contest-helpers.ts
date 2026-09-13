@@ -188,11 +188,23 @@ export async function createTestSubmission(options: {
   } = options
 
   const [training, trainingProblem] = await Promise.all([
-    prisma.training.findUniqueOrThrow({ where: { id: trainingId }, select: { organizationId: true, scope: true } }),
+    prisma.training.findUniqueOrThrow({
+      where: { id: trainingId },
+      select: { organizationId: true, scope: true, type: true },
+    }),
     trainingProblemId
       ? prisma.trainingProblem.findUnique({ where: { id: trainingProblemId }, select: { problemId: true } })
       : Promise.resolve(null),
   ])
+  const canonicalProblem = submitScope === 'contest' && trainingProblemId
+    ? await prisma.$transaction(async tx => {
+        await ensureContestAggregateTx(tx, trainingId)
+        return syncContestProblemAggregateTx(tx, trainingProblemId)
+      })
+    : null
+  if (submitScope === 'contest' && !canonicalProblem) {
+    throw new Error('Contest test submission requires a canonical ContestProblem')
+  }
   const submission = await prisma.submission.create({
     data: {
       userId,
@@ -208,6 +220,8 @@ export async function createTestSubmission(options: {
       trainingId,
       trainingProblemId,
       submitScope,
+      canonicalContestId: canonicalProblem?.contestId || null,
+      canonicalContestProblemId: canonicalProblem?.id || null,
       submitMethod: 'local',
       workspaceScope: training.scope,
       organizationId: training.organizationId,

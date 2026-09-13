@@ -420,7 +420,7 @@ export async function transitionContestLifecycleTx(
     ? (await tx.submission.updateMany({
         where: {
           submitScope: 'contest',
-          contestId: input.runtimeTrainingId,
+          canonicalContestId: aggregate.id,
           isGlobalVisible: false,
         },
         data: { isGlobalVisible: true },

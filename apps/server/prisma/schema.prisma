@@ -707,25 +707,25 @@ model ContestResult {
 }
 
 model ContestUserProblemStatus {
-  id                        String          @id
-  contestId                 Int
-  canonicalContestId        String?
+  id                        String           @id
+  contestId                 Int?
+  canonicalContestId        String
   userId                    String
-  contestProblemId          String
-  canonicalContestProblemId String?
+  contestProblemId          String?
+  canonicalContestProblemId String
   bestScore                 Int?
   bestResult                String?
-  attemptCount              Int             @default(0)
+  attemptCount              Int              @default(0)
   acAt                      DateTime?
   frozenScore               Int?
   frozenResult              String?
-  createdAt                 DateTime        @default(now())
-  updatedAt                 DateTime        @default(now())
-  Training                  Training        @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  TrainingProblem           TrainingProblem @relation(fields: [contestProblemId], references: [id], onDelete: Cascade)
-  CanonicalContest          Contest?        @relation("CanonicalContestStatuses", fields: [canonicalContestId], references: [id], onDelete: Restrict)
-  CanonicalContestProblem   ContestProblem? @relation("CanonicalContestProblemStatuses", fields: [canonicalContestProblemId], references: [id], onDelete: Restrict)
-  User                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @default(now())
+  Training                  Training?        @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  TrainingProblem           TrainingProblem? @relation(fields: [contestProblemId], references: [id], onDelete: Cascade)
+  CanonicalContest          Contest          @relation("CanonicalContestStatuses", fields: [canonicalContestId], references: [id], onDelete: Restrict)
+  CanonicalContestProblem   ContestProblem   @relation("CanonicalContestProblemStatuses", fields: [canonicalContestProblemId], references: [id], onDelete: Restrict)
+  User                      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, userId, contestProblemId])
   @@unique([canonicalContestId, userId, canonicalContestProblemId])

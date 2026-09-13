@@ -40,7 +40,7 @@ async function createContestFixture() {
 }
 
 describe('canonical contest submission identity', () => {
-  it('dual-writes aggregate ids for submissions, status and contest records', async () => {
+  it('writes only aggregate ids for new submissions and statuses', async () => {
     const fixture = await createContestFixture()
     const submission = await createQueuedTrainingSubmission({
       userId: fixture.participant.user.id,
@@ -55,33 +55,31 @@ describe('canonical contest submission identity', () => {
     })
 
     expect(submission).toMatchObject({
-      contestId: fixture.runtime.id,
-      contestProblemId: fixture.runtimeProblem.id,
+      contestId: null,
+      contestProblemId: null,
       canonicalContestId: fixture.contest.id,
       canonicalContestProblemId: fixture.contestProblem.id,
     })
 
     await syncContestProblemStatus(
       fixture.participant.user.id,
-      fixture.runtime.id,
-      fixture.runtimeProblem.id,
+      fixture.contest.id,
+      fixture.contestProblem.id,
       'accepted',
       100,
-      {
-        canonicalContestId: fixture.contest.id,
-        canonicalContestProblemId: fixture.contestProblem.id,
-      },
     )
     const status = await prisma.contestUserProblemStatus.findUniqueOrThrow({
       where: {
-        contestId_userId_contestProblemId: {
-          contestId: fixture.runtime.id,
+        canonicalContestId_userId_canonicalContestProblemId: {
+          canonicalContestId: fixture.contest.id,
           userId: fixture.participant.user.id,
-          contestProblemId: fixture.runtimeProblem.id,
+          canonicalContestProblemId: fixture.contestProblem.id,
         },
       },
     })
     expect(status).toMatchObject({
+      contestId: null,
+      contestProblemId: null,
       canonicalContestId: fixture.contest.id,
       canonicalContestProblemId: fixture.contestProblem.id,
     })
@@ -93,31 +91,6 @@ describe('canonical contest submission identity', () => {
       'contest notes',
     )
     expect(record?.canonicalContestId).toBe(fixture.contest.id)
-  })
-
-  it('fills canonical ids for an old compatible submission write', async () => {
-    const fixture = await createContestFixture()
-    const submission = await prisma.submission.create({
-      data: {
-        userId: fixture.participant.user.id,
-        oj: 'carits',
-        problemId: fixture.problem.problemId,
-        problemInternalId: fixture.problem.id,
-        language: 'cpp',
-        code: 'int main() {}',
-        codeLength: 13,
-        submitMethod: 'local',
-        submitScope: 'contest',
-        trainingId: fixture.runtime.id,
-        trainingProblemId: fixture.runtimeProblem.id,
-      },
-    })
-    expect(submission).toMatchObject({
-      contestId: fixture.runtime.id,
-      contestProblemId: fixture.runtimeProblem.id,
-      canonicalContestId: fixture.contest.id,
-      canonicalContestProblemId: fixture.contestProblem.id,
-    })
   })
 
   it('keeps ordinary training records outside the Contest aggregate', async () => {
@@ -137,4 +110,3 @@ describe('canonical contest submission identity', () => {
     expect(record?.canonicalContestId).toBeNull()
   })
 })
-

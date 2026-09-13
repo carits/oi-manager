@@ -95,6 +95,18 @@ export async function listFinishedContestRuntimeIds() {
   return rows.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
 }
 
+/** Canonical ids for consumers that persist or query Contest-owned facts. */
+export async function listFinishedContestIds() {
+  const rows = await prisma.contest.findMany({
+    where: {
+      status: 'finished',
+      RuntimeTraining: { is: { type: 'contest' } },
+    },
+    select: { id: true },
+  })
+  return rows.map(row => row.id)
+}
+
 const licenseRuntimeInclude = {
   Team: { include: { TeamMember: true } },
 } as const

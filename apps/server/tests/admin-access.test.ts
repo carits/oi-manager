@@ -85,7 +85,7 @@ describe('administrator entry without User.schoolId', () => {
           codeLength: 12,
           submitMethod: 'standard',
           result: 'judging',
-          submitScope: 'contest',
+          submitScope: 'problem',
           workspaceScope: 'campus',
           isGlobalVisible: false,
         },

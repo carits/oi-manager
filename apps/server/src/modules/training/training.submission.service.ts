@@ -63,7 +63,6 @@ export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmis
       inputFilename: input.inputFilename || null,
       outputFilename: input.outputFilename || null,
       ioAdapterVersion: input.ioAdapterVersion ?? 1,
-      ...(input.training.type === 'contest' ? { contestId: input.training.id, contestProblemId: input.trainingProblem.id } : {}),
       ...(canonicalContestIdentity || {}),
       isGlobalVisible: input.training.type === 'contest' ? false : true,
       ...(input.createdAt ? { createdAt: input.createdAt, updatedAt: input.createdAt } : {}),

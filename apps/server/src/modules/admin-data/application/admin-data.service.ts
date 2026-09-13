@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../../../prisma'
 import { createRejudgeBatch, rejudgeSubmissionWithRun } from '../../judge/application/judge-run.service'
 import { currentJudgeCompletedWhere } from '../../judge/application/judge-read-projection'
-import { listFinishedContestRuntimeIds } from '../../contest/contest-query.facade'
+import { listFinishedContestIds } from '../../contest/contest-query.facade'
 
 export class AdminDataError extends Error {
   constructor(public readonly statusCode: number, message: string) {
@@ -145,9 +145,9 @@ export async function backfillTrainingParticipants(trainingId: unknown) {
 
 export async function fixSubmissionVisibility() {
   const trainingResult = await prisma.submission.updateMany({ where: { submitScope: 'training', isGlobalVisible: false }, data: { isGlobalVisible: true } })
-  const contestRuntimeIds = await listFinishedContestRuntimeIds()
-  const contestResult = contestRuntimeIds.length ? await prisma.submission.updateMany({
-    where: { submitScope: 'contest', isGlobalVisible: false, contestId: { in: contestRuntimeIds } },
+  const contestIds = await listFinishedContestIds()
+  const contestResult = contestIds.length ? await prisma.submission.updateMany({
+    where: { submitScope: 'contest', isGlobalVisible: false, canonicalContestId: { in: contestIds } },
     data: { isGlobalVisible: true },
   }) : { count: 0 }
   return {

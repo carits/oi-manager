@@ -89,9 +89,9 @@ async function inspectCanonicalSubmissionIdentities(db: typeof prisma | Prisma.T
         SELECT s."id" FROM "ContestUserProblemStatus" s
           JOIN "Contest" c ON c."id" = s."canonicalContestId"
           JOIN "ContestProblem" p ON p."id" = s."canonicalContestProblemId"
-          WHERE c."runtimeTrainingId" IS DISTINCT FROM s."contestId"
+          WHERE (s."contestId" IS NOT NULL AND c."runtimeTrainingId" IS DISTINCT FROM s."contestId")
              OR p."contestId" IS DISTINCT FROM c."id"
-             OR p."runtimeTrainingProblemId" IS DISTINCT FROM s."contestProblemId"
+             OR (s."contestProblemId" IS NOT NULL AND p."runtimeTrainingProblemId" IS DISTINCT FROM s."contestProblemId")
         UNION ALL
         SELECT r."id" FROM "ContestRecord" r
           JOIN "Training" t ON t."id" = r."trainingId"

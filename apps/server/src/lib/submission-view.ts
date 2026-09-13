@@ -265,8 +265,8 @@ export function getSubmissionViews(
     // 根据 submitScope 获取对应的训练信息
     if (submission.submitScope === 'training' && submission.trainingId) {
       training = trainingMap.get(submission.trainingId)
-    } else if (submission.submitScope === 'contest' && submission.contestId) {
-      training = trainingMap.get(submission.contestId)
+    } else if (submission.submitScope === 'contest' && submission.trainingId) {
+      training = trainingMap.get(submission.trainingId)
     }
 
     return getSubmissionView({

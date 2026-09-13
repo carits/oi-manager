@@ -14,6 +14,7 @@ import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest
 import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
 
 const app = createTestApp()
 const testdataDirectories: string[] = []
@@ -818,6 +819,11 @@ describe('OI 赛制可见性测试', () => {
           points: 100,
         },
       })
+      const canonicalProblem = await prisma.$transaction(async tx => {
+        await ensureContestAggregateTx(tx, oiTraining.id)
+        return syncContestProblemAggregateTx(tx, trainingProblem.id)
+      })
+      if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
       const submission = await prisma.submission.create({
         data: {
           userId: studentUser.user.id,
@@ -834,7 +840,8 @@ describe('OI 赛制可见性测试', () => {
           submitScope: 'contest',
           trainingId: oiTraining.id,
           trainingProblemId: trainingProblem.id,
-          contestId: oiTraining.id,
+          canonicalContestId: canonicalProblem.contestId,
+          canonicalContestProblemId: canonicalProblem.id,
           cases: '[]',
         },
       })

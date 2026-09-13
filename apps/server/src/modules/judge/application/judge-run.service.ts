@@ -304,8 +304,6 @@ export async function finalizeOwnedJudgeAttempt(input: {
         submitScope: true,
         trainingId: true,
         trainingProblemId: true,
-        contestId: true,
-        contestProblemId: true,
         canonicalContestId: true,
         canonicalContestProblemId: true,
         trainingSessionId: true,

@@ -140,7 +140,8 @@ describe('比赛赛制可见性测试', () => {
           orderIndex: 0,
         },
       })
-      await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
+      const canonicalProblem = await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
+      if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
       await prisma.submission.createMany({
         data: [
           {
@@ -157,8 +158,8 @@ describe('比赛赛制可见性测试', () => {
             submitScope: 'contest',
             trainingId: ioiContest.id,
             trainingProblemId: trainingProblem.id,
-            contestId: ioiContest.id,
-            contestProblemId: trainingProblem.id,
+            canonicalContestId: canonicalProblem.contestId,
+            canonicalContestProblemId: canonicalProblem.id,
           },
           {
             userId: studentUser.user.id,
@@ -175,8 +176,8 @@ describe('比赛赛制可见性测试', () => {
             submitScope: 'contest',
             trainingId: ioiContest.id,
             trainingProblemId: trainingProblem.id,
-            contestId: ioiContest.id,
-            contestProblemId: trainingProblem.id,
+            canonicalContestId: canonicalProblem.contestId,
+            canonicalContestProblemId: canonicalProblem.id,
           },
         ],
       })
@@ -254,7 +255,8 @@ describe('比赛赛制可见性测试', () => {
           orderIndex: 0,
         },
       })
-      await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
+      const canonicalProblem = await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
+      if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
       await prisma.submission.createMany({
         data: [
           {
@@ -271,8 +273,8 @@ describe('比赛赛制可见性测试', () => {
             submitScope: 'contest',
             trainingId: icpcContest.id,
             trainingProblemId: trainingProblem.id,
-            contestId: icpcContest.id,
-            contestProblemId: trainingProblem.id,
+            canonicalContestId: canonicalProblem.contestId,
+            canonicalContestProblemId: canonicalProblem.id,
           },
           {
             userId: studentUser.user.id,
@@ -289,8 +291,8 @@ describe('比赛赛制可见性测试', () => {
             submitScope: 'contest',
             trainingId: icpcContest.id,
             trainingProblemId: trainingProblem.id,
-            contestId: icpcContest.id,
-            contestProblemId: trainingProblem.id,
+            canonicalContestId: canonicalProblem.contestId,
+            canonicalContestProblemId: canonicalProblem.id,
           },
         ],
       })
