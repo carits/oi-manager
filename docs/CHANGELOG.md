@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### Contest Query Legacy Fallback 退役
+
+- 移除 Contest Query Facade 中全部裸 `Training(type=contest)` 兼容返回；Rating、平台/组织列表、Data Market、Dashboard、Blog、Submission、榜单和比赛详情现在只从规范 `Contest.runtimeTrainingId` 进入执行对象。
+- 共享活动读取仍支持普通 Training；未映射比赛统一记录 `contest_aggregate_missing` 并 fail closed。架构审计禁止重新引入 `source: legacy` 和 `contest_query_legacy_fallback`。
+- Contest、Rating 与学校比赛夹具改为创建真实 Contest/ContestProblem 聚合，避免测试环境依赖生产已禁止的数据形状。生产同构隔离 Contest cutover 11 文件 113/113、Server 构建和架构门禁通过。
+- 提交 `876e0e0`、`9b8adb7`、`6aa156a` 已推送 `main`。本批无 Prisma 迁移、业务数据改写或 Web 变更。
+
 ### Server 运行时组合根
 
 - 新增唯一的 `createApplication()`，生产入口与测试辅助层共用完整 Express 组合；删除测试中的平行路由挂载和伪造 `/api/health`，避免测试通过但生产路由缺失。

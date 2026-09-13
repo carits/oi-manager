@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-12
+last_verified: 2026-09-13
 source_of_truth: apps/server/src/modules/training-engine, apps/server/src/modules/assignment, apps/server/prisma/schema.prisma
 ---
 
@@ -19,17 +19,17 @@ source_of_truth: apps/server/src/modules/training-engine, apps/server/src/module
 
 旧训练使用受保护的 `/api/admin/migration/training-engine` check/apply 幂等迁移为一个自由训练阶段；旧作业使用 `/api/admin/migration/assignments` 幂等迁移为独立作业。两条迁移都不删除旧记录、不改历史成绩。
 
-比赛只有一个可变事实源：`Training(type=contest)`。每个运行比赛通过唯一 `trainingId` 对应一个既有
-`Contest` 规范化投影；创建、基本信息、状态、起止时间和题目增删改排在同一事务中通过
-`modules/contest/contest-aggregate.service.ts` 同步 `Contest/ContestProblem`。Training 之外的业务域不得直接写
-这两个投影，静态架构门禁会拒绝越界写入。题目投影保存相同的固定 TestSet Revision，状态变更也会先补建
-遗漏聚合。受保护的 `/api/admin/migration/contest-aggregates` check/apply 只幂等回填历史桥接，不重写比赛结果。
+比赛发现与跨领域查询只有一个规范入口：`Contest/ContestProblem`。每个运行比赛通过唯一
+`Contest.runtimeTrainingId` 关联暂存于 `Training(type=contest)` 的执行状态；Rating、平台与组织列表、榜单、
+Submission Context、Data Market、Dashboard、Blog 引用和比赛详情均必须经过
+`modules/contest/contest-query.facade.ts`。生产 767 个运行比赛已全部建立映射，查询 Facade 不再返回裸
+`Training(type=contest)`；映射缺失会记录 `contest_aggregate_missing` 并 fail closed。普通 Training 仍可由共享
+活动读取方法返回，不会被误判成比赛。
 
-Contest 查询切换已经开始：Rating 的比赛解析和平台比赛列表必须经过
-`modules/contest/contest-query.facade.ts`，优先从 `Contest.runtimeTrainingId` 进入运行兼容对象。
-未映射历史记录只能在 Facade 内只读回退并记录 `contest_query_legacy_fallback`；业务服务不得各自解释
-`Training.type=contest`。生产回退计数保持为零后，下一阶段再切换组织/团队列表、榜单、Submission Context
-和 Data Market，并最终移除 Facade 内的旧读路径。架构门禁已固定当前 Rating 与平台列表边界。
+比赛创建、基本信息、状态、起止时间、题目增删改排和 Rating 终结状态统一经 Contest Command Service，
+在比赛 advisory lock、CAS 与数据库事务中同步兼容运行态和 `Contest/ContestProblem`。Training 之外的业务域
+不得直接写双模型，静态架构门禁同时禁止查询回退和越界写入。题目聚合保存相同的固定 TestSet Revision。
+受保护的 `/api/admin/migration/contest-aggregates` check/apply 仅用于幂等回填和一致性审计，不重写比赛结果。
 
 ## 训练结构
 
@@ -109,7 +109,7 @@ TrainingSession
 
 - `Training(type=training|homework)` 已冻结为只读兼容来源；新训练只写 `TrainingSession`，新作业只写 `Assignment`。
 - `Training(type=contest)` 暂时保留为比赛运行态，新增比赛能力必须先通过 Contest facade/aggregate service，不允许页面或其他领域直接新增旧 Training 写路径。
-- Contest facade 按“查询切换 → 命令切换 → 运行态迁移”的顺序逐步退出旧存储；当前已完成 Rating 解析和平台比赛列表的第一批查询切换，不做破坏性迁移，也不改历史外键。
+- Contest 查询切换已完成，Facade 内不存在 `source: legacy` 或 `contest_query_legacy_fallback`；下一阶段只继续收口剩余命令/运行态存储，不恢复任何裸比赛读取路径，也不改历史外键。
 - 架构门禁持续禁止 `Contest/ContestProblem` 越界写入；旧活动 API 只接受兼容修复，不再承载训练、作业或全新产品能力。
 
 ## 迁移与回退

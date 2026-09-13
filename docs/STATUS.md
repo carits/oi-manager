@@ -5,6 +5,8 @@ last_verified: 2026-09-13
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-13: Contest 查询兼容回退已从生产代码彻底移除。Rating、平台/组织列表、Data Market、Dashboard、Blog、Submission、榜单和比赛详情只接受 `Contest.runtimeTrainingId` 的规范映射；共享活动查询仍支持普通 Training，但遇到未映射的 `type=contest` 会记录 `contest_aggregate_missing` 并 fail closed。架构门禁禁止重新加入 `source: legacy` 或 `contest_query_legacy_fallback`。测试夹具同步要求比赛创建时生成规范 Contest/ContestProblem，不再用裸 Training 掩盖生产约束。生产同构隔离 Contest cutover 11 文件 113/113、Server 构建与架构门禁通过。提交 `876e0e0`、`9b8adb7`、`6aa156a` 已推送 `main`；本批无 Prisma、业务数据或 Web 变更。生产发布与运行态复核见同批部署记录。
+
 - 2026-09-13: Server 运行时组合根已完成收口并生产发布。新增唯一的 `createApplication()`，生产启动与测试请求共用同一套中间件、静态资源、95 个路由挂载、404 和全局错误处理；测试辅助层删除平行路由图及伪造健康接口。监听端口、Chat SSE、Judge WebSocket 和优雅退出集中到 `startServerRuntime()`，Judge WebSocket 改为显式注入 HTTP Server，不再依赖隐式全局变量；入口文件仅负责环境加载、运行时校验和组合。架构门禁现会阻止生产/测试组合再次分叉。首轮生产同构隔离测试实际捕获了遗漏的个人路由导入，在任何生产流量切换前修复；最终 Contest 全域 11 文件 113/113、Server 生产构建、架构和文档门禁通过。提交 `a1b5242`、`b83cd16` 已推送 `main`，API 3302→3303；数据库 readiness 延迟 2.2 ms，六项服务 active。生产 767/767 场比赛和 199/199 个比赛题目映射继续成立，未映射与部署后 fallback 均为 0，原有 7 个未跟踪维护文件未改动。本批无 Prisma、业务数据或 Web 变更。
 
 - 2026-09-13: Contest 题目结构写入已进入统一命令边界。比赛题目的新增、编辑、排序和删除均在比赛 advisory lock 下执行，新增顺序在锁内分配，Runtime TrainingProblem 与规范 ContestProblem 在同一事务保持固定 TestSet Revision、分值和顺序一致；普通 Training 题目流程保持原路径。架构门禁禁止 Training Problem Management 再直接导入 Contest Aggregate writer。Linux Server 构建、生产同构 Contest 核心 3 文件 43/43 和全部架构/文档门禁通过；提交 `6893111` 已推送 `main`，API 3303→3302。生产 199/199 个比赛题目映射，未映射和核心字段差异均为 0；767/767 场比赛映射继续成立，部署后 fallback 0，六项服务 active。本批无 Prisma、业务数据或 Web 变更。

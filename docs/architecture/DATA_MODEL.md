@@ -16,7 +16,7 @@ source_of_truth: apps/server/prisma/schema.prisma, docs/architecture/generated/A
 | 账号与组织 | `User`、`Organization`、`School`、`OrganizationMembership`、成员资料、加入/邀请/创建申请与审计 |
 | 授权 | `OrganizationMembershipRole`、`OrganizationMembershipCapability`；旧 `memberRole` 在迁移期仅作为资料身份和兼容输入 |
 | 团队与教学 | `Team`、`Assignment`、`TrainingSession` 及其题目、名单、进度、提示、反馈和事件 |
-| 比赛运行与 Rating | `Training(type=contest)` 是可变运行事实源；`Contest/ContestProblem` 是受边界保护的规范化投影；最终榜单和 Rating 批次不可变 |
+| 比赛运行与 Rating | `Contest/ContestProblem` 是比赛发现与跨域查询的规范入口；关联的 `Training(type=contest)` 暂承载可变执行状态；最终榜单和 Rating 批次不可变 |
 | 题目与评测资产 | `Problem`、`ProblemTestSetRevision`、Test Graph、测试点、Blob、Judge Program、Validator/Feature/Classifier |
 | Candidate 与贡献经济 | Candidate、生成任务、Wrong Corpus、Selector、Evaluation Budget、Contribution、Carits 和 Credits 账本 |
 | 提交与 Judge | `Submission` 保存提交意图与远端归档结果；本地执行结果唯一来自 `JudgeRun`，物理执行来自 `JudgeAttempt` |
@@ -54,7 +54,8 @@ flowchart LR
 
 - TestSet Revision 是正式评测数据的不可变事实；YAML 只允许由结构化模型单向生成。
 - 已创建活动固定 Revision，题库 Hack/Candidate 的新 Revision 不直接传播到活动。
-- `Training(type=contest)` 是比赛编辑和运行状态的唯一可变事实源；`Contest/ContestProblem` 只能经 `contest-aggregate.service.ts` 同事务投影，普通领域禁止直接写。
+- `Contest/ContestProblem` 是比赛发现和跨领域查询的规范入口；运行比赛必须先通过 `Contest.runtimeTrainingId` 定位兼容执行对象，缺失映射时 fail closed，不再读取裸 `Training(type=contest)` 作为比赛回退。
+- `Training(type=contest)` 暂时保留比赛的可变执行状态；所有比赛创建、编辑、生命周期、题目结构和终结写入必须经过 Contest Command Service，在同一锁与事务中同步规范聚合，普通领域禁止直接写双模型。
 
 ## Submission 与 Judge
 
