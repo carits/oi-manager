@@ -16,6 +16,7 @@ import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 import { listPlatformContestRuntimes } from '../../contest/contest-query.facade'
 import {
   createContestRuntimeTx,
+  deleteContestRuntimeTx,
   transitionContestLifecycleTx,
   updateContestRuntimeTx,
 } from '../../contest/contest-command.service'
@@ -456,7 +457,15 @@ export async function deleteTraining(id: number, userId: string) {
     where: { TrainingProblem: { trainingId: id }, snapshotFileId: { not: null } },
     select: { snapshotFileId: true },
   })
-  await prisma.training.delete({ where: { id } })
+  if (training.type === 'contest') {
+    const deleted = await prisma.$transaction(tx => deleteContestRuntimeTx(tx, id))
+    if (deleted.conflict === 'missing') fail(404, 'TRAINING_NOT_FOUND', '比赛不存在')
+    if (deleted.conflict === 'finalized') {
+      fail(409, 'FINALIZED_CONTEST_DELETE_FORBIDDEN', '已生成最终榜单的比赛必须永久保留；如需隐藏请使用归档能力')
+    }
+  } else {
+    await prisma.training.delete({ where: { id } })
+  }
   await Promise.all(snapshotFiles.map(({ snapshotFileId }) => snapshotFileId
     ? fileService.softDelete(snapshotFileId).catch(error => {
         logger.warn('training_snapshot_file_cleanup_failed', {

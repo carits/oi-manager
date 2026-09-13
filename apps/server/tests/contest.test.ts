@@ -21,6 +21,7 @@ function createOrganizationRequest(token: string, organizationId: string) {
     get: (url: string) => agent.get(url).set('x-oi-organization-id', organizationId),
     post: (url: string) => agent.post(url).set('x-oi-organization-id', organizationId),
     put: (url: string) => agent.put(url).set('x-oi-organization-id', organizationId),
+    delete: (url: string) => agent.delete(url).set('x-oi-organization-id', organizationId),
   }
 }
 
@@ -710,5 +711,29 @@ describe('比赛类型区分测试', () => {
     expect(aggregate.format).toBe('ioi')
     expect(aggregate.endAt?.getTime()).toBe(renamedEndTime.getTime())
     expect(aggregate.RuntimeTraining?.RatingConfig?.track).toBe('IOI')
+  })
+
+  it('CT6: 删除未终结比赛会同时删除聚合和兼容运行时', async () => {
+    const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .post(`/api/teams/${team.id}/trainings`)
+      .send({
+        title: '待删除比赛',
+        format: 'oi',
+        type: 'contest',
+        startTime: new Date(Date.now() + 86400000).toISOString(),
+        endTime: new Date(Date.now() + 86400000 * 2).toISOString(),
+      })
+
+    expect(created.status).toBe(200)
+    const contestId = created.body.data.id as number
+    const aggregateBefore = await prisma.contest.findUniqueOrThrow({
+      where: { runtimeTrainingId: contestId },
+    })
+
+    const deleted = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .delete(`/api/trainings/${contestId}`)
+    expect(deleted.status).toBe(200)
+    expect(await prisma.training.findUnique({ where: { id: contestId } })).toBeNull()
+    expect(await prisma.contest.findUnique({ where: { id: aggregateBefore.id } })).toBeNull()
   })
 })

@@ -102,6 +102,9 @@ if (!trainingCrud.includes('transitionContestLifecycleTx')) {
 if (!trainingCrud.includes('updateContestRuntimeTx')) {
   violations.push('Contest metadata update bypasses the Contest command service')
 }
+if (!trainingCrud.includes('deleteContestRuntimeTx')) {
+  violations.push('Contest deletion bypasses the Contest command service')
+}
 for (const directLifecyclePattern of [
   /training\.type\s*===\s*['"]contest['"][\s\S]{0,240}tx\.training\.update\([^)]*status:/,
   /tx\.training\.update\([^)]*finalizationStatus:\s*['"]JUDGING['"]/,

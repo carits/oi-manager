@@ -86,6 +86,40 @@ export interface UpdateContestRuntimeInput {
   }
 }
 
+/**
+ * Delete an unfinalized contest aggregate and its compatibility runtime in
+ * dependency order. The canonical Contest owns projection rows that still
+ * reference TrainingProblem, so it must be removed before Training.
+ */
+export async function deleteContestRuntimeTx(
+  tx: Prisma.TransactionClient,
+  runtimeTrainingId: number,
+) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+
+  const aggregate = await tx.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: { RuntimeTraining: { select: lifecycleRuntimeSelect } },
+  })
+  const runtime = aggregate?.RuntimeTraining || await tx.training.findFirst({
+    where: { id: runtimeTrainingId, type: 'contest' },
+    select: lifecycleRuntimeSelect,
+  })
+  if (!runtime) return { conflict: 'missing' as const }
+  if (runtime.finalizedStandingId) return { conflict: 'finalized' as const }
+
+  if (!aggregate) {
+    logger.warn('contest_command_legacy_fallback', {
+      action: 'contest_command',
+      metadata: { runtimeTrainingId, consumer: 'delete' },
+    })
+  } else {
+    await tx.contest.delete({ where: { id: aggregate.id } })
+  }
+  await tx.training.delete({ where: { id: runtimeTrainingId } })
+  return { conflict: null }
+}
+
 const lifecycleRuntimeSelect = {
   id: true,
   type: true,
