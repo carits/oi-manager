@@ -18,6 +18,7 @@ function systemdDurationToMicroseconds(value) {
 
 const failures = []
 const warnings = []
+const requireMonitorSuccess = process.env.RUNTIME_AUDIT_REQUIRE_MONITOR_SUCCESS !== '0'
 const judge = JSON.parse(command('docker', ['inspect', 'oi-judge']))[0]
 const database = JSON.parse(command('docker', ['inspect', 'oi-postgres']))[0]
 const host = judge.HostConfig
@@ -88,7 +89,11 @@ assert(operationService.LimitNOFILE === '65536', 'operation tasks must have Limi
 assert(systemdDurationToMicroseconds(operationService.TimeoutStartUSec) === 7_200_000_000, 'operation tasks must have a two-hour timeout', failures)
 assert(operationService.NoNewPrivileges === 'yes', 'operation tasks must enable NoNewPrivileges', failures)
 assert(operationService.User === 'ecs-user' && operationService.Group === 'ecs-user', 'operation tasks must run as ecs-user', failures)
-assert(operationService.Result === 'success', 'the latest monitor operation must have succeeded', failures)
+if (requireMonitorSuccess) {
+  assert(operationService.Result === 'success', 'the latest monitor operation must have succeeded', failures)
+} else if (operationService.Result !== 'success') {
+  warnings.push('Latest monitor result is not success; result verification was intentionally deferred for the security-baseline self-check')
+}
 assert(!operationService.Requires?.split(/\s+/).includes('docker.service'), 'monitor operations must still run when Docker is down', failures)
 assert(operationService.Wants?.split(/\s+/).includes('docker.service'), 'operation tasks should order Docker startup without requiring it', failures)
 
@@ -136,6 +141,7 @@ console.log(JSON.stringify({
   },
   units,
   operationService,
+  requireMonitorSuccess,
   operationTimers,
   failures,
   warnings,

@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 475 |
+| Referenced environment keys | 476 |
 
 ## HTTP adapter ownership
 
@@ -788,6 +788,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ROOT_DIR`
 - `ROUTER_PID`
 - `ROUTER_PORT`
+- `RUNTIME_AUDIT_REQUIRE_MONITOR_SUCCESS`
 - `RUNTIME_JUDGE_ENV`
 - `RUNTIME_SERVER_ENV`
 - `RUN_DIR`

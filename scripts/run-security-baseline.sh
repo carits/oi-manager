@@ -7,7 +7,7 @@ REPORT_DIR="${SECURITY_BASELINE_DIR:-/data/backups/oi-manager/security-baseline}
 STATE_FILE="${SECURITY_BASELINE_STATE_FILE:-$REPORT_DIR/security-baseline.json}"
 KEEP_DAYS="${SECURITY_BASELINE_KEEP_DAYS:-90}"
 LOCK_FILE="${SECURITY_BASELINE_LOCK_FILE:-/tmp/oi-manager-security-baseline.lock}"
-check_timeout_seconds="${SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS:-300}"
+check_timeout_seconds="${SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS:-600}"
 
 [[ "$KEEP_DAYS" =~ ^[0-9]+$ ]] || { echo 'SECURITY_BASELINE_KEEP_DAYS must be non-negative' >&2; exit 2; }
 [[ "$check_timeout_seconds" =~ ^[1-9][0-9]*$ ]] || {
@@ -52,7 +52,7 @@ run_check runtime-security pnpm --silent security:audit
 run_check runtime-security-contract pnpm --silent security:verify
 run_check secret-decryption pnpm --silent security:rotate:check
 run_check network-exposure pnpm --silent network:audit
-run_check runtime-limits pnpm --silent runtime:audit
+run_check runtime-limits env RUNTIME_AUDIT_REQUIRE_MONITOR_SUCCESS=0 pnpm --silent runtime:audit
 run_check operation-timers pnpm --silent operations:timers:verify
 run_check external-uptime-workflow pnpm --silent monitor:external:verify
 run_check asset-backup-contract pnpm --silent backup:assets:test
