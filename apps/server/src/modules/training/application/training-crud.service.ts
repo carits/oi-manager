@@ -13,7 +13,7 @@ import {
 } from '../training.helpers'
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
-import { listPlatformContestRuntimes } from '../../contest/contest-query.facade'
+import { findActivityRuntimeForDetail, listPlatformContestRuntimes } from '../../contest/contest-query.facade'
 import { resolveOrganizationAuthorization } from '../../authorization/capabilities'
 import {
   createContestRuntimeTx,
@@ -260,10 +260,7 @@ export async function synchronizeTrainingStatus(training: any, now: Date) {
 }
 
 export async function getTrainingDetail(id: number, userId: string) {
-  const training = await prisma.training.findUnique({
-    where: { id },
-    include: { RatingConfig: true, _count: { select: { TrainingParticipant: true, TrainingProblem: true } } },
-  })
+  const training = await findActivityRuntimeForDetail(id)
   if (!training) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
   if (!await canAccessTraining(userId, training)) {
     fail(403, 'TRAINING_ACCESS_DENIED', '无权限查看该训练')

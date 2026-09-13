@@ -71,9 +71,9 @@ type RankingRatingChange = {
   appliedDelta: number
 }
 
-async function ratingChangesByUser(trainingId: number): Promise<Map<string, RankingRatingChange[]>> {
+async function ratingChangesByUser(contestId: string): Promise<Map<string, RankingRatingChange[]>> {
   const batches = await prisma.ratingBatch.findMany({
-    where: { trainingId, status: 'APPLIED', supersededAt: null },
+    where: { contestId, status: 'APPLIED', supersededAt: null },
     select: {
       Pool: { select: { scopeType: true, track: true, organizationId: true, Organization: { select: { name: true, School: { select: { shortName: true } } } } } },
       Changes: { select: { userId: true, ratingBefore: true, ratingAfter: true, appliedDelta: true } },
@@ -98,9 +98,10 @@ async function ratingChangesByUser(trainingId: number): Promise<Map<string, Rank
   return result
 }
 
-async function appendFinalizedRatingChanges(training: any, payload: any) {
+async function appendFinalizedRatingChanges(training: any, contestId: string | null, payload: any) {
   if (training.type !== 'contest' || training.status !== 'finished' || payload.hidden) return payload
-  const byUser = await ratingChangesByUser(training.id)
+  if (!contestId) fail(409, 'CONTEST_CANONICAL_IDENTITY_MISSING', '比赛缺少规范身份，无法读取 Rating 变化')
+  const byUser = await ratingChangesByUser(contestId)
   return {
     ...payload,
     ranking: payload.ranking.map((row: any) => ({ ...row, ratingChanges: byUser.get(row.userId) || [] })),
@@ -368,5 +369,5 @@ export async function getTrainingRanking(trainingId: number, userId: string) {
   const payload = training.format === 'ioi' || training.format === 'oi'
     ? await buildOiRanking(training, excludedIds)
     : await buildIcpcRanking(training, excludedIds)
-  return appendFinalizedRatingChanges(training, payload)
+  return appendFinalizedRatingChanges(training, resolved.contest?.id || null, payload)
 }

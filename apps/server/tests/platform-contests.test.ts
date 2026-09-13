@@ -42,11 +42,10 @@ describe('platform contest lifecycle', () => {
 
     const contest = await prisma.training.findUniqueOrThrow({
       where: { id: created.body.data.id },
-      include: { RatingConfig: true },
     })
     expect(contest).toMatchObject({ type: 'contest', scope: 'platform', teamId: null, organizationId: null })
-    expect(contest.RatingConfig).toMatchObject({ scope: 'NONE', track: 'IOI', revision: 1 })
-    const aggregate = await prisma.contest.findUniqueOrThrow({ where: { runtimeTrainingId: contest.id } })
+    const aggregate = await prisma.contest.findUniqueOrThrow({ where: { runtimeTrainingId: contest.id }, include: { RatingConfig: true } })
+    expect(aggregate.RatingConfig).toMatchObject({ scope: 'NONE', track: 'IOI', revision: 1 })
     expect(aggregate).toMatchObject({ title: contest.title, scope: 'platform', format: 'ioi', countRating: false })
 
     const configured = await request(app)

@@ -389,6 +389,43 @@ export async function findActivityRuntimeForAccess(runtimeTrainingId: number) {
   return { contest: null, runtime, source: 'training' as const }
 }
 
+const detailRuntimeInclude = {
+  _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
+} as const
+
+/** Resolve activity detail and attach Contest-owned Rating configuration. */
+export async function findActivityRuntimeForDetail(runtimeTrainingId: number) {
+  const aggregate = await prisma.contest.findUnique({
+    where: { runtimeTrainingId },
+    include: {
+      RatingConfig: true,
+      RuntimeTraining: { include: detailRuntimeInclude },
+    },
+  })
+  if (aggregate?.RuntimeTraining) {
+    if (aggregate.RuntimeTraining.type !== 'contest') {
+      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
+        action: 'contest_query',
+        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'activity_detail' },
+      })
+      return null
+    }
+    return { ...aggregate.RuntimeTraining, RatingConfig: aggregate.RatingConfig }
+  }
+  const runtime = await prisma.training.findUnique({
+    where: { id: runtimeTrainingId },
+    include: detailRuntimeInclude,
+  })
+  if (!runtime) return null
+  if (runtime.type === 'contest') {
+    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
+      action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'activity_detail' },
+    })
+    return null
+  }
+  return { ...runtime, RatingConfig: null }
+}
+
 const overviewRuntimeInclude = {
   _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
   TrainingProblem: {

@@ -675,10 +675,10 @@ describe('比赛类型区分测试', () => {
 
     const afterStart = await prisma.contest.findUniqueOrThrow({
       where: { runtimeTrainingId: contestId },
-      include: { RuntimeTraining: { include: { RatingConfig: true } } },
+      include: { RatingConfig: true, RuntimeTraining: true },
     })
     expect(afterStart.status).toBe('ongoing')
-    expect(afterStart.RuntimeTraining?.RatingConfig?.lockedAt).not.toBeNull()
+    expect(afterStart.RatingConfig?.lockedAt).not.toBeNull()
 
     const finished = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .post(`/api/trainings/${contestId}/finish`)
@@ -723,12 +723,12 @@ describe('比赛类型区分测试', () => {
 
     const aggregate = await prisma.contest.findUniqueOrThrow({
       where: { runtimeTrainingId: contestId },
-      include: { RuntimeTraining: { include: { RatingConfig: true } } },
+      include: { RatingConfig: true, RuntimeTraining: true },
     })
     expect(aggregate.title).toBe('已编辑比赛')
     expect(aggregate.format).toBe('ioi')
     expect(aggregate.endAt?.getTime()).toBe(renamedEndTime.getTime())
-    expect(aggregate.RuntimeTraining?.RatingConfig?.track).toBe('IOI')
+    expect(aggregate.RatingConfig?.track).toBe('IOI')
   })
 
   it('CT6: 删除未终结比赛会同时删除聚合和兼容运行时', async () => {

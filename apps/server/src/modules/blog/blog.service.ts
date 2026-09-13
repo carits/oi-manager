@@ -299,32 +299,33 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
   if (input.type === 'CONTEST_STANDING') {
     const snapshot = await db.contestStandingSnapshot.findUnique({
       where: { id: input.standingSnapshotId! },
-      include: { Training: true, Entries: { where: { userId: user.userId }, take: 1 } },
+      include: { Contest: true, Entries: { where: { userId: user.userId }, take: 1 } },
     })
     if (!snapshot || !snapshot.Entries[0] || !['FINALIZED', 'SUPERSEDED'].includes(snapshot.status)) {
       fail(404, 'BLOG_REFERENCE_NOT_FOUND', '只能引用自己参加过的已结算比赛榜单')
     }
-    const training = snapshot.Training
+    const contest = snapshot.Contest
+    if (contest.runtimeTrainingId === null) fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的比赛没有可访问的运行记录')
     let accessMode: BlogVisibility = BlogVisibility.PRIVATE
-    if (training.scope === 'platform') accessMode = BlogVisibility.PUBLIC
-    else if (training.organizationId && await activeOrganizationMember(db, user.userId, training.organizationId)) accessMode = BlogVisibility.ORGANIZATION
-    else if (training.teamId) {
-      const member = await db.teamMember.findFirst({ where: { teamId: training.teamId, userId: user.userId, status: 'active' }, select: { id: true } })
+    if (contest.scope === 'platform') accessMode = BlogVisibility.PUBLIC
+    else if (contest.organizationId && await activeOrganizationMember(db, user.userId, contest.organizationId)) accessMode = BlogVisibility.ORGANIZATION
+    else if (contest.teamId) {
+      const member = await db.teamMember.findFirst({ where: { teamId: contest.teamId, userId: user.userId, status: 'active' }, select: { id: true } })
       if (!member) fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的比赛不可访问')
     } else fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的比赛不可访问')
     const entry = snapshot.Entries[0]
     return {
       ...shared,
       referenceType: input.type,
-      referenceId: String(training.id),
+      referenceId: contest.id,
       referenceVersionId: snapshot.id,
-      trainingId: training.id,
+      trainingId: contest.runtimeTrainingId,
       standingSnapshotId: snapshot.id,
       accessMode,
       snapshotData: {
-        kind: 'contest-standing', trainingId: training.id, title: training.title,
-        organizationId: training.organizationId,
-        format: training.format, standingRevision: snapshot.revision, scoringMode: snapshot.scoringMode,
+        kind: 'contest-standing', trainingId: contest.runtimeTrainingId, contestId: contest.id, title: contest.title,
+        organizationId: contest.organizationId,
+        format: contest.format, standingRevision: snapshot.revision, scoringMode: snapshot.scoringMode,
         rank: entry.rank, score: entry.totalScore === null ? null : Number(entry.totalScore),
         solvedCount: entry.solvedCount, penaltySeconds: entry.penaltySeconds, fullScoreCount: entry.fullScoreCount,
       },
@@ -359,12 +360,14 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
   }
   const change = await db.ratingChange.findUnique({
     where: { id: input.ratingChangeId! },
-    include: { Batch: { include: { Pool: true, Training: true } } },
+    include: { Batch: { include: { Pool: true, Contest: true } } },
   })
   if (!change || change.userId !== user.userId || !['APPLIED', 'SUPERSEDED'].includes(change.Batch.status)) {
     fail(404, 'BLOG_REFERENCE_NOT_FOUND', '只能引用自己的已应用 Rating 变化')
   }
   const pool = change.Batch.Pool
+  const contest = change.Batch.Contest
+  if (contest.runtimeTrainingId === null) fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的 Rating 变化没有可访问的运行记录')
   const accessMode = pool.scopeType === 'GLOBAL' ? BlogVisibility.PUBLIC : BlogVisibility.ORGANIZATION
   if (pool.scopeType === 'ORGANIZATION' && (!pool.organizationId || !await activeOrganizationMember(db, user.userId, pool.organizationId))) {
     fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的组织 Rating 变化不可访问')
@@ -375,14 +378,14 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
     referenceId: change.id,
     referenceVersionId: change.batchId,
     ratingChangeId: change.id,
-    trainingId: change.Batch.trainingId,
+    trainingId: contest.runtimeTrainingId,
     accessMode,
     snapshotData: {
       kind: 'rating-change', ratingChangeId: change.id, batchId: change.batchId,
       scope: pool.scopeType, organizationId: pool.organizationId, track: pool.track,
       ratingBefore: change.ratingBefore, appliedDelta: change.appliedDelta, ratingAfter: change.ratingAfter,
       rank: change.rank, fieldSize: change.fieldSize,
-      contest: { id: change.Batch.Training.id, title: change.Batch.Training.title },
+      contest: { id: contest.runtimeTrainingId, contestId: contest.id, title: contest.title },
     },
   }
 }
