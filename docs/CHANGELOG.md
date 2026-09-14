@@ -15,7 +15,8 @@ source_of_truth: Git history
 - `packages/contracts` 新增 Endpoint Contract、分页、字段错误与日期 Wire Schema，并为 Assignment 批改矩阵/人工完成、Blog 公共阅读、Rating 人类化展示和题解相似对照建立共享 Runtime Schema。
 - Server 新增请求、查询与成功响应 Contract Adapter；Web 新增 `queryContract/mutateContract`，无效请求在发出前阻断，不合规成功响应显式报错而不伪装为空数据。
 - `pnpm architecture:check` 新增 Contract/Feature Slice 防回退门禁，固定已迁移边界并拒绝旧目录、App 深层导入和 Feature 内 `any`；隔离测试脚本同步纳入 Contract Adapter 回归。
-- Contracts、Server、Web 类型检查与生产构建、Web 39 文件 165 项、UI/架构/文档门禁已通过；生产发布证据将在蓝绿与 canary 验收后补齐。
+- Contracts、Server、Web 类型检查与生产构建、Web 39 文件 166 项、UI/架构/文档门禁已通过；真实隔离数据库验证中 Contract fail-closed 捕获并修正 Assignment 矩阵投影字段偏差，最终 Assignment 14/14、Blog 12/12、Rating 22/22 通过。
+- 提交 `172a711`、`3d52fb4` 已推送 `main`；API 3302→3303，Web BUILD_ID `cQJ2FSPc7kihEygGUEWBr` 经 canary 与正式双账号消息闭环（序号 158–161）后提升，公开 Blog Contract、health/readiness 及全部生产服务核验正常。
 
 ## 2026-09-13
 
