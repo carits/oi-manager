@@ -174,7 +174,8 @@ describe('学校私有题库隔离', () => {
         ojBindings: [{ platform: 'luogu', problemId: createId }],
         statements: [{ content: '缺少 format' }],
       })
-    expect(rejectedCreate.status).toBe(400)
+    expect(rejectedCreate.status).toBe(422)
+    expect(rejectedCreate.body.code).toBe('API_CONTRACT_REQUEST_INVALID')
     expect(await prisma.problem.count({ where: {
       organizationId: schoolA.school.organizationId,
       platform: 'luogu',
@@ -186,7 +187,8 @@ describe('学校私有题库隔离', () => {
     const rejectedUpdate = await createAuthenticatedRequest(app, ownerAToken)
       .put(`/api/problems/${created.body.data.id}`)
       .send({ title: '不应提交的标题', statements: [{ content: '缺少 format' }], solutions: [] })
-    expect(rejectedUpdate.status).toBe(400)
+    expect(rejectedUpdate.status).toBe(422)
+    expect(rejectedUpdate.body.code).toBe('API_CONTRACT_REQUEST_INVALID')
     expect((await prisma.problem.findUniqueOrThrow({ where: { id: created.body.data.id } })).title).toBe(originalTitle)
   })
 

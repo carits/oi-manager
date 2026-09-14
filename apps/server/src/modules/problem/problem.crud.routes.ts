@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination } from '../../lib/pagination'
+import { ProblemContracts } from '@oi-manager/contracts'
+import { parseContractBody, sendContractData } from '../../lib/api-contract'
 import {
   archiveProblem,
   copyProblemIntoSchool,
@@ -40,8 +42,9 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
 
 problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   try {
-    const data = await createProblem(req.user!, req.body)
-    return res.status(201).json({ success: true, data })
+    const body = parseContractBody(ProblemContracts.create, req.body)
+    const data = await createProblem(req.user!, body)
+    return sendContractData(res, ProblemContracts.create, data, 201)
   } catch (error) {
     return sendProblemCrudError(error, res)
   }
@@ -68,7 +71,7 @@ problemCrudRouter.get('/library/creators', authenticate, asyncHandler(async (req
 problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getProblemDetail(req.user!, req.params.id)
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.getEditorDetail, data)
   } catch (error) {
     return sendProblemCrudError(error, res)
   }
@@ -76,8 +79,9 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
 
 problemCrudRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
   try {
-    const data = await updateProblem(req.user!, req.params.id, req.body)
-    return res.json({ success: true, data })
+    const body = parseContractBody(ProblemContracts.update, req.body)
+    const data = await updateProblem(req.user!, req.params.id, body)
+    return sendContractData(res, ProblemContracts.update, data)
   } catch (error) {
     return sendProblemCrudError(error, res)
   }

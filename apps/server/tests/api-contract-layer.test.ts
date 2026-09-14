@@ -110,4 +110,42 @@ describe('shared API contract adapter', () => {
       }),
     }))
   })
+
+  it('guards Problem editor requests and preserves the complete detail projection', () => {
+    const body = parseContractBody(ProblemContracts.update, {
+      title: '整数求和',
+      status: 'published',
+      timeLimit: 1000,
+      memoryLimit: 256,
+      statements: [{
+        format: 'markdown',
+        language: 'zh',
+        content: '题面',
+        fileUrl: null,
+        isVisible: true,
+      }],
+      solutions: [],
+    })
+    expect(body.status).toBe('published')
+    expect(() => parseContractBody(ProblemContracts.update, {
+      title: '整数求和',
+      status: 'public',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getEditorDetail, {
+      id: 'problem-1',
+      title: '整数求和',
+      platform: 'carits',
+      status: 'draft',
+      statements: [],
+      solutions: [],
+      permissions: { canEdit: true, canView: true },
+      ownerName: 'teacher',
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({ ownerName: 'teacher' }),
+    }))
+  })
 })

@@ -6,21 +6,19 @@ import unifiedStyles from './ProblemForm.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { JudgeSettingsTab, JudgeSettingsTabHandle } from './JudgeSettingsTab'
 import apiClient from '@/lib/apiClient'
-import { OJ_PLATFORMS_NO_ALL as OJ_PLATFORMS } from '@/lib/oj-platforms'
-import { Paperclip } from 'lucide-react'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
+import { ProblemContentVersions, type ProblemContentVersion } from './ProblemContentVersions'
+import { ProblemPublishingSettings, type ProblemOjBinding } from './ProblemPublishingSettings'
+import { ProblemAttachments } from './ProblemAttachments'
+import { createProblem, getProblemEditorDetail, updateProblem } from '../api/problemEditorApi'
+import type { ProblemCreateInput } from '@oi-manager/contracts'
 
-interface OjBinding {
-  platform: string
-  problemId: string
-  url?: string
-}
+type OjBinding = ProblemOjBinding
 
 interface OjAttachment {
   filename: string
@@ -33,21 +31,6 @@ interface ProblemAttachment {
   fileSize: number
 }
 
-interface EditableProblem {
-  id: string
-  title: string
-  platform?: string | null
-  difficulty?: string | null
-  timeLimit?: number | null
-  memoryLimit?: number | null
-  visibility?: string | null
-  status: string
-  ojBindings?: string | OjBinding[] | null
-  statements?: Statement[]
-  solutions?: Statement[]
-  permissions?: { canEdit?: boolean }
-}
-
 interface FetchedOjProblem {
   title: string
   timeLimit?: number | null
@@ -57,7 +40,6 @@ interface FetchedOjProblem {
   attachments?: OjAttachment[]
 }
 
-type ProblemMutationResult = { id: string }
 type UploadedStatement = { id: string; fileUrl: string }
 
 const requestErrorMessage = (error: unknown, fallback: string) => {
@@ -69,19 +51,7 @@ const requestErrorMessage = (error: unknown, fallback: string) => {
   return fallback
 }
 
-interface Statement {
-  id?: string
-  format: 'markdown' | 'pdf'
-  language: 'zh' | 'en' | null
-  content: string | null
-  fileUrl: string | null
-  isVisible: boolean
-}
-
-const LANGUAGE_LABELS: Record<string, string> = {
-  zh: '中文',
-  en: 'English'
-}
+type Statement = ProblemContentVersion
 
 interface ProblemFormProps {
   mode: 'create' | 'edit'
@@ -89,7 +59,7 @@ interface ProblemFormProps {
   problemId?: string
 }
 
-let problemDraftBootstrap: Promise<Awaited<ReturnType<typeof apiClient.post<{ id: string }>>>> | null = null
+let problemDraftBootstrap: ReturnType<typeof createProblem> | null = null
 
 export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const router = useRouter()
@@ -126,11 +96,11 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   useEffect(() => {
     if (mode !== 'create') return
     const bootstrap = async () => {
-      const request = problemDraftBootstrap ||= apiClient.post<{ id: string }>('/api/problems', { title: '未命名题目', status: 'draft', statements: [], solutions: [] })
+      const request = problemDraftBootstrap ||= createProblem({ title: '未命名题目', status: 'draft', statements: [], solutions: [] })
       const result = await request
       window.setTimeout(() => { if (problemDraftBootstrap === request) problemDraftBootstrap = null }, 1000)
-      if (!result.success || !result.data?.id) {
-        setLoading(false); toast.error(result.message || '无法创建题目草稿，请重试')
+      if (!result.ok || !result.data.id) {
+        setLoading(false); toast.error(result.ok ? '无法创建题目草稿，请重试' : result.error.message)
         return
       }
       router.replace(`${pathPrefix}/problems/${result.data.id}/edit?new=1`)
@@ -152,7 +122,15 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   }
 
   // 表单状态
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    title: string
+    platform: string
+    difficulty: string
+    timeLimit: string
+    memoryLimit: string
+    visibility: string
+    status: 'draft' | 'published' | 'archived'
+  }>({
     title: '',
     platform: '',
     difficulty: '',
@@ -167,8 +145,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const [solutions, setSolutions] = useState<Statement[]>([])
   const [ojBindings, setOjBindings] = useState<OjBinding[]>([])
 
-  const buildProblemPayload = () => {
-    const data: Record<string, unknown> = {
+  const buildProblemPayload = (): ProblemCreateInput => {
+    const data: ProblemCreateInput = {
       title: form.title.trim() || '未命名题目',
       difficulty: form.difficulty || null,
       timeLimit: form.timeLimit ? parseInt(form.timeLimit) : null,
@@ -213,8 +191,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     const timer = window.setTimeout(async () => {
       setAutoSaveStatus('saving')
       const fingerprint = currentFingerprint
-      const result = await apiClient.put(`/api/problems/${problemId}`, buildProblemPayload())
-      if (result.success) {
+      const result = await updateProblem(problemId, buildProblemPayload())
+      if (result.ok) {
         savedFingerprintRef.current = fingerprint
         setAutoSaveStatus('saved')
       } else {
@@ -229,9 +207,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const fetchProblem = async () => {
     try {
       setLoading(true)
-      const result = await apiClient.get<EditableProblem>(`/api/problems/${problemId}`)
-      if (result.success && result.data) {
-        const p = result.data
+      const p = await getProblemEditorDetail(problemId || '')
         if (!p.permissions?.canEdit) {
           toast.error('你没有权限编辑这道题')
           router.replace(`${pathPrefix}/problems/${problemId}`)
@@ -250,9 +226,16 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           setOjBindings(typeof p.ojBindings === 'string' ? JSON.parse(p.ojBindings) : p.ojBindings)
         }
         // 加载多版本数据
-        setStatements(p.statements || [])
-        setSolutions(p.solutions || [])
-      }
+        const normalizeContent = (item: (typeof p.statements)[number]): Statement => ({
+          id: item.id,
+          format: item.format,
+          language: item.language,
+          content: item.content ?? null,
+          fileUrl: item.fileUrl ?? null,
+          isVisible: item.isVisible ?? true,
+        })
+        setStatements((p.statements || []).map(normalizeContent))
+        setSolutions((p.solutions || []).map(normalizeContent))
     } catch (error) {
       console.error('Failed to fetch problem:', error)
     } finally {
@@ -528,13 +511,6 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     }
   }
 
-  // 格式化文件大小
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B'
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -550,12 +526,12 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
       let result
       if (mode === 'create') {
-        result = await apiClient.post<ProblemMutationResult>('/api/problems', data)
+        result = await createProblem(data)
       } else {
-        result = await apiClient.put<ProblemMutationResult>(`/api/problems/${problemId}`, data)
+        result = await updateProblem(problemId || '', data)
       }
 
-      if (result.success && result.data) {
+      if (result.ok) {
         const createdId = result.data.id || problemId
 
         // 创建模式：上传暂存的评测数据 + 保存评测配置
@@ -727,210 +703,35 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           {/* Tab 内容 */}
           <div className={unifiedStyles.u5}>
             {activeTab === 'statement' && (
-              <div>
-                {/* 已添加的版本 */}
-                {statements.map((stmt, index) => (
-                  <div key={index} className={unifiedStyles.u13}>
-                    <div className={unifiedStyles.u14}>
-                      <span className={unifiedStyles.u15}>
-                        {stmt.format === 'pdf' ? 'PDF' : `${stmt.language ? LANGUAGE_LABELS[stmt.language] : '未知'}`}
-                      </span>
-                      <div className={unifiedStyles.u16}>
-                        <label className={unifiedStyles.u17}>
-                          <Input
-                            type="checkbox"
-                            checked={stmt.isVisible}
-                            onChange={(e) => updateStatement(index, { isVisible: e.target.checked })}
-                          />
-                          可见
-                        </label>
-                        <Button variant="ghost"
-                          type="button"
-                          onClick={() => removeStatement(index)}
-                          className={unifiedStyles.u18}
-                        >
-                          删除
-                        </Button>
-                      </div>
-                    </div>
-                    <div className={unifiedStyles.u19}>
-                      {stmt.format === 'markdown' ? (
-                        <div>
-                          <div className={unifiedStyles.u20}>
-                            <Button variant="ghost" type="button" onClick={() => setEditMode('edit')}
-                              className={unifiedStyles.editorModeButton} aria-pressed={editMode === 'edit'}>
-                              编辑
-                            </Button>
-                            <Button variant="ghost" type="button" onClick={() => setEditMode('preview')}
-                              className={unifiedStyles.editorModeButton} aria-pressed={editMode === 'preview'}>
-                              预览
-                            </Button>
-                          </div>
-                          {editMode === 'edit' ? (
-                            <Textarea
-                              value={stmt.content || ''}
-                              onChange={(e) => updateStatement(index, { content: e.target.value })}
-                              className={unifiedStyles.u21}
-                              placeholder="请输入题面内容（支持 Markdown 和 LaTeX）"
-                            />
-                          ) : (
-                            <div className={unifiedStyles.u22}>
-                              {stmt.content ? (
-                                <MarkdownRenderer content={stmt.content} />
-                              ) : (
-                                <span className={unifiedStyles.u23}>暂无内容</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          {mode === 'edit' && problemId ? (
-                            <div>
-                              <Input
-                                type="file"
-                                accept=".pdf"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0]
-                                  if (file) uploadPdf('statement', index, file)
-                                }}
-                                className={unifiedStyles.u24}
-                              />
-                              {stmt.fileUrl && (
-                                <p className={unifiedStyles.u25}>
-                                  已上传 PDF
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <p className={unifiedStyles.u26}>
-                              请先保存题目后再上传 PDF
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {/* 添加版本下拉 */}
-                <div className={unifiedStyles.u27}>
-                  <Select aria-label="选择"
-                    onChange={(e) => {
-                      const value = e.target.value
-                      if (value === 'markdown-zh') addStatement('markdown', 'zh')
-                      else if (value === 'markdown-en') addStatement('markdown', 'en')
-                      else if (value === 'pdf') addStatement('pdf', null)
-                      e.target.value = ''
-                    }}
-                    className={unifiedStyles.u28}
-                  >
-                    <option value="">+ 添加题面版本</option>
-                    <option value="markdown-zh" disabled={hasStatement('markdown', 'zh')}>
-                      Markdown 中文 {hasStatement('markdown', 'zh') ? '(已添加)' : ''}
-                    </option>
-                    <option value="markdown-en" disabled={hasStatement('markdown', 'en')}>
-                      Markdown 英文 {hasStatement('markdown', 'en') ? '(已添加)' : ''}
-                    </option>
-                    <option value="pdf" disabled={hasStatement('pdf', null)}>
-                      上传 PDF {hasStatement('pdf', null) ? '(已添加)' : ''}
-                    </option>
-                  </Select>
-                </div>
-              </div>
+              <ProblemContentVersions
+                kind="statement"
+                items={statements}
+                mode={mode}
+                problemId={problemId}
+                editMode={editMode}
+                onEditModeChange={setEditMode}
+                onUpdate={updateStatement}
+                onRemove={(index) => void removeStatement(index)}
+                onAdd={addStatement}
+                onUploadPdf={(index, file) => void uploadPdf('statement', index, file)}
+              />
             )}
 
             {activeTab === 'solution' && (
-              <div>
-                {/* 已添加的版本 */}
-                {solutions.map((sol, index) => (
-                  <div key={index} className={unifiedStyles.u13}>
-                    <div className={unifiedStyles.u14}>
-                      <span className={unifiedStyles.u15}>
-                        题解 - {sol.format === 'pdf' ? 'PDF' : `${sol.language ? LANGUAGE_LABELS[sol.language] : '未知'}`}
-                      </span>
-                      <div className={unifiedStyles.u16}>
-                        <label className={unifiedStyles.u17}>
-                          <Input
-                            type="checkbox"
-                            checked={sol.isVisible}
-                            onChange={(e) => updateSolution(index, { isVisible: e.target.checked })}
-                          />
-                          可见
-                        </label>
-                        <Button variant="ghost"
-                          type="button"
-                          onClick={() => removeSolution(index)}
-                          className={unifiedStyles.u18}
-                        >
-                          删除
-                        </Button>
-                      </div>
-                    </div>
-                    <div className={unifiedStyles.u19}>
-                      {sol.format === 'markdown' ? (
-                        <Textarea
-                          value={sol.content || ''}
-                          onChange={(e) => updateSolution(index, { content: e.target.value })}
-                          className={unifiedStyles.u29}
-                          placeholder="请输入题解内容（支持 Markdown 和 LaTeX）"
-                        />
-                      ) : (
-                        <div>
-                          {mode === 'edit' && problemId ? (
-                            <div>
-                              <Input
-                                type="file"
-                                accept=".pdf"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0]
-                                  if (file) uploadPdf('solution', index, file)
-                                }}
-                                className={unifiedStyles.u24}
-                              />
-                              {sol.fileUrl && (
-                                <p className={unifiedStyles.u25}>
-                                  已上传 PDF
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <p className={unifiedStyles.u26}>
-                              请先保存题目后再上传 PDF
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {/* 添加版本下拉 */}
-                <div className={unifiedStyles.u27}>
-                  <Select aria-label="选择"
-                    onChange={(e) => {
-                      const value = e.target.value
-                      if (value === 'markdown-zh') addSolution('markdown', 'zh')
-                      else if (value === 'markdown-en') addSolution('markdown', 'en')
-                      else if (value === 'pdf') addSolution('pdf', null)
-                      e.target.value = ''
-                    }}
-                    className={unifiedStyles.u28}
-                  >
-                    <option value="">+ 添加题解版本</option>
-                    <option value="markdown-zh" disabled={hasSolution('markdown', 'zh')}>
-                      Markdown 中文 {hasSolution('markdown', 'zh') ? '(已添加)' : ''}
-                    </option>
-                    <option value="markdown-en" disabled={hasSolution('markdown', 'en')}>
-                      Markdown 英文 {hasSolution('markdown', 'en') ? '(已添加)' : ''}
-                    </option>
-                    <option value="pdf" disabled={hasSolution('pdf', null)}>
-                      上传 PDF {hasSolution('pdf', null) ? '(已添加)' : ''}
-                    </option>
-                  </Select>
-                </div>
-              </div>
+              <ProblemContentVersions
+                kind="solution"
+                items={solutions}
+                mode={mode}
+                problemId={problemId}
+                editMode={editMode}
+                onEditModeChange={setEditMode}
+                onUpdate={updateSolution}
+                onRemove={(index) => void removeSolution(index)}
+                onAdd={addSolution}
+                onUploadPdf={(index, file) => void uploadPdf('solution', index, file)}
+              />
             )}
+
 
             {activeTab === 'judge_settings' && (
               <JudgeSettingsTab
@@ -944,174 +745,33 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
             )}
 
             {activeTab === 'settings' && (
-              <div>
-                {/* 题库归属由服务端根据当前工作区和角色确定 */}
-                {role === 'admin' && (
-                  <div className={unifiedStyles.u30}>
-                    <label className={unifiedStyles.u8}>题库归属</label>
-                    <p className={unifiedStyles.u31}>平台题库</p>
-                  </div>
-                )}
-
-                <div className={unifiedStyles.u30}>
-                  <label className={unifiedStyles.u8}>状态</label>
-                  <Select aria-label="选择"
-                    value={form.status}
-                    onChange={(e) => handleChange('status', e.target.value)}
-                    className={unifiedStyles.u28}
-                  >
-                    <option value="draft">草稿</option>
-                    <option value="published">已发布</option>
-                  </Select>
-                </div>
-
-                {/* OJ 绑定 */}
-                <div className={unifiedStyles.u30}>
-                  <label className={unifiedStyles.u8}>OJ 题目绑定</label>
-                  <p className={unifiedStyles.u32}>
-                    绑定外部OJ题目，最多可添加3个
-                  </p>
-
-                  {ojBindings.map((binding, index) => (
-                    <div key={index} className={unifiedStyles.u33}>
-                      <Select aria-label="选择"
-                        value={binding.platform}
-                        onChange={(e) => updateOjBinding(index, 'platform', e.target.value)}
-                        className={unifiedStyles.u28}
-                      >
-                        <option value="">选择平台</option>
-                        {OJ_PLATFORMS.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
-                      </Select>
-                      <Input
-                        type="text"
-                        value={binding.problemId}
-                        onChange={(e) => updateOjBinding(index, 'problemId', e.target.value)}
-                        placeholder="题号"
-                        className={unifiedStyles.u34}
-                      />
-                      <Button variant="outline"
-                        type="button"
-                        onClick={() => handleFetchFromOj(index)}
-                        disabled={fetchingFromOj || !binding.platform || !binding.problemId.trim()}
-                        size="sm"
-                      >
-                        {fetchingFromOj ? '拉取中...' : '拉取'}
-                      </Button>
-                      <Button variant="ghost"
-                        type="button"
-                        onClick={() => removeOjBinding(index)}
-                        className={unifiedStyles.u35}
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  ))}
-
-                  {ojBindings.length < 3 && (
-                    <Button variant="ghost"
-                      type="button"
-                      onClick={addOjBinding}
-                      className={unifiedStyles.u36}
-                    >
-                      + 添加绑定
-                    </Button>
-                  )}
-                </div>
-              </div>
+              <ProblemPublishingSettings
+                role={role}
+                status={form.status}
+                bindings={ojBindings}
+                fetching={fetchingFromOj}
+                onStatusChange={(value) => handleChange('status', value)}
+                onBindingChange={updateOjBinding}
+                onFetch={(index) => void handleFetchFromOj(index)}
+                onRemove={removeOjBinding}
+                onAdd={addOjBinding}
+              />
             )}
+
 
             {activeTab === 'attachments' && (
-              <div>
-                <div className={unifiedStyles.u37}>
-                  <label className={unifiedStyles.u8}>上传附件</label>
-                  <p className={unifiedStyles.u32}>
-                    支持 PDF、ZIP、RAR、7Z、TXT、CPP、C、PY、JAVA、PAS、IN、OUT、MD 格式，最大 50MB
-                  </p>
-                  <Input
-                    type="file"
-                    accept=".pdf,.zip,.rar,.7z,.txt,.cpp,.c,.py,.java,.pas,.in,.out,.md"
-                    onChange={handleAttachmentUpload}
-                    disabled={uploadingAttachment}
-                    className={unifiedStyles.u24}
-                  />
-                  {uploadingAttachment && <span className={unifiedStyles.u38}>上传中...</span>}
-                </div>
-
-                <div className={unifiedStyles.u39}>
-                  <label className={unifiedStyles.u8}>已上传附件</label>
-                  {attachmentsLoading ? (
-                    <div className={unifiedStyles.u40}><span className={[("resource-skeleton-line"), collisionStyles.u2].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
-                  ) : attachments.length === 0 ? (
-                    <div className={unifiedStyles.u40}>暂无附件</div>
-                  ) : (
-                    <div>
-                      {attachments.map((attachment) => (
-                        <div
-                          key={attachment.id}
-                          className={unifiedStyles.u41}
-                        >
-                          <div className={unifiedStyles.u16}>
-                            <Paperclip aria-hidden="true" size={20} />
-                            <div>
-                              <div className={unifiedStyles.u15}>{attachment.fileName}</div>
-                              <div className={unifiedStyles.u10}>
-                                {formatFileSize(attachment.fileSize)}
-                              </div>
-                            </div>
-                          </div>
-                          <Button variant="outline" size="sm"
-                            type="button"
-                            onClick={() => handleAttachmentDelete(attachment.id)}
-                            className={unifiedStyles.u42}
-                          >
-                            删除
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 远程附件（从 OJ 拉取的附件） */}
-                {remoteAttachments.length > 0 && (
-                  <div className={unifiedStyles.u39}>
-                    <label className={unifiedStyles.u8}>
-                      远程附件（从 OJ 拉取）
-                    </label>
-                    <p className={unifiedStyles.u32}>
-                      以下附件来自 OJ 平台，点击下载后保存到本系统
-                    </p>
-                    <div>
-                      {remoteAttachments.map((attachment, index) => (
-                        <div
-                          key={index}
-                          className={unifiedStyles.u43}
-                        >
-                          <div className={unifiedStyles.u16}>
-                            <span className={unifiedStyles.u44}>📥</span>
-                            <div>
-                              <div className={unifiedStyles.u15}>{attachment.filename}</div>
-                              <div className={unifiedStyles.u10}>
-                                待下载
-                              </div>
-                            </div>
-                          </div>
-                          <Button variant="ghost"
-                            type="button"
-                            onClick={() => handleDownloadRemoteAttachment(attachment)}
-                            disabled={downloadingAttachment !== null}
-                          >
-                            {downloadingAttachment === attachment.filename ? '下载中...' : '下载'}
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ProblemAttachments
+                attachments={attachments}
+                remoteAttachments={remoteAttachments}
+                loading={attachmentsLoading}
+                uploading={uploadingAttachment}
+                downloadingFilename={downloadingAttachment}
+                onUpload={handleAttachmentUpload}
+                onDelete={handleAttachmentDelete}
+                onDownloadRemote={(attachment) => void handleDownloadRemoteAttachment(attachment)}
+              />
             )}
+
           </div>
 
           {/* 提交按钮 */}

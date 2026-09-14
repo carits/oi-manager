@@ -6,6 +6,7 @@ import {
   ContestRatingDataSchema,
   ProblemJudgeModeTransitionInputSchema,
   ProblemJudgeSettingsSchema,
+  ProblemEditorMutationSchema,
   ProblemTestdataSchema,
   SimilarityComparisonSchema,
   TrainingDesignSchema,
@@ -175,6 +176,17 @@ describe('feature slice contracts', () => {
       targetMode: 'ioi',
       expectedLatestRevisionId: 'revision-1',
     }).success).toBe(false)
+  })
+
+  it('shares the Problem editor mutation contract instead of accepting arbitrary payloads', () => {
+    expect(ProblemEditorMutationSchema.safeParse({
+      title: '整数求和',
+      status: 'draft',
+      statements: [],
+      solutions: [],
+    }).success).toBe(true)
+    expect(ProblemEditorMutationSchema.safeParse({ status: 'visible' }).success).toBe(false)
+    expect(ProblemEditorMutationSchema.safeParse({ timeLimit: -1 }).success).toBe(false)
   })
 
   it('routes pages through feature public APIs instead of component internals', () => {

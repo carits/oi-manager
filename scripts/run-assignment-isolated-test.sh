@@ -85,7 +85,7 @@ elif [[ "$TEST_SCOPE" == "assignment" ]]; then
 elif [[ "$TEST_SCOPE" == "problem-contract" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     tests/api-contract-layer.test.ts tests/problem-judge-api.test.ts \
-    tests/problem-testset-revision.test.ts tests/testdata.test.ts
+    tests/problem-library-isolation.test.ts tests/problem-testset-revision.test.ts tests/testdata.test.ts
 elif [[ "$TEST_SCOPE" == "authorization" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     tests/authorization-boundary.test.ts tests/auth.test.ts tests/organization-creation.test.ts \

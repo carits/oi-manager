@@ -1,6 +1,60 @@
 import { z } from "zod";
 import { DateTimeWireSchema, defineApiEndpoint } from "./http";
 
+export const ProblemContentVersionSchema = z.object({
+  id: z.string().optional(),
+  format: z.enum(["markdown", "pdf"]),
+  language: z.enum(["zh", "en"]).nullable(),
+  content: z.string().nullable().optional(),
+  fileUrl: z.string().nullable().optional(),
+  isVisible: z.boolean().optional(),
+}).passthrough();
+
+export const ProblemOjBindingSchema = z.object({
+  platform: z.string(),
+  problemId: z.string(),
+  url: z.string().optional(),
+});
+
+const ProblemEditorMutationShape = {
+  title: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  statementType: z.string().optional(),
+  solutionType: z.string().optional(),
+  solutionMarkdown: z.string().nullable().optional(),
+  solutionVisible: z.boolean().optional(),
+  difficulty: z.string().nullable().optional(),
+  timeLimit: z.number().nonnegative().nullable().optional(),
+  memoryLimit: z.number().nonnegative().nullable().optional(),
+  visibility: z.string().optional(),
+  status: z.enum(["draft", "published", "archived"]).optional(),
+  ojBindings: z.array(ProblemOjBindingSchema).max(3).optional(),
+  statements: z.array(ProblemContentVersionSchema).optional(),
+  solutions: z.array(ProblemContentVersionSchema).optional(),
+};
+
+export const ProblemCreateInputSchema = z.object(ProblemEditorMutationShape).extend({
+  title: z.string().min(1),
+});
+export const ProblemEditorMutationSchema = z.object(ProblemEditorMutationShape);
+
+export const ProblemEditorDetailSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  platform: z.string().nullable().optional(),
+  difficulty: z.string().nullable().optional(),
+  timeLimit: z.number().nullable().optional(),
+  memoryLimit: z.number().nullable().optional(),
+  visibility: z.string().nullable().optional(),
+  status: z.enum(["draft", "published", "archived"]),
+  ojBindings: z.string().nullable().optional(),
+  statements: z.array(ProblemContentVersionSchema),
+  solutions: z.array(ProblemContentVersionSchema),
+  permissions: z.object({ canEdit: z.boolean().optional() }).passthrough(),
+}).passthrough();
+
+export const ProblemMutationResultSchema = z.object({ id: z.string() }).passthrough();
+
 export const ProblemTestCasePairSchema = z.object({
   input: z.string().min(1),
   output: z.string().min(1),
@@ -108,6 +162,26 @@ export const ProblemJudgeModeTransitionInputSchema = z.object({
 });
 
 export const ProblemContracts = {
+  create: defineApiEndpoint({
+    key: "problem.create",
+    method: "POST",
+    scope: "context",
+    body: ProblemCreateInputSchema,
+    data: ProblemMutationResultSchema,
+  }),
+  getEditorDetail: defineApiEndpoint({
+    key: "problem.editor-detail.get",
+    method: "GET",
+    scope: "context",
+    data: ProblemEditorDetailSchema,
+  }),
+  update: defineApiEndpoint({
+    key: "problem.update",
+    method: "PUT",
+    scope: "context",
+    body: ProblemEditorMutationSchema,
+    data: ProblemMutationResultSchema,
+  }),
   getJudgeSettings: defineApiEndpoint({
     key: "problem.judge-settings.get",
     method: "GET",
@@ -156,3 +230,6 @@ export type ProblemJudgeSettingsInput = z.infer<
 export type ProblemCheckerFile = z.infer<typeof ProblemCheckerFileSchema>;
 export type ProblemTestdataFile = z.infer<typeof ProblemTestdataFileSchema>;
 export type ProblemTestCasePair = z.infer<typeof ProblemTestCasePairSchema>;
+export type ProblemEditorMutation = z.infer<typeof ProblemEditorMutationSchema>;
+export type ProblemCreateInput = z.infer<typeof ProblemCreateInputSchema>;
+export type ProblemEditorDetail = z.infer<typeof ProblemEditorDetailSchema>;
