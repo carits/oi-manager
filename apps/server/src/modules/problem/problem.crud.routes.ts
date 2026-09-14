@@ -3,7 +3,7 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination } from '../../lib/pagination'
 import { ProblemContracts } from '@oi-manager/contracts'
-import { parseContractBody, sendContractData } from '../../lib/api-contract'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import {
   archiveProblem,
   copyProblemIntoSchool,
@@ -18,6 +18,7 @@ import {
 export const problemCrudRouter = Router()
 
 function sendProblemCrudError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return res
   if (!(error instanceof ProblemCrudError)) throw error
   return res.status(error.statusCode).json({
     success: false,

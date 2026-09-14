@@ -40,6 +40,12 @@ describe('学校私有题库隔离', () => {
       workspaceMode,
     })
 
+  const organizationRequest = (token: string, organizationId: string) =>
+    createAuthenticatedRequest(app, token, { organizationId })
+
+  const schoolARequest = (token: string) => organizationRequest(token, schoolA.school.organizationId)
+  const schoolBRequest = (token: string) => organizationRequest(token, schoolB.school.organizationId)
+
   beforeEach(async () => {
     schoolA = await createTestSchoolWithPrincipal('隔离测试学校 A')
     schoolB = await createTestSchoolWithPrincipal('隔离测试学校 B')
@@ -67,7 +73,7 @@ describe('学校私有题库隔离', () => {
   })
 
   async function createSchoolProblem(status: 'draft' | 'published' = 'draft', suffix = crypto.randomUUID()) {
-    return createAuthenticatedRequest(app, ownerAToken)
+    return organizationRequest(ownerAToken, schoolA.school.organizationId)
       .post('/api/problems')
       .send({
         title: `学校 A 题目 ${suffix}`,
@@ -90,10 +96,10 @@ describe('学校私有题库隔离', () => {
     expect(problem.status).toBe('draft')
     expect(problem.publishedAt).toBeNull()
 
-    const ownerList = await createAuthenticatedRequest(app, ownerAToken).get('/api/problems?library=school')
-    const peerList = await createAuthenticatedRequest(app, peerAToken).get('/api/problems?library=school')
-    const principalList = await createAuthenticatedRequest(app, principalAToken).get('/api/problems?library=school')
-    const otherSchool = await createAuthenticatedRequest(app, teacherBToken).get(`/api/problems/${problem.id}`)
+    const ownerList = await organizationRequest(ownerAToken, schoolA.school.organizationId).get('/api/problems?library=school')
+    const peerList = await organizationRequest(peerAToken, schoolA.school.organizationId).get('/api/problems?library=school')
+    const principalList = await organizationRequest(principalAToken, schoolA.school.organizationId).get('/api/problems?library=school')
+    const otherSchool = await organizationRequest(teacherBToken, schoolB.school.organizationId).get(`/api/problems/${problem.id}`)
 
     expect(ownerList.body.data.data.map((item: { id: string }) => item.id)).toContain(problem.id)
     expect(peerList.body.data.data.map((item: { id: string }) => item.id)).not.toContain(problem.id)
@@ -106,17 +112,17 @@ describe('学校私有题库隔离', () => {
     const problemId = created.body.data.id as string
     await prisma.problem.update({ where: { id: problemId }, data: { judgeConfig: '{"secret":true}' } })
 
-    const publish = await createAuthenticatedRequest(app, ownerAToken)
+    const publish = await schoolARequest(ownerAToken)
       .put(`/api/problems/${problemId}`)
       .send({ status: 'published' })
     expect(publish.status).toBe(200)
     expect(publish.body.data.publishedAt).toBeTruthy()
 
-    const peerDetail = await createAuthenticatedRequest(app, peerAToken).get(`/api/problems/${problemId}`)
-    const peerEdit = await createAuthenticatedRequest(app, peerAToken)
+    const peerDetail = await schoolARequest(peerAToken).get(`/api/problems/${problemId}`)
+    const peerEdit = await schoolARequest(peerAToken)
       .put(`/api/problems/${problemId}`)
       .send({ title: '越权修改' })
-    const principalEdit = await createAuthenticatedRequest(app, principalAToken)
+    const principalEdit = await schoolARequest(principalAToken)
       .put(`/api/problems/${problemId}`)
       .send({ title: '负责人修改' })
 
@@ -132,9 +138,9 @@ describe('学校私有题库隔离', () => {
     const created = await createSchoolProblem('published')
     const problemId = created.body.data.id as string
 
-    const studentList = await createAuthenticatedRequest(app, studentAToken).get('/api/problems?library=school')
-    const studentDetail = await createAuthenticatedRequest(app, studentAToken).get(`/api/problems/${problemId}`)
-    const otherDetail = await createAuthenticatedRequest(app, teacherBToken).get(`/api/problems/${problemId}`)
+    const studentList = await schoolARequest(studentAToken).get('/api/problems?library=school')
+    const studentDetail = await schoolARequest(studentAToken).get(`/api/problems/${problemId}`)
+    const otherDetail = await schoolBRequest(teacherBToken).get(`/api/problems/${problemId}`)
     const platformDetail = await createAuthenticatedRequest(app, platformAdminToken).get(`/api/problems/${problemId}`)
     const superDetail = await createAuthenticatedRequest(app, superAdminToken).get(`/api/problems/${problemId}`)
     const personalSchoolList = await createAuthenticatedRequest(app, tokenFor(ownerA, 'personal')).get('/api/problems?library=school')
@@ -155,9 +161,9 @@ describe('学校私有题库隔离', () => {
       status: 'published',
       ojBindings: [{ platform: 'luogu', problemId: 'P1000' }],
     }
-    const schoolAProblem = await createAuthenticatedRequest(app, ownerAToken).post('/api/problems').send(payload)
-    const duplicateA = await createAuthenticatedRequest(app, peerAToken).post('/api/problems').send(payload)
-    const schoolBProblem = await createAuthenticatedRequest(app, teacherBToken).post('/api/problems').send(payload)
+    const schoolAProblem = await schoolARequest(ownerAToken).post('/api/problems').send(payload)
+    const duplicateA = await schoolARequest(peerAToken).post('/api/problems').send(payload)
+    const schoolBProblem = await schoolBRequest(teacherBToken).post('/api/problems').send(payload)
 
     expect(schoolAProblem.status).toBe(201)
     expect(duplicateA.status).toBe(409)
@@ -167,7 +173,7 @@ describe('学校私有题库隔离', () => {
 
   it('题目与题面版本在创建和更新失败时保持原子性', async () => {
     const createId = `ATOMIC-${crypto.randomUUID()}`
-    const rejectedCreate = await createAuthenticatedRequest(app, ownerAToken)
+    const rejectedCreate = await schoolARequest(ownerAToken)
       .post('/api/problems')
       .send({
         title: '不应留下的半成品题目',
@@ -184,7 +190,7 @@ describe('学校私有题库隔离', () => {
 
     const created = await createSchoolProblem('draft')
     const originalTitle = created.body.data.title as string
-    const rejectedUpdate = await createAuthenticatedRequest(app, ownerAToken)
+    const rejectedUpdate = await schoolARequest(ownerAToken)
       .put(`/api/problems/${created.body.data.id}`)
       .send({ title: '不应提交的标题', statements: [{ content: '缺少 format' }], solutions: [] })
     expect(rejectedUpdate.status).toBe(422)
@@ -203,11 +209,11 @@ describe('学校私有题库隔离', () => {
       })
     expect(platformProblem.status).toBe(201)
 
-    const firstCopy = await createAuthenticatedRequest(app, ownerAToken)
+    const firstCopy = await schoolARequest(ownerAToken)
       .post(`/api/problems/${platformProblem.body.data.id}/copy-to-school`)
-    const duplicateCopy = await createAuthenticatedRequest(app, peerAToken)
+    const duplicateCopy = await schoolARequest(peerAToken)
       .post(`/api/problems/${platformProblem.body.data.id}/copy-to-school`)
-    const otherSchoolCopy = await createAuthenticatedRequest(app, teacherBToken)
+    const otherSchoolCopy = await schoolBRequest(teacherBToken)
       .post(`/api/problems/${platformProblem.body.data.id}/copy-to-school`)
 
     expect(firstCopy.status).toBe(201)
@@ -274,7 +280,7 @@ describe('学校私有题库隔离', () => {
       expect(response.status).toBe(400)
       expect(response.body.code).toBe('INVALID_PROBLEM_SOURCE_GROUP')
     }
-    const schoolGroup = await createAuthenticatedRequest(app, ownerAToken)
+    const schoolGroup = await schoolARequest(ownerAToken)
       .get('/api/problems?library=school&sourceGroup=carits')
     expect(schoolGroup.status).toBe(400)
     expect(schoolGroup.body.code).toBe('INVALID_PROBLEM_SOURCE_GROUP')
@@ -304,13 +310,13 @@ describe('学校私有题库隔离', () => {
       data: { id: crypto.randomUUID(), problemId, fileName: 'isolation.txt', fileSize: 4, fileUrl },
     })
 
-    const ownerAttachments = await createAuthenticatedRequest(app, ownerAToken).get(`/api/problems/${problemId}/attachments`)
-    const studentAttachments = await createAuthenticatedRequest(app, studentAToken).get(`/api/problems/${problemId}/attachments`)
-    const otherAttachments = await createAuthenticatedRequest(app, teacherBToken).get(`/api/problems/${problemId}/attachments`)
+    const ownerAttachments = await schoolARequest(ownerAToken).get(`/api/problems/${problemId}/attachments`)
+    const studentAttachments = await schoolARequest(studentAToken).get(`/api/problems/${problemId}/attachments`)
+    const otherAttachments = await schoolBRequest(teacherBToken).get(`/api/problems/${problemId}/attachments`)
     const adminFileMetadata = await createAuthenticatedRequest(app, platformAdminToken).get(`/api/files/${fileId}`)
-    const ownerTestdata = await createAuthenticatedRequest(app, ownerAToken).get(`/api/problems/${problemId}/testdata`)
-    const peerTestdata = await createAuthenticatedRequest(app, peerAToken).get(`/api/problems/${problemId}/testdata`)
-    const otherTestdata = await createAuthenticatedRequest(app, teacherBToken).get(`/api/problems/${problemId}/testdata`)
+    const ownerTestdata = await schoolARequest(ownerAToken).get(`/api/problems/${problemId}/testdata`)
+    const peerTestdata = await schoolARequest(peerAToken).get(`/api/problems/${problemId}/testdata`)
+    const otherTestdata = await schoolBRequest(teacherBToken).get(`/api/problems/${problemId}/testdata`)
     const adminAi = await createAuthenticatedRequest(app, platformAdminToken)
       .post(`/api/problems/${problemId}/ai/format`)
       .send({})
@@ -376,14 +382,14 @@ describe('学校私有题库隔离', () => {
       },
     })
 
-    const contextualProblem = await createAuthenticatedRequest(app, studentAToken)
+    const contextualProblem = await schoolARequest(studentAToken)
       .get(`/api/problem-lists/${listId}/entries/${entryId}/problem`)
-    const contextualFile = await createAuthenticatedRequest(app, studentAToken)
+    const contextualFile = await schoolARequest(studentAToken)
       .get(`/api/problem-lists/${listId}/entries/${entryId}/files/${uploaded.id}`)
-    const rawProblem = await createAuthenticatedRequest(app, studentAToken).get(`/api/problems/${problemId}`)
-    const swappedEntry = await createAuthenticatedRequest(app, studentAToken)
+    const rawProblem = await schoolARequest(studentAToken).get(`/api/problems/${problemId}`)
+    const swappedEntry = await schoolARequest(studentAToken)
       .get(`/api/problem-lists/${listId}/entries/${crypto.randomUUID()}/files/${uploaded.id}`)
-    const otherSchoolContext = await createAuthenticatedRequest(app, teacherBToken)
+    const otherSchoolContext = await schoolBRequest(teacherBToken)
       .get(`/api/problem-lists/${listId}/entries/${entryId}/problem`)
 
     expect(contextualProblem.status).toBe(200)
@@ -403,7 +409,7 @@ describe('学校私有题库隔离', () => {
   it('公开个人题面 PDF 仍受学校题目边界约束', async () => {
     const created = await createSchoolProblem('published')
     const problemId = created.body.data.id as string
-    const version = await createAuthenticatedRequest(app, ownerAToken)
+    const version = await schoolARequest(ownerAToken)
       .post(`/api/problems/${problemId}/statement-versions`)
       .send({
         name: '学校公开版本',
@@ -416,14 +422,15 @@ describe('学校私有题库隔离', () => {
     const uploaded = await request(app)
       .post(`/api/problems/${problemId}/statement-versions/${versionId}/pdf`)
       .set('Authorization', `Bearer ${ownerAToken}`)
+      .set('X-OI-Organization-ID', schoolA.school.organizationId)
       .attach('file', Buffer.from('%PDF-1.4\nschool statement'), {
         filename: 'statement.pdf',
         contentType: 'application/pdf',
       })
     expect(uploaded.status).toBe(200)
-    expect((await createAuthenticatedRequest(app, ownerAToken)
+    expect((await schoolARequest(ownerAToken)
       .get(`/api/problems/${problemId}/statement-versions/${versionId}/file`)).status).toBe(200)
-    expect((await createAuthenticatedRequest(app, teacherBToken)
+    expect((await schoolBRequest(teacherBToken)
       .get(`/api/problems/${problemId}/statement-versions/${versionId}/file`)).status).toBe(404)
   })
 
