@@ -15,7 +15,8 @@ source_of_truth: Git history
 - 三个切片完成 `api/model/ui` 分层、根级按页面公共入口和零 `any` 门禁；Training Designer 的草稿模型与纯排序/解锁逻辑从巨型 UI 文件抽出。
 - Training 设计读取、结构校验和整图保存接入统一 Runtime Contract；保存接口不再返回与 Web 预期不一致的内部 Session，而是事务完成后返回规范 Design。
 - Contract/Feature 架构门禁提升为 9 个契约文件、8 个 Feature Slice 和 13 条端到端边界，并禁止旧目录或 App 对 `api/model/ui` 的深层导入回流。
-- Contracts、Server、Web 类型检查、Web 聚焦 8 文件 31 项和生产构建通过；本批不包含 Prisma 或业务数据迁移。
+- Contracts、Server、Web 类型检查、Web 39 文件 168 项、生产构建、架构和文档门禁通过；生产同构隔离库 Assignment/Contract/Worker 15/15 通过。
+- 提交 `0a92590` 已推送 `main`，API 3303→3302；Web BUILD_ID `0ap26jB5kWZ-n0LztqZtT` 经 canary 与正式双账号消息闭环（序号 162–165）后提升。本批不包含 Prisma 或业务数据迁移。
 
 ### Frontend Feature Slice 与统一 API Contract Layer
 
