@@ -9,6 +9,7 @@ import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import styles from './JudgeProgramWizard.module.css'
 import type { GeneratorProtocolConfig as ProtocolConfig, JudgeProgramFixture as Fixture, JudgeProgramKind as Kind, ParameterRule, ProgramCatalog, ProgramTemplate } from '../model/judgeProgramTemplateTypes'
+import { getJudgeProgramTemplate } from '../api/judgeProgramTemplateApi'
 
 type Draft = { id: string; kind: Kind; name: string; language: string; protocol: string; templateId?: string; templateVersion?: number; source: string; protocolConfig?: ProtocolConfig; fixtures: Fixture[]; revision: number }
 type Program = { id: string; kind: Kind; name: string; currentVersionId?: string | null; versions: Array<{ id: string; versionNumber: number; lifecycleStatus: string; compileStatus: string }> }
@@ -45,15 +46,15 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
   const selectedTemplateVersion = draft?.templateId === templateId ? draft.templateVersion : selectedTemplate?.version
 
   const loadTemplate = useCallback(async (id: string) => {
-    const result = await apiClient.get<ProgramTemplate>(`/api/judge-program-templates/${id}`)
-    if (!result.success || !result.data) return toast.error(result.message || '模板加载失败')
-    setKind(result.data.kind); setMethod(result.data.language === 'validator-dsl' ? 'dsl' : 'code'); setTemplateId(id); setLanguage(result.data.language); setProtocol(result.data.protocol); setName(result.data.title); setSource(result.data.source || ''); setFixtures(cloneFixtures(result.data.examples || [])); setProtocolConfig(cloneConfig(result.data.protocolConfig)); setLoadedTemplate(result.data); setPreviewTemplate(null); setBlankChosen(false); setDraft(null); setProgram(null); setVersionId(''); setVerification(null)
+    try {
+      const result = await getJudgeProgramTemplate(id)
+      setKind(result.kind); setMethod(result.language === 'validator-dsl' ? 'dsl' : 'code'); setTemplateId(id); setLanguage(result.language); setProtocol(result.protocol); setName(result.title); setSource(result.source || ''); setFixtures(cloneFixtures(result.examples || [])); setProtocolConfig(cloneConfig(result.protocolConfig)); setLoadedTemplate(result); setPreviewTemplate(null); setBlankChosen(false); setDraft(null); setProgram(null); setVersionId(''); setVerification(null)
+    } catch { toast.error('模板加载失败') }
   }, [toast])
 
   const previewTemplateById = useCallback(async (id: string) => {
-    const result = await apiClient.get<ProgramTemplate>(`/api/judge-program-templates/${id}`)
-    if (!result.success || !result.data) return toast.error(result.message || '模板预览加载失败')
-    setPreviewTemplate(result.data)
+    try { setPreviewTemplate(await getJudgeProgramTemplate(id)) }
+    catch { toast.error('模板预览加载失败') }
   }, [toast])
 
   const selectKind = useCallback((next: Kind) => {
@@ -70,7 +71,7 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
       const existing = result.data?.find(item => item.kind === 'standard')
       if (existing) {
         setKind(existing.kind); setDraft(existing); setName(existing.name); setLanguage(existing.language); setProtocol(existing.protocol); setTemplateId(existing.templateId || ''); setSource(existing.source); setFixtures(existing.fixtures || []); setProtocolConfig(existing.protocolConfig || DEFAULT_CONFIG); setLoadedTemplate(null); setBlankChosen(!existing.templateId)
-        if (existing.templateId) void apiClient.get<ProgramTemplate>(`/api/judge-program-templates/${existing.templateId}`).then(templateResult => { if (templateResult.success && templateResult.data) setLoadedTemplate(templateResult.data) })
+        if (existing.templateId) void getJudgeProgramTemplate(existing.templateId).then(setLoadedTemplate).catch(() => undefined)
       }
       else selectKind('standard')
     })

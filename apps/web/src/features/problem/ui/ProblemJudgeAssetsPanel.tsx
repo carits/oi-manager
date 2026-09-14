@@ -12,6 +12,8 @@ import { JudgeProgramWizard } from './JudgeProgramWizard'
 import { JudgeProgramTemplateGallery } from './JudgeProgramTemplateGallery'
 import type { ProgramCatalog } from '../model/judgeProgramTemplateTypes'
 import { ProblemQualityPanel } from './ProblemQualityPanel'
+import { listJudgeProgramTemplates } from '../api/judgeProgramTemplateApi'
+import { getProblemTestGraph } from '../api/problemTestGraphApi'
 
 type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
 type Program = { id: string; kind: string; name: string; language: string; currentVersionId?: string | null; versions: Version[] }
@@ -80,22 +82,22 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
     const [programResult, jobResult, graphResult, aiUsageResult, poolResult, corpusResult, templateResult] = await Promise.all([
       apiClient.get<Program[]>(`/api/problems/${problemId}/judge-programs`),
       apiClient.get<Job[]>(`/api/problems/${problemId}/data-generation-jobs`),
-      judgeMode === 'oi' ? apiClient.get<Graph>(`/api/problems/${problemId}/test-graph`) : Promise.resolve(null),
+      judgeMode === 'oi' ? getProblemTestGraph(problemId).catch(() => null) : Promise.resolve(null),
       apiClient.get<AiUsage>(`/api/problems/${problemId}/ai/usage`),
       apiClient.get<CandidatePool>(`/api/problems/${problemId}/candidate-pool`),
       apiClient.get<Corpus>(`/api/problems/${problemId}/wrong-corpus`),
-      apiClient.get<ProgramCatalog>('/api/judge-program-templates'),
+      listJudgeProgramTemplates().catch(() => null),
     ])
     if (programResult.success && programResult.data) setPrograms(programResult.data)
     if (jobResult.success && jobResult.data) setJobs(jobResult.data)
-    if (graphResult && graphResult.success && graphResult.data) setGraph(graphResult.data)
+    if (graphResult) setGraph(graphResult)
     if (aiUsageResult.success && aiUsageResult.data) {
       setAiUsage(aiUsageResult.data)
       setStatementId(current => current || aiUsageResult.data!.markdownStatements[0]?.id || '')
     }
     if (poolResult.success && poolResult.data) setCandidatePool(poolResult.data)
     if (corpusResult.success && corpusResult.data) setCorpus(corpusResult.data)
-    if (templateResult.success && templateResult.data) setCatalog(templateResult.data)
+    if (templateResult) setCatalog(templateResult)
   }, [problemId, judgeMode])
   useEffect(() => { void load() }, [load])
 

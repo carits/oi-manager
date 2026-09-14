@@ -148,4 +148,48 @@ describe('shared API contract adapter', () => {
       data: expect.objectContaining({ ownerName: 'teacher' }),
     }))
   })
+
+  it('guards OI Test Graph edits and normalizes workspace dates', () => {
+    const body = parseContractBody(ProblemContracts.saveTestGraph, {
+      revision: 3,
+      expectedLatestRevisionId: 'revision-3',
+      subtasks: [{
+        id: 1, score: 100, if: [], groups: [
+          { key: 'official-1', name: '官方测试组', kind: 'official', score: 100, type: 'min', cases: [] },
+          { key: 'hack-gate', name: 'Hack 得分门槛', kind: 'hack_gate', score: 0, type: 'min', cases: [] },
+        ],
+      }],
+    })
+    expect(body.revision).toBe(3)
+    expect(() => parseContractBody(ProblemContracts.registerTestGraphTestcases, { pairs: [] })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getTestGraph, {
+      revision: 3,
+      revisionId: 'revision-3',
+      createdAt: new Date('2026-09-14T00:00:00Z'),
+      migrated: true,
+      subtasks: body.subtasks,
+      files: [], pairs: [], unmatchedFiles: [], testcases: [],
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({ createdAt: '2026-09-14T00:00:00.000Z' }),
+    }))
+  })
+
+  it('rejects incomplete judge template responses at the shared boundary', () => {
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getJudgeProgramTemplate, {
+      id: 'validator-cpp17', version: 1, kind: 'validator', language: 'cpp17',
+      protocol: 'oj.validator/v1', title: 'Validator', description: '输入校验', recommended: true,
+      protocolHelp: ['严格 EOF'], source: 'int main() {}',
+      examples: [{ name: '合法', stdin: '1\n', expectedExitCode: 0 }],
+      learningNotes: ['输入来自 stdin'], requiredChanges: ['修改约束'],
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }))
+    expect(() => sendContractData(response, ProblemContracts.getJudgeProgramTemplate, {
+      id: 'broken', kind: 'validator', source: '', examples: [],
+    })).toThrowError(ApiContractError)
+  })
 })

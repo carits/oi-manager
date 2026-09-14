@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Copy, Download, GripVertical, History, Plus, RefreshCw, Save, Trash2, Upload } from 'lucide-react'
+import type {
+  ProblemTestGraphPairInput,
+  ProblemTestGraphSubtask,
+  ProblemTestGraphWorkspace,
+  ProblemTestSetRevisionDetail,
+  ProblemTestSetRevisionSummary,
+} from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog, DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { Input, SearchField, Select } from '@/components/ui/FormControls'
@@ -10,6 +17,15 @@ import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemTestGraphPanel.unified.module.css'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
+import { listProblemTestSetRevisions } from '../api/problemJudgeSettingsApi'
+import {
+  getProblemTestGraph,
+  getProblemTestSetRevision,
+  migrateProblemTestGraph,
+  registerProblemTestGraphTestcases,
+  saveProblemTestGraph,
+  setProblemTestGraphTestcaseProtection,
+} from '../api/problemTestGraphApi'
 
 const MAX_SUBTASKS = 15
 const MAX_CASES_PER_SUBTASK = 10
@@ -34,7 +50,7 @@ type TestGroup = {
   cases: TestcaseRef[]
 }
 
-type Subtask = { dbId?: string; id: number; score: number; if: number[]; groups: TestGroup[] }
+type Subtask = ProblemTestGraphSubtask
 type TestdataFile = { id: string; filename: string; size: number; sha256?: string | null; uploadedAt?: string }
 type TestcasePoolItem = {
   id: string
@@ -51,24 +67,11 @@ type TestcasePoolItem = {
 }
 type DetectedPair = { inputFileId: string; outputFileId: string; input: string; output: string; testcaseId: string | null }
 
-type TestGraph = {
-  revision: number
-  revisionId?: string
-  source?: string
-  createdAt?: string
-  migrated: boolean
-  canMigrate?: boolean
-  migrationIssues?: string[]
-  subtasks: Subtask[]
-  files: TestdataFile[]
-  pairs: DetectedPair[]
-  unmatchedFiles: Array<{ id: string; filename: string; size: number }>
-  testcases: TestcasePoolItem[]
-}
+type TestGraph = ProblemTestGraphWorkspace
 
 type ValidationIssue = { path: string; message: string; subtaskId?: number; groupKey?: string }
-type RevisionSummary = { id: string; revisionNumber: number; mode: string; source: string; judgeConfigHash: string; graphHash: string; createdAt: string }
-type RevisionDetail = RevisionSummary & { judgeConfig: string; spec: unknown }
+type RevisionSummary = ProblemTestSetRevisionSummary
+type RevisionDetail = ProblemTestSetRevisionDetail
 
 function cloneSubtasks(subtasks: Subtask[]): Subtask[] {
   return JSON.parse(JSON.stringify(subtasks))
@@ -169,24 +172,25 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await apiClient.get<TestGraph>(`/api/problems/${problemId}/test-graph`)
-      if (!result.success || !result.data) return toast.error(result.message || '测试图加载失败')
-      setGraph(result.data)
-      const next = cloneSubtasks(result.data.subtasks || [])
+      const result = await getProblemTestGraph(problemId)
+      setGraph(result)
+      const next = cloneSubtasks(result.subtasks || [])
       setSubtasks(next)
-      baseFingerprint.current = graphFingerprint(result.data.revision, next)
+      baseFingerprint.current = graphFingerprint(result.revision, next)
       setSelectedSubtaskId(current => next.some(item => item.id === current) ? current : next[0]?.id ?? null)
       setSelectedGroupKey(null)
       setSelectedTestcaseIds(new Set())
+    } catch {
+      toast.error('测试图加载失败')
     } finally {
       setLoading(false)
     }
   }, [problemId, toast])
 
   const refreshPool = useCallback(async () => {
-    const result = await apiClient.get<TestGraph>(`/api/problems/${problemId}/test-graph`)
-    if (!result.success || !result.data) return toast.error(result.message || '测试数据刷新失败')
-    setGraph(result.data)
+    try {
+      setGraph(await getProblemTestGraph(problemId))
+    } catch { toast.error('测试数据刷新失败') }
   }, [problemId, toast])
 
   useEffect(() => { load() }, [load])
@@ -219,10 +223,10 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   const migrate = async () => {
     setMigrating(true)
     try {
-      const result = await apiClient.post<TestGraph>(`/api/problems/${problemId}/test-graph/migrate`, {})
-      if (!result.success || !result.data) return toast.error(result.message || '迁移失败')
+      const result = await migrateProblemTestGraph(problemId)
+      if (!result.ok) return toast.error(result.error.message || '迁移失败')
       replaceGraphData(result.data)
-      toast.success(result.message || '测试图迁移完成')
+      toast.success('测试图迁移完成')
       setConfirmMigration(false)
     } finally { setMigrating(false) }
   }
@@ -231,15 +235,15 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
     if (!graph || issues.length) return
     setSaving(true)
     try {
-      const result = await apiClient.put<TestGraph>(`/api/problems/${problemId}/test-graph`, {
+      const result = await saveProblemTestGraph(problemId, {
         revision: graph.revision,
         expectedLatestRevisionId: graph.revisionId,
         subtasks,
         overrideReason: overrideReason.trim() || undefined,
       })
-      if (!result.success || !result.data) {
-        if (result.code === 'TEST_GRAPH_STALE') toast.error('测试图已被其他管理员修改；当前草稿仍保留，请导出或刷新后重新调整')
-        else toast.error(result.message || '保存失败')
+      if (!result.ok) {
+        if (result.error.code === 'TEST_GRAPH_STALE') toast.error('测试图已被其他管理员修改；当前草稿仍保留，请导出或刷新后重新调整')
+        else toast.error(result.error.message || '保存失败')
         return
       }
       replaceGraphData(result.data)
@@ -317,24 +321,24 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   const toggleProtection = async (item: TestcasePoolItem) => {
     if (!item.isProtected) { setProtectingTestcase(item); setProtectionReason(''); return }
     const reason = ''
-    const result = await apiClient.patch(`/api/problems/${problemId}/test-graph/testcases/${item.id}/protection`, { isProtected: !item.isProtected, reason })
-    if (!result.success) return toast.error(result.message || '测试点保护状态更新失败')
-    toast.success(result.message || '保护状态已更新')
+    const result = await setProblemTestGraphTestcaseProtection(problemId, item.id, { isProtected: !item.isProtected, reason })
+    if (!result.ok) return toast.error(result.error.message || '测试点保护状态更新失败')
+    toast.success('保护状态已更新')
     await refreshPool()
   }
   const protectTestcase = async () => {
     if (!protectingTestcase || protectionReason.trim().length < 5) return
-    const result = await apiClient.patch(`/api/problems/${problemId}/test-graph/testcases/${protectingTestcase.id}/protection`, { isProtected: true, reason: protectionReason.trim() })
-    if (!result.success) return toast.error(result.message || '测试点保护状态更新失败')
-    toast.success(result.message || '测试点已设为永久保护')
+    const result = await setProblemTestGraphTestcaseProtection(problemId, protectingTestcase.id, { isProtected: true, reason: protectionReason.trim() })
+    if (!result.ok) return toast.error(result.error.message || '测试点保护状态更新失败')
+    toast.success('测试点已设为永久保护')
     setProtectingTestcase(null); setProtectionReason(''); await refreshPool()
   }
 
-  const registerPairs = async (pairs: Array<{ inputFileId: string; outputFileId: string }>) => {
-    const result = await apiClient.post<TestGraph>(`/api/problems/${problemId}/test-graph/testcases`, { pairs })
-    if (!result.success || !result.data) return toast.error(result.message || '测试点注册失败')
+  const registerPairs = async (pairs: ProblemTestGraphPairInput[]) => {
+    const result = await registerProblemTestGraphTestcases(problemId, pairs)
+    if (!result.ok) return toast.error(result.error.message || '测试点注册失败')
     setGraph(result.data)
-    toast.success(result.message || '测试点已注册')
+    toast.success('测试点已注册')
     setManualInputId('')
     setManualOutputId('')
   }
@@ -389,19 +393,20 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
     setHistoryOpen(true)
     setHistoryLoading(true)
     try {
-      const result = await apiClient.get<{ revisions: RevisionSummary[] }>(`/api/problems/${problemId}/test-set-revisions`)
-      if (!result.success || !result.data) return toast.error(result.message || '版本历史加载失败')
-      setRevisionHistory(result.data.revisions)
+      const result = await listProblemTestSetRevisions(problemId)
+      setRevisionHistory(result.revisions)
       setRevisionDetail(null)
+    } catch {
+      toast.error('版本历史加载失败')
     } finally { setHistoryLoading(false) }
   }
 
   const inspectRevision = async (revision: RevisionSummary) => {
     setHistoryLoading(true)
     try {
-      const result = await apiClient.get<RevisionDetail>(`/api/problems/${problemId}/test-set-revisions/${revision.id}`)
-      if (!result.success || !result.data) return toast.error(result.message || '版本详情加载失败')
-      setRevisionDetail(result.data)
+      setRevisionDetail(await getProblemTestSetRevision(problemId, revision.id))
+    } catch {
+      toast.error('版本详情加载失败')
     } finally { setHistoryLoading(false) }
   }
 

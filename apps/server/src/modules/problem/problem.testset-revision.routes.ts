@@ -26,7 +26,7 @@ problemTestSetRevisionRouter.get('/:id/test-set-revisions/:revisionId', authenti
   if (!problem) return res.status(404).json({ success: false, message: '题目不存在' })
   const revision = await getProblemTestSetRevision(problem.id, req.params.revisionId)
   if (!revision) return res.status(404).json({ success: false, message: '测试版本不存在' })
-  res.json({ success: true, data: revision })
+  sendContractData(res, ProblemContracts.getTestSetRevision, revision)
 }))
 
 problemTestSetRevisionRouter.post('/:id/judge-mode-transition', authenticate, asyncHandler(async (req, res) => {

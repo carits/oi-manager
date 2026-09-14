@@ -156,6 +156,213 @@ export const ProblemTestSetRevisionListSchema = z.object({
   revisions: z.array(ProblemTestSetRevisionSummarySchema),
 });
 
+export const ProblemTestGraphCaseSchema = z.object({
+  testcaseId: z.string(),
+  input: z.string(),
+  output: z.string(),
+  source: z.string(),
+  score: z.number().nullable().optional(),
+  time: z.string().nullable().optional(),
+  memory: z.string().nullable().optional(),
+});
+
+export const ProblemTestGraphGroupSchema = z.object({
+  id: z.string().optional(),
+  key: z.string().min(1),
+  name: z.string(),
+  kind: z.enum(["official", "hack_gate"]),
+  score: z.number(),
+  type: z.enum(["min", "max", "sum"]),
+  cases: z.array(ProblemTestGraphCaseSchema),
+});
+
+export const ProblemTestGraphSubtaskSchema = z.object({
+  dbId: z.string().optional(),
+  id: z.number().int().positive(),
+  score: z.number(),
+  if: z.array(z.number().int().positive()),
+  groups: z.array(ProblemTestGraphGroupSchema),
+});
+
+export const ProblemTestGraphFileSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  size: z.number().int().nonnegative(),
+  sha256: z.string().nullable().optional(),
+  uploadedAt: DateTimeWireSchema.optional(),
+});
+
+export const ProblemTestGraphPairSchema = z.object({
+  inputFileId: z.string(),
+  outputFileId: z.string(),
+  input: z.string(),
+  output: z.string(),
+  testcaseId: z.string().nullable(),
+});
+
+export const ProblemTestGraphTestcaseSchema = z.object({
+  id: z.string(),
+  inputFileId: z.string(),
+  outputFileId: z.string(),
+  input: z.string(),
+  output: z.string(),
+  source: z.string(),
+  enabled: z.boolean(),
+  isProtected: z.boolean(),
+  protectionReason: z.string().nullable().optional(),
+  protectedUntil: DateTimeWireSchema.nullable().optional(),
+  assignments: z.array(z.object({
+    subtaskId: z.number().int().positive(),
+    groupId: z.string(),
+    groupKey: z.string(),
+    groupName: z.string(),
+    groupKind: z.string(),
+  })),
+});
+
+export const ProblemTestGraphWorkspaceSchema = z.object({
+  revision: z.number().int().nonnegative(),
+  revisionId: z.string().optional(),
+  source: z.string().optional(),
+  createdAt: DateTimeWireSchema.optional(),
+  migrated: z.boolean(),
+  canMigrate: z.boolean().optional(),
+  migrationIssues: z.array(z.string()).optional(),
+  subtasks: z.array(ProblemTestGraphSubtaskSchema),
+  files: z.array(ProblemTestGraphFileSchema),
+  pairs: z.array(ProblemTestGraphPairSchema),
+  unmatchedFiles: z.array(ProblemTestGraphFileSchema.pick({ id: true, filename: true, size: true })),
+  testcases: z.array(ProblemTestGraphTestcaseSchema),
+});
+
+export const ProblemTestGraphSaveInputSchema = z.object({
+  revision: z.number().int().nonnegative(),
+  expectedLatestRevisionId: z.string().optional(),
+  subtasks: z.array(ProblemTestGraphSubtaskSchema),
+  overrideReason: z.string().optional(),
+});
+
+export const ProblemTestGraphPairInputSchema = z.object({
+  inputFileId: z.string().min(1),
+  outputFileId: z.string().min(1),
+});
+
+export const ProblemTestGraphRegisterInputSchema = z.object({
+  pairs: z.array(ProblemTestGraphPairInputSchema).min(1),
+});
+
+export const ProblemTestcaseProtectionInputSchema = z.object({
+  isProtected: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const ProblemTestcaseProtectionResultSchema = z.object({
+  id: z.string(),
+  isProtected: z.boolean(),
+  protectionReason: z.string().nullable().optional(),
+  protectedUntil: DateTimeWireSchema.nullable().optional(),
+}).passthrough();
+
+const ProblemRevisionCaseSpecSchema = z.object({
+  testcaseId: z.string().nullable().optional(),
+  inputName: z.string(),
+  outputName: z.string(),
+  inputObjectId: z.string(),
+  outputObjectId: z.string(),
+  source: z.string(),
+  score: z.number().nullable().optional(),
+  time: z.string().nullable().optional(),
+  memory: z.string().nullable().optional(),
+});
+
+export const ProblemTestSetRevisionSpecSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("acm"), cases: z.array(ProblemRevisionCaseSpecSchema) }),
+  z.object({
+    mode: z.literal("oi"),
+    subtasks: z.array(z.object({
+      id: z.number().int().positive(),
+      score: z.number(),
+      if: z.array(z.number().int().positive()),
+      groups: z.array(z.object({
+        key: z.string(),
+        name: z.string(),
+        kind: z.enum(["official", "hack_gate"]),
+        score: z.number(),
+        type: z.enum(["min", "max", "sum"]),
+        cases: z.array(ProblemRevisionCaseSpecSchema),
+      })),
+    })),
+  }),
+]);
+
+export const ProblemTestSetRevisionDetailSchema = ProblemTestSetRevisionSummarySchema.extend({
+  judgeConfig: z.string(),
+  spec: ProblemTestSetRevisionSpecSchema.nullable(),
+}).passthrough();
+
+export const JudgeProgramKindSchema = z.enum(["standard", "validator", "classifier", "generator"]);
+export const JudgeProgramFixtureSchema = z.object({
+  name: z.string(),
+  stdin: z.string(),
+  expectedExitCode: z.number().int().optional(),
+  expectedStdout: z.string().optional(),
+  expectedSubtasks: z.array(z.number().int().positive()).optional(),
+});
+export const JudgeProgramParameterRuleSchema = z.object({
+  type: z.enum(["integer", "number", "string", "boolean"]),
+  default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  minimum: z.number().optional(),
+  maximum: z.number().optional(),
+  enum: z.array(z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+export const JudgeProgramProtocolConfigSchema = z.object({
+  profiles: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  })),
+  parameterSchema: z.record(z.string(), JudgeProgramParameterRuleSchema),
+});
+export const JudgeProgramTemplateSummarySchema = z.object({
+  id: z.string(),
+  version: z.number().int().positive(),
+  kind: JudgeProgramKindSchema,
+  language: z.string(),
+  protocol: z.string(),
+  title: z.string(),
+  description: z.string(),
+  recommended: z.boolean(),
+  protocolHelp: z.array(z.string()),
+  fixtureCount: z.number().int().nonnegative(),
+  profileCount: z.number().int().nonnegative(),
+  hasProtocolConfig: z.boolean(),
+  learningNoteCount: z.number().int().nonnegative(),
+  requiredChangeCount: z.number().int().nonnegative(),
+});
+export const JudgeProgramTemplateSchema = JudgeProgramTemplateSummarySchema.omit({
+  fixtureCount: true,
+  profileCount: true,
+  hasProtocolConfig: true,
+  learningNoteCount: true,
+  requiredChangeCount: true,
+}).extend({
+  source: z.string(),
+  examples: z.array(JudgeProgramFixtureSchema),
+  protocolConfig: JudgeProgramProtocolConfigSchema.optional(),
+  learningNotes: z.array(z.string()),
+  requiredChanges: z.array(z.string()),
+});
+export const JudgeProgramCatalogSchema = z.object({
+  capabilities: z.record(JudgeProgramKindSchema, z.object({
+    title: z.string(),
+    description: z.string(),
+    defaultLanguage: z.string(),
+    languages: z.record(z.string(), z.array(z.string())),
+    quickProtocol: z.array(z.string()),
+  })),
+  templates: z.array(JudgeProgramTemplateSummarySchema),
+}).passthrough();
+
 export const ProblemJudgeModeTransitionInputSchema = z.object({
   targetMode: z.enum(["acm", "oi"]),
   expectedLatestRevisionId: z.string().min(1),
@@ -213,6 +420,58 @@ export const ProblemContracts = {
     scope: "context",
     data: ProblemTestSetRevisionListSchema,
   }),
+  getTestSetRevision: defineApiEndpoint({
+    key: "problem.test-set-revision.get",
+    method: "GET",
+    scope: "context",
+    data: ProblemTestSetRevisionDetailSchema,
+  }),
+  getTestGraph: defineApiEndpoint({
+    key: "problem.test-graph.get",
+    method: "GET",
+    scope: "context",
+    data: ProblemTestGraphWorkspaceSchema,
+  }),
+  migrateTestGraph: defineApiEndpoint({
+    key: "problem.test-graph.migrate",
+    method: "POST",
+    scope: "context",
+    body: z.object({}),
+    data: ProblemTestGraphWorkspaceSchema,
+  }),
+  saveTestGraph: defineApiEndpoint({
+    key: "problem.test-graph.save",
+    method: "PUT",
+    scope: "context",
+    body: ProblemTestGraphSaveInputSchema,
+    data: ProblemTestGraphWorkspaceSchema,
+  }),
+  registerTestGraphTestcases: defineApiEndpoint({
+    key: "problem.test-graph.testcases.register",
+    method: "POST",
+    scope: "context",
+    body: ProblemTestGraphRegisterInputSchema,
+    data: ProblemTestGraphWorkspaceSchema,
+  }),
+  setTestcaseProtection: defineApiEndpoint({
+    key: "problem.test-graph.testcase.protection",
+    method: "PATCH",
+    scope: "context",
+    body: ProblemTestcaseProtectionInputSchema,
+    data: ProblemTestcaseProtectionResultSchema,
+  }),
+  listJudgeProgramTemplates: defineApiEndpoint({
+    key: "judge-program.templates.list",
+    method: "GET",
+    scope: "account",
+    data: JudgeProgramCatalogSchema,
+  }),
+  getJudgeProgramTemplate: defineApiEndpoint({
+    key: "judge-program.template.get",
+    method: "GET",
+    scope: "account",
+    data: JudgeProgramTemplateSchema,
+  }),
   transitionJudgeMode: defineApiEndpoint({
     key: "problem.judge-mode.transition",
     method: "POST",
@@ -233,3 +492,16 @@ export type ProblemTestCasePair = z.infer<typeof ProblemTestCasePairSchema>;
 export type ProblemEditorMutation = z.infer<typeof ProblemEditorMutationSchema>;
 export type ProblemCreateInput = z.infer<typeof ProblemCreateInputSchema>;
 export type ProblemEditorDetail = z.infer<typeof ProblemEditorDetailSchema>;
+export type ProblemTestGraphWorkspace = z.infer<typeof ProblemTestGraphWorkspaceSchema>;
+export type ProblemTestGraphSubtask = z.infer<typeof ProblemTestGraphSubtaskSchema>;
+export type ProblemTestGraphSaveInput = z.infer<typeof ProblemTestGraphSaveInputSchema>;
+export type ProblemTestGraphPairInput = z.infer<typeof ProblemTestGraphPairInputSchema>;
+export type ProblemTestSetRevisionDetail = z.infer<typeof ProblemTestSetRevisionDetailSchema>;
+export type ProblemTestSetRevisionSummary = z.infer<typeof ProblemTestSetRevisionSummarySchema>;
+export type JudgeProgramKind = z.infer<typeof JudgeProgramKindSchema>;
+export type JudgeProgramFixture = z.infer<typeof JudgeProgramFixtureSchema>;
+export type JudgeProgramParameterRule = z.infer<typeof JudgeProgramParameterRuleSchema>;
+export type JudgeProgramProtocolConfig = z.infer<typeof JudgeProgramProtocolConfigSchema>;
+export type JudgeProgramTemplateSummary = z.infer<typeof JudgeProgramTemplateSummarySchema>;
+export type JudgeProgramTemplate = z.infer<typeof JudgeProgramTemplateSchema>;
+export type JudgeProgramCatalog = z.infer<typeof JudgeProgramCatalogSchema>;

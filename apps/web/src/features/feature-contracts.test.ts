@@ -8,6 +8,10 @@ import {
   ProblemJudgeSettingsSchema,
   ProblemEditorMutationSchema,
   ProblemTestdataSchema,
+  ProblemTestGraphSaveInputSchema,
+  ProblemTestGraphWorkspaceSchema,
+  JudgeProgramCatalogSchema,
+  JudgeProgramTemplateSchema,
   SimilarityComparisonSchema,
   TrainingDesignSchema,
   TrainingStructureInputSchema,
@@ -187,6 +191,71 @@ describe('feature slice contracts', () => {
     }).success).toBe(true)
     expect(ProblemEditorMutationSchema.safeParse({ status: 'visible' }).success).toBe(false)
     expect(ProblemEditorMutationSchema.safeParse({ timeLimit: -1 }).success).toBe(false)
+  })
+
+  it('shares the complete OI Test Graph workspace and mutation contract', () => {
+    const testcase = {
+      id: 'testcase-1', inputFileId: 'input-1', outputFileId: 'output-1',
+      input: '1.in', output: '1.out', source: 'official', enabled: true,
+      isProtected: false, assignments: [],
+    }
+    expect(ProblemTestGraphWorkspaceSchema.safeParse({
+      revision: 2,
+      revisionId: 'revision-2',
+      source: 'admin_edit',
+      createdAt: new Date('2026-09-14T00:00:00Z'),
+      migrated: true,
+      canMigrate: false,
+      migrationIssues: [],
+      subtasks: [{
+        id: 1, score: 100, if: [], groups: [
+          { key: 'official-1', name: '官方测试组', kind: 'official', score: 100, type: 'min', cases: [{ testcaseId: testcase.id, input: testcase.input, output: testcase.output, source: testcase.source }] },
+          { key: 'hack-gate', name: 'Hack 得分门槛', kind: 'hack_gate', score: 0, type: 'min', cases: [] },
+        ],
+      }],
+      files: [], pairs: [], unmatchedFiles: [], testcases: [testcase],
+    }).success).toBe(true)
+
+    expect(ProblemTestGraphSaveInputSchema.safeParse({
+      revision: 2,
+      expectedLatestRevisionId: 'revision-2',
+      subtasks: [{
+        id: 1, score: 100, if: [], groups: [
+          { key: 'official-1', name: '官方测试组', kind: 'official', score: 100, type: 'min', cases: [] },
+          { key: 'hack-gate', name: 'Hack 得分门槛', kind: 'hack_gate', score: 0, type: 'min', cases: [] },
+        ],
+      }],
+    }).success).toBe(true)
+  })
+
+  it('shares judge program template summaries and complete examples', () => {
+    const summary = {
+      id: 'standard-cpp17-sum', version: 1, kind: 'standard', language: 'cpp17',
+      protocol: 'oj.standard/v1', title: 'STD 示例', description: '整数求和', recommended: true,
+      protocolHelp: ['stdin 读取'], fixtureCount: 2, profileCount: 0,
+      hasProtocolConfig: false, learningNoteCount: 1, requiredChangeCount: 1,
+    }
+    expect(JudgeProgramCatalogSchema.safeParse({
+      capabilities: {
+        standard: { title: 'STD', description: '标准程序', defaultLanguage: 'cpp17', languages: { cpp17: ['oj.standard/v1'] }, quickProtocol: [] },
+        validator: { title: 'Validator', description: '校验器', defaultLanguage: 'cpp17', languages: { cpp17: ['oj.validator/v1'] }, quickProtocol: [] },
+        classifier: { title: 'Classifier', description: '分类器', defaultLanguage: 'cpp17', languages: { cpp17: ['oj.classifier/v1'] }, quickProtocol: [] },
+        generator: { title: 'Generator', description: '生成器', defaultLanguage: 'cpp17', languages: { cpp17: ['oj.generator/v1'] }, quickProtocol: [] },
+      },
+      templates: [summary],
+    }).success).toBe(true)
+    expect(JudgeProgramTemplateSchema.safeParse({
+      ...summary,
+      fixtureCount: undefined,
+      profileCount: undefined,
+      hasProtocolConfig: undefined,
+      learningNoteCount: undefined,
+      requiredChangeCount: undefined,
+      source: 'int main() {}',
+      examples: [{ name: '普通输入', stdin: '1\n', expectedStdout: '1\n' }],
+      learningNotes: ['读取标准输入'],
+      requiredChanges: ['替换求解逻辑'],
+    }).success).toBe(true)
   })
 
   it('routes pages through feature public APIs instead of component internals', () => {

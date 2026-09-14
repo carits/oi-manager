@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import { Copy, Download, Eye, Sparkles } from 'lucide-react'
-import apiClient from '@/lib/apiClient'
 import { copyText } from '@/lib/clipboard'
 import { Button } from '@/components/ui/Button'
 import { DetailDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
 import type { JudgeProgramKind, ProgramCatalog, ProgramTemplate, ProgramTemplateSummary } from '../model/judgeProgramTemplateTypes'
 import styles from './JudgeProgramTemplateGallery.module.css'
+import { getJudgeProgramTemplate } from '../api/judgeProgramTemplateApi'
 
 const KINDS: Array<{ value: JudgeProgramKind; label: string; short: string }> = [
   { value: 'standard', label: '标准程序 STD 示例', short: 'STD' },
@@ -53,9 +53,9 @@ export function JudgeProgramTemplateGallery({ catalog, subtasks, onUse }: {
   const openPreview = async (template: ProgramTemplateSummary) => {
     setLoadingId(template.id)
     try {
-      const result = await apiClient.get<ProgramTemplate>(`/api/judge-program-templates/${template.id}`)
-      if (!result.success || !result.data) return toast.error(result.message || '模板示例加载失败')
-      setPreview(result.data)
+      setPreview(await getJudgeProgramTemplate(template.id))
+    } catch {
+      toast.error('模板示例加载失败')
     } finally {
       setLoadingId('')
     }
