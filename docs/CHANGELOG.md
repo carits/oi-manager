@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-14
 
+### Problem Editor、Judge 与 Training Feature Slice 第三批
+
+- Judge Settings、Training Session Designer、训练题目链以及 Problem Editor 的附件、内容版本和发布设置已拆入独立 Feature UI；页面组件只负责组合，领域请求统一从 Feature API 边界发起。
+- Problem 创建、编辑详情、更新及 Judge/TestSet 链路接入共享 Runtime Contract。无效 Problem 请求现在稳定返回 422 契约错误，不再落入 500；学校题库测试使用显式 Organization Header 验证现行权限模型。
+- 架构门禁提升为 10 个 Contract 文件、8 个 Feature Slice 和 24 条端到端边界。Contracts/Server/Web 类型、Web 39 文件 170 项、生产构建及生产同构隔离库 5 文件 34/34 通过。
+- 提交 `4f388de`、`219b3b5`、`9134d7b`、`ca12ff0`、`c2b571b` 已推送 `main`；API 3303→3302，Web BUILD_ID `2UBZnh51soF02OpHle-od` 经 canary 与正式消息闭环（序号 170–173）后提升。本批无 Prisma 或业务数据迁移。
+
 ### Problem、Contest 与 Training Session Feature Slice 收口
 
 - 旧 `components/problem`、`components/training`、`components/training-engine` 已直接迁入 Problem、Contest、Training Session Feature Slice，不保留双写目录或兼容转发层。
