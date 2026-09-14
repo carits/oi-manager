@@ -7,6 +7,15 @@ source_of_truth: Git history
 
 # 变更记录
 
+## 2026-09-15
+
+### Test Graph 与 Judge Template Contract 收口
+
+- OI Test Graph 工作台、TestSet Revision 详情和 Judge Program Template 列表/详情接入共享 Runtime Contract；Test Graph 保存、迁移、测试点注册/保护及模板响应在 Server 边界 fail closed 校验。
+- Web 新增 Problem Feature API，页面组件不再直接拼装上述 JSON 请求；模板 DTO 由共享 Schema 推导，测试数据上传/下载等二进制传输保留为明确的 Raw Transport 边界。
+- 架构门禁提升为 10 个 Contract 文件、8 个 Feature Slice、36 条端到端契约边界且 0 违规。Contracts/Server/Web 类型、Web 39 文件 172 项、8 个内置 Judge 模板、生产构建和文档门禁通过；生产同构隔离库 5 文件 36/36 通过。
+- 提交 `c0bb1d0` 已推送 `main`；API 3302→3303，Web BUILD_ID `0fAHmd8Ekx2EoixK-lvlm` 经 canary 与正式消息闭环（序号 174–177）后提升。本批无 Prisma 或业务数据迁移。
+
 ## 2026-09-14
 
 ### Problem Editor、Judge 与 Training Feature Slice 第三批
