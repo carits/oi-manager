@@ -5,6 +5,8 @@ import {
   BlogDiscoveryDetailSchema,
   ContestRatingDataSchema,
   SimilarityComparisonSchema,
+  TrainingDesignSchema,
+  TrainingStructureInputSchema,
 } from '@oi-manager/contracts'
 
 describe('feature slice contracts', () => {
@@ -92,12 +94,56 @@ describe('feature slice contracts', () => {
     expect(parsed.standing?.finalizedAt).toBe('2026-09-14T00:01:00.000Z')
   })
 
+  it('shares the Training design and mutation contract at runtime', () => {
+    expect(TrainingDesignSchema.safeParse({
+      editable: true,
+      statusRevision: 3,
+      session: {
+        id: 'session-1',
+        title: '顺序训练',
+        description: null,
+        sessionType: 'GENERAL',
+        status: 'DRAFT',
+        organizationId: 'organization-1',
+        teamId: null,
+        scheduledStartAt: new Date('2026-09-15T00:00:00Z'),
+      },
+      stages: [{
+        id: 'stage-1',
+        clientKey: 'stage-1',
+        name: '热身',
+        mode: 'SEQUENTIAL',
+        advanceMode: 'MANUAL',
+        problemAccessMode: 'SEQUENTIAL',
+        submissionMode: 'NORMAL',
+        Problems: [],
+      }],
+      issues: [],
+    }).success).toBe(true)
+
+    expect(TrainingStructureInputSchema.safeParse({
+      expectedRevision: 3,
+      title: '顺序训练',
+      description: '',
+      stages: [{
+        clientKey: 'draft-stage-1',
+        name: '热身',
+        mode: 'SEQUENTIAL',
+        advanceMode: 'MANUAL',
+        problemAccessMode: 'SEQUENTIAL',
+        submissionMode: 'NORMAL',
+        problems: [],
+      }],
+    }).success).toBe(true)
+  })
+
   it('routes pages through feature public APIs instead of component internals', () => {
     const page = fs.readFileSync(new URL('../app/blog/page.tsx', import.meta.url), 'utf8')
     const organization = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/[...segments]/page.tsx', import.meta.url), 'utf8')
     expect(page).toContain("from '@/features/blog'")
     expect(organization).toContain("from '@/features/assignment'")
-    expect(organization).not.toMatch(/@\/components\/(?:assignment|blog|submission)\//)
-    expect(organization).not.toMatch(/@\/features\/(?:assignment|blog|submission)\//)
+    expect(organization).toContain("from '@/features/training-session/TrainingSessionWorkspace'")
+    expect(organization).not.toMatch(/@\/components\/(?:assignment|blog|submission|problem|training|training-engine)\//)
+    expect(organization).not.toMatch(/@\/features\/(?:assignment|blog|submission|problem|contest|training-session)\/(?:api|model|ui)\//)
   })
 })

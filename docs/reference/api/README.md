@@ -12,7 +12,8 @@ source_of_truth: apps/server/src/modules, packages/contracts/src, scripts/genera
 共享 Contract 已成为新接口的唯一 DTO 边界。`packages/contracts` 同时声明 HTTP 方法、作用域、请求/查询和成功响应
 Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web Feature API 在发送请求和消费成功响应时再次校验。
 当前已完成 Auth/Health/Identity，以及 Assignment 进度与人工完成、Blog Discovery、Contest Rating、Solution Review
-相似度的端到端接入。后续端点只能扩展这一目录和门禁，不得另建 Shared interface 或页面私有响应类型作为事实源。
+相似度和 Training 设计/校验/保存的端到端接入。后续端点只能扩展这一目录和门禁，不得另建 Shared interface
+或页面私有响应类型作为事实源。Training 结构保存成功响应固定为重新读取后的 Design DTO，而非内部 Session 记录。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
 `scripts/api-public-endpoints.json` 对照。当前 614 个端点中 600 个必须认证，14 个允许匿名访问；

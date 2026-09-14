@@ -45,8 +45,8 @@ source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-bounda
 - 普通产品界面不得把 raw UUID、CAS、Revision、Snapshot 或内部 Enum 当作主要文案。
 - 数据库历史字段可以保留 `campus`，但新 Application Contract 使用 `organization`；禁止扩大历史术语。
 - 业务页面使用统一 UI、Dialog 和 SubmissionCodeEditor，不重新实现通用按钮、遮罩或提交编辑器。
-- 已迁移领域使用 `features/<feature>/{api,model,ui}`；App Route 只能引用 Feature 的 `index.ts` 公共 API，
-  不得深层导入或在 `components` 下重建同名领域目录。
+- 已迁移领域使用 `features/<feature>/{api,model,ui}`；App Route 只能引用 Feature 根 `index.ts` 或根级按页面公共 API，
+  不得直接引用 `api/model/ui` 内部目录，也不得在 `components` 下重建同名领域目录。按页面公共 API 用于保留路由级代码切块。
 
 ## 运行与发布
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { ProblemNote } from '@/components/problem/ProblemNote'
+import { ProblemNote } from '@/features/problem/ProblemNote'
 
 export default function ProblemNotePage() {
   const params = useParams()

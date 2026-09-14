@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { TrainingStatementManagementPage } from '@/components/training/TrainingStatementManagementPage'
+import { TrainingStatementManagementPage } from '@/features/contest/TrainingStatementManagementPage'
 
 export default function PlatformAdminContestStatementsPage() {
   const { id } = useParams<{ id: string }>()

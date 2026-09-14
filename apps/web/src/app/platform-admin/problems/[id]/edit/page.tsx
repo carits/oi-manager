@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { ProblemForm } from '@/components/problem/ProblemForm'
+import { ProblemForm } from '@/features/problem/ProblemForm'
 
 export default function EditProblemPage() {
   const params = useParams()

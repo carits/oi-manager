@@ -15,6 +15,7 @@ const contractFiles = [
   'packages/contracts/src/blog.ts',
   'packages/contracts/src/rating.ts',
   'packages/contracts/src/solution-review.ts',
+  'packages/contracts/src/training.ts',
 ]
 for (const file of contractFiles) {
   if (!exists(file)) failures.push(`missing shared contract: ${file}`)
@@ -41,16 +42,27 @@ for (const symbol of ['parseContractBody', 'parseContractQuery', 'sendContractDa
   if (!serverAdapter.includes(symbol)) failures.push(`server contract adapter is missing ${symbol}`)
 }
 
-const slices = ['assignment', 'blog', 'contest-rating', 'solution-review', 'submission']
+const slices = [
+  { name: 'assignment', legacyDirectory: 'assignment', allowedAnyTokens: 0 },
+  { name: 'blog', legacyDirectory: 'blog', allowedAnyTokens: 0 },
+  { name: 'contest-rating', legacyDirectory: 'contest-rating', allowedAnyTokens: 0 },
+  { name: 'solution-review', legacyDirectory: 'solution-review', allowedAnyTokens: 0 },
+  { name: 'submission', legacyDirectory: 'submission', allowedAnyTokens: 0 },
+  // These three slices physically absorb the pre-existing UI in this rollout.
+  // Migrated slices are held to the same zero-any boundary as the original slices.
+  { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
+  { name: 'contest', legacyDirectory: 'training', allowedAnyTokens: 0 },
+  { name: 'training-session', legacyDirectory: 'training-engine', allowedAnyTokens: 0 },
+]
 function containsSourceFiles(directory) {
   if (!exists(directory)) return false
   return fs.readdirSync(path.join(root, directory), { recursive: true })
     .some(file => /\.(?:ts|tsx|css)$/.test(String(file)))
 }
 for (const slice of slices) {
-  const index = `apps/web/src/features/${slice}/index.ts`
+  const index = `apps/web/src/features/${slice.name}/index.ts`
   if (!exists(index)) failures.push(`missing feature public API: ${index}`)
-  const legacyDirectory = `apps/web/src/components/${slice}`
+  const legacyDirectory = `apps/web/src/components/${slice.legacyDirectory}`
   if (containsSourceFiles(legacyDirectory)) failures.push(`legacy component feature directory still exists: ${legacyDirectory}`)
 }
 
@@ -59,11 +71,15 @@ const contractedBoundaries = [
   ['apps/server/src/modules/blog/blog.routes.ts', 'BlogDiscoveryContracts'],
   ['apps/server/src/modules/rating/rating-domain.routes.ts', 'ContestRatingContracts'],
   ['apps/server/src/modules/solution/solution.routes.ts', 'SolutionReviewContracts'],
+  ['apps/server/src/modules/training-engine/training-engine.routes.ts', 'TrainingContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
   ['apps/web/src/features/blog/ui/BlogDiscoveryDetail.tsx', 'getBlogDiscovery'],
   ['apps/web/src/features/contest-rating/ui/TrainingRatingPanel.tsx', 'getContestRating'],
   ['apps/web/src/features/solution-review/ui/SolutionEditorialPanel.tsx', 'getSimilarityComparison'],
+  ['apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx', 'getTrainingDesign'],
+  ['apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx', 'validateTrainingDesign'],
+  ['apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx', 'saveTrainingDesign'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
@@ -81,10 +97,10 @@ collect(path.join(root, 'apps/web/src/app'))
 for (const file of appFiles) {
   const source = fs.readFileSync(file, 'utf8')
   const relative = path.relative(root, file).replaceAll('\\', '/')
-  if (/from ['"]@\/components\/(?:assignment|blog|submission)\//.test(source)) {
+  if (/from ['"]@\/components\/(?:assignment|blog|submission|problem|training|training-engine)\//.test(source)) {
     failures.push(`${relative} bypasses a feature public API`)
   }
-  if (/from ['"]@\/features\/(?:assignment|blog|contest-rating|solution-review|submission)\//.test(source)) {
+  if (/from ['"]@\/features\/(?:assignment|blog|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
 }
@@ -98,10 +114,13 @@ function collectFeature(directory) {
     else if (/\.(?:ts|tsx)$/.test(entry.name)) featureFiles.push(absolute)
   }
 }
-for (const file of featureFiles) {
-  const source = fs.readFileSync(file, 'utf8')
-  if (/\bany\b/.test(source)) {
-    failures.push(`${path.relative(root, file).replaceAll('\\', '/')}: feature slices cannot use any`)
+for (const slice of slices) {
+  const prefix = path.join(root, 'apps/web/src/features', slice.name) + path.sep
+  const count = featureFiles
+    .filter(file => file.startsWith(prefix))
+    .reduce((total, file) => total + (fs.readFileSync(file, 'utf8').match(/\bany\b/g)?.length ?? 0), 0)
+  if (count > slice.allowedAnyTokens) {
+    failures.push(`apps/web/src/features/${slice.name}: any debt increased from ${slice.allowedAnyTokens} to ${count}`)
   }
 }
 

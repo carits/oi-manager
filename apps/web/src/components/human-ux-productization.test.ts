@@ -5,7 +5,7 @@ const read = (path: string) => fs.readFileSync(new URL(path, import.meta.url), '
 
 describe('human UX productization contract', () => {
   it('uses a simple training flow and keeps coach controls optional', () => {
-    const source = read('./training-engine/TrainingSessionListPage.tsx')
+    const source = read('../features/training-session/ui/TrainingSessionListPage.tsx')
     expect(source).toContain('普通训练（推荐）')
     expect(source).toContain('教练带练模式')
     expect(source).toContain('选择题目')
@@ -16,7 +16,7 @@ describe('human UX productization contract', () => {
   })
 
   it('separates student training language and actions from the manager view', () => {
-    const source = read('./training-engine/TrainingSessionListPage.tsx')
+    const source = read('../features/training-session/ui/TrainingSessionListPage.tsx')
     expect(source).toContain("user?.organizationRole === 'teacher'")
     expect(source).toContain("user?.organizationRole === 'school_principal'")
     expect(source).toContain("managerView ? '布置和管理学生练习。' : '查看老师安排的训练并继续练习。'")
@@ -30,7 +30,7 @@ describe('human UX productization contract', () => {
   })
 
   it('describes ordinary training with tasks and gives school managers a team filter', () => {
-    const source = read('./training-engine/TrainingSessionListPage.tsx')
+    const source = read('../features/training-session/ui/TrainingSessionListPage.tsx')
     expect(source).toContain("item.productMode !== 'simple'")
     expect(source).toContain('`${item.problemCount || 0} 道题')
     expect(source).toContain('全部训练范围')
@@ -88,7 +88,7 @@ describe('human UX productization contract', () => {
   })
 
   it('makes school training targets explicit and keeps team navigation canonical', () => {
-    const training = read('./training-engine/TrainingSessionListPage.tsx')
+    const training = read('../features/training-session/ui/TrainingSessionListPage.tsx')
     const contests = read('./organization-pages/teacher/contests/page.tsx')
     const activities = read('./team/TeamActivityOverview.tsx')
     expect(training).toContain('团队（推荐）')
@@ -102,7 +102,7 @@ describe('human UX productization contract', () => {
   })
 
   it('uses an inline submission workbench and merges personal solutions', () => {
-    const source = read('./problem/ProblemDetail.tsx')
+    const source = read('../features/problem/ui/ProblemDetail.tsx')
     expect(source).toContain('aria-label="代码提交工作台"')
     expect(source).toContain('撰写我的题解')
     expect(source).toContain('label="题目更多内容"')
@@ -113,7 +113,7 @@ describe('human UX productization contract', () => {
 
   it('keeps student views free of internal revision terminology', () => {
     const assignment = read('../features/assignment/ui/AssignmentWorkspace.tsx')
-    const training = read('./training-engine/TrainingSessionWorkspace.tsx')
+    const training = read('../features/training-session/ui/TrainingSessionWorkspace.tsx')
     expect(assignment).toContain('作业发布时固定的数据评测')
     expect(training).toContain('使用训练发布时固定的数据评测')
     expect(assignment).not.toContain('TestSet Revision 与学生名单')
@@ -123,7 +123,7 @@ describe('human UX productization contract', () => {
   })
 
   it('renders quality conclusions and hides technical certificates by default', () => {
-    const source = read('./problem/ProblemQualityPanel.tsx')
+    const source = read('../features/problem/ui/ProblemQualityPanel.tsx')
     expect(source).toContain('数据质量良好')
     expect(source).toContain('查看技术证书与评分细项')
   })
@@ -157,7 +157,7 @@ describe('human UX productization contract', () => {
   })
 
   it('uses human contribution language outside the manager-only technical view', () => {
-    const source = read('./problem/ProblemHackPanel.tsx')
+    const source = read('../features/problem/ui/ProblemHackPanel.tsx')
     expect(source).toContain('系统会依次检查输入是否合法')
     expect(source).toContain('贡献候选数据')
     expect(source).toContain('选择学校只用于贡献记录归属')
@@ -165,7 +165,7 @@ describe('human UX productization contract', () => {
   })
 
   it('keeps archive import out of activity submission guidance', () => {
-    const source = read('./training/TrainingDetailPage.tsx')
+    const source = read('../features/contest/ui/TrainingDetailPage.tsx')
     expect(source).toContain('提交结果只计入当前活动')
     expect(source).not.toContain('远程提交记录可在题目页同步归档')
   })

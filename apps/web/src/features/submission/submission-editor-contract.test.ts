@@ -4,7 +4,7 @@ import { transitionSubmissionDraft } from './model/submission-draft'
 
 describe('shared submission editor product contract', () => {
   const editor = fs.readFileSync(new URL('./ui/SubmissionCodeEditor.tsx', import.meta.url), 'utf8')
-  const trainingEngine = fs.readFileSync(new URL('../../components/training-engine/TrainingSessionWorkspace.tsx', import.meta.url), 'utf8')
+  const trainingEngine = fs.readFileSync(new URL('../training-session/ui/TrainingSessionWorkspace.tsx', import.meta.url), 'utf8')
 
   it('loads CodeMirror on the client and keeps a usable textarea fallback', () => {
     expect(editor).toContain("import('@codemirror/state')")

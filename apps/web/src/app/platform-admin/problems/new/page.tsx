@@ -1,6 +1,6 @@
 'use client'
 
-import { ProblemForm } from '@/components/problem/ProblemForm'
+import { ProblemForm } from '@/features/problem/ProblemForm'
 
 export default function NewProblemPage() {
   return (

@@ -39,16 +39,17 @@ Header、背景和最大宽度。
 | 层次 | 目录 | 职责 |
 |------|------|------|
 | 页面 | `app/` | 路由参数、页面编排 |
-| Feature Slice | `features/<feature>/{api,model,ui}` | 业务 API、状态模型和完整交互；只从 `index.ts` 导出 |
-| 组合组件 | `components/problem`, `team`, `training` | 跨 Feature 页面编排，不拥有已迁移领域事实 |
+| Feature Slice | `features/<feature>/{api,model,ui}` | 业务 API、状态模型和完整交互；从根 `index.ts` 或根级按页面公共入口导出 |
+| 组合组件 | `components/team`, `components/organization-pages` | 跨 Feature 页面编排，不拥有已迁移领域事实 |
 | 通用业务 | `components/business` | 用户管理、地区等跨页面能力 |
 | UI | `components/ui` | Button、Pagination 等基础控件 |
 | 数据 Hooks | `hooks/data` | 缓存、加载、错误和刷新 |
 | Contract Client | `lib/apiClient.ts` | 认证、作用域、超时及共享 Runtime Schema 校验 |
 
-Assignment、Blog、Submission、Contest Rating 与 Solution Review 已迁入 Feature Slice。路由和跨域组件只能
-从 `@/features/<feature>` 公共入口引用，不得深层导入 `api/model/ui`，也不得在 `components` 下重新建立同名
-业务目录。大型 Problem/Training 组合页继续按修改范围迁移，禁止为了目录整齐复制领域状态或 API 类型。
+Assignment、Blog、Submission、Contest Rating、Solution Review、Problem、Contest 与 Training Session 已迁入
+Feature Slice。路由和跨域组件只能从 `@/features/<feature>` 根入口或根级按页面公共入口引用，不得深层导入
+`api/model/ui`，也不得在 `components` 下重新建立同名业务目录。根级按页面入口用于保持 Next.js 路由的切块
+边界，避免一个聚合 barrel 将同一 Feature 的全部管理工作台装入首屏。
 
 普通题目页的多题面工作区以左侧版本栏作为版本名称、身份和创建入口的唯一展示位置；右侧
 只渲染题面正文，不重复标题、作者、语言、格式、来源或派生入口。只有用户自己的版本在右侧

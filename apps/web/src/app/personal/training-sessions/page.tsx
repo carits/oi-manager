@@ -1,3 +1,3 @@
 'use client'
-import { TrainingSessionListPage } from '@/components/training-engine/TrainingSessionListPage'
+import { TrainingSessionListPage } from '@/features/training-session/TrainingSessionListPage'
 export default function PersonalTrainingSessionsPage() { return <TrainingSessionListPage /> }

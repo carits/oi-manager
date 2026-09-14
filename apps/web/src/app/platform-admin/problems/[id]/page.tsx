@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
 const ProblemDetail = dynamic(
-  () => import('@/components/problem/ProblemDetail').then(module => module.ProblemDetail),
+  () => import('@/features/problem/ProblemDetail').then(module => module.ProblemDetail),
   { loading: () => <PageLoadingFrame title="题目详情" rows={8} /> },
 )
 

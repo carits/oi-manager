@@ -1,6 +1,6 @@
 'use client'
 
-import ProblemListDetailPage from '@/components/problem/ProblemListDetailPage'
+import { ProblemListDetailPage } from '@/features/problem/ProblemListDetailPage'
 
 export default function PersonalProblemListEditPage() {
   return <ProblemListDetailPage />

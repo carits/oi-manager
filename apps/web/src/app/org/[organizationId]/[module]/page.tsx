@@ -17,7 +17,7 @@ import StudentProblemListsPage from '@/components/organization-pages/student/pro
 import TeacherRankingsPage from '@/components/organization-pages/teacher/rankings/page'
 import CampusManagementPage from '@/components/organization-pages/teacher/management/page'
 import StudentRankingsPage from '@/components/organization-pages/student/rating/page'
-import { TrainingSessionListPage } from '@/components/training-engine/TrainingSessionListPage'
+import { TrainingSessionListPage } from '@/features/training-session/TrainingSessionListPage'
 import { SubmissionList } from '@/features/submission'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
