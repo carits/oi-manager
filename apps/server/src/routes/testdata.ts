@@ -1,8 +1,10 @@
 import { Router, type NextFunction, type Response } from 'express'
+import { ProblemContracts } from '@oi-manager/contracts'
 import type { Problem } from '@prisma/client'
 import yazl from 'yazl'
 import { authenticate, type AuthRequest as MiddlewareAuthRequest } from '../middleware/auth'
 import { logger } from '../lib/logger'
+import { sendContractData } from '../lib/api-contract'
 import {
   cleanupTestdataStaging,
   collectUploadedTestdata,
@@ -62,7 +64,7 @@ const requireView = (req: AuthRequest, res: Response, next: NextFunction) =>
 
 testdataRouter.get('/problems/:id/testdata', authenticate, requireView, async (req: AuthRequest, res) => {
   try {
-    res.json({ success: true, data: await listTestdata(req.params.id) })
+    sendContractData(res, ProblemContracts.listTestdata, await listTestdata(req.params.id))
   } catch (error) {
     logger.error('get_testdata_error', { action: 'testdata', metadata: { error: String(error) } })
     res.status(500).json({ success: false, message: 'Testdata operation failed' })

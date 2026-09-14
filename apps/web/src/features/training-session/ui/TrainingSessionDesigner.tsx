@@ -5,11 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
-  Copy,
   GripVertical,
-  Plus,
   RefreshCw,
-  Search,
   Trash2,
 } from "lucide-react";
 import { apiClient } from "@/lib/apiClient";
@@ -29,6 +26,12 @@ import { Empty } from "@/components/ui/Empty";
 import { PageLoadingFrame } from "@/components/ui/PageLoadingFrame";
 import { useToast } from "@/components/ui/Toast";
 import { TrainingDesignAuxiliary } from "./TrainingDesignAuxiliary";
+import { TrainingProblemPool } from "./TrainingProblemPool";
+import {
+  AssignmentPolicyEditor,
+  UnlockEditor,
+} from "./TrainingProblemPolicyEditors";
+import { TrainingStageTimeline } from "./TrainingStageTimeline";
 import styles from "./TrainingEngine.module.css";
 import { useUnsavedChanges } from "@/components/navigation/UnsavedChangesProvider";
 import {
@@ -36,8 +39,8 @@ import {
   saveTrainingDesign,
   validateTrainingDesign,
 } from "../api/trainingSessionApi";
-import type { Assignment, Design, DesignProblem, Issue, ProblemPage, ProblemSummary, SourceGroup, Stage, UnlockCondition, UnlockPolicy } from "../model/trainingDesign";
-import { conditionLabels, createTrainingDesignDraft, moveItem, newTrainingDesignKey, normalizeAssignments, normalizeProblemOrder, stageModes, unlockLabel } from "../model/trainingDesign";
+import type { Assignment, Design, DesignProblem, Issue, ProblemPage, ProblemSummary, SourceGroup, Stage } from "../model/trainingDesign";
+import { createTrainingDesignDraft, moveItem, newTrainingDesignKey, normalizeAssignments, normalizeProblemOrder, stageModes, unlockLabel } from "../model/trainingDesign";
 
 const newKey = newTrainingDesignKey;
 
@@ -540,108 +543,26 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
 
         {activeStep === 2 && (
           <div className={styles.designWorkspace}>
-            <section className={styles.designColumn} aria-label="阶段时间线">
-              <header>
-                <div>
-                  <strong>阶段时间线</strong>
-                  <small>{stages.length}/30</small>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  icon={<Plus size={14} />}
-                  onClick={addStage}
-                >
-                  新增
-                </Button>
-              </header>
-              <div className={styles.designColumnBody}>
-                {stages.map((stage, index) => (
-                  <article
-                    key={stage.clientKey}
-                    draggable
-                    onDragStart={() => setDraggedStage(index)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => {
-                      if (draggedStage != null)
-                        replaceStages((current) =>
-                          moveItem(current, draggedStage, index),
-                        );
-                      setDraggedStage(null);
-                    }}
-                    className={`${styles.stageCard} ${activeStageKey === stage.clientKey ? styles.activeDesignCard : ""}`}
-                    onClick={() => setActiveStageKey(stage.clientKey)}
-                  >
-                    <div className={styles.cardTitle}>
-                      <GripVertical size={15} />
-                      <strong>
-                        {index + 1}. {stage.name}
-                      </strong>
-                    </div>
-                    <small>
-                      {stageModes.find((item) => item[0] === stage.mode)?.[1] ||
-                        stage.mode}{" "}
-                      · {stage.Problems.length} 题
-                      {stage.durationSeconds
-                        ? ` · ${Math.round(stage.durationSeconds / 60)} 分钟`
-                        : ""}
-                    </small>
-                    <div className={styles.actions}>
-                      <Button
-                        iconOnly
-                        aria-label="上移阶段"
-                        variant="text"
-                        disabled={index === 0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          replaceStages((current) =>
-                            moveItem(current, index, index - 1),
-                          );
-                        }}
-                      >
-                        <ArrowUp size={14} />
-                      </Button>
-                      <Button
-                        iconOnly
-                        aria-label="下移阶段"
-                        variant="text"
-                        disabled={index === stages.length - 1}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          replaceStages((current) =>
-                            moveItem(current, index, index + 1),
-                          );
-                        }}
-                      >
-                        <ArrowDown size={14} />
-                      </Button>
-                      <Button
-                        iconOnly
-                        aria-label="复制阶段"
-                        variant="text"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          copyStage(stage);
-                        }}
-                      >
-                        <Copy size={14} />
-                      </Button>
-                      <Button
-                        iconOnly
-                        aria-label="删除阶段"
-                        variant="text"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          removeStage(stage);
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
+            <TrainingStageTimeline
+              stages={stages}
+              activeStageKey={activeStageKey}
+              draggedIndex={draggedStage}
+              onAdd={addStage}
+              onSelect={setActiveStageKey}
+              onDragStart={setDraggedStage}
+              onDrop={(index) => {
+                if (draggedStage != null)
+                  replaceStages((current) =>
+                    moveItem(current, draggedStage, index),
+                  );
+                setDraggedStage(null);
+              }}
+              onMove={(from, to) =>
+                replaceStages((current) => moveItem(current, from, to))
+              }
+              onCopy={copyStage}
+              onRemove={removeStage}
+            />
 
             <section
               className={styles.designColumn}
@@ -1019,133 +940,27 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               </div>
             </section>
 
-            <section className={styles.designColumn} aria-label="可用题目池">
-              <header>
-                <div>
-                  <strong>可用题目池</strong>
-                  <small>{poolTotal} 道</small>
-                </div>
-              </header>
-              <div className={styles.poolControls}>
-                <div className={styles.sourceTabs}>
-                  <Button
-                    size="sm"
-                    variant={source === "school" ? "primary" : "outline"}
-                    onClick={() => {
-                      setSource("school");
-                      setPage(1);
-                    }}
-                  >
-                    组织题库
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={source === "carits" ? "primary" : "outline"}
-                    onClick={() => {
-                      setSource("carits");
-                      setPage(1);
-                    }}
-                  >
-                    Carits
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={source === "external" ? "primary" : "outline"}
-                    onClick={() => {
-                      setSource("external");
-                      setPage(1);
-                    }}
-                  >
-                    其他题库
-                  </Button>
-                </div>
-                <label className={styles.searchControl}>
-                  <Search size={15} />
-                  <Input
-                    value={query}
-                    placeholder="搜索题号或标题"
-                    onChange={(event) => {
-                      setQuery(event.target.value);
-                      setPage(1);
-                    }}
-                  />
-                </label>
-              </div>
-              <div className={styles.designColumnBody}>
-                {poolLoading ? (
-                  <p className={styles.muted}>正在搜索…</p>
-                ) : !pool.length ? (
-                  <Empty title="当前分区无可用题目" />
-                ) : (
-                  pool.map((problem) => {
-                    const assigned = stages.filter((stage) =>
-                      stage.Problems.some(
-                        (item) => item.problemId === problem.id,
-                      ),
-                    );
-                    return (
-                      <article className={styles.poolProblem} key={problem.id}>
-                        <div>
-                          <strong>
-                            {problem.platform} · {problem.problemId}
-                          </strong>
-                          <span>{problem.title}</span>
-                          <small>
-                            {assigned.length
-                              ? `已在：${assigned.map((stage) => stage.name).join("、")}`
-                              : "尚未分配"}
-                          </small>
-                        </div>
-                        <div className={styles.actions}>
-                          <Button
-                            size="sm"
-                            disabled={
-                              !activeStage ||
-                              activeStage.Problems.some(
-                                (item) => item.problemId === problem.id,
-                              )
-                            }
-                            onClick={() => void addProblem(problem)}
-                          >
-                            加入当前阶段
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void openMultiAdd(problem)}
-                          >
-                            加入多个阶段
-                          </Button>
-                        </div>
-                      </article>
-                    );
-                  })
-                )}
-              </div>
-              {poolTotal > 20 && (
-                <footer className={styles.pagination}>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === 1}
-                    onClick={() => setPage((current) => current - 1)}
-                  >
-                    上一页
-                  </Button>
-                  <span>
-                    第 {page} / {Math.ceil(poolTotal / 20)} 页
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page >= Math.ceil(poolTotal / 20)}
-                    onClick={() => setPage((current) => current + 1)}
-                  >
-                    下一页
-                  </Button>
-                </footer>
-              )}
-            </section>
+            <TrainingProblemPool
+              stages={stages}
+              activeStage={activeStage}
+              source={source}
+              query={query}
+              page={page}
+              pool={pool}
+              total={poolTotal}
+              loading={poolLoading}
+              onSourceChange={(nextSource) => {
+                setSource(nextSource);
+                setPage(1);
+              }}
+              onQueryChange={(nextQuery) => {
+                setQuery(nextQuery);
+                setPage(1);
+              }}
+              onPageChange={setPage}
+              onAdd={(problem) => void addProblem(problem)}
+              onMultiAdd={(problem) => void openMultiAdd(problem)}
+            />
           </div>
         )}
 
@@ -1265,222 +1080,5 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         </FormDialog>
       </div>
     </PageFrame>
-  );
-}
-
-function AssignmentPolicyEditor({
-  assignment,
-  stage,
-  onChange,
-}: {
-  assignment: Assignment;
-  stage: Stage;
-  onChange: (value: Partial<Assignment>) => void;
-}) {
-  const strategyMode = stage.mode === "FOCUS";
-  return (
-    <details className={styles.assignmentPolicy}>
-      <summary>单题目标与训练策略</summary>
-      <div className={styles.compactGrid}>
-        <label className={styles.field}>
-          目标分（留空继承阶段）
-          <Input
-            type="number"
-            min={0}
-            max={100}
-            value={assignment.targetScore ?? ""}
-            onChange={(event) =>
-              onChange({
-                targetScore:
-                  event.target.value === "" ? null : Number(event.target.value),
-              })
-            }
-          />
-          <small>
-            当前有效目标：
-            {assignment.targetScore ?? stage.targetScore ?? "未设置"}
-          </small>
-        </label>
-        <label className={styles.field}>
-          单题训练时限（分钟）
-          <Input
-            type="number"
-            min={1}
-            value={
-              assignment.timeLimitSeconds
-                ? Math.round(assignment.timeLimitSeconds / 60)
-                : ""
-            }
-            onChange={(event) =>
-              onChange({
-                timeLimitSeconds: event.target.value
-                  ? Number(event.target.value) * 60
-                  : null,
-              })
-            }
-          />
-        </label>
-        {strategyMode && (
-          <>
-            <label className={styles.field}>
-              策略切换间隔（分钟）
-              <Input
-                type="number"
-                min={1}
-                value={
-                  assignment.strategyIntervalSeconds
-                    ? Math.round(assignment.strategyIntervalSeconds / 60)
-                    : ""
-                }
-                onChange={(event) =>
-                  onChange({
-                    strategyIntervalSeconds: event.target.value
-                      ? Number(event.target.value) * 60
-                      : null,
-                  })
-                }
-              />
-            </label>
-            <label className={styles.field}>
-              最长连续作答（分钟）
-              <Input
-                type="number"
-                min={1}
-                value={
-                  assignment.maxContinuousWorkSeconds
-                    ? Math.round(assignment.maxContinuousWorkSeconds / 60)
-                    : ""
-                }
-                onChange={(event) =>
-                  onChange({
-                    maxContinuousWorkSeconds: event.target.value
-                      ? Number(event.target.value) * 60
-                      : null,
-                  })
-                }
-              />
-            </label>
-            <Checkbox
-              label="超时后强制切换题目"
-              checked={Boolean(assignment.forceSwitchOnTimeout)}
-              onChange={(event) =>
-                onChange({ forceSwitchOnTimeout: event.target.checked })
-              }
-            />
-          </>
-        )}
-      </div>
-    </details>
-  );
-}
-
-function UnlockEditor({
-  value,
-  onChange,
-}: {
-  value: UnlockPolicy;
-  onChange: (value: UnlockPolicy) => void;
-}) {
-  const conditions = value.conditions?.length
-    ? value.conditions
-    : [{ type: "AC" as const }];
-  return (
-    <div className={styles.unlockEditor}>
-      <div className={styles.unlockHeader}>
-        <strong>前一道题解锁条件</strong>
-        <Select
-          aria-label="条件组合"
-          value={value.mode}
-          onChange={(event) =>
-            onChange({ ...value, mode: event.target.value as "ANY" | "ALL" })
-          }
-        >
-          <option value="ANY">任意一项 ANY</option>
-          <option value="ALL">全部满足 ALL</option>
-        </Select>
-      </div>
-      {conditions.map((condition, index) => (
-        <div className={styles.conditionRow} key={`${condition.type}-${index}`}>
-          <Select
-            value={condition.type}
-            aria-label={`解锁条件 ${index + 1}`}
-            onChange={(event) => {
-              const type = event.target.value as UnlockCondition["type"];
-              onChange({
-                ...value,
-                conditions: conditions.map((item, current) =>
-                  current === index
-                    ? {
-                        type,
-                        ...(["AC", "TEACHER"].includes(type)
-                          ? {}
-                          : { value: type === "SCORE" ? 60 : 1 }),
-                      }
-                    : item,
-                ),
-              });
-            }}
-          >
-            {Object.entries(conditionLabels).map(([type, label]) => (
-              <option value={type} key={type}>
-                {label}
-              </option>
-            ))}
-          </Select>
-          {!["AC", "TEACHER"].includes(condition.type) && (
-            <Input
-              aria-label="条件值"
-              type="number"
-              min={condition.type === "SCORE" ? 0 : 1}
-              max={
-                condition.type === "SCORE"
-                  ? 100
-                  : condition.type === "ATTEMPTS"
-                    ? 1000
-                    : 604800
-              }
-              value={condition.value || ""}
-              onChange={(event) =>
-                onChange({
-                  ...value,
-                  conditions: conditions.map((item, current) =>
-                    current === index
-                      ? { ...item, value: Number(event.target.value) }
-                      : item,
-                  ),
-                })
-              }
-            />
-          )}
-          <Button
-            iconOnly
-            aria-label="删除解锁条件"
-            variant="text"
-            disabled={conditions.length === 1}
-            onClick={() =>
-              onChange({
-                ...value,
-                conditions: conditions.filter(
-                  (_, current) => current !== index,
-                ),
-              })
-            }
-          >
-            <Trash2 size={14} />
-          </Button>
-        </div>
-      ))}
-      <Button
-        size="sm"
-        variant="outline"
-        icon={<Plus size={14} />}
-        disabled={conditions.length >= 10}
-        onClick={() =>
-          onChange({ ...value, conditions: [...conditions, { type: "AC" }] })
-        }
-      >
-        添加条件
-      </Button>
-    </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, TrainingContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, ProblemContracts, TrainingContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -77,6 +77,36 @@ describe('shared API contract adapter', () => {
       data: expect.objectContaining({
         statusRevision: 2,
         session: expect.objectContaining({ scheduledStartAt: '2026-09-15T00:00:00.000Z' }),
+      }),
+    }))
+  })
+
+  it('guards Problem judge mutations and normalizes judge asset dates', () => {
+    const body = parseContractBody(ProblemContracts.saveJudgeSettings, {
+      problemType: 'default',
+      timeLimit: 1000,
+      memoryLimit: 256,
+      config: { mode: 'acm', type: 'default', checker_type: 'default' },
+    })
+    expect(body.config?.mode).toBe('acm')
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.listTestdata, {
+      files: [{
+        id: 'file-1',
+        filename: '1.in',
+        size: 2,
+        md5: null,
+        uploadedAt: new Date('2026-09-14T00:00:00Z'),
+      }],
+      pairs: [{ input: '1.in', output: '1.out' }],
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({
+        files: [expect.objectContaining({
+          uploadedAt: '2026-09-14T00:00:00.000Z',
+        })],
       }),
     }))
   })

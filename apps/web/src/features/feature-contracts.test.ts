@@ -4,6 +4,9 @@ import {
   AssignmentProgressDataSchema,
   BlogDiscoveryDetailSchema,
   ContestRatingDataSchema,
+  ProblemJudgeModeTransitionInputSchema,
+  ProblemJudgeSettingsSchema,
+  ProblemTestdataSchema,
   SimilarityComparisonSchema,
   TrainingDesignSchema,
   TrainingStructureInputSchema,
@@ -135,6 +138,43 @@ describe('feature slice contracts', () => {
         problems: [],
       }],
     }).success).toBe(true)
+  })
+
+  it('shares Problem judge settings, testdata and mode transition contracts', () => {
+    const settings = ProblemJudgeSettingsSchema.parse({
+      problemType: 'default',
+      timeLimit: 1000,
+      memoryLimit: 256,
+      config: {
+        mode: 'oi',
+        type: 'default',
+        checker_type: 'default',
+        subtasks: [{
+          id: 1,
+          score: 100,
+          type: 'min',
+          cases: [{ input: '1.in', output: '1.out' }],
+        }],
+      },
+    })
+    expect(settings.config?.mode).toBe('oi')
+
+    const testdata = ProblemTestdataSchema.parse({
+      files: [{
+        id: 'file-1',
+        filename: '1.in',
+        size: 12,
+        md5: null,
+        sha256: null,
+        uploadedAt: new Date('2026-09-14T00:00:00Z'),
+      }],
+      pairs: [{ input: '1.in', output: '1.out' }],
+    })
+    expect(testdata.files[0].uploadedAt).toBe('2026-09-14T00:00:00.000Z')
+    expect(ProblemJudgeModeTransitionInputSchema.safeParse({
+      targetMode: 'ioi',
+      expectedLatestRevisionId: 'revision-1',
+    }).success).toBe(false)
   })
 
   it('routes pages through feature public APIs instead of component internals', () => {

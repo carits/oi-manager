@@ -1,6 +1,8 @@
 import { Router } from 'express'
+import { ProblemContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import {
   deleteProblemChecker,
   getProblemCheckerDownload,
@@ -18,6 +20,7 @@ import {
 export const problemJudgeRouter = Router()
 
 function sendJudgeError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return res
   if (!(error instanceof ProblemJudgeRouteError)) throw error
   return res.status(error.statusCode).json({
     success: false,
@@ -30,7 +33,7 @@ function sendJudgeError(error: unknown, res: any) {
 problemJudgeRouter.get('/:id/checker', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await listProblemCheckers(req.user!, req.params.id)
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.listCheckers, data)
   } catch (error) {
     return sendJudgeError(error, res)
   }
@@ -72,7 +75,7 @@ problemJudgeRouter.delete('/:id/checker/:checkerId', authenticate, asyncHandler(
 problemJudgeRouter.get('/:id/judge-config', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getProblemJudgeConfig(req.user!, req.params.id)
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.getJudgeSettings, data)
   } catch (error) {
     return sendJudgeError(error, res)
   }
@@ -83,9 +86,9 @@ problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (re
     const data = await saveProblemJudgeConfig({
       user: req.user!,
       problemId: req.params.id,
-      body: req.body,
+      body: parseContractBody(ProblemContracts.saveJudgeSettings, req.body),
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.saveJudgeSettings, data)
   } catch (error) {
     return sendJudgeError(error, res)
   }

@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useRef, useMemo, forwardRef, useImperativeHandle } from 'react'
 import collisionStyles from './JudgeSettingsTab.collision.module.css'
-import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './JudgeSettingsTab.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -15,6 +14,24 @@ import { ProblemHackConfigPanel } from './ProblemHackConfigPanel'
 import { ProblemTestGraphPanel } from './ProblemTestGraphPanel'
 import { LANGUAGE_OPTIONS } from '@/lib/judge-constants'
 import { ProblemJudgeAssetsPanel } from './ProblemJudgeAssetsPanel'
+import { JudgeTestdataPanel } from './JudgeTestdataPanel'
+import {
+  getProblemJudgeSettings,
+  listProblemCheckers,
+  listProblemTestdata,
+  listProblemTestSetRevisions,
+  saveProblemJudgeSettings,
+  transitionProblemJudgeMode,
+} from '../api/problemJudgeSettingsApi'
+import {
+  CHECKER_INTERFACES,
+  PROBLEM_TYPES,
+  type CheckerFile,
+  type JudgeConfig,
+  type SubtaskConfig,
+  type TestCasePair,
+  type TestdataFile,
+} from '../model/judgeSettingsTypes'
 
 // ==================== 类型定义 ====================
 
@@ -31,75 +48,6 @@ export interface JudgeSettingsTabHandle {
   isDirty: () => boolean
   getStagedFiles: () => File[]
 }
-
-interface TestdataFile {
-  id: string
-  filename: string
-  size: number
-  md5: string | null
-  sha256?: string | null
-  uploadedAt: string
-}
-interface CheckerFile { id: string; fileName: string; fileSize: number; fileUrl: string; uploadedAt: string }
-
-interface TestCasePair {
-  input: string
-  output: string
-  score?: number  // 单个测试点分数（用于 sum 类型）
-}
-
-interface SubtaskConfig {
-  id: number
-  score: number
-  type: 'min' | 'max' | 'sum'
-  if?: number[]
-  time?: string
-  memory?: string
-  cases: TestCasePair[]
-}
-
-interface JudgeConfig {
-  mode?: 'acm' | 'oi'
-  type?: string
-  checker_type?: string
-  ignore_trailing_space?: boolean
-  filename?: string
-  time?: string
-  memory?: string
-  checker?: string | { file: string; lang?: string } | null
-  interactor?: string | { file: string; lang?: string } | null
-  manager?: string | { file: string; lang?: string } | null
-  num_processes?: number
-  subType?: string
-  user_extra_files?: string[]
-  judge_extra_files?: string[]
-  langs?: string[]
-  subtasks?: SubtaskConfig[]
-}
-
-// ==================== 常量 ====================
-
-const PROBLEM_TYPES = [
-  { value: 'default', label: '传统题' },
-  { value: 'interactive', label: '交互题' },
-  { value: 'communication', label: '通信题' },
-  { value: 'submit_answer', label: '提交答案题' },
-  { value: 'objective', label: '客观题' },
-] as const
-
-const CHECKER_INTERFACES = [
-  { value: 'syzoj', label: 'SYZOJ' },
-  { value: 'hustoj', label: 'HUSTOJ' },
-  { value: 'lemon', label: 'Lemon' },
-  { value: 'kattis', label: 'Kattis' },
-  { value: 'qduoj', label: 'QDUOJ' },
-]
-
-const SUBTASK_TYPES = [
-  { value: 'min', label: 'Min（取最小）' },
-  { value: 'max', label: 'Max（取最大）' },
-  { value: 'sum', label: 'Sum（求和）' },
-] as const
 
 // ==================== 主组件 ====================
 
@@ -118,7 +66,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   // ==================== 状态 ====================
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'basic' | 'data' | 'subtasks' | 'testdata' | 'assets' | 'hack'>('basic')
+  const [activeTab, setActiveTab] = useState<'basic' | 'data' | 'testdata' | 'assets' | 'hack'>('basic')
   const [testGraphDirty, setTestGraphDirty] = useState(false)
   const [yamlCollapsed, setYamlCollapsed] = useState(true)
 
@@ -148,10 +96,6 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   // 子任务
   const [subtasks, setSubtasks] = useState<SubtaskConfig[]>([])
-  const [unassignedCases, setUnassignedCases] = useState<TestCasePair[]>([])
-  const [expandedSubtasks, setExpandedSubtasks] = useState<Set<number>>(new Set())
-  const [editingSubtaskId, setEditingSubtaskId] = useState<number | null>(null)
-  const [editForm, setEditForm] = useState({ score: '', time: '', memory: '', deps: '', type: 'min' })
 
   // 确认弹窗状态
   const [confirmState, setConfirmState] = useState<{ message: string; action: () => Promise<void> } | null>(null)
@@ -285,9 +229,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   const fetchJudgeConfig = async () => {
     try {
       setLoading(true)
-      const result = await apiClient.get<{ config?: JudgeConfig; problemType?: string; timeLimit?: number; memoryLimit?: number }>(`/api/problems/${problemId}/judge-config`)
-      if (result.success && result.data) {
-        const { config, problemType: pt, timeLimit: tl, memoryLimit: ml } = result.data
+      const data = await getProblemJudgeSettings(problemId)
+      if (data) {
+        const { config, problemType: pt, timeLimit: tl, memoryLimit: ml } = data
 
         if (pt) setProblemType(pt)
         const resolvedMode = config?.mode === 'oi' || (config?.mode !== 'acm' && config?.subtasks?.length) ? 'oi' : 'acm'
@@ -356,7 +300,6 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             }))
             setSubtasks(loaded)
             // 自动展开已加载的子任务，让用户看到配置已恢复
-            setExpandedSubtasks(new Set(loaded.map((st: SubtaskConfig) => st.id)))
           } else {
             console.log('[JudgeSettings] No subtasks in config. config.subtasks:', config.subtasks)
           }
@@ -381,11 +324,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   const fetchTestdata = async () => {
     try {
-      const result = await apiClient.get<{ files: TestdataFile[]; pairs: TestCasePair[] }>(`/api/problems/${problemId}/testdata`)
-      if (result.success && result.data) {
-        setTestdataFiles(result.data.files || [])
-        setTestdataPairs(result.data.pairs || [])
-      }
+      const data = await listProblemTestdata(problemId)
+      setTestdataFiles(data.files)
+      setTestdataPairs(data.pairs)
     } catch (error) {
       console.error('Failed to fetch testdata:', error)
     }
@@ -393,7 +334,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   const fetchCheckerFiles = async () => {
     if (!problemId) return
-    try { const result = await apiClient.get<CheckerFile[]>(`/api/problems/${problemId}/checker`); if (result.success) setCheckerFiles(result.data || []) } catch (error) { console.error("Failed to fetch checker files:", error) }
+    try { setCheckerFiles(await listProblemCheckers(problemId)) } catch (error) { console.error("Failed to fetch checker files:", error) }
   }
 
   const handleCheckerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -430,19 +371,19 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       console.log('[JudgeSettings] Saving config, subtasks count:', config.subtasks?.length ?? 0,
         'subtasks:', JSON.stringify(config.subtasks))
 
-      const result = await apiClient.put(`/api/problems/${pid}/judge-config`, {
+      const result = await saveProblemJudgeSettings(pid, {
         problemType,
         timeLimit: timeVal,
         memoryLimit: memVal,
         config,
       })
 
-      if (result.success) {
+      if (result.ok) {
         toast.success('评测配置已保存')
         // 更新初始配置快照（清除脏标记）
         initialConfigRef.current = JSON.stringify(buildConfig())
       } else {
-        toast.error(result.message || '保存失败')
+        toast.error(result.error.message || '保存失败')
       }
     } catch (error) {
       console.error('[JudgeSettings] Save error:', error)
@@ -457,9 +398,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     if (!problemId) { setJudgeMode(pendingJudgeMode); setLoadedJudgeMode(pendingJudgeMode); setPendingJudgeMode(null); return }
     setTransitioningMode(true)
     try {
-      const list = await apiClient.get<{ latestTestSetRevisionId: string | null }>(`/api/problems/${problemId}/test-set-revisions`)
-      if (!list.success) return toast.error(list.message || '无法读取正式测试版本')
-      if (!list.data?.latestTestSetRevisionId) {
+      const revisions = await listProblemTestSetRevisions(problemId)
+      if (!revisions.latestTestSetRevisionId) {
         setJudgeMode(pendingJudgeMode)
         setLoadedJudgeMode(pendingJudgeMode)
         if (pendingJudgeMode === 'acm' && checkerType === 'lemon') {
@@ -468,17 +408,16 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         if (pendingJudgeMode === 'oi' && subtasks.length === 0) {
           const cases = problemId ? testdataPairs : stagedPairs
           setSubtasks([{ id: 1, score: 100, type: 'min', cases }])
-          setExpandedSubtasks(new Set([1]))
         }
         setPendingJudgeMode(null)
         return
       }
-      const result = await apiClient.post(`/api/problems/${problemId}/judge-mode-transition`, {
+      const result = await transitionProblemJudgeMode(problemId, {
         targetMode: pendingJudgeMode,
-        expectedLatestRevisionId: list.data.latestTestSetRevisionId,
+        expectedLatestRevisionId: revisions.latestTestSetRevisionId,
       })
-      if (!result.success) return toast.error(result.message || '评测模式迁移失败')
-      toast.success(result.message || '评测模式迁移完成')
+      if (!result.ok) return toast.error(result.error.message || '评测模式迁移失败')
+      toast.success('评测模式迁移完成，Hack 已关闭并需要重新确认')
       setJudgeMode(pendingJudgeMode)
       setLoadedJudgeMode(pendingJudgeMode)
       setPendingJudgeMode(null)
@@ -610,123 +549,6 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     finally { setDownloadingFile(null) }
   }
 
-  const getAssignedCases = useCallback((): Set<string> => {
-    const assigned = new Set<string>()
-    for (const st of subtasks) for (const c of st.cases) assigned.add(`${c.input}→${c.output}`)
-    return assigned
-  }, [subtasks])
-
-  /** 更新 subtasks 状态并自动保存到后端 */
-  const updateSubtasksAndSave = async (newSubtasks: SubtaskConfig[]) => {
-    setSubtasks(newSubtasks)
-    if (problemId) {
-      await handleSaveConfig(newSubtasks)
-    }
-  }
-
-  const autoConfigure = useCallback(async () => {
-    const assigned = getAssignedCases()
-    const allPairs = !problemId ? stagedPairs : testdataPairs
-    const available = allPairs.filter(p => !assigned.has(`${p.input}→${p.output}`))
-    if (available.length === 0) { toast.warning('没有可用的测试点'); return }
-
-    const groups: Record<string, TestCasePair[]> = {}
-    for (const pair of available) {
-      const baseName = pair.input.replace(/\.in$/, '')
-      const numMatch = baseName.match(/^(\d+)/)
-      const prefix = numMatch ? numMatch[1] : baseName
-      if (!groups[prefix]) groups[prefix] = []
-      groups[prefix].push(pair)
-    }
-
-    const existingIds = subtasks.map(s => s.id)
-    let nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1
-    const newSubtasks = [...subtasks]
-    const groupKeys = Object.keys(groups).sort((a, b) => {
-      const na = parseInt(a), nb = parseInt(b)
-      if (!isNaN(na) && !isNaN(nb)) return na - nb
-      return a.localeCompare(b)
-    })
-
-    for (const key of groupKeys) {
-      newSubtasks.push({ id: nextId, score: Math.round(100 / groupKeys.length), type: 'min', cases: groups[key] })
-      nextId++
-    }
-    await updateSubtasksAndSave(newSubtasks)
-    toast.success(`已生成 ${groupKeys.length} 个子任务并保存`)
-  }, [testdataPairs, stagedPairs, subtasks, getAssignedCases])
-
-  const addSubtask = async () => {
-    const nextId = subtasks.length > 0 ? Math.max(...subtasks.map(s => s.id)) + 1 : 1
-    const newSubtasks = [...subtasks, { id: nextId, score: 0, type: 'min' as const, cases: [] }]
-    setExpandedSubtasks(new Set(Array.from(expandedSubtasks).concat([nextId])))
-    await updateSubtasksAndSave(newSubtasks)
-  }
-
-  const deleteSubtask = async (id: number) => {
-    const target = subtasks.find(s => s.id === id)
-    const newSubtasks = subtasks.filter(s => s.id !== id)
-    if (target?.cases.length) setUnassignedCases([...unassignedCases, ...target.cases])
-    setExpandedSubtasks(new Set(Array.from(expandedSubtasks).filter(x => x !== id)))
-    await updateSubtasksAndSave(newSubtasks)
-  }
-
-  const deleteAllSubtasks = async () => {
-    // 收集所有已分配的测试点
-    const allAssignedCases = subtasks.flatMap(s => s.cases)
-    if (allAssignedCases.length > 0) setUnassignedCases([...unassignedCases, ...allAssignedCases])
-    setExpandedSubtasks(new Set())
-    await updateSubtasksAndSave([])
-    toast.success('已删除所有子任务')
-  }
-
-  const startEditSubtask = (st: SubtaskConfig) => {
-    setEditingSubtaskId(st.id)
-    setEditForm({ score: String(st.score), time: st.time || '', memory: st.memory || '', deps: (st.if || []).join(', '), type: st.type })
-  }
-
-  const saveEditSubtask = async () => {
-    if (editingSubtaskId === null) return
-    const newSubtasks = subtasks.map(st => st.id !== editingSubtaskId ? st : {
-      ...st, score: parseInt(editForm.score) || 0,
-      time: editForm.time || undefined, memory: editForm.memory || undefined,
-      if: editForm.deps.split(',').map(s => s.trim()).filter(s => s && !isNaN(+s)).map(s => +s),
-      type: editForm.type as 'min' | 'max' | 'sum',
-    })
-    setEditingSubtaskId(null)
-    await updateSubtasksAndSave(newSubtasks)
-  }
-
-  const assignCasesToSubtask = async (subtaskId: number, cases: TestCasePair[]) => {
-    const assigned = getAssignedCases()
-    const available = cases.filter(c => !assigned.has(`${c.input}→${c.output}`))
-    if (!available.length) return
-    const newSubtasks = subtasks.map(st => st.id !== subtaskId ? st : { ...st, cases: [...st.cases, ...available] })
-    setUnassignedCases(unassignedCases.filter(c => !available.find(a => a.input === c.input && a.output === c.output)))
-    await updateSubtasksAndSave(newSubtasks)
-  }
-
-  const removeCaseFromSubtask = async (subtaskId: number, caseIndex: number) => {
-    const st = subtasks.find(s => s.id === subtaskId)
-    if (!st) return
-    const removed = st.cases[caseIndex]
-    const newSubtasks = subtasks.map(s => s.id !== subtaskId ? s : { ...s, cases: s.cases.filter((_, i) => i !== caseIndex) })
-    if (removed) setUnassignedCases([...unassignedCases, removed])
-    await updateSubtasksAndSave(newSubtasks)
-  }
-
-  useEffect(() => {
-    const assigned = getAssignedCases()
-    const allPairs = !problemId ? stagedPairs : testdataPairs
-    setUnassignedCases(allPairs.filter(p => !assigned.has(`${p.input}→${p.output}`)))
-  }, [testdataPairs, stagedPairs, subtasks, getAssignedCases])
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
   // ==================== 渲染 ====================
 
   if (loading) {
@@ -816,7 +638,6 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                   if (mode === 'oi' && subtasks.length === 0) {
                     const cases = problemId ? testdataPairs : stagedPairs
                     setSubtasks([{ id: 1, score: 100, type: 'min', cases }])
-                    setExpandedSubtasks(new Set([1]))
                   }
                 }} className={unifiedStyles.optionButton} aria-selected={judgeMode === mode}>
                   {label}
@@ -1021,159 +842,6 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         </div>
       )}
 
-      {/* ===== 子任务 Tab ===== */}
-      {judgeMode === 'oi' && activeTab === 'subtasks' && (
-        <div>
-          {/* 操作栏 */}
-          <div className={unifiedStyles.u22}>
-            <Button variant="outline" size="sm" type="button" onClick={autoConfigure}>⚡ 自动配置</Button>
-            <Button variant="outline" size="sm" type="button" onClick={addSubtask}>＋ 添加子任务</Button>
-            {subtasks.length > 0 && (
-              <Button variant="danger" size="sm" type="button" onClick={deleteAllSubtasks}>删除全部子任务</Button>
-            )}
-            <span className={unifiedStyles.u23}>
-              全局 {globalTime} / {globalMemory} · {subtasks.reduce((sum, st) => sum + st.cases.length, 0)} 测试点 · {subtasks.length} 子任务
-            </span>
-          </div>
-
-          {/* 未分配测试点 */}
-          {unassignedCases.length > 0 && (
-            <div className={unifiedStyles.settingsCard}>
-              <div className={`${unifiedStyles.sectionHeading} ${unifiedStyles.warningTitle}`}>未分配测试点 ({unassignedCases.length})</div>
-              <div className={unifiedStyles.u24}>
-                {unassignedCases.map((c, i) => (
-                  <span key={i} className={unifiedStyles.u25}>
-                    {c.input} → {c.output}
-                  </span>
-                ))}
-                {subtasks.length > 0 && (
-                  <div className={unifiedStyles.u26}>
-                    <span className={unifiedStyles.u5}>全部分配到:</span>
-                    <Select aria-label="选择" onChange={(e) => { const sid = parseInt(e.target.value); if (sid) assignCasesToSubtask(sid, unassignedCases); e.target.value = '' }} className={unifiedStyles.assignmentSelect} defaultValue="">
-                      <option value="" disabled>选择子任务...</option>
-                      {subtasks.map(st => <option key={st.id} value={st.id}>子任务 {st.id}</option>)}
-                    </Select>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 子任务列表 */}
-          {subtasks.map(st => {
-            const isExpanded = expandedSubtasks.has(st.id)
-            const isEditing = editingSubtaskId === st.id
-            return (
-              <div key={st.id} className={unifiedStyles.settingsCard}>
-                {/* 头部 */}
-                <div className={unifiedStyles.u27}
-                  onClick={() => {
-                    const next = new Set(Array.from(expandedSubtasks))
-                    if (next.has(st.id)) next.delete(st.id); else next.add(st.id)
-                    setExpandedSubtasks(next)
-                  }}>
-                  <span className={unifiedStyles.u28}>{isExpanded ? '▼' : '▶'}</span>
-                  <span className={unifiedStyles.u29}>子任务 {st.id}</span>
-                  <span className={unifiedStyles.u30}>{st.cases.length} 测试点</span>
-                  <span className={unifiedStyles.u31}>{st.score} 分</span>
-                  <span className={unifiedStyles.u32}>{st.type}</span>
-                  {st.if && st.if.length > 0 && (
-                    <span className={unifiedStyles.u33}>依赖: {st.if.join(', ')}</span>
-                  )}
-                  <Button variant="danger" size="sm" type="button" onClick={(e) => { e.stopPropagation(); deleteSubtask(st.id) }}
-                    className={unifiedStyles.deleteSubtask}>删除</Button>
-                </div>
-
-                {/* 展开内容 */}
-                {isExpanded && (
-                  <div className={unifiedStyles.u34}>
-                    {isEditing ? (
-                      <div className={unifiedStyles.u35}>
-                        <div>
-                          <label className={unifiedStyles.fieldLabel}>分值</label>
-                          <Input type="number" value={editForm.score} onChange={(e) => setEditForm({ ...editForm, score: e.target.value })} />
-                        </div>
-                        <div>
-                          <label className={unifiedStyles.fieldLabel}>时间覆盖</label>
-                          <Input type="text" value={editForm.time} placeholder={globalTime} onChange={(e) => setEditForm({ ...editForm, time: e.target.value })} />
-                        </div>
-                        <div>
-                          <label className={unifiedStyles.fieldLabel}>内存覆盖</label>
-                          <Input type="text" value={editForm.memory} placeholder={globalMemory} onChange={(e) => setEditForm({ ...editForm, memory: e.target.value })} />
-                        </div>
-                        <div>
-                          <label className={unifiedStyles.fieldLabel}>评分方式</label>
-                          <Select aria-label="选择" value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}>
-                            {SUBTASK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                          </Select>
-                        </div>
-                        <div className={unifiedStyles.u36}>
-                          <label className={unifiedStyles.fieldLabel}>依赖 (子任务ID, 逗号分隔)</label>
-                          <Input type="text" value={editForm.deps} onChange={(e) => setEditForm({ ...editForm, deps: e.target.value })} placeholder="如: 1, 2" />
-                        </div>
-                        <div className={unifiedStyles.u37}>
-                          <Button size="sm" type="button" onClick={saveEditSubtask}>保存</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={unifiedStyles.u38}>
-                        <span>⏱ {st.time || globalTime}</span>
-                        <span>内存 {st.memory || globalMemory}</span>
-                        <Button variant="ghost" type="button" onClick={() => startEditSubtask(st)} className={unifiedStyles.u39}>编辑</Button>
-                      </div>
-                    )}
-
-                    {/* 测试点 */}
-                    <div className={unifiedStyles.u24}>
-                      {st.cases.map((c, ci) => (
-                        <span key={ci} className={unifiedStyles.u40}>
-                          {c.input} → {c.output}
-                          {st.type === 'sum' && (
-                            <Input
-                              type="number"
-                              value={c.score || 0}
-                              onChange={(e) => {
-                                const newScore = parseInt(e.target.value) || 0
-                                const newSubtasks = subtasks.map(s => s.id === st.id ? {
-                                  ...s,
-                                  cases: s.cases.map((tc, ti) => ti === ci ? { ...tc, score: newScore } : tc)
-                                } : s)
-                                setSubtasks(newSubtasks)
-                              }}
-                              onBlur={() => updateSubtasksAndSave(subtasks)}
-                              className={unifiedStyles.u41}
-                              min={0}
-                            />
-                          )}
-                          {c.score !== undefined && st.type !== 'sum' && (
-                            <span className={unifiedStyles.u42}>({c.score}分)</span>
-                          )}
-                          <Button variant="ghost" type="button" onClick={() => removeCaseFromSubtask(st.id, ci)} className={unifiedStyles.u43}>✕</Button>
-                        </span>
-                      ))}
-                      {unassignedCases.length > 0 && (
-                        <Select aria-label="选择" onChange={(e) => { const inp = e.target.value; if (!inp) return; const pair = unassignedCases.find(c => c.input === inp); if (pair) assignCasesToSubtask(st.id, [pair]); e.target.value = '' }}
-                          className={unifiedStyles.u44} defaultValue="">
-                          <option value="">+ 添加测试点</option>
-                          {unassignedCases.map((c, i) => <option key={i} value={c.input}>{c.input} → {c.output}</option>)}
-                        </Select>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {subtasks.length === 0 && (
-            <div className={unifiedStyles.u45}>
-              <p className={unifiedStyles.u46}>暂无子任务</p>
-              <p className={unifiedStyles.u47}>上传测试数据后点击「自动配置」，或手动「添加子任务」</p>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ===== 测试数据 Tab ===== */}
       {activeTab === 'basic' && problemId && (
         <div className={unifiedStyles.settingsCard}>
@@ -1191,132 +859,22 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
       {/* ===== 测试数据 Tab ===== */}
       {activeTab === 'testdata' && (
-        <div>
-          <div className={unifiedStyles.u51}>
-            <p className={unifiedStyles.u30}>
-              支持 .in, .out, .ans, .yaml, .zip 文件。同名配对的 .in 和 .out/.ans 文件将自动识别为测试点。
-              {!problemId && <span className={unifiedStyles.u52}>（创建模式：文件暂存本地，保存题目后自动上传）</span>}
-            </p>
-            <div className={unifiedStyles.u53}>
-              {problemId && testdataFiles.length > 0 && (
-                <Button variant="outline" type="button" onClick={handleDownloadAllTestdata} disabled={downloadingAll}>
-                  {downloadingAll ? '\u4e0b\u8f7d\u4e2d...' : '\u4e0b\u8f7d\u6570\u636e\u5305'}
-                </Button>
-              )}
-              <label className={unifiedStyles.uploadButton} data-disabled={uploading}>
-                {uploading ? '\u4e0a\u4f20\u4e2d...' : '\u4e0a\u4f20\u6587\u4ef6'}
-                <Input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" className={unifiedStyles.u49} disabled={uploading} />
-              </label>
-            </div>
-          </div>
-
-          {/* 已识别测试点 */}
-          {(() => {
-            const pairs = !problemId ? stagedPairs : testdataPairs
-            return pairs.length > 0 ? (
-              <div className={`${unifiedStyles.settingsCard} ${unifiedStyles.recognizedCard}`}>
-                <div className={`${unifiedStyles.sectionHeading} ${unifiedStyles.successTitle}`}>已识别测试点 ({pairs.length})</div>
-                <div className={unifiedStyles.u20}>
-                  {pairs.map((pair, i) => (
-                    <span key={i} className={unifiedStyles.u54}>
-                      <span className={unifiedStyles.u55}>{pair.input}</span>
-                      <span className={unifiedStyles.u56}>→</span>
-                      <span className={unifiedStyles.u57}>{pair.output}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null
-          })()}
-
-          {/* 文件列表 */}
-          {(() => {
-            // 创建模式：显示暂存文件
-            if (!problemId) {
-              return stagedFiles.length > 0 ? (
-                <div className={unifiedStyles.u58}>
-                  <TableRoot className={unifiedStyles.u59}>
-                    <TableHead>
-                      <TableRow className={unifiedStyles.u60}>
-                        <TableHeaderCell className={unifiedStyles.u61}>文件名</TableHeaderCell>
-                        <TableHeaderCell className={unifiedStyles.u62}>大小</TableHeaderCell>
-                        <TableHeaderCell className={unifiedStyles.u62}>状态</TableHeaderCell>
-                        <TableHeaderCell className={unifiedStyles.u63}>操作</TableHeaderCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {stagedFiles.map((file, i) => (
-                        <TableRow key={i} className={unifiedStyles.u64}>
-                          <TableCell className={unifiedStyles.u65}>
-                            <span className={unifiedStyles.testdataName} data-kind={file.name.endsWith('.in') ? 'input' : file.name.endsWith('.out') || file.name.endsWith('.ans') ? 'output' : 'other'}>
-                              {file.name}
-                            </span>
-                          </TableCell>
-                          <TableCell className={unifiedStyles.u66}>{formatFileSize(file.size)}</TableCell>
-                          <TableCell className={unifiedStyles.u67}>
-                            <span className={unifiedStyles.u68}>待上传</span>
-                          </TableCell>
-                          <TableCell className={unifiedStyles.u69}>
-                            <Button variant="danger" size="sm" type="button" onClick={() => handleDeleteFile('', file.name)}>
-                              删除
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </TableRoot>
-                </div>
-              ) : (
-                <div className={unifiedStyles.u45}>
-                  暂无测试数据，请上传 .in 和 .out/.ans 文件
-                </div>
-              )
-            }
-
-            // 编辑模式：显示已上传文件
-            return testdataFiles.length > 0 ? (
-              <div className={unifiedStyles.u58}>
-                <TableRoot className={unifiedStyles.u59}>
-                  <TableHead>
-                    <TableRow className={unifiedStyles.u60}>
-                      <TableHeaderCell className={unifiedStyles.u61}>文件名</TableHeaderCell>
-                      <TableHeaderCell className={unifiedStyles.u62}>大小</TableHeaderCell>
-                      <TableHeaderCell className={unifiedStyles.u70}>上传时间</TableHeaderCell>
-                      <TableHeaderCell className={unifiedStyles.u63}>操作</TableHeaderCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {testdataFiles.map(file => (
-                      <TableRow key={file.id} className={unifiedStyles.u64}>
-                        <TableCell className={unifiedStyles.u65}>
-                          <span className={unifiedStyles.testdataName} data-kind={file.filename.endsWith('.in') ? 'input' : file.filename.endsWith('.out') || file.filename.endsWith('.ans') ? 'output' : 'other'}>
-                            {file.filename}
-                          </span>
-                        </TableCell>
-                        <TableCell className={unifiedStyles.u66}>{formatFileSize(file.size)}</TableCell>
-                        <TableCell className={unifiedStyles.u66}>{new Date(file.uploadedAt).toLocaleString('zh-CN')}</TableCell>
-                        <TableCell className={unifiedStyles.u69}>
-                          <div className={unifiedStyles.u71}>
-                            <Button variant="outline" size="sm" type="button" onClick={() => handleDownloadFile(file)} disabled={downloadingFile === file.id}>
-                              {downloadingFile === file.id ? '...' : '\u4e0b\u8f7d'}
-                            </Button>
-                            <Button variant="danger" size="sm" type="button" onClick={() => handleDeleteFile(file.id, file.filename)} disabled={deletingFile === file.id}>
-                              {deletingFile === file.id ? '...' : '\u5220\u9664'}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </TableRoot>
-              </div>
-            ) : (
-              <div className={unifiedStyles.u45}>
-                暂无测试数据，请上传 .in 和 .out/.ans 文件
-              </div>
-            )
-          })()}
-        </div>
+        <JudgeTestdataPanel
+          problemId={problemId}
+          stagedFiles={stagedFiles}
+          stagedPairs={stagedPairs}
+          testdataFiles={testdataFiles}
+          testdataPairs={testdataPairs}
+          uploading={uploading}
+          deletingFile={deletingFile}
+          downloadingFile={downloadingFile}
+          downloadingAll={downloadingAll}
+          fileInputRef={fileInputRef}
+          onUpload={handleFileUpload}
+          onDownloadAll={() => void handleDownloadAllTestdata()}
+          onDownload={(file) => void handleDownloadFile(file)}
+          onDelete={(id, filename) => void handleDeleteFile(id, filename)}
+        />
       )}
 
       {activeTab === 'hack' && problemId && (

@@ -11,6 +11,7 @@ const contractFiles = [
   'packages/contracts/src/auth.ts',
   'packages/contracts/src/health.ts',
   'packages/contracts/src/identity.ts',
+  'packages/contracts/src/problem.ts',
   'packages/contracts/src/assignment.ts',
   'packages/contracts/src/blog.ts',
   'packages/contracts/src/rating.ts',
@@ -72,6 +73,9 @@ const contractedBoundaries = [
   ['apps/server/src/modules/rating/rating-domain.routes.ts', 'ContestRatingContracts'],
   ['apps/server/src/modules/solution/solution.routes.ts', 'SolutionReviewContracts'],
   ['apps/server/src/modules/training-engine/training-engine.routes.ts', 'TrainingContracts'],
+  ['apps/server/src/modules/problem/problem.judge.routes.ts', 'ProblemContracts'],
+  ['apps/server/src/modules/problem/problem.testset-revision.routes.ts', 'ProblemContracts'],
+  ['apps/server/src/routes/testdata.ts', 'ProblemContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
   ['apps/web/src/features/blog/ui/BlogDiscoveryDetail.tsx', 'getBlogDiscovery'],
@@ -80,6 +84,10 @@ const contractedBoundaries = [
   ['apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx', 'getTrainingDesign'],
   ['apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx', 'validateTrainingDesign'],
   ['apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx', 'saveTrainingDesign'],
+  ['apps/web/src/features/problem/api/problemJudgeSettingsApi.ts', 'ProblemContracts'],
+  ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'getProblemJudgeSettings'],
+  ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'saveProblemJudgeSettings'],
+  ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'transitionProblemJudgeMode'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
