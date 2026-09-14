@@ -152,7 +152,7 @@ describe('学校私有题库隔离', () => {
     expect(platformDetail.status).toBe(404)
     expect(superDetail.status).toBe(404)
     expect(personalSchoolList.status).toBe(403)
-    expect(personalSchoolList.body.code).toBe('ORGANIZATION_REQUIRED')
+    expect(personalSchoolList.body.code).toBe('TEACHER_ONLY')
   })
 
   it('不同学校可使用相同 OJ 题号，同校重复创建被拒绝', async () => {
