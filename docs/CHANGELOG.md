@@ -12,6 +12,7 @@ source_of_truth: Git history
 - 组合页面迁入 `features/account-wallet`，删除旧 `components/wallet` 领域实现；页面不再声明后端 DTO、拼接业务 URL 或直接调用传输客户端。
 - Server 对钱包读取、平台审计、额度读取和兑换请求/响应执行共享 Runtime Schema；架构门禁新增三项 Feature Slice 与两项 Contract 文件。
 - 无数据库结构、账本余额、额度流水或历史业务数据修改。
+- 发布验证：生产同构 Economy/Contract 24/24；API 蓝绿切换至 3302；Web BUILD_ID `L7qz3ngcr8hg5b6ax-n7y` 完成候选与正式聊天闭环（序号 210–213）。
 
 # 变更记录
 
