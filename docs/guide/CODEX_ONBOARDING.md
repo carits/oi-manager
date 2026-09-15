@@ -101,6 +101,11 @@ Schema、Server 边界、Feature API 和契约测试，生产兼容字段也必�
 自行拼 `/api/users/:id/profile`、复制 `UserProfile` DTO，或根据 URL 猜测校园资料权限；Identity Contract 与
 Server 的显式组织上下文共同决定可见投影。
 
+团队功能从 `@/features/team` 公共入口使用，共享 Runtime Contract 位于 `packages/contracts/src/team.ts`。
+新增 Team 字段或动作时必须同步更新 Contract、Server Route Adapter、Feature API 与隔离契约测试；页面不得
+恢复 `components/team` 领域目录或直接调用核心 `/api/teams/*` JSON 接口。头像 multipart 和二进制下载只能作为
+Feature 内登记的 Raw Transport 例外。
+
 不得手写身份前缀后再拼接详情地址。尤其要避免“详情页存在，但父列表页不存在”的错误：
 
 ```text

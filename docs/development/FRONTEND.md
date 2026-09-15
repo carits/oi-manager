@@ -40,14 +40,14 @@ Header、背景和最大宽度。
 |------|------|------|
 | 页面 | `app/` | 路由参数、页面编排 |
 | Feature Slice | `features/<feature>/{api,model,ui}` | 业务 API、状态模型和完整交互；从根 `index.ts` 或根级按页面公共入口导出 |
-| 组合组件 | `components/team`, `components/organization-pages` | 跨 Feature 页面编排，不拥有已迁移领域事实 |
+| 组合组件 | `components/organization-pages` | 跨 Feature 页面编排，不拥有已迁移领域事实 |
 | 通用业务 | `components/business` | 用户管理、地区等跨页面能力 |
 | UI | `components/ui` | Button、Pagination 等基础控件 |
 | 数据 Hooks | `hooks/data` | 缓存、加载、错误和刷新 |
 | Contract Client | `lib/apiClient.ts` | 认证、作用域、超时及共享 Runtime Schema 校验 |
 
 Assignment、Blog、Submission、Contest Rating、Solution Review、Problem、Contest、Training Session、Chat、
-Organization Account、Notification、Workspace、Auth 与 User Profile 已迁入
+Organization Account、Notification、Workspace、Auth、User Profile 与 Team 已迁入
 Feature Slice。路由和跨域组件只能从 `@/features/<feature>` 根入口或根级按页面公共入口引用，不得深层导入
 `api/model/ui`，也不得在 `components` 下重新建立同名业务目录。根级按页面入口用于保持 Next.js 路由的切块
 边界，避免一个聚合 barrel 将同一 Feature 的全部管理工作台装入首屏。
@@ -77,6 +77,11 @@ Organization Header 才能选择当前组织内的学生/教师 Profile；链接
 `features/workspace/api/workspaceApi.ts` 的账号级 Client 读取。身份页、切换器以及 Blog、Problem Hack、
 组织管理、Data Market 等消费者不得再次声明 `WorkspaceSummary` 或直接调用 `/api/workspaces`；校园页面发起
 该请求时也不能继承 `X-OI-Organization-ID`。
+
+团队领域统一由 `packages/contracts/src/team.ts` 与 `features/team` 形成边界。列表、详情、成员、邀请、
+加入申请、公告和负责人转移不得在页面或组合组件内直接请求 `/api/teams/*`，也不得重新声明 Team DTO。
+头像上传属于 multipart Raw Transport 例外，但仍必须由 Team Feature API 封装；团队比赛、训练和题单的
+聚合展示属于跨领域组合，不应被塞入 Team Contract 伪装成团队实体字段。
 
 跨端 DTO 的事实源位于 `packages/contracts`。一个 Endpoint Contract 同时声明方法、作用域、请求、查询和成功
 响应 Runtime Schema，并由 Zod 推导 TypeScript 类型。Server Route Adapter 使用 `parseContractBody()`、

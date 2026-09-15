@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-15
 
+### Team Feature Slice 与共享 API Contract 收口
+
+- Team 列表、详情、创建、编辑、公告、成员、邀请、加入申请、离队和负责人转移迁入 `features/team/{api,model,ui}`；页面及跨域消费者只使用 Team 公共入口，旧 Team 领域组件与数据 Hook 目录已移除。
+- 新增 Team Runtime Contract，Server Route 与 Web Feature API 共同校验核心 JSON 请求/响应；头像 multipart 保留为明确 Raw Transport 例外，跨领域活动汇总继续作为组合层而不冒充 Team 事实源。
+- 迁移修复邀请载荷 `id/type` 与服务端 `userId/userType` 不一致的问题，并将异步路由中的 Contract 校验错误统一映射为 422。生产同构 Team/Contract 套件 2 文件 34/34、Web 39 文件 179 项、生产构建和架构门禁通过。
+- 门禁提升为 15 个 Contract 文件、15 个 Feature Slice、70 条契约边界且 0 违规。提交 `5a6ec13`、`26b866f`、`5a465cd` 已推送 `main`；API 3303→3302，Web BUILD_ID `s4Ff2aUjczPhovwdj0KH3` 经 canary 与正式消息闭环（序号 202–205）后提升。本批无 Prisma 或业务数据迁移。
+
 ### User Profile Feature Slice 与共享 API Contract 收口
 
 - 公开用户资料页和 `UserIdentityLink` 迁入 `features/user-profile/{api,ui}`，路由及 Ranking、Team、Contest、Submission 消费者只使用 Feature 公共入口；旧 `components/profile` 已移除。
