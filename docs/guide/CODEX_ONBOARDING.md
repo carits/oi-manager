@@ -97,6 +97,10 @@ curl -fsS http://127.0.0.1:3002/api/health
 `components/profile`，也不要在页面里直接调用 `/api/auth/*`。新增或调整认证字段时必须同时更新共享
 Schema、Server 边界、Feature API 和契约测试，生产兼容字段也必须显式列入 Schema。
 
+用户资料展示和身份链接从 `@/features/user-profile` 使用。不要在 Ranking、Team、Contest 或 Submission 中
+自行拼 `/api/users/:id/profile`、复制 `UserProfile` DTO，或根据 URL 猜测校园资料权限；Identity Contract 与
+Server 的显式组织上下文共同决定可见投影。
+
 不得手写身份前缀后再拼接详情地址。尤其要避免“详情页存在，但父列表页不存在”的错误：
 
 ```text

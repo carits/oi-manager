@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-15
 
+### User Profile Feature Slice 与共享 API Contract 收口
+
+- 公开用户资料页和 `UserIdentityLink` 迁入 `features/user-profile/{api,ui}`，路由及 Ranking、Team、Contest、Submission 消费者只使用 Feature 公共入口；旧 `components/profile` 已移除。
+- Identity Runtime Contract 新增资料类型查询与公开投影。个人上下文强制降级为账号公开资料，只有显式校园上下文才返回该学校的学生/教师档案；非法 `userType` 在共享边界返回 422。
+- Web 39 文件 179 项、生产同构 Profile/Contract 套件 2 文件 17/17、生产构建和架构门禁通过。门禁提升为 14 个 Contract 文件、14 个 Feature Slice、63 条契约边界且 0 违规。
+- 提交 `6e3a9b5` 已推送 `main`；API 3302→3303，Web BUILD_ID `RiXD-COZXo-cpsPP9gWOH` 经 canary 与正式消息闭环（序号 198–201）后提升。本批无 Prisma 或业务数据迁移。
+
 ### Auth Feature Slice 与共享 API Contract 收口
 
 - 登录表单、`AuthProvider`、账号资料和安全设置迁入 `features/auth/{api,model,ui}`；页面、布局和业务 Feature 只从 Auth 公共入口使用账号身份，不再依赖旧 `components/AuthProvider` 或 `components/profile`。

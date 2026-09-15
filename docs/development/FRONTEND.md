@@ -47,7 +47,7 @@ Header、背景和最大宽度。
 | Contract Client | `lib/apiClient.ts` | 认证、作用域、超时及共享 Runtime Schema 校验 |
 
 Assignment、Blog、Submission、Contest Rating、Solution Review、Problem、Contest、Training Session、Chat、
-Organization Account、Notification、Workspace 与 Auth 已迁入
+Organization Account、Notification、Workspace、Auth 与 User Profile 已迁入
 Feature Slice。路由和跨域组件只能从 `@/features/<feature>` 根入口或根级按页面公共入口引用，不得深层导入
 `api/model/ui`，也不得在 `components` 下重新建立同名业务目录。根级按页面入口用于保持 Next.js 路由的切块
 边界，避免一个聚合 barrel 将同一 Feature 的全部管理工作台装入首屏。
@@ -68,6 +68,10 @@ Markdown 或替换 PDF 后必须刷新到新的不可变 revision。
 `@/features/auth` 读取 `useAuth()`，不得重新创建认证 Context、直接请求 Auth JSON 接口或在页面内声明账号 DTO。
 头像上传是 multipart Raw Transport 例外，仍由 Auth Feature 封装。Server Session 在使用 `/auth/me` 同型数据前
 执行 `CurrentAccountSchema` 校验；可选兼容字段只能在共享 Contract 中显式登记，不能依赖 Zod 未知字段透传。
+
+公开账号/校园成员资料和身份链接统一由 `features/user-profile` 提供。页面不得直接调用
+`/api/users/:id/profile` 或自行声明资料 DTO。该接口属于上下文契约：个人上下文只暴露账号公开字段，显式
+Organization Header 才能选择当前组织内的学生/教师 Profile；链接组件根据当前工作区生成相同语义的资料 URL。
 
 账号工作区目录由 `packages/contracts/src/workspace.ts` 定义，浏览器只能经
 `features/workspace/api/workspaceApi.ts` 的账号级 Client 读取。身份页、切换器以及 Blog、Problem Hack、
