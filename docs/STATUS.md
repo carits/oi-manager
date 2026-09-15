@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-14
+last_verified: 2026-09-15
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-09-15: Frontend Feature Slice 与统一 API Contract Layer 第五批完成并上线。账号聊天已整体迁入 `features/chat/{api,model,ui}`，消息页面只通过 Feature 公共入口装配；隐私、好友、申请、黑名单、会话、消息、已读、归档、清空、举报和表情包 JSON 接口统一使用共享 Runtime Contract，旧分页客户端保持兼容，SSE 与二进制表情资源作为显式特殊传输边界保留。远端隔离 PostgreSQL 首轮测试发现契约错误未映射为 422，已由 `2043298` 修复并复跑 Chat/Contract 29/29。架构门禁现固定 11 个 Contract 文件、9 个 Feature Slice、41 条契约边界且 0 违规；Contracts/Server/Web 类型、Web 39 文件 173 项、Web 生产构建均通过。提交 `26dae46`、`2043298` 已推送 `main`；API 3303→3302，Web BUILD_ID `lnkluAtplqgcKDhHv0ZSs` 经 canary 与正式双账号消息闭环（序号 178–181）后提升。六项服务 active，readiness 数据库延迟 1.4 ms。本批没有 Prisma 或业务数据迁移；生产原有未跟踪维护文件与本地用户 Training Engine 修改均未改动。
 
 - 2026-09-15: Frontend Feature Slice 与统一 API Contract Layer 第四批完成并上线。OI Test Graph 工作台、TestSet Revision 详情和 Judge Program Template 列表/详情已接入共享 Runtime Contract；Server 在 Test Graph 保存、迁移、测试点注册/保护及模板响应边界执行同一 Schema，Web 通过 Problem Feature API 使用契约推导 DTO，不再在页面组件直接拼装这些 JSON 请求。模板本地类型已收口为共享契约别名，二进制测试数据传输继续保留为显式 Raw Transport 边界。架构门禁现固定 10 个 Contract 文件、8 个 Feature Slice、36 条端到端契约边界且 0 违规。Contracts/Server/Web 类型、Web 39 文件 172 项、Judge 8 个内置模板、生产构建与文档门禁通过；生产同构隔离库 5 文件 36/36 通过。提交 `c0bb1d0` 已推送 `main`；API 3302→3303，Web BUILD_ID `0fAHmd8Ekx2EoixK-lvlm` 经 canary 与正式双账号消息闭环（序号 174–177）后提升，readiness 正常。本批没有 Prisma 或业务数据迁移；生产原有未跟踪维护文件与本地用户 Training Engine 修改均未改动。
 

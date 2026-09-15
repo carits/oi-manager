@@ -1,13 +1,20 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-14
+last_verified: 2026-09-15
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 ## 2026-09-15
+
+### Chat Feature Slice 与共享 API Contract 收口
+
+- 账号聊天迁入独立 Feature Slice；App Route、页头按钮、Provider 和举报页仅使用公共入口，核心 JSON 请求统一由 Chat Feature API 发起。
+- 新增 Chat Runtime Contract，覆盖隐私、用户发现、好友、好友申请、黑名单、会话、消息、已读、归档、清空、举报与表情包。Server 请求/响应边界执行同一 Schema，旧分页客户端继续兼容，SSE 和二进制素材保持显式边界。
+- 真实 PostgreSQL 测试捕获并修复契约拒绝错误被错误映射为 500 的问题；超长 UTF-8 消息和冲突分页参数现稳定返回 422。Chat/Contract 隔离套件 29/29、Web 39 文件 173 项、类型检查、生产构建及架构门禁通过。
+- 架构门禁提升为 11 个 Contract 文件、9 个 Feature Slice、41 条契约边界且 0 违规。提交 `26dae46`、`2043298` 已推送 `main`；API 3303→3302，Web BUILD_ID `lnkluAtplqgcKDhHv0ZSs` 经 canary 与正式消息闭环（序号 178–181）后提升。本批无 Prisma 或业务数据迁移。
 
 ### Test Graph 与 Judge Template Contract 收口
 
