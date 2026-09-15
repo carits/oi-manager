@@ -10,7 +10,7 @@ import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { useToast } from '@/components/ui/Toast'
-import { resolveNotificationHref } from '@/components/workspace/workspaceRouting'
+import { resolveNotificationHref } from '@/features/workspace'
 import { listAccountNotifications, readAccountNotification, readAllAccountNotifications, respondToNotification } from '../api/notificationApi'
 import styles from './NotificationCenterPage.module.css'
 

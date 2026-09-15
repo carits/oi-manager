@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Archive, ArrowLeft, BookOpenCheck, FolderPlus, History, Save, Send } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
-import type { WorkspaceSummary } from '@oi-manager/shared'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
@@ -34,6 +34,7 @@ import {
 } from '../model/blog-contract'
 import styles from './BlogWorkspace.module.css'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
+import { listWorkspaces } from '@/features/workspace'
 
 type BlogVersion = {
   id: string
@@ -142,11 +143,11 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
   useEffect(() => { void load() }, [load])
   useEffect(() => {
     void Promise.all([
-      apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces', { accountScoped: true }),
+      listWorkspaces().catch(() => ({ workspaces: [] })),
       apiClient.get<{ items: BlogSeriesSummary[] }>('/api/blog-series?pageSize=100', { accountScoped: true }),
       apiClient.get<{ items: BlogTagSummary[] }>('/api/blog-tags', { accountScoped: true }),
     ]).then(([workspaceResult, seriesResult, tagResult]) => {
-      if (workspaceResult.success && workspaceResult.data) setWorkspaces(workspaceResult.data.workspaces.filter(item => item.type === 'organization'))
+      setWorkspaces(workspaceResult.workspaces.filter(item => item.type === 'organization'))
       if (seriesResult.success && seriesResult.data) setSeries(seriesResult.data.items)
       if (tagResult.success && tagResult.data) setTagSuggestions(tagResult.data.items)
     })

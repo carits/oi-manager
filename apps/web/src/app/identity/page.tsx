@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getServerSession } from '@/lib/serverSession'
-import { IdentityChooser } from './IdentityChooser'
+import { IdentityChooser } from '@/features/workspace'
 
 export default async function IdentityPage() {
   const session = await getServerSession()

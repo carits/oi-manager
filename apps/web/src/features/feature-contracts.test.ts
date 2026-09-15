@@ -22,6 +22,8 @@ import {
   SimilarityComparisonSchema,
   TrainingDesignSchema,
   TrainingStructureInputSchema,
+  WorkspaceContracts,
+  WorkspaceListSchema,
 } from '@oi-manager/contracts'
 
 describe('feature slice contracts', () => {
@@ -315,16 +317,33 @@ describe('feature slice contracts', () => {
     expect(NotificationContracts.list.query.safeParse({ page: '1', pageSize: '51' }).success).toBe(false)
   })
 
+  it('shares the account workspace list contract', () => {
+    expect(WorkspaceListSchema.safeParse({ workspaces: [
+      { type: 'personal', availableModules: ['overview'] },
+      {
+        type: 'organization', organizationId: 'organization-1', organizationName: '第一中学',
+        organizationType: 'school', organizationMembershipId: 'membership-1', memberRole: 'student',
+        relationType: 'enrolled', relationLabel: '本校学生', availableModules: ['overview'],
+      },
+    ] }).success).toBe(true)
+    expect(WorkspaceContracts.list.scope).toBe('account')
+    expect(WorkspaceListSchema.safeParse({ workspaces: [
+      { type: 'organization', organizationId: 'organization-1', availableModules: [] },
+    ] }).success).toBe(false)
+  })
+
   it('routes pages through feature public APIs instead of component internals', () => {
     const page = fs.readFileSync(new URL('../app/blog/page.tsx', import.meta.url), 'utf8')
     const messages = fs.readFileSync(new URL('../app/account/messages/page.tsx', import.meta.url), 'utf8')
     const organizations = fs.readFileSync(new URL('../app/personal/organizations/page.tsx', import.meta.url), 'utf8')
     const notifications = fs.readFileSync(new URL('../app/account/notifications/page.tsx', import.meta.url), 'utf8')
+    const identity = fs.readFileSync(new URL('../app/identity/page.tsx', import.meta.url), 'utf8')
     const organization = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/[...segments]/page.tsx', import.meta.url), 'utf8')
     expect(page).toContain("from '@/features/blog'")
     expect(messages).toContain("from '@/features/chat'")
     expect(organizations).toContain("from '@/features/organization-account'")
     expect(notifications).toContain("from '@/features/notification'")
+    expect(identity).toContain("from '@/features/workspace'")
     expect(organization).toContain("from '@/features/assignment'")
     expect(organization).toContain("from '@/features/training-session/TrainingSessionWorkspace'")
     expect(organization).not.toMatch(/@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//)

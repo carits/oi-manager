@@ -42,8 +42,8 @@ describe('human UX productization contract', () => {
 
   it('keeps the sidebar account footer account-only and uses human workspace roles', () => {
     const shell = read('./AppShell.tsx')
-    const switcher = read('./workspace/WorkspaceSwitcher.tsx')
-    const routing = read('./workspace/workspaceRouting.ts')
+    const switcher = read('../features/workspace/ui/WorkspaceSwitcher.tsx')
+    const routing = read('../features/workspace/model/workspaceRouting.ts')
     expect(shell).toContain("isPersonal ? '个人账号' : `@${user.username}`")
     expect(shell).toContain('sidebarOpen ? <PanelLeftClose')
     expect(switcher).toContain('workspaceRoleLabel')

@@ -12,7 +12,8 @@ import { getLanguageLabel } from '@/lib/judge-constants'
 import styles from './ProblemHackPanel.module.css'
 import { SubmissionIoFields, SubmissionCodeEditor, clearSubmissionDraft, type SubmissionIoValue } from '@/features/submission'
 import { getJudgeProgramTemplate } from '@oi-manager/shared'
-import type { WorkspaceSummary } from '@oi-manager/shared'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
+import { listWorkspaces } from '@/features/workspace'
 import { buildContributionTimeline, candidateLifecyclePresentation, contributionStageLabel, hackCanonicalPresentation, type LifecycleTone } from '../model/problem-contribution-display'
 
 type InputChoice = 'data' | 'cpp17' | 'python3'
@@ -45,12 +46,13 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
       apiClient.get<{ attempts: Attempt[]; acceptedCount: number; canManage: boolean }>(`/api/problems/${problemId}/hacks?pageSize=50`),
       apiClient.get<Readiness>(`/api/problems/${problemId}/contribution-readiness`),
       apiClient.get<ContributionTask[]>(`/api/problems/${problemId}/contributions/mine`),
-      apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces', { accountScoped: true }),
+      listWorkspaces().catch(() => ({ workspaces: [] })),
     ])
     if (hackResult.success && hackResult.data) { setAttempts(hackResult.data.attempts); setCanManage(hackResult.data.canManage); setTotalAccepted(hackResult.data.acceptedCount) } else { setAttempts([]); setHackLoadError(hackResult.message || 'Hack 记录加载失败') }
     if (readinessResult.success && readinessResult.data) { setReadiness(readinessResult.data); setCanManage(readinessResult.data.canManage) } else { setReadiness(null); setReadinessLoadError(readinessResult.message || '贡献就绪状态加载失败') }
     if (contributionResult.success && contributionResult.data) setContributions(contributionResult.data); else { setContributions([]); setContributionLoadError(contributionResult.message || '贡献任务加载失败') }
-    if (workspaceResult.success && workspaceResult.data) setOrganizationWorkspaces(workspaceResult.data.workspaces.filter(item => item.type === 'organization' && Boolean(item.organizationId))); else { setOrganizationWorkspaces([]); setWorkspaceLoadError(workspaceResult.message || '学校列表加载失败') }
+    setOrganizationWorkspaces(workspaceResult.workspaces.filter(item => item.type === 'organization'))
+    if (workspaceResult.workspaces.length === 0) setWorkspaceLoadError('学校列表暂时无法加载')
     setLoading(false)
   }, [problemId])
   useEffect(() => { setLoading(true); void load() }, [load])

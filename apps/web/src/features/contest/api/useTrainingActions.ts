@@ -5,7 +5,7 @@ import { createClientUUID } from '@/lib/uuid'
 import { saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import type { TrainingInfo, TrainingProblem, Attachment } from '../model/types'
-import { listHref } from '@/components/workspace/workspaceRouting'
+import { listHref } from '@/features/workspace'
 import type { SubmissionIoValue } from '@/features/submission'
 
 export function useTrainingActions(

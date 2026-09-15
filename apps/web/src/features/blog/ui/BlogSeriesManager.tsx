@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowUp, Library, Plus, Save } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import type { WorkspaceSummary } from '@oi-manager/shared'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
@@ -16,6 +16,7 @@ import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { BLOG_VISIBILITY_LABELS, type BlogVisibility } from '../model/blog-contract'
 import styles from './BlogWorkspace.module.css'
+import { listWorkspaces } from '@/features/workspace'
 
 type SeriesSummary = {
   id: string
@@ -74,7 +75,7 @@ export function BlogSeriesManager() {
     setDetails(result.data); setEntries(result.data.entries); setTitle(result.data.title); setDescription(result.data.description || ''); setVisibility(result.data.visibility)
   }, [])
 
-  useEffect(() => { void loadList(); void apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces', { accountScoped: true }).then(result => { if (result.success && result.data) setWorkspaces(result.data.workspaces.filter(item => item.type === 'organization')) }) }, [loadList])
+  useEffect(() => { void loadList(); void listWorkspaces().then(result => setWorkspaces(result.workspaces.filter(item => item.type === 'organization'))).catch(() => setWorkspaces([])) }, [loadList])
   useEffect(() => { void loadDetails(selectedId) }, [loadDetails, selectedId])
 
   const createSeries = async () => {

@@ -16,7 +16,7 @@ import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { useAuth } from '@/components/AuthProvider'
 import type { Attachment, TabType } from '../model/types'
 import { typeLabel, formatLabel as formatLabelFn } from '../model/types'
-import { listHref, resourceHref } from '@/components/workspace/workspaceRouting'
+import { listHref, resourceHref } from '@/features/workspace'
 
 import { useTrainingDetail } from '../api/useTrainingDetail'
 import { useTrainingRank } from '../api/useTrainingRank'

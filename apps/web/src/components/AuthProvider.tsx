@@ -14,8 +14,7 @@ import { usePathname } from 'next/navigation'
 import { accountClient, organizationClient, AUTH_UNAUTHORIZED_EVENT, ORGANIZATION_UNAVAILABLE_EVENT } from '@/lib/apiClient'
 import { clearAuth, clearLegacyBrowserToken, setAdminId, setRole, setUserId } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
-import type { WorkspaceSummary } from '@oi-manager/shared'
-import type { AccountRole, LegacyUserRole, OrganizationMembershipRole } from '@oi-manager/contracts'
+import type { AccountRole, LegacyUserRole, OrganizationMembershipRole, WorkspaceSummary } from '@oi-manager/contracts'
 
 export interface AuthUser {
   userId: string
@@ -35,8 +34,6 @@ export interface AuthUser {
   /** 当前 URL 所在校园的成员身份；校园身份不再从全局账号角色推断。 */
   organizationRole?: OrganizationMembershipRole
 }
-
-export type { WorkspaceSummary }
 
 interface LoginResult {
   success: boolean

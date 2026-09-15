@@ -3,14 +3,13 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Building2, ChevronRight, ShieldCheck, UserRound } from 'lucide-react'
-import type { AuthUser, WorkspaceSummary } from '@/components/AuthProvider'
-import { apiClient } from '@/lib/apiClient'
-import { workspaceHref, workspaceRoleLabel } from '@/components/workspace/workspaceRouting'
+import type { AuthUser } from '@/components/AuthProvider'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
+import { listWorkspaces } from '../api/workspaceApi'
+import { workspaceHref, workspaceRoleLabel } from '../model/workspaceRouting'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
-import styles from './identity.module.css'
-
-type Payload = { workspaces: WorkspaceSummary[] }
+import styles from './IdentityChooser.module.css'
 
 export function IdentityChooser({ user }: { user: AuthUser }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
@@ -20,11 +19,13 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
   const load = async () => {
     setError('')
     setWorkspaces(null)
-    const result = await apiClient.get<Payload>('/api/workspaces')
-    if (!result.success || !result.data) return setError(result.message || '身份列表加载失败')
-    const items = result.data.workspaces
-    setWorkspaces(items)
-    if (items.length === 1) window.location.replace(workspaceHref(items[0], 'overview'))
+    try {
+      const { workspaces: items } = await listWorkspaces()
+      setWorkspaces(items)
+      if (items.length === 1) window.location.replace(workspaceHref(items[0], 'overview'))
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '身份列表加载失败')
+    }
   }
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
       return
     }
     void load()
-  }, [])
+  }, [user.role])
 
   const enter = (workspace: WorkspaceSummary) => {
     setEntering(workspace.organizationId || workspace.type)

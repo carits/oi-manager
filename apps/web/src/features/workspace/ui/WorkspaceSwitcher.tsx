@@ -2,18 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { Check, ChevronDown, Plus, Search, School, ShieldCheck, UserRound } from 'lucide-react'
-import { apiClient } from '@/lib/apiClient'
-import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
+import { useAuth } from '@/components/AuthProvider'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
 import { isGlobalAdministrator } from '@/lib/capabilities'
-import { workspaceHref, workspaceModule, workspaceRoleLabel } from './workspaceRouting'
+import { listWorkspaces } from '../api/workspaceApi'
+import { workspaceHref, workspaceModule, workspaceRoleLabel } from '../model/workspaceRouting'
 import styles from './WorkspaceSwitcher.module.css'
 import { useNavigationGuard } from '@/components/navigation/UnsavedChangesProvider'
 import { resolveNavigationContext } from '@/lib/navigationContext'
-
-type Payload = { workspaces: WorkspaceSummary[] }
 
 export function WorkspaceSwitcher() {
   const { user } = useAuth()
@@ -29,9 +28,7 @@ export function WorkspaceSwitcher() {
   const visible = useMemo(() => workspaces.filter(item => !query || ((item.organizationName || '') + ' ' + (item.relationLabel || '')).toLocaleLowerCase().includes(query.toLocaleLowerCase())), [query, workspaces])
 
   useEffect(() => {
-    void apiClient.get<Payload>('/api/workspaces').then(result => {
-      if (result.success && result.data) setWorkspaces(result.data.workspaces)
-    })
+    void listWorkspaces().then(result => setWorkspaces(result.workspaces)).catch(() => setWorkspaces([]))
   }, [user?.userId])
 
   useEffect(() => {

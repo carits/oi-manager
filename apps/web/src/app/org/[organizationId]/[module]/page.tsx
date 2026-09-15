@@ -19,8 +19,8 @@ import CampusManagementPage from '@/components/organization-pages/teacher/manage
 import StudentRankingsPage from '@/components/organization-pages/student/rating/page'
 import { TrainingSessionListPage } from '@/features/training-session/TrainingSessionListPage'
 import { SubmissionList } from '@/features/submission'
-import { apiClient } from '@/lib/apiClient'
-import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
+import { useAuth } from '@/components/AuthProvider'
+import { listWorkspaces } from '@/features/workspace'
 import { BlogDiscovery } from '@/features/blog'
 import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
 
@@ -39,15 +39,15 @@ export default function OrgPage() {
   useEffect(() => {
     setReady(false)
     setLoadError(null)
-    void apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces').then(result => {
-      const workspace = result.data?.workspaces.find(item => item.organizationId === organizationId)
-      if (result.success && workspace?.type === 'organization') {
+    void listWorkspaces().then(result => {
+      const workspace = result.workspaces.find(item => item.organizationId === organizationId)
+      if (workspace?.type === 'organization') {
         activateOrganization(workspace)
         setWorkspaceRole(workspace.memberRole as 'school_principal' | 'teacher' | 'student')
       } else if (user?.organizationId === organizationId && user.organizationRole) {
         setWorkspaceRole(user.organizationRole)
       } else {
-        setLoadError(result.message || '当前账号没有该校园的有效成员关系')
+        setLoadError('当前账号没有该校园的有效成员关系')
       }
       setReady(true)
     }).catch(() => {

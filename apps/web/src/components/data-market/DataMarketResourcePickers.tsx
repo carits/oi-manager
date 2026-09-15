@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react'
 import apiClient from '@/lib/apiClient'
 import { Select } from '@/components/ui/FormControls'
 import { activityStatusLabel } from '@/lib/humanPresentation'
+import { listWorkspaces } from '@/features/workspace'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
 
 type Problem = { id: string; problemId: string; title: string; platform: string }
 type ProblemPage = { data: Problem[] }
 type Revision = { id: string; revisionNumber: number; mode: string }
 type RevisionList = { revisions: Revision[] }
 type Quality = { id: string; overallScore: number | null; qualityStatus: string; criticalIssueCount: number }
-type Workspace = { type: string; organizationId?: string; organizationName?: string }
 type Contest = { id: string | number; title?: string; name?: string; status?: string }
 
 export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, onRevisionChange, onQualityChange, requireQuality = false, lockProblem = false }: {
@@ -76,13 +77,11 @@ export function LicenseScopePicker({ license, organizationId, contestId, onOrgan
   onOrganizationChange: (id: string) => void
   onContestChange: (id: string) => void
 }) {
-  const [organizations, setOrganizations] = useState<Workspace[]>([])
+  const [organizations, setOrganizations] = useState<WorkspaceSummary[]>([])
   const [contests, setContests] = useState<Contest[]>([])
   useEffect(() => {
     if (license === 'PERSONAL') return
-    void apiClient.get<{ workspaces: Workspace[] }>('/api/workspaces', { accountScoped: true }).then(result => {
-      if (result.success) setOrganizations((result.data?.workspaces || []).filter(item => item.type === 'organization'))
-    })
+    void listWorkspaces().then(result => setOrganizations(result.workspaces.filter(item => item.type === 'organization'))).catch(() => setOrganizations([]))
   }, [license])
   useEffect(() => {
     setContests([]); onContestChange('')

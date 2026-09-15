@@ -1,6 +1,6 @@
 import { canNavigate, fallbackHref, listHref, notificationTeamHref, resolveNotificationHref, resourceHref, workspaceHref } from './workspaceRouting'
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceSummary } from '@oi-manager/shared'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
 
 describe('组织路由能力', () => {
   const organization = { workspace: 'organization' as const, organizationId: 'org_1', role: 'student' }
@@ -27,7 +27,11 @@ describe('组织路由能力', () => {
   })
   it('切换工作区时保留知识广场模块', () => {
     const personal: WorkspaceSummary = { type: 'personal', availableModules: [] }
-    const campus: WorkspaceSummary = { type: 'organization', organizationId: 'org_1', availableModules: [] }
+    const campus: WorkspaceSummary = {
+      type: 'organization', organizationId: 'org_1', organizationName: '学校', organizationType: 'school',
+      organizationMembershipId: 'membership-1', memberRole: 'student', relationType: 'enrolled',
+      relationLabel: '本校学生', availableModules: [],
+    }
     expect(workspaceHref(personal, 'knowledge')).toBe('/personal/knowledge')
     expect(workspaceHref(campus, 'knowledge')).toBe('/org/org_1/knowledge')
   })

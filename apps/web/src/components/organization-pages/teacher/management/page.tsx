@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
-import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
+import { useAuth } from '@/components/AuthProvider'
+import { listWorkspaces } from '@/features/workspace'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
@@ -33,11 +34,11 @@ export default function CampusManagementPage() {
 
   useEffect(() => {
     if (params.organizationId) return
-    void apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces').then(result => {
-      const workspace = result.data?.workspaces.find(item => item.type === 'organization')
+    void listWorkspaces().then(result => {
+      const workspace = result.workspaces.find(item => item.type === 'organization')
       setOrganizationId(workspace?.organizationId || '')
       setLoadingWorkspace(false)
-    })
+    }).catch(() => setLoadingWorkspace(false))
   }, [params.organizationId])
 
   const items = useMemo(() => [

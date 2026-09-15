@@ -4,6 +4,7 @@ import { notificationService } from '../../notification/notification.service'
 import { createOrganizationInvitation, respondToInvitation } from '../../organization-join/organization-join.service'
 import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
 import { organizationRoleFromRoleKeys } from '../../authorization/capabilities'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
 
 const allModules = ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
 const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts']
@@ -36,7 +37,7 @@ function relationLabel(memberRole: string, relationType: string) {
   return '本校学生'
 }
 
-export async function listWorkspaces(actor: WorkspaceActor) {
+export async function listWorkspaces(actor: WorkspaceActor): Promise<WorkspaceSummary[]> {
   const accountRole = actor.accountRole || actor.role
   if (accountRole === 'super_admin' || accountRole === 'platform_admin') {
     return [{

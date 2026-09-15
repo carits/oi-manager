@@ -57,18 +57,6 @@ export interface JwtPayload extends SessionJwtPayload {
   organizationMembershipId?: string
 }
 
-export interface WorkspaceSummary {
-  type: 'organization' | 'personal' | 'platform'
-  organizationId?: string
-  organizationName?: string
-  organizationType?: string
-  memberRole?: string
-  relationType?: string
-  relationLabel?: string
-  organizationMembershipId?: string
-  availableModules: string[]
-}
-
 // 分页参数
 export interface PaginationParams {
   page?: number

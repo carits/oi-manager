@@ -9,6 +9,8 @@ import {
   WorkspaceError,
 } from '../modules/workspace/application/workspace.service'
 import { OrganizationJoinError } from '../modules/organization-join/organization-join.service'
+import { WorkspaceContracts } from '@oi-manager/contracts'
+import { sendContractData, sendContractError } from '../lib/api-contract'
 
 export const workspaceRouter = Router()
 
@@ -21,6 +23,7 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
     try {
       await handler(req, res)
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof WorkspaceError) {
         return res.status(error.statusCode).json({
           success: false,
@@ -37,7 +40,7 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
 }
 
 workspaceRouter.get('/', authenticate, endpoint('获取工作区失败', async (req, res) => {
-  res.json({ success: true, data: { workspaces: await listWorkspaces(actor(req)) } })
+  sendContractData(res, WorkspaceContracts.list, { workspaces: await listWorkspaces(actor(req)) })
 }))
 
 workspaceRouter.post('/organizations/:id/invitations', authenticate, endpoint('邀请校园成员失败', async (req, res) => {

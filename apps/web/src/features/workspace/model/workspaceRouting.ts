@@ -1,4 +1,4 @@
-import type { WorkspaceSummary } from '@oi-manager/shared'
+import type { WorkspaceSummary } from '@oi-manager/contracts'
 import type { NavigationContext } from '@/lib/navigationContext'
 export type { NavigationContext } from '@/lib/navigationContext'
 

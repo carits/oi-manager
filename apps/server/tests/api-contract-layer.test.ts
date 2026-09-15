@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, ChatContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TrainingContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, ChatContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -256,5 +256,26 @@ describe('shared API contract adapter', () => {
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ notifications: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })] }),
     }))
+  })
+
+  it('guards account workspace summaries at the shared boundary', () => {
+    const { response, json } = responseStub()
+    sendContractData(response, WorkspaceContracts.list, {
+      workspaces: [
+        {
+          type: 'organization', organizationId: 'organization-1', organizationName: '第一中学',
+          organizationType: 'school', organizationMembershipId: 'membership-1', memberRole: 'teacher',
+          relationType: 'employee', relationLabel: '本校教师', shortName: null,
+          availableModules: ['overview', 'teams'],
+        },
+        { type: 'personal', availableModules: ['overview'] },
+      ],
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ workspaces: expect.arrayContaining([expect.objectContaining({ type: 'personal' })]) }),
+    }))
+    expect(() => sendContractData(response, WorkspaceContracts.list, {
+      workspaces: [{ type: 'organization', organizationId: 'organization-1', availableModules: [] }],
+    })).toThrowError(ApiContractError)
   })
 })

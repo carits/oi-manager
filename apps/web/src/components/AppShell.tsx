@@ -10,7 +10,7 @@ import { getNavConfig, getActiveNavItem, roleNames, UserRole } from '@/config/na
 import { getSidebarNavigationPreference, setSidebarNavigationOpen } from '@/lib/auth'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import { SessionUnavailable } from './SessionUnavailable'
-import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
+import { WorkspaceSwitcher } from '@/features/workspace'
 import { NotificationBell } from '@/features/notification'
 import { ChatButton } from '@/features/chat'
 import { UserAvatar } from '@/components/user/UserAvatar'

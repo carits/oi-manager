@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import type { UserNotification } from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/components/AuthProvider'
-import { resolveNotificationHref } from '@/components/workspace/workspaceRouting'
+import { resolveNotificationHref } from '@/features/workspace'
 import { resolveNavigationContext } from '@/lib/navigationContext'
 import {
   listContextNotifications,
