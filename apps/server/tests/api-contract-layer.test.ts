@@ -42,11 +42,11 @@ describe('shared API contract adapter', () => {
     const { response, json } = responseStub()
     sendContractData(response, AuthContracts.me, {
       userId: 'user-1', username: 'teacher1', accountRole: 'user', role: 'teacher',
-      organizationId: 'organization-1', organizationRole: 'teacher', workspaceMode: 'work',
+      organizationId: 'organization-1', organizationRole: 'teacher', schoolId: 'school-1', workspaceMode: 'work',
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
-      data: expect.objectContaining({ accountRole: 'user', organizationRole: 'teacher' }),
+      data: expect.objectContaining({ accountRole: 'user', organizationRole: 'teacher', schoolId: 'school-1' }),
     }))
   })
 

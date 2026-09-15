@@ -45,7 +45,7 @@ describe('feature slice contracts', () => {
   it('shares account authentication contracts and rejects malformed identities', () => {
     expect(CurrentAccountSchema.safeParse({
       userId: 'user-1', username: 'teacher1', accountRole: 'user', role: 'teacher',
-      organizationRole: 'teacher', organizationId: 'organization-1',
+      organizationRole: 'teacher', organizationId: 'organization-1', schoolId: 'school-1',
     }).success).toBe(true)
     expect(CurrentAccountSchema.safeParse({
       userId: 'user-1', username: 'teacher1', accountRole: 'teacher', role: 'teacher',

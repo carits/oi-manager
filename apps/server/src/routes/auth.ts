@@ -118,10 +118,12 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
 
 authRouter.post('/register', registerLimiter, async (req, res) => {
   try {
+    if (req.body?.role && req.body.role !== 'student') {
+      return res.status(400).json({ success: false, message: '仅支持注册学生账号' })
+    }
     const input = RegisterRequestSchema.safeParse(req.body || {})
     if (!input.success) return res.status(400).json({ success: false, message: '注册信息格式无效' })
     const { username, password, role } = input.data
-    if (role && role !== 'student') return res.status(400).json({ success: false, message: '仅支持注册学生账号' })
     const usernameCheck = validateUsername(username)
     if (!usernameCheck.valid) return res.status(400).json({ success: false, message: usernameCheck.message })
     const passwordCheck = validatePassword(password)

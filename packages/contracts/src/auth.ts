@@ -39,6 +39,7 @@ export const CurrentAccountSchema = z.object({
   organizationName: z.string().min(1).optional(),
   organizationMembershipId: z.string().min(1).optional(),
   organizationRole: OrganizationMembershipRoleSchema.optional(),
+  schoolId: z.string().min(1).optional(),
   workspaceMode: z.enum(['work', 'personal']).optional(),
   profile: z.unknown().optional(),
   adminId: z.string().min(1).optional(),
