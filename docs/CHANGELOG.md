@@ -5,6 +5,13 @@ last_verified: 2026-09-15
 source_of_truth: Git history
 ---
 
+## 2026-09-15 — Contribution 契约与 Feature Slice 收口
+
+- 个人贡献记录和平台贡献/奖励审计迁入 `features/contribution`，Route 仅保留公共入口装配，移除页面内联 DTO、URL 和旧领域组件目录。
+- 新增 `ContributionContracts`，统一贡献摘要、分页、排名、组织事件、审计证据和经济决策的请求/响应 Schema；超管写操作使用规范账号角色。
+- 新增生产同构 Contribution/Economy/Contract 测试范围，4 文件 50/50 通过；无数据库结构或业务数据迁移。
+- API 蓝绿切换至 3303；Web BUILD_ID `R7Dwy3OoA0ZPPsk2q6NtW` 完成 canary 与正式消息闭环（序号 214–217）。
+
 ## 2026-09-15 — Carits 与 Evaluation Credits 契约/切片分离
 
 - 新增独立 `CaritsContracts` 与 `EvaluationCreditContracts`；Carits 使用精确整数账本字符串，Evaluation Credits 使用独立额度、预占、消耗和套餐结构，禁止在类型层混成通用 Wallet。
