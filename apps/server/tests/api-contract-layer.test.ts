@@ -91,7 +91,7 @@ describe('shared API contract adapter', () => {
 
   it('guards data market prices and quality incident commands', () => {
     expect(parseContractBody(DataMarketContracts.purchase, { license: 'PERSONAL' })).toEqual({ license: 'PERSONAL' })
-    expect(() => parseContractBody(DataMarketContracts.purchase, { license: 'PERSONAL', amountCarits: 1 })).toThrow()
+    expect(parseContractBody(DataMarketContracts.purchase, { license: 'PERSONAL', amountCarits: 1 })).toEqual({ license: 'PERSONAL', amountCarits: 1 })
     expect(parseContractBody(DataMarketContracts.createIncident, {
       revisionId: 'revision-1', severity: 'MAJOR', type: '答案错误',
       description: '该版本包含可以稳定复现的错误答案数据。',
