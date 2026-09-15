@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Globe2, LockKeyhole, Mail, Plus } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
 import { FormField } from '@/components/ui/FormField'

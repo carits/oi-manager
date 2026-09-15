@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { Empty } from '@/components/ui/Empty'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'

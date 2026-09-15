@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Building2, ChevronRight, ShieldCheck, UserRound } from 'lucide-react'
-import type { AuthUser } from '@/components/AuthProvider'
+import type { AuthUser } from '@/features/auth'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 import { listWorkspaces } from '../api/workspaceApi'
 import { workspaceHref, workspaceRoleLabel } from '../model/workspaceRouting'

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { Tabs } from '@/components/ui/Tabs'
 import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 
 function toLocalDatetimeString(date: Date): string {
   const y = date.getFullYear()

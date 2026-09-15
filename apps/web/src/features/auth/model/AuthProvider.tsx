@@ -11,29 +11,16 @@ import {
 } from 'react'
 import { useSWRConfig } from 'swr'
 import { usePathname } from 'next/navigation'
-import { accountClient, organizationClient, AUTH_UNAUTHORIZED_EVENT, ORGANIZATION_UNAVAILABLE_EVENT } from '@/lib/apiClient'
+import { AUTH_UNAUTHORIZED_EVENT, ORGANIZATION_UNAVAILABLE_EVENT } from '@/lib/apiClient'
 import { clearAuth, clearLegacyBrowserToken, setAdminId, setRole, setUserId } from '@/lib/auth'
-import { getRoleHome } from '@/lib/roleAccess'
-import type { AccountRole, LegacyUserRole, OrganizationMembershipRole, WorkspaceSummary } from '@oi-manager/contracts'
+import type { CurrentAccount, WorkspaceSummary } from '@oi-manager/contracts'
+import {
+  loadCurrentAccount,
+  loginAccount,
+  logoutAccount,
+} from '../api/authApi'
 
-export interface AuthUser {
-  userId: string
-  organizationId?: string
-  organizationName?: string
-  organizationMembershipId?: string
-  username: string
-  /** Context role retained for compatibility while callers migrate. */
-  role: LegacyUserRole
-  accountRole: AccountRole
-  avatar?: string | null
-  phone?: string | null
-  email?: string | null
-  bio?: string | null
-  profile?: unknown
-  adminId?: string
-  /** 当前 URL 所在校园的成员身份；校园身份不再从全局账号角色推断。 */
-  organizationRole?: OrganizationMembershipRole
-}
+export type AuthUser = CurrentAccount
 
 interface LoginResult {
   success: boolean
@@ -125,10 +112,7 @@ export function AuthProvider({
     if (contextMatches) return
 
     let cancelled = false
-    const contextClient = organizationId ? organizationClient(organizationId) : accountClient
-    void contextClient.query<AuthUser>('/api/auth/me', {
-      retry: false,
-    }).then(nextUser => {
+    void loadCurrentAccount(organizationId).then(nextUser => {
       if (cancelled) return
       setUser(nextUser)
       setStatus('authenticated')
@@ -144,11 +128,7 @@ export function AuthProvider({
     username: string,
     password: string,
   ): Promise<LoginResult> => {
-    const result = await accountClient.mutate<AuthUser>(
-      '/api/auth/login',
-      'POST',
-      { username, password },
-    )
+    const result = await loginAccount(username, password)
 
     if (!result.ok) {
       return { success: false, message: result.error.message }
@@ -163,7 +143,7 @@ export function AuthProvider({
   }
 
   const logout = async () => {
-    const result = await accountClient.mutate('/api/auth/logout', 'POST')
+    const result = await logoutAccount()
     if (!result.ok) {
       setStatus('degraded')
       return
@@ -177,7 +157,7 @@ export function AuthProvider({
 
   const refreshUser = async () => {
     try {
-      const nextUser = await accountClient.query<AuthUser>('/api/auth/me', { retry: false })
+      const nextUser = await loadCurrentAccount()
       setUser(nextUser)
       setStatus('authenticated')
       storeAccountMetadata(nextUser)

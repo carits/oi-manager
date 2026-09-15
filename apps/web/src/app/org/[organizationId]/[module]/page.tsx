@@ -19,7 +19,7 @@ import CampusManagementPage from '@/components/organization-pages/teacher/manage
 import StudentRankingsPage from '@/components/organization-pages/student/rating/page'
 import { TrainingSessionListPage } from '@/features/training-session/TrainingSessionListPage'
 import { SubmissionList } from '@/features/submission'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { listWorkspaces } from '@/features/workspace'
 import { BlogDiscovery } from '@/features/blog'
 import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'

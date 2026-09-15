@@ -6,7 +6,8 @@ import unifiedStyles from './ProfileEditor.unified.module.css'
 import { Input, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { FormField } from '@/components/ui/FormField'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '../model/AuthProvider'
+import { updateAccountProfile } from '../api/authApi'
 import apiClient from '@/lib/apiClient'
 import { getAssetUrl } from '@/lib/assets'
 import { useToast } from '@/components/ui/Toast'
@@ -48,12 +49,12 @@ export function ProfileEditor({ userType: _userType }: ProfileEditorProps) {
     e.preventDefault()
     setSaving(true)
     try {
-      const result = await apiClient.put('/api/auth/profile', form)
-      if (result.success) {
+      const result = await updateAccountProfile(form)
+      if (result.ok) {
         toast.success('保存成功')
         refreshUser?.()
       } else {
-        toast.error(result.message || '保存失败')
+        toast.error(result.error.message || '保存失败')
       }
     } catch (error) {
       toast.error('保存失败')

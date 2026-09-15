@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowRight, ClipboardList, GraduationCap, Trophy, Users, UsersRound, AlertCircle, CalendarClock } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { usePathname } from 'next/navigation'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { compareDashboardTasks, type LearningTask } from '@/lib/dashboardTasks'

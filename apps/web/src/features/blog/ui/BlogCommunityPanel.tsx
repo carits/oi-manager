@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/FormControls'
 import { useToast } from '@/components/ui/Toast'
 import styles from './BlogWorkspace.module.css'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 
 type Community = {
   reactions: { LIKE: number; HELPFUL: number }

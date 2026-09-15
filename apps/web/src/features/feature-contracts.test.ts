@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   AssignmentProgressDataSchema,
+  AuthContracts,
   BlogDiscoveryDetailSchema,
   ChatContracts,
   ChatMessagePageSchema,
@@ -24,6 +25,7 @@ import {
   TrainingStructureInputSchema,
   WorkspaceContracts,
   WorkspaceListSchema,
+  CurrentAccountSchema,
 } from '@oi-manager/contracts'
 
 describe('feature slice contracts', () => {
@@ -38,6 +40,17 @@ describe('feature slice contracts', () => {
       problems: [],
       pagination: { page: 0, pageSize: 40, total: 0, totalPages: 0 },
     }).success).toBe(false)
+  })
+
+  it('shares account authentication contracts and rejects malformed identities', () => {
+    expect(CurrentAccountSchema.safeParse({
+      userId: 'user-1', username: 'teacher1', accountRole: 'user', role: 'teacher',
+      organizationRole: 'teacher', organizationId: 'organization-1',
+    }).success).toBe(true)
+    expect(CurrentAccountSchema.safeParse({
+      userId: 'user-1', username: 'teacher1', accountRole: 'teacher', role: 'teacher',
+    }).success).toBe(false)
+    expect(AuthContracts.updateProfile.body.safeParse({ email: 'teacher@example.com' }).success).toBe(true)
   })
 
   it('accepts the assignment matrix projection returned by the application service', () => {
@@ -339,11 +352,13 @@ describe('feature slice contracts', () => {
     const notifications = fs.readFileSync(new URL('../app/account/notifications/page.tsx', import.meta.url), 'utf8')
     const identity = fs.readFileSync(new URL('../app/identity/page.tsx', import.meta.url), 'utf8')
     const organization = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/[...segments]/page.tsx', import.meta.url), 'utf8')
+    const login = fs.readFileSync(new URL('../app/login/page.tsx', import.meta.url), 'utf8')
     expect(page).toContain("from '@/features/blog'")
     expect(messages).toContain("from '@/features/chat'")
     expect(organizations).toContain("from '@/features/organization-account'")
     expect(notifications).toContain("from '@/features/notification'")
     expect(identity).toContain("from '@/features/workspace'")
+    expect(login).toContain("from '@/features/auth'")
     expect(organization).toContain("from '@/features/assignment'")
     expect(organization).toContain("from '@/features/training-session/TrainingSessionWorkspace'")
     expect(organization).not.toMatch(/@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//)

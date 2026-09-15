@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { PageFrame } from '@/components/ui/PageFrame'

@@ -2,7 +2,7 @@
 
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { useResource } from '@/hooks/useResource'
 import { TeamTrainingList } from '@/features/contest/TeamTrainingList'

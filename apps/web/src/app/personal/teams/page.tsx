@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { TeamListPage, type Invitation, type TeamItem } from '@/components/team'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { useTeams, type Team } from '@/hooks/data/useTeams'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'

@@ -1,4 +1,4 @@
-import { LoginForm } from './LoginForm'
+import { LoginForm } from '@/features/auth'
 import { redirect } from 'next/navigation'
 import { getServerSession } from '@/lib/serverSession'
 

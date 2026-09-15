@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/TablePrimitives";
 import { useToast } from "@/components/ui/Toast";
 import { apiClient } from "@/lib/apiClient";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/features/auth";
 import {
   candidateSourceLabel,
   contributionSourceLabel,

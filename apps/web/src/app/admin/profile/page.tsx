@@ -1,6 +1,6 @@
 'use client'
 
-import { ProfileEditor } from '@/components/profile'
+import { ProfileEditor } from '@/features/auth'
 import unifiedStyles from './page.unified.module.css'
 
 export default function AdminProfilePage() {

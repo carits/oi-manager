@@ -5,7 +5,7 @@ import unifiedStyles from './PasswordEditor.unified.module.css'
 import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { FormField } from '@/components/ui/FormField'
-import apiClient from '@/lib/apiClient'
+import { changeAccountPassword, revokeOtherSessions } from '../api/authApi'
 
 export function PasswordEditor() {
   const [form, setForm] = useState({
@@ -52,11 +52,8 @@ export function PasswordEditor() {
 
     setSaving(true)
     try {
-      const result = await apiClient.put('/api/auth/password', {
-        currentPassword: form.currentPassword,
-        newPassword: form.newPassword
-      })
-      if (result.success) {
+      const result = await changeAccountPassword(form.currentPassword, form.newPassword)
+      if (result.ok) {
         setSuccessMessage('密码修改成功，其他设备已退出')
         setForm({
           currentPassword: '',
@@ -64,7 +61,7 @@ export function PasswordEditor() {
           confirmPassword: ''
         })
       } else {
-        setError(result.message || '修改失败')
+        setError(result.error.message || '修改失败')
       }
     } catch (error) {
       setError('修改失败')
@@ -142,10 +139,15 @@ export function PasswordEditor() {
             onClick={async () => {
               setRevoking(true)
               setError(null)
-              const result = await apiClient.post('/api/auth/sessions/revoke')
-              setRevoking(false)
-              if (result.success) setSuccessMessage('其他设备已退出，当前设备保持登录')
-              else setError(result.message || '退出其他设备失败')
+              try {
+                const result = await revokeOtherSessions()
+                if (result.ok) setSuccessMessage('其他设备已退出，当前设备保持登录')
+                else setError(result.error.message || '退出其他设备失败')
+              } catch {
+                setError('退出其他设备失败')
+              } finally {
+                setRevoking(false)
+              }
             }}
           >
             退出其他设备

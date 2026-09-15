@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { ArrowRight, CalendarClock, ListChecks, Plus, UsersRound } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { Button } from '@/components/ui/Button'

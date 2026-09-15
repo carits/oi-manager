@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, ChatContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, AuthContracts, ChatContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -29,6 +29,25 @@ describe('shared API contract adapter', () => {
       reason: '',
       expectedVersion: 0,
     })).toThrowError(ApiContractError)
+  })
+
+  it('guards account authentication requests and context responses', () => {
+    expect(parseContractBody(AuthContracts.login, {
+      username: 'teacher1', password: '123456',
+    })).toEqual({ username: 'teacher1', password: '123456' })
+    expect(() => parseContractBody(AuthContracts.changePassword, {
+      currentPassword: '123456', newPassword: '123',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, AuthContracts.me, {
+      userId: 'user-1', username: 'teacher1', accountRole: 'user', role: 'teacher',
+      organizationId: 'organization-1', organizationRole: 'teacher', workspaceMode: 'work',
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({ accountRole: 'user', organizationRole: 'teacher' }),
+    }))
   })
 
   it('serializes only data that satisfies the shared response schema', () => {

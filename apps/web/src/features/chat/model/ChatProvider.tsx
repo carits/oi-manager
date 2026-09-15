@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ChatUnread } from '@oi-manager/contracts'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { connectChatEvents, type ChatEvent } from '../api/chatEvents'
 import { getChatUnread } from '../api/chatApi'
 

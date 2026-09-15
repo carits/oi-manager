@@ -7,7 +7,7 @@ import { BLOG_PUBLISHED_REFERENCE_LABELS, BLOG_VISIBILITY_LABELS, referenceSnaps
 import { referenceHref, type PublishedBlogReference } from './blog-reference-navigation'
 import styles from './BlogPublishedMetadata.module.css'
 import { usePathname } from 'next/navigation'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { resolveNavigationContext } from '@/lib/navigationContext'
 
 export type { PublishedBlogReference } from './blog-reference-navigation'

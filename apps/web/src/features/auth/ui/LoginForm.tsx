@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { AlertCircle, LogIn } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '../model/AuthProvider'
 import { Button } from '@/components/ui/Button'
 import { FormField } from '@/components/ui/FormField'
 import { ENV } from '@/config/env'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
-import styles from './login.module.css'
+import styles from './LoginForm.module.css'
 
 export function LoginForm({ nextPath }: { nextPath?: string }) {
   const router = useRouter()

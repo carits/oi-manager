@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Plus, Send, Trash2 } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import apiClient from '@/lib/apiClient'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowRight, Link2, School, ShieldCheck, UserPlus, Users } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { PageFrame } from '@/components/ui/PageFrame'

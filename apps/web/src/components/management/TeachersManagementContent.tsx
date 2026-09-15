@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import unifiedStyles from './TeachersManagementContent.unified.module.css'
 import { useParams } from 'next/navigation'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import apiClient from '@/lib/apiClient'
 import TeachersTab from '@/components/organization-pages/teacher/school/components/TeachersTab'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'

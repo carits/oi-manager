@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowRight, BookOpenCheck, Database, Library, ServerCog, Users } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { PageFrame } from '@/components/ui/PageFrame'

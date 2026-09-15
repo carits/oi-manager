@@ -1,7 +1,7 @@
 'use client'
 
-import { useAuth } from '@/components/AuthProvider'
-import { ProfileEditor } from '@/components/profile'
+import { useAuth } from '@/features/auth'
+import { ProfileEditor } from '@/features/auth'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 

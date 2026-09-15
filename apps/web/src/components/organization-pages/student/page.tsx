@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { ArrowRight, BookOpenCheck, ClipboardList, ListChecks, Trophy, UsersRound } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import { LoadError } from '@/components/ui/LoadError'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'

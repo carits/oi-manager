@@ -14,7 +14,7 @@ import type {
 } from '@oi-manager/contracts'
 import { createClientUUID } from '@/lib/uuid'
 import { copyText } from '@/lib/clipboard'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { useChat } from '../model/ChatProvider'
 import { Button } from '@/components/ui/Button'
 import { Input, SearchField, Switch, Textarea } from '@/components/ui/FormControls'

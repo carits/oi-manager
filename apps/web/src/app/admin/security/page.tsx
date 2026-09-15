@@ -1,6 +1,6 @@
 'use client'
 
-import { PasswordEditor } from '@/components/profile'
+import { PasswordEditor } from '@/features/auth'
 import unifiedStyles from './page.unified.module.css'
 
 export default function AdminSecurityPage() {

@@ -1,12 +1,12 @@
 import 'server-only'
 
 import { cookies } from 'next/headers'
-import type { AuthUser } from '@/components/AuthProvider'
+import { CurrentAccountSchema, type CurrentAccount } from '@oi-manager/contracts'
 import { ENV } from '@/config/env'
 import { cache } from 'react'
 
 export type ServerSessionResult =
-  | { state: 'authenticated'; user: AuthUser }
+  | { state: 'authenticated'; user: CurrentAccount }
   | { state: 'anonymous' }
   | { state: 'unavailable'; message: string; requestId?: string }
 
@@ -36,7 +36,16 @@ export const getServerSession = cache(async (): Promise<ServerSessionResult> => 
       }
     }
 
-    return { state: 'authenticated', user: payload.data as AuthUser }
+    const account = CurrentAccountSchema.safeParse(payload.data)
+    if (!account.success) {
+      return {
+        state: 'unavailable',
+        message: '会话响应格式无效，请重试',
+        requestId: response.headers.get('x-request-id') || undefined,
+      }
+    }
+
+    return { state: 'authenticated', user: account.data }
   } catch {
     return {
       state: 'unavailable',

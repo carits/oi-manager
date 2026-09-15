@@ -1,7 +1,15 @@
 import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import type { JwtPayload, SessionJwtPayload, UserRole } from '@oi-manager/shared'
-import { accountRoleFromLegacy, LoginRequestSchema, LoginResponseDataSchema } from '@oi-manager/contracts'
+import {
+  accountRoleFromLegacy,
+  AuthContracts,
+  LoginRequestSchema,
+  LoginResponseDataSchema,
+  PasswordChangeSchema,
+  ProfileUpdateSchema,
+  RegisterRequestSchema,
+} from '@oi-manager/contracts'
 import { authenticate } from '../middleware/auth'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
 import { getJwtSecret } from '../lib/jwtSecret'
@@ -24,6 +32,7 @@ import {
   avatarUpload,
   cleanupAvatarTemporaryFile,
 } from '../modules/auth/auth-avatar-upload'
+import { sendContractData, sendContractError } from '../lib/api-contract'
 
 export const authRouter = Router()
 
@@ -99,11 +108,9 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
       avatar: result.user.avatar,
       next: result.isGlobalAdmin ? (result.role === 'super_admin' ? '/admin' : '/platform-admin') : '/identity',
     })
-    res.json({
-      success: true,
-      data: responseData,
-    })
+    sendContractData(res, AuthContracts.login, responseData)
   } catch (error) {
+    if (sendContractError(error, res)) return
     logger.error('login_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -111,7 +118,9 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
 
 authRouter.post('/register', registerLimiter, async (req, res) => {
   try {
-    const { username, password, role } = req.body || {}
+    const input = RegisterRequestSchema.safeParse(req.body || {})
+    if (!input.success) return res.status(400).json({ success: false, message: '注册信息格式无效' })
+    const { username, password, role } = input.data
     if (role && role !== 'student') return res.status(400).json({ success: false, message: '仅支持注册学生账号' })
     const usernameCheck = validateUsername(username)
     if (!usernameCheck.valid) return res.status(400).json({ success: false, message: usernameCheck.message })
@@ -122,11 +131,12 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     issueToken(res, {
       userId: user.id, sessionVersion: user.sessionVersion, accountRole: 'user', role: 'user' as UserRole, username: user.username, workspaceMode: 'personal',
     })
-    res.status(200).json({ success: true, data: LoginResponseDataSchema.parse({
+    sendContractData(res, AuthContracts.register, LoginResponseDataSchema.parse({
       userId: user.id, accountRole: 'user', role: 'user', username: user.username,
       workspaceMode: 'personal', next: '/personal', avatar: user.avatar,
-    }) })
+    }))
   } catch (error) {
+    if (sendContractError(error, res)) return
     logger.error('register_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -139,9 +149,7 @@ authRouter.get('/me', authenticate, async (req, res) => {
     if (result.status === 'missing') return res.status(404).json({ success: false, message: '用户不存在' })
     if (result.status === 'disabled') return res.status(401).json({ success: false, message: '该账号已被禁用' })
     const { user, membership } = result
-    res.json({
-      success: true,
-      data: {
+    sendContractData(res, AuthContracts.me, {
         userId: user.id,
         username: user.username,
         accountRole: accountRoleFromLegacy(user.role as UserRole),
@@ -156,9 +164,9 @@ authRouter.get('/me', authenticate, async (req, res) => {
         schoolId: result.schoolId,
         workspaceMode: result.isGlobalAdmin ? 'work' : (payload.workspaceMode === 'personal' ? 'personal' : 'work'),
         profile: result.profile,
-      },
     })
   } catch (error) {
+    if (sendContractError(error, res)) return
     logger.error('load_current_account_error', error, { userId: (req as any).user?.userId, action: 'auth_me' })
     res.status(503).json({ success: false, code: 'AUTH_SERVICE_UNAVAILABLE', message: '账号服务暂时不可用，请稍后重试' })
   }
@@ -191,12 +199,14 @@ authRouter.post('/session/migrate', authenticate, (req, res) => {
 
 authRouter.post('/logout', (_req, res) => {
   clearSessionCookie(res)
-  res.json({ success: true })
+  sendContractData(res, AuthContracts.logout, {})
 })
 
 authRouter.put('/profile', authenticate, async (req, res) => {
   try {
-    const { avatar, phone, email, bio } = req.body || {}
+    const input = ProfileUpdateSchema.safeParse(req.body || {})
+    if (!input.success) return res.status(400).json({ success: false, message: '账号资料格式无效' })
+    const { avatar, phone, email, bio } = input.data
     if (phone) {
       const check = validatePhone(phone)
       if (!check.valid) return res.status(400).json({ success: false, message: check.message })
@@ -206,14 +216,12 @@ authRouter.put('/profile', authenticate, async (req, res) => {
       if (!check.valid) return res.status(400).json({ success: false, message: check.message })
     }
     const user = await updateAccountProfile((req as any).user, { avatar, phone, email, bio })
-    res.json({
-      success: true,
-      data: {
+    sendContractData(res, AuthContracts.updateProfile, {
         userId: user.id, username: user.username, role: user.role, avatar: user.avatar,
         phone: user.phone, email: user.email, bio: user.bio,
-      },
     })
   } catch (error) {
+    if (sendContractError(error, res)) return
     logger.error('update_profile_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -238,16 +246,18 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
 
 authRouter.put('/password', authenticate, passwordLimiter, async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body || {}
-    if (!currentPassword || !newPassword) return res.status(400).json({ success: false, message: '请填写完整信息' })
+    const input = PasswordChangeSchema.safeParse(req.body || {})
+    if (!input.success) return res.status(400).json({ success: false, message: '请填写完整信息' })
+    const { currentPassword, newPassword } = input.data
     const check = validatePassword(newPassword)
     if (!check.valid) return res.status(400).json({ success: false, message: check.message })
     const result = await changeAccountPassword((req as any).user.userId, currentPassword, newPassword)
     if (!result.ok) return res.status(result.statusCode).json({ success: false, message: result.message })
     const payload = (req as any).user as JwtPayload
     issueToken(res, { ...renewablePayload(payload), sessionVersion: result.sessionVersion })
-    res.json({ success: true, message: '密码修改成功' })
+    sendContractData(res, AuthContracts.changePassword, {})
   } catch (error) {
+    if (sendContractError(error, res)) return
     logger.error('change_password_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -258,8 +268,9 @@ authRouter.post('/sessions/revoke', authenticate, passwordLimiter, async (req, r
     const payload = (req as any).user as JwtPayload
     const sessionVersion = await revokeOtherAccountSessions(payload.userId)
     issueToken(res, { ...renewablePayload(payload), sessionVersion })
-    res.json({ success: true, message: '其他设备已退出' })
+    sendContractData(res, AuthContracts.revokeSessions, {})
   } catch (error) {
+    if (sendContractError(error, res)) return
     logger.error('revoke_sessions_error', error, { userId: (req as any).user?.userId, action: 'session_revoke' })
     res.status(500).json({ success: false, message: '服务器错误' })
   }

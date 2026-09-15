@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowLeft, Home, RefreshCw } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { Button } from '@/components/ui/Button'
 import { navigationHome, resolveNavigationContext } from '@/lib/navigationContext'
 import styles from './ContextualRecovery.module.css'

@@ -1,6 +1,6 @@
 'use client'
 
-import { PasswordEditor } from '@/components/profile'
+import { PasswordEditor } from '@/features/auth'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 

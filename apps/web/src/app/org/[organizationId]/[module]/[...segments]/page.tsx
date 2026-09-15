@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { TeamDetailPage } from '@/components/team/TeamDetailPage'
 import { TrainingDetailPage } from '@/features/contest/TrainingDetailPage'
 import { ProblemDetail } from '@/features/problem/ProblemDetail'

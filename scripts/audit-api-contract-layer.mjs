@@ -57,6 +57,7 @@ const slices = [
   { name: 'organization-account', legacyDirectory: 'organization-account', allowedAnyTokens: 0 },
   { name: 'notification', legacyDirectory: 'notification', allowedAnyTokens: 0 },
   { name: 'workspace', legacyDirectory: 'workspace', allowedAnyTokens: 0 },
+  { name: 'auth', legacyDirectory: null, allowedAnyTokens: 0 },
   // These three slices physically absorb the pre-existing UI in this rollout.
   // Migrated slices are held to the same zero-any boundary as the original slices.
   { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
@@ -71,8 +72,18 @@ function containsSourceFiles(directory) {
 for (const slice of slices) {
   const index = `apps/web/src/features/${slice.name}/index.ts`
   if (!exists(index)) failures.push(`missing feature public API: ${index}`)
-  const legacyDirectory = `apps/web/src/components/${slice.legacyDirectory}`
-  if (containsSourceFiles(legacyDirectory)) failures.push(`legacy component feature directory still exists: ${legacyDirectory}`)
+  if (slice.legacyDirectory) {
+    const legacyDirectory = `apps/web/src/components/${slice.legacyDirectory}`
+    if (containsSourceFiles(legacyDirectory)) failures.push(`legacy component feature directory still exists: ${legacyDirectory}`)
+  }
+}
+for (const retiredAuthFile of [
+  'apps/web/src/components/AuthProvider.tsx',
+  'apps/web/src/app/login/LoginForm.tsx',
+  'apps/web/src/components/profile/ProfileEditor.tsx',
+  'apps/web/src/components/profile/PasswordEditor.tsx',
+]) {
+  if (exists(retiredAuthFile)) failures.push(`legacy auth implementation still exists: ${retiredAuthFile}`)
 }
 
 const contractedBoundaries = [
@@ -91,6 +102,7 @@ const contractedBoundaries = [
   ['apps/server/src/modules/organization-creation/organization-creation.routes.ts', 'OrganizationContracts'],
   ['apps/server/src/modules/notification/notification.routes.ts', 'NotificationContracts'],
   ['apps/server/src/routes/workspaces.ts', 'WorkspaceContracts'],
+  ['apps/server/src/routes/auth.ts', 'AuthContracts'],
   ['apps/server/src/routes/testdata.ts', 'ProblemContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
@@ -131,6 +143,10 @@ const contractedBoundaries = [
   ['apps/web/src/features/workspace/api/workspaceApi.ts', 'WorkspaceContracts'],
   ['apps/web/src/features/workspace/ui/IdentityChooser.tsx', 'listWorkspaces'],
   ['apps/web/src/features/workspace/ui/WorkspaceSwitcher.tsx', 'listWorkspaces'],
+  ['apps/web/src/features/auth/api/authApi.ts', 'AuthContracts'],
+  ['apps/web/src/features/auth/model/AuthProvider.tsx', 'loadCurrentAccount'],
+  ['apps/web/src/features/auth/ui/ProfileEditor.tsx', 'updateAccountProfile'],
+  ['apps/web/src/features/auth/ui/PasswordEditor.tsx', 'changeAccountPassword'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
@@ -151,7 +167,7 @@ for (const file of appFiles) {
   if (/from ['"]@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//.test(source)) {
     failures.push(`${relative} bypasses a feature public API`)
   }
-  if (/from ['"]@\/features\/(?:assignment|blog|chat|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
+  if (/from ['"]@\/features\/(?:assignment|auth|blog|chat|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
 }

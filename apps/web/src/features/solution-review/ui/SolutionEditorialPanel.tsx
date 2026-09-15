@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BookOpenCheck, FileClock, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
 import apiClient from '@/lib/apiClient'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
 import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'

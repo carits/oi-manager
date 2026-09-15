@@ -5,7 +5,7 @@ import { Bell, UserPlus } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { UserNotification } from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
-import { useAuth } from '@/components/AuthProvider'
+import { useAuth } from '@/features/auth'
 import { resolveNotificationHref } from '@/features/workspace'
 import { resolveNavigationContext } from '@/lib/navigationContext'
 import {
