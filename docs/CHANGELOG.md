@@ -13,6 +13,7 @@ source_of_truth: Git history
 
 - 身份选择、工作区切换和工作区路由模型迁入 `features/workspace/{api,model,ui}`；App Shell、身份路由及跨域调用方只使用 Feature 公共入口。
 - 新增 Workspace Runtime Contract，`WorkspaceSummary` 不再由 Shared 重复声明；Server 与 Web 共同校验账号工作区响应，读取统一使用不会携带组织作用域的 Account Client。
+- 隔离应用测试默认以当前 Prisma 结构创建临时 Schema；完整历史 migration 链保留为显式迁移演练，不再作为普通契约测试的错误默认路径。
 - Web 39 文件 176 项、生产同构 Workspace/组织/权限套件 4 文件 27/27、相关生产构建及架构门禁通过。门禁提升为 14 个 Contract 文件、12 个 Feature Slice、55 条契约边界且 0 违规。提交 `9af9c1e`、`62a2bbb` 已推送 `main`；API 3302→3303，Web BUILD_ID `J_MpjvGKOw2Pn9cwVTyHf` 经 canary 与正式消息闭环（序号 190–193）后提升。本批无 Prisma 或业务数据迁移。
 
 ### Notification Feature Slice 与共享 API Contract 收口

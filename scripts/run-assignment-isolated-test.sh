@@ -9,7 +9,10 @@ ENV_FILE="${1:-$ROOT_DIR/apps/server/.env}"
 TEST_SCHEMA="${ASSIGNMENT_TEST_SCHEMA:-assignment_test_$(date +%s)}"
 BASE_SCHEMA="${ASSIGNMENT_BASE_SCHEMA:-}"
 TEST_SCOPE="${ASSIGNMENT_TEST_SCOPE:-assignment}"
-SCHEMA_SETUP="${ASSIGNMENT_SCHEMA_SETUP:-migrations}"
+# Historical migrations intentionally preserve several retired bootstrap paths
+# and are not a valid clean-schema fixture. Isolated application tests exercise
+# the current authoritative Prisma shape unless a migration rehearsal opts in.
+SCHEMA_SETUP="${ASSIGNMENT_SCHEMA_SETUP:-current}"
 
 if [[ ! "$TEST_SCHEMA" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
   echo "Invalid ASSIGNMENT_TEST_SCHEMA" >&2
