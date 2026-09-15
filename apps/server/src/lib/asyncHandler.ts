@@ -6,6 +6,7 @@
 
 import { Request, Response, NextFunction } from 'express'
 import logger from './logger'
+import { sendContractError } from './api-contract'
 
 type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<any>
 
@@ -52,6 +53,7 @@ export function classifyClientError(error: any): ClientErrorResponse | null {
 export function asyncHandler(fn: AsyncHandler, errorMessage = '服务器错误') {
   return (req: Request, res: Response, next: NextFunction): void => {
     fn(req, res, next).catch((e: any) => {
+      if (sendContractError(e, res)) return
       if (e?.message === 'TEAM_SCOPE_MISMATCH') {
         if (!res.headersSent) {
           res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })

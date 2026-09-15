@@ -1,6 +1,7 @@
 import compression from 'compression'
 import cors from 'cors'
 import express from 'express'
+import { sendContractError } from './lib/api-contract'
 import helmet from 'helmet'
 import { MulterError } from 'multer'
 import path from 'path'
@@ -152,6 +153,7 @@ export function createApplication(options: ApplicationOptions = {}) {
   })
 
   app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (sendContractError(err, res)) return
     if (isInvalidJsonBodyError(err)) {
       logger.warn('invalid_json_body', {
         requestId: req.requestId,

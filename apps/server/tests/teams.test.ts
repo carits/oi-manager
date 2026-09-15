@@ -25,6 +25,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .post('/api/teams')
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
         .send({
           id: `team_${shortId()}`,
           name: `测试团队_${Date.now()}`,
@@ -65,11 +66,12 @@ describe('Team Operations', () => {
       const res = await request(app)
         .post('/api/teams')
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
         .send({
           schoolId: school.id
         })
 
-      expect(res.status).toBe(400)
+      expect(res.status).toBe(422)
     })
   })
 
@@ -92,6 +94,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
         .send({
           members: [{ userId: newMemberId, userType: 'teacher' }],
           role: 'member'
@@ -125,6 +128,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
         .send({
           members: [{ userId: newMemberId, userType: 'student' }],
           role: 'member'
@@ -165,6 +169,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .delete(`/api/teams/${team.id}/members/${memberId}?memberType=student`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -208,6 +213,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
         .send({
           members: [{ userId: newMemberId, userType: 'teacher' }],
           role: 'member'
@@ -249,6 +255,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .post(`/api/teams/${team.id}/admins`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
         .send({
           memberId: memberId,
           memberType: 'teacher'
@@ -297,6 +304,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .post(`/api/teams/${team.id}/transfer`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
         .send({
           newOwnerId: newOwnerId,
           newOwnerType: 'teacher'
@@ -451,6 +459,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .get(`/api/teams/${team.id}`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -476,6 +485,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .delete(`/api/teams/${team.id}`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -518,6 +528,7 @@ describe('Team Operations', () => {
       const res = await request(app)
         .delete(`/api/teams/${team.id}`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(403)
     })
@@ -602,6 +613,7 @@ describe('Team Operations', () => {
       const campusDetail = await request(app)
         .get(`/api/teams/${createResponse.body.data.id}`)
         .set('Authorization', `Bearer ${campusToken}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(campusDetail.status).toBe(403)
     })
@@ -633,6 +645,7 @@ describe('Team Operations', () => {
       const response = await request(app)
         .get(`/api/teams/${team.id}`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(response.status).toBe(200)
       expect(response.body.data.owner.name).toBe(username)
@@ -706,6 +719,7 @@ describe('Team Operations', () => {
       const response = await request(app)
         .get('/api/rankings/personal/rating')
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(response.status).toBe(403)
     })
