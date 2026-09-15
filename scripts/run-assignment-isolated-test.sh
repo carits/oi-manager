@@ -2,7 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${1:-$ROOT_DIR/apps/server/.env.production}"
+# The deployed API and isolated production-like tests must resolve the same
+# authoritative runtime connection. `.env.production` is a legacy local file
+# and may contain retired credentials; callers can still pass an explicit file.
+ENV_FILE="${1:-$ROOT_DIR/apps/server/.env}"
 TEST_SCHEMA="${ASSIGNMENT_TEST_SCHEMA:-assignment_test_$(date +%s)}"
 BASE_SCHEMA="${ASSIGNMENT_BASE_SCHEMA:-}"
 TEST_SCOPE="${ASSIGNMENT_TEST_SCOPE:-assignment}"
