@@ -613,7 +613,7 @@ describe('Team Operations', () => {
       const campusDetail = await request(app)
         .get(`/api/teams/${createResponse.body.data.id}`)
         .set('Authorization', `Bearer ${campusToken}`)
-        .set('x-oi-organization-id', school.organizationId!)
+        .set('x-oi-organization-id', schoolA.organizationId!)
 
       expect(campusDetail.status).toBe(403)
     })
@@ -645,7 +645,6 @@ describe('Team Operations', () => {
       const response = await request(app)
         .get(`/api/teams/${team.id}`)
         .set('Authorization', `Bearer ${token}`)
-        .set('x-oi-organization-id', school.organizationId!)
 
       expect(response.status).toBe(200)
       expect(response.body.data.owner.name).toBe(username)
