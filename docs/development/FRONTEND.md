@@ -46,7 +46,8 @@ Header、背景和最大宽度。
 | 数据 Hooks | `hooks/data` | 缓存、加载、错误和刷新 |
 | Contract Client | `lib/apiClient.ts` | 认证、作用域、超时及共享 Runtime Schema 校验 |
 
-Assignment、Blog、Submission、Contest Rating、Solution Review、Problem、Contest 与 Training Session 已迁入
+Assignment、Blog、Submission、Contest Rating、Solution Review、Problem、Contest、Training Session、Chat、
+Organization Account、Notification 与 Workspace 已迁入
 Feature Slice。路由和跨域组件只能从 `@/features/<feature>` 根入口或根级按页面公共入口引用，不得深层导入
 `api/model/ui`，也不得在 `components` 下重新建立同名业务目录。根级按页面入口用于保持 Next.js 路由的切块
 边界，避免一个聚合 barrel 将同一 Feature 的全部管理工作台装入首屏。
@@ -61,6 +62,11 @@ Feature Slice。路由和跨域组件只能从 `@/features/<feature>` 根入口�
 Markdown 或替换 PDF 后必须刷新到新的不可变 revision。
 
 ## API 契约与响应
+
+账号工作区目录由 `packages/contracts/src/workspace.ts` 定义，浏览器只能经
+`features/workspace/api/workspaceApi.ts` 的账号级 Client 读取。身份页、切换器以及 Blog、Problem Hack、
+组织管理、Data Market 等消费者不得再次声明 `WorkspaceSummary` 或直接调用 `/api/workspaces`；校园页面发起
+该请求时也不能继承 `X-OI-Organization-ID`。
 
 跨端 DTO 的事实源位于 `packages/contracts`。一个 Endpoint Contract 同时声明方法、作用域、请求、查询和成功
 响应 Runtime Schema，并由 Zod 推导 TypeScript 类型。Server Route Adapter 使用 `parseContractBody()`、

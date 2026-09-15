@@ -82,7 +82,8 @@ curl -fsS http://127.0.0.1:3002/api/health
 
 路由任务不能只检查 `page.tsx` 是否存在。必须按“用户实际能点到什么”验证：侧栏、顶栏、卡片、表格行、包屑、返回按钮、空状态、通知、弹窗成功回调和更多菜单都属于跳转入口。
 
-统一路由能力位于 `apps/web/src/components/workspace/workspaceRouting.ts`。新业务导航优先使用：
+统一路由能力位于 `apps/web/src/features/workspace/model/workspaceRouting.ts`，跨域调用只从
+`@/features/workspace` 公共入口导入。新业务导航优先使用：
 
 - `moduleHref(...)`：工作区模块入口。
 - `resourceHref(...)`：需要资源 ID 的详情页。
