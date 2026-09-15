@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-15
 
+### Auth Feature Slice 与共享 API Contract 收口
+
+- 登录表单、`AuthProvider`、账号资料和安全设置迁入 `features/auth/{api,model,ui}`；页面、布局和业务 Feature 只从 Auth 公共入口使用账号身份，不再依赖旧 `components/AuthProvider` 或 `components/profile`。
+- Auth Runtime Contract 覆盖登录、注册、当前账号、退出、资料更新、密码修改和退出其他设备；Server Route、Server Session 与 Web Feature API 共享请求/响应 Schema，头像 multipart 上传保留为明确的 Raw Transport 例外。
+- 生产同构测试捕获并修复两项兼容偏差：`/auth/me.schoolId` 继续作为可选兼容字段返回，非学生注册继续返回原有明确业务错误。最终 Auth/Contract/Admin 套件 3 文件 64/64、Web 39 文件 178 项、生产构建与全部架构/文档门禁通过。
+- 门禁提升为 14 个 Contract 文件、13 个 Feature Slice、60 条契约边界且 0 违规。提交 `3229178`、`d5f4fc1` 已推送 `main`；API 3303→3302，Web BUILD_ID `UA-Gz7d-t1Onckr6YSZOw` 经 canary 与正式消息闭环（序号 194–197）后提升。本批无 Prisma 或业务数据迁移。
+
 ### Workspace Feature Slice 与共享 API Contract 收口
 
 - 身份选择、工作区切换和工作区路由模型迁入 `features/workspace/{api,model,ui}`；App Shell、身份路由及跨域调用方只使用 Feature 公共入口。

@@ -92,6 +92,11 @@ curl -fsS http://127.0.0.1:3002/api/health
 - `fallbackHref(...)`：模块不支持或上下文不足时安全回退。
 - `notificationHref(...)`：通知资源跳转；失效资源返回空值，不猜测地址。
 
+账号身份、登录和资料能力统一从 `@/features/auth` 公共入口使用；请求实现位于 Auth Feature 内部，
+共享 Runtime Contract 位于 `packages/contracts/src/auth.ts`。不要恢复 `components/AuthProvider`、
+`components/profile`，也不要在页面里直接调用 `/api/auth/*`。新增或调整认证字段时必须同时更新共享
+Schema、Server 边界、Feature API 和契约测试，生产兼容字段也必须显式列入 Schema。
+
 不得手写身份前缀后再拼接详情地址。尤其要避免“详情页存在，但父列表页不存在”的错误：
 
 ```text
