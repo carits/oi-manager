@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { defineApiEndpoint } from './http'
 
 /** Global account identity. Organization jobs must never be stored here. */
 export const AccountRoleSchema = z.enum(['user', 'platform_admin', 'super_admin'])
@@ -49,6 +50,38 @@ export const WorkspaceCapabilitySchema = z.enum([
   'manage-organization',
 ])
 export type WorkspaceCapability = z.infer<typeof WorkspaceCapabilitySchema>
+
+export const ProfileUserTypeSchema = z.enum(['teacher', 'student', 'user'])
+export type ProfileUserType = z.infer<typeof ProfileUserTypeSchema>
+
+export const PublicUserProfileQuerySchema = z.object({
+  userType: ProfileUserTypeSchema.default('user'),
+})
+
+export const PublicUserProfileSchema = z.object({
+  id: z.string().min(1),
+  profileId: z.string().min(1).optional(),
+  name: z.string().nullable().optional(),
+  username: z.string().min(1),
+  avatar: z.string().nullable(),
+  bio: z.string().nullable(),
+  userType: ProfileUserTypeSchema,
+  school: z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+  }).nullable().optional(),
+})
+export type PublicUserProfile = z.infer<typeof PublicUserProfileSchema>
+
+export const IdentityContracts = {
+  publicProfile: defineApiEndpoint({
+    key: 'identity.publicProfile',
+    method: 'GET',
+    scope: 'context',
+    query: PublicUserProfileQuerySchema,
+    data: PublicUserProfileSchema,
+  }),
+} as const
 
 const workspaceCapabilities: Record<LegacyUserRole, ReadonlySet<WorkspaceCapability>> = {
   user: new Set(['enter-personal-workspace']),

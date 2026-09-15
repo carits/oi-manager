@@ -1,13 +1,12 @@
 'use client'
 
 import type { CSSProperties } from 'react'
+import type { ProfileUserType } from '@oi-manager/contracts'
 import unifiedStyles from './UserIdentityLink.unified.module.css'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getAssetUrl } from '@/lib/assets'
 import { isPersonalPath } from '@/lib/workspacePath'
-
-export type ProfileUserType = 'teacher' | 'student' | 'user'
 
 interface UserIdentityLinkProps {
   id?: string | null

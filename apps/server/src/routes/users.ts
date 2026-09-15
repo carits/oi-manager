@@ -1,5 +1,7 @@
 import { Router, type Response } from 'express'
+import { IdentityContracts } from '@oi-manager/contracts'
 import { authenticate, type AuthRequest, isPersonalContext } from '../middleware/auth'
+import { parseContractQuery, sendContractData, sendContractError } from '../lib/api-contract'
 import { passwordResetLimiter } from '../middleware/rateLimiter'
 import { asyncHandler } from '../lib/asyncHandler'
 import { parsePagination } from '../lib/pagination'
@@ -30,6 +32,7 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
     try {
       await handler(req, res)
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof UserApplicationError) {
         return res.status(error.statusCode).json({
           success: false,
@@ -43,7 +46,12 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
 }
 
 userRouter.get('/:userId/profile', authenticate, endpoint('获取用户资料失败', async (req, res) => {
-  res.json({ success: true, data: await getUserProfile(actor(req), req.params.userId, req.query.userType) })
+  const query = parseContractQuery(IdentityContracts.publicProfile, req.query)
+  sendContractData(
+    res,
+    IdentityContracts.publicProfile,
+    await getUserProfile(actor(req), req.params.userId, query.userType),
+  )
 }))
 
 userRouter.get('/', authenticate, endpoint('获取用户列表失败', async (req, res) => {

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
-import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { UserIdentityLink } from '@/features/user-profile'
 import styles from './Team.module.css'
 
 interface PendingInvite {

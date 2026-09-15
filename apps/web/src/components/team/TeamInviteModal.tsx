@@ -10,7 +10,7 @@ import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/features/auth'
 import { usePathname } from 'next/navigation'
 import { isPersonalPath } from '@/lib/workspacePath'
-import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { UserIdentityLink } from '@/features/user-profile'
 import styles from './Team.module.css'
 
 interface AvailableMember {

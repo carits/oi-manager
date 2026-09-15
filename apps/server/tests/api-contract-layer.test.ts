@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, AuthContracts, ChatContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, AuthContracts, ChatContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -47,6 +47,24 @@ describe('shared API contract adapter', () => {
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
       data: expect.objectContaining({ accountRole: 'user', organizationRole: 'teacher', schoolId: 'school-1' }),
+    }))
+  })
+
+  it('guards public profile type and organization projection', () => {
+    expect(parseContractQuery(IdentityContracts.publicProfile, { userType: 'student' }))
+      .toEqual({ userType: 'student' })
+    expect(() => parseContractQuery(IdentityContracts.publicProfile, { userType: 'principal' }))
+      .toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, IdentityContracts.publicProfile, {
+      id: 'user-1', profileId: 'profile-1', name: '张同学', username: 'student1',
+      avatar: null, bio: null, userType: 'student',
+      school: { id: 'organization-1', name: '测试学校' },
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({ userType: 'student', school: { id: 'organization-1', name: '测试学校' } }),
     }))
   })
 

@@ -18,7 +18,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Pagination } from '@/components/ui/Pagination'
 import { StatusBadge, getResultVariant } from '@/components/ui/StatusBadge'
 import { Table } from '@/components/ui/Table'
-import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { UserIdentityLink } from '@/features/user-profile'
 import styles from './SubmissionList.module.css'
 
 const SubmissionDetailModal = dynamic(

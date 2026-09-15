@@ -6,7 +6,7 @@ import unifiedStyles from './TrainingRankTable.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { Search } from 'lucide-react'
-import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { UserIdentityLink } from '@/features/user-profile'
 import styles from '../TrainingWorkspace.module.css'
 
 interface RankProblem {

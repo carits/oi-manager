@@ -58,6 +58,7 @@ const slices = [
   { name: 'notification', legacyDirectory: 'notification', allowedAnyTokens: 0 },
   { name: 'workspace', legacyDirectory: 'workspace', allowedAnyTokens: 0 },
   { name: 'auth', legacyDirectory: null, allowedAnyTokens: 0 },
+  { name: 'user-profile', legacyDirectory: 'profile', allowedAnyTokens: 0 },
   // These three slices physically absorb the pre-existing UI in this rollout.
   // Migrated slices are held to the same zero-any boundary as the original slices.
   { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
@@ -103,6 +104,7 @@ const contractedBoundaries = [
   ['apps/server/src/modules/notification/notification.routes.ts', 'NotificationContracts'],
   ['apps/server/src/routes/workspaces.ts', 'WorkspaceContracts'],
   ['apps/server/src/routes/auth.ts', 'AuthContracts'],
+  ['apps/server/src/routes/users.ts', 'IdentityContracts'],
   ['apps/server/src/routes/testdata.ts', 'ProblemContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
@@ -147,6 +149,8 @@ const contractedBoundaries = [
   ['apps/web/src/features/auth/model/AuthProvider.tsx', 'loadCurrentAccount'],
   ['apps/web/src/features/auth/ui/ProfileEditor.tsx', 'updateAccountProfile'],
   ['apps/web/src/features/auth/ui/PasswordEditor.tsx', 'changeAccountPassword'],
+  ['apps/web/src/features/user-profile/api/userProfileApi.ts', 'IdentityContracts'],
+  ['apps/web/src/features/user-profile/ui/UserProfilePage.tsx', 'getPublicUserProfile'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
@@ -167,7 +171,7 @@ for (const file of appFiles) {
   if (/from ['"]@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//.test(source)) {
     failures.push(`${relative} bypasses a feature public API`)
   }
-  if (/from ['"]@\/features\/(?:assignment|auth|blog|chat|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
+  if (/from ['"]@\/features\/(?:assignment|auth|user-profile|blog|chat|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
 }

@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/components/ui/Pagination'
 import { Table } from '@/components/ui/Table'
 import { useAuth } from '@/features/auth'
-import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { UserIdentityLink } from '@/features/user-profile'
 import apiClient, { type ApiClientResponse } from '@/lib/apiClient'
 import styles from './MetricRankingWorkspace.module.css'
 

@@ -8,7 +8,7 @@ import { JUDGE_RESULT_LABEL_MAP, JUDGE_RESULT_OPTIONS, LANGUAGE_LABEL_MAP, LANGU
 import type { TrainingInfo, TrainingProblem, SubmissionRow } from '../../model/types'
 import { LoadError } from '@/components/ui/LoadError'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
-import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { UserIdentityLink } from '@/features/user-profile'
 import styles from '../TrainingWorkspace.module.css'
 
 const RESULT_TONES: Record<string, 'accepted' | 'info' | 'warning' | 'error' | 'compile'> = { accepted: 'accepted', queuing: 'info', judging: 'info', tle: 'warning', mle: 'warning', wa: 'error', re: 'error', ce: 'compile', pe: 'warning', ole: 'warning' }

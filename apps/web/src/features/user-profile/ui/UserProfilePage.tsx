@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, School } from 'lucide-react'
-import apiClient from '@/lib/apiClient'
+import type { ProfileUserType, PublicUserProfile } from '@oi-manager/contracts'
 import { getAssetUrl } from '@/lib/assets'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -12,24 +12,15 @@ import { LoadError } from '@/components/ui/LoadError'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
+import { getPublicUserProfile } from '../api/userProfileApi'
 import styles from './UserProfilePage.module.css'
 
-interface UserProfile {
-  id: string
-  name?: string
-  username: string
-  avatar: string | null
-  bio: string | null
-  userType: 'student' | 'teacher' | 'user'
-  school?: { id: string; name: string } | null
-}
-
-export function UserProfilePage({ userType }: { userType: 'student' | 'teacher' | 'user' }) {
+export function UserProfilePage({ userType }: { userType: ProfileUserType }) {
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
   const roleLabel = userType === 'student' ? '学生' : userType === 'teacher' ? '教师' : '用户'
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profile, setProfile] = useState<PublicUserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,11 +28,9 @@ export function UserProfilePage({ userType }: { userType: 'student' | 'teacher' 
     setLoading(true)
     setError(null)
     try {
-      const result = await apiClient.get<UserProfile>(`/api/users/${id}/profile?userType=${userType}`)
-      if (result.success && result.data) setProfile(result.data)
-      else setError(result.message || '用户资料读取失败')
-    } catch {
-      setError('网络异常，请稍后重试')
+      setProfile(await getPublicUserProfile(id, userType))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '用户资料读取失败')
     } finally {
       setLoading(false)
     }

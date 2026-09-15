@@ -26,6 +26,7 @@ import {
   WorkspaceContracts,
   WorkspaceListSchema,
   CurrentAccountSchema,
+  IdentityContracts,
 } from '@oi-manager/contracts'
 
 describe('feature slice contracts', () => {
@@ -51,6 +52,15 @@ describe('feature slice contracts', () => {
       userId: 'user-1', username: 'teacher1', accountRole: 'teacher', role: 'teacher',
     }).success).toBe(false)
     expect(AuthContracts.updateProfile.body.safeParse({ email: 'teacher@example.com' }).success).toBe(true)
+  })
+
+  it('shares the public profile query and response contract', () => {
+    expect(IdentityContracts.publicProfile.query.safeParse({ userType: 'teacher' }).success).toBe(true)
+    expect(IdentityContracts.publicProfile.query.safeParse({ userType: 'principal' }).success).toBe(false)
+    expect(IdentityContracts.publicProfile.data.safeParse({
+      id: 'user-1', username: 'teacher1', avatar: null, bio: '简介', userType: 'teacher',
+      school: { id: 'organization-1', name: '测试学校' },
+    }).success).toBe(true)
   })
 
   it('accepts the assignment matrix projection returned by the application service', () => {

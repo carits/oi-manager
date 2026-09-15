@@ -5,7 +5,7 @@ import unifiedStyles from './TeamMemberList.unified.module.css'
 import type { TeamDetail } from '@/hooks/data/useTeamDetail'
 import type { TeamPermission, UserType } from '@/hooks/useTeamPermission'
 import { Button } from '@/components/ui/Button'
-import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { UserIdentityLink } from '@/features/user-profile'
 import styles from './Team.module.css'
 
 export interface JoinRequestItem {
