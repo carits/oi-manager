@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import type { ChatSticker } from './StickerPicker'
+import type { ChatSticker } from '@oi-manager/contracts'
 import styles from './StickerMessage.module.css'
 
 export function StickerMessage({ sticker, fallback }: { sticker: ChatSticker; fallback: string }) {

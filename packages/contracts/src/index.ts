@@ -1,6 +1,7 @@
 export * from './auth'
 export * from './assignment'
 export * from './blog'
+export * from './chat'
 export * from './health'
 export * from './http'
 export * from './identity'

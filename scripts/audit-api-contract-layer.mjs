@@ -14,6 +14,7 @@ const contractFiles = [
   'packages/contracts/src/problem.ts',
   'packages/contracts/src/assignment.ts',
   'packages/contracts/src/blog.ts',
+  'packages/contracts/src/chat.ts',
   'packages/contracts/src/rating.ts',
   'packages/contracts/src/solution-review.ts',
   'packages/contracts/src/training.ts',
@@ -49,6 +50,7 @@ const slices = [
   { name: 'contest-rating', legacyDirectory: 'contest-rating', allowedAnyTokens: 0 },
   { name: 'solution-review', legacyDirectory: 'solution-review', allowedAnyTokens: 0 },
   { name: 'submission', legacyDirectory: 'submission', allowedAnyTokens: 0 },
+  { name: 'chat', legacyDirectory: 'chat', allowedAnyTokens: 0 },
   // These three slices physically absorb the pre-existing UI in this rollout.
   // Migrated slices are held to the same zero-any boundary as the original slices.
   { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
@@ -78,6 +80,7 @@ const contractedBoundaries = [
   ['apps/server/src/modules/problem/problem.testset-revision.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.test-graph.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.judge-program.routes.ts', 'ProblemContracts'],
+  ['apps/server/src/modules/chat/chat.routes.ts', 'ChatContracts'],
   ['apps/server/src/routes/testdata.ts', 'ProblemContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
@@ -104,6 +107,10 @@ const contractedBoundaries = [
   ['apps/web/src/features/problem/ui/JudgeProgramTemplateGallery.tsx', 'getJudgeProgramTemplate'],
   ['apps/web/src/features/problem/ui/JudgeProgramWizard.tsx', 'getJudgeProgramTemplate'],
   ['apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx', 'listJudgeProgramTemplates'],
+  ['apps/web/src/features/chat/api/chatApi.ts', 'ChatContracts'],
+  ['apps/web/src/features/chat/ui/ChatWorkspace.tsx', 'sendChatTextMessage'],
+  ['apps/web/src/features/chat/ui/ChatWorkspace.tsx', 'sendChatStickerMessage'],
+  ['apps/web/src/features/chat/model/ChatProvider.tsx', 'getChatUnread'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
@@ -121,10 +128,10 @@ collect(path.join(root, 'apps/web/src/app'))
 for (const file of appFiles) {
   const source = fs.readFileSync(file, 'utf8')
   const relative = path.relative(root, file).replaceAll('\\', '/')
-  if (/from ['"]@\/components\/(?:assignment|blog|submission|problem|training|training-engine)\//.test(source)) {
+  if (/from ['"]@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//.test(source)) {
     failures.push(`${relative} bypasses a feature public API`)
   }
-  if (/from ['"]@\/features\/(?:assignment|blog|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
+  if (/from ['"]@\/features\/(?:assignment|blog|chat|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
 }

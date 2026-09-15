@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, ProblemContracts, TrainingContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, ChatContracts, ProblemContracts, TrainingContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -191,5 +191,30 @@ describe('shared API contract adapter', () => {
     expect(() => sendContractData(response, ProblemContracts.getJudgeProgramTemplate, {
       id: 'broken', kind: 'validator', source: '', examples: [],
     })).toThrowError(ApiContractError)
+  })
+
+  it('guards chat message payloads and serializes dates at the account boundary', () => {
+    const body = parseContractBody(ChatContracts.sendMessage, {
+      type: 'text', content: '你好', clientMessageId: '12345678-1234-1234-1234-123456789012',
+    })
+    expect(body.type).toBe('text')
+    expect(() => parseContractBody(ChatContracts.sendMessage, {
+      type: 'sticker', stickerId: '', clientMessageId: 'invalid',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ChatContracts.listMessagesV2, {
+      items: [{
+        id: 'message-1', conversationId: 'conversation-1', senderUserId: 'user-1',
+        seq: 1, content: '你好', type: 'text', createdAt: new Date('2026-09-15T00:00:00Z'),
+      }],
+      page: { hasMoreBefore: false, hasMoreAfter: false, oldestSeq: 1, newestSeq: 1 },
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({
+        items: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })],
+      }),
+    }))
   })
 })

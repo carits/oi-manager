@@ -1,15 +1,15 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { ChatUnread } from '@oi-manager/contracts'
 import { useAuth } from '@/components/AuthProvider'
-import { accountClient } from '@/lib/apiClient'
-import { connectChatEvents, type ChatEvent } from '@/lib/chatEvents'
+import { connectChatEvents, type ChatEvent } from '../api/chatEvents'
+import { getChatUnread } from '../api/chatApi'
 
-type Unread = { messageUnread: number; pendingFriendRequests: number; total: number }
 type Subscriber = (events: ChatEvent[]) => void
-type ChatContextValue = { unread: Unread; refreshUnread: () => Promise<void>; subscribe: (subscriber: Subscriber) => () => void }
+type ChatContextValue = { unread: ChatUnread; refreshUnread: () => Promise<void>; subscribe: (subscriber: Subscriber) => () => void }
 
-const emptyUnread: Unread = { messageUnread: 0, pendingFriendRequests: 0, total: 0 }
+const emptyUnread: ChatUnread = { messageUnread: 0, pendingFriendRequests: 0, total: 0 }
 const ChatContext = createContext<ChatContextValue | null>(null)
 
 export function ChatProvider({ children }: { children: ReactNode }) {
@@ -22,8 +22,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const refreshUnread = useCallback(async () => {
     if (!user?.userId) return setUnread(emptyUnread)
-    const response = await accountClient.get<Unread>('/api/chat/unread')
-    if (response.success && response.data) setUnread(response.data)
+    try { setUnread(await getChatUnread()) }
+    catch { /* keep the last known projection until the stream or fallback poll recovers */ }
   }, [user?.userId])
 
   const subscribe = useCallback((subscriber: Subscriber) => {

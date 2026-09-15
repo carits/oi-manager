@@ -1,2 +1,2 @@
-import { ChatReportWorkbench } from '@/components/chat/ChatReportWorkbench'
+import { ChatReportWorkbench } from '@/features/chat'
 export default function AdminChatReportsPage() { return <ChatReportWorkbench /> }

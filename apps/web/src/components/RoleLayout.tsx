@@ -6,7 +6,7 @@ import { SessionUnavailable } from './SessionUnavailable'
 import { getServerSession } from '@/lib/serverSession'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
-import { ChatProvider } from './chat/ChatProvider'
+import { ChatProvider } from '@/features/chat'
 import { resolveNavigationContext } from '@/lib/navigationContext'
 
 interface RoleLayoutProps {

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { MessageCircle } from 'lucide-react'
-import { useChat } from './ChatProvider'
+import { useChat } from '../model/ChatProvider'
 import styles from './ChatButton.module.css'
 
 export function ChatButton() {

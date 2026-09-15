@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   AssignmentProgressDataSchema,
   BlogDiscoveryDetailSchema,
+  ChatContracts,
+  ChatMessagePageSchema,
   ContestRatingDataSchema,
   ProblemJudgeModeTransitionInputSchema,
   ProblemJudgeSettingsSchema,
@@ -258,13 +260,37 @@ describe('feature slice contracts', () => {
     }).success).toBe(true)
   })
 
+  it('shares account chat messages and validates send payloads at runtime', () => {
+    const page = ChatMessagePageSchema.parse({
+      items: [{
+        id: 'message-1',
+        conversationId: 'conversation-1',
+        senderUserId: 'user-1',
+        seq: 1,
+        content: '你好',
+        type: 'text',
+        createdAt: new Date('2026-09-15T00:00:00Z'),
+      }],
+      page: { hasMoreBefore: false, hasMoreAfter: false, oldestSeq: 1, newestSeq: 1 },
+    })
+    expect(page.items[0].createdAt).toBe('2026-09-15T00:00:00.000Z')
+    expect(ChatContracts.sendMessage.body.safeParse({
+      type: 'text', content: '你好', clientMessageId: '12345678-1234-1234-1234-123456789abc',
+    }).success).toBe(true)
+    expect(ChatContracts.sendMessage.body.safeParse({
+      type: 'sticker', stickerId: '', clientMessageId: 'not-a-client-id',
+    }).success).toBe(false)
+  })
+
   it('routes pages through feature public APIs instead of component internals', () => {
     const page = fs.readFileSync(new URL('../app/blog/page.tsx', import.meta.url), 'utf8')
+    const messages = fs.readFileSync(new URL('../app/account/messages/page.tsx', import.meta.url), 'utf8')
     const organization = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/[...segments]/page.tsx', import.meta.url), 'utf8')
     expect(page).toContain("from '@/features/blog'")
+    expect(messages).toContain("from '@/features/chat'")
     expect(organization).toContain("from '@/features/assignment'")
     expect(organization).toContain("from '@/features/training-session/TrainingSessionWorkspace'")
-    expect(organization).not.toMatch(/@\/components\/(?:assignment|blog|submission|problem|training|training-engine)\//)
-    expect(organization).not.toMatch(/@\/features\/(?:assignment|blog|submission|problem|contest|training-session)\/(?:api|model|ui)\//)
+    expect(organization).not.toMatch(/@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//)
+    expect(organization).not.toMatch(/@\/features\/(?:assignment|blog|chat|submission|problem|contest|training-session)\/(?:api|model|ui)\//)
   })
 })

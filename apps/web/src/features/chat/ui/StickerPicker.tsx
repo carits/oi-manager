@@ -1,12 +1,12 @@
 'use client'
 import { useMemo, useState } from 'react'
+import type { ChatSticker, ChatStickerPack } from '@oi-manager/contracts'
 import { Smile } from 'lucide-react'
 import { IconButton, Popover, usePopoverClose } from '@/components/ui/OverlayPrimitives'
 import { Button } from '@/components/ui/Button'
 import styles from './StickerPicker.module.css'
 
-export type ChatSticker = { id: string; label: string; assetUrl: string; posterUrl: string; width: number; height: number; animated: boolean }
-export type ChatStickerPack = { id: string; key: string; name: string; version: number; stickers: ChatSticker[] }
+export type { ChatSticker, ChatStickerPack }
 
 function PickerContent({ packs, recentIds, sending, onSelect }: { packs: ChatStickerPack[]; recentIds: string[]; sending?: string; onSelect: (sticker: ChatSticker) => Promise<boolean> }) {
   const close = usePopoverClose()
