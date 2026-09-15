@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, AuthContracts, ChatContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, AuthContracts, ChatContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -65,6 +65,27 @@ describe('shared API contract adapter', () => {
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
       data: expect.objectContaining({ userType: 'student', school: { id: 'organization-1', name: '测试学校' } }),
+    }))
+  })
+
+  it('guards Team membership commands and normalizes the detail wire format', () => {
+    expect(parseContractBody(TeamContracts.inviteMembers, {
+      members: [{ userId: 'user-2', userType: 'student' }],
+    })).toEqual({ members: [{ userId: 'user-2', userType: 'student' }] })
+    expect(() => parseContractBody(TeamContracts.inviteMembers, {
+      members: [{ id: 'user-2', type: 'student' }],
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, TeamContracts.detail, {
+      id: 'team-1', name: '顺序训练队', avatar: null, description: null,
+      scope: 'campus', isPublic: true, createdAt: new Date('2026-09-15T00:00:00Z'),
+      school: { id: 'school-1', name: '测试学校' }, owner: null,
+      admins: [], teachers: [], students: [], pendingRequests: [],
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' }),
     }))
   })
 

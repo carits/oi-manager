@@ -12,6 +12,8 @@ import type { MemberType } from './team.types'
 import { getMemberDetailsBatch } from './team.utils'
 import { notificationService } from '../notification/notification.service'
 import { decideJoinRequest, findPendingJoinMember, listPendingJoinMembers } from './application/team-route-operations.service'
+import { TeamContracts } from '@oi-manager/contracts'
+import { parseContractBody, sendContractData } from '../../lib/api-contract'
 
 export const teamRequestsRouter = Router()
 
@@ -19,11 +21,11 @@ export const teamRequestsRouter = Router()
 
 teamRequestsRouter.post('/:id/join-request', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params
-  const { message } = req.body
+  const { message } = parseContractBody(TeamContracts.joinRequest, req.body)
   const user = (req as any).user!
 
   const result = await teamService.joinRequest(id, { message }, user)
-  res.json({ success: true, data: result, message: '申请已提交，等待审批' })
+  sendContractData(res, TeamContracts.joinRequest, result)
 }))
 
 // ==================== 加入申请列表 ====================
@@ -61,13 +63,14 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
     }
   })
 
-  res.json({ success: true, data: requests })
+  sendContractData(res, TeamContracts.joinRequests, requests)
 }))
 
 // ==================== 审批 ====================
 
 teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, asyncHandler(async (req, res) => {
   const { requestId } = req.params
+  parseContractBody(TeamContracts.decideJoinRequest, req.body || {})
   const user = (req as any).user!
   const scope = teamService.getScopeForUser(user)
 
@@ -99,11 +102,12 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
     await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: true, organizationId: team.organizationId || undefined })
   }
 
-  res.json({ success: true, message: '已同意加入请求' })
+  sendContractData(res, TeamContracts.decideJoinRequest, { message: '已同意加入请求' })
 }))
 
 teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncHandler(async (req, res) => {
   const { requestId } = req.params
+  parseContractBody(TeamContracts.decideJoinRequest, req.body || {})
   const user = (req as any).user!
   const scope = teamService.getScopeForUser(user)
 
@@ -134,5 +138,5 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
     await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: false, organizationId: team.organizationId || undefined })
   }
 
-  res.json({ success: true, message: '已拒绝申请' })
+  sendContractData(res, TeamContracts.decideJoinRequest, { message: '已拒绝申请' })
 }))

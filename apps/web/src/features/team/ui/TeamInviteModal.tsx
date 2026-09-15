@@ -6,7 +6,7 @@ import { Search, UserPlus } from 'lucide-react'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
+import { inviteTeamMembers, listAvailableTeamMembers } from '@/features/team'
 import { useAuth } from '@/features/auth'
 import { usePathname } from 'next/navigation'
 import { isPersonalPath } from '@/lib/workspacePath'
@@ -68,15 +68,11 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
   const fetchAvailableMembers = async (keyword?: string) => {
     try {
       setLoadingMembers(true)
-      const params = new URLSearchParams()
-      if (keyword) params.set('keyword', keyword)
-      const result = await apiClient.get<{ teachers: any[]; students: any[]; users?: any[] }>(`/api/teams/${teamId}/available-members?${params}`)
-      if (result.success && result.data) {
-        const teachers = (result.data.teachers || []).map((t: any) => ({ ...t, memberType: 'teacher' as const }))
-        const students = (result.data.students || []).map((s: any) => ({ ...s, memberType: 'student' as const }))
-        const users = (result.data.users || []).map((candidate: any) => ({ ...candidate, memberType: 'user' as const }))
-        setAvailableMembers([...users, ...teachers, ...students])
-      }
+      const result = await listAvailableTeamMembers(teamId, keyword)
+      const teachers = result.teachers.map(member => ({ ...member, memberType: 'teacher' as const }))
+      const students = result.students.map(member => ({ ...member, memberType: 'student' as const }))
+      const users = (result.users || []).map(member => ({ ...member, memberType: 'user' as const }))
+      setAvailableMembers([...users, ...teachers, ...students])
     } catch (error) {
       console.error('Failed to fetch available members:', error)
       setAvailableMembers([])
@@ -98,18 +94,18 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
 
     try {
       setInviting(true)
-      const members = selectedMembers.map(m => ({ id: m.id, type: m.memberType }))
-      const result = await apiClient.post<any>(`/api/teams/${teamId}/members`, {
+      const members = selectedMembers.map(member => ({ userId: member.id, userType: member.memberType }))
+      const result = await inviteTeamMembers(teamId, {
         members,
         usernames: usernameInput.trim() ? usernameInput.split(',').map(s => s.trim()).filter(Boolean) : [],
       })
-      if (result.success) {
-        const successCount = result.data?.invited?.length || members.length
+      if (result.ok) {
+        const successCount = result.data.invited.length
         toast.success(`成功发送 ${successCount} 个邀请`)
         onClose()
         onSuccess()
       } else {
-        toast.error(result.message || '邀请失败')
+        toast.error(result.error.message || '邀请失败')
       }
     } catch (error) {
       console.error('Invite members error:', error)

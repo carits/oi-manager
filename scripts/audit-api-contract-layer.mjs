@@ -19,6 +19,7 @@ const contractFiles = [
   'packages/contracts/src/chat.ts',
   'packages/contracts/src/rating.ts',
   'packages/contracts/src/solution-review.ts',
+  'packages/contracts/src/team.ts',
   'packages/contracts/src/training.ts',
   'packages/contracts/src/workspace.ts',
 ]
@@ -59,6 +60,7 @@ const slices = [
   { name: 'workspace', legacyDirectory: 'workspace', allowedAnyTokens: 0 },
   { name: 'auth', legacyDirectory: null, allowedAnyTokens: 0 },
   { name: 'user-profile', legacyDirectory: 'profile', allowedAnyTokens: 0 },
+  { name: 'team', legacyDirectory: 'team', allowedAnyTokens: 0 },
   // These three slices physically absorb the pre-existing UI in this rollout.
   // Migrated slices are held to the same zero-any boundary as the original slices.
   { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
@@ -106,6 +108,10 @@ const contractedBoundaries = [
   ['apps/server/src/routes/auth.ts', 'AuthContracts'],
   ['apps/server/src/routes/users.ts', 'IdentityContracts'],
   ['apps/server/src/routes/testdata.ts', 'ProblemContracts'],
+  ['apps/server/src/modules/team/team.crud.routes.ts', 'TeamContracts'],
+  ['apps/server/src/modules/team/team.members.routes.ts', 'TeamContracts'],
+  ['apps/server/src/modules/team/team.requests.routes.ts', 'TeamContracts'],
+  ['apps/server/src/modules/team/team.invitations.routes.ts', 'TeamContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
   ['apps/web/src/features/blog/ui/BlogDiscoveryDetail.tsx', 'getBlogDiscovery'],
@@ -151,6 +157,9 @@ const contractedBoundaries = [
   ['apps/web/src/features/auth/ui/PasswordEditor.tsx', 'changeAccountPassword'],
   ['apps/web/src/features/user-profile/api/userProfileApi.ts', 'IdentityContracts'],
   ['apps/web/src/features/user-profile/ui/UserProfilePage.tsx', 'getPublicUserProfile'],
+  ['apps/web/src/features/team/api/teamApi.ts', 'TeamContracts'],
+  ['apps/web/src/features/team/ui/TeamDetailPage.tsx', 'useTeamDetail'],
+  ['apps/web/src/features/team/ui/TeamInviteModal.tsx', 'inviteTeamMembers'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
@@ -168,10 +177,10 @@ collect(path.join(root, 'apps/web/src/app'))
 for (const file of appFiles) {
   const source = fs.readFileSync(file, 'utf8')
   const relative = path.relative(root, file).replaceAll('\\', '/')
-  if (/from ['"]@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//.test(source)) {
+  if (/from ['"]@\/components\/(?:assignment|blog|chat|submission|problem|team|training|training-engine)\//.test(source)) {
     failures.push(`${relative} bypasses a feature public API`)
   }
-  if (/from ['"]@\/features\/(?:assignment|auth|user-profile|blog|chat|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
+  if (/from ['"]@\/features\/(?:assignment|auth|user-profile|blog|chat|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|team|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
 }

@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
-import { TeamListPage, TeamItem, Invitation } from '@/components/team'
-import { useTeams, Team } from '@/hooks/data/useTeams'
+import { createTeam, getMyTeams, respondToTeamInvitation, TeamListPage, TeamItem, Invitation } from '@/features/team'
+import { useTeams, Team } from '@/features/team'
 import { useAuth } from '@/features/auth'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
 import { currentWorkspacePrefix, isPersonalPath } from '@/lib/workspacePath'
 
 // 学生端 - 团队管理页面
@@ -36,7 +35,7 @@ export default function StudentTeamPage() {
     page,
     pageSize,
     view: activeTab === 'mine' ? 'mine' : 'all'
-  }
+  } as const
 
   const { data, loading, error, refetch } = useTeams(queryParams, sessionKey)
 
@@ -67,20 +66,18 @@ export default function StudentTeamPage() {
       if (!user) return
       try {
         setLoadingInvitations(true)
-        const data = await apiClient.get<any>('/api/teams/mine')
-        if (data.success) {
-          const pending = (data.data?.pending || []).map((inv: any) => ({
-            id: inv.invitationId,
+        const data = await getMyTeams()
+          const pending = data.pending.map(inv => ({
+            id: inv.invitationId || '',
             teamId: inv.id,
             teamName: inv.name,
             schoolName: inv.school?.name || '',
             memberCount: inv._count?.members || 0,
-            ownerName: inv.owner?.name,
-            invitedAt: inv.invitedAt,
+            ownerName: inv.owner?.name || '未知',
+            invitedAt: inv.invitedAt || inv.createdAt,
             type: 'member' as const
           }))
           setInvitations(pending)
-        }
       } catch (error) {
         console.error('Failed to fetch invitations:', error)
       } finally {
@@ -94,12 +91,12 @@ export default function StudentTeamPage() {
   const handleAcceptInvitation = async (invitationId: string) => {
     try {
       setProcessingInvitation(invitationId)
-      const result = await apiClient.post(`/api/teams/invitations/${invitationId}/accept`)
-      if (result.success) {
+      const result = await respondToTeamInvitation(invitationId, 'accept')
+      if (result.ok) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
         refetch()
       } else {
-        toast.error(result.message || '操作失败')
+        toast.error(result.error.message || '操作失败')
       }
     } catch (error) {
       toast.error('操作失败')
@@ -112,11 +109,11 @@ export default function StudentTeamPage() {
   const handleRejectInvitation = async (invitationId: string) => {
     try {
       setProcessingInvitation(invitationId)
-      const result = await apiClient.post(`/api/teams/invitations/${invitationId}/reject`)
-      if (result.success) {
+      const result = await respondToTeamInvitation(invitationId, 'reject')
+      if (result.ok) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
       } else {
-        toast.error(result.message || '操作失败')
+        toast.error(result.error.message || '操作失败')
       }
     } catch (error) {
       toast.error('操作失败')
@@ -134,19 +131,19 @@ export default function StudentTeamPage() {
 
     try {
       setCreating(true)
-      const result = await apiClient.post('/api/teams', {
+      const result = await createTeam({
         name: formData.name,
-        description: formData.description || null,
+        description: formData.description,
         isPublic: formData.isPublic,
         id: formData.teamId
       })
-      if (result.success) {
+      if (result.ok) {
         setCreateModalOpen(false)
         refetch()
         toast.success('团队创建成功')
         return true
       } else {
-        toast.error(result.message || '创建失败')
+        toast.error(result.error.message || '创建失败')
         return false
       }
     } catch (error) {

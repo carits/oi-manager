@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { TeamListPage, type Invitation, type TeamItem } from '@/components/team'
+import { createTeam as createTeamRequest, listMyTeamInvitations, respondToTeamInvitation, TeamListPage, type Invitation, type TeamItem } from '@/features/team'
 import { useAuth } from '@/features/auth'
-import { useTeams, type Team } from '@/hooks/data/useTeams'
-import apiClient from '@/lib/apiClient'
+import { useTeams, type Team } from '@/features/team'
 import { useToast } from '@/components/ui/Toast'
 
 type TeamTab = 'mine' | 'all'
@@ -47,15 +46,11 @@ export default function PersonalTeamsPage() {
     setLoadingInvitations(true)
     try {
       const [memberResult, adminResult] = await Promise.all([
-        apiClient.get<InvitationPayload[]>('/api/teams/invitations'),
-        apiClient.get<InvitationPayload[]>('/api/teams/admin-invitations'),
+        listMyTeamInvitations('all'),
+        listMyTeamInvitations('admin'),
       ])
-      const members = memberResult.success
-        ? (memberResult.data || []).map(item => ({ ...item, schoolName: '', type: 'member' as const }))
-        : []
-      const admins = adminResult.success
-        ? (adminResult.data || []).map(item => ({ ...item, schoolName: '', type: 'admin' as const }))
-        : []
+      const members = memberResult.map(item => ({ ...item, schoolName: '', type: 'member' as const }))
+      const admins = adminResult.map(item => ({ ...item, schoolName: '', type: 'admin' as const }))
       setInvitations([...admins, ...members])
     } finally {
       setLoadingInvitations(false)
@@ -66,10 +61,9 @@ export default function PersonalTeamsPage() {
 
   const processInvitation = async (id: string, type: 'admin' | 'member', action: 'accept' | 'reject') => {
     setProcessingInvitation(id)
-    const prefix = type === 'admin' ? 'admin-invitations' : 'invitations'
     try {
-      const result = await apiClient.post(`/api/teams/${prefix}/${id}/${action}`)
-      if (!result.success) return toast.error(result.message || '操作失败')
+      const result = await respondToTeamInvitation(id, action, type === 'admin' ? 'admin' : 'all')
+      if (!result.ok) return toast.error(result.error.message || '操作失败')
       setInvitations(current => current.filter(invitation => invitation.id !== id))
       if (action === 'accept') await resource.refetch()
     } finally {
@@ -80,14 +74,14 @@ export default function PersonalTeamsPage() {
   const createTeam = async (form: { name: string; description: string; isPublic: boolean; teamId: string }) => {
     setCreating(true)
     try {
-      const result = await apiClient.post('/api/teams', {
+      const result = await createTeamRequest({
         id: form.teamId,
         name: form.name,
-        description: form.description || null,
+        description: form.description,
         isPublic: form.isPublic,
       })
-      if (!result.success) {
-        toast.error(result.message || '创建失败')
+      if (!result.ok) {
+        toast.error(result.error.message || '创建失败')
         return false
       }
       toast.success('团队创建成功')

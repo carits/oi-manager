@@ -4,7 +4,7 @@ import { AlertTriangle, Crown } from 'lucide-react'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
+import { transferTeam } from '@/features/team'
 import styles from './Team.module.css'
 
 interface TransferCandidate {
@@ -32,16 +32,16 @@ export function TeamTransferModal({ isOpen, onClose, teamId, selectedTarget, onS
     }
 
     try {
-      const result = await apiClient.post(`/api/teams/${teamId}/transfer`, {
+      const result = await transferTeam(teamId, {
         newOwnerId: selectedTarget.id,
         newOwnerType: selectedTarget.memberType,
       })
-      if (result.success) {
+      if (result.ok) {
         toast.success('所有权转移成功')
         onClose()
         onSuccess()
       } else {
-        toast.error(result.message || '转移失败')
+        toast.error(result.error.message || '转移失败')
       }
     } catch (error) {
       console.error('Transfer error:', error)

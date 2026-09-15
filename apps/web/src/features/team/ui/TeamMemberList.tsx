@@ -2,8 +2,8 @@
 
 import { Check, Crown, Mail, ShieldCheck, UserPlus, Users, X } from 'lucide-react'
 import unifiedStyles from './TeamMemberList.unified.module.css'
-import type { TeamDetail } from '@/hooks/data/useTeamDetail'
-import type { TeamPermission, UserType } from '@/hooks/useTeamPermission'
+import type { TeamDetail } from '@/features/team'
+import type { TeamPermission, UserType } from '@/features/team'
 import { Button } from '@/components/ui/Button'
 import { UserIdentityLink } from '@/features/user-profile'
 import styles from './Team.module.css'

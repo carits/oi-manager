@@ -10,9 +10,9 @@ import { Camera, ChevronLeft, Crown, Edit3, LockKeyhole, Megaphone, School, Shie
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import type { TeamDetail } from '@/hooks/data/useTeamDetail'
-import type { TeamPermission } from '@/hooks/useTeamPermission'
-import apiClient from '@/lib/apiClient'
+import type { TeamDetail } from '@/features/team'
+import type { TeamPermission } from '@/features/team'
+import { uploadTeamAvatar } from '@/features/team'
 import { getAssetUrl } from '@/lib/assets'
 import styles from './Team.module.css'
 
@@ -63,13 +63,11 @@ export function TeamHeader({
 
     setUploadingAvatar(true)
     try {
-      const formData = new FormData()
-      formData.append('avatar', file)
-      const result = await apiClient.post<{ avatar: string }>(`/api/teams/${team.id}/avatar`, formData)
-      if (result.success && result.data) {
+      const result = await uploadTeamAvatar(team.id, file)
+      if (result.ok) {
         onAvatarUpdate?.(result.data.avatar)
       } else {
-        toast.error(result.message || '上传失败')
+        toast.error(result.error.message || '上传失败')
       }
     } catch (error) {
       console.error('Upload avatar error:', error)

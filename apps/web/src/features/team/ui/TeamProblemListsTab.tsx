@@ -41,6 +41,10 @@ interface MyProblemList {
   description: string | null
 }
 
+interface MyProblemListResponse {
+  lists: MyProblemList[]
+}
+
 interface TeamProblemListsTabProps {
   teamId: string
   basePath: string
@@ -85,7 +89,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
     setShowAddModal(true)
     setLoadingMyLists(true)
     try {
-      const result = await apiClient.get<any>('/api/problem-lists?tab=mine')
+      const result = await apiClient.get<MyProblemListResponse>('/api/problem-lists?tab=mine')
       if (result.success) {
         setMyLists(result.data?.lists || [])
       }

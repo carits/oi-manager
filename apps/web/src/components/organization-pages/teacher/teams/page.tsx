@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
-import { TeamListPage, TeamItem, Invitation } from '@/components/team'
-import { useTeams, Team } from '@/hooks/data/useTeams'
+import { createTeam, listMyTeamInvitations, respondToTeamInvitation, TeamListPage, TeamItem, Invitation } from '@/features/team'
+import { useTeams, Team } from '@/features/team'
 import { useAuth } from '@/features/auth'
-import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 
@@ -33,7 +32,7 @@ export default function TeamsPage() {
     page,
     pageSize,
     view: activeTab === 'mine' ? 'mine' : 'all'
-  }
+  } as const
 
   const { data, loading, error, refetch } = useTeams(queryParams, sessionKey)
 
@@ -64,11 +63,11 @@ export default function TeamsPage() {
       try {
         setLoadingInvitations(true)
         const [adminResult, memberResult] = await Promise.all([
-          apiClient.get<any[]>('/api/teams/admin-invitations'),
-          apiClient.get<any[]>('/api/teams/member-invitations')
+          listMyTeamInvitations('admin'),
+          listMyTeamInvitations('member')
         ])
-        const adminInvitations = (adminResult.success ? (adminResult.data || []) : []).map((i: any) => ({ ...i, type: 'admin' as const }))
-        const memberInvitations = (memberResult.success ? (memberResult.data || []) : []).map((i: any) => ({ ...i, type: 'member' as const }))
+        const adminInvitations = adminResult.map(invitation => ({ ...invitation, type: 'admin' as const }))
+        const memberInvitations = memberResult.map(invitation => ({ ...invitation, type: 'member' as const }))
         setInvitations([...adminInvitations, ...memberInvitations])
       } catch (error) {
         console.error('Failed to fetch invitations:', error)
@@ -83,15 +82,12 @@ export default function TeamsPage() {
   const handleAcceptInvitation = async (invitationId: string, type: 'admin' | 'member') => {
     try {
       setProcessingInvitation(invitationId)
-      const endpoint = type === 'admin'
-        ? `/api/teams/admin-invitations/${invitationId}/accept`
-        : `/api/teams/member-invitations/${invitationId}/accept`
-      const result = await apiClient.post(endpoint)
-      if (result.success) {
+      const result = await respondToTeamInvitation(invitationId, 'accept', type)
+      if (result.ok) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
         refetch()
       } else {
-        toast.error(result.message || '操作失败')
+        toast.error(result.error.message || '操作失败')
       }
     } catch (error) {
       toast.error('操作失败')
@@ -104,14 +100,11 @@ export default function TeamsPage() {
   const handleRejectInvitation = async (invitationId: string, type: 'admin' | 'member') => {
     try {
       setProcessingInvitation(invitationId)
-      const endpoint = type === 'admin'
-        ? `/api/teams/admin-invitations/${invitationId}/reject`
-        : `/api/teams/member-invitations/${invitationId}/reject`
-      const result = await apiClient.post(endpoint)
-      if (result.success) {
+      const result = await respondToTeamInvitation(invitationId, 'reject', type)
+      if (result.ok) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
       } else {
-        toast.error(result.message || '操作失败')
+        toast.error(result.error.message || '操作失败')
       }
     } catch (error) {
       toast.error('操作失败')
@@ -124,19 +117,19 @@ export default function TeamsPage() {
   const handleCreateTeam = async (data: { name: string; description: string; isPublic: boolean; teamId: string }) => {
     try {
       setCreating(true)
-      const result = await apiClient.post('/api/teams', {
+      const result = await createTeam({
         name: data.name,
-        description: data.description || null,
+        description: data.description,
         isPublic: data.isPublic,
         id: data.teamId
       })
-      if (result.success) {
+      if (result.ok) {
         setCreateModalOpen(false)
         refetch()
         toast.success('团队创建成功')
         return true
       } else {
-        toast.error(result.message || '创建失败')
+        toast.error(result.error.message || '创建失败')
         return false
       }
     } catch (error) {

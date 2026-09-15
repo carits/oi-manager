@@ -5,7 +5,7 @@ import unifiedStyles from './TeamsTab.unified.module.css'
 import Link from 'next/link'
 import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
-import { useTeams } from '@/hooks/data/useTeams'
+import { useTeams } from '@/features/team'
 
 interface TeamsTabProps {
   schoolId: string

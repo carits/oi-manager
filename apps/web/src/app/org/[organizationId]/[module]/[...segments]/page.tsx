@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useAuth } from '@/features/auth'
-import { TeamDetailPage } from '@/components/team/TeamDetailPage'
+import { TeamDetailPage } from '@/features/team'
 import { TrainingDetailPage } from '@/features/contest/TrainingDetailPage'
 import { ProblemDetail } from '@/features/problem/ProblemDetail'
 import { ProblemForm } from '@/features/problem/ProblemForm'

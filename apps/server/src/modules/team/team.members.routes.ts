@@ -14,6 +14,8 @@ import { addMembersSchema, memberIdSchema, setAdminSchema } from './schemas/team
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import type { MemberType } from './team.types'
 import { changeMemberRoleWithLog, findUsernames, removeMemberWithLog } from './application/team-route-operations.service'
+import { TeamContracts } from '@oi-manager/contracts'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 
 export const teamMembersRouter = Router()
 
@@ -21,7 +23,7 @@ export const teamMembersRouter = Router()
 
 teamMembersRouter.get('/:id/available-members', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params
-  const { keyword, type } = req.query
+  const { keyword, type } = parseContractQuery(TeamContracts.availableMembers, req.query)
   const user = (req as any).user!
 
   const { isAdmin } = await teamService.isTeamAdmin(id, user)
@@ -49,20 +51,20 @@ teamMembersRouter.get('/:id/available-members', authenticate, asyncHandler(async
     type: type as MemberType
   })
 
-  res.json({ success: true, data: result })
+  sendContractData(res, TeamContracts.availableMembers, result)
 }))
 
 // ==================== 邀请成员 ====================
 
-teamMembersRouter.post('/:id/members', authenticate, validateBody(addMembersSchema), asyncHandler(async (req, res) => {
+teamMembersRouter.post('/:id/members', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params
-  const validated = (req as any).validated?.body
+  const validated = parseContractBody(TeamContracts.inviteMembers, req.body)
   const { members, usernames, role = 'member' } = validated
   const user = (req as any).user!
 
   try {
     const result = await teamService.inviteMembers(id, { members, usernames, role }, user)
-    res.json({ success: true, data: result })
+    sendContractData(res, TeamContracts.inviteMembers, result)
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(409).json({ success: false, message: '该成员已被邀请，请勿重复操作' })
@@ -76,7 +78,7 @@ teamMembersRouter.post('/:id/members', authenticate, validateBody(addMembersSche
 teamMembersRouter.delete('/:id/members/:memberId', authenticate, validateParams(memberIdSchema), asyncHandler(async (req, res) => {
   const validated = (req as any).validated?.params
   const { id, memberId } = validated
-  const memberType = req.query.memberType as string | undefined
+  const { memberType } = parseContractQuery(TeamContracts.removeMember, req.query)
   const user = (req as any).user!
 
   const { isAdmin } = await teamService.isTeamAdmin(id, user)
@@ -119,7 +121,7 @@ teamMembersRouter.delete('/:id/members/:memberId', authenticate, validateParams(
 
   await removeMemberWithLog(id, member, callerId, getMembershipType(user) as MemberType)
 
-  res.json({ success: true, message: '移除成功' })
+  sendContractData(res, TeamContracts.removeMember, { message: '移除成功' })
 }))
 
 // ==================== 待处理邀请 ====================
@@ -164,7 +166,7 @@ teamMembersRouter.get('/:id/pending-invites', authenticate, asyncHandler(async (
     }
   })
 
-  res.json({ success: true, data: invites.filter(Boolean) })
+  sendContractData(res, TeamContracts.pendingInvites, invites.filter(Boolean))
 }))
 
 // ==================== 管理员列表 ====================
@@ -189,9 +191,9 @@ teamMembersRouter.get('/:id/admins', authenticate, asyncHandler(async (req, res)
 
 // ==================== 设置管理员 ====================
 
-teamMembersRouter.post('/:id/admins', authenticate, validateBody(setAdminSchema), asyncHandler(async (req, res) => {
+teamMembersRouter.post('/:id/admins', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params
-  const validated = (req as any).validated?.body
+  const validated = parseContractBody(TeamContracts.setAdmin, req.body)
   const { memberId, memberType } = validated
   const user = (req as any).user!
 
@@ -239,7 +241,7 @@ teamMembersRouter.post('/:id/admins', authenticate, validateBody(setAdminSchema)
     team.scope as 'campus' | 'personal'
   )
 
-  res.json({ success: true, data: { ...result, memberName }, message: '已设置为管理员' })
+  sendContractData(res, TeamContracts.setAdmin, { ...result, memberName, message: '已设置为管理员' })
 }))
 
 // ==================== 取消管理员 ====================
@@ -311,12 +313,13 @@ teamMembersRouter.delete('/:id/invites/:inviteId', authenticate, asyncHandler(as
     return res.status(400).json({ success: false, message: '邀请已被处理' })
   }
 
-  res.json({ success: true, message: '已取消邀请' })
+  sendContractData(res, TeamContracts.cancelInvite, { message: '已取消邀请' })
 }))
 
 // ==================== 错误处理工具（局部） ====================
 
 function handleError(res: any, error: unknown, defaultMessage: string = '服务器错误') {
+  if (sendContractError(error, res)) return
   if (error instanceof Error) {
     const errorMessages: Record<string, { status: number; message: string }> = {
       'TEAM_NOT_FOUND': { status: 404, message: '团队不存在' },

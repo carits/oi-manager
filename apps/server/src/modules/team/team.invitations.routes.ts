@@ -12,6 +12,8 @@ import { asyncHandler } from '../../lib/asyncHandler'
 import type { MemberType } from './team.types'
 import { notificationService } from '../notification/notification.service'
 import { processInvitation } from './application/team-route-operations.service'
+import { TeamContracts } from '@oi-manager/contracts'
+import { parseContractBody, sendContractData } from '../../lib/api-contract'
 
 export const teamInvitationsRouter = Router()
 
@@ -56,7 +58,7 @@ teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req,
     })
   )
 
-  res.json({ success: true, data: formattedInvitations })
+  sendContractData(res, TeamContracts.invitations, formattedInvitations)
 }))
 
 // ==================== 管理员团队列表 ====================
@@ -146,11 +148,12 @@ teamInvitationsRouter.get('/admin-invitations', authenticate, asyncHandler(async
     })
   )
 
-  res.json({ success: true, data: invitationsWithOwner })
+  sendContractData(res, TeamContracts.adminInvitations, invitationsWithOwner)
 }))
 
 teamInvitationsRouter.post('/admin-invitations/:invitationId/accept', authenticate, asyncHandler(async (req, res) => {
   const { invitationId } = req.params
+  parseContractBody(TeamContracts.respondInvitation, req.body || {})
   const user = (req as any).user!
 
   const invitation = await teamRepository.findMemberById(invitationId)
@@ -170,11 +173,12 @@ teamInvitationsRouter.post('/admin-invitations/:invitationId/accept', authentica
 
   await teamService.assertTeamScope(invitation.teamId, user)
   await teamRepository.updateMemberStatus(invitationId, 'active')
-  res.json({ success: true, message: '已加入团队' })
+  sendContractData(res, TeamContracts.respondInvitation, { message: '已加入团队' })
 }))
 
 teamInvitationsRouter.post('/admin-invitations/:invitationId/reject', authenticate, asyncHandler(async (req, res) => {
   const { invitationId } = req.params
+  parseContractBody(TeamContracts.respondInvitation, req.body || {})
   const user = (req as any).user!
 
   const invitation = await teamRepository.findMemberById(invitationId)
@@ -194,7 +198,7 @@ teamInvitationsRouter.post('/admin-invitations/:invitationId/reject', authentica
 
   await teamService.assertTeamScope(invitation.teamId, user)
   await teamRepository.deleteMember(invitationId)
-  res.json({ success: true, message: '已拒绝邀请' })
+  sendContractData(res, TeamContracts.respondInvitation, { message: '已拒绝邀请' })
 }))
 
 // ==================== 成员邀请处理 ====================
@@ -227,11 +231,12 @@ teamInvitationsRouter.get('/member-invitations', authenticate, asyncHandler(asyn
     })
   )
 
-  res.json({ success: true, data: invitationsWithOwner })
+  sendContractData(res, TeamContracts.memberInvitations, invitationsWithOwner)
 }))
 
 teamInvitationsRouter.post('/member-invitations/:invitationId/accept', authenticate, asyncHandler(async (req, res) => {
   const { invitationId } = req.params
+  parseContractBody(TeamContracts.respondInvitation, req.body || {})
   const user = (req as any).user!
 
   if (!isOrganizationTeacherIdentity(user)) {
@@ -250,11 +255,12 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/accept', authentic
 
   await teamService.assertTeamScope(invitation.teamId, user)
   await teamRepository.updateMemberStatus(invitationId, 'active')
-  res.json({ success: true, message: '已加入团队' })
+  sendContractData(res, TeamContracts.respondInvitation, { message: '已加入团队' })
 }))
 
 teamInvitationsRouter.post('/member-invitations/:invitationId/reject', authenticate, asyncHandler(async (req, res) => {
   const { invitationId } = req.params
+  parseContractBody(TeamContracts.respondInvitation, req.body || {})
   const user = (req as any).user!
 
   if (!isOrganizationTeacherIdentity(user)) {
@@ -273,13 +279,14 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/reject', authentic
 
   await teamService.assertTeamScope(invitation.teamId, user)
   await teamRepository.deleteMember(invitationId)
-  res.json({ success: true, message: '已拒绝邀请' })
+  sendContractData(res, TeamContracts.respondInvitation, { message: '已拒绝邀请' })
 }))
 
 // ==================== 统一邀请处理 ====================
 
 teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, asyncHandler(async (req, res) => {
   const { invitationId } = req.params
+  parseContractBody(TeamContracts.respondInvitation, req.body || {})
   const user = (req as any).user!
 
   const userId = user.userId
@@ -320,7 +327,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
         organizationId: team!.organizationId || undefined
       })
     }
-    res.json({ success: true, message: '已加入团队' })
+    sendContractData(res, TeamContracts.respondInvitation, { message: '已加入团队' })
   } catch (error) {
     if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
       return res.status(400).json({ success: false, message: '邀请已处理' })
@@ -330,6 +337,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
 }))
 teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, asyncHandler(async (req, res) => {
   const { invitationId } = req.params
+  parseContractBody(TeamContracts.respondInvitation, req.body || {})
   const user = (req as any).user!
 
   const userId = user.userId
@@ -369,7 +377,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
         organizationId: team!.organizationId || undefined
       })
     }
-    res.json({ success: true, message: '已拒绝邀请' })
+    sendContractData(res, TeamContracts.respondInvitation, { message: '已拒绝邀请' })
   } catch (error) {
     if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
       return res.status(400).json({ success: false, message: '邀请已处理' })

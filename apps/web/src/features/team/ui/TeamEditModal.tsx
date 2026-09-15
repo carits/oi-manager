@@ -6,7 +6,7 @@ import { Globe2, LockKeyhole, Save } from 'lucide-react'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
+import { updateTeam } from '@/features/team'
 import styles from './Team.module.css'
 
 interface TeamEditFormData {
@@ -41,16 +41,16 @@ export function TeamEditModal({ isOpen, onClose, teamId, initialData, onSuccess 
 
     try {
       setSaving(true)
-      const result = await apiClient.put(`/api/teams/${teamId}`, {
+      const result = await updateTeam(teamId, {
         name: formData.name.trim(),
-        description: formData.description.trim() || null,
+        description: formData.description.trim(),
         isPublic: formData.isPublic,
       })
-      if (result.success) {
+      if (result.ok) {
         onClose()
         onSuccess()
       } else {
-        toast.error(result.message || '编辑失败')
+        toast.error(result.error.message || '编辑失败')
       }
     } catch (error) {
       console.error('Edit team error:', error)

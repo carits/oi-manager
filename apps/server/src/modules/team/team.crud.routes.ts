@@ -21,12 +21,15 @@ import logger from '../../lib/logger'
 import { isTeamIdAvailable, uploadTeamAvatar } from './application/team-route-operations.service'
 import { cleanupTeamAvatarTemporaryFile, teamAvatarUpload } from './infrastructure/team-avatar-upload'
 import { requestHasOrganizationCapability } from '../authorization/capabilities'
+import { TeamContracts } from '@oi-manager/contracts'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 
 export const teamCrudRouter = Router()
 
 // ==================== 错误处理工具 ====================
 
 function handleError(res: Response, error: unknown, defaultMessage: string = '服务器错误') {
+  if (sendContractError(error, res)) return
   if (error instanceof Error) {
     const errorMessages: Record<string, { status: number; message: string }> = {
       'TEAM_NOT_FOUND': { status: 404, message: '团队不存在' },
@@ -77,7 +80,7 @@ teamCrudRouter.get('/organization/:organizationId', authenticate, asyncHandler(a
 teamCrudRouter.get('/mine', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
   const result = await teamService.getStudentTeams(user.userId, user)
-  res.json({ success: true, data: result })
+  sendContractData(res, TeamContracts.mine, result)
 }))
 
 // ==================== 团队列表 ====================
@@ -85,8 +88,9 @@ teamCrudRouter.get('/mine', authenticate, asyncHandler(async (req, res) => {
 teamCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
 
-  const { organizationId, view, keyword } = req.query
-  const { page, pageSize, skip } = parsePagination(req.query, { defaultPageSize: 12 })
+  const query = parseContractQuery(TeamContracts.list, req.query)
+  const { organizationId, view, keyword } = query
+  const { page, pageSize, skip } = parsePagination(query, { defaultPageSize: 12 })
   const user = (req as any).user!
 
   const result = await teamService.getTeamList({
@@ -99,7 +103,7 @@ teamCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     user
   })
 
-  res.json({ success: true, data: result })
+  sendContractData(res, TeamContracts.list, result)
 }))
 
 // ==================== 校验团队ID唯一性 ====================
@@ -131,13 +135,13 @@ teamCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
 
   const result = await teamService.getTeamDetail(id, user)
-  res.json({ success: true, data: result })
+  sendContractData(res, TeamContracts.detail, result)
 }, '团队不存在'))
 
 // ==================== 创建团队 ====================
 
-teamCrudRouter.post('/', authenticate, validateBody(createTeamSchema), asyncHandler(async (req, res) => {
-  const validated = (req as any).validated?.body
+teamCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
+  const validated = parseContractBody(TeamContracts.create, req.body)
   const { name, description, isPublic, id } = validated
   const user = (req as any).user!
 
@@ -148,7 +152,7 @@ teamCrudRouter.post('/', authenticate, validateBody(createTeamSchema), asyncHand
 
   try {
     const team = await teamService.createTeam({ name, description, isPublic, id }, user)
-    res.json({ success: true, data: team })
+    sendContractData(res, TeamContracts.create, team)
   } catch (error) {
     if (error instanceof Error && error.message === 'TEAM_LIMIT_EXCEEDED') {
       const user = (req as any).user!
@@ -167,25 +171,25 @@ teamCrudRouter.post('/', authenticate, validateBody(createTeamSchema), asyncHand
 
 // ==================== 更新团队 ====================
 
-teamCrudRouter.put('/:id', authenticate, validateBody(updateTeamSchema), asyncHandler(async (req, res) => {
+teamCrudRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params
-  const validated = (req as any).validated?.body
+  const validated = parseContractBody(TeamContracts.update, req.body)
   const { name, description, isPublic } = validated
   const user = (req as any).user!
 
   const result = await teamService.updateTeam(id, { name, description, isPublic }, user)
-  res.json({ success: true, data: result })
+  sendContractData(res, TeamContracts.update, result)
 }))
 
 // ==================== 更新公告 ====================
 
 teamCrudRouter.put('/:id/announcement', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params
-  const { announcement } = req.body
+  const { announcement } = parseContractBody(TeamContracts.announcement, req.body)
   const user = (req as any).user!
 
-  const result = await teamService.updateAnnouncement(id, announcement, user)
-  res.json({ success: true, data: result })
+  const result = await teamService.updateAnnouncement(id, announcement ?? '', user)
+  sendContractData(res, TeamContracts.announcement, result)
 }))
 
 // ==================== 上传头像 ====================
@@ -217,15 +221,15 @@ teamCrudRouter.post('/:id/avatar', authenticate, teamAvatarUpload.single('avatar
 
 // ==================== 转移团队 ====================
 
-teamCrudRouter.post('/:id/transfer', authenticate, validateBody(transferTeamSchema), asyncHandler(async (req, res) => {
+teamCrudRouter.post('/:id/transfer', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params
-  const validated = (req as any).validated?.body
+  const validated = parseContractBody(TeamContracts.transfer, req.body)
   const { newOwnerId, newOwnerType } = validated
   const user = (req as any).user!
 
   try {
     await teamService.transferTeam(id, { newOwnerId, newOwnerType }, user)
-    res.json({ success: true, message: '所有权转移成功' })
+    sendContractData(res, TeamContracts.transfer, { message: '所有权转移成功' })
   } catch (error) {
     if (error instanceof Error) {
       const errorMessages: Record<string, { status: number; message: string }> = {
@@ -257,7 +261,7 @@ teamCrudRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
 
   try {
     await teamService.deleteTeam(id, user)
-    res.json({ success: true, message: '团队删除成功' })
+    sendContractData(res, TeamContracts.delete, { message: '团队删除成功' })
   } catch (error) {
     if (error instanceof Error && error.message === 'HAS_OTHER_MEMBERS') {
       return res.status(400).json({
@@ -277,7 +281,8 @@ teamCrudRouter.post('/:id/leave', authenticate, asyncHandler(async (req, res) =>
 
   try {
     const result = await teamService.leaveTeam(id, user)
-    res.json({ success: true, message: result.message })
+    parseContractBody(TeamContracts.leave, req.body || {})
+    sendContractData(res, TeamContracts.leave, { message: result.message })
   } catch (error) {
     if (error instanceof Error && error.message === 'HAS_OTHER_MEMBERS') {
       return res.status(400).json({

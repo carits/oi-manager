@@ -24,5 +24,5 @@ export { TeamTransferModal } from './TeamTransferModal'
 export { TeamEditModal } from './TeamEditModal'
 
 // 类型重新导出
-export type { TeamDetail } from '@/hooks/data/useTeamDetail'
-export type { TeamPermission, UserType, MemberRole } from '@/hooks/useTeamPermission'
+export type { TeamDetail } from '../model/useTeamDetail'
+export type { TeamPermission, UserType, MemberRole } from '../model/useTeamPermission'

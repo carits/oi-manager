@@ -52,7 +52,7 @@ describe('human UX productization contract', () => {
   })
 
   it('treats a team as an activity container instead of another workspace', () => {
-    const source = read('./team/TeamDetailPage.tsx')
+    const source = read('../features/team/ui/TeamDetailPage.tsx')
     expect(source).toContain('<TeamActivityOverview')
     expect(source).toContain('<TeamMemberList')
     expect(source).not.toContain('TeamProblemListsTab')
@@ -90,7 +90,7 @@ describe('human UX productization contract', () => {
   it('makes school training targets explicit and keeps team navigation canonical', () => {
     const training = read('../features/training-session/ui/TrainingSessionListPage.tsx')
     const contests = read('./organization-pages/teacher/contests/page.tsx')
-    const activities = read('./team/TeamActivityOverview.tsx')
+    const activities = read('../features/team/ui/TeamActivityOverview.tsx')
     expect(training).toContain('团队（推荐）')
     expect(training).toContain('自定义学生')
     expect(training).toContain('全校学生')

@@ -8,23 +8,12 @@ import { DetailDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
+import { cancelTeamInvite, listPendingTeamInvites } from '@/features/team'
+import type { TeamPendingInvite } from '@oi-manager/contracts'
 import { UserIdentityLink } from '@/features/user-profile'
 import styles from './Team.module.css'
 
-interface PendingInvite {
-  id: string
-  type: 'student' | 'teacher' | 'user'
-  role: 'admin' | 'member'
-  invitedAt: string
-  invitedByName: string
-  user: {
-    id: string
-    name: string
-    username?: string
-    avatar?: string | null
-  }
-}
+type PendingInvite = TeamPendingInvite
 
 interface TeamInviteListModalProps {
   isOpen: boolean
@@ -60,10 +49,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
   const fetchInviteList = async () => {
     try {
       setLoading(true)
-      const result = await apiClient.get<PendingInvite[]>(`/api/teams/${teamId}/pending-invites`)
-      if (result.success && result.data) {
-        setPendingInvites(result.data || [])
-      }
+      setPendingInvites(await listPendingTeamInvites(teamId))
     } catch (error) {
       console.error('Failed to fetch invite list:', error)
       setPendingInvites([])
@@ -81,11 +67,11 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
     if (!cancelTarget) return
 
     try {
-      const result = await apiClient.delete(`/api/teams/${teamId}/invites/${cancelTarget.id}`)
-      if (result.success) {
+      const result = await cancelTeamInvite(teamId, cancelTarget.id)
+      if (result.ok) {
         void fetchInviteList()
       } else {
-        toast.error(result.message || '取消失败')
+        toast.error(result.error.message || '取消失败')
       }
     } catch (error) {
       console.error('Cancel invite error:', error)

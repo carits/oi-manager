@@ -5,9 +5,18 @@ import unifiedStyles from './TeamDetailPage.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/features/auth'
-import apiClient from '@/lib/apiClient'
-import { useTeamPermission, type UserType } from '@/hooks/useTeamPermission'
-import { useTeamDetail } from '@/hooks/data/useTeamDetail'
+import {
+  decideTeamJoinRequest,
+  leaveTeam,
+  listPendingTeamInvites,
+  removeTeamMember,
+  requestToJoinTeam,
+  setTeamAdmin,
+  updateTeamAnnouncement,
+  useTeamDetail,
+  useTeamPermission,
+  type UserType,
+} from '@/features/team'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import { TeamMemberList } from './TeamMemberList'
@@ -108,10 +117,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
 
   const fetchPendingInviteCount = async () => {
     try {
-      const result = await apiClient.get<{ length: number }[]>(`/api/teams/${teamId}/pending-invites`)
-      if (result.success && result.data) {
-        setPendingInviteCount(result.data.length || 0)
-      }
+      setPendingInviteCount((await listPendingTeamInvites(teamId)).length)
     } catch (error) {
       console.error('Failed to fetch pending invites:', error)
     }
@@ -132,14 +138,12 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
     if (!team) return
     try {
       setSavingAnnouncement(true)
-      const result = await apiClient.put(`/api/teams/${teamId}/announcement`, {
-        announcement: announcementText
-      })
-      if (result.success) {
+      const result = await updateTeamAnnouncement(teamId, announcementText)
+      if (result.ok) {
         setEditingAnnouncement(false)
         refetch()
       } else {
-        toast.error(result.message || '保存失败')
+        toast.error(result.error.message || '保存失败')
       }
     } catch (error) {
       toast.error('保存失败')
@@ -164,13 +168,13 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
 
     try {
       setLeaving(true)
-      const result = await apiClient.post(`/api/teams/${teamId}/leave`)
-      if (result.success) {
+      const result = await leaveTeam(teamId)
+      if (result.ok) {
         router.push(basePath)
       } else {
         setShowLeaveConfirm(false)
         // 显示错误提示
-        setTimeout(() => toast.error(result.message || '退出失败'), 100)
+        setTimeout(() => toast.error(result.error.message || '退出失败'), 100)
       }
     } catch (error) {
       console.error('Leave team error:', error)
@@ -192,11 +196,11 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
     if (!removeTarget) return
 
     try {
-      const result = await apiClient.delete(`/api/teams/${teamId}/members/${removeTarget.id}?memberType=${removeTarget.userType}`)
-      if (result.success) {
+      const result = await removeTeamMember(teamId, removeTarget.id, removeTarget.userType)
+      if (result.ok) {
         refetch()
       } else {
-        toast.error(result.message || '移除失败')
+        toast.error(result.error.message || '移除失败')
       }
     } catch (error) {
       console.error('Remove member error:', error)
@@ -218,17 +222,14 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
     if (!setAdminTarget) return
 
     try {
-      const result = await apiClient.post(`/api/teams/${teamId}/admins`, {
-        memberId: setAdminTarget.id,
-        memberType: setAdminTarget.userType
-      })
-      if (result.success) {
+      const result = await setTeamAdmin(teamId, setAdminTarget.id, setAdminTarget.userType)
+      if (result.ok) {
         toast.success('已设置为管理员')
         refetch()
         setShowSetAdminConfirm(false)
         setSetAdminTarget(null)
       } else {
-        toast.error(result.message || '设置失败')
+        toast.error(result.error.message || '设置失败')
       }
     } catch (error) {
       console.error('Set admin error:', error)
@@ -272,12 +273,12 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
   // 申请处理
   const handleApproveRequest = useCallback(async (requestId: string) => {
     try {
-      const result = await apiClient.post(`/api/teams/join-requests/${requestId}/approve`)
-      if (result.success) {
+      const result = await decideTeamJoinRequest(requestId, 'approve')
+      if (result.ok) {
         fetchJoinRequests()
         refetch()
       } else {
-        toast.error(result.message || '操作失败')
+        toast.error(result.error.message || '操作失败')
       }
     } catch (error) {
       console.error('Approve request error:', error)
@@ -287,11 +288,11 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
 
   const handleRejectRequest = useCallback(async (requestId: string) => {
     try {
-      const result = await apiClient.post(`/api/teams/join-requests/${requestId}/reject`)
-      if (result.success) {
+      const result = await decideTeamJoinRequest(requestId, 'reject')
+      if (result.ok) {
         fetchJoinRequests()
       } else {
-        toast.error(result.message || '操作失败')
+        toast.error(result.error.message || '操作失败')
       }
     } catch (error) {
       console.error('Reject request error:', error)
@@ -304,14 +305,12 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
     if (!team) return
     try {
       setApplying(true)
-      const result = await apiClient.post(`/api/teams/${teamId}/join-request`, {
-        message: '我想加入这个团队'
-      })
-      if (result.success) {
+      const result = await requestToJoinTeam(teamId, '我想加入这个团队')
+      if (result.ok) {
         toast.success('申请已提交')
         refetch()
       } else {
-        toast.error(result.message || '申请失败')
+        toast.error(result.error.message || '申请失败')
       }
     } catch (error) {
       toast.error('申请失败')
