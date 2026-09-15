@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-15
 
+### Notification Feature Slice 与共享 API Contract 收口
+
+- 通知铃铛与账号消息中心迁入 `features/notification/{api,ui}`；App Shell 和账号 Route 只使用 Feature 公共入口，通知页面不再自行声明 DTO 或直接调用通用 API Client。
+- 新增 Notification Runtime Contract，覆盖上下文/账号通知列表、筛选分页、单条已读和全部已读；邀请动作使用显式账号或组织 Client，已删除旧 Workspace 邀请 fallback。
+- 隔离测试入口默认环境改为 systemd API 实际使用的 `.env`，避免过期 `.env.production` 凭据使生产同构测试在用例前失败；调用方仍可显式传入其他环境文件。
+- Web 39 文件 175 项、通知/组织/Contract 隔离套件 3 文件 25/25、类型、生产构建及架构门禁通过。门禁提升为 13 个 Contract 文件、11 个 Feature Slice、51 条契约边界且 0 违规。提交 `1a40442`、`1c418cd` 已推送 `main`；API 3303→3302，Web BUILD_ID `npRC-l14YqBfe2ti1s6si` 经 canary 与正式消息闭环（序号 186–189）后提升，线上通知读取返回 200。本批无 Prisma 或业务数据迁移。
+
 ### Organization Account Feature Slice 与共享 API Contract 收口
 
 - 个人组织目录、我的组织、加入申请、邀请处理及组织创建申请迁入 `features/organization-account/{api,ui}`；个人组织页面只从 Feature 公共入口装配，不再直接维护请求 DTO 和账号级请求细节。
