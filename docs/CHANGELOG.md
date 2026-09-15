@@ -13,7 +13,7 @@ source_of_truth: Git history
 
 - 数据市场 UI 与策略迁入 `features/data-market/{api,model,ui}`，核心商品、购买、授权、升级、清单和质量事故请求统一经 Feature API；旧 `components/data-market` 已删除。
 - 新增 Data Market Runtime Contract，并在 Server Route 执行同一请求/响应校验；精确价格伪造和不支持交付物仍由业务服务拒绝，未被通用契约错误覆盖。
-- Web 39 文件 179 项、生产同构 Data Market/Contract 3 文件 23/23、生产构建和架构门禁通过；门禁现为 16 个 Contract 文件、16 个 Feature Slice、73 条契约边界且 0 违规。提交 `08097d1`、`2d4aba9` 已推送 `main`。
+- Web 39 文件 179 项、生产同构 Data Market/Contract 3 文件 23/23、生产构建和架构门禁通过；门禁现为 16 个 Contract 文件、16 个 Feature Slice、73 条契约边界且 0 违规。提交至 `95b70e7` 已推送 `main`；API 3302→3303，Web BUILD_ID `o_5Sa_ZUj1qiAF4noNJ_w` 经 canary 与正式消息闭环（序号 206–209）后提升。
 
 ### Team Feature Slice 与共享 API Contract 收口
 
