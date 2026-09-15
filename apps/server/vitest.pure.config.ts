@@ -9,6 +9,7 @@ export default defineConfig({
       'tests/solution-similarity.test.ts',
       'tests/contest-scoring-rules.test.ts',
       'tests/authorization-boundary.test.ts',
+      'tests/api-contract-layer.test.ts',
     ],
   },
 })

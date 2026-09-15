@@ -17,7 +17,9 @@ const contractFiles = [
   'packages/contracts/src/assignment.ts',
   'packages/contracts/src/blog.ts',
   'packages/contracts/src/chat.ts',
+  'packages/contracts/src/carits.ts',
   'packages/contracts/src/data-market.ts',
+  'packages/contracts/src/evaluation-credits.ts',
   'packages/contracts/src/rating.ts',
   'packages/contracts/src/solution-review.ts',
   'packages/contracts/src/team.ts',
@@ -63,6 +65,9 @@ const slices = [
   { name: 'user-profile', legacyDirectory: 'profile', allowedAnyTokens: 0 },
   { name: 'team', legacyDirectory: 'team', allowedAnyTokens: 0 },
   { name: 'data-market', legacyDirectory: 'data-market', allowedAnyTokens: 0 },
+  { name: 'carits', legacyDirectory: null, allowedAnyTokens: 0 },
+  { name: 'evaluation-credits', legacyDirectory: null, allowedAnyTokens: 0 },
+  { name: 'account-wallet', legacyDirectory: 'wallet', allowedAnyTokens: 0 },
   // These three slices physically absorb the pre-existing UI in this rollout.
   // Migrated slices are held to the same zero-any boundary as the original slices.
   { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
@@ -115,6 +120,8 @@ const contractedBoundaries = [
   ['apps/server/src/modules/team/team.requests.routes.ts', 'TeamContracts'],
   ['apps/server/src/modules/team/team.invitations.routes.ts', 'TeamContracts'],
   ['apps/server/src/modules/data-market/data-market.routes.ts', 'DataMarketContracts'],
+  ['apps/server/src/modules/carits/carits.routes.ts', 'CaritsContracts'],
+  ['apps/server/src/modules/carits/resource.routes.ts', 'EvaluationCreditContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
   ['apps/web/src/features/blog/ui/BlogDiscoveryDetail.tsx', 'getBlogDiscovery'],
@@ -165,6 +172,10 @@ const contractedBoundaries = [
   ['apps/web/src/features/team/ui/TeamInviteModal.tsx', 'inviteTeamMembers'],
   ['apps/web/src/features/data-market/api/dataMarketApi.ts', 'DataMarketContracts'],
   ['apps/web/src/features/data-market/ui/DataMarketplace.tsx', 'listDataProducts'],
+  ['apps/web/src/features/carits/api/caritsApi.ts', 'CaritsContracts'],
+  ['apps/web/src/features/evaluation-credits/api/evaluationCreditsApi.ts', 'EvaluationCreditContracts'],
+  ['apps/web/src/features/account-wallet/ui/WalletPage.tsx', 'getPersonalCaritsTransactions'],
+  ['apps/web/src/features/account-wallet/ui/WalletPage.tsx', 'getEvaluationCreditOverview'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
@@ -182,10 +193,10 @@ collect(path.join(root, 'apps/web/src/app'))
 for (const file of appFiles) {
   const source = fs.readFileSync(file, 'utf8')
   const relative = path.relative(root, file).replaceAll('\\', '/')
-  if (/from ['"]@\/components\/(?:assignment|blog|chat|data-market|submission|problem|team|training|training-engine)\//.test(source)) {
+  if (/from ['"]@\/components\/(?:assignment|blog|chat|data-market|wallet|submission|problem|team|training|training-engine)\//.test(source)) {
     failures.push(`${relative} bypasses a feature public API`)
   }
-  if (/from ['"]@\/features\/(?:assignment|auth|user-profile|blog|chat|data-market|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|team|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
+  if (/from ['"]@\/features\/(?:assignment|auth|user-profile|blog|chat|data-market|carits|evaluation-credits|account-wallet|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|team|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
 }

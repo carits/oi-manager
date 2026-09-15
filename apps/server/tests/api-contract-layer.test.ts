@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, AuthContracts, ChatContracts, DataMarketContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -96,6 +96,40 @@ describe('shared API contract adapter', () => {
       revisionId: 'revision-1', severity: 'MAJOR', type: '答案错误',
       description: '该版本包含可以稳定复现的错误答案数据。',
     }).severity).toBe('MAJOR')
+  })
+
+  it('keeps Carits ledger values separate from Evaluation Credit resource contracts', () => {
+    const purchase = parseContractBody(EvaluationCreditContracts.purchase, {
+      packageCode: 'EVAL_5K', userId: 'ignored-by-authenticated-service',
+    })
+    expect(purchase).toEqual({ packageCode: 'EVAL_5K', userId: 'ignored-by-authenticated-service' })
+    expect(() => parseContractBody(EvaluationCreditContracts.purchase, { packageCode: '' }))
+      .toThrowError(ApiContractError)
+
+    const accountResponse = responseStub()
+    sendContractData(accountResponse.response, CaritsContracts.personalTransactions, {
+      currency: 'Carits币', accountStatus: 'active', accountId: 'account-1',
+      balance: '20', availableBalance: '20', debtBalance: '0',
+      createdAt: new Date('2026-09-15T00:00:00Z'), updatedAt: new Date('2026-09-15T00:00:00Z'),
+      items: [{ id: 'entry-1', type: 'contribution_reward', source: 'contribution_event', referenceId: null, amount: '20', balanceAfter: '20', createdAt: new Date('2026-09-15T00:00:00Z') }],
+    })
+    expect(accountResponse.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ balance: '20', items: [expect.objectContaining({ amount: '20' })] }),
+    }))
+
+    const creditResponse = responseStub()
+    sendContractData(creditResponse.response, EvaluationCreditContracts.overview, {
+      periodStart: new Date('2026-09-15T00:00:00Z'), resetsAt: new Date('2026-09-16T00:00:00Z'),
+      level: 'L1', contributionScore: 100, dailyLimit: 20_000,
+      free: { limit: 10_000, available: 9_000, reserved: 500, consumed: 500 },
+      purchased: { available: 5_000, reserved: 0, consumed: '0' },
+      today: { reserved: 500, consumed: 500 },
+      packages: [{ packageCode: 'EVAL_5K', carits: '10', credits: 5_000, exchangeRate: 500, policyCode: 'evaluation_credit_exchange', policyVersion: 1 }],
+      recentPurchases: [],
+    })
+    expect(creditResponse.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ dailyLimit: 20_000, purchased: expect.objectContaining({ available: 5_000 }) }),
+    }))
   })
 
   it('serializes only data that satisfies the shared response schema', () => {

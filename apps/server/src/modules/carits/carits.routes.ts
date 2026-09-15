@@ -1,5 +1,7 @@
 import { Router, type Response } from 'express'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { CaritsContracts } from '@oi-manager/contracts'
+import { sendContractData } from '../../lib/api-contract'
 import type { AuthRequest } from '../../middleware/auth'
 import { isPlatformAdministrator } from '../featureAvailability'
 import {
@@ -24,30 +26,24 @@ function caritsEndpoint(handler: (req: AuthRequest, res: Response) => Promise<un
 }
 
 caritsRouter.get('/me', caritsEndpoint(async (req, res) => {
-  res.json({ success: true, data: await getPersonalCaritsAccount(req.user!.userId) })
+  sendContractData(res, CaritsContracts.personalAccount, await getPersonalCaritsAccount(req.user!.userId))
 }))
 
 caritsRouter.get('/me/transactions', caritsEndpoint(async (req, res) => {
-  res.json({ success: true, data: await getPersonalCaritsAccount(req.user!.userId, true) })
+  sendContractData(res, CaritsContracts.personalTransactions, await getPersonalCaritsAccount(req.user!.userId, true))
 }))
 
 caritsRouter.get('/organizations/:organizationId', caritsEndpoint(async (req, res) => {
-  res.json({
-    success: true,
-    data: await getOrganizationCaritsAccount(req.user!.userId, req.params.organizationId),
-  })
+  sendContractData(res, CaritsContracts.organizationAccount, await getOrganizationCaritsAccount(req.user!.userId, req.params.organizationId))
 }))
 
 caritsRouter.get('/organizations/:organizationId/transactions', caritsEndpoint(async (req, res) => {
-  res.json({
-    success: true,
-    data: await getOrganizationCaritsAccount(req.user!.userId, req.params.organizationId, true),
-  })
+  sendContractData(res, CaritsContracts.organizationTransactions, await getOrganizationCaritsAccount(req.user!.userId, req.params.organizationId, true))
 }))
 
 caritsRouter.get('/platform', caritsEndpoint(async (req, res) => {
   if (!isPlatformAdministrator(req.user)) {
     return res.status(403).json({ success: false, message: '仅平台管理员可查看 Carits币审计入口' })
   }
-  res.json({ success: true, data: await listPlatformCaritsAccounts() })
+  sendContractData(res, CaritsContracts.platformAudit, await listPlatformCaritsAccounts())
 }))

@@ -16,8 +16,10 @@ import { Button } from "@/components/ui/Button";
 import { FormDialog } from "@/components/ui/Dialogs";
 import { Select } from "@/components/ui/FormControls";
 import { useToast } from "@/components/ui/Toast";
-import { apiClient } from "@/lib/apiClient";
 import { createClientUUID } from "@/lib/uuid";
+import type { CaritsAccount, EvaluationCreditOverview } from "@oi-manager/contracts";
+import { getOrganizationCaritsTransactions, getPersonalCaritsTransactions } from "@/features/carits";
+import { getEvaluationCreditOverview, purchaseEvaluationCreditPackage } from "@/features/evaluation-credits";
 import styles from "./WalletPage.module.css";
 import {
   canAffordCarits,
@@ -27,64 +29,18 @@ import {
   walletTransactionTypeLabel,
 } from "./wallet-display";
 
-interface WalletEntry {
-  id: string;
-  type: string;
-  source: string;
-  amount: string;
-  balanceAfter: string;
-  createdAt: string;
-}
-interface WalletData {
-  currency: string;
-  accountStatus: "active" | "empty";
-  balance?: string;
-  availableBalance?: string;
-  debtBalance?: string;
-  items: WalletEntry[];
-}
-interface Package {
-  packageCode: string;
-  carits: string;
-  credits: number;
-}
-interface RecentPurchase {
-  id: string;
-  packageCode: string;
-  caritsAmount: string;
-  evaluationCredits: number;
-  status: string;
-  createdAt: string;
-}
-interface EvaluationData {
-  level: string;
-  contributionScore: number;
-  dailyLimit: number;
-  resetsAt: string;
-  free: {
-    limit: number;
-    available: number;
-    reserved: number;
-    consumed: number;
-  };
-  purchased: { available: number; reserved: number; consumed: string };
-  today: { reserved: number; consumed: number };
-  packages: Package[];
-  recentPurchases?: RecentPurchase[];
-}
-
 export function WalletPage({
   scope,
-  endpoint,
+  organizationId,
   embedded = false,
 }: {
   scope: "personal" | "organization";
-  endpoint: string;
+  organizationId?: string;
   embedded?: boolean;
 }) {
   const toast = useToast();
-  const [data, setData] = useState<WalletData | null>(null),
-    [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
+  const [data, setData] = useState<CaritsAccount | null>(null),
+    [evaluation, setEvaluation] = useState<EvaluationCreditOverview | null>(null);
   const [walletError, setWalletError] = useState(""),
     [evaluationError, setEvaluationError] = useState(""),
     [loading, setLoading] = useState(true),
@@ -96,26 +52,28 @@ export function WalletPage({
     setLoading(true);
     setWalletError("");
     setEvaluationError("");
-    const [wallet, credits] = await Promise.all([
-      apiClient.get<WalletData>(endpoint),
+    const [wallet, credits] = await Promise.allSettled([
       scope === "personal"
-        ? apiClient.get<EvaluationData>("/api/resources/evaluation-credits", {
-            accountScoped: true,
-          })
+        ? getPersonalCaritsTransactions()
+        : organizationId
+          ? getOrganizationCaritsTransactions(organizationId)
+          : Promise.reject(new Error("缺少组织上下文")),
+      scope === "personal"
+        ? getEvaluationCreditOverview()
         : Promise.resolve(null),
     ]);
-    if (wallet.success && wallet.data) setData(wallet.data);
+    if (wallet.status === "fulfilled") setData(wallet.value);
     else {
       setData(null);
-      setWalletError(wallet.message || "钱包信息加载失败");
+      setWalletError(wallet.reason instanceof Error ? wallet.reason.message : "钱包信息加载失败");
     }
-    if (credits?.success && credits.data) setEvaluation(credits.data);
+    if (credits.status === "fulfilled" && credits.value) setEvaluation(credits.value);
     else if (scope === "personal") {
       setEvaluation(null);
-      setEvaluationError(credits?.message || "评测额度加载失败");
+      setEvaluationError(credits.status === "rejected" && credits.reason instanceof Error ? credits.reason.message : "评测额度加载失败");
     }
     setLoading(false);
-  }, [endpoint, scope]);
+  }, [organizationId, scope]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -148,15 +106,8 @@ export function WalletPage({
     }
     setBuying(true);
     try {
-      const response = await apiClient.post(
-        "/api/resources/evaluation-credits/purchase",
-        { packageCode },
-        {
-          accountScoped: true,
-          headers: { "Idempotency-Key": purchaseRequestKey },
-        },
-      );
-      if (!response.success) return toast.error(response.message || "购买失败");
+      const response = await purchaseEvaluationCreditPackage({ packageCode }, purchaseRequestKey);
+      if (!response.ok) return toast.error(response.error.message);
       toast.success("评测额度已到账");
       setPurchaseOpen(false);
       setPurchaseRequestKey(createClientUUID());

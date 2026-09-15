@@ -7,6 +7,13 @@ source_of_truth: apps/web/src
 
 # 前端架构
 
+## 经济系统 Feature 边界
+
+- `features/carits` 只负责 Carits 双式账本读取与审计投影。
+- `features/evaluation-credits` 只负责评测资源额度、套餐和购买命令。
+- `features/account-wallet` 可以组合上述两个 Feature 的 UI，但不得定义新的“统一钱包”业务 DTO，也不得直接访问 API URL。
+- Route 与校园管理页面只从各 Feature 的根 `index.ts` 装配，禁止重新引入 `components/wallet`。
+
 ## 页面与布局
 
 页面位于 `apps/web/src/app`，按角色目录组织。每个角色 layout 使用 `RoleLayout`：

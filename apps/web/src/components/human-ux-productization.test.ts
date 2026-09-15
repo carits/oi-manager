@@ -148,7 +148,7 @@ describe('human UX productization contract', () => {
 
   it('uses school language in the school workspace and hides account internals', () => {
     const school = read('./organization-pages/teacher/school/components/HomeTab.tsx')
-    const wallet = read('./wallet/WalletPage.tsx')
+    const wallet = read('../features/account-wallet/ui/WalletPage.tsx')
     expect(school).toContain('学校资产')
     expect(school).not.toContain('组织钱包')
     expect(wallet).toContain('我的钱包与评测额度')

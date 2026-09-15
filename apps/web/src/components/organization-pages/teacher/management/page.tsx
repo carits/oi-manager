@@ -11,7 +11,7 @@ import { Empty } from '@/components/ui/Empty'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import StudentsManagementContent from '@/components/management/StudentsManagementContent'
 import TeachersManagementContent from '@/components/management/TeachersManagementContent'
-import { WalletPage } from '@/components/wallet/WalletPage'
+import { WalletPage } from '@/features/account-wallet'
 import { apiClient } from '@/lib/apiClient'
 import { JoinApplicationsManagement, OrganizationInvitationsManagement, OrganizationJoinSettings } from '@/components/organization/OrganizationJoinManagement'
 import styles from '@/components/ranking/RankingPage.module.css'
@@ -81,7 +81,7 @@ export default function CampusManagementPage() {
         {activeTab === 'applications' && organizationId && <JoinApplicationsManagement organizationId={organizationId} isPrincipal={isPrincipal} initialApplicationId={searchParams.get('applicationId')} onOpenSettings={() => setTab('settings')} />}
         {activeTab === 'invitations' && organizationId && <OrganizationInvitationsManagement organizationId={organizationId} isPrincipal={isPrincipal} />}
         {activeTab === 'settings' && organizationId && isPrincipal && <OrganizationJoinSettings organizationId={organizationId} />}
-        {activeTab === 'wallet' && organizationId && <WalletPage embedded scope="organization" endpoint={'/api/carits/organizations/' + organizationId + '/transactions'} />}
+        {activeTab === 'wallet' && organizationId && <WalletPage embedded scope="organization" organizationId={organizationId} />}
         {activeTab === 'wallet' && !organizationId && <Empty title="未找到学校" description="当前账号没有可访问的学校资产。" />}
       </div>
     </PageFrame>

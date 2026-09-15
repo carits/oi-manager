@@ -5,6 +5,14 @@ last_verified: 2026-09-15
 source_of_truth: Git history
 ---
 
+## 2026-09-15 — Carits 与 Evaluation Credits 契约/切片分离
+
+- 新增独立 `CaritsContracts` 与 `EvaluationCreditContracts`；Carits 使用精确整数账本字符串，Evaluation Credits 使用独立额度、预占、消耗和套餐结构，禁止在类型层混成通用 Wallet。
+- 个人/组织钱包与平台账本审计改由 Carits Feature API 访问；额度概览和兑换改由 Evaluation Credits Feature API 访问。
+- 组合页面迁入 `features/account-wallet`，删除旧 `components/wallet` 领域实现；页面不再声明后端 DTO、拼接业务 URL 或直接调用传输客户端。
+- Server 对钱包读取、平台审计、额度读取和兑换请求/响应执行共享 Runtime Schema；架构门禁新增三项 Feature Slice 与两项 Contract 文件。
+- 无数据库结构、账本余额、额度流水或历史业务数据修改。
+
 # 变更记录
 
 ## 2026-09-15

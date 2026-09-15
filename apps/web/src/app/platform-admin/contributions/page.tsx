@@ -19,6 +19,8 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { apiClient } from "@/lib/apiClient";
 import { useAuth } from "@/features/auth";
+import { getPlatformCaritsAudit } from "@/features/carits";
+import type { PlatformCarits } from "@oi-manager/contracts";
 import {
   candidateSourceLabel,
   contributionSourceLabel,
@@ -57,21 +59,6 @@ type Event = {
     attemptCount?: number;
     errorMessage?: string | null;
   } | null;
-};
-type Economy = {
-  summary: {
-    rewardedCarits: string;
-    rewardCount: number;
-    spentCarits: string;
-    purchasedCredits: number;
-    purchaseCount: number;
-  };
-  transactions: Array<{
-    id: string;
-    type: string;
-    postedAt: string;
-    entries: Array<{ amount: string; ownerLabel: string }>;
-  }>;
 };
 type AuditPage = {
   items: Event[];
@@ -113,7 +100,7 @@ export default function PlatformContributionPage() {
   const { user } = useAuth();
   const canDecide = user?.role === "super_admin";
   const [items, setItems] = useState<Event[]>([]),
-    [economy, setEconomy] = useState<Economy | null>(null),
+    [economy, setEconomy] = useState<PlatformCarits | null>(null),
     [status, setStatus] = useState(""),
     [page, setPage] = useState(1),
     [pageSize, setPageSize] = useState(20),
@@ -134,7 +121,7 @@ export default function PlatformContributionPage() {
     const sequence = ++requestSequence.current;
     setLoading(true);
     setLoadError("");
-    const [result, economyResult] = await Promise.all([
+    const [resultState, economyState] = await Promise.allSettled([
       apiClient.get<AuditPage>(
         `/api/platform/contributions?${new URLSearchParams({
           ...(status ? { status } : {}),
@@ -143,12 +130,11 @@ export default function PlatformContributionPage() {
         }).toString()}`,
         { accountScoped: true },
       ),
-      apiClient.get<Economy>("/api/carits/platform", {
-        accountScoped: true,
-      }),
+      getPlatformCaritsAudit(),
     ]);
     if (sequence !== requestSequence.current) return;
-    if (result.success && result.data) {
+    const result = resultState.status === "fulfilled" ? resultState.value : null;
+    if (result?.success && result.data) {
       setItems(result.data.items);
       setItemsLoaded(true);
       setTotal(result.data.total);
@@ -160,14 +146,14 @@ export default function PlatformContributionPage() {
       setTotal(0);
       setTotalPages(0);
       setPendingCount(null);
-      setLoadError(result.message || "贡献审计记录加载失败");
+      setLoadError(result?.message || (resultState.status === "rejected" && resultState.reason instanceof Error ? resultState.reason.message : "贡献审计记录加载失败"));
     }
-    if (economyResult.success && economyResult.data)
-      setEconomy(economyResult.data);
+    if (economyState.status === "fulfilled")
+      setEconomy(economyState.value);
     else {
       setEconomy(null);
       setLoadError((current) =>
-        [current, economyResult.message || "Carits 账本摘要加载失败"]
+        [current, economyState.reason instanceof Error ? economyState.reason.message : "Carits 账本摘要加载失败"]
           .filter(Boolean)
           .join("；"),
       );
@@ -347,7 +333,7 @@ export default function PlatformContributionPage() {
                 {(economy?.transactions || []).map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
-                      {new Date(item.postedAt).toLocaleString("zh-CN")}
+                      {item.postedAt ? new Date(item.postedAt).toLocaleString("zh-CN") : "—"}
                     </TableCell>
                     <TableCell>{contributionTypeLabel(item.type)}</TableCell>
                     <TableCell>
