@@ -12,6 +12,7 @@ const contractFiles = [
   'packages/contracts/src/health.ts',
   'packages/contracts/src/identity.ts',
   'packages/contracts/src/organization.ts',
+  'packages/contracts/src/notification.ts',
   'packages/contracts/src/problem.ts',
   'packages/contracts/src/assignment.ts',
   'packages/contracts/src/blog.ts',
@@ -53,6 +54,7 @@ const slices = [
   { name: 'submission', legacyDirectory: 'submission', allowedAnyTokens: 0 },
   { name: 'chat', legacyDirectory: 'chat', allowedAnyTokens: 0 },
   { name: 'organization-account', legacyDirectory: 'organization-account', allowedAnyTokens: 0 },
+  { name: 'notification', legacyDirectory: 'notification', allowedAnyTokens: 0 },
   // These three slices physically absorb the pre-existing UI in this rollout.
   // Migrated slices are held to the same zero-any boundary as the original slices.
   { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
@@ -85,6 +87,7 @@ const contractedBoundaries = [
   ['apps/server/src/modules/chat/chat.routes.ts', 'ChatContracts'],
   ['apps/server/src/modules/organization-join/organization-join.routes.ts', 'OrganizationContracts'],
   ['apps/server/src/modules/organization-creation/organization-creation.routes.ts', 'OrganizationContracts'],
+  ['apps/server/src/modules/notification/notification.routes.ts', 'NotificationContracts'],
   ['apps/server/src/routes/testdata.ts', 'ProblemContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
@@ -119,6 +122,9 @@ const contractedBoundaries = [
   ['apps/web/src/features/organization-account/ui/PersonalOrganizationsPage.tsx', 'getMyOrganizations'],
   ['apps/web/src/features/organization-account/ui/PersonalOrganizationsPage.tsx', 'createOrganizationJoinApplication'],
   ['apps/web/src/features/organization-account/ui/PersonalOrganizationsPage.tsx', 'createOrganizationApplication'],
+  ['apps/web/src/features/notification/api/notificationApi.ts', 'NotificationContracts'],
+  ['apps/web/src/features/notification/ui/NotificationBell.tsx', 'listContextNotifications'],
+  ['apps/web/src/features/notification/ui/NotificationCenterPage.tsx', 'listAccountNotifications'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
@@ -139,7 +145,7 @@ for (const file of appFiles) {
   if (/from ['"]@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//.test(source)) {
     failures.push(`${relative} bypasses a feature public API`)
   }
-  if (/from ['"]@\/features\/(?:assignment|blog|chat|organization-account|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
+  if (/from ['"]@\/features\/(?:assignment|blog|chat|organization-account|notification|contest-rating|solution-review|submission|problem|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
 }

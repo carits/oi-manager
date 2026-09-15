@@ -6,6 +6,8 @@ import {
   ChatContracts,
   ChatMessagePageSchema,
   MyOrganizationsSchema,
+  NotificationContracts,
+  NotificationPageSchema,
   OrganizationContracts,
   OrganizationDirectoryPageSchema,
   ContestRatingDataSchema,
@@ -300,14 +302,29 @@ describe('feature slice contracts', () => {
     }).success).toBe(true)
   })
 
+  it('shares notification pagination, actions and ISO dates', () => {
+    const page = NotificationPageSchema.parse({
+      notifications: [{
+        id: 'notification-1', type: 'organization_invitation', title: '学校邀请', body: '邀请你加入学校',
+        sourceType: 'organization_invitation', sourceId: 'invitation-1', actionable: true,
+        actions: [{ key: 'accept', label: '接受', style: 'primary' }], createdAt: new Date('2026-09-15T00:00:00Z'),
+      }],
+      unreadCount: 1, page: 1, pageSize: 20, hasMore: false,
+    })
+    expect(page.notifications[0].createdAt).toBe('2026-09-15T00:00:00.000Z')
+    expect(NotificationContracts.list.query.safeParse({ page: '1', pageSize: '51' }).success).toBe(false)
+  })
+
   it('routes pages through feature public APIs instead of component internals', () => {
     const page = fs.readFileSync(new URL('../app/blog/page.tsx', import.meta.url), 'utf8')
     const messages = fs.readFileSync(new URL('../app/account/messages/page.tsx', import.meta.url), 'utf8')
     const organizations = fs.readFileSync(new URL('../app/personal/organizations/page.tsx', import.meta.url), 'utf8')
+    const notifications = fs.readFileSync(new URL('../app/account/notifications/page.tsx', import.meta.url), 'utf8')
     const organization = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/[...segments]/page.tsx', import.meta.url), 'utf8')
     expect(page).toContain("from '@/features/blog'")
     expect(messages).toContain("from '@/features/chat'")
     expect(organizations).toContain("from '@/features/organization-account'")
+    expect(notifications).toContain("from '@/features/notification'")
     expect(organization).toContain("from '@/features/assignment'")
     expect(organization).toContain("from '@/features/training-session/TrainingSessionWorkspace'")
     expect(organization).not.toMatch(/@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//)

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, ChatContracts, OrganizationContracts, ProblemContracts, TrainingContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, ChatContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TrainingContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -236,6 +236,25 @@ describe('shared API contract adapter', () => {
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ memberships: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })] }),
+    }))
+  })
+
+  it('guards notification queries and serializes notification dates', () => {
+    expect(parseContractQuery(NotificationContracts.list, {
+      page: '2', pageSize: '50', filter: 'unread', view: 'account',
+    })).toEqual({ page: 2, pageSize: 50, filter: 'unread', view: 'account' })
+    expect(() => parseContractQuery(NotificationContracts.list, { pageSize: '51' })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, NotificationContracts.list, {
+      notifications: [{
+        id: 'notification-1', type: 'account', title: '通知', body: '正文', sourceType: 'test', sourceId: 'source-1',
+        actionable: false, actions: [], readAt: null, createdAt: new Date('2026-09-15T00:00:00Z'),
+      }],
+      unreadCount: 1, page: 1, pageSize: 20, hasMore: false,
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ notifications: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })] }),
     }))
   })
 })

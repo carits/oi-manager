@@ -3,30 +3,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bell, UserPlus } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
+import type { UserNotification } from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
-import { apiClient } from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
 import { resolveNotificationHref } from '@/components/workspace/workspaceRouting'
 import { resolveNavigationContext } from '@/lib/navigationContext'
+import {
+  listContextNotifications,
+  readAllContextNotifications,
+  readContextNotification,
+  respondToNotification,
+} from '../api/notificationApi'
 import styles from '@/components/AppShell.module.css'
-
-export interface UserNotification {
-  id: string
-  type: string
-  title: string
-  body: string
-  href?: string | null
-  sourceType: string
-  sourceId: string
-  organizationId?: string | null
-  organizationName?: string | null
-  actionable: boolean
-  actions?: Array<{ key: string; label: string; style: string }>
-  readAt?: string | null
-  createdAt: string
-}
-
-type NotificationPayload = { notifications: UserNotification[]; unreadCount: number }
 
 export function NotificationBell() {
   const pathname = usePathname(), router = useRouter(), { user } = useAuth()
@@ -41,9 +29,12 @@ export function NotificationBell() {
   const rootRef = useRef<HTMLDivElement>(null)
 
   const load = async () => {
-    const response = await apiClient.get<NotificationPayload>('/api/notifications?pageSize=10')
-    if (response.success && response.data) { setNotifications(response.data.notifications); setUnreadCount(response.data.unreadCount); setError('') }
-    else setError(response.message || '通知加载失败')
+    try {
+      const data = await listContextNotifications(10)
+      setNotifications(data.notifications); setUnreadCount(data.unreadCount); setError('')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '通知加载失败')
+    }
   }
   useEffect(() => {
     if (!user) return
@@ -61,8 +52,8 @@ export function NotificationBell() {
   }, [])
 
   const markRead = async (id: string) => {
-    const response = await apiClient.patch<{ unreadCount: number }>(`/api/notifications/${id}/read`)
-    if (response.success) { setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: item.readAt || new Date().toISOString() } : item)); if (response.data) setUnreadCount(response.data.unreadCount) }
+    const response = await readContextNotification(id)
+    if (response.ok) { setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: item.readAt || new Date().toISOString() } : item)); setUnreadCount(response.data.unreadCount) }
   }
   const openNotification = async (notification: UserNotification) => {
     await markRead(notification.id)
@@ -72,25 +63,16 @@ export function NotificationBell() {
   const act = async (notification: UserNotification, action: string) => {
     if (action === 'view') return openNotification(notification)
     setProcessingId(notification.id)
-    let endpoint = notification.type === 'organization_invitation'
-      ? `/api/organization-invitations/${notification.sourceId}/${action}`
-      : notification.type === 'team_invitation'
-        ? `/api/teams/invitations/${notification.sourceId}/${action === 'decline' ? 'reject' : action}`
-        : `/api/teams/join-requests/${notification.sourceId}/${action}`
-    let response = await apiClient.post(endpoint)
-    if (!response.success && response.status === 404 && notification.type === 'organization_invitation') {
-      endpoint = `/api/workspaces/organization-invitations/${notification.sourceId}/${action === 'decline' ? 'reject' : action}`
-      response = await apiClient.post(endpoint)
-    }
+    const response = await respondToNotification(notification, action)
     setProcessingId(null)
-    if (response.success || response.code?.includes('ALREADY_PROCESSED')) await load()
-    else setError(response.message || '操作失败，请重试')
+    if (response.ok || (!response.ok && response.error.code?.includes('ALREADY_PROCESSED'))) await load()
+    else if (!response.ok) setError(response.error.message || '操作失败，请重试')
   }
 
   return <div className={styles.notificationRoot} ref={rootRef}>
     <Button variant="ghost" type="button" className={styles.notificationButton} onClick={() => setOpen(current => !current)} aria-expanded={open} aria-haspopup="true" aria-label={unreadCount ? `打开通知，${unreadCount} 条未读` : '打开通知'} title="通知"><Bell size={20} aria-hidden="true" />{unreadCount > 0 && <span className={styles.notificationBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</Button>
     {open && <div className={styles.notificationPanel} role="region" aria-label="通知">
-      <div className={styles.notificationHeader}><strong>通知</strong><Button variant="ghost" type="button" className={styles.readAllButton} disabled={!unreadCount} onClick={async () => { const response = await apiClient.post('/api/notifications/read-all'); if (response.success) await load(); else setError(response.message || '全部已读失败，请重试') }}>全部已读</Button></div>
+      <div className={styles.notificationHeader}><strong>通知</strong><Button variant="ghost" type="button" className={styles.readAllButton} disabled={!unreadCount} onClick={async () => { const response = await readAllContextNotifications(); if (response.ok) await load(); else setError(response.error.message || '全部已读失败，请重试') }}>全部已读</Button></div>
       <div className={styles.notificationList}>{error && <p className={styles.notificationError} role="status">{error}</p>}{!error && notifications.length === 0 && <p className={styles.notificationEmpty}>暂时没有新通知</p>}{notifications.map(notification => <article key={notification.id} className={`${styles.notificationItem} ${!notification.readAt ? styles.notificationUnread : ''}`}>
         <Button variant="ghost" type="button" className={styles.notificationContent} onClick={() => void openNotification(notification)}><span className={styles.notificationIcon} aria-hidden="true">{notification.type.includes('join_application') ? <UserPlus size={17} /> : <Bell size={17} />}</span><span className={styles.notificationText}><strong>{notification.title}</strong><span>{notification.body}</span><time>{new Date(notification.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></span>{!notification.readAt && <span className={styles.unreadDot} aria-label="未读" />}</Button>
         {notification.actionable && <div className={styles.notificationActions}>{(notification.actions || []).map(action => <Button key={action.key} variant="ghost" type="button" className={action.style === 'primary' ? styles.primaryAction : styles.secondaryAction} disabled={processingId === notification.id} onClick={() => void act(notification, action.key)}>{action.label}</Button>)}</div>}

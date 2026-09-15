@@ -11,7 +11,7 @@ import { getSidebarNavigationPreference, setSidebarNavigationOpen } from '@/lib/
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import { SessionUnavailable } from './SessionUnavailable'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
-import { NotificationBell } from '@/components/notification/NotificationBell'
+import { NotificationBell } from '@/features/notification'
 import { ChatButton } from '@/features/chat'
 import { UserAvatar } from '@/components/user/UserAvatar'
 import styles from './AppShell.module.css'

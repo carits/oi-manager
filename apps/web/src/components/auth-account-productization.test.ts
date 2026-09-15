@@ -29,8 +29,11 @@ describe('account and authentication productization', () => {
   })
 
   it('uses the full account notification view and displays its school source', () => {
-    const source = read('../app/account/notifications/page.tsx')
-    expect(source).toContain('view=account')
+    const route = read('../app/account/notifications/page.tsx')
+    const api = read('../features/notification/api/notificationApi.ts')
+    const source = read('../features/notification/ui/NotificationCenterPage.tsx')
+    expect(route).toContain("from '@/features/notification'")
+    expect(api).toContain("view: 'account'")
     expect(source).toContain('所有已加入学校')
     expect(source).toContain('来源学校：')
   })
