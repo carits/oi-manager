@@ -9,6 +9,12 @@ source_of_truth: Git history
 
 ## 2026-09-15
 
+### Data Market Feature Slice 与共享 API Contract 收口
+
+- 数据市场 UI 与策略迁入 `features/data-market/{api,model,ui}`，核心商品、购买、授权、升级、清单和质量事故请求统一经 Feature API；旧 `components/data-market` 已删除。
+- 新增 Data Market Runtime Contract，并在 Server Route 执行同一请求/响应校验；精确价格伪造和不支持交付物仍由业务服务拒绝，未被通用契约错误覆盖。
+- Web 39 文件 179 项、生产同构 Data Market/Contract 3 文件 23/23、生产构建和架构门禁通过；门禁现为 16 个 Contract 文件、16 个 Feature Slice、73 条契约边界且 0 违规。提交 `08097d1`、`2d4aba9` 已推送 `main`。
+
 ### Team Feature Slice 与共享 API Contract 收口
 
 - Team 列表、详情、创建、编辑、公告、成员、邀请、加入申请、离队和负责人转移迁入 `features/team/{api,model,ui}`；页面及跨域消费者只使用 Team 公共入口，旧 Team 领域组件与数据 Hook 目录已移除。
