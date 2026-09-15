@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-15
 
+### Organization Account Feature Slice 与共享 API Contract 收口
+
+- 个人组织目录、我的组织、加入申请、邀请处理及组织创建申请迁入 `features/organization-account/{api,ui}`；个人组织页面只从 Feature 公共入口装配，不再直接维护请求 DTO 和账号级请求细节。
+- 新增 Organization Runtime Contract，Server 请求/响应与 Web 成功响应共同 fail closed 校验；学生和教师加入申请省略关系类型的旧客户端行为分别规范为 `enrolled` 与 `employee`，保持既有 API 兼容。
+- 生产同构隔离库首次运行捕获上述默认关系契约偏差，修复后 Organization/Contract 套件 4 文件 27/27；Web 39 文件 174 项、Contracts/Server/Web 类型、生产构建和架构门禁通过。
+- 架构门禁提升为 12 个 Contract 文件、10 个 Feature Slice、47 条契约边界且 0 违规。提交 `fad5679`、`bdf1b65` 已推送 `main`；API 3302→3303，Web BUILD_ID `o_VJFJoQBjltPKF_ULrmG` 经 canary 与正式消息闭环（序号 182–185）后提升。本批无 Prisma 或业务数据迁移。
+
 ### Chat Feature Slice 与共享 API Contract 收口
 
 - 账号聊天迁入独立 Feature Slice；App Route、页头按钮、Provider 和举报页仅使用公共入口，核心 JSON 请求统一由 Chat Feature API 发起。
