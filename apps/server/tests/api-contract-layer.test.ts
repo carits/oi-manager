@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -129,6 +129,34 @@ describe('shared API contract adapter', () => {
     })
     expect(creditResponse.json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ dailyLimit: 20_000, purchased: expect.objectContaining({ available: 5_000 }) }),
+    }))
+  })
+
+  it('guards contribution decisions and serializes immutable reward evidence', () => {
+    expect(parseContractBody(ContributionContracts.reject, {
+      reason: '该紧急晋升缺少可复现的正式采用证据。',
+    })).toEqual({ reason: '该紧急晋升缺少可复现的正式采用证据。' })
+    expect(() => parseContractBody(ContributionContracts.revoke, { reason: '太短' }))
+      .toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ContributionContracts.audit, {
+      items: [{
+        id: 'contribution-1', type: 'candidate_promoted', sourceType: 'candidate', sourceId: 'candidate-1',
+        score: 100, status: 'accepted', createdAt: new Date('2026-09-15T00:00:00Z'),
+        evidence: { problemId: 'problem-1', candidateId: 'candidate-1', promotedRevisionId: 'revision-2' },
+        Actor: { username: 'contributor' },
+        RewardDelivery: { status: 'posted', userCarits: '20' },
+      }],
+      page: 1, pageSize: 20, total: 1, totalPages: 1, pending: 0,
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        items: [expect.objectContaining({
+          createdAt: '2026-09-15T00:00:00.000Z',
+          evidence: expect.objectContaining({ promotedRevisionId: 'revision-2' }),
+        })],
+      }),
     }))
   })
 

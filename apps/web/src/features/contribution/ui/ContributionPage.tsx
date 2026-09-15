@@ -14,7 +14,8 @@ import {
   TableHeaderCell,
   TableCell,
 } from "@/components/ui/TablePrimitives";
-import { apiClient } from "@/lib/apiClient";
+import type { ContributionEvent, ContributionSummary } from "@oi-manager/contracts";
+import { getContributionSummary, listMyContributionEvents } from "../api/contributionApi";
 import {
   contributionRewardPresentation,
   contributionScoreLabel,
@@ -23,35 +24,9 @@ import {
 } from "./contribution-display";
 import styles from "./ContributionPage.module.css";
 
-type Summary = { eventCount: number; contributionScore: number; level: string };
-type Event = {
-  id: string;
-  type: string;
-  sourceType: string;
-  score: number;
-  status: string;
-  occurredAt: string;
-  displayAt?: string;
-  acceptedAt: string | null;
-  revokedAt?: string | null;
-  revokeReason?: string | null;
-  Attribution?: {
-    organizationId: string;
-    Organization?: { name: string } | null;
-  } | null;
-  RewardDelivery?: { status: string; userCarits: string } | null;
-};
-type EventPage = {
-  items: Event[];
-  page?: number;
-  pageSize?: number;
-  total?: number;
-  totalPages?: number;
-};
-
 export function ContributionPage() {
-  const [summary, setSummary] = useState<Summary | null>(null),
-    [events, setEvents] = useState<Event[]>([]),
+  const [summary, setSummary] = useState<ContributionSummary | null>(null),
+    [events, setEvents] = useState<ContributionEvent[]>([]),
     [eventsLoaded, setEventsLoaded] = useState(false),
     [page, setPage] = useState(1),
     [pageSize, setPageSize] = useState(20),
@@ -64,37 +39,29 @@ export function ContributionPage() {
     const sequence = ++requestSequence.current;
     setLoading(true);
     setError("");
-    const [summaryResult, eventResult] = await Promise.all([
-      apiClient.get<Summary>("/api/contributions/me/summary", {
-        accountScoped: true,
-      }),
-      apiClient.get<EventPage>(
-        `/api/contributions/me/events?page=${page}&pageSize=${pageSize}`,
-        { accountScoped: true },
-      ),
+    const [summaryResult, eventResult] = await Promise.allSettled([
+      getContributionSummary(),
+      listMyContributionEvents({ page, pageSize }),
     ]);
     if (sequence !== requestSequence.current) return;
     const errors: string[] = [];
-    if (summaryResult.success && summaryResult.data)
-      setSummary(summaryResult.data);
+    if (summaryResult.status === "fulfilled")
+      setSummary(summaryResult.value);
     else {
       setSummary(null);
-      errors.push(summaryResult.message || "贡献摘要加载失败");
+      errors.push(summaryResult.reason instanceof Error ? summaryResult.reason.message : "贡献摘要加载失败");
     }
-    if (eventResult.success && eventResult.data) {
-      setEvents(eventResult.data.items);
+    if (eventResult.status === "fulfilled") {
+      setEvents(eventResult.value.items);
       setEventsLoaded(true);
-      setTotal(eventResult.data.total ?? eventResult.data.items.length);
-      setTotalPages(
-        eventResult.data.totalPages ??
-          Math.ceil((eventResult.data.total ?? eventResult.data.items.length) / pageSize),
-      );
+      setTotal(eventResult.value.total);
+      setTotalPages(eventResult.value.totalPages);
     } else {
       setEvents([]);
       setEventsLoaded(false);
       setTotal(0);
       setTotalPages(0);
-      errors.push(eventResult.message || "贡献记录加载失败");
+      errors.push(eventResult.reason instanceof Error ? eventResult.reason.message : "贡献记录加载失败");
     }
     setError([...new Set(errors)].join("；"));
     setLoading(false);
@@ -151,9 +118,7 @@ export function ContributionPage() {
                 {events.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
-                      {item.displayAt || item.acceptedAt || item.occurredAt
-                        ? new Date(item.displayAt || item.acceptedAt || item.occurredAt).toLocaleString("zh-CN")
-                        : "时间待补录"}
+                      {formatContributionTime(item)}
                     </TableCell>
                     <TableCell>{contributionTypeLabel(item.type)}</TableCell>
                     <TableCell>
@@ -202,4 +167,9 @@ export function ContributionPage() {
       </div>
     </PageFrame>
   );
+}
+
+function formatContributionTime(item: ContributionEvent) {
+  const value = item.displayAt || item.acceptedAt || item.occurredAt
+  return value ? new Date(value).toLocaleString("zh-CN") : "时间待补录"
 }

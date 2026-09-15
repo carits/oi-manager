@@ -1,4 +1,4 @@
-import { ContributionPage } from '@/components/contribution/ContributionPage'
+import { ContributionPage } from '@/features/contribution'
 
 export default function PersonalContributionsPage() {
   return <ContributionPage />
