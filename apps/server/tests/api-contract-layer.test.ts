@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, AuthContracts, ChatContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, AuthContracts, ChatContracts, DataMarketContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -87,6 +87,15 @@ describe('shared API contract adapter', () => {
       success: true,
       data: expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' }),
     }))
+  })
+
+  it('guards data market prices and quality incident commands', () => {
+    expect(parseContractBody(DataMarketContracts.purchase, { license: 'PERSONAL' })).toEqual({ license: 'PERSONAL' })
+    expect(() => parseContractBody(DataMarketContracts.purchase, { license: 'PERSONAL', amountCarits: 1 })).toThrow()
+    expect(parseContractBody(DataMarketContracts.createIncident, {
+      revisionId: 'revision-1', severity: 'MAJOR', type: '答案错误',
+      description: '该版本包含可以稳定复现的错误答案数据。',
+    }).severity).toBe('MAJOR')
   })
 
   it('serializes only data that satisfies the shared response schema', () => {

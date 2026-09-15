@@ -1,18 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import apiClient from '@/lib/apiClient'
 import { Select } from '@/components/ui/FormControls'
 import { activityStatusLabel } from '@/lib/humanPresentation'
 import { listWorkspaces } from '@/features/workspace'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
+import { getDataMarketQuality, listDataMarketContests, listDataMarketProblems, listDataMarketRevisions, type DataMarketContest as Contest, type DataMarketProblem as Problem, type DataMarketQuality as Quality, type DataMarketRevision as Revision } from '../api/dataMarketApi'
 
-type Problem = { id: string; problemId: string; title: string; platform: string }
-type ProblemPage = { data: Problem[] }
-type Revision = { id: string; revisionNumber: number; mode: string }
-type RevisionList = { revisions: Revision[] }
-type Quality = { id: string; overallScore: number | null; qualityStatus: string; criticalIssueCount: number }
-type Contest = { id: string | number; title?: string; name?: string; status?: string }
 
 export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, onRevisionChange, onQualityChange, requireQuality = false, lockProblem = false }: {
   problemId: string
@@ -28,25 +22,20 @@ export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, 
   const [quality, setQuality] = useState<Quality | null>(null)
 
   useEffect(() => {
-    void apiClient.get<ProblemPage>('/api/problems?library=platform&pageSize=100').then(result => {
-      if (result.success) setProblems(result.data?.data || [])
-    })
+    void listDataMarketProblems().then(setProblems).catch(() => setProblems([]))
   }, [])
   useEffect(() => {
     setRevisions([]); setQuality(null)
     if (!problemId) return
-    void apiClient.get<RevisionList>(`/api/problems/${problemId}/test-set-revisions`).then(result => {
-      if (result.success) setRevisions(result.data?.revisions || [])
-    })
+    void listDataMarketRevisions(problemId).then(setRevisions).catch(() => setRevisions([]))
   }, [problemId])
   useEffect(() => {
     setQuality(null); onQualityChange?.('')
     if (!problemId || !revisionId || !requireQuality) return
-    void apiClient.get<Quality>(`/api/problems/${problemId}/test-set-revisions/${revisionId}/quality`).then(result => {
-      const snapshot = result.success ? result.data || null : null
+    void getDataMarketQuality(problemId, revisionId).then(snapshot => {
       setQuality(snapshot)
       if (snapshot?.qualityStatus === 'READY' && snapshot.criticalIssueCount === 0) onQualityChange?.(snapshot.id)
-    })
+    }).catch(() => setQuality(null))
   // Callback identity must not retrigger resource loading.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problemId, requireQuality, revisionId])
@@ -86,9 +75,7 @@ export function LicenseScopePicker({ license, organizationId, contestId, onOrgan
   useEffect(() => {
     setContests([]); onContestChange('')
     if (license !== 'CONTEST' || !organizationId) return
-    void apiClient.get<Contest[]>(`/api/organizations/${organizationId}/members/activities/contests`).then(result => {
-      if (result.success) setContests(result.data || [])
-    })
+    void listDataMarketContests(organizationId).then(setContests).catch(() => setContests([]))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [license, organizationId])
 

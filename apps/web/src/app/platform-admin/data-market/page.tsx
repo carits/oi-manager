@@ -1,2 +1,2 @@
-import { DataMarketplace } from '@/components/data-market/DataMarketplace'
+import { DataMarketplace } from '@/features/data-market'
 export default function PlatformDataMarketPage(){return <DataMarketplace/>}

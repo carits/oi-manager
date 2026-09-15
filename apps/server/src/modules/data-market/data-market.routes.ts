@@ -2,6 +2,9 @@ import { Router } from 'express'
 import type { AuthRequest } from '../../middleware/auth'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { DataMarketContracts, type ApiEndpointContract } from '@oi-manager/contracts'
+import type { ZodType } from 'zod'
+import { parseContractBody, parseContractQuery, sendContractData } from '../../lib/api-contract'
 import { CaritsLedgerError } from '../carits/application/carits-ledger.service'
 import {
   confirmQualityIncident, createDataProduct, createQualityIncident, DataMarketError,
@@ -26,14 +29,21 @@ function route(handler: (req: AuthRequest) => Promise<unknown>, status = 200) {
   })
 }
 
-dataMarketRouter.get('/data-products', authenticate, route(req => listDataProducts(req.user!, req.query)))
+function contractRoute(contract: ApiEndpointContract<ZodType, ZodType, ZodType>, handler: (req: AuthRequest) => Promise<unknown>, status = 200) {
+  return asyncHandler(async (req: AuthRequest, res) => {
+    try { return sendContractData(res, contract, await handler(req), status) }
+    catch (error) { return sendError(error, res) }
+  })
+}
+
+dataMarketRouter.get('/data-products', authenticate, contractRoute(DataMarketContracts.products, req => listDataProducts(req.user!, parseContractQuery(DataMarketContracts.products, req.query))))
 dataMarketRouter.get('/data-products/:id', authenticate, route(req => getDataProduct(req.user!, req.params.id)))
-dataMarketRouter.post('/problems/:problemId/data-products', authenticate, route(req => createDataProduct(req.user!, req.params.problemId, req.body), 201))
-dataMarketRouter.post('/data-products/:id/purchase', authenticate, route(req => purchaseDataProduct(req.user!, req.params.id, req.body, String(req.header('Idempotency-Key') || '')), 201))
+dataMarketRouter.post('/problems/:problemId/data-products', authenticate, contractRoute(DataMarketContracts.createProduct, req => createDataProduct(req.user!, req.params.problemId, parseContractBody(DataMarketContracts.createProduct, req.body)), 201))
+dataMarketRouter.post('/data-products/:id/purchase', authenticate, contractRoute(DataMarketContracts.purchase, req => purchaseDataProduct(req.user!, req.params.id, parseContractBody(DataMarketContracts.purchase, req.body), String(req.header('Idempotency-Key') || '')), 201))
 dataMarketRouter.get('/data-purchases', authenticate, route(req => listDataPurchases(req.user!)))
-dataMarketRouter.get('/data-entitlements', authenticate, route(req => listDataEntitlements(req.user!)))
+dataMarketRouter.get('/data-entitlements', authenticate, contractRoute(DataMarketContracts.entitlements, req => listDataEntitlements(req.user!)))
 dataMarketRouter.get('/data-entitlements/:id', authenticate, route(req => getDataEntitlement(req.user!, req.params.id)))
-dataMarketRouter.get('/data-entitlements/:id/revisions/:revisionId/manifest', authenticate, route(req => getEntitlementManifest(req.user!, req.params.id, req.params.revisionId)))
+dataMarketRouter.get('/data-entitlements/:id/revisions/:revisionId/manifest', authenticate, contractRoute(DataMarketContracts.manifest, req => getEntitlementManifest(req.user!, req.params.id, req.params.revisionId)))
 dataMarketRouter.get('/data-entitlements/:id/revisions/:revisionId/objects/:objectId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const object = await readEntitlementObject(req.user!, req.params.id, req.params.revisionId, req.params.objectId)
@@ -43,8 +53,8 @@ dataMarketRouter.get('/data-entitlements/:id/revisions/:revisionId/objects/:obje
     return res.send(object.content)
   } catch (error) { return sendError(error, res) }
 }))
-dataMarketRouter.post('/data-entitlements/:id/upgrades', authenticate, route(req => upgradeDataEntitlement(req.user!, req.params.id, req.body), 201))
-dataMarketRouter.post('/test-set-quality-incidents', authenticate, route(req => createQualityIncident(req.user!, req.body), 201))
-dataMarketRouter.get('/problems/:problemId/test-set-quality-incidents', authenticate, route(req => listQualityIncidents(req.user!, req.params.problemId)))
-dataMarketRouter.post('/test-set-quality-incidents/:id/confirm', authenticate, route(req => confirmQualityIncident(req.user!, req.params.id)))
-dataMarketRouter.post('/test-set-quality-incidents/:id/resolve', authenticate, route(req => resolveQualityIncident(req.user!, req.params.id, req.body)))
+dataMarketRouter.post('/data-entitlements/:id/upgrades', authenticate, contractRoute(DataMarketContracts.upgrade, req => upgradeDataEntitlement(req.user!, req.params.id, parseContractBody(DataMarketContracts.upgrade, req.body)), 201))
+dataMarketRouter.post('/test-set-quality-incidents', authenticate, contractRoute(DataMarketContracts.createIncident, req => createQualityIncident(req.user!, parseContractBody(DataMarketContracts.createIncident, req.body)), 201))
+dataMarketRouter.get('/problems/:problemId/test-set-quality-incidents', authenticate, contractRoute(DataMarketContracts.incidents, req => listQualityIncidents(req.user!, req.params.problemId)))
+dataMarketRouter.post('/test-set-quality-incidents/:id/confirm', authenticate, contractRoute(DataMarketContracts.confirmIncident, req => { parseContractBody(DataMarketContracts.confirmIncident, req.body); return confirmQualityIncident(req.user!, req.params.id) }))
+dataMarketRouter.post('/test-set-quality-incidents/:id/resolve', authenticate, contractRoute(DataMarketContracts.resolveIncident, req => resolveQualityIncident(req.user!, req.params.id, parseContractBody(DataMarketContracts.resolveIncident, req.body))))

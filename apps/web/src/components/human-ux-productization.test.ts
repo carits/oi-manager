@@ -129,7 +129,7 @@ describe('human UX productization contract', () => {
   })
 
   it('does not ask users to type resource IDs in the data market', () => {
-    const source = read('./data-market/DataMarketplace.tsx')
+    const source = read('../features/data-market/ui/DataMarketplace.tsx')
     expect(source).toContain('<ProblemRevisionPicker')
     expect(source).toContain('<LicenseScopePicker')
     expect(source).not.toContain('Problem ID')

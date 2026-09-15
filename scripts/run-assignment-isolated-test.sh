@@ -116,6 +116,9 @@ elif [[ "$TEST_SCOPE" == "user-profile-contract" ]]; then
 elif [[ "$TEST_SCOPE" == "team-contract" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     --no-file-parallelism tests/api-contract-layer.test.ts tests/teams.test.ts
+elif [[ "$TEST_SCOPE" == "data-market-contract" ]]; then
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
+    --no-file-parallelism tests/api-contract-layer.test.ts tests/data-market-policy.test.ts tests/data-market.test.ts
 elif [[ "$TEST_SCOPE" == "authorization" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     tests/authorization-boundary.test.ts tests/auth.test.ts tests/organization-creation.test.ts \
@@ -137,6 +140,6 @@ elif [[ "$TEST_SCOPE" == "contest-core" ]]; then
     tests/contest-canonical-submission-identity.test.ts \
     tests/school-contest.test.ts tests/contest.test.ts
 else
-  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, problem-contract, chat-contract, organization-contract, notification-contract, workspace-contract, auth-contract, user-profile-contract, team-contract, authorization, release-invariants, contest-core, contest-cutover or full" >&2
+  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, problem-contract, chat-contract, organization-contract, notification-contract, workspace-contract, auth-contract, user-profile-contract, team-contract, data-market-contract, authorization, release-invariants, contest-core, contest-cutover or full" >&2
   exit 1
 fi
