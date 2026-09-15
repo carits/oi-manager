@@ -118,12 +118,20 @@ export const OrganizationContracts = {
   }),
   createJoinApplication: defineApiEndpoint({
     key: 'organization.join.create', method: 'POST', scope: 'account', data: JoinApplicationActionSchema,
-    body: z.object({
-      organizationId: z.string().min(1), requestedRole: z.enum(['student', 'teacher']),
-      requestedRelationType: z.enum(['enrolled', 'preselected', 'employee', 'external_coach']),
-      realName: z.string().trim().min(1).max(80), profileData: z.record(z.string(), z.unknown()).optional(),
-      message: z.string().trim().max(1000).optional(),
-    }),
+    body: z.discriminatedUnion('requestedRole', [
+      z.object({
+        organizationId: z.string().min(1), requestedRole: z.literal('student'),
+        requestedRelationType: z.enum(['enrolled', 'preselected']).default('enrolled'),
+        realName: z.string().trim().min(1).max(80), profileData: z.record(z.string(), z.unknown()).optional(),
+        message: z.string().trim().max(1000).optional(),
+      }),
+      z.object({
+        organizationId: z.string().min(1), requestedRole: z.literal('teacher'),
+        requestedRelationType: z.enum(['employee', 'external_coach']).default('employee'),
+        realName: z.string().trim().min(1).max(80), profileData: z.record(z.string(), z.unknown()).optional(),
+        message: z.string().trim().max(1000).optional(),
+      }),
+    ]),
   }),
   cancelJoinApplication: defineApiEndpoint({
     key: 'organization.join.cancel', method: 'POST', scope: 'account', data: z.object({ cancelled: z.literal(true) }),

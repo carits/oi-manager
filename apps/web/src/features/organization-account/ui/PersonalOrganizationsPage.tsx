@@ -102,11 +102,15 @@ export default function PersonalOrganizationsPage() {
   const submit = async () => {
     if (!selected || !form.realName.trim()) return
     setSubmitting(true)
-    const response = await createOrganizationJoinApplication({
-      organizationId: selected.id, requestedRole: form.requestedRole, requestedRelationType: form.requestedRelationType,
-      realName: form.realName, message: form.message,
-      profileData: form.requestedRole === 'student' ? { enrollmentYear: Number(form.enrollmentYear) || null } : { title: form.title },
-    })
+    const response = form.requestedRole === 'student'
+      ? await createOrganizationJoinApplication({
+        organizationId: selected.id, requestedRole: 'student', requestedRelationType: form.requestedRelationType as 'enrolled' | 'preselected',
+        realName: form.realName, message: form.message, profileData: { enrollmentYear: Number(form.enrollmentYear) || null },
+      })
+      : await createOrganizationJoinApplication({
+        organizationId: selected.id, requestedRole: 'teacher', requestedRelationType: form.requestedRelationType as 'employee' | 'external_coach',
+        realName: form.realName, message: form.message, profileData: { title: form.title },
+      })
     setSubmitting(false)
     if (!response.ok) return toast.error(response.error.message || '申请提交失败')
     toast.success('申请已提交，学校审核后会通过站内消息通知你')
