@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, ChatContracts, ProblemContracts, TrainingContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, ChatContracts, OrganizationContracts, ProblemContracts, TrainingContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -215,6 +215,27 @@ describe('shared API contract adapter', () => {
       data: expect.objectContaining({
         items: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })],
       }),
+    }))
+  })
+
+  it('guards organization applications and serializes directory relations', () => {
+    expect(parseContractBody(OrganizationContracts.createJoinApplication, {
+      organizationId: 'organization-1', requestedRole: 'student', requestedRelationType: 'enrolled', realName: '学生甲',
+    }).requestedRole).toBe('student')
+    expect(() => parseContractBody(OrganizationContracts.createJoinApplication, {
+      organizationId: 'organization-1', requestedRole: 'principal', requestedRelationType: 'employee', realName: '越权身份',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, OrganizationContracts.mine, {
+      memberships: [{
+        id: 'membership-1', status: 'active', memberRole: 'student', createdAt: new Date('2026-09-15T00:00:00Z'),
+        Organization: { id: 'organization-1', name: '第一中学', ignoredInternalField: true },
+      }],
+      applications: [], invitations: [],
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ memberships: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })] }),
     }))
   })
 })

@@ -1,5 +1,7 @@
 import { Router, type Response } from 'express'
+import { OrganizationContracts } from '@oi-manager/contracts'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import { authenticate, type AuthRequest } from '../../middleware/auth'
 import {
   cancelJoinApplication,
@@ -31,6 +33,7 @@ function endpoint(handler: (req: AuthRequest, res: Response) => Promise<unknown>
   return asyncHandler(async (req: AuthRequest, res: Response) => {
     try { await handler(req, res) }
     catch (cause) {
+      if (sendContractError(cause, res)) return
       if (cause instanceof OrganizationJoinError) return res.status(cause.statusCode).json({ success: false, code: cause.code, message: cause.message })
       throw cause
     }
@@ -38,19 +41,22 @@ function endpoint(handler: (req: AuthRequest, res: Response) => Promise<unknown>
 }
 
 organizationJoinRouter.get('/organizations', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await listOrganizationDirectory(actor(req), req.query) })
+  const query = parseContractQuery(OrganizationContracts.directory, req.query)
+  sendContractData(res, OrganizationContracts.directory, await listOrganizationDirectory(actor(req), query))
 }))
 organizationJoinRouter.get('/me/organizations', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await listMyOrganizations(actor(req)) })
+  sendContractData(res, OrganizationContracts.mine, await listMyOrganizations(actor(req)))
 }))
 organizationJoinRouter.get('/me/organization-join-applications', authenticate, endpoint(async (req, res) => {
   const data = await listMyOrganizations(actor(req)); res.json({ success: true, data: data.applications })
 }))
 organizationJoinRouter.post('/organization-join-applications', authenticate, endpoint(async (req, res) => {
-  res.status(201).json({ success: true, data: await createJoinApplication(actor(req), req.body || {}) })
+  sendContractData(res, OrganizationContracts.createJoinApplication, await createJoinApplication(actor(req), parseContractBody(OrganizationContracts.createJoinApplication, req.body)), 201)
 }))
 organizationJoinRouter.post('/organization-join-applications/:id/cancel', authenticate, endpoint(async (req, res) => {
-  await cancelJoinApplication(actor(req), req.params.id); res.json({ success: true })
+  parseContractBody(OrganizationContracts.cancelJoinApplication, req.body || {})
+  await cancelJoinApplication(actor(req), req.params.id)
+  sendContractData(res, OrganizationContracts.cancelJoinApplication, { cancelled: true })
 }))
 
 organizationJoinRouter.get('/organizations/:organizationId/join-applications', authenticate, endpoint(async (req, res) => {
@@ -76,10 +82,12 @@ organizationJoinRouter.post('/organizations/:organizationId/invitations/:id/revo
   await revokeOrganizationInvitation(actor(req), req.params.organizationId, req.params.id); res.json({ success: true })
 }))
 organizationJoinRouter.post('/organization-invitations/:id/accept', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await respondToInvitation(actor(req), req.params.id, 'accept') })
+  parseContractBody(OrganizationContracts.respondInvitation, req.body || {})
+  sendContractData(res, OrganizationContracts.respondInvitation, await respondToInvitation(actor(req), req.params.id, 'accept'))
 }))
 organizationJoinRouter.post('/organization-invitations/:id/decline', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await respondToInvitation(actor(req), req.params.id, 'decline') })
+  parseContractBody(OrganizationContracts.respondInvitation, req.body || {})
+  sendContractData(res, OrganizationContracts.respondInvitation, await respondToInvitation(actor(req), req.params.id, 'decline'))
 }))
 organizationJoinRouter.patch('/organizations/:organizationId/join-policy', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await updateJoinPolicy(actor(req), req.params.organizationId, req.body?.joinPolicy) })

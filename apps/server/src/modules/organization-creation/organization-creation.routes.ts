@@ -1,5 +1,7 @@
 import { Router, type Response } from 'express'
+import { OrganizationContracts } from '@oi-manager/contracts'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import { IdempotencyConflictError, readIdempotencyKey, requestFingerprint, runIdempotent } from '../../lib/idempotency'
 import { authenticate, type AuthRequest } from '../../middleware/auth'
 import {
@@ -22,6 +24,7 @@ function endpoint(handler: (req: AuthRequest, res: Response) => Promise<unknown>
     try {
       await handler(req, res)
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof OrganizationCreationError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
       if (error instanceof IdempotencyConflictError) return res.status(409).json({ success: false, code: 'IDEMPOTENCY_KEY_REUSED', message: error.message })
       throw error
@@ -34,20 +37,23 @@ async function mutation<T>(req: AuthRequest, scope: string, operation: () => Pro
 }
 
 organizationCreationRouter.post('/organization-creation-applications', authenticate, endpoint(async (req, res) => {
-  const result = await mutation(req, 'organization-creation:submit', () => createOrganizationApplication(actor(req), req.body || {}))
+  const body = parseContractBody(OrganizationContracts.createOrganizationApplication, req.body)
+  const result = await mutation(req, 'organization-creation:submit', () => createOrganizationApplication(actor(req), body))
   if (result.replayed) res.setHeader('X-Idempotent-Replay', 'true')
-  res.status(201).json({ success: true, data: result.value })
+  sendContractData(res, OrganizationContracts.createOrganizationApplication, result.value, 201)
 }))
 organizationCreationRouter.get('/me/organization-creation-applications', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await listMyOrganizationApplications(actor(req), req.query) })
+  const query = parseContractQuery(OrganizationContracts.listMyCreationApplications, req.query)
+  sendContractData(res, OrganizationContracts.listMyCreationApplications, await listMyOrganizationApplications(actor(req), query))
 }))
 organizationCreationRouter.get('/me/organization-creation-applications/:id', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await getMyOrganizationApplication(actor(req), req.params.id) })
 }))
 organizationCreationRouter.post('/organization-creation-applications/:id/cancel', authenticate, endpoint(async (req, res) => {
+  parseContractBody(OrganizationContracts.cancelOrganizationApplication, req.body || {})
   const result = await mutation(req, 'organization-creation:cancel', () => cancelOrganizationApplication(actor(req), req.params.id))
   if (result.replayed) res.setHeader('X-Idempotent-Replay', 'true')
-  res.json({ success: true, data: result.value })
+  sendContractData(res, OrganizationContracts.cancelOrganizationApplication, result.value)
 }))
 
 organizationCreationRouter.get('/platform/organization-creation-applications', authenticate, endpoint(async (req, res) => {

@@ -5,6 +5,9 @@ import {
   BlogDiscoveryDetailSchema,
   ChatContracts,
   ChatMessagePageSchema,
+  MyOrganizationsSchema,
+  OrganizationContracts,
+  OrganizationDirectoryPageSchema,
   ContestRatingDataSchema,
   ProblemJudgeModeTransitionInputSchema,
   ProblemJudgeSettingsSchema,
@@ -282,15 +285,32 @@ describe('feature slice contracts', () => {
     }).success).toBe(false)
   })
 
+  it('shares organization directory and personal application contracts', () => {
+    expect(OrganizationDirectoryPageSchema.safeParse({
+      items: [{ id: 'organization-1', name: '第一中学', type: 'school', joinPolicy: 'approval', relationship: null }],
+      total: 1, page: 1, pageSize: 20,
+    }).success).toBe(true)
+    expect(MyOrganizationsSchema.safeParse({ memberships: [], applications: [], invitations: [] }).success).toBe(true)
+    expect(OrganizationContracts.createJoinApplication.body.safeParse({
+      organizationId: 'organization-1', requestedRole: 'student', requestedRelationType: 'enrolled', realName: '学生甲',
+    }).success).toBe(true)
+    expect(OrganizationContracts.createOrganizationApplication.body.safeParse({
+      organizationType: 'school', name: '第一中学', schoolType: '高中', region: '湖南省/长沙市/雨花区',
+      educationSystem: '6-3-3', applicantRealName: '教师甲', description: '申请创建学校用于开展信息学竞赛教学和训练管理。',
+    }).success).toBe(true)
+  })
+
   it('routes pages through feature public APIs instead of component internals', () => {
     const page = fs.readFileSync(new URL('../app/blog/page.tsx', import.meta.url), 'utf8')
     const messages = fs.readFileSync(new URL('../app/account/messages/page.tsx', import.meta.url), 'utf8')
+    const organizations = fs.readFileSync(new URL('../app/personal/organizations/page.tsx', import.meta.url), 'utf8')
     const organization = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/[...segments]/page.tsx', import.meta.url), 'utf8')
     expect(page).toContain("from '@/features/blog'")
     expect(messages).toContain("from '@/features/chat'")
+    expect(organizations).toContain("from '@/features/organization-account'")
     expect(organization).toContain("from '@/features/assignment'")
     expect(organization).toContain("from '@/features/training-session/TrainingSessionWorkspace'")
     expect(organization).not.toMatch(/@\/components\/(?:assignment|blog|chat|submission|problem|training|training-engine)\//)
-    expect(organization).not.toMatch(/@\/features\/(?:assignment|blog|chat|submission|problem|contest|training-session)\/(?:api|model|ui)\//)
+    expect(organization).not.toMatch(/@\/features\/(?:assignment|blog|chat|organization-account|submission|problem|contest|training-session)\/(?:api|model|ui)\//)
   })
 })
