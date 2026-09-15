@@ -2,7 +2,7 @@ import { Router, type Response } from 'express'
 import multer from 'multer'
 import { ChatContracts } from '@oi-manager/contracts'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { parseContractBody, parseContractQuery, sendContractData } from '../../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import { authenticate, authorize, type AuthRequest } from '../../middleware/auth'
 import { chatRealtimeHub } from './chat-realtime'
 import { chatMetrics } from './chat-metrics'
@@ -24,6 +24,7 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
   return asyncHandler(async (req: AuthRequest, res: Response) => {
     try { await handler(req, res) }
     catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof ChatError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
       throw error
     }
