@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { FormField } from '@/components/ui/FormField'
 import { useForm } from '@/hooks/form/useForm'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
+import { updateOrganizationCampus } from '@/features/organization-account'
 import { RegionSelector } from '@/components/business/RegionSelector'
 import type { CampusSchool } from './HomeTab'
 
@@ -16,7 +16,7 @@ interface EditSchoolModalProps {
   school: CampusSchool
   onClose: () => void
   onSuccess: () => void
-  endpoint?: string
+  organizationId?: string
 }
 
 const educationOptions = [
@@ -27,8 +27,10 @@ const educationOptions = [
   ['custom', '自定义', '按学校实际阶段年数配置']
 ] as const
 
-function normalizeEducationSystem(value: string | null) {
-  return ['6-3-3', '5-4-3', '6-3', '5-4', 'custom'].includes(value || '') ? value! : '6-3-3'
+type EducationSystem = '6-3-3' | '5-4-3' | '6-3' | '5-4' | 'custom'
+
+function normalizeEducationSystem(value: string | null): EducationSystem {
+  return ['6-3-3', '5-4-3', '6-3', '5-4', 'custom'].includes(value || '') ? value as EducationSystem : '6-3-3'
 }
 
 function FormSection({ title, children }: { title: string; children: ReactNode }) {
@@ -40,7 +42,7 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
   )
 }
 
-export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }: EditSchoolModalProps) {
+export default function EditSchoolModal({ school, onClose, onSuccess, organizationId }: EditSchoolModalProps) {
   const toast = useToast()
   const [submitting, setSubmitting] = useState(false)
   const [province, setProvince] = useState('')
@@ -75,21 +77,20 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
       setSubmitting(true)
       try {
         const region = [province, city, district].filter(Boolean).join('/')
-        if (!endpoint) throw new Error('当前学校暂时无法保存资料，请刷新后重试')
-        const result = await apiClient.put(endpoint, {
+        if (!organizationId) throw new Error('当前学校暂时无法保存资料，请刷新后重试')
+        await updateOrganizationCampus(organizationId, {
           name: values.name,
           shortName: values.shortName || null,
           description: values.description || null,
           region: region || null,
           schoolType: values.schoolType || null,
           schoolNature: values.schoolNature || null,
-          educationSystem: values.educationSystem,
+          educationSystem: normalizeEducationSystem(values.educationSystem),
           educationSystemDetail: values.educationSystem === 'custom' ? customYears : null,
           contactPerson: values.contactPerson || null,
           contactPhone: values.contactPhone || null,
           contactEmail: values.contactEmail || null
         })
-        if (!result.success) throw new Error(result.message || '保存失败')
         onSuccess()
         onClose()
       } catch (error) {

@@ -18,16 +18,12 @@ const legacyTransportAllowances = {
   'apps/web/src/components/business/UserManagement.tsx': 2,
   'apps/web/src/app/admin/users/page.tsx': 2,
   'apps/web/src/app/platform-admin/users/page.tsx': 2,
-  'apps/web/src/components/organization-pages/teacher/management/page.tsx': 2,
   'apps/web/src/components/team-import/ImportPreview.tsx': 1,
   'apps/web/src/app/admin/schools/new/page.tsx': 1,
   'apps/web/src/app/admin/users/new-platform-admin/page.tsx': 1,
-  'apps/web/src/components/organization-pages/teacher/school/components/HomeTab.tsx': 1,
-  'apps/web/src/components/organization-pages/teacher/school/components/EditSchoolModal.tsx': 1,
   'apps/web/src/components/ui/PasswordResetModal.tsx': 1,
   'apps/web/src/components/telemetry/ClientTelemetry.tsx': 1,
   'apps/web/src/components/feature/PlannedFeaturePage.tsx': 1,
-  'apps/web/src/components/campus/OrganizationCampusPage.tsx': 1,
   'apps/web/src/app/admin/users/[id]/page.tsx': 1,
 }
 const legacyFeatureTransportAllowances = {

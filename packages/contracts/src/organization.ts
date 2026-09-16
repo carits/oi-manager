@@ -122,9 +122,31 @@ const ManagedPageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
   page: z.number().int().positive(), pageSize: z.number().int().positive(),
 })
 
+const NullableTextSchema = z.string().nullable()
 export const OrganizationCampusSummarySchema = z.object({
-  joinPolicy: OrganizationJoinPolicySchema,
+  id: z.string().min(1), name: z.string().min(1), shortName: NullableTextSchema,
+  description: NullableTextSchema, announcement: NullableTextSchema, region: NullableTextSchema,
+  schoolType: NullableTextSchema, schoolNature: NullableTextSchema, educationSystem: NullableTextSchema,
+  educationSystemDetail: z.object({
+    primaryYears: z.number().int().optional(), middleYears: z.number().int().optional(), highYears: z.number().int().optional(),
+  }).nullable(),
+  contactPerson: NullableTextSchema, contactPhone: NullableTextSchema, contactEmail: NullableTextSchema,
+  contactMasked: z.boolean(), status: z.string(), joinPolicy: OrganizationJoinPolicySchema,
+  principal: z.object({ name: z.string(), title: NullableTextSchema.optional() }).nullable(),
 }).passthrough()
+
+const CampusUpdateBodySchema = z.object({
+  name: z.string().trim().min(1).max(100), shortName: NullableTextSchema.optional(),
+  description: NullableTextSchema.optional(), region: NullableTextSchema.optional(),
+  schoolType: NullableTextSchema.optional(), schoolNature: NullableTextSchema.optional(),
+  educationSystem: z.enum(['6-3-3', '5-4-3', '6-3', '5-4', 'custom']).optional(),
+  educationSystemDetail: z.object({
+    primaryYears: z.number().int().min(0).max(9).optional(),
+    middleYears: z.number().int().min(0).max(9).optional(),
+    highYears: z.number().int().min(0).max(9).optional(),
+  }).nullable().optional(),
+  contactPerson: NullableTextSchema.optional(), contactPhone: NullableTextSchema.optional(), contactEmail: NullableTextSchema.optional(),
+})
 
 export const OrganizationTeacherOptionPageSchema = z.object({
   data: z.array(z.object({ membershipId: z.string().min(1), name: z.string() }).passthrough()),
@@ -252,6 +274,14 @@ export const OrganizationContracts = {
   }),
   campusSummary: defineApiEndpoint({
     key: 'organization.campus.summary', method: 'GET', scope: 'organization', data: OrganizationCampusSummarySchema,
+  }),
+  updateCampus: defineApiEndpoint({
+    key: 'organization.campus.update', method: 'PUT', scope: 'organization',
+    body: CampusUpdateBodySchema, data: z.object({ updated: z.literal(true) }),
+  }),
+  updateCampusAnnouncement: defineApiEndpoint({
+    key: 'organization.campus.announcement.update', method: 'PUT', scope: 'organization',
+    body: z.object({ announcement: z.string().max(10000) }), data: z.object({ updated: z.literal(true) }),
   }),
   teacherOptions: defineApiEndpoint({
     key: 'organization.teacher.options', method: 'GET', scope: 'organization', data: OrganizationTeacherOptionPageSchema,

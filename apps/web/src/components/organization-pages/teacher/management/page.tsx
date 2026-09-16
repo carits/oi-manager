@@ -12,8 +12,13 @@ import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import StudentsManagementContent from '@/components/management/StudentsManagementContent'
 import TeachersManagementContent from '@/components/management/TeachersManagementContent'
 import { WalletPage } from '@/features/account-wallet'
-import { apiClient } from '@/lib/apiClient'
-import { JoinApplicationsManagement, OrganizationInvitationsManagement, OrganizationJoinSettings } from '@/features/organization-account'
+import {
+  getOrganizationInvitations,
+  getOrganizationJoinApplications,
+  JoinApplicationsManagement,
+  OrganizationInvitationsManagement,
+  OrganizationJoinSettings,
+} from '@/features/organization-account'
 import styles from '@/features/ranking/RankingPage.module.css'
 
 type Tab = 'students' | 'teachers' | 'applications' | 'invitations' | 'settings' | 'wallet'
@@ -53,9 +58,9 @@ export default function CampusManagementPage() {
   useEffect(() => {
     if (!organizationId) return
     void Promise.all([
-      apiClient.get<{ pending: number }>(`/api/organizations/${organizationId}/join-applications?pageSize=1`),
-      apiClient.get<{ pending: number }>(`/api/organizations/${organizationId}/invitations?pageSize=1`),
-    ]).then(([applications, invitations]) => setPending({ applications: applications.data?.pending || 0, invitations: invitations.data?.pending || 0 }))
+      getOrganizationJoinApplications(organizationId),
+      getOrganizationInvitations(organizationId),
+    ]).then(([applications, invitations]) => setPending({ applications: applications.pending, invitations: invitations.pending }))
   }, [organizationId, activeTab])
 
   useEffect(() => { setActiveTab(resolvedTab) }, [resolvedTab])

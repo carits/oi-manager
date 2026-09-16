@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express'
 import { OrganizationContracts } from '@oi-manager/contracts'
 import { asyncHandler } from '../lib/asyncHandler'
-import { parseContractQuery, sendContractData, sendContractError } from '../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../lib/api-contract'
 import { parsePagination } from '../lib/pagination'
 import { authenticate, type AuthRequest } from '../middleware/auth'
 import {
@@ -66,11 +66,14 @@ organizationMemberRouter.get('/campus', authenticate, endpoint('查看校园资�
 }))
 
 organizationMemberRouter.put('/campus', authenticate, endpoint('编辑校园资料', 'organization.settings', async (req, res, context) => {
-  await updateCampus(context, req.body); res.json({ success: true })
+  await updateCampus(context, parseContractBody(OrganizationContracts.updateCampus, req.body))
+  sendContractData(res, OrganizationContracts.updateCampus, { updated: true })
 }))
 
 organizationMemberRouter.put('/campus/announcement', authenticate, endpoint('编辑校园公告', 'organization.settings', async (req, res, context) => {
-  await updateCampusAnnouncement(context, req.body.announcement); res.json({ success: true })
+  const body = parseContractBody(OrganizationContracts.updateCampusAnnouncement, req.body)
+  await updateCampusAnnouncement(context, body.announcement)
+  sendContractData(res, OrganizationContracts.updateCampusAnnouncement, { updated: true })
 }))
 
 organizationMemberRouter.get('/activities/homeworks', authenticate, endpoint('获取作业列表失败', 'organization.view', async (_req, res, context) => {

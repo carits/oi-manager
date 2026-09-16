@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 import { Bell, Edit3, UsersRound } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
+import { updateOrganizationCampusAnnouncement } from '@/features/organization-account'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import styles from './CampusHome.module.css'
 
@@ -36,11 +36,10 @@ interface HomeTabProps {
   onAnnouncementUpdate: () => void
   onEditSchool?: () => void
   canViewWallet?: boolean
-  announcementEndpoint?: string
   walletHref?: string
 }
 
-export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onEditSchool, canViewWallet = false, announcementEndpoint, walletHref }: HomeTabProps) {
+export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onEditSchool, canViewWallet = false, walletHref }: HomeTabProps) {
   const pathname = usePathname()
   const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const toast = useToast()
@@ -51,9 +50,8 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
   const saveAnnouncement = async () => {
     setSaving(true)
     try {
-      if (!announcementEndpoint) throw new Error('当前学校暂时无法保存公告，请刷新后重试')
-      const result = await apiClient.put(announcementEndpoint, { announcement })
-      if (!result.success) throw new Error(result.message)
+      if (!organizationId) throw new Error('当前学校暂时无法保存公告，请刷新后重试')
+      await updateOrganizationCampusAnnouncement(organizationId, announcement)
       setEditingAnnouncement(false)
       onAnnouncementUpdate()
       toast.success('公告已保存')

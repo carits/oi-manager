@@ -535,6 +535,28 @@ describe('shared API contract adapter', () => {
     })).toThrowError(ApiContractError)
     expect(parseContractBody(OrganizationContracts.updateJoinPolicy, { joinPolicy: 'approval' }))
       .toEqual({ joinPolicy: 'approval' })
+    expect(parseContractBody(OrganizationContracts.updateCampus, {
+      name: '第一中学', educationSystem: '6-3-3', educationSystemDetail: { primaryYears: 6, middleYears: 3, highYears: 3 },
+    })).toEqual({
+      name: '第一中学', educationSystem: '6-3-3', educationSystemDetail: { primaryYears: 6, middleYears: 3, highYears: 3 },
+    })
+    expect(() => parseContractBody(OrganizationContracts.updateCampus, {
+      name: '', educationSystem: 'invalid',
+    })).toThrowError(ApiContractError)
+    expect(parseContractBody(OrganizationContracts.updateCampusAnnouncement, { announcement: '校园公告' }))
+      .toEqual({ announcement: '校园公告' })
+
+    const campus = responseStub()
+    sendContractData(campus.response, OrganizationContracts.campusSummary, {
+      id: 'school-1', name: '第一中学', shortName: null, description: null, announcement: '校园公告', region: null,
+      schoolType: null, schoolNature: null, educationSystem: null, educationSystemDetail: null,
+      contactPerson: null, contactPhone: null, contactEmail: null, contactMasked: false,
+      status: 'active', joinPolicy: 'invite_only', principal: { name: '负责人', title: null },
+      internalDatabaseField: 'removed',
+    })
+    expect(campus.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ id: 'school-1', announcement: '校园公告' }),
+    }))
 
     const managed = responseStub()
     sendContractData(managed.response, OrganizationContracts.managedJoinApplications, {
