@@ -5,6 +5,14 @@ last_verified: 2026-09-16
 source_of_truth: Git history
 ---
 
+## 2026-09-16 — 架构进度 telemetry 与低上下文工作流
+
+- 新增 `pnpm architecture:progress`，自动生成 Contract、Feature Slice、契约边界、两类 transport、Contest runtime 兼容点、HTTPS 证据和 Top Debt，不再人工维护进度数字。
+- `architecture:check` 增加文件新鲜度与跨提交单调门禁；GitHub Actions 在 PR、main push 和每日定时检查，并写 compact diff/Top Debt 到 Job Summary。
+- `AGENTS.md` 固化架构燃尽的选择、验证与退出条件；生产 HTTPS 只有出现独立外部证据文件后才能标记完成。
+- `STATUS.md` 仅保留当前说明与最近 rollout，历史流水归档到 `docs/history/STATUS-2026-09.md`，日常接手只需读取最近提交、机器状态与精简 STATUS。
+- 学生选择器迁入 Organization Feature，Assignment/Training 不再直接请求团队与学生 API；旧页面 transport 降至 19 文件/42 调用。
+
 ## 2026-09-16 — 组织加入管理契约与 Feature Slice 收口
 
 - 学校加入申请、成员邀请、加入策略、校园摘要和教师选择统一通过 `features/organization-account` 的公共 API/UI 边界；旧组织管理组件目录删除，教师管理 Route 仅负责装配。

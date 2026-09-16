@@ -1,8 +1,8 @@
 ---
 status: current
 audience: development, architecture
-last_verified: 2026-09-14
-source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-boundaries.mjs, apps/server/src/modules, apps/server/prisma/schema.prisma
+last_verified: 2026-09-16
+source_of_truth: scripts/architecture-progress.mjs, scripts/audit-route-boundaries.mjs, scripts/audit-domain-boundaries.mjs, apps/server/src/modules, apps/server/prisma/schema.prisma
 ---
 
 # 架构不变量
@@ -56,6 +56,11 @@ source_of_truth: scripts/audit-route-boundaries.mjs, scripts/audit-domain-bounda
 - 架构债基线只能下降；任何新增例外都必须先更新本页、对应领域文档和自动门禁，不能只扩大白名单。
 - `pnpm architecture:check` 必须同时通过 API Contract/Feature Slice 门禁；契约边界数量和已迁移切片只能增加，
   旧组件目录、App 深层导入和 Feature 内 `any` 均属于构建失败。
+- `docs/architecture-progress.json` 是架构迁移的机器可读当前状态；它只能由
+  `pnpm architecture:progress` 生成。CI 对 transport、Contract boundary、Contest 兼容点和 HTTPS
+  证据执行跨提交单调门禁，并把 compact diff 与最高债务写入 Job Summary。
+- Contract/Feature 收口、Contest runtime 退役和生产 HTTPS 的完成条件以该 JSON 中的
+  `exitCriteria` 为准；目录已经存在、工具已经具备或 STATUS 曾写过不等同于完成。
 - `pnpm db:baseline:check` 必须保持通过；新 migration 必须按名称位于当前 Epoch 之后，正式建立新 Epoch 前必须证明空库和生产备份升级库结构签名一致。
 
 ## 保留的架构决定

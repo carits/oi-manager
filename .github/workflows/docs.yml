@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 1 * * *'
 
 jobs:
   check:
@@ -18,4 +20,8 @@ jobs:
           node-version: 24
       - run: pnpm docs:check
       - run: pnpm ui:state-check
+      - name: Architecture progress summary
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: pnpm architecture:progress:check
 

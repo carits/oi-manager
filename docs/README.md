@@ -96,5 +96,9 @@ Production v1 外部验收仍保持未完成，不能把“运行拓扑已生产
 - 被修改或重新核对的活动文档同步更新 `last_verified`。
 - 最后运行 `pnpm docs:check`。
 
+架构迁移进度不再从历史流水人工推断。优先读取
+[机器可读架构进度](architecture-progress.json)，运行 `pnpm architecture:progress` 刷新；
+`STATUS.md` 仅保留当前说明和最近五次 rollout，较早记录按月归档到 `archive/history/`。
+
 完整门禁和完成清单见[开发工作流](development/WORKFLOW.md)，项目级执行约束见根目录
 `AGENTS.md`。

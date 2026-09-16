@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 478 |
+| Referenced environment keys | 481 |
 
 ## HTTP adapter ownership
 
@@ -427,6 +427,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `API_URL`
 - `APPLY`
 - `APP_ENV`
+- `ARCHITECTURE_PROGRESS_BASE_REF`
 - `ARCHIVE_SCHEDULE`
 - `ASSET_BACKUP_CHECK`
 - `ASSET_BACKUP_DIR`
@@ -568,6 +569,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `FAULT_TCP_PROXY_PORT`
 - `FAULT_TCP_UPSTREAM_PORT`
 - `FRONTEND_URL`
+- `GITHUB_BASE_SHA`
+- `GITHUB_STEP_SUMMARY`
 - `GO_JUDGE_NAME`
 - `GO_JUDGE_URL`
 - `GREEN_PID`

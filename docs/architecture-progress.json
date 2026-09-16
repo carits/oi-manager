@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "contracts": 24,
+  "featureSlices": 24,
+  "contractedBoundaries": 111,
+  "transport": {
+    "legacy": {
+      "files": 19,
+      "calls": 42
+    },
+    "feature": {
+      "files": 44,
+      "calls": 244
+    }
+  },
+  "contestCompatibility": {
+    "remaining": 4,
+    "points": [
+      {
+        "key": "runtimeTrainingIdentity",
+        "active": true
+      },
+      {
+        "key": "trainingProjectionWriter",
+        "active": true
+      },
+      {
+        "key": "trainingRuntimeCreation",
+        "active": true
+      },
+      {
+        "key": "trainingProblemRuntime",
+        "active": true
+      }
+    ]
+  },
+  "https": {
+    "publicHttps": false,
+    "secureCookie": false,
+    "csp": false,
+    "hsts": false,
+    "externalHttpsProbe": false,
+    "evidence": null
+  },
+  "topDebt": [
+    {
+      "file": "apps/web/src/features/contest/ui/TrainingFormModal.tsx",
+      "calls": 22,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx",
+      "calls": 18,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/problem/ui/ProblemListDetailPage.tsx",
+      "calls": 18,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/training-session/ui/TrainingSessionWorkspace.tsx",
+      "calls": 18,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/solution-review/ui/SolutionEditorialPanel.tsx",
+      "calls": 13,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/blog/ui/BlogWorkspace.tsx",
+      "calls": 11,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/problem/ui/JudgeProgramWizard.tsx",
+      "calls": 11,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/blog/ui/BlogCommunityPanel.tsx",
+      "calls": 10,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/training-session/ui/TrainingSessionListPage.tsx",
+      "calls": 10,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/problem/ui/ProblemDetail.tsx",
+      "calls": 9,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx",
+      "calls": 8,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/problem/ui/ProblemForm.tsx",
+      "calls": 8,
+      "layer": "feature"
+    }
+  ],
+  "exitCriteria": {
+    "contractFeatureMigration": "transport.legacy.calls == 0 && transport.feature.calls == 0",
+    "contestRuntimeRetirement": "contestCompatibility.remaining == 0",
+    "productionHttps": "all https flags are true"
+  },
+  "updatedAt": "2026-09-16T12:24:11.592Z"
+}

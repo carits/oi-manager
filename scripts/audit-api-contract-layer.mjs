@@ -374,6 +374,16 @@ const remainingLegacyFeatureTransportCalls = Object.entries(legacyFeatureTranspo
     return total + Math.min(read(file).match(directTransportPattern)?.length ?? 0, allowance)
   }, 0)
 
+const debtRows = allowances => Object.entries(allowances)
+  .flatMap(([file, allowance]) => {
+    if (!exists(file)) return []
+    const calls = Math.min(read(file).match(directTransportPattern)?.length ?? 0, allowance)
+    return calls > 0 ? [{ file, calls }] : []
+  })
+  .sort((left, right) => right.calls - left.calls || left.file.localeCompare(right.file))
+
+const includeProgressDetails = process.argv.includes('--progress')
+
 console.log(JSON.stringify({
   sharedRuntimeContracts: failures.length === 0,
   contractFiles: contractFiles.length,
@@ -383,6 +393,10 @@ console.log(JSON.stringify({
   remainingLegacyTransportCalls,
   remainingLegacyFeatureTransportFiles: Object.keys(legacyFeatureTransportAllowances).filter(exists).length,
   remainingLegacyFeatureTransportCalls,
+  ...(includeProgressDetails ? {
+    legacyTransportDebt: debtRows(legacyTransportAllowances),
+    featureTransportDebt: debtRows(legacyFeatureTransportAllowances),
+  } : {}),
   violations: failures,
 }, null, 2))
 

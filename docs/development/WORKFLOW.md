@@ -48,6 +48,7 @@ source_of_truth: AGENTS.md, package.json and workspace package manifests
 |----------|----------------|
 | `docs/CHANGELOG.md` | 日期、任务结果、影响范围、实际验证，以及是否已推送或部署 |
 | `docs/STATUS.md` | 发生变化的当前能力、限制、端口、运行状态和最近验证数字 |
+| `docs/architecture-progress.json` | 自动生成的架构燃尽指标、最高债务和明确退出条件；禁止手工改数字 |
 | 对应活动文档 | 长期有效的业务规则、接口契约、开发步骤或运维恢复方法 |
 | 文档元数据 | 被修改或重新核对文档的 `last_verified` |
 
@@ -58,6 +59,10 @@ source_of_truth: AGENTS.md, package.json and workspace package manifests
 3. 未实际发生的推送、合并、部署或正式上线没有写成已完成。
 4. 敏感值没有进入文档、日志样例或变更记录。
 5. `pnpm docs:check` 通过。
+
+架构迁移任务开始前先运行 `pnpm architecture:progress`，默认从 `topDebt` 中选择能保持单一领域
+边界的高价值批次；完成后再次生成状态并运行 `pnpm architecture:check`。日常进度检查只需读取
+最近提交、该 JSON 与精简后的 `STATUS.md`，不再扫描完整历史流水。
 
 任务结果不能只存在于聊天、提交信息、终端输出或个人笔记中。根目录 `AGENTS.md`
 将本节作为项目级执行约束。
