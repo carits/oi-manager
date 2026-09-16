@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -129,6 +129,27 @@ describe('shared API contract adapter', () => {
     })
     expect(creditResponse.json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ dailyLimit: 20_000, purchased: expect.objectContaining({ available: 5_000 }) }),
+    }))
+  })
+
+  it('guards platform AI adjustments and serializes BigInt-backed ledger values', () => {
+    expect(parseContractBody(AiGovernanceContracts.adjustTokenPool, {
+      amount: '5000', reason: ' 补充平台测试额度 ', idempotencyKey: 'admin:test:12345678',
+    })).toEqual({ amount: 5000, reason: '补充平台测试额度', idempotencyKey: 'admin:test:12345678' })
+    expect(() => parseContractBody(AiGovernanceContracts.adjustTokenPool, {
+      amount: 0, reason: '无效调整', idempotencyKey: 'admin:test:invalid',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, AiGovernanceContracts.adjustTokenPool, {
+      id: 'ledger-1', type: 'adjust', amount: 5000n,
+      availableAfter: 9000n, reservedAfter: 100n, consumedAfter: 200n,
+      reason: '补充平台测试额度', createdAt: new Date('2026-09-16T00:00:00Z'),
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        amount: '5000', availableAfter: '9000', createdAt: '2026-09-16T00:00:00.000Z',
+      }),
     }))
   })
 

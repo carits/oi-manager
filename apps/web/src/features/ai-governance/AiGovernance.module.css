@@ -1,0 +1,12 @@
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.summary div, .card { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.summary div { display: grid; gap: var(--space-2); min-width: 0; }
+.summary span, .hint { color: var(--text-secondary); }
+.summary strong { font-size: var(--font-size-2xl); overflow-wrap: anywhere; }
+.card { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); min-width: 0; }
+.card h2, .hint { margin: 0; }
+.card h2 { font-size: var(--font-size-lg); }
+.hint { font-size: var(--font-size-sm); }
+.form { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(18rem, 2fr) auto; gap: var(--space-2); align-items: start; }
+.tableScroll { max-width: 100%; overflow-x: auto; }
+@media (max-width: 720px) { .summary { grid-template-columns: 1fr; } .form { grid-template-columns: 1fr; } }

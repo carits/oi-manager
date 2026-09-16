@@ -200,4 +200,46 @@ describe('contribution economy HTTP permissions', () => {
     await prisma.school.update({ where: { id: fixture.school.id }, data: { directoryStatus: 'legacy', nameKey: null } })
     expect((await client.get(`/api/carits/organizations/${fixture.school.organizationId}`)).status).toBe(403)
   })
+
+  it('protects platform AI governance and returns a JSON-safe adjustment ledger', async () => {
+    const userClient = createAuthenticatedRequest(app, generateTokenFromUser(user.user))
+    const platformClient = createAuthenticatedRequest(app, generateTokenFromUser(platformAdmin.user))
+    expect((await userClient.get('/api/platform-admin/ai/token-usage')).status).toBe(403)
+
+    const invalid = await platformClient.post('/api/platform-admin/ai/token-pool/adjust').send({
+      amount: 0,
+      reason: '无效调整',
+      idempotencyKey: `invalid:${crypto.randomUUID()}`,
+    })
+    expect(invalid.status).toBe(422)
+    expect(invalid.body.code).toBe('API_CONTRACT_REQUEST_INVALID')
+
+    const idempotencyKey = `platform-ai-http:${crypto.randomUUID()}`
+    const first = await platformClient.post('/api/platform-admin/ai/token-pool/adjust').send({
+      amount: 7,
+      reason: '平台 AI 治理接口测试',
+      idempotencyKey,
+    })
+    const repeated = await platformClient.post('/api/platform-admin/ai/token-pool/adjust').send({
+      amount: 7,
+      reason: '平台 AI 治理接口测试',
+      idempotencyKey,
+    })
+    expect(first.status).toBe(200)
+    expect(repeated.status).toBe(200)
+    expect(repeated.body.data.id).toBe(first.body.data.id)
+    expect(first.body.data).toMatchObject({ type: 'adjust', amount: '7' })
+    expect(typeof first.body.data.availableAfter).toBe('string')
+    const conflicting = await platformClient.post('/api/platform-admin/ai/token-pool/adjust').send({
+      amount: 8,
+      reason: '复用幂等键的冲突请求',
+      idempotencyKey,
+    })
+    expect(conflicting.status).toBe(409)
+    expect(conflicting.body.code).toBe('IDEMPOTENCY_KEY_REUSED')
+
+    const usage = await platformClient.get('/api/platform-admin/ai/token-usage')
+    expect(usage.status).toBe(200)
+    expect(usage.body.data.entries.some((entry: { id: string }) => entry.id === first.body.data.id)).toBe(true)
+  })
 })

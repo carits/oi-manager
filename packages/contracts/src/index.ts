@@ -1,4 +1,5 @@
 export * from './auth'
+export * from './ai-governance'
 export * from './assignment'
 export * from './blog'
 export * from './chat'

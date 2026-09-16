@@ -8,6 +8,16 @@ const MAX_HOURLY_PER_USER = Number(process.env.AI_MAX_HOURLY_PER_USER || 10)
 
 export class AiTokenError extends Error { constructor(public statusCode: number, public code: string, message: string) { super(message) } }
 
+function serializeLedgerEntry<T extends { amount: bigint; availableAfter: bigint; reservedAfter: bigint; consumedAfter: bigint }>(item: T) {
+  return {
+    ...item,
+    amount: item.amount.toString(),
+    availableAfter: item.availableAfter.toString(),
+    reservedAfter: item.reservedAfter.toString(),
+    consumedAfter: item.consumedAfter.toString(),
+  }
+}
+
 async function lockPool(tx: Prisma.TransactionClient) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ai-token-pool:${POOL_ID}`}, 0)) IS NULL AS locked`
   return tx.aiTokenPool.upsert({ where: { id: POOL_ID }, update: {}, create: {
@@ -83,19 +93,25 @@ export async function getAiTokenPool() {
 
 export async function listAiTokenUsage() {
   const [pool, entries] = await Promise.all([getAiTokenPool(), prisma.aiTokenLedgerEntry.findMany({ where: { poolId: POOL_ID }, orderBy: { createdAt: 'desc' }, take: 200 })])
-  return { pool, entries: entries.map(item => ({ ...item, amount: item.amount.toString(), availableAfter: item.availableAfter.toString(), reservedAfter: item.reservedAfter.toString(), consumedAfter: item.consumedAfter.toString() })) }
+  return { pool, entries: entries.map(serializeLedgerEntry) }
 }
 
 export async function adjustAiTokenPool(input: { amount: number; idempotencyKey: string; operatorUserId: string; reason: string }) {
   if (!Number.isSafeInteger(input.amount) || input.amount === 0) throw new AiTokenError(400, 'AI_TOKEN_ADJUSTMENT_INVALID', '调整 Token 必须是非零整数')
   if (!input.idempotencyKey?.trim() || !input.reason?.trim()) throw new AiTokenError(400, 'AI_TOKEN_AUDIT_REQUIRED', '必须提供幂等键和调整原因')
-  return prisma.$transaction(async tx => {
+  const entry = await prisma.$transaction(async tx => {
     await lockPool(tx)
     const existing = await tx.aiTokenLedgerEntry.findUnique({ where: { idempotencyKey: input.idempotencyKey } })
-    if (existing) return existing
+    if (existing) {
+      if (existing.type !== 'adjust' || existing.amount !== BigInt(input.amount) || existing.reason !== input.reason) {
+        throw new AiTokenError(409, 'IDEMPOTENCY_KEY_REUSED', '该幂等键已用于另一笔 Token 调整')
+      }
+      return existing
+    }
     const pool = await tx.aiTokenPool.findUniqueOrThrow({ where: { id: POOL_ID } })
     if (pool.availableTokens + BigInt(input.amount) < 0n) throw new AiTokenError(409, 'AI_TOKEN_BALANCE_NEGATIVE', '调整后可用 Token 不能为负数')
     await tx.aiTokenPool.update({ where: { id: POOL_ID }, data: { availableTokens: { increment: BigInt(input.amount) }, version: { increment: 1 } } })
     return ledger(tx, { type: 'adjust', amount: BigInt(input.amount), idempotencyKey: input.idempotencyKey, operatorUserId: input.operatorUserId, reason: input.reason })
   })
+  return serializeLedgerEntry(entry)
 }
