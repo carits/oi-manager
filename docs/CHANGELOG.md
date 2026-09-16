@@ -5,6 +5,13 @@ last_verified: 2026-09-17
 source_of_truth: Git history
 ---
 
+## 2026-09-17 — 组织学生管理 Contract 化
+
+- 学生列表、创建、编辑、启停、移出和主教练转移统一通过 Organization Feature API 与共享 Runtime Contract。
+- 删除学生页面对通用裸传输 Hooks 的依赖；主教练选择改为提交正确的 Membership ID，不再误传教师 Profile ID。
+- 旧 Route/Component transport 降至 13 文件/26 调用；生产同构组织测试 4 文件 41/41，Server/Web 构建与架构门禁通过。
+- 提交 `f61846d` 已部署：API 蓝绿切换至 3303，Web BUILD_ID `9LVMLCl3FfY_nLh20BM4B` 完成 canary 与正式消息闭环（序号 262–265）。
+
 ## 2026-09-17 — 组织教师管理 Contract 化
 
 - 教师列表、创建、编辑、启停、移出和负责人转移统一通过 Organization Feature API 与共享 Runtime Contract。
