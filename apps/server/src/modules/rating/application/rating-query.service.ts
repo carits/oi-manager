@@ -32,7 +32,7 @@ export async function getRatingLeaderboard(input: { scope: 'GLOBAL' | 'ORGANIZAT
   }
   const pool = await prisma.ratingPool.findFirst({ where: { scopeType: input.scope, organizationId: input.scope === 'GLOBAL' ? null : input.organizationId, track: selectedTrack, status: 'active' } })
   const { page, pageSize, skip } = parsePagination(input.query, { defaultPageSize: 50, maxPageSize: 200 })
-  if (!pool) return { ...paginatedResponse([], 0, page, pageSize), track: selectedTrack, scope: input.scope }
+  if (!pool) return { items: [], page, pageSize, total: 0, totalPages: 0, track: selectedTrack, scope: input.scope, organizationId: input.organizationId || null }
   const q = typeof input.query.q === 'string' ? input.query.q.trim() : ''
   const where = { poolId: pool.id, User: { status: 'active' as const, ...(q ? { username: { contains: q, mode: 'insensitive' as const } } : {}) } }
   const [accounts, total] = await Promise.all([
@@ -56,7 +56,8 @@ export async function getRatingLeaderboard(input: { scope: 'GLOBAL' | 'ORGANIZAT
       higher += group._count._all
     }
   }
-  return { ...paginatedResponse(accounts.map(account => ({ ...accountDto(account), rank: rankByRating.get(account.rating) || null, userId: account.userId, id: account.userId, username: account.User.username, avatar: account.User.avatar })), total, page, pageSize), track: selectedTrack, scope: input.scope, organizationId: input.organizationId || null }
+  const items = accounts.map(account => ({ ...accountDto(account), rank: rankByRating.get(account.rating) || null, userId: account.userId, id: account.userId, username: account.User.username, avatar: account.User.avatar }))
+  return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize), track: selectedTrack, scope: input.scope, organizationId: input.organizationId || null }
 }
 
 export async function getRatingHistory(input: { userId: string; requestingUserId: string; scope?: string; organizationId?: string; track?: unknown; query: any }) {
@@ -67,13 +68,14 @@ export async function getRatingHistory(input: { userId: string; requestingUserId
   if (scope === 'ORGANIZATION' && (!input.organizationId || !await isOrganizationMember(input.requestingUserId, input.organizationId))) throw new ContestRatingError(403, 'ORGANIZATION_RATING_ACCESS_DENIED', '无权限查看该组织 Rating')
   const pool = await prisma.ratingPool.findFirst({ where: { scopeType: scope as any, organizationId: scope === 'GLOBAL' ? null : input.organizationId, track: selectedTrack } })
   const { page, pageSize, skip } = parsePagination(input.query, { defaultPageSize: 30, maxPageSize: 100 })
-  if (!pool) return { account: null, ...paginatedResponse([], 0, page, pageSize) }
+  if (!pool) return { account: null, items: [], page, pageSize, total: 0, totalPages: 0 }
   const account = await prisma.ratingAccount.findUnique({ where: { poolId_userId: { poolId: pool.id, userId: input.userId } }, include: { Pool: { include: { Organization: { include: { School: { select: { name: true, shortName: true } } } } } } } })
-  if (!account) return { account: null, ...paginatedResponse([], 0, page, pageSize) }
+  if (!account) return { account: null, items: [], page, pageSize, total: 0, totalPages: 0 }
   const where = { accountId: account.id, Batch: { status: 'APPLIED' as const } }
   const [changes, total] = await Promise.all([
     prisma.ratingChange.findMany({ where, include: { Batch: { include: { Contest: { select: { id: true, runtimeTrainingId: true, title: true, endAt: true } } } } }, orderBy: [{ Batch: { sequenceAt: 'desc' } }, { createdAt: 'desc' }], skip, take: pageSize }),
     prisma.ratingChange.count({ where }),
   ])
-  return { account: accountDto(account), ...paginatedResponse(changes.map(change => ({ id: change.id, contest: { id: change.Batch.Contest.runtimeTrainingId, canonicalId: change.Batch.Contest.id, title: change.Batch.Contest.title, endTime: change.Batch.Contest.endAt }, rank: change.rank, fieldSize: change.fieldSize, ratingBefore: change.ratingBefore, appliedDelta: change.appliedDelta, ratingAfter: change.ratingAfter, expectedPerformance: Number(change.expectedPerformance), actualPerformance: Number(change.actualPerformance), createdAt: change.createdAt })), total, page, pageSize) }
+  const pagination = paginatedResponse(changes.map(change => ({ id: change.id, contest: { id: change.Batch.Contest.runtimeTrainingId, canonicalId: change.Batch.Contest.id, title: change.Batch.Contest.title, endTime: change.Batch.Contest.endAt }, rank: change.rank, fieldSize: change.fieldSize, ratingBefore: change.ratingBefore, appliedDelta: change.appliedDelta, ratingAfter: change.ratingAfter, expectedPerformance: Number(change.expectedPerformance), actualPerformance: Number(change.actualPerformance), createdAt: change.createdAt })), total, page, pageSize)
+  return { account: accountDto(account), items: pagination.data, page, pageSize, total, totalPages: pagination.totalPages }
 }

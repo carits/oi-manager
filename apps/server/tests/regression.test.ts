@@ -122,7 +122,7 @@ describe('current list and detail regressions', () => {
       .set('Authorization', `Bearer ${tokenFor(teacher)}`)
       .set('x-oi-organization-id', school.organizationId!)
     expect(response.status).toBe(200)
-    const ratings = response.body.data.map((item: { rating: number }) => item.rating)
+    const ratings = response.body.data.items.map((item: { rating: number }) => item.rating)
     expect(ratings).toEqual([...ratings].sort((left, right) => right - left))
   })
 

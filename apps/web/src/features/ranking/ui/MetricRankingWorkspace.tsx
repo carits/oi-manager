@@ -8,31 +8,9 @@ import { Pagination } from '@/components/ui/Pagination'
 import { Table } from '@/components/ui/Table'
 import { useAuth } from '@/features/auth'
 import { UserIdentityLink } from '@/features/user-profile'
-import apiClient, { type ApiClientResponse } from '@/lib/apiClient'
+import { getMetricRanking, type RankingMetric, type RankingScope } from '../api/rankingApi'
+import type { RankingRow, RankingTrack } from '@oi-manager/contracts'
 import styles from './MetricRankingWorkspace.module.css'
-
-export type RankingMetric = 'rating' | 'solved' | 'contribution'
-type RankingScope = 'campus' | 'personal'
-
-interface RankingRow {
-  id: string
-  userId?: string
-  name?: string
-  username: string
-  avatar?: string | null
-  grade?: string
-  rating?: number
-  solvedCount?: number
-  contributionScore?: number
-}
-
-interface RankingResponse extends ApiClientResponse<RankingRow[]> {
-  page?: number
-  pageSize?: number
-  total?: number
-  totalPages?: number
-  filters?: { grades?: string[] }
-}
 
 interface MetricRankingWorkspaceProps {
   scope: RankingScope
@@ -61,7 +39,7 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
   const searchParams = useSearchParams()
   const query = searchParams.get('q') || ''
   const isContribution = metric === 'contribution'
-  const ratingTrack = metric === 'rating' && ['OI', 'IOI', 'ACM'].includes(searchParams.get('track') || '') ? searchParams.get('track')! : 'OI'
+  const ratingTrack: RankingTrack = metric === 'rating' && ['OI', 'IOI', 'ACM'].includes(searchParams.get('track') || '') ? searchParams.get('track') as RankingTrack : 'OI'
   const grade = scope === 'campus' && !isContribution ? searchParams.get('grade') || '' : ''
   const includeGraduated = scope === 'campus' && !isContribution && searchParams.get('includeGraduated') === '1'
   const page = Math.max(Number(searchParams.get('page')) || 1, 1)
@@ -97,37 +75,26 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
     if (scope === 'campus' && !organizationId) return
     setLoading(true)
     setError(null)
-    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
-    if (query) params.set('q', query)
-    if (scope === 'campus' && !isContribution) {
-      if (grade) params.set('grade', grade)
-      if (includeGraduated) params.set('includeGraduated', '1')
-    }
-    const endpoint = isContribution
-      ? scope === 'campus' && organizationId
-        ? `/api/contributions/organizations/${organizationId}/rankings?${params}`
-        : `/api/contributions/rankings/users?${params}`
-      : metric === 'rating'
-        ? scope === 'campus'
-          ? `/api/ratings/organizations/${organizationId}/${ratingTrack}?${params}`
-          : `/api/ratings/global/${ratingTrack}?${params}`
-        : scope === 'campus'
-          ? `/api/rankings/organizations/${organizationId}/${metric}?${params}`
-          : `/api/rankings/personal/${metric}?${params}`
-    const result = await apiClient.get<RankingRow[]>(endpoint, { signal }) as RankingResponse
-    if (!result.success) {
+    try {
+      const result = await getMetricRanking({
+        scope, metric, organizationId, track: ratingTrack, signal,
+        query: {
+          page, pageSize, q: query || undefined,
+          grade: scope === 'campus' && !isContribution ? grade || undefined : undefined,
+          includeGraduated: scope === 'campus' && !isContribution && includeGraduated ? '1' : undefined,
+        },
+      })
+      setRows(result.items)
+      setTotal(result.total)
+      setTotalPages(result.totalPages)
+      setGrades(result.filters?.grades || [])
+    } catch (requestError) {
+      if (signal?.aborted) return
       setRows([])
-      setError(result.message || '排名获取失败')
-      setLoading(false)
-      return
+      setError(requestError instanceof Error ? requestError.message : '排名获取失败')
+    } finally {
+      if (!signal?.aborted) setLoading(false)
     }
-    const payload = result.data as RankingRow[] | { items?: RankingRow[] } | undefined
-    const nextRows = Array.isArray(payload) ? payload : payload?.items || []
-    setRows(nextRows)
-    setTotal(result.total || nextRows.length)
-    setTotalPages(result.totalPages || 1)
-    setGrades(result.filters?.grades || [])
-    setLoading(false)
   }, [grade, includeGraduated, metric, page, pageSize, query, pathname, ratingTrack, scope])
 
   useEffect(() => {
@@ -193,7 +160,10 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
             label: '排名',
             width: '80px',
             align: 'center',
-            render: (_, index) => <span className={`${styles.rank} ${rankClass(startIndex + index) || ''}`}>{startIndex + index + 1}</span>
+            render: (row, index) => {
+              const rank = row.rank ?? startIndex + index + 1
+              return <span className={`${styles.rank} ${rankClass(rank - 1) || ''}`}>{rank}</span>
+            }
           },
           {
             key: 'identity',

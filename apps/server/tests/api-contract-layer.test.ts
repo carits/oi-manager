@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -176,6 +176,23 @@ describe('shared API contract adapter', () => {
     }])
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       data: [expect.objectContaining({ verifiedAt: '2026-09-15T00:00:00.000Z' })],
+    }))
+  })
+
+  it('normalizes all leaderboard filters and preserves ranking metadata', () => {
+    expect(parseContractQuery(RankingContracts.organization, {
+      page: '2', pageSize: '100', q: ' student ', grade: '初二', includeGraduated: '1', ignored: 'value',
+    })).toEqual({ page: 2, pageSize: 100, q: 'student', grade: '初二', includeGraduated: '1' })
+    expect(() => parseContractQuery(RankingContracts.organization, { includeGraduated: 'yes' }))
+      .toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, RatingLeaderboardContracts.global, {
+      items: [{ id: 'user-1', userId: 'user-1', username: 'alice', avatar: null, rating: 1600, rank: 4 }],
+      page: 1, pageSize: 20, total: 1, totalPages: 1, track: 'OI', scope: 'GLOBAL', organizationId: null,
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ items: [expect.objectContaining({ rank: 4 })], track: 'OI' }),
     }))
   })
 

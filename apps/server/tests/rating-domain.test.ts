@@ -325,12 +325,12 @@ describe('rating domain HTTP and persistence', () => {
 
     const leaderboard = await createAuthenticatedRequest(app, firstToken).get('/api/ratings/global/OI')
     expect(leaderboard.status).toBe(200)
-    expect(leaderboard.body.data.map((item: any) => item.rank)).toEqual([1, 2, 2, 4])
+    expect(leaderboard.body.data.items.map((item: any) => item.rank)).toEqual([1, 2, 2, 4])
 
     const filtered = await createAuthenticatedRequest(app, firstToken).get(`/api/ratings/global/OI?q=${encodeURIComponent(fourth.user.username)}`)
     expect(filtered.status).toBe(200)
-    expect(filtered.body.data).toHaveLength(1)
-    expect(filtered.body.data[0]).toMatchObject({ userId: fourth.user.id, rank: 4 })
+    expect(filtered.body.data.items).toHaveLength(1)
+    expect(filtered.body.data.items[0]).toMatchObject({ userId: fourth.user.id, rank: 4 })
   })
 
   it('audits participant disposition and serializes it with finalization', async () => {

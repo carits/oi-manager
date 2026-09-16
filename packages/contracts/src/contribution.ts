@@ -45,7 +45,8 @@ export const ContributionRankingRowSchema = z.object({
 })
 
 const EventPageSchema = paginatedDataSchema(ContributionEventSchema)
-const RankingSchema = z.object({ items: z.array(ContributionRankingRowSchema) })
+const RankingQuerySchema = PaginationQuerySchema.extend({ q: z.string().trim().max(100).optional() })
+const RankingSchema = paginatedDataSchema(ContributionRankingRowSchema)
 const OrganizationEventsSchema = z.object({ items: z.array(ContributionEventSchema) })
 export const AuditContributionEventSchema = ContributionEventSchema.extend({
   createdAt: DateTimeWireSchema,
@@ -67,8 +68,8 @@ export type ContributionEvidence = z.infer<typeof EvidenceSchema>
 export const ContributionContracts = {
   summary: defineApiEndpoint({ key: 'contribution.summary', method: 'GET', scope: 'account', data: ContributionSummarySchema }),
   mine: defineApiEndpoint({ key: 'contribution.mine', method: 'GET', scope: 'account', query: PaginationQuerySchema, data: EventPageSchema }),
-  userRanking: defineApiEndpoint({ key: 'contribution.user-ranking', method: 'GET', scope: 'account', query: z.object({}).passthrough(), data: RankingSchema }),
-  organizationRanking: defineApiEndpoint({ key: 'contribution.organization-ranking', method: 'GET', scope: 'organization', query: z.object({}).passthrough(), data: RankingSchema }),
+  userRanking: defineApiEndpoint({ key: 'contribution.user-ranking', method: 'GET', scope: 'account', query: RankingQuerySchema, data: RankingSchema }),
+  organizationRanking: defineApiEndpoint({ key: 'contribution.organization-ranking', method: 'GET', scope: 'organization', query: RankingQuerySchema, data: RankingSchema }),
   organizationEvents: defineApiEndpoint({ key: 'contribution.organization-events', method: 'GET', scope: 'organization', data: OrganizationEventsSchema }),
   audit: defineApiEndpoint({ key: 'contribution.audit', method: 'GET', scope: 'platform', query: AuditQuerySchema, data: AuditPageSchema }),
   evidence: defineApiEndpoint({ key: 'contribution.evidence', method: 'GET', scope: 'platform', query: EvidenceQuerySchema, data: EvidenceSchema }),

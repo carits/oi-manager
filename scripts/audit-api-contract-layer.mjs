@@ -15,6 +15,7 @@ const contractFiles = [
   'packages/contracts/src/notification.ts',
   'packages/contracts/src/platform-binding.ts',
   'packages/contracts/src/problem.ts',
+  'packages/contracts/src/ranking.ts',
   'packages/contracts/src/assignment.ts',
   'packages/contracts/src/blog.ts',
   'packages/contracts/src/chat.ts',
@@ -72,6 +73,7 @@ const slices = [
   { name: 'account-wallet', legacyDirectory: 'wallet', allowedAnyTokens: 0 },
   { name: 'contribution', legacyDirectory: 'contribution', allowedAnyTokens: 0 },
   { name: 'platform-binding', legacyDirectory: null, allowedAnyTokens: 0 },
+  { name: 'ranking', legacyDirectory: 'ranking', allowedAnyTokens: 0 },
   // These three slices physically absorb the pre-existing UI in this rollout.
   // Migrated slices are held to the same zero-any boundary as the original slices.
   { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
@@ -128,6 +130,9 @@ const contractedBoundaries = [
   ['apps/server/src/modules/carits/resource.routes.ts', 'EvaluationCreditContracts'],
   ['apps/server/src/modules/contribution/contribution.routes.ts', 'ContributionContracts'],
   ['apps/server/src/modules/platform-binding/platform-binding.routes.ts', 'PlatformBindingContracts'],
+  ['apps/server/src/modules/ranking/ranking.routes.ts', 'RankingContracts'],
+  ['apps/server/src/modules/rating/rating-domain.routes.ts', 'RatingLeaderboardContracts'],
+  ['apps/server/src/modules/rating/rating-domain.routes.ts', 'RatingAccountContracts'],
   ['apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx', 'setAssignmentManualCompletion'],
   ['apps/web/src/features/blog/ui/BlogDiscovery.tsx', 'listBlogDiscovery'],
   ['apps/web/src/features/blog/ui/BlogDiscoveryDetail.tsx', 'getBlogDiscovery'],
@@ -187,6 +192,11 @@ const contractedBoundaries = [
   ['apps/web/src/features/contribution/ui/PlatformContributionPage.tsx', 'listContributionAudit'],
   ['apps/web/src/features/platform-binding/api/platformBindingApi.ts', 'PlatformBindingContracts'],
   ['apps/web/src/features/platform-binding/ui/PlatformBindingsPage.tsx', 'listPlatformBindings'],
+  ['apps/web/src/features/ranking/api/rankingApi.ts', 'RankingContracts'],
+  ['apps/web/src/features/ranking/api/rankingApi.ts', 'RatingLeaderboardContracts'],
+  ['apps/web/src/features/ranking/api/rankingApi.ts', 'ContributionContracts'],
+  ['apps/web/src/features/ranking/api/rankingApi.ts', 'RatingAccountContracts'],
+  ['apps/web/src/features/ranking/ui/MetricRankingWorkspace.tsx', 'getMetricRanking'],
 ]
 for (const [file, symbol] of contractedBoundaries) {
   if (!read(file).includes(symbol)) failures.push(`${file} bypasses ${symbol}`)
@@ -207,7 +217,7 @@ for (const file of appFiles) {
   if (/from ['"]@\/components\/(?:assignment|blog|chat|data-market|wallet|submission|problem|team|training|training-engine)\//.test(source)) {
     failures.push(`${relative} bypasses a feature public API`)
   }
-  if (/from ['"]@\/features\/(?:assignment|auth|user-profile|blog|chat|data-market|carits|evaluation-credits|account-wallet|contribution|platform-binding|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|team|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
+  if (/from ['"]@\/features\/(?:assignment|auth|user-profile|blog|chat|data-market|carits|evaluation-credits|account-wallet|contribution|platform-binding|ranking|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|team|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
 }

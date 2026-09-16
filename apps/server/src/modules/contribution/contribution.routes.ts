@@ -37,14 +37,14 @@ contributionRouter.get('/me/events', asyncHandler(async (req, res) => {
 }))
 
 contributionRouter.get('/rankings/users', asyncHandler(async (req, res) => {
-  parseContractQuery(ContributionContracts.userRanking, req.query)
-  sendContractData(res, ContributionContracts.userRanking, await listContributionRanking())
+  const query = parseContractQuery(ContributionContracts.userRanking, req.query)
+  sendContractData(res, ContributionContracts.userRanking, await listContributionRanking(undefined, query))
 }))
 
 contributionRouter.get('/organizations/:organizationId/rankings', asyncHandler(async (req, res) => {
   if (!requireOrganization(req, res)) return
-  parseContractQuery(ContributionContracts.organizationRanking, req.query)
-  sendContractData(res, ContributionContracts.organizationRanking, await listContributionRanking(req.params.organizationId))
+  const query = parseContractQuery(ContributionContracts.organizationRanking, req.query)
+  sendContractData(res, ContributionContracts.organizationRanking, await listContributionRanking(req.params.organizationId, query))
 }))
 
 contributionRouter.get('/organizations/:organizationId/events', asyncHandler(async (req, res) => {

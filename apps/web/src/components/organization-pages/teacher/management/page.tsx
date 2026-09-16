@@ -14,7 +14,7 @@ import TeachersManagementContent from '@/components/management/TeachersManagemen
 import { WalletPage } from '@/features/account-wallet'
 import { apiClient } from '@/lib/apiClient'
 import { JoinApplicationsManagement, OrganizationInvitationsManagement, OrganizationJoinSettings } from '@/components/organization/OrganizationJoinManagement'
-import styles from '@/components/ranking/RankingPage.module.css'
+import styles from '@/features/ranking/RankingPage.module.css'
 
 type Tab = 'students' | 'teachers' | 'applications' | 'invitations' | 'settings' | 'wallet'
 

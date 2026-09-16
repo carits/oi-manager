@@ -691,7 +691,7 @@ describe('Team Operations', () => {
         .set('Authorization', `Bearer ${personalToken}`)
 
       expect(response.status).toBe(200)
-      const rows = response.body.data.filter((row: any) =>
+      const rows = response.body.data.items.filter((row: any) =>
         row.username === usernameA || row.username === usernameB
       )
       expect(rows).toHaveLength(2)

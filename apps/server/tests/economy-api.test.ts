@@ -77,6 +77,34 @@ describe('contribution economy HTTP permissions', () => {
     expect(audit.body.data.items.every((item: any) => item.status === 'accepted')).toBe(true)
   })
 
+  it('searches and paginates contribution rankings through the shared ranking contract', async () => {
+    const other = await createTestUser()
+    const now = new Date()
+    await prisma.contributionEvent.createMany({ data: [
+      {
+        id: crypto.randomUUID(), actorUserId: user.user.id, type: 'candidate_promoted', sourceType: 'testcase_candidate', sourceId: crypto.randomUUID(),
+        score: 100, ruleCode: 'canonical_testcase_promoted', ruleVersion: 1, dedupeKey: `ranking:${user.user.id}`,
+        status: 'accepted', occurredAt: now, acceptedAt: now, evidence: {},
+      },
+      {
+        id: crypto.randomUUID(), actorUserId: other.user.id, type: 'hack_promoted', sourceType: 'testcase_candidate', sourceId: crypto.randomUUID(),
+        score: 150, ruleCode: 'canonical_testcase_promoted', ruleVersion: 1, dedupeKey: `ranking:${other.user.id}`,
+        status: 'accepted', occurredAt: now, acceptedAt: now, evidence: {},
+      },
+    ] })
+    const client = createAuthenticatedRequest(app, generateTokenFromUser(user.user))
+    const page = await client.get('/api/contributions/rankings/users?page=1&pageSize=1')
+    expect(page.status).toBe(200)
+    expect(page.body.data).toMatchObject({ page: 1, pageSize: 1, total: 2, totalPages: 2 })
+    expect(page.body.data.items).toHaveLength(1)
+    expect(page.body.data.items[0]).toMatchObject({ userId: other.user.id, contributionScore: 150 })
+
+    const filtered = await client.get(`/api/contributions/rankings/users?q=${encodeURIComponent(user.user.username)}`)
+    expect(filtered.status).toBe(200)
+    expect(filtered.body.data.items).toHaveLength(1)
+    expect(filtered.body.data.items[0]).toMatchObject({ userId: user.user.id, contributionScore: 100 })
+  })
+
   it('lets platform auditors inspect bound Candidate and Revision evidence through the audit API', async () => {
     const problem = await createTestProblem({ ownerId: user.user.id, title: '贡献证据测试题' })
     const revisionId = crypto.randomUUID()

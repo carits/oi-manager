@@ -102,8 +102,21 @@ export async function listMyContributionEvents(
   }
 }
 
-export async function listContributionRanking(organizationId?: string) {
-  return { items: await rankingRows(organizationId) }
+export async function listContributionRanking(
+  organizationId: string | undefined,
+  query: { page: number; pageSize: number; q?: string },
+) {
+  const normalizedQuery = query.q?.trim().toLowerCase() || ''
+  const rows = (await rankingRows(organizationId))
+    .filter(row => !normalizedQuery || row.username.toLowerCase().includes(normalizedQuery))
+  const start = (query.page - 1) * query.pageSize
+  return {
+    items: rows.slice(start, start + query.pageSize),
+    page: query.page,
+    pageSize: query.pageSize,
+    total: rows.length,
+    totalPages: Math.ceil(rows.length / query.pageSize),
+  }
 }
 
 export async function listOrganizationContributionEvents(organizationId: string) {

@@ -27,7 +27,8 @@ export async function getPersonalRatingRanking(queryParams: any) {
   const data = profiles.map(profile => ({
     id: profile.userId, username: profile.User.username, avatar: profile.User.avatar, rating: profile.rating,
   }))
-  return paginatedResponse(data, total, page, pageSize)
+  const pagination = paginatedResponse(data, total, page, pageSize)
+  return { items: pagination.data, page, pageSize, total, totalPages: pagination.totalPages }
 }
 
 export async function getPersonalSolvedRanking(queryParams: any) {
@@ -68,7 +69,7 @@ export async function getPersonalSolvedRanking(queryParams: any) {
     solvedCount: solvedByUser.get(profile.userId)?.size || 0,
   })).sort((left, right) => right.solvedCount - left.solvedCount || left.username.localeCompare(right.username))
   const start = (page - 1) * pageSize
-  return paginatedResponse(ranked.slice(start, start + pageSize), ranked.length, page, pageSize)
+  return { items: ranked.slice(start, start + pageSize), page, pageSize, total: ranked.length, totalPages: Math.ceil(ranked.length / pageSize) }
 }
 
 export async function getOrganizationRanking(organizationId: string, metric: string, queryParams: any) {
@@ -126,7 +127,7 @@ export async function getOrganizationRanking(organizationId: string, metric: str
   }
   const start = (page - 1) * pageSize
   return {
-    ...paginatedResponse(ranked.slice(start, start + pageSize), ranked.length, page, pageSize),
+    items: ranked.slice(start, start + pageSize), page, pageSize, total: ranked.length, totalPages: Math.ceil(ranked.length / pageSize),
     filters: {
       grades: getAllGrades(school.schoolType, school.educationSystem, school.educationSystemDetail as any).filter(Boolean),
     },

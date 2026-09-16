@@ -2,11 +2,11 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import PersonalRankingsTab from '@/components/organization-pages/student/rating/PersonalRankingsTab'
-import { PersonalRatingDashboard } from '@/components/ranking/PersonalRatingDashboard'
+import { PersonalRatingDashboard } from '@/features/ranking'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
-import styles from '@/components/ranking/RankingPage.module.css'
+import styles from '@/features/ranking/RankingPage.module.css'
 
 type RankingTab = 'rating' | 'solved' | 'contribution'
 

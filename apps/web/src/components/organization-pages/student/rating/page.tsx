@@ -7,9 +7,9 @@ import { Empty } from '@/components/ui/Empty'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
-import { MetricRankingWorkspace } from '@/components/ranking/MetricRankingWorkspace'
+import { MetricRankingWorkspace } from '@/features/ranking'
 import { isPersonalPath } from '@/lib/workspacePath'
-import styles from '@/components/ranking/RankingPage.module.css'
+import styles from '@/features/ranking/RankingPage.module.css'
 
 type TabType = 'rating' | 'solved' | 'contribution'
 
