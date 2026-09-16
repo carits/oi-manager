@@ -51,6 +51,37 @@ async function boundUser() {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('remote submission archive', () => {
+  it('serves one runtime contract for platform metadata, binding status and request validation', async () => {
+    const platforms = await request(app).get('/api/platform-bindings/platforms')
+    expect(platforms.status).toBe(200)
+    expect(platforms.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'codeforces', supported: true }),
+      expect.objectContaining({ id: 'luogu', supported: true }),
+    ]))
+
+    const config = await request(app).get('/api/platform-bindings/codeforces/config-schema')
+    expect(config.status).toBe(200)
+    expect(config.body.data.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'JSESSIONID', required: true }),
+    ]))
+
+    const { token } = await boundUser()
+    const bindings = await request(app)
+      .get('/api/platform-bindings')
+      .set('Authorization', `Bearer ${token}`)
+    expect(bindings.status).toBe(200)
+    expect(bindings.body.data).toEqual([
+      expect.objectContaining({ platform: 'codeforces', bindingStatus: 'bound', platformUsername: 'e2e_handle' }),
+    ])
+
+    const invalid = await request(app)
+      .post('/api/platform-bindings/codeforces/bind')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ extra: { JSESSIONID: { nested: 'invalid' } } })
+    expect(invalid.status).toBe(422)
+    expect(invalid.body.code).toBe('API_CONTRACT_REQUEST_INVALID')
+  })
+
   it('imports remote records as idempotent archive-only submissions', async () => {
     const { user, token } = await boundUser()
     vi.stubGlobal('fetch', vi.fn(async () => cfResponse([

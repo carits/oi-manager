@@ -37,6 +37,7 @@ export interface PlatformBindingResponse {
   platform: BindingPlatform
   platformUsername: string | null
   bindingStatus: BindingStatus
+  statusMessage?: string | null
   verifiedAt: Date | null
 }
 

@@ -1,10 +1,10 @@
 'use client'
 
-import AdminPlatformBindingsPage from '@/app/admin/platform-bindings/page'
+import { PlatformBindingsPage } from '@/features/platform-binding'
 export default function PlatformAdminPlatformBindingsPage() {
   return (
     <>
-      <AdminPlatformBindingsPage />
+      <PlatformBindingsPage />
     </>
   )
 }

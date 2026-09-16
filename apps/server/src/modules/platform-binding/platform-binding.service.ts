@@ -38,6 +38,7 @@ export class PlatformBindingService {
       platform: b.platform as BindingPlatform,
       platformUsername: b.platformUsername,
       bindingStatus: b.bindingStatus as PlatformBindingResponse['bindingStatus'],
+      statusMessage: b.statusMessage,
       verifiedAt: b.verifiedAt
     }))
   }

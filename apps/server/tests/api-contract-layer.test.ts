@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -157,6 +157,25 @@ describe('shared API contract adapter', () => {
           evidence: expect.objectContaining({ promotedRevisionId: 'revision-2' }),
         })],
       }),
+    }))
+  })
+
+  it('guards OJ platform binding secrets and normalizes verified dates', () => {
+    expect(parseContractBody(PlatformBindingContracts.bind, {
+      extra: { JSESSIONID: 'session-cookie' },
+    })).toEqual({ extra: { JSESSIONID: 'session-cookie' } })
+    expect(() => parseContractBody(PlatformBindingContracts.bind, {
+      extra: { JSESSIONID: { nested: 'not-supported' } },
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, PlatformBindingContracts.list, [{
+      id: 'binding-1', platform: 'codeforces', platformUsername: 'tourist',
+      bindingStatus: 'bound', statusMessage: null,
+      verifiedAt: new Date('2026-09-15T00:00:00Z'),
+    }])
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ verifiedAt: '2026-09-15T00:00:00.000Z' })],
     }))
   })
 

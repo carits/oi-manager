@@ -4,7 +4,9 @@
  */
 
 import { Router, Request, Response } from 'express'
+import { PlatformBindingContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import { PlatformBindingService } from './platform-binding.service'
 import type { BindingPlatform } from './platform-binding.types'
 import {
@@ -37,7 +39,7 @@ function codeforcesArchiveInputError(body: unknown): string | null {
  */
 platformBindingRouter.get('/platforms', (req: Request, res: Response) => {
   const platforms = service.getSupportedPlatforms()
-  res.json({ success: true, data: platforms })
+  sendContractData(res, PlatformBindingContracts.platforms, platforms)
 })
 
 /**
@@ -55,7 +57,7 @@ platformBindingRouter.get('/:platform/config-schema', (req: Request, res: Respon
     })
   }
 
-  res.json({ success: true, data: schema })
+  sendContractData(res, PlatformBindingContracts.config, schema)
 })
 
 /**
@@ -66,8 +68,9 @@ platformBindingRouter.get('/', authenticate, async (req: Request, res: Response)
   try {
     const userId = (req as any).user.userId
     const bindings = await service.getUserBindings(userId)
-    res.json({ success: true, data: bindings })
+    sendContractData(res, PlatformBindingContracts.list, bindings)
   } catch (error) {
+    if (sendContractError(error, res)) return
     console.error('Get platform bindings error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -83,8 +86,9 @@ platformBindingRouter.get('/:platform', authenticate, async (req: Request, res: 
     const platform = req.params.platform as BindingPlatform
 
     const result = await service.getUserPlatformBinding(userId, platform)
-    res.json({ success: true, data: result })
+    sendContractData(res, PlatformBindingContracts.detail, result)
   } catch (error) {
+    if (sendContractError(error, res)) return
     console.error('Get platform binding error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -98,7 +102,7 @@ platformBindingRouter.post('/:platform/bind', authenticate, async (req: Request,
   try {
     const userId = (req as any).user.userId
     const platform = req.params.platform as BindingPlatform
-    const { platformUsername, password, extra } = req.body
+    const { platformUsername, password, extra } = parseContractBody(PlatformBindingContracts.bind, req.body ?? {})
 
     // 验证平台是否支持
     const supportedPlatforms = service.getSupportedPlatforms()
@@ -130,11 +134,12 @@ platformBindingRouter.post('/:platform/bind', authenticate, async (req: Request,
     })
 
     if (result.success) {
-      res.json({ success: true, data: result })
+      sendContractData(res, PlatformBindingContracts.bind, result)
     } else {
       res.status(400).json({ success: false, message: result.message })
     }
   } catch (error) {
+    if (sendContractError(error, res)) return
     console.error('Bind platform error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -152,11 +157,12 @@ platformBindingRouter.delete('/:platform', authenticate, async (req: Request, re
     const result = await service.unbindPlatform(userId, platform)
 
     if (result.success) {
-      res.json({ success: true, message: result.message })
+      sendContractData(res, PlatformBindingContracts.unbind, { unbound: true })
     } else {
       res.status(400).json({ success: false, message: result.message })
     }
   } catch (error) {
+    if (sendContractError(error, res)) return
     console.error('Unbind platform error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -174,11 +180,12 @@ platformBindingRouter.post('/:platform/refresh', authenticate, async (req: Reque
     const result = await service.refreshBinding(userId, platform)
 
     if (result.success) {
-      res.json({ success: true, message: result.message })
+      sendContractData(res, PlatformBindingContracts.refresh, { refreshed: true })
     } else {
       res.status(400).json({ success: false, message: result.message })
     }
   } catch (error) {
+    if (sendContractError(error, res)) return
     console.error('Refresh binding error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
