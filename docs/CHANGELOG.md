@@ -5,6 +5,13 @@ last_verified: 2026-09-16
 source_of_truth: Git history
 ---
 
+## 2026-09-16 — 组织加入管理契约与 Feature Slice 收口
+
+- 学校加入申请、成员邀请、加入策略、校园摘要和教师选择统一通过 `features/organization-account` 的公共 API/UI 边界；旧组织管理组件目录删除，教师管理 Route 仅负责装配。
+- 扩展 Organization Runtime Contract，Server Route 与 Web Feature API 共同校验管理列表、审批、邀请、撤销和策略更新；可选审批资料继续保持既有业务语义。
+- 生产同构组织契约 4 文件 40/40、Contracts/Server/Web 构建及 UI/路由/架构门禁通过；契约边界增至 111，旧页面直连降至 20 文件 45 调用。
+- 提交 `030ef60`、`24c3771` 已部署：API 蓝绿切换至 3302，Web BUILD_ID `VaZGDHIeY_4fpHA3mbW_8` 经 canary 与正式消息闭环（序号 242–245）后提升。
+
 ## 2026-09-16 — 平台题库与 OJ 账号管理契约/Feature Slice 收口
 
 - 平台题库/OJ Fetcher 与 OJ 账号管理迁入 `features/problem`、`features/oj-account`，对应 App Route 仅保留公共入口装配；共移除页面层 19 个直接 API 调用。
