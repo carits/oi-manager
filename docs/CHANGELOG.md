@@ -5,6 +5,15 @@ last_verified: 2026-09-16
 source_of_truth: Git history
 ---
 
+## 2026-09-16 — AI Governance 契约与 Feature Slice 收口
+
+- 平台 AI Token、调整流水和 Candidate Evaluation Budget 统一迁入 `features/ai-governance/{api,ui}`；平台 Route 只负责装配 Feature 公共入口。
+- 新增 `AiGovernanceContracts`，Server Route 和 Web Feature API 共用 Token Pool、流水、评估预算及调整请求/响应 Schema。
+- 修复调整成功响应包含原始 Prisma `BigInt` 时可能出现的 JSON 500；相同幂等键更换调整金额或原因现在稳定返回 409，不再静默返回另一笔流水。
+- 页面补齐首屏骨架、错误重试、后台刷新、审计说明、空表状态和窄屏横向表格；不再由页面手写接口 DTO。
+- 生产同构 `ai-governance-contract` 4 文件 42/42、Web 40 文件 181 项、Contracts/Server/Web 构建及 UI/导航/架构门禁通过；无数据库结构或业务数据迁移。
+- 提交 `823194e`、`5c48716` 已推送 `main`；API 蓝绿切换至 3302，Web BUILD_ID `yHRqSBrdFmLsQOXHiXKFc` 完成 canary 与正式消息闭环（序号 226–229）。
+
 ## 2026-09-16 — Ranking 契约与 Feature Slice 收口
 
 - 个人/校园 Rating、做题量、贡献榜及个人 Rating 账户/历史统一迁入 `features/ranking/{api,ui}`，删除旧 `components/ranking` 领域目录。
