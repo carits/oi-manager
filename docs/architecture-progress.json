@@ -38,10 +38,10 @@
     "implementationFiles": 0,
     "activeReferences": 0,
     "modelPresent": false,
-    "databaseSubmissions": null,
-    "databaseArchivedProblems": null,
-    "migrationVerified": false,
-    "evidence": null
+    "databaseSubmissions": 0,
+    "databaseArchivedProblems": 0,
+    "migrationVerified": true,
+    "evidence": "docs/operations/remote-archive-retirement-evidence.json"
   },
   "judgeCompatibility": {
     "remainingColumns": 12,
@@ -162,5 +162,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-16T13:00:13.044Z"
+  "updatedAt": "2026-09-16T13:58:00.358Z"
 }

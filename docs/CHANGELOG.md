@@ -11,7 +11,8 @@ source_of_truth: Git history
 - 增加一次性数据库迁移：先阻断仍有 JudgeRun、活动、Blog 或题解引用的归档提交，再删除归档提交与 `UserArchivedProblem`，最后用 CHECK 约束禁止 `submitMethod=archive` 回流。
 - Judge 读取、队列、排名、Rating、训练和 IO 迁移移除归档特殊分支，统一以 CurrentJudgeRun 为结果事实源。
 - 提交详情接入共享 Runtime Contract 与 Submission Feature API；架构 telemetry 新增远端归档、Judge 兼容列及外部运维证据状态。
-- 本条记录代码完成状态；生产迁移、在线 404/远程提交验证与证据回填完成后再记录正式 rollout。
+- 生产发布完成：迁移前备份通过恢复审计，68 条归档提交和 26 条归档题均为零引用；迁移后记录归零、归档表删除、数据库写入约束生效，2,469 条正常远程 ID 记录保持不变。
+- 生产同构隔离测试 3 文件 54/54；旧接口在线均为 404。API 切换至 3302，Web BUILD_ID `_hmy7gvp9tYj4lAyMPD5a` 完成 canary 与正式双账号消息闭环（序号 250–253）。
 
 ## 2026-09-16 — 架构进度 telemetry 与低上下文工作流
 

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-09-16T21:53:00+08:00",
+  "commit": "7fc71470",
+  "databaseSubmissions": 0,
+  "databaseArchivedProblems": 0,
+  "normalRemoteIdentityRecords": 2469,
+  "archiveWriteConstraint": true,
+  "migrationVerified": true,
+  "retiredEndpointsReturn404": true,
+  "apiSlot": 3302,
+  "apiReadiness": "ready",
+  "webBuildId": "_hmy7gvp9tYj4lAyMPD5a",
+  "backup": {
+    "name": "oi_manager_20260916_215021.dump",
+    "restoreAuditVerified": true
+  },
+  "isolatedTests": {
+    "files": 3,
+    "tests": 54,
+    "passed": 54
+  }
+}

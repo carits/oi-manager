@@ -13,7 +13,7 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 ## 最近 rollout
 
-- 2026-09-16: P1 远端 OJ 代码归档退役进入发布批次。Codeforces/洛谷历史提交同步、归档题 CRUD、源码回抓、定时抓取及 Judge/排名/Rating 特判已从代码中删除；新增一次性迁移，在确认归档提交无 JudgeRun、比赛、训练、作业、Blog 或题解引用后删除 68 条归档提交和 26 条归档题，并以数据库约束禁止 `submitMethod=archive` 回流。正常远程提交、结果轮询、账号绑定与 `ojRemoteId` 保持不变。提交详情成为第 25 个 Runtime Contract，Feature transport 从 244 降至 242；架构 telemetry 增加远端归档、Judge 兼容列、PITR、真实告警和云监控证据项。生产迁移与在线证据尚未完成前，本项不标记退出。
+- 2026-09-16: P1 远端 OJ 代码归档已正式退役。生产迁移前完成 34 MiB 备份及恢复审计，复核 68 条归档提交与 26 条归档题均无 JudgeRun、比赛、训练、作业、Blog 或题解引用；迁移后两类记录为 0、`UserArchivedProblem` 表已删除、数据库 CHECK 禁止 `submitMethod=archive` 回流。Codeforces/洛谷历史同步、归档题 CRUD、源码回抓、定时抓取及 Judge/排名/Rating 特判全部删除，旧接口在线返回 404；2,469 条正常远程 ID 记录、账号绑定、远程提交和结果轮询保持不变。Submission 成为第 25 个 Runtime Contract，生产同构隔离测试 3 文件 54/54；API 3303→3302，Web BUILD_ID `_hmy7gvp9tYj4lAyMPD5a` 经 canary/正式双账号消息闭环（序号 250–253）后提升。远端代码归档退出条件已满足，P1-01～P1-04、Judge 兼容列和外部运维项继续按机器状态燃尽。
 
 - 2026-09-16: 架构迁移进度已产品化为仓库 telemetry。新增自动生成的 `architecture-progress.json`、跨提交单调门禁、Top Debt 任务排序、compact diff 和 GitHub Job Summary；CI 在 PR、main push 和每日定时执行。当前机器状态为 Contract 24、Feature Slice 24、边界 111，旧页面 transport 19 文件/42 调用、Feature UI/Model 44 文件/244 调用、Contest runtime 兼容点 4、生产 HTTPS 证据 0/5。`STATUS.md` 从 561 行缩减为当前说明与最近五次 rollout，旧流水移入 `docs/archive/history/STATUS-2026-09.md`；`AGENTS.md` 固化选择批次、验证和退出条件。学生选择器同时迁入 Organization Feature 并接入 Student/Team Runtime Contract；生产同构组织测试 4 文件 40/40、状态过期/指标反弹反向验证和文档门禁通过。提交 `11d4461`、`0ef9f65`、`67a0bd2` 已推送；API 3302→3303，Web BUILD_ID `6s6HJjDUEg29eJxSLwH7e` 经 canary/正式消息闭环（序号 246–249）后提升。
 
