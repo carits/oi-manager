@@ -5,6 +5,14 @@ last_verified: 2026-09-16
 source_of_truth: Git history
 ---
 
+## 2026-09-16 — Ranking 契约与 Feature Slice 收口
+
+- 个人/校园 Rating、做题量、贡献榜及个人 Rating 账户/历史统一迁入 `features/ranking/{api,ui}`，删除旧 `components/ranking` 领域目录。
+- 新增 Ranking Runtime Contract，并扩展 Rating 与 Contribution Contract；四类排名统一使用 `items + page + pageSize + total + totalPages`，Server Route 和 Web Feature API 共用 Schema。
+- 修复贡献排名此前忽略搜索和分页的问题；Rating 页面直接展示服务端竞赛名次，正确保留并列名次和搜索后的全池名次。
+- 生产同构 `ranking-contract` 5 文件 75/75、Web 40 文件 181 项、Contracts/Server/Web 构建与 UI/导航/架构门禁通过；无数据库结构或业务数据迁移。
+- 提交 `061cc5e` 已推送 `main`；API 蓝绿切换至 3303，Web BUILD_ID `hPU1R1HmMI3K5R0jjpfJt` 完成 canary 与正式消息闭环（序号 222–225）。
+
 ## 2026-09-16 — Platform Binding 契约与 Feature Slice 收口
 
 - 账号、超级管理员和平台管理员的平台绑定页面统一迁入 `features/platform-binding/{api,ui}`，删除两套重复页面实现和旧共享样式；Route 只保留 Feature 公共入口装配。
