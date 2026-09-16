@@ -173,17 +173,32 @@ const CreateTeacherBodySchema = TeacherProfileBodySchema.extend({
 
 const MemberStatusBodySchema = z.object({ status: z.enum(['active', 'disabled']) })
 
+export const OrganizationStudentSchema = z.object({
+  id: z.string().min(1), membershipId: z.string().min(1), userId: z.string().min(1), name: z.string().min(1),
+  gender: NullableTextSchema, enrollmentYear: z.number().int().nullable(), rating: z.number(), status: z.string(),
+  headTeacherMembershipId: z.string().nullable(),
+  headTeacher: z.object({ id: z.string().min(1), name: z.string() }).nullable(),
+  user: z.object({ id: z.string().min(1), username: z.string(), avatar: NullableTextSchema.optional(), status: z.string() }),
+})
+
 export const OrganizationStudentOptionPageSchema = z.object({
-  data: z.array(z.object({
-    userId: z.string().min(1),
-    name: z.string(),
-    enrollmentYear: z.number().int().nullable().optional(),
-    user: z.object({ username: z.string().optional() }).passthrough().optional(),
-  }).passthrough()),
+  data: z.array(OrganizationStudentSchema),
   total: z.number().int().nonnegative(), page: z.number().int().positive(), pageSize: z.number().int().positive(),
   totalPages: z.number().int().nonnegative(),
   filters: z.object({ grades: z.array(z.string()).optional() }).passthrough().optional(),
 }).passthrough()
+
+const StudentProfileBodySchema = z.object({
+  name: z.string().trim().min(1).max(80), gender: NullableTextSchema.optional(),
+  enrollmentYear: z.number().int().min(1900).max(2200).nullable().optional(),
+  password: z.string().min(6).max(200).optional(), headTeacherMembershipId: z.string().min(1).optional(),
+  targetContest: NullableTextSchema.optional(), tags: z.array(z.string()).nullable().optional(), notes: NullableTextSchema.optional(),
+  avatar: NullableTextSchema.optional(),
+})
+
+const CreateStudentBodySchema = StudentProfileBodySchema.extend({
+  username: z.string().trim().min(1).max(80), password: z.string().min(6).max(200),
+})
 
 const JoinDecisionBodySchema = z.object({
   relationType: z.string().min(1).optional(),
@@ -334,5 +349,22 @@ export const OrganizationContracts = {
       q: z.string().trim().max(100).optional(), grade: z.string().max(40).optional(),
       teamId: z.string().optional(), status: z.string().optional(), headTeacherMembershipId: z.string().optional(),
     }),
+  }),
+  createStudent: defineApiEndpoint({
+    key: 'organization.student.create', method: 'POST', scope: 'organization',
+    body: CreateStudentBodySchema,
+    data: z.object({ id: z.string().min(1), membershipId: z.string().min(1), userId: z.string().min(1) }),
+  }),
+  updateStudent: defineApiEndpoint({
+    key: 'organization.student.update', method: 'PUT', scope: 'organization',
+    body: StudentProfileBodySchema, data: z.object({ updated: z.literal(true) }),
+  }),
+  updateStudentStatus: defineApiEndpoint({
+    key: 'organization.student.status.update', method: 'PUT', scope: 'organization',
+    body: MemberStatusBodySchema, data: z.object({ updated: z.literal(true) }),
+  }),
+  archiveStudent: defineApiEndpoint({
+    key: 'organization.student.archive', method: 'DELETE', scope: 'organization',
+    data: z.object({ archived: z.literal(true) }),
   }),
 } as const

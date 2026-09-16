@@ -37,11 +37,17 @@ export const updateOrganizationTeacher = (organizationId: string, profileId: str
 export const updateOrganizationTeacherStatus = (organizationId: string, profileId: string, status: 'active' | 'disabled') => apiClient.mutateContract(OrganizationContracts.updateTeacherStatus, `/api/organizations/${encoded(organizationId)}/members/teachers/${encoded(profileId)}/status`, { status })
 export const archiveOrganizationTeacher = (organizationId: string, profileId: string) => apiClient.mutateContract(OrganizationContracts.archiveTeacher, `/api/organizations/${encoded(organizationId)}/members/teachers/${encoded(profileId)}`, undefined)
 export const transferOrganizationPrincipal = (organizationId: string, newPrincipalMembershipId: string) => apiClient.mutateContract(OrganizationContracts.transferPrincipal, `/api/organizations/${encoded(organizationId)}/members/principal-transfer`, { newPrincipalMembershipId })
-export const getOrganizationStudentOptions = (organizationId: string, query: { page: number; pageSize: number; q?: string; grade?: string; teamId?: string }) => {
+export const getOrganizationStudentOptions = (organizationId: string, query: { page: number; pageSize: number; q?: string; grade?: string; teamId?: string; status?: string; headTeacherMembershipId?: string }) => {
   const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) })
   if (query.q) params.set('q', query.q)
   if (query.grade) params.set('grade', query.grade)
   if (query.teamId) params.set('teamId', query.teamId)
+  if (query.status) params.set('status', query.status)
+  if (query.headTeacherMembershipId) params.set('headTeacherMembershipId', query.headTeacherMembershipId)
   return apiClient.queryContract(OrganizationContracts.studentOptions, `/api/organizations/${encoded(organizationId)}/members/students?${params}`)
 }
+export const createOrganizationStudent = (organizationId: string, body: EndpointBody<typeof OrganizationContracts.createStudent>) => apiClient.mutateContract(OrganizationContracts.createStudent, `/api/organizations/${encoded(organizationId)}/members/students`, body)
+export const updateOrganizationStudent = (organizationId: string, profileId: string, body: EndpointBody<typeof OrganizationContracts.updateStudent>) => apiClient.mutateContract(OrganizationContracts.updateStudent, `/api/organizations/${encoded(organizationId)}/members/students/${encoded(profileId)}`, body)
+export const updateOrganizationStudentStatus = (organizationId: string, profileId: string, status: 'active' | 'disabled') => apiClient.mutateContract(OrganizationContracts.updateStudentStatus, `/api/organizations/${encoded(organizationId)}/members/students/${encoded(profileId)}/status`, { status })
+export const archiveOrganizationStudent = (organizationId: string, profileId: string) => apiClient.mutateContract(OrganizationContracts.archiveStudent, `/api/organizations/${encoded(organizationId)}/members/students/${encoded(profileId)}`, undefined)
 export const updateOrganizationJoinPolicy = (organizationId: string, joinPolicy: EndpointBody<typeof OrganizationContracts.updateJoinPolicy>['joinPolicy']) => apiClient.mutateContract(OrganizationContracts.updateJoinPolicy, `/api/organizations/${encoded(organizationId)}/join-policy`, { joinPolicy })

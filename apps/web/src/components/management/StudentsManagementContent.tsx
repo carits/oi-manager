@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import unifiedStyles from './StudentsManagementContent.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { useParams, useRouter } from 'next/navigation'
@@ -13,27 +13,35 @@ import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { FormField } from '@/components/ui/FormField'
 import { Pagination } from '@/components/ui/Pagination'
-import { useStudents, Student } from '@/hooks/data/useStudents'
 import { useModal } from '@/hooks/form/useModal'
-import { useDelete } from '@/hooks/actions/useDelete'
 import { useForm } from '@/hooks/form/useForm'
 import { useAuth } from '@/features/auth'
-import apiClient from '@/lib/apiClient'
+import {
+  archiveOrganizationStudent,
+  createOrganizationStudent,
+  getOrganizationStudentOptions,
+  getOrganizationTeacherOptions,
+  updateOrganizationStudent,
+  updateOrganizationStudentStatus,
+} from '@/features/organization-account'
+import { OrganizationContracts, type EndpointData } from '@oi-manager/contracts'
 import { calculateStudentGrade } from '@/lib/grade'
 import { Badge } from '@/components/ui/Badge'
 import { ActionMenu, ActionMenuItem, IdentityCell, ManagementToolbar, managementListStyles } from '@/components/management/ManagementList'
 
 interface Teacher {
   id: string
+  membershipId: string
   name: string
 }
+
+type StudentListData = EndpointData<typeof OrganizationContracts.studentOptions>
+type Student = StudentListData['data'][number]
 
 export default function StudentsManagementContent() {
   const router = useRouter()
   const { organizationId } = useParams<{ organizationId?: string }>()
   const { user, sessionKey } = useAuth()
-  const studentsEndpoint = organizationId ? '/api/organizations/' + organizationId + '/members/students' : '/api/organizations/__retired__/members/students'
-  const teachersEndpoint = organizationId ? '/api/organizations/' + organizationId + '/members/teachers' : null
   const toast = useToast()
   const [confirmState, setConfirmState] = useState<{ id: string; message: string; action: () => Promise<void> } | null>(null)
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -50,9 +58,32 @@ export default function StudentsManagementContent() {
 
   const filterParams = useMemo(() => ({ ...filters, ...pagination }), [filters, pagination])
 
-  const { data, loading, refetch } = useStudents(filterParams, sessionKey, studentsEndpoint)
+  const [data, setData] = useState<StudentListData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const refetch = useCallback(async () => {
+    if (!organizationId) return
+    setLoading(true)
+    try {
+      setData(await getOrganizationStudentOptions(organizationId, filterParams))
+    } catch (error) {
+      console.error('Failed to fetch students:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [filterParams, organizationId, sessionKey])
+  useEffect(() => { void refetch() }, [refetch])
   const modal = useModal<Student>()
-  const { deleteItem } = useDelete(studentsEndpoint, refetch)
+  const deleteItem = async (id: string, confirmMessage: string) => {
+    if (!organizationId || !window.confirm(confirmMessage)) return false
+    try {
+      await archiveOrganizationStudent(organizationId, id)
+      await refetch()
+      return true
+    } catch {
+      toast.error('删除失败')
+      return false
+    }
+  }
 
   // 禁用/启用账号
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -65,14 +96,10 @@ export default function StudentsManagementContent() {
       action: async () => {
         setTogglingId(studentId)
         try {
-          const endpoint = studentsEndpoint + '/' + studentId + '/status'
-          const res = await apiClient.put(endpoint, { status: newStatus })
-          if (res.success) {
-            toast.success(`${action}成功`)
-            refetch()
-          } else {
-            toast.error(res.message || `${action}失败`)
-          }
+          if (!organizationId) throw new Error('当前学校上下文无效')
+          await updateOrganizationStudentStatus(organizationId, studentId, newStatus)
+          toast.success(`${action}成功`)
+          refetch()
         } catch {
           toast.error(`${action}失败`)
         } finally {
@@ -97,17 +124,15 @@ export default function StudentsManagementContent() {
     const fetchTeachers = async () => {
       if (!isPrincipal) return
       try {
-        if (!teachersEndpoint) return
-        const result = await apiClient.get<{ data: Teacher[]; total: number }>(teachersEndpoint + '?pageSize=100')
-        if (result.success && result.data) {
-          setTeachers(result.data.data)
-        }
+        if (!organizationId) return
+        const result = await getOrganizationTeacherOptions(organizationId)
+        setTeachers(result.data)
       } catch (error) {
         console.error('Failed to fetch teachers:', error)
       }
     }
     void fetchTeachers()
-  }, [isPrincipal, teachersEndpoint])
+  }, [isPrincipal, organizationId])
 
   // 学生列表直接使用后端返回的数据（后端已根据 headTeacherId 筛选）
   const students = data?.data || []
@@ -138,20 +163,17 @@ export default function StudentsManagementContent() {
     }
 
     try {
-      const result = await apiClient.put(studentsEndpoint + '/' + transferringStudent.id, {
+      if (!organizationId) throw new Error('当前学校上下文无效')
+      await updateOrganizationStudent(organizationId, transferringStudent.id, {
         name: transferringStudent.name,
         gender: transferringStudent.gender,
         enrollmentYear: transferringStudent.enrollmentYear,
         headTeacherMembershipId: selectedTeacherId
       })
-      if (result.success) {
-        toast.success('转移成功')
-        setTransferringStudent(null)
-        setSelectedTeacherId('')
-        refetch()
-      } else {
-        toast.error(result.message || '转移失败')
-      }
+      toast.success('转移成功')
+      setTransferringStudent(null)
+      setSelectedTeacherId('')
+      refetch()
     } catch (error) {
       toast.error('转移失败')
     }
@@ -172,7 +194,7 @@ export default function StudentsManagementContent() {
         <ManagementToolbar total={total} noun="学生">
           <Input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索学生" />
           <Select className={managementListStyles.select} value={filters.grade} onChange={event => updateFilter('grade', event.target.value)} aria-label="年级筛选"><option value="">年级：全部</option>{gradeOptions.map(grade => <option key={grade} value={grade}>{grade}</option>)}</Select>
-          {isPrincipal && <Select className={managementListStyles.select} value={filters.headTeacherMembershipId} onChange={event => updateFilter('headTeacherMembershipId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</Select>}
+          {isPrincipal && <Select className={managementListStyles.select} value={filters.headTeacherMembershipId} onChange={event => updateFilter('headTeacherMembershipId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.membershipId}>{teacher.name}</option>)}</Select>}
           <Select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></Select>
         </ManagementToolbar>
         <Table
@@ -205,7 +227,7 @@ export default function StudentsManagementContent() {
                       >
                         <option value="">选择教练</option>
                         {teachers.map((teacher) => (
-                          <option key={teacher.id} value={teacher.id}>
+                          <option key={teacher.id} value={teacher.membershipId}>
                             {teacher.name}
                           </option>
                         ))}
@@ -262,7 +284,6 @@ export default function StudentsManagementContent() {
         {modal.isOpen && (
           <StudentFormModal
             student={modal.data}
-            studentsEndpoint={studentsEndpoint}
             organizationId={organizationId}
             onClose={modal.close}
             onSuccess={() => {
@@ -297,13 +318,11 @@ export default function StudentsManagementContent() {
 // 学生表单弹窗组件
 function StudentFormModal({
   student,
-  studentsEndpoint,
   organizationId,
   onClose,
   onSuccess
 }: {
   student: Student | null
-  studentsEndpoint: string
   organizationId?: string
   onClose: () => void
   onSuccess: () => void
@@ -331,15 +350,10 @@ function StudentFormModal({
           headTeacherMembershipId: student?.headTeacherMembershipId || undefined
         }
 
-        const result = student
-          ? await apiClient.put(`${studentsEndpoint}/${student.id}`, body)
-          : await apiClient.post(studentsEndpoint, body)
-
-        if (result.success) {
-          onSuccess()
-        } else {
-          toast.error(result.message || '操作失败')
-        }
+        if (!organizationId) throw new Error('当前学校上下文无效')
+        if (student) await updateOrganizationStudent(organizationId, student.id, body)
+        else await createOrganizationStudent(organizationId, { ...body, username: values.username, password: values.password })
+        onSuccess()
       } catch {
         toast.error('操作失败')
       } finally {

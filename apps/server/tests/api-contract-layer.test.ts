@@ -555,6 +555,14 @@ describe('shared API contract adapter', () => {
       .toEqual({ status: 'disabled' })
     expect(parseContractBody(OrganizationContracts.transferPrincipal, { newPrincipalMembershipId: 'membership-2' }))
       .toEqual({ newPrincipalMembershipId: 'membership-2' })
+    expect(parseContractBody(OrganizationContracts.createStudent, {
+      username: 'student2', password: 'secure-password', name: '学生乙', enrollmentYear: 2026,
+    })).toEqual({ username: 'student2', password: 'secure-password', name: '学生乙', enrollmentYear: 2026 })
+    expect(() => parseContractBody(OrganizationContracts.createStudent, {
+      username: 'student2', password: '123', name: '学生乙',
+    })).toThrowError(ApiContractError)
+    expect(parseContractBody(OrganizationContracts.updateStudentStatus, { status: 'active' }))
+      .toEqual({ status: 'active' })
 
     const campus = responseStub()
     sendContractData(campus.response, OrganizationContracts.campusSummary, {

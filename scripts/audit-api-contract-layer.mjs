@@ -10,7 +10,6 @@ const failures = []
 // direct transport is forbidden and every completed feature slice must reduce
 // or remove its allowance. The target state is an empty object.
 const legacyTransportAllowances = {
-  'apps/web/src/components/management/StudentsManagementContent.tsx': 5,
   'apps/web/src/app/admin/schools/page.tsx': 5,
   'apps/web/src/app/admin/schools/[id]/edit/page.tsx': 5,
   'apps/web/src/app/admin/schools/[id]/page.tsx': 3,

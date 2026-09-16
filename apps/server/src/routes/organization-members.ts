@@ -101,19 +101,24 @@ organizationMemberRouter.get('/teachers', authenticate, endpoint('获取教师�
 }))
 
 organizationMemberRouter.post('/students', authenticate, endpoint('创建学生失败', 'membership.manage.students', async (req, res, context) => {
-  res.status(201).json({ success: true, data: await createOrganizationStudent(context, req.body) })
+  const body = parseContractBody(OrganizationContracts.createStudent, req.body)
+  sendContractData(res.status(201), OrganizationContracts.createStudent, await createOrganizationStudent(context, body))
 }))
 
 organizationMemberRouter.put('/students/:profileId', authenticate, endpoint('更新学生失败', 'membership.manage.students', async (req, res, context) => {
-  await updateOrganizationStudent(context, req.params.profileId, req.body); res.json({ success: true })
+  await updateOrganizationStudent(context, req.params.profileId, parseContractBody(OrganizationContracts.updateStudent, req.body))
+  sendContractData(res, OrganizationContracts.updateStudent, { updated: true })
 }))
 
 organizationMemberRouter.put('/students/:profileId/status', authenticate, endpoint('更新学生状态失败', 'membership.manage.students', async (req, res, context) => {
-  await setOrganizationStudentStatus(context, req.params.profileId, req.body.status); res.json({ success: true })
+  const body = parseContractBody(OrganizationContracts.updateStudentStatus, req.body)
+  await setOrganizationStudentStatus(context, req.params.profileId, body.status)
+  sendContractData(res, OrganizationContracts.updateStudentStatus, { updated: true })
 }))
 
 organizationMemberRouter.delete('/students/:profileId', authenticate, endpoint('移出学生失败', 'membership.manage.students', async (req, res, context) => {
-  await archiveOrganizationStudent(context, req.params.profileId); res.json({ success: true, message: '学生已移出校园' })
+  await archiveOrganizationStudent(context, req.params.profileId)
+  sendContractData(res, OrganizationContracts.archiveStudent, { archived: true })
 }))
 
 organizationMemberRouter.post('/principal-transfer', authenticate, endpoint('转移学校负责人失败', 'membership.manage.teachers', async (req, res, context) => {
