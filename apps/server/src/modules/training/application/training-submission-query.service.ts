@@ -34,7 +34,12 @@ export async function queryTrainingSubmissions(params: {
   const where: any = {
     submitScope: training.type === 'contest' ? 'contest' : 'training',
     trainingId: training.id,
-    currentJudgeRunId: { not: null },
+    AND: [{
+      OR: [
+        { currentJudgeRunId: { not: null } },
+        { currentJudgeRunId: null, result: { not: '' } },
+      ],
+    }],
   }
   if (filters.userId) where.userId = filters.userId
   if (filters.problemId) {

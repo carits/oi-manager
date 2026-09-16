@@ -1,7 +1,7 @@
 /** 评测记录 HTTP API。授权与持久化由 application service 负责。 */
 import { Router } from 'express'
 import { SubmissionContracts } from '@oi-manager/contracts'
-import { sendContractData } from '../lib/api-contract'
+import { sendContractData, sendContractError } from '../lib/api-contract'
 import { authenticate, getAccountRole, getResourceScope, isAdmin, isPersonalContext } from '../middleware/auth'
 import { logger } from '../lib/logger'
 import {
@@ -27,6 +27,7 @@ function contextOf(req: any): SubmissionQueryContext {
 }
 
 function sendError(res: any, error: unknown, action: string, fallback: string) {
+  if (sendContractError(error, res)) return res
   if (error instanceof SubmissionQueryError) {
     return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
   }
