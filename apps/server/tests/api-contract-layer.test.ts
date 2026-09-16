@@ -545,6 +545,16 @@ describe('shared API contract adapter', () => {
     })).toThrowError(ApiContractError)
     expect(parseContractBody(OrganizationContracts.updateCampusAnnouncement, { announcement: '校园公告' }))
       .toEqual({ announcement: '校园公告' })
+    expect(parseContractBody(OrganizationContracts.createTeacher, {
+      username: 'teacher2', password: 'secure-password', name: '教师乙', email: 'teacher2@example.com',
+    })).toEqual({ username: 'teacher2', password: 'secure-password', name: '教师乙', email: 'teacher2@example.com' })
+    expect(() => parseContractBody(OrganizationContracts.createTeacher, {
+      username: 'teacher2', password: '123', name: '教师乙',
+    })).toThrowError(ApiContractError)
+    expect(parseContractBody(OrganizationContracts.updateTeacherStatus, { status: 'disabled' }))
+      .toEqual({ status: 'disabled' })
+    expect(parseContractBody(OrganizationContracts.transferPrincipal, { newPrincipalMembershipId: 'membership-2' }))
+      .toEqual({ newPrincipalMembershipId: 'membership-2' })
 
     const campus = responseStub()
     sendContractData(campus.response, OrganizationContracts.campusSummary, {

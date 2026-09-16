@@ -12,7 +12,14 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import { useModal } from '@/hooks/form/useModal'
 import { useForm } from '@/hooks/form/useForm'
-import apiClient from '@/lib/apiClient'
+import {
+  archiveOrganizationTeacher,
+  createOrganizationTeacher,
+  getOrganizationTeacherOptions,
+  transferOrganizationPrincipal,
+  updateOrganizationTeacher,
+  updateOrganizationTeacherStatus,
+} from '@/features/organization-account'
 import { Badge } from '@/components/ui/Badge'
 import { ActionMenu, ActionMenuItem, IdentityCell, ManagementToolbar, managementListStyles } from '@/components/management/ManagementList'
 
@@ -46,7 +53,6 @@ interface TeachersTabProps {
 }
 
 export default function TeachersTab({ school, isPrincipal, showHeader = false, showActions = true, organizationId }: TeachersTabProps) {
-  const teachersEndpoint = '/api/organizations/' + organizationId + '/members/teachers'
   const toast = useToast()
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,18 +78,15 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 
   useEffect(() => {
     fetchTeachers()
-  }, [teachersEndpoint, pagination.page, pagination.pageSize, filters])
+  }, [organizationId, pagination.page, pagination.pageSize, filters])
 
   const fetchTeachers = async () => {
     setLoading(true)
     try {
-      const result = await apiClient.get<{ data: Teacher[]; total: number }>(
-        teachersEndpoint + '?' + new URLSearchParams({ page: String(pagination.page), pageSize: String(pagination.pageSize), ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) })
-      )
-      if (result.success) {
-        setTeachers(result.data?.data || [])
-        setTotal(result.data?.total || 0)
-      }
+      if (!organizationId) throw new Error('当前学校上下文无效')
+      const result = await getOrganizationTeacherOptions(organizationId, { ...pagination, ...filters })
+      setTeachers(result.data)
+      setTotal(result.total)
     } catch (error) {
       console.error('Failed to fetch teachers:', error)
     } finally {
@@ -99,13 +102,10 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
       danger: true,
       onConfirm: async () => {
         try {
-          const result = await apiClient.delete(teachersEndpoint + '/' + id)
-          if (result.success) {
-            toast.success('删除成功')
-            fetchTeachers()
-          } else {
-            toast.error(result.message || '删除失败')
-          }
+          if (!organizationId) throw new Error('当前学校上下文无效')
+          await archiveOrganizationTeacher(organizationId, id)
+          toast.success('删除成功')
+          fetchTeachers()
         } catch {
           toast.error('删除失败')
         } finally {
@@ -126,13 +126,10 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
       danger: newStatus === 'disabled',
       onConfirm: async () => {
         try {
-          const result = await apiClient.put(teachersEndpoint + '/' + teacher.id + '/status', { status: newStatus })
-          if (result.success) {
-            toast.success(`${action}成功`)
-            fetchTeachers()
-          } else {
-            toast.error(result.message || '操作失败')
-          }
+          if (!organizationId) throw new Error('当前学校上下文无效')
+          await updateOrganizationTeacherStatus(organizationId, teacher.id, newStatus)
+          toast.success(`${action}成功`)
+          fetchTeachers()
         } catch {
           toast.error('操作失败')
         } finally {
@@ -156,16 +153,12 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
       onConfirm: async () => {
         setTransferring(true)
         try {
-          const result = await apiClient.post('/api/organizations/' + organizationId + '/members/principal-transfer', {
-            newPrincipalMembershipId: selectedNewPrincipal          })
-          if (result.success) {
-            toast.success('转移成功')
-            transferModal.close()
-            setConfirmState(prev => ({ ...prev, isOpen: false }))
-            window.location.reload()
-          } else {
-            toast.error(result.message || '转移失败')
-          }
+          if (!organizationId) throw new Error('当前学校上下文无效')
+          await transferOrganizationPrincipal(organizationId, selectedNewPrincipal)
+          toast.success('转移成功')
+          transferModal.close()
+          setConfirmState(prev => ({ ...prev, isOpen: false }))
+          window.location.reload()
         } catch {
           toast.error('转移失败')
         } finally {
@@ -260,7 +253,6 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
           teacher={addModal.data}
           schoolId={school.id}
           organizationId={organizationId}
-          teachersEndpoint={teachersEndpoint}
           onClose={addModal.close}
           onSuccess={() => {
             addModal.close()
@@ -314,14 +306,12 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 
 function TeacherFormModal({
   organizationId,
-  teachersEndpoint,
   teacher,
   schoolId,
   onClose,
   onSuccess
 }: {
   organizationId?: string
-  teachersEndpoint: string
   teacher: Teacher | null
   schoolId: string
   onClose: () => void
@@ -362,15 +352,10 @@ function TeacherFormModal({
           body.password = values.password
         }
 
-        const result = teacher
-          ? await apiClient.put(teachersEndpoint + '/' + teacher.id, body)
-          : await apiClient.post(teachersEndpoint, body)
-
-        if (result.success) {
-          onSuccess()
-        } else {
-          toast.error(result.message || '操作失败')
-        }
+        if (!organizationId) throw new Error('当前学校上下文无效')
+        if (teacher) await updateOrganizationTeacher(organizationId, teacher.id, body)
+        else await createOrganizationTeacher(organizationId, body)
+        onSuccess()
       } catch {
         toast.error('操作失败')
       } finally {

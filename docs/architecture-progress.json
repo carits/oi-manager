@@ -5,8 +5,8 @@
   "contractedBoundaries": 114,
   "transport": {
     "legacy": {
-      "files": 15,
-      "calls": 37
+      "files": 14,
+      "calls": 31
     },
     "feature": {
       "files": 43,
@@ -162,5 +162,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-16T14:07:19.928Z"
+  "updatedAt": "2026-09-16T23:15:11.639Z"
 }

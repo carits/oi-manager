@@ -148,11 +148,30 @@ const CampusUpdateBodySchema = z.object({
   contactPerson: NullableTextSchema.optional(), contactPhone: NullableTextSchema.optional(), contactEmail: NullableTextSchema.optional(),
 })
 
+export const OrganizationTeacherSchema = z.object({
+  id: z.string().min(1), membershipId: z.string().min(1), userId: z.string().min(1), name: z.string().min(1),
+  title: NullableTextSchema, email: NullableTextSchema, phone: NullableTextSchema,
+  status: z.string(), memberRole: z.string(),
+  user: z.object({ id: z.string().min(1), username: z.string(), avatar: NullableTextSchema.optional(), status: z.string() }),
+})
+
 export const OrganizationTeacherOptionPageSchema = z.object({
-  data: z.array(z.object({ membershipId: z.string().min(1), name: z.string() }).passthrough()),
+  data: z.array(OrganizationTeacherSchema),
   total: z.number().int().nonnegative(), page: z.number().int().positive(), pageSize: z.number().int().positive(),
   totalPages: z.number().int().nonnegative(),
 }).passthrough()
+
+const TeacherProfileBodySchema = z.object({
+  name: z.string().trim().min(1).max(80), title: NullableTextSchema.optional(), email: NullableTextSchema.optional(),
+  phone: NullableTextSchema.optional(), avatar: NullableTextSchema.optional(), bio: NullableTextSchema.optional(),
+  password: z.string().min(6).max(200).optional(),
+})
+
+const CreateTeacherBodySchema = TeacherProfileBodySchema.extend({
+  username: z.string().trim().min(1).max(80), password: z.string().min(6).max(200),
+})
+
+const MemberStatusBodySchema = z.object({ status: z.enum(['active', 'disabled']) })
 
 export const OrganizationStudentOptionPageSchema = z.object({
   data: z.array(z.object({
@@ -286,6 +305,28 @@ export const OrganizationContracts = {
   teacherOptions: defineApiEndpoint({
     key: 'organization.teacher.options', method: 'GET', scope: 'organization', data: OrganizationTeacherOptionPageSchema,
     query: PaginationQuerySchema.extend({ q: z.string().optional(), status: z.string().optional(), role: z.string().optional() }),
+  }),
+  createTeacher: defineApiEndpoint({
+    key: 'organization.teacher.create', method: 'POST', scope: 'organization',
+    body: CreateTeacherBodySchema,
+    data: z.object({ id: z.string().min(1), membershipId: z.string().min(1), userId: z.string().min(1) }),
+  }),
+  updateTeacher: defineApiEndpoint({
+    key: 'organization.teacher.update', method: 'PUT', scope: 'organization',
+    body: TeacherProfileBodySchema, data: z.object({ updated: z.literal(true) }),
+  }),
+  updateTeacherStatus: defineApiEndpoint({
+    key: 'organization.teacher.status.update', method: 'PUT', scope: 'organization',
+    body: MemberStatusBodySchema, data: z.object({ updated: z.literal(true) }),
+  }),
+  archiveTeacher: defineApiEndpoint({
+    key: 'organization.teacher.archive', method: 'DELETE', scope: 'organization',
+    data: z.object({ archived: z.literal(true) }),
+  }),
+  transferPrincipal: defineApiEndpoint({
+    key: 'organization.principal.transfer', method: 'POST', scope: 'organization',
+    body: z.object({ newPrincipalMembershipId: z.string().min(1) }),
+    data: z.object({ principalMembershipId: z.string().min(1) }),
   }),
   studentOptions: defineApiEndpoint({
     key: 'organization.student.options', method: 'GET', scope: 'organization', data: OrganizationStudentOptionPageSchema,

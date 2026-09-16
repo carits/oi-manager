@@ -117,21 +117,27 @@ organizationMemberRouter.delete('/students/:profileId', authenticate, endpoint('
 }))
 
 organizationMemberRouter.post('/principal-transfer', authenticate, endpoint('转移学校负责人失败', 'membership.manage.teachers', async (req, res, context) => {
-  res.json({ success: true, data: await transferOrganizationPrincipal(context, req.body.newPrincipalMembershipId) })
+  const body = parseContractBody(OrganizationContracts.transferPrincipal, req.body)
+  sendContractData(res, OrganizationContracts.transferPrincipal, await transferOrganizationPrincipal(context, body.newPrincipalMembershipId))
 }))
 
 organizationMemberRouter.post('/teachers', authenticate, endpoint('创建教师失败', 'membership.manage.teachers', async (req, res, context) => {
-  res.status(201).json({ success: true, data: await createOrganizationTeacher(context, req.body) })
+  const body = parseContractBody(OrganizationContracts.createTeacher, req.body)
+  sendContractData(res.status(201), OrganizationContracts.createTeacher, await createOrganizationTeacher(context, body))
 }))
 
 organizationMemberRouter.put('/teachers/:profileId', authenticate, endpoint('更新教师失败', 'membership.manage.teachers', async (req, res, context) => {
-  await updateOrganizationTeacher(context, req.params.profileId, req.body); res.json({ success: true })
+  await updateOrganizationTeacher(context, req.params.profileId, parseContractBody(OrganizationContracts.updateTeacher, req.body))
+  sendContractData(res, OrganizationContracts.updateTeacher, { updated: true })
 }))
 
 organizationMemberRouter.put('/teachers/:profileId/status', authenticate, endpoint('更新教师状态失败', 'membership.manage.teachers', async (req, res, context) => {
-  await setOrganizationTeacherStatus(context, req.params.profileId, req.body.status); res.json({ success: true })
+  const body = parseContractBody(OrganizationContracts.updateTeacherStatus, req.body)
+  await setOrganizationTeacherStatus(context, req.params.profileId, body.status)
+  sendContractData(res, OrganizationContracts.updateTeacherStatus, { updated: true })
 }))
 
 organizationMemberRouter.delete('/teachers/:profileId', authenticate, endpoint('移出教师失败', 'membership.manage.teachers', async (req, res, context) => {
-  await archiveOrganizationTeacher(context, req.params.profileId); res.json({ success: true, message: '教师已移出校园' })
+  await archiveOrganizationTeacher(context, req.params.profileId)
+  sendContractData(res, OrganizationContracts.archiveTeacher, { archived: true })
 }))
