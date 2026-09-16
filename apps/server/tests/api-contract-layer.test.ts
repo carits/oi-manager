@@ -48,6 +48,15 @@ describe('shared API contract adapter', () => {
       success: true,
       data: expect.objectContaining({ accountRole: 'user', organizationRole: 'teacher', schoolId: 'school-1' }),
     }))
+
+    const avatarResponse = responseStub()
+    sendContractData(avatarResponse.response, AuthContracts.uploadAvatar, {
+      avatar: '/api/files/avatar-1/public', fileId: 'avatar-1', internalPath: '/private/path',
+    })
+    expect(avatarResponse.json).toHaveBeenCalledWith({
+      success: true,
+      data: { avatar: '/api/files/avatar-1/public', fileId: 'avatar-1' },
+    })
   })
 
   it('guards public profile type and organization projection', () => {

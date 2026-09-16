@@ -6,6 +6,82 @@ const read = relative => fs.readFileSync(path.join(root, relative), 'utf8')
 const exists = relative => fs.existsSync(path.join(root, relative))
 const failures = []
 
+// Temporary migration ledger for legacy page/component transport calls. New
+// direct transport is forbidden and every completed feature slice must reduce
+// or remove its allowance. The target state is an empty object.
+const legacyTransportAllowances = {
+  'apps/web/src/app/platform-admin/problems/page.tsx': 10,
+  'apps/web/src/components/organization/OrganizationJoinManagement.tsx': 10,
+  'apps/web/src/app/platform-admin/oj-accounts/page.tsx': 9,
+  'apps/web/src/components/organization-pages/teacher/school/components/TeachersTab.tsx': 6,
+  'apps/web/src/components/management/StudentsManagementContent.tsx': 5,
+  'apps/web/src/app/admin/schools/page.tsx': 5,
+  'apps/web/src/app/admin/schools/[id]/edit/page.tsx': 5,
+  'apps/web/src/components/pickers/StudentPicker.tsx': 3,
+  'apps/web/src/app/admin/schools/[id]/page.tsx': 3,
+  'apps/web/src/components/business/UserManagement.tsx': 2,
+  'apps/web/src/app/admin/users/page.tsx': 2,
+  'apps/web/src/app/platform-admin/users/page.tsx': 2,
+  'apps/web/src/components/organization-pages/teacher/management/page.tsx': 2,
+  'apps/web/src/components/team-import/ImportPreview.tsx': 1,
+  'apps/web/src/app/admin/schools/new/page.tsx': 1,
+  'apps/web/src/app/admin/users/new-platform-admin/page.tsx': 1,
+  'apps/web/src/components/organization-pages/teacher/school/components/HomeTab.tsx': 1,
+  'apps/web/src/components/organization-pages/teacher/school/components/EditSchoolModal.tsx': 1,
+  'apps/web/src/components/ui/PasswordResetModal.tsx': 1,
+  'apps/web/src/components/telemetry/ClientTelemetry.tsx': 1,
+  'apps/web/src/components/feature/PlannedFeaturePage.tsx': 1,
+  'apps/web/src/components/campus/OrganizationCampusPage.tsx': 1,
+  'apps/web/src/app/admin/users/[id]/page.tsx': 1,
+}
+const legacyFeatureTransportAllowances = {
+  'apps/web/src/features/training-session/ui/TrainingSessionWorkspace.tsx': 18,
+  'apps/web/src/features/contest-rating/ui/TrainingRatingPanel.tsx': 3,
+  'apps/web/src/features/training-session/ui/TrainingSessionListPage.tsx': 10,
+  'apps/web/src/features/contest-rating/rating-workspace.test.ts': 1,
+  'apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx': 3,
+  'apps/web/src/features/team/ui/TeamProblemListsTab.tsx': 4,
+  'apps/web/src/features/blog/ui/ProblemRelatedBlogs.tsx': 1,
+  'apps/web/src/features/blog/ui/BlogWorkspace.tsx': 11,
+  'apps/web/src/features/blog/ui/BlogSeriesManager.tsx': 5,
+  'apps/web/src/features/blog/ui/BlogReferenceEditor.tsx': 3,
+  'apps/web/src/features/blog/ui/BlogModerationWorkbench.tsx': 4,
+  'apps/web/src/features/blog/ui/BlogListPage.tsx': 1,
+  'apps/web/src/features/contest/ui/TrainingStatementManagementPage.tsx': 2,
+  'apps/web/src/features/blog/ui/BlogCommunityPanel.tsx': 10,
+  'apps/web/src/features/contest/ui/TrainingFormModal.tsx': 22,
+  'apps/web/src/features/contest/ui/TrainingDetailPage.tsx': 2,
+  'apps/web/src/features/chat/ui/ChatReportWorkbench.tsx': 3,
+  'apps/web/src/features/team/ui/TeamActivityOverview.tsx': 3,
+  'apps/web/src/features/training-session/ui/TrainingDesignAuxiliary.tsx': 4,
+  'apps/web/src/features/assignment/ui/AssignmentListPage.tsx': 1,
+  'apps/web/src/features/submission/model/useSubmissionDetail.ts': 2,
+  'apps/web/src/features/solution-review/ui/SolutionEditorialPanel.tsx': 13,
+  'apps/web/src/features/problem/ui/JudgeSettingsTab.tsx': 4,
+  'apps/web/src/features/problem/ui/NewProblemListPage.tsx': 1,
+  'apps/web/src/features/problem/ui/JudgeProgramWizard.tsx': 11,
+  'apps/web/src/features/problem/ui/ProblemHackConfigPanel.tsx': 2,
+  'apps/web/src/features/problem/ui/ProblemForm.tsx': 9,
+  'apps/web/src/features/problem/ui/ProblemDetail.tsx': 9,
+  'apps/web/src/features/problem/ui/ProblemHackPanel.tsx': 8,
+  'apps/web/src/features/problem/ui/ProblemNote.tsx': 3,
+  'apps/web/src/features/problem/ui/ProblemListPage.tsx': 1,
+  'apps/web/src/features/problem/ui/UserProblemContentPanel.tsx': 5,
+  'apps/web/src/features/problem/ui/ProblemListDetailPage.tsx': 18,
+  'apps/web/src/features/problem/ui/ProblemList.tsx': 1,
+  'apps/web/src/features/problem/ui/StatementVersionWorkspace.tsx': 8,
+  'apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx': 19,
+  'apps/web/src/features/problem/ui/ProblemTestGraphPanel.tsx': 2,
+  'apps/web/src/features/problem/ui/ProblemQualityPanel.tsx': 6,
+  'apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx': 8,
+  'apps/web/src/features/contest/ui/components/TrainingContentSelectionModal.tsx': 3,
+  'apps/web/src/features/contest/ui/components/TrainingHackSyncAction.tsx': 2,
+  'apps/web/src/features/contest/ui/components/TrainingContentSnapshotEditorModal.tsx': 2,
+  'apps/web/src/features/contest/ui/components/TrainingRankingSubmissionsModal.tsx': 1,
+  'apps/web/src/features/contest/ui/components/TrainingRejudgeModal.tsx': 2,
+}
+const directTransportPattern = /\bapiClient\.(?:get|post|put|patch|delete|query|mutate)(?:Contract)?\b/g
+
 const contractFiles = [
   'packages/contracts/src/http.ts',
   'packages/contracts/src/auth.ts',
@@ -226,6 +302,26 @@ for (const file of appFiles) {
   if (/from ['"]@\/features\/(?:assignment|auth|user-profile|blog|chat|data-market|carits|evaluation-credits|account-wallet|contribution|platform-binding|ranking|ai-governance|organization-account|notification|workspace|contest-rating|solution-review|submission|problem|team|contest|training-session)\/(?:api|model|ui)\//.test(source)) {
     failures.push(`${relative} imports feature internals instead of its public index`)
   }
+  const directCalls = source.match(directTransportPattern)?.length ?? 0
+  const allowance = legacyTransportAllowances[relative] ?? 0
+  if (directCalls > allowance) failures.push(`${relative} adds direct API transport (${directCalls} > legacy allowance ${allowance})`)
+}
+
+const componentFiles = []
+collectComponents(path.join(root, 'apps/web/src/components'))
+function collectComponents(directory) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name)
+    if (entry.isDirectory()) collectComponents(absolute)
+    else if (/\.(?:ts|tsx)$/.test(entry.name)) componentFiles.push(absolute)
+  }
+}
+for (const file of componentFiles) {
+  const source = fs.readFileSync(file, 'utf8')
+  const relative = path.relative(root, file).replaceAll('\\', '/')
+  const directCalls = source.match(directTransportPattern)?.length ?? 0
+  const allowance = legacyTransportAllowances[relative] ?? 0
+  if (directCalls > allowance) failures.push(`${relative} adds direct API transport (${directCalls} > legacy allowance ${allowance})`)
 }
 
 const featureFiles = []
@@ -247,11 +343,34 @@ for (const slice of slices) {
   }
 }
 
+for (const file of featureFiles) {
+  const relative = path.relative(root, file).replaceAll('\\', '/')
+  if (relative.includes('/api/')) continue
+  const directCalls = read(relative).match(directTransportPattern)?.length ?? 0
+  const allowance = legacyFeatureTransportAllowances[relative] ?? 0
+  if (directCalls > allowance) failures.push(`${relative} bypasses its Feature API transport boundary (${directCalls} > legacy allowance ${allowance})`)
+}
+
+const remainingLegacyTransportCalls = Object.entries(legacyTransportAllowances)
+  .reduce((total, [file, allowance]) => {
+    if (!exists(file)) return total
+    return total + Math.min(read(file).match(directTransportPattern)?.length ?? 0, allowance)
+  }, 0)
+const remainingLegacyFeatureTransportCalls = Object.entries(legacyFeatureTransportAllowances)
+  .reduce((total, [file, allowance]) => {
+    if (!exists(file)) return total
+    return total + Math.min(read(file).match(directTransportPattern)?.length ?? 0, allowance)
+  }, 0)
+
 console.log(JSON.stringify({
   sharedRuntimeContracts: failures.length === 0,
   contractFiles: contractFiles.length,
   featureSlices: slices.length,
   contractedBoundaries: contractedBoundaries.length,
+  remainingLegacyTransportFiles: Object.keys(legacyTransportAllowances).filter(exists).length,
+  remainingLegacyTransportCalls,
+  remainingLegacyFeatureTransportFiles: Object.keys(legacyFeatureTransportAllowances).filter(exists).length,
+  remainingLegacyFeatureTransportCalls,
   violations: failures,
 }, null, 2))
 

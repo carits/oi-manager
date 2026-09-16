@@ -57,6 +57,11 @@ export const AccountProfileSchema = z.object({
 })
 export type AccountProfile = z.infer<typeof AccountProfileSchema>
 
+export const AvatarUploadResultSchema = z.object({
+  avatar: z.string().min(1),
+  fileId: z.string().min(1),
+})
+
 const EmptyResultSchema = z.object({})
 export const RegisterRequestSchema = z.object({
   username: z.string().trim().min(1).max(64),
@@ -95,6 +100,10 @@ export const AuthContracts = {
   updateProfile: defineApiEndpoint({
     key: 'auth.profile.update', method: 'PUT', scope: 'account',
     data: AccountProfileSchema, body: ProfileUpdateSchema,
+  }),
+  uploadAvatar: defineApiEndpoint({
+    key: 'auth.avatar.upload', method: 'POST', scope: 'account',
+    data: AvatarUploadResultSchema,
   }),
   changePassword: defineApiEndpoint({
     key: 'auth.password.change', method: 'PUT', scope: 'account',

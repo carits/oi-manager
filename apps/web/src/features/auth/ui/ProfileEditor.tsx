@@ -7,8 +7,7 @@ import { Input, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { FormField } from '@/components/ui/FormField'
 import { useAuth } from '../model/AuthProvider'
-import { updateAccountProfile } from '../api/authApi'
-import apiClient from '@/lib/apiClient'
+import { updateAccountProfile, uploadAccountAvatar } from '../api/authApi'
 import { getAssetUrl } from '@/lib/assets'
 import { useToast } from '@/components/ui/Toast'
 
@@ -73,10 +72,7 @@ export function ProfileEditor({ userType: _userType }: ProfileEditorProps) {
 
     setUploadingAvatar(true)
     try {
-      const formData = new FormData()
-      formData.append('avatar', file)
-
-      const result = await apiClient.postFile('/api/auth/avatar', formData)
+      const result = await uploadAccountAvatar(file)
       if (result.success) {
         refreshUser?.()
       } else {

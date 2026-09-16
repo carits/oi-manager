@@ -238,7 +238,7 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
       action: 'upload_avatar',
       metadata: { fileId: result.fileId, originalName: result.originalName },
     })
-    res.json({ success: true, data: { avatar: result.avatar, fileId: result.fileId } })
+    sendContractData(res, AuthContracts.uploadAvatar, { avatar: result.avatar, fileId: result.fileId })
   } catch (error) {
     cleanupAvatarTemporaryFile(req.file)
     logger.error('upload_avatar_error', error)
