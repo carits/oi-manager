@@ -133,9 +133,9 @@ export const OrganizationTeacherOptionPageSchema = z.object({
 }).passthrough()
 
 const JoinDecisionBodySchema = z.object({
-  relationType: z.string().min(1),
+  relationType: z.string().min(1).optional(),
   headTeacherMembershipId: z.string().min(1).nullable().optional(),
-  profile: z.record(z.string(), z.unknown()),
+  profile: z.record(z.string(), z.unknown()).default({}),
   decisionMessage: z.string().max(500).default(''),
   internalReviewNote: z.string().max(1000).default(''),
 })
