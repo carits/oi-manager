@@ -23,7 +23,7 @@ import { useToast } from '@/components/ui/Toast'
 import styles from './Assignment.module.css'
 import { type Assignment, type AssignmentProblem, assignmentStatusMeta, formatAssignmentTime } from '../model/types'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
-import { StudentPicker } from '@/components/pickers/StudentPicker'
+import { StudentPicker } from '@/features/organization-account'
 import { setAssignmentManualCompletion } from '@/features/assignment/api/assignmentApi'
 import type {
   AssignmentProgressCell as ContractProgressCell,

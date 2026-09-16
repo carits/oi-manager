@@ -24,4 +24,11 @@ export const createOrganizationInvitation = (organizationId: string, body: Invit
 export const revokeOrganizationInvitation = (organizationId: string, invitationId: string) => apiClient.mutateContract(OrganizationContracts.revokeManagedInvitation, `/api/organizations/${encoded(organizationId)}/invitations/${encoded(invitationId)}/revoke`, {})
 export const getOrganizationCampus = (organizationId: string) => apiClient.queryContract(OrganizationContracts.campusSummary, `/api/organizations/${encoded(organizationId)}/members/campus`)
 export const getOrganizationTeacherOptions = (organizationId: string) => apiClient.queryContract(OrganizationContracts.teacherOptions, `/api/organizations/${encoded(organizationId)}/members/teachers?page=1&pageSize=100`)
+export const getOrganizationStudentOptions = (organizationId: string, query: { page: number; pageSize: number; q?: string; grade?: string; teamId?: string }) => {
+  const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) })
+  if (query.q) params.set('q', query.q)
+  if (query.grade) params.set('grade', query.grade)
+  if (query.teamId) params.set('teamId', query.teamId)
+  return apiClient.queryContract(OrganizationContracts.studentOptions, `/api/organizations/${encoded(organizationId)}/members/students?${params}`)
+}
 export const updateOrganizationJoinPolicy = (organizationId: string, joinPolicy: EndpointBody<typeof OrganizationContracts.updateJoinPolicy>['joinPolicy']) => apiClient.mutateContract(OrganizationContracts.updateJoinPolicy, `/api/organizations/${encoded(organizationId)}/join-policy`, { joinPolicy })

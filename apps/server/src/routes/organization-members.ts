@@ -86,8 +86,9 @@ organizationMemberRouter.post('/activities/contests', authenticate, endpoint('�
 }))
 
 organizationMemberRouter.get('/students', authenticate, endpoint('获取学生列表失败', 'membership.view.students', async (req, res, context) => {
-  const { page, pageSize } = parsePagination(req.query)
-  res.json({ success: true, data: await listOrganizationStudents(context, req.query, page, pageSize) })
+  const query = parseContractQuery(OrganizationContracts.studentOptions, req.query)
+  const { page, pageSize } = parsePagination(query)
+  sendContractData(res, OrganizationContracts.studentOptions, await listOrganizationStudents(context, query, page, pageSize))
 }))
 
 organizationMemberRouter.get('/teachers', authenticate, endpoint('获取教师列表失败', 'membership.view.teachers', async (req, res, context) => {

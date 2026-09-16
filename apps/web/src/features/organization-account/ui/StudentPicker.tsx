@@ -1,16 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { apiClient } from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Input, Select } from '@/components/ui/FormControls'
+import { listTeams } from '@/features/team'
+import { getOrganizationStudentOptions } from '../api/organizationAccountApi'
 import styles from './StudentPicker.module.css'
 
 type Student = { userId: string; name: string; enrollmentYear?: number | null; user?: { username?: string } }
 type Team = { id: string; name: string }
-type StudentPage = { data: Student[]; page: number; pageSize: number; total: number; totalPages: number; filters?: { grades?: string[] } }
-type TeamPage = { data: Team[]; totalPages: number }
-
 export function StudentPicker({ organizationId, teams, selectedIds, onChange }: {
   organizationId: string
   teams?: Team[]
@@ -28,10 +26,14 @@ export function StudentPicker({ organizationId, teams, selectedIds, onChange }: 
     if (teams) return
     let cancelled = false
     void (async () => {
-      const first = await apiClient.get<TeamPage>(`/api/teams?organizationId=${encodeURIComponent(organizationId)}&page=1&pageSize=100`)
-      if (!first.success || !first.data || cancelled) return
-      const pages = await Promise.all(Array.from({ length: Math.max(0, first.data.totalPages - 1) }, (_, index) => apiClient.get<TeamPage>(`/api/teams?organizationId=${encodeURIComponent(organizationId)}&page=${index + 2}&pageSize=100`)))
-      if (!cancelled) setLoadedTeams([...(first.data.data || []), ...pages.flatMap(result => result.success ? result.data?.data || [] : [])])
+      try {
+        const first = await listTeams({ organizationId, page: 1, pageSize: 100 })
+        if (cancelled) return
+        const pages = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) => listTeams({ organizationId, page: index + 2, pageSize: 100 })))
+        if (!cancelled) setLoadedTeams([...first.data, ...pages.flatMap(result => result.data)])
+      } catch {
+        if (!cancelled) setLoadedTeams([])
+      }
     })()
     return () => { cancelled = true }
   }, [organizationId, teams])
@@ -39,18 +41,20 @@ export function StudentPicker({ organizationId, teams, selectedIds, onChange }: 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       setLoading(true)
-      const params = new URLSearchParams({ page: String(page), pageSize: '20' })
-      if (q.trim()) params.set('q', q.trim())
-      if (grade) params.set('grade', grade)
-      if (teamId) params.set('teamId', teamId)
-      const response = await apiClient.get<StudentPage>(`/api/organizations/${organizationId}/members/students?${params}`)
-      setLoading(false)
-      if (!response.success || !response.data) { setError(response.message || '学生列表加载失败'); return }
-      setStudents(response.data.data || [])
-      setTotal(response.data.total || 0)
-      setTotalPages(Math.max(1, response.data.totalPages || 1))
-      setGrades(response.data.filters?.grades || [])
-      setError('')
+      try {
+        const response = await getOrganizationStudentOptions(organizationId, {
+          page, pageSize: 20, q: q.trim() || undefined, grade: grade || undefined, teamId: teamId || undefined,
+        })
+        setStudents(response.data)
+        setTotal(response.total)
+        setTotalPages(Math.max(1, response.totalPages))
+        setGrades(response.filters?.grades || [])
+        setError('')
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : '学生列表加载失败')
+      } finally {
+        setLoading(false)
+      }
     }, 250)
     return () => window.clearTimeout(timer)
   }, [grade, organizationId, page, q, teamId])

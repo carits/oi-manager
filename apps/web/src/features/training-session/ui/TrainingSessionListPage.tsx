@@ -17,7 +17,7 @@ import { Empty } from '@/components/ui/Empty'
 import { useToast } from '@/components/ui/Toast'
 import styles from './TrainingEngine.module.css'
 import { trainingSessionTypeLabel, trainingStatusLabel } from '@/lib/humanPresentation'
-import { StudentPicker } from '@/components/pickers/StudentPicker'
+import { StudentPicker } from '@/features/organization-account'
 
 type Template = { key: string; name: string; description: string; sessionType: string; stages: Array<Record<string, unknown>> }
 type Session = { id: string; title: string; description?: string; status: string; sessionType: string; productMode?: 'simple' | 'coach'; problemCount?: number; dueAt?: string | null; statusRevision?: number; canJoin?: boolean; teamId?: string | null; teamName?: string | null; _count: { Stages: number; Participants: number } }

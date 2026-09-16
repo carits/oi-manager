@@ -14,7 +14,6 @@ const legacyTransportAllowances = {
   'apps/web/src/components/management/StudentsManagementContent.tsx': 5,
   'apps/web/src/app/admin/schools/page.tsx': 5,
   'apps/web/src/app/admin/schools/[id]/edit/page.tsx': 5,
-  'apps/web/src/components/pickers/StudentPicker.tsx': 3,
   'apps/web/src/app/admin/schools/[id]/page.tsx': 3,
   'apps/web/src/components/business/UserManagement.tsx': 2,
   'apps/web/src/app/admin/users/page.tsx': 2,

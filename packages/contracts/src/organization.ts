@@ -132,6 +132,18 @@ export const OrganizationTeacherOptionPageSchema = z.object({
   totalPages: z.number().int().nonnegative(),
 }).passthrough()
 
+export const OrganizationStudentOptionPageSchema = z.object({
+  data: z.array(z.object({
+    userId: z.string().min(1),
+    name: z.string(),
+    enrollmentYear: z.number().int().nullable().optional(),
+    user: z.object({ username: z.string().optional() }).passthrough().optional(),
+  }).passthrough()),
+  total: z.number().int().nonnegative(), page: z.number().int().positive(), pageSize: z.number().int().positive(),
+  totalPages: z.number().int().nonnegative(),
+  filters: z.object({ grades: z.array(z.string()).optional() }).passthrough().optional(),
+}).passthrough()
+
 const JoinDecisionBodySchema = z.object({
   relationType: z.string().min(1).optional(),
   headTeacherMembershipId: z.string().min(1).nullable().optional(),
@@ -244,5 +256,12 @@ export const OrganizationContracts = {
   teacherOptions: defineApiEndpoint({
     key: 'organization.teacher.options', method: 'GET', scope: 'organization', data: OrganizationTeacherOptionPageSchema,
     query: PaginationQuerySchema.extend({ q: z.string().optional(), status: z.string().optional(), role: z.string().optional() }),
+  }),
+  studentOptions: defineApiEndpoint({
+    key: 'organization.student.options', method: 'GET', scope: 'organization', data: OrganizationStudentOptionPageSchema,
+    query: PaginationQuerySchema.extend({
+      q: z.string().trim().max(100).optional(), grade: z.string().max(40).optional(),
+      teamId: z.string().optional(), status: z.string().optional(), headTeacherMembershipId: z.string().optional(),
+    }),
   }),
 } as const
