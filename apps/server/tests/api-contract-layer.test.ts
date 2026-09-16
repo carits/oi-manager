@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -381,6 +381,45 @@ describe('shared API contract adapter', () => {
     expect(problemResponse.json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ data: [expect.objectContaining({ problemId: '1041' })] }),
     }))
+  })
+
+  it('guards OJ account secrets, configuration and operation results', () => {
+    expect(parseContractBody(OjAccountContracts.create, {
+      platform: 'hdu', username: 'submit-bot', loginMethod: 'cookie', cookie: 'session=value',
+    })).toEqual({ platform: 'hdu', username: 'submit-bot', loginMethod: 'cookie', cookie: 'session=value' })
+    expect(() => parseContractBody(OjAccountContracts.update, { priority: 'high' }))
+      .toThrowError(ApiContractError)
+
+    const accountResponse = responseStub()
+    sendContractData(accountResponse.response, OjAccountContracts.list, [{
+      id: 'oj-account-1', platform: 'hdu', username: 'submit-bot', loginMethod: 'cookie',
+      status: 'active', lastLoginAt: null, lastErrorMessage: null, hasPassword: false,
+      hasCookie: true, createdAt: new Date('2026-09-16T00:00:00Z'),
+      enabled: true, priority: 1, maxConsecutiveFailures: 3, freezeDurationMinutes: 30,
+      submitMaxRetries: 1, retryIntervalSeconds: 10, loginFailureCooldownMinutes: 15,
+      cookieValidMinutes: 3600, reverifyIntervalMinutes: 30, renewLoginThresholdMinutes: 10,
+      minSubmitIntervalSeconds: 30, minRequestIntervalSeconds: 3,
+      maxConcurrentSubmissions: 1, maxConcurrentRequests: 2, firstPollDelaySeconds: 5,
+      pollIntervalSeconds: 5, maxWaitDurationMinutes: 10, rateLimitThreshold: 2,
+      banSuspicionCooldownHours: 6, autoVerifyIntervalMinutes: 1440,
+      password: 'must-not-leak', cookie: 'must-not-leak',
+    }])
+    expect(accountResponse.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({
+        createdAt: '2026-09-16T00:00:00.000Z', hasCookie: true,
+      })],
+    }))
+    expect(accountResponse.json.mock.calls[0][0].data[0]).not.toHaveProperty('password')
+    expect(accountResponse.json.mock.calls[0][0].data[0]).not.toHaveProperty('cookie')
+
+    const loginResponse = responseStub()
+    sendContractData(loginResponse.response, OjAccountContracts.login, {
+      success: false, status: 'error', message: '登录失败',
+    })
+    expect(loginResponse.json).toHaveBeenCalledWith({
+      success: true,
+      data: { success: false, status: 'error', message: '登录失败' },
+    })
   })
 
   it('guards OI Test Graph edits and normalizes workspace dates', () => {

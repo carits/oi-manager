@@ -11,7 +11,6 @@ const failures = []
 // or remove its allowance. The target state is an empty object.
 const legacyTransportAllowances = {
   'apps/web/src/components/organization/OrganizationJoinManagement.tsx': 10,
-  'apps/web/src/app/platform-admin/oj-accounts/page.tsx': 9,
   'apps/web/src/components/organization-pages/teacher/school/components/TeachersTab.tsx': 6,
   'apps/web/src/components/management/StudentsManagementContent.tsx': 5,
   'apps/web/src/app/admin/schools/page.tsx': 5,
@@ -90,6 +89,7 @@ const contractFiles = [
   'packages/contracts/src/organization.ts',
   'packages/contracts/src/notification.ts',
   'packages/contracts/src/oj-fetcher.ts',
+  'packages/contracts/src/oj-account.ts',
   'packages/contracts/src/platform-binding.ts',
   'packages/contracts/src/problem.ts',
   'packages/contracts/src/ranking.ts',
@@ -152,6 +152,7 @@ const slices = [
   { name: 'platform-binding', legacyDirectory: null, allowedAnyTokens: 0 },
   { name: 'ranking', legacyDirectory: 'ranking', allowedAnyTokens: 0 },
   { name: 'ai-governance', legacyDirectory: null, allowedAnyTokens: 0 },
+  { name: 'oj-account', legacyDirectory: null, allowedAnyTokens: 0 },
   // These three slices physically absorb the pre-existing UI in this rollout.
   // Migrated slices are held to the same zero-any boundary as the original slices.
   { name: 'problem', legacyDirectory: 'problem', allowedAnyTokens: 0 },
@@ -189,6 +190,7 @@ const contractedBoundaries = [
   ['apps/server/src/modules/problem/problem.judge.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.crud.routes.ts', 'ProblemContracts'],
   ['apps/server/src/routes/oj-fetcher.ts', 'OjFetcherContracts'],
+  ['apps/server/src/routes/oj-accounts.ts', 'OjAccountContracts'],
   ['apps/server/src/modules/problem/problem.testset-revision.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.test-graph.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.judge-program.routes.ts', 'ProblemContracts'],
@@ -231,6 +233,9 @@ const contractedBoundaries = [
   ['apps/web/src/features/problem/ui/ProblemForm.tsx', 'updateProblem'],
   ['apps/web/src/features/problem/ui/PlatformProblemManagementPage.tsx', 'listOjFetchJobs'],
   ['apps/web/src/features/problem/ui/PlatformProblemManagementPage.tsx', 'listPlatformManagedProblems'],
+  ['apps/web/src/features/oj-account/api/ojAccountApi.ts', 'OjAccountContracts'],
+  ['apps/web/src/features/oj-account/ui/OjAccountManagementPage.tsx', 'listOjAccounts'],
+  ['apps/web/src/features/oj-account/ui/OjAccountManagementPage.tsx', 'createOjAccount'],
   ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'getProblemJudgeSettings'],
   ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'saveProblemJudgeSettings'],
   ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'transitionProblemJudgeMode'],
