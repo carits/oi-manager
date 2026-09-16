@@ -10,7 +10,6 @@ const failures = []
 // direct transport is forbidden and every completed feature slice must reduce
 // or remove its allowance. The target state is an empty object.
 const legacyTransportAllowances = {
-  'apps/web/src/app/platform-admin/problems/page.tsx': 10,
   'apps/web/src/components/organization/OrganizationJoinManagement.tsx': 10,
   'apps/web/src/app/platform-admin/oj-accounts/page.tsx': 9,
   'apps/web/src/components/organization-pages/teacher/school/components/TeachersTab.tsx': 6,
@@ -90,6 +89,7 @@ const contractFiles = [
   'packages/contracts/src/identity.ts',
   'packages/contracts/src/organization.ts',
   'packages/contracts/src/notification.ts',
+  'packages/contracts/src/oj-fetcher.ts',
   'packages/contracts/src/platform-binding.ts',
   'packages/contracts/src/problem.ts',
   'packages/contracts/src/ranking.ts',
@@ -188,6 +188,7 @@ const contractedBoundaries = [
   ['apps/server/src/modules/training-engine/training-engine.routes.ts', 'TrainingContracts'],
   ['apps/server/src/modules/problem/problem.judge.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.crud.routes.ts', 'ProblemContracts'],
+  ['apps/server/src/routes/oj-fetcher.ts', 'OjFetcherContracts'],
   ['apps/server/src/modules/problem/problem.testset-revision.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.test-graph.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.judge-program.routes.ts', 'ProblemContracts'],
@@ -222,10 +223,14 @@ const contractedBoundaries = [
   ['apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx', 'saveTrainingDesign'],
   ['apps/web/src/features/problem/api/problemJudgeSettingsApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/problemEditorApi.ts', 'ProblemContracts'],
+  ['apps/web/src/features/problem/api/platformProblemAdminApi.ts', 'OjFetcherContracts'],
+  ['apps/web/src/features/problem/api/platformProblemAdminApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/problemTestGraphApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/judgeProgramTemplateApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/ui/ProblemForm.tsx', 'getProblemEditorDetail'],
   ['apps/web/src/features/problem/ui/ProblemForm.tsx', 'updateProblem'],
+  ['apps/web/src/features/problem/ui/PlatformProblemManagementPage.tsx', 'listOjFetchJobs'],
+  ['apps/web/src/features/problem/ui/PlatformProblemManagementPage.tsx', 'listPlatformManagedProblems'],
   ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'getProblemJudgeSettings'],
   ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'saveProblemJudgeSettings'],
   ['apps/web/src/features/problem/ui/JudgeSettingsTab.tsx', 'transitionProblemJudgeMode'],

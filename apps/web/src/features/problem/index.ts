@@ -7,3 +7,6 @@ export const ProblemNote = dynamic(() => import('./ui/ProblemNote').then(module 
 export const ProblemListPage = dynamic(() => import('./ui/ProblemListPage'))
 export const ProblemListDetailPage = dynamic(() => import('./ui/ProblemListDetailPage'))
 export const NewProblemListPage = dynamic(() => import('./ui/NewProblemListPage'))
+export const PlatformProblemManagementPage = dynamic(() =>
+  import('./ui/PlatformProblemManagementPage').then(module => module.PlatformProblemManagementPage)
+)

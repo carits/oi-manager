@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DateTimeWireSchema, defineApiEndpoint } from "./http";
+import { DateTimeWireSchema, PaginationQuerySchema, defineApiEndpoint } from "./http";
 
 export const ProblemContentVersionSchema = z.object({
   id: z.string().optional(),
@@ -54,6 +54,36 @@ export const ProblemEditorDetailSchema = z.object({
 }).passthrough();
 
 export const ProblemMutationResultSchema = z.object({ id: z.string() }).passthrough();
+
+export const ProblemAdminListItemSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  platform: z.string(),
+  title: z.string(),
+  difficulty: z.string().nullable(),
+  status: z.string(),
+  ojBindings: z.string().nullable(),
+  ownerName: z.string().optional(),
+  createdAt: DateTimeWireSchema,
+}).passthrough();
+
+export const ProblemAdminListQuerySchema = PaginationQuerySchema.extend({
+  library: z.enum(["platform", "school"]).optional(),
+  visibility: z.enum(["public", "private"]).optional(),
+  platform: z.string().optional(),
+  keyword: z.string().optional(),
+  ownerId: z.string().optional(),
+  status: z.enum(["draft", "published", "archived"]).optional(),
+  sourceGroup: z.enum(["carits", "external"]).optional(),
+});
+
+export const ProblemAdminListSchema = z.object({
+  data: z.array(ProblemAdminListItemSchema),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  total: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+});
 
 export const ProblemTestCasePairSchema = z.object({
   input: z.string().min(1),
@@ -369,6 +399,13 @@ export const ProblemJudgeModeTransitionInputSchema = z.object({
 });
 
 export const ProblemContracts = {
+  listAdmin: defineApiEndpoint({
+    key: "problem.admin-list.get",
+    method: "GET",
+    scope: "platform",
+    query: ProblemAdminListQuerySchema,
+    data: ProblemAdminListSchema,
+  }),
   create: defineApiEndpoint({
     key: "problem.create",
     method: "POST",
@@ -388,6 +425,13 @@ export const ProblemContracts = {
     scope: "context",
     body: ProblemEditorMutationSchema,
     data: ProblemMutationResultSchema,
+  }),
+  archive: defineApiEndpoint({
+    key: "problem.archive",
+    method: "DELETE",
+    scope: "platform",
+    body: z.object({}),
+    data: z.object({}),
   }),
   getJudgeSettings: defineApiEndpoint({
     key: "problem.judge-settings.get",
@@ -492,6 +536,7 @@ export type ProblemTestCasePair = z.infer<typeof ProblemTestCasePairSchema>;
 export type ProblemEditorMutation = z.infer<typeof ProblemEditorMutationSchema>;
 export type ProblemCreateInput = z.infer<typeof ProblemCreateInputSchema>;
 export type ProblemEditorDetail = z.infer<typeof ProblemEditorDetailSchema>;
+export type ProblemAdminListItem = z.infer<typeof ProblemAdminListItemSchema>;
 export type ProblemTestGraphWorkspace = z.infer<typeof ProblemTestGraphWorkspaceSchema>;
 export type ProblemTestGraphSubtask = z.infer<typeof ProblemTestGraphSubtaskSchema>;
 export type ProblemTestGraphSaveInput = z.infer<typeof ProblemTestGraphSaveInputSchema>;

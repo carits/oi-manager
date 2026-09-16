@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express'
+import { OjFetcherContracts } from '@oi-manager/contracts'
 import { authenticate, authorize } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../lib/api-contract'
 import {
   fetchProblemWithMetrics,
   getAdapter,
@@ -39,6 +41,7 @@ function adminEndpoint(handler: (req: Request, res: Response) => Promise<unknown
   return asyncHandler(async (req, res) => {
     try { await handler(req, res) }
     catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof OjFetcherAdminError) {
         return res.status(error.statusCode).json({ success: false, message: error.message })
       }
@@ -52,30 +55,39 @@ ojFetcherRouter.get('/platforms', (_req, res) => {
 })
 
 ojFetcherRouter.get('/platforms/:platform/config', ...superAdminOnly, adminEndpoint(async (req, res) => {
-  res.json({ success: true, data: await getOjPlatformConfig(req.params.platform) })
+  return sendContractData(res, OjFetcherContracts.getPlatformConfig, await getOjPlatformConfig(req.params.platform))
 }))
 
 ojFetcherRouter.put('/platforms/:platform/config', ...superAdminOnly, adminEndpoint(async (req, res) => {
-  res.json({ success: true, data: await updateOjPlatformConfig(req.params.platform, req.body.cookies) })
+  const body = parseContractBody(OjFetcherContracts.updatePlatformConfig, req.body)
+  return sendContractData(
+    res,
+    OjFetcherContracts.updatePlatformConfig,
+    await updateOjPlatformConfig(req.params.platform, body.cookies),
+  )
 }))
 
 ojFetcherRouter.get('/jobs', ...adminOnly, adminEndpoint(async (req, res) => {
-  res.json({ success: true, data: await listOjFetchJobs(req.query) })
+  const query = parseContractQuery(OjFetcherContracts.listJobs, req.query)
+  return sendContractData(res, OjFetcherContracts.listJobs, await listOjFetchJobs(query))
 }))
 
 ojFetcherRouter.post('/jobs/batch', ...adminOnly, adminEndpoint(async (req, res) => {
-  const result = await createOjFetchJobs(req.body.platform, req.body.problemIds)
-  res.json({ success: true, data: result.data })
+  const body = parseContractBody(OjFetcherContracts.createBatch, req.body)
+  const result = await createOjFetchJobs(body.platform, body.problemIds)
+  return sendContractData(res, OjFetcherContracts.createBatch, result.data)
 }))
 
 ojFetcherRouter.post('/jobs/:id/retry', ...adminOnly, adminEndpoint(async (req, res) => {
+  parseContractBody(OjFetcherContracts.retryJob, req.body || {})
   await retryOjFetchJob(req.params.id)
-  res.json({ success: true, message: '任务已重置' })
+  return sendContractData(res, OjFetcherContracts.retryJob, {})
 }))
 
 ojFetcherRouter.delete('/jobs/:id', ...adminOnly, adminEndpoint(async (req, res) => {
+  parseContractBody(OjFetcherContracts.deleteJob, req.body || {})
   await deleteOjFetchJob(req.params.id)
-  res.json({ success: true, message: '任务已删除' })
+  return sendContractData(res, OjFetcherContracts.deleteJob, {})
 }))
 
 ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, asyncHandler(async (req: Request, res: Response) => {

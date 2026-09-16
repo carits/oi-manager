@@ -3,7 +3,7 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination } from '../../lib/pagination'
 import { ProblemContracts } from '@oi-manager/contracts'
-import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import {
   archiveProblem,
   copyProblemIntoSchool,
@@ -30,12 +30,13 @@ function sendProblemCrudError(error: unknown, res: any) {
 
 problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   try {
+    const query = parseContractQuery(ProblemContracts.listAdmin, req.query)
     const data = await listProblems({
       user: req.user!,
-      query: req.query,
-      pagination: parsePagination(req.query),
+      query,
+      pagination: parsePagination(query),
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.listAdmin, data)
   } catch (error) {
     return sendProblemCrudError(error, res)
   }
@@ -90,8 +91,9 @@ problemCrudRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
 
 problemCrudRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
   try {
+    parseContractBody(ProblemContracts.archive, req.body || {})
     const result = await archiveProblem(req.user!, req.params.id)
-    return res.json({ success: true, message: result.message })
+    return sendContractData(res, ProblemContracts.archive, {})
   } catch (error) {
     return sendProblemCrudError(error, res)
   }

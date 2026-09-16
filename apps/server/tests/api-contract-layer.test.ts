@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -341,6 +341,45 @@ describe('shared API contract adapter', () => {
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
       data: expect.objectContaining({ ownerName: 'teacher' }),
+    }))
+  })
+
+  it('guards platform problem management and OJ fetcher payloads', () => {
+    expect(parseContractQuery(OjFetcherContracts.listJobs, {
+      page: '2', pageSize: '20', platform: 'luogu', status: 'pending', ignored: 'value',
+    })).toEqual({ page: 2, pageSize: 20, platform: 'luogu', status: 'pending' })
+    expect(() => parseContractQuery(OjFetcherContracts.listJobs, { status: 'unknown' }))
+      .toThrowError(ApiContractError)
+    expect(parseContractBody(OjFetcherContracts.createBatch, {
+      platform: 'luogu', problemIds: ['P1000', 'P1001'],
+    })).toEqual({ platform: 'luogu', problemIds: ['P1000', 'P1001'] })
+
+    const jobResponse = responseStub()
+    sendContractData(jobResponse.response, OjFetcherContracts.listJobs, {
+      data: [{
+        id: 'job-1', platform: 'luogu', problemId: 'P1000', status: 'pending', message: null,
+        hasAttachment: false, attachmentStatus: null, createdProblemId: null,
+        createdAt: new Date('2026-09-16T00:00:00Z'),
+      }],
+      page: 1, pageSize: 20, total: 1, totalPages: 1,
+    })
+    expect(jobResponse.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        data: [expect.objectContaining({ createdAt: '2026-09-16T00:00:00.000Z' })],
+      }),
+    }))
+
+    const problemResponse = responseStub()
+    sendContractData(problemResponse.response, ProblemContracts.listAdmin, {
+      data: [{
+        id: 'problem-1', problemId: '1041', platform: 'carits', title: '整数求和',
+        difficulty: null, status: 'published', ojBindings: null, ownerName: 'teacher1',
+        createdAt: new Date('2026-09-16T00:00:00Z'),
+      }],
+      page: 1, pageSize: 10, total: 1, totalPages: 1,
+    })
+    expect(problemResponse.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ data: [expect.objectContaining({ problemId: '1041' })] }),
     }))
   })
 

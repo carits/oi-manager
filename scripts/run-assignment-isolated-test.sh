@@ -92,6 +92,10 @@ elif [[ "$TEST_SCOPE" == "problem-contract" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     tests/api-contract-layer.test.ts tests/problem-judge-api.test.ts \
     tests/problem-library-isolation.test.ts tests/problem-testset-revision.test.ts tests/testdata.test.ts
+elif [[ "$TEST_SCOPE" == "platform-problem-contract" ]]; then
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
+    --no-file-parallelism tests/api-contract-layer.test.ts tests/problem-library-isolation.test.ts \
+    tests/security-boundaries.test.ts tests/oj-fetcher-queue.service.test.ts
 elif [[ "$TEST_SCOPE" == "chat-contract" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     --no-file-parallelism tests/api-contract-layer.test.ts tests/chat.test.ts
@@ -155,6 +159,6 @@ elif [[ "$TEST_SCOPE" == "contest-core" ]]; then
     tests/contest-canonical-submission-identity.test.ts \
     tests/school-contest.test.ts tests/contest.test.ts
 else
-  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, problem-contract, chat-contract, organization-contract, notification-contract, workspace-contract, auth-contract, user-profile-contract, team-contract, data-market-contract, contribution-contract, platform-binding-contract, ranking-contract, ai-governance-contract, authorization, release-invariants, contest-core, contest-cutover or full" >&2
+  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, problem-contract, platform-problem-contract, chat-contract, organization-contract, notification-contract, workspace-contract, auth-contract, user-profile-contract, team-contract, data-market-contract, contribution-contract, platform-binding-contract, ranking-contract, ai-governance-contract, authorization, release-invariants, contest-core, contest-cutover or full" >&2
   exit 1
 fi
