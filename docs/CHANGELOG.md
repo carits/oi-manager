@@ -5,6 +5,13 @@ last_verified: 2026-09-16
 source_of_truth: Git history
 ---
 
+## 2026-09-16 — 平台题库与 OJ 账号管理契约/Feature Slice 收口
+
+- 平台题库/OJ Fetcher 与 OJ 账号管理迁入 `features/problem`、`features/oj-account`，对应 App Route 仅保留公共入口装配；共移除页面层 19 个直接 API 调用。
+- 新增共享 Runtime Contract，服务端与 Web 对列表、配置、归档、验证、登录和批量操作使用同一数据边界；OJ 账号列表及操作响应不会返回密码或 Cookie。
+- OJ 账号生产同构回归 39/39、Web 生产构建及 UI/导航/架构/文档门禁通过；门禁现为 24 个 Contract、24 个 Feature Slice、107 条契约边界，旧页面直连剩余 21 文件 55 调用。
+- 提交 `41f8bad`、`3f3a29a`、`70a9e48` 已部署：API 蓝绿切换至 3303，Web BUILD_ID `shX6h3nZyqic2J1rvt0Ba` 经 canary 与正式消息闭环（序号 238–241）后提升。
+
 ## 2026-09-16 — API transport 单调收敛门禁
 
 - 架构门禁开始统计所有页面、旧组件和 Feature UI/Model 的直接 API transport；新直连与调用数增加一律失败，遗留清单只能减少并以归零为完成条件。
