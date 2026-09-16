@@ -5,6 +5,13 @@ last_verified: 2026-09-16
 source_of_truth: Git history
 ---
 
+## 2026-09-16 — API transport 单调收敛门禁
+
+- 架构门禁开始统计所有页面、旧组件和 Feature UI/Model 的直接 API transport；新直连与调用数增加一律失败，遗留清单只能减少并以归零为完成条件。
+- 初始燃尽基线为旧 Route/Component 23 文件 74 调用、Feature UI/Model 45 文件 244 调用；Auth 头像上传迁入 Feature API 后后者降至 44 文件。
+- 头像 multipart 保留专用文件传输，公开响应由 `AuthContracts.uploadAvatar` 校验并剥离内部字段。
+- 生产同构 Auth/Contract/Admin 3 文件 72/72 与三端构建通过；提交 `269b113` 已推送 `main`，API 切换至 3303，Web BUILD_ID `k_B5bg5dj0lLEe-RK-0XG` 完成 canary/正式消息闭环（序号 230–233）。
+
 ## 2026-09-16 — AI Governance 契约与 Feature Slice 收口
 
 - 平台 AI Token、调整流水和 Candidate Evaluation Budget 统一迁入 `features/ai-governance/{api,ui}`；平台 Route 只负责装配 Feature 公共入口。
