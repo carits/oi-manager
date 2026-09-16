@@ -5,6 +5,13 @@ last_verified: 2026-09-17
 source_of_truth: Git history
 ---
 
+## 2026-09-17 — 组织教师管理 Contract 化
+
+- 教师列表、创建、编辑、启停、移出和负责人转移统一通过 Organization Feature API 与共享 Runtime Contract。
+- 页面不再拼接教师管理 endpoint 或判断旧 `ApiResponse`；服务端在进入成员服务前完成请求校验，并校验成功响应。
+- 旧 Route/Component transport 降至 14 文件/31 调用；生产同构组织测试 4 文件 41/41，Server/Web 构建与架构门禁通过。
+- 提交 `5124853` 已部署：API 蓝绿切换至 3302，Web BUILD_ID `f50UP_4UltYhbw5x3llwN` 完成 canary 与正式消息闭环（序号 258–261）。
+
 ## 2026-09-17 — 组织校园请求 Contract 化
 
 - 组织校园摘要、学校资料更新、校园公告更新和管理页申请/邀请待办计数统一经 Organization Feature API 与共享 Runtime Contract。

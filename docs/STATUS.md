@@ -13,6 +13,8 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 ## 最近 rollout
 
+- 2026-09-17: Frontend Feature Slice 与统一 API Contract Layer 第二十三批完成并上线。组织教师列表、创建、编辑、启停、移出和学校负责人转移统一进入 Organization Feature API；Server 对六类请求/响应执行共享 Runtime Contract，页面删除 endpoint 拼接和 `ApiResponse` 分支。旧 Route/Component 直连由 15 文件/37 调用降至 14 文件/31 调用，Feature UI/Model 保持 43 文件/242 调用。生产同构组织测试 4 文件 41/41、Contracts/Server/Web 构建及架构门禁通过；提交 `5124853` 已推送 `main`，API 3303→3302，Web BUILD_ID `f50UP_4UltYhbw5x3llwN` 经 canary 和正式双账号消息闭环（序号 258–261）后提升。本批无数据库结构或业务数据迁移。
+
 - 2026-09-17: Frontend Feature Slice 与统一 API Contract Layer 第二十二批完成并上线。组织校园资料读取、学校资料编辑、校园公告保存及管理页加入/邀请待办计数全部改由 `features/organization-account` 调用共享 Organization Runtime Contract；页面不再混用旧 `ApiResponse` 包装与 Contract 已解析数据，删除失效的 endpoint 透传参数。旧 Route/Component 直连由 19 文件/42 调用降至 15 文件/37 调用，Feature UI/Model 仍为 43 文件/242 调用；Contracts/Server/Web 构建、文档与架构门禁通过，生产同构组织测试 4 文件 41/41。提交 `ed804bd` 已推送 `main`；API 3302→3303，Web BUILD_ID `_rH9vqUWWgwsUD_yICUXq` 经 canary 和正式双账号消息闭环（序号 254–257）后提升，六项服务 active，readiness 正常。本批无数据库结构或业务数据迁移。
 
 - 2026-09-16: P1 远端 OJ 代码归档已正式退役。生产迁移前完成 34 MiB 备份及恢复审计，复核 68 条归档提交与 26 条归档题均无 JudgeRun、比赛、训练、作业、Blog 或题解引用；迁移后两类记录为 0、`UserArchivedProblem` 表已删除、数据库 CHECK 禁止 `submitMethod=archive` 回流。Codeforces/洛谷历史同步、归档题 CRUD、源码回抓、定时抓取及 Judge/排名/Rating 特判全部删除，旧接口在线返回 404；2,469 条正常远程 ID 记录、账号绑定、远程提交和结果轮询保持不变。Submission 成为第 25 个 Runtime Contract，生产同构隔离测试 3 文件 54/54；API 3303→3302，Web BUILD_ID `_hmy7gvp9tYj4lAyMPD5a` 经 canary/正式双账号消息闭环（序号 250–253）后提升。远端代码归档退出条件已满足，P1-01～P1-04、Judge 兼容列和外部运维项继续按机器状态燃尽。
