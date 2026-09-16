@@ -91,7 +91,7 @@ export function SubmissionJudgeResult({
                   <TableRow key={`subtask-${row.subtask.id}-${rowIndex}`} className={unifiedStyles.u7}>
                     <TableCell colSpan={judgeMode === 'oi' ? 5 : 4} className={unifiedStyles.u8}>
                       Subtask {row.subtask.id}
-                      <span className={unifiedStyles.u9}>{row.subtask.cases.length} 个测试点 · {row.subtask.type}</span>
+                      <span className={unifiedStyles.u9}>{row.subtask.cases?.length || 0} 个测试点{row.subtask.type ? ` · ${row.subtask.type}` : ''}</span>
                       <span className={unifiedStyles.u10}>{row.subtask.score} 分</span>
                     </TableCell>
                   </TableRow>

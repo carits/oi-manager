@@ -10,9 +10,9 @@ export interface JudgeCaseResult {
 
 export interface JudgeSubtaskResult {
   id: number | string
-  type: string
+  type?: string
   score: number
-  cases: JudgeCaseResult[]
+  cases?: JudgeCaseResult[]
 }
 
 export type JudgeResultRow =
@@ -28,7 +28,7 @@ export function buildJudgeResultRows(
     let index = 0
     return subtasks.flatMap(subtask => [
       { kind: 'subtask', subtask } as const,
-      ...subtask.cases.map(testCase => ({ kind: 'case', index: index++, testCase }) as const),
+      ...(subtask.cases || []).map(testCase => ({ kind: 'case', index: index++, testCase }) as const),
     ])
   }
   return (cases || []).map((testCase, index) => ({ kind: 'case', index, testCase }))
