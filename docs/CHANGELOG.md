@@ -1,9 +1,16 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-16
+last_verified: 2026-09-17
 source_of_truth: Git history
 ---
+
+## 2026-09-17 — 组织校园请求 Contract 化
+
+- 组织校园摘要、学校资料更新、校园公告更新和管理页申请/邀请待办计数统一经 Organization Feature API 与共享 Runtime Contract。
+- Server 对校园更新请求和成功响应执行同一 Schema；Web 删除旧 `ApiResponse` 解包和 endpoint 字符串透传。
+- 旧 Route/Component transport 降至 15 文件/37 调用；生产同构组织测试 4 文件 41/41，三端构建及文档/架构门禁通过。
+- 提交 `ed804bd` 已部署：API 蓝绿切换至 3303，Web BUILD_ID `_rH9vqUWWgwsUD_yICUXq` 完成 canary 与正式消息闭环（序号 254–257）。
 
 ## 2026-09-16 — 远端代码归档退役与 Submission Contract
 
