@@ -139,7 +139,6 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
         LEFT JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
         WHERE s."submitScope" = ${submitScope}
           AND s."trainingId" = ${training.id}
-          AND COALESCE(s."submitMethod", '') <> 'archive'
       ), selected AS (
         SELECT p.*, ROW_NUMBER() OVER (
           PARTITION BY p."userId", p."problemId"
@@ -177,7 +176,6 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
       LEFT JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
       WHERE s."submitScope" = ${submitScope}
         AND s."trainingId" = ${training.id}
-        AND COALESCE(s."submitMethod", '') <> 'archive'
     )
     SELECT
       p."userId",
@@ -254,11 +252,7 @@ async function buildIcpcRanking(training: any, excludedIds: string[]) {
       submitScope,
       trainingId: training.id,
       ...(excludedIds.length > 0 ? { NOT: { userId: { in: excludedIds } } } : {}),
-      submitMethod: { not: 'archive' },
-      OR: [
-        { currentJudgeRunId: { not: null } },
-        { currentJudgeRunId: null, result: { not: '' } },
-      ],
+      currentJudgeRunId: { not: null },
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: {

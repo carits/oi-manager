@@ -128,67 +128,6 @@ describe('比赛赛制可见性测试', () => {
       expect(res.body.success).toBe(true)
     })
 
-    it('IOI-A3: 远程归档不能抬高实时排名分数', async () => {
-      const problem = await createTestProblem({ ownerId: ownerUser.user.id, title: 'IOI 归档隔离题' })
-      const trainingProblem = await prisma.trainingProblem.create({
-        data: {
-          id: crypto.randomUUID(),
-          trainingId: ioiContest.id,
-          problemId: problem.id,
-          alias: 'A',
-          points: 100,
-          orderIndex: 0,
-        },
-      })
-      const canonicalProblem = await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
-      if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
-      await prisma.submission.createMany({
-        data: [
-          {
-            userId: studentUser.user.id,
-            oj: 'carits',
-            problemId: problem.problemId,
-            problemInternalId: problem.id,
-            language: 'cpp',
-            code: 'int main(){}',
-            codeLength: 12,
-            result: 'wa',
-            score: 40,
-            submitMethod: 'local',
-            submitScope: 'contest',
-            trainingId: ioiContest.id,
-            trainingProblemId: trainingProblem.id,
-            canonicalContestId: canonicalProblem.contestId,
-            canonicalContestProblemId: canonicalProblem.id,
-          },
-          {
-            userId: studentUser.user.id,
-            oj: 'codeforces',
-            ojRemoteId: `archive-ioi-${Date.now()}`,
-            problemId: problem.problemId,
-            problemInternalId: problem.id,
-            language: 'cpp',
-            code: '',
-            codeLength: 0,
-            result: 'accepted',
-            score: 100,
-            submitMethod: 'archive',
-            submitScope: 'contest',
-            trainingId: ioiContest.id,
-            trainingProblemId: trainingProblem.id,
-            canonicalContestId: canonicalProblem.contestId,
-            canonicalContestProblemId: canonicalProblem.id,
-          },
-        ],
-      })
-
-      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${ioiContest.id}/ranking`)
-      expect(res.status).toBe(200)
-      const row = res.body.data.ranking.find((item: any) => item.userId === studentUser.user.id)
-      expect(row.totalScore).toBe(40)
-      expect(row.problems[trainingProblem.id].score).toBe(40)
-    })
   })
 
   // ==================== ICPC 赛制（实时可见，AC数+罚时） ====================
@@ -243,68 +182,6 @@ describe('比赛赛制可见性测试', () => {
       }
     })
 
-    it('ICPC-A3: 远程归档 AC 不能计入已解数或罚时', async () => {
-      const problem = await createTestProblem({ ownerId: ownerUser.user.id, title: 'ICPC 归档隔离题' })
-      const trainingProblem = await prisma.trainingProblem.create({
-        data: {
-          id: crypto.randomUUID(),
-          trainingId: icpcContest.id,
-          problemId: problem.id,
-          alias: 'A',
-          points: 100,
-          orderIndex: 0,
-        },
-      })
-      const canonicalProblem = await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
-      if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
-      await prisma.submission.createMany({
-        data: [
-          {
-            userId: studentUser.user.id,
-            oj: 'carits',
-            problemId: problem.problemId,
-            problemInternalId: problem.id,
-            language: 'cpp',
-            code: 'int main(){}',
-            codeLength: 12,
-            result: 'wa',
-            score: 0,
-            submitMethod: 'local',
-            submitScope: 'contest',
-            trainingId: icpcContest.id,
-            trainingProblemId: trainingProblem.id,
-            canonicalContestId: canonicalProblem.contestId,
-            canonicalContestProblemId: canonicalProblem.id,
-          },
-          {
-            userId: studentUser.user.id,
-            oj: 'codeforces',
-            ojRemoteId: `archive-icpc-${Date.now()}`,
-            problemId: problem.problemId,
-            problemInternalId: problem.id,
-            language: 'cpp',
-            code: '',
-            codeLength: 0,
-            result: 'accepted',
-            score: 100,
-            submitMethod: 'archive',
-            submitScope: 'contest',
-            trainingId: icpcContest.id,
-            trainingProblemId: trainingProblem.id,
-            canonicalContestId: canonicalProblem.contestId,
-            canonicalContestProblemId: canonicalProblem.id,
-          },
-        ],
-      })
-
-      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${icpcContest.id}/ranking`)
-      expect(res.status).toBe(200)
-      const row = res.body.data.ranking.find((item: any) => item.userId === studentUser.user.id)
-      expect(row.solvedCount).toBe(0)
-      expect(row.totalPenalty).toBe(0)
-      expect(row.problems[trainingProblem.id]).toMatchObject({ solved: false, attempts: 1, submitted: true })
-    })
   })
 
   // ==================== OI 赛制（赛后可见） ====================

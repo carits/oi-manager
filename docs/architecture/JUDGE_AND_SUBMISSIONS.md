@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-08
+last_verified: 2026-09-16
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -19,14 +19,14 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 
 - 本地代码提交：`oj/problemId` 只记录题目来源，`submitMethod=local` 选择本站 Judge；Carits、
   Codeforces、洛谷、HDU 等来源题统一走该路径。
-- 远程归档：平台绑定同步创建 `submitMethod=archive` 的只读历史记录。归档可展示，但不进入
-  本地 Judge、比赛排名、最佳成绩或重新评测。
+- 正常远程提交：平台绑定仍可用于主动提交到外部 OJ，`ojRemoteId` 保存远端评测身份并供结果轮询使用。
 - 训练提交：额外关联 `trainingId`，按训练、作业或比赛权限控制可见性。
 - 全局提交：题库上下文中的个人提交，按题目所有权和角色决定可见性。
 
 代码提交要求题目已有本地 `judgeConfig` 和测试数据记录；任一缺失时接口返回
 `409 LOCAL_JUDGE_NOT_CONFIGURED`，不会回退为远程评测。旧客户端传入的 `robot` 或
-`myAccount` 会兼容规范为 `local`，`archive` 必须使用独立同步接口。
+`myAccount` 会兼容规范为 `local`。远端 OJ 历史提交、题目归档与源码回抓能力已经退役，数据库约束拒绝
+再次写入 `submitMethod=archive`。
 
 训练提交列表、详情和排行榜使用同一套 Current `JudgeRun` 状态事实，不以 `cases` 是否存在作为“已评测”
 的可见条件。因此 OLE、CE、RE、Judge Error 等没有测试点明细的终态记录仍可查询；Queuing/Judging
@@ -93,7 +93,7 @@ Verdict、首个失败测试点、耗时和内存，不显示点分或子任务�
 Disclosure 展开完整表格，切换提交后恢复折叠。OI 赛中脱敏不返回测试点，也不显示 Disclosure。
 详情来源统一为来源平台与原始题号：活动优先读取 `TrainingProblem` 固定的来源快照，题库提交读取
 题目/提交来源；活动别名只用于活动标题。隐藏原题身份时来源字段从 DTO 中省略。远端提交 ID 仍供
-归档抓取和授权业务使用，但不再显示在提交详情界面。
+正常远程评测轮询和授权业务使用，但不再显示在提交详情界面。
 
 ## ICPC 首 A 判定
 
@@ -135,10 +135,7 @@ SELECT id
 FROM "Submission"
 WHERE result = 'queuing'
   AND "problemInternalId" IS NOT NULL
-  AND (
-    "submitMethod" IN ('local', 'demo_scenario')
-    OR (oj = 'carits' AND "submitMethod" <> 'archive')
-  )
+  AND ("submitMethod" IN ('local', 'demo_scenario') OR oj = 'carits')
 ORDER BY "createdAt"
 FOR UPDATE SKIP LOCKED
 LIMIT 1;

@@ -5,6 +5,14 @@ last_verified: 2026-09-16
 source_of_truth: Git history
 ---
 
+## 2026-09-16 — 远端代码归档退役与 Submission Contract
+
+- 删除 Codeforces/洛谷归档同步、归档题 CRUD、远端源码回抓和定时抓取实现；删除归档专用测试与前端自动回抓，不影响平台绑定、正常远程提交、结果轮询和 `ojRemoteId`。
+- 增加一次性数据库迁移：先阻断仍有 JudgeRun、活动、Blog 或题解引用的归档提交，再删除归档提交与 `UserArchivedProblem`，最后用 CHECK 约束禁止 `submitMethod=archive` 回流。
+- Judge 读取、队列、排名、Rating、训练和 IO 迁移移除归档特殊分支，统一以 CurrentJudgeRun 为结果事实源。
+- 提交详情接入共享 Runtime Contract 与 Submission Feature API；架构 telemetry 新增远端归档、Judge 兼容列及外部运维证据状态。
+- 本条记录代码完成状态；生产迁移、在线 404/远程提交验证与证据回填完成后再记录正式 rollout。
+
 ## 2026-09-16 — 架构进度 telemetry 与低上下文工作流
 
 - 新增 `pnpm architecture:progress`，自动生成 Contract、Feature Slice、契约边界、两类 transport、Contest runtime 兼容点、HTTPS 证据和 Top Debt，不再人工维护进度数字。

@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import apiClient, { ApiError } from '@/lib/apiClient'
+import { ApiError } from '@/lib/apiClient'
+import { getSubmissionDetail } from '../api/submissionApi'
 import { shouldPollSubmissionDetail, shouldRetrySubmissionPoll } from './submission-polling'
 import type { SubmissionDetailDto } from './submission-detail.types'
 
@@ -59,10 +60,7 @@ export function useSubmissionDetail(input: {
     if (initial) setLoading(true)
 
     try {
-      const endpoint = trainingId
-        ? `/api/trainings/${trainingId}/submissions/${submissionId}`
-        : `/api/submissions/${submissionId}`
-      const data = await apiClient.query<SubmissionDetailDto>(endpoint, { signal: controller.signal })
+      const data = await getSubmissionDetail(submissionId, trainingId, controller.signal)
       if (!mountedRef.current || controller.signal.aborted) return
       setDetail(data)
       setError(null)
@@ -72,17 +70,6 @@ export function useSubmissionDetail(input: {
       previousPollingRef.current = polling
       if (polling) pollTimerRef.current = setTimeout(() => void fetchDetail(false), 2000)
 
-      if (!trainingId && data.oj === 'codeforces' && !data.code && data.submitMethod === 'archive') {
-        void apiClient.post<{ code: string; codeLength: number }>(
-          `/api/submissions/${submissionId}/refetch-code`,
-          undefined,
-          { signal: controller.signal },
-        ).then(response => {
-          if (mountedRef.current && response.success && response.data?.code) {
-            setDetail(current => current ? { ...current, ...response.data } : current)
-          }
-        }).catch(() => undefined)
-      }
     } catch (loadError) {
       if (!mountedRef.current || controller.signal.aborted) return
       const normalized = normalizeError(loadError)

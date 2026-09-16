@@ -1,11 +1,12 @@
 /** 评测记录 HTTP API。授权与持久化由 application service 负责。 */
 import { Router } from 'express'
+import { SubmissionContracts } from '@oi-manager/contracts'
+import { sendContractData } from '../lib/api-contract'
 import { authenticate, getAccountRole, getResourceScope, isAdmin, isPersonalContext } from '../middleware/auth'
 import { logger } from '../lib/logger'
 import {
   getSubmissionDetail,
   listSubmissions,
-  refetchSubmissionCode,
   SubmissionQueryError,
   type SubmissionQueryContext,
 } from '../modules/submission/application/submission-query.service'
@@ -45,21 +46,9 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
 submissionsRouter.get('/:id', authenticate, async (req, res) => {
   try {
     const data = await getSubmissionDetail(contextOf(req), Number(req.params.id))
-    return res.json({ success: true, data })
+    return sendContractData(res, SubmissionContracts.detail, data)
   } catch (error) {
     return sendError(res, error, 'submission_detail_error', '查询失败')
-  }
-})
-
-submissionsRouter.post('/:id/refetch-code', authenticate, async (req, res) => {
-  try {
-    if (!/^\d+$/.test(req.params.id)) {
-      return res.status(400).json({ success: false, code: 'INVALID_SUBMISSION_ID', message: '无效的提交 ID' })
-    }
-    const data = await refetchSubmissionCode(contextOf(req), Number(req.params.id))
-    return res.json({ success: true, data })
-  } catch (error) {
-    return sendError(res, error, 'submission_refetch_code_error', '抓取失败')
   }
 })
 

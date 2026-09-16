@@ -33,7 +33,7 @@ function sendCommandError(res: any, error: unknown, fallbackMessage: string) {
   return res.status(500).json({ success: false, message: fallbackMessage })
 }
 
-/** Every source platform uses the local Judge; remote history is imported by archive APIs. */
+/** Every source platform uses the local Judge. */
 submitRouter.post('/', authenticate, async (req: any, res) => {
   try {
     const result = await submitLocalCode(commandContext(req), {

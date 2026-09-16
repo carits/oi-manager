@@ -90,12 +90,6 @@ describe('Submission and Judge lifecycle creation', () => {
     expect(stored.JudgeRuns).toHaveLength(1)
   })
 
-  it('does not create local Judge lifecycle rows for archive records', async () => {
-    await expect(createQueuedSubmissionWithRun({
-      userId: 'unused', oj: 'codeforces', problemId: '1A', language: 'cpp',
-      code: '', codeLength: 0, result: 'accepted', submitMethod: 'archive',
-    })).rejects.toThrow('Archive submissions do not create local Judge runs')
-  })
 })
 
 async function createLifecycleFixture() {

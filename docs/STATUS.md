@@ -13,6 +13,8 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 ## 最近 rollout
 
+- 2026-09-16: P1 远端 OJ 代码归档退役进入发布批次。Codeforces/洛谷历史提交同步、归档题 CRUD、源码回抓、定时抓取及 Judge/排名/Rating 特判已从代码中删除；新增一次性迁移，在确认归档提交无 JudgeRun、比赛、训练、作业、Blog 或题解引用后删除 68 条归档提交和 26 条归档题，并以数据库约束禁止 `submitMethod=archive` 回流。正常远程提交、结果轮询、账号绑定与 `ojRemoteId` 保持不变。提交详情成为第 25 个 Runtime Contract，Feature transport 从 244 降至 242；架构 telemetry 增加远端归档、Judge 兼容列、PITR、真实告警和云监控证据项。生产迁移与在线证据尚未完成前，本项不标记退出。
+
 - 2026-09-16: 架构迁移进度已产品化为仓库 telemetry。新增自动生成的 `architecture-progress.json`、跨提交单调门禁、Top Debt 任务排序、compact diff 和 GitHub Job Summary；CI 在 PR、main push 和每日定时执行。当前机器状态为 Contract 24、Feature Slice 24、边界 111，旧页面 transport 19 文件/42 调用、Feature UI/Model 44 文件/244 调用、Contest runtime 兼容点 4、生产 HTTPS 证据 0/5。`STATUS.md` 从 561 行缩减为当前说明与最近五次 rollout，旧流水移入 `docs/archive/history/STATUS-2026-09.md`；`AGENTS.md` 固化选择批次、验证和退出条件。学生选择器同时迁入 Organization Feature 并接入 Student/Team Runtime Contract；生产同构组织测试 4 文件 40/40、状态过期/指标反弹反向验证和文档门禁通过。提交 `11d4461`、`0ef9f65`、`67a0bd2` 已推送；API 3302→3303，Web BUILD_ID `6s6HJjDUEg29eJxSLwH7e` 经 canary/正式消息闭环（序号 246–249）后提升。
 
 - 2026-09-16: Frontend Feature Slice 与统一 API Contract Layer 第二十一批完成并上线。学校加入申请、成员邀请、加入策略、校园摘要和教师选择接口统一纳入 Organization Runtime Contract；管理页面迁入 `features/organization-account/ui`，教师管理 Route 只装配 Feature 公共入口。首轮生产同构回归发现审批请求被契约错误要求携带可选关系资料，已修正为保持既有业务语义并复跑组织契约 4 文件 40/40。Contracts/Server/Web 构建及 UI/路由/架构门禁通过；门禁现为 24 个 Contract 文件、24 个 Feature Slice、111 条契约边界，旧 Route/Component 直连降至 20 文件 45 调用，Feature UI/Model 遗留为 44 文件 244 调用。提交 `030ef60`、`24c3771` 已推送 `main`；API 当前为 3302，Web BUILD_ID `VaZGDHIeY_4fpHA3mbW_8` 经 canary 与正式双账号消息闭环（序号 242–245）后提升。本批无数据库结构或业务数据迁移。

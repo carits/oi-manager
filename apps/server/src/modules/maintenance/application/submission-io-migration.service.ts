@@ -6,7 +6,7 @@ type Candidate = Awaited<ReturnType<typeof loadCandidates>>[number]
 
 async function loadCandidates() {
   return prisma.submission.findMany({
-    where: { submitMethod: { not: 'archive' }, problemInternalId: { not: null }, ioAdapterVersion: 0 },
+    where: { problemInternalId: { not: null }, ioAdapterVersion: 0 },
     select: {
       id: true,
       problemInternalId: true,
@@ -84,5 +84,5 @@ export async function applySubmissionIoMigration() {
     })
     if (changed) migrated++
   }
-  return { migrated, unresolved, remaining: await prisma.submission.count({ where: { submitMethod: { not: 'archive' }, problemInternalId: { not: null }, ioAdapterVersion: 0 } }) }
+  return { migrated, unresolved, remaining: await prisma.submission.count({ where: { problemInternalId: { not: null }, ioAdapterVersion: 0 } }) }
 }

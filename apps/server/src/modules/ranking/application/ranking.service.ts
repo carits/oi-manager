@@ -49,7 +49,6 @@ export async function getPersonalSolvedRanking(queryParams: any) {
         where: {
           userId: { in: userIds },
           workspaceScope: 'personal',
-          submitMethod: { not: 'archive' },
           AND: [currentJudgeAcceptedWhere()],
         },
         select: { userId: true, problemId: true },
@@ -110,7 +109,7 @@ export async function getOrganizationRanking(organizationId: string, metric: str
   else {
     const accepted = await prisma.submission.findMany({
       where: {
-        userId: { in: baseRows.map(row => row.userId) }, submitMethod: { not: 'archive' },
+        userId: { in: baseRows.map(row => row.userId) },
         Training: { organizationId },
         AND: [currentJudgeAcceptedWhere()],
       },

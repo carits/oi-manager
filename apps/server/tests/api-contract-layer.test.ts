@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -15,6 +15,23 @@ function responseStub() {
 }
 
 describe('shared API contract adapter', () => {
+  it('serializes submission detail through the shared runtime contract', () => {
+    const { response, json } = responseStub()
+    sendContractData(response, SubmissionContracts.detail, {
+      id: 3824, username: 'student', result: 'accepted', timeUsed: 4, memoryUsed: 624,
+      codeLength: 20, language: 'cpp17', code: null, submitMethod: 'local', ojRemoteId: null,
+      submittedAt: new Date('2026-09-16T00:00:00Z'), errorMessage: null,
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ id: 3824, submittedAt: '2026-09-16T00:00:00.000Z' }),
+    }))
+    expect(() => sendContractData(response, SubmissionContracts.detail, {
+      id: 0, username: 'student', result: null, timeUsed: null, memoryUsed: null,
+      codeLength: 0, language: 'cpp17', code: null, submitMethod: 'local', ojRemoteId: null,
+      submittedAt: new Date(), errorMessage: null,
+    })).toThrowError(ApiContractError)
+  })
+
   it('normalizes bounded pagination at the server boundary', () => {
     expect(parseContractQuery(AssignmentContracts.progress, {
       page: '2',

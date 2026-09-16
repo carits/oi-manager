@@ -4755,7 +4755,6 @@ model User {
   RatingAccounts                           RatingAccount[]
   RatingChanges                            RatingChange[]
   ContestStandingEntries                   ContestStandingEntry[]
-  UserArchivedProblem                      UserArchivedProblem[]
   UserPlatformBinding                      UserPlatformBinding[]
   UserNotification                         UserNotification[]
   UserProblemContent                       UserProblemContent[]
@@ -5076,30 +5075,6 @@ model UserNotification {
   @@index([userId, scope, readAt, createdAt])
   @@index([userId, scope, createdAt])
   @@index([userId, contextKey, readAt, createdAt])
-}
-
-model UserArchivedProblem {
-  id          String    @id
-  userId      String
-  platform    String
-  problemId   String
-  title       String?
-  difficulty  String?
-  tags        String?
-  solvedAt    DateTime?
-  sourceUrl   String?
-  note        String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @default(now())
-  ojRemoteId  String?
-  result      String?
-  submittedAt DateTime?
-  User        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, platform, problemId])
-  @@index([platform])
-  @@index([userId])
-  @@index([userId, platform])
 }
 
 model UserPlatformBinding {

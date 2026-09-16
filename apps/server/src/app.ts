@@ -6,7 +6,6 @@ import helmet from 'helmet'
 import { MulterError } from 'multer'
 import path from 'path'
 import { adminDataRouter } from './routes/admin-data'
-import { archivedProblemsRouter } from './routes/archived-problems'
 import { authRouter } from './routes/auth'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { filesRouter } from './routes/files'
@@ -124,7 +123,6 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api/admin/data', authenticate, adminDataRouter)
   app.use('/api/admin', testGraphAdminRouter)
   app.use('/api/admin/migration', authenticate, migrationRouter)
-  app.use('/api/archived-problems', archivedProblemsRouter)
   app.use('/api/rankings', rankingRouter)
   app.use('/api', ratingDomainRouter)
   app.use('/api/me', meRouter)

@@ -254,14 +254,6 @@ describe('提交记录学校数据隔离', () => {
     expect(crossOrganizationRes.status).toBe(404)
   })
 
-  it('S7: 校园教师不能通过重新抓取接口清空学生代码', async () => {
-    const res = await organizationRequest(teacherAToken, schoolA.school.organizationId!)
-      .post(`/api/submissions/${submissionA.id}/refetch-code`)
-
-    expect(res.status).toBe(404)
-    const unchanged = await prisma.submission.findUniqueOrThrow({ where: { id: submissionA.id } })
-    expect(unchanged.code).toBe('int main() { return 0; }')
-  })
 })
 
 describe('提交详情权限', () => {

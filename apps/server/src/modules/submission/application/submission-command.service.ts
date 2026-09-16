@@ -53,9 +53,6 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
   if (!problemId || !oj || !language || !code.trim()) {
     throw new SubmissionCommandError(400, 'INVALID_SUBMISSION', '缺少必要参数')
   }
-  if (input.submitMethod === 'archive') {
-    throw new SubmissionCommandError(400, 'USE_ARCHIVE_SYNC', '远程记录请使用平台绑定中的同步归档功能')
-  }
   if (context.organizationRole === 'student' && context.workspaceScope !== 'personal') {
     throw new SubmissionCommandError(403, 'TEACHER_ONLY', '校园学生请从作业或比赛提交')
   }
@@ -149,7 +146,6 @@ export async function rejudgeLocalCode(context: SubmissionCommandContext, submis
   ) {
     throw new SubmissionCommandError(404, 'SUBMISSION_NOT_FOUND', '提交记录不存在')
   }
-  if (submission.submitMethod === 'archive') return { success: false, message: '远程归档记录不支持重新评测' }
   if (!submission.problemInternalId) return { success: false, message: '提交缺少题目内部 ID' }
   const queued = await rejudgeSubmissionWithRun(submissionId, context.userId)
   if (!queued) return { success: false, message: '提交正在排队或评测中，未重复加入队列' }

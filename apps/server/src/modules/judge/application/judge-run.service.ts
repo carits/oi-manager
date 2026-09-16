@@ -67,14 +67,13 @@ function terminalAttemptState(result: string): JudgeAttemptState {
 
 /**
  * Creates immutable submission intent and its first logical/physical Judge
- * lifecycle in one transaction. Local execution state belongs exclusively to
- * JudgeRun/JudgeAttempt; Submission result columns are archive-only snapshots.
+ * lifecycle in one transaction. Execution state belongs exclusively to
+ * JudgeRun/JudgeAttempt.
  */
 export async function createQueuedSubmissionWithRun(
   data: Prisma.SubmissionUncheckedCreateInput,
   options: CreateQueuedSubmissionOptions = {},
 ) {
-  if (data.submitMethod === 'archive') throw new Error('Archive submissions do not create local Judge runs')
   return prisma.$transaction(async tx => {
     const submission = await tx.submission.create({ data })
     const runId = crypto.randomUUID()
@@ -110,7 +109,7 @@ export async function createQueuedSubmissionWithRun(
   })
 }
 
-/** Claim the next physical attempt without mutating archive-only Submission result fields. */
+/** Claim the next physical attempt without mutating Submission result mirrors. */
 export async function claimNextQueuedSubmission(judgeId: string): Promise<ClaimedSubmissionLifecycle | null> {
   return prisma.$transaction(async tx => {
     const candidates = await tx.$queryRaw<Array<{
@@ -129,10 +128,7 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
         AND run."currentAttemptId" = attempt.id
         AND submission."currentJudgeRunId" = run.id
         AND submission."problemInternalId" IS NOT NULL
-        AND (
-          submission."submitMethod" IN ('local', 'demo_scenario')
-          OR (submission.oj = 'carits' AND submission."submitMethod" <> 'archive')
-        )
+        AND (submission."submitMethod" IN ('local', 'demo_scenario') OR submission.oj = 'carits')
       ORDER BY attempt."createdAt" ASC
       FOR UPDATE OF attempt SKIP LOCKED
       LIMIT 1
@@ -417,7 +413,7 @@ async function queueRejudgeRun(
     where: { id: submissionId },
     include: { CurrentJudgeRun: true },
   })
-  if (!submission || submission.submitMethod === 'archive' || !submission.problemInternalId) return false
+  if (!submission || !submission.problemInternalId) return false
   if (submission.CurrentJudgeRun && ['QUEUED', 'RUNNING'].includes(submission.CurrentJudgeRun.status)) return false
 
   const latest = await tx.judgeRun.aggregate({ where: { submissionId }, _max: { runNumber: true } })

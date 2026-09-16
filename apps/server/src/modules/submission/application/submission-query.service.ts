@@ -1,6 +1,5 @@
 import { prisma } from '../../../prisma'
 import yaml from 'js-yaml'
-import { fetchAndStoreCfCode } from '../../../lib/cf-code-fetcher'
 import { resolveJudgePresentationConfig } from '../../../lib/judge-mode'
 import {
   canAccessTraining,
@@ -27,14 +26,12 @@ export interface SubmissionQueryContext {
   isGlobalAdmin: boolean
   isPersonal: boolean
 }
-
 export class SubmissionQueryError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) {
     super(message)
     this.name = 'SubmissionQueryError'
   }
 }
-
 export interface SubmissionListInput {
   username?: string
   oj?: string
@@ -165,7 +162,6 @@ export async function listSubmissions(context: SubmissionQueryContext, input: Su
     scope: context.isGlobalAdmin ? 'all' : context.workspaceScope,
   }
 }
-
 async function requireVisibleSubmission(
   context: SubmissionQueryContext,
   submissionId: number,
@@ -376,28 +372,4 @@ export async function getSubmissionDetail(
     contestFormat,
     io: submissionIoDto(resolvedIo.inputFile, resolvedIo.outputFile),
   }
-}
-
-export async function refetchSubmissionCode(context: SubmissionQueryContext, submissionId: number) {
-  const access = await requireVisibleSubmission(context, submissionId)
-  const submission = access.submission
-  // 查看权限不等于修改归档记录权限。校园教师可以查看成员提交，
-  // 但只有提交本人或全局管理员能触发远端抓取并改写保存的源码。
-  if (!context.isGlobalAdmin && submission.userId !== context.userId) throw notFound()
-  if (submission.oj !== 'codeforces') throw new SubmissionQueryError(400, 'UNSUPPORTED_OJ', '仅支持 Codeforces 提交的代码抓取')
-  if (!submission.ojRemoteId) throw new SubmissionQueryError(400, 'REMOTE_ID_REQUIRED', '缺少远程提交 ID')
-
-  await prisma.submission.update({ where: { id: submissionId }, data: { code: '', codeLength: 0 } })
-  try {
-    const fetched = await fetchAndStoreCfCode(submissionId)
-    if (!fetched) throw new SubmissionQueryError(502, 'CODE_FETCH_FAILED', '抓取源代码失败，请稍后重试')
-  } catch (error) {
-    await prisma.submission.updateMany({
-      where: { id: submissionId, code: '' },
-      data: { code: submission.code, codeLength: submission.codeLength },
-    })
-    throw error
-  }
-  const updated = await prisma.submission.findUnique({ where: { id: submissionId }, select: { code: true, codeLength: true } })
-  return { code: updated?.code || '', codeLength: updated?.codeLength || 0 }
 }

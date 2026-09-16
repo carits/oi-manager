@@ -213,7 +213,6 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TrainingUserProblemStatus` | 以 Prisma schema 为准 |
 | `User` | 全局账号、密码摘要、状态与会话撤销代数；不保存学校身份 |
 | `UserProblemContent` | 用户独立题面版本与兼容题解；题面按名称软删除并使用 private/public 可见性 |
-| `UserArchivedProblem` | 以 Prisma schema 为准 |
 | `UserNotification` | 以 Prisma schema 为准 |
 | `UserPlatformBinding` | 以 Prisma schema 为准 |
 | `UserStatusLog` | 以 Prisma schema 为准 |

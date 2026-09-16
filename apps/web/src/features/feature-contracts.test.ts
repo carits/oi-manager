@@ -21,6 +21,7 @@ import {
   JudgeProgramCatalogSchema,
   JudgeProgramTemplateSchema,
   SimilarityComparisonSchema,
+  SubmissionDetailSchema,
   TrainingDesignSchema,
   TrainingStructureInputSchema,
   WorkspaceContracts,
@@ -30,6 +31,17 @@ import {
 } from '@oi-manager/contracts'
 
 describe('feature slice contracts', () => {
+  it('validates submission detail data at the feature boundary', () => {
+    const detail = {
+      id: 3824, username: 'student', result: 'accepted', timeUsed: 4, memoryUsed: 624,
+      codeLength: 20, language: 'cpp17', code: 'int main(){}', submitMethod: 'local',
+      ojRemoteId: null, submittedAt: '2026-09-16T00:00:00.000Z', errorMessage: null,
+    }
+    expect(SubmissionDetailSchema.safeParse(detail).success).toBe(true)
+    expect(SubmissionDetailSchema.safeParse({ ...detail, id: -1 }).success).toBe(false)
+    expect(SubmissionDetailSchema.safeParse({ ...detail, submittedAt: 'not-a-date' }).success).toBe(false)
+  })
+
   it('accepts explicit empty assignment progress and rejects malformed pagination', () => {
     expect(AssignmentProgressDataSchema.safeParse({
       recipients: [],

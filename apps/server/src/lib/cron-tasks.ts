@@ -1,9 +1,8 @@
 /**
- * 定时任务：扫描 code 为空的 CF 提交，通过 Playwright 抓取源代码
+ * 后台维护任务。
  */
 
 import cron from 'node-cron'
-import { fetchMissingCfCodes } from './cf-code-fetcher'
 import logger from './logger'
 import { collectOrphanTestdataObjects } from './testdata-object-gc'
 import { collectOrphanContentBlobs, releaseBlobReferences } from '../modules/storage/content-blob.service'
@@ -22,7 +21,6 @@ async function expireCandidateData() {
   return { expired: candidates.length }
 }
 
-let isRunning = false
 let cronStopper: (() => void) | null = null
 
 export function startCronTasks() {
@@ -30,35 +28,6 @@ export function startCronTasks() {
     logger.warn('cron_tasks_already_running', { action: 'cron_start' })
     return cronStopper
   }
-  // 每 1 分钟扫描一次 code 为空的 CF 提交，每次最多抓取 20 条
-  const task = cron.schedule('* * * * *', async () => {
-    if (isRunning) {
-      logger.info('cron_cf_code_fetch_skip', {
-        action: 'cron_cf_code_fetch',
-        metadata: { reason: 'previous_run_still_active' },
-      })
-      return
-    }
-
-    isRunning = true
-    logger.info('cron_cf_code_fetch_start', { action: 'cron_cf_code_fetch' })
-
-    try {
-      const result = await fetchMissingCfCodes(20)
-      logger.info('cron_cf_code_fetch_done', {
-        action: 'cron_cf_code_fetch',
-        metadata: result,
-      })
-    } catch (error) {
-      logger.error('cron_cf_code_fetch_error', {
-        action: 'cron_cf_code_fetch',
-        metadata: { error: (error as Error).message },
-      })
-    } finally {
-      isRunning = false
-    }
-  })
-
   // Content-addressed uploads may be left behind when a Revision transaction
   // loses CAS or rolls back. Remove only objects older than 24 hours and still
   // unreferenced, under the same per-problem database lock as publishers.
@@ -99,7 +68,6 @@ export function startCronTasks() {
 
   logger.info('cron_tasks_started', { action: 'cron_start' })
   cronStopper = () => {
-    task.stop()
     gcTask.stop()
     chatTask.stop()
     selectorTask.stop()

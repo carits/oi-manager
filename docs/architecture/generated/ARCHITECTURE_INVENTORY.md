@@ -13,9 +13,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 201 |
+| Prisma models | 200 |
 | Prisma enums | 74 |
-| Legacy route adapters | 25 |
+| Legacy route adapters | 24 |
 | Module route adapters | 53 |
 | systemd units | 8 |
 | Referenced environment keys | 483 |
@@ -25,7 +25,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 ### Legacy adapters（Strangler 待迁移）
 
 - `apps/server/src/routes/admin-data.ts`
-- `apps/server/src/routes/archived-problems.ts`
 - `apps/server/src/routes/auth.ts`
 - `apps/server/src/routes/demo-scenario.ts`
 - `apps/server/src/routes/files.ts`
@@ -298,7 +297,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingSolution`
 - `TrainingUserProblemStatus`
 - `User`
-- `UserArchivedProblem`
 - `UserBlock`
 - `UserNotification`
 - `UserPlatformBinding`

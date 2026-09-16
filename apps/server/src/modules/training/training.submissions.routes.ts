@@ -4,11 +4,13 @@
  */
 
 import { Router } from 'express'
+import { SubmissionContracts } from '@oi-manager/contracts'
 import yaml from 'js-yaml'
 import { authenticate, getAccountRole, getResourceScope, isAdmin, isPersonalContext } from '../../middleware/auth'
 import { logger } from '../../lib/logger'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { sendContractData } from '../../lib/api-contract'
 import type { AuthRequest } from '../../middleware/auth'
 import {
   canAccessTraining,
@@ -57,13 +59,6 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
       return res.status(400).json({ success: false, message: '缺少必要参数' })
     }
 
-    if (submitMethod === 'archive') {
-      return res.status(400).json({
-        success: false,
-        code: 'USE_ARCHIVE_SYNC',
-        message: '远程归档不计入比赛提交，请在题目页使用同步归档功能',
-      })
-    }
     // Legacy robot/myAccount payloads remain accepted, but always run locally.
     const method = 'local'
     const idempotencyKey = readIdempotencyKey(req)
@@ -267,7 +262,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
 
     try {
       const detail = await getSubmissionDetail(context, submissionId, id)
-      return res.json({ success: true, data: detail })
+      return sendContractData(res, SubmissionContracts.detail, detail)
     } catch (error) {
       if (error instanceof SubmissionQueryError) {
         return res.status(error.statusCode).json({

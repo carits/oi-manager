@@ -9,7 +9,6 @@ import {
 
 export const localJudgeSubmissionWhere = () => ({
   problemInternalId: { not: null },
-  submitMethod: { not: 'archive' },
   OR: [{ submitMethod: { in: ['local', 'demo_scenario'] } }, { oj: 'carits' }],
 })
 
@@ -35,12 +34,7 @@ export async function queryTrainingSubmissions(params: {
   const where: any = {
     submitScope: training.type === 'contest' ? 'contest' : 'training',
     trainingId: training.id,
-    AND: [{
-      OR: [
-        { currentJudgeRunId: { not: null } },
-        { currentJudgeRunId: null, result: { not: '' } },
-      ],
-    }],
+    currentJudgeRunId: { not: null },
   }
   if (filters.userId) where.userId = filters.userId
   if (filters.problemId) {

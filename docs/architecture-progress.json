@@ -1,16 +1,16 @@
 {
-  "schemaVersion": 1,
-  "contracts": 24,
+  "schemaVersion": 2,
+  "contracts": 25,
   "featureSlices": 24,
-  "contractedBoundaries": 111,
+  "contractedBoundaries": 114,
   "transport": {
     "legacy": {
       "files": 19,
       "calls": 42
     },
     "feature": {
-      "files": 44,
-      "calls": 244
+      "files": 43,
+      "calls": 242
     }
   },
   "contestCompatibility": {
@@ -33,6 +33,54 @@
         "active": true
       }
     ]
+  },
+  "remoteArchive": {
+    "implementationFiles": 0,
+    "activeReferences": 0,
+    "modelPresent": false,
+    "databaseSubmissions": null,
+    "databaseArchivedProblems": null,
+    "migrationVerified": false,
+    "evidence": null
+  },
+  "judgeCompatibility": {
+    "remainingColumns": 12,
+    "columns": [
+      "result",
+      "timeUsed",
+      "wallTimeUsed",
+      "memoryUsed",
+      "timeoutReason",
+      "metricSource",
+      "errorMessage",
+      "cases",
+      "score",
+      "subtasks",
+      "judgeId",
+      "judgeStarted"
+    ]
+  },
+  "pitr": {
+    "walArchive": false,
+    "offHostStorage": false,
+    "restoreExercise": false,
+    "rpoMet": false,
+    "rtoMet": false,
+    "evidence": null
+  },
+  "externalAlerting": {
+    "realRecipient": false,
+    "faultDelivered": false,
+    "recoveryDelivered": false,
+    "evidence": null
+  },
+  "cloudMonitoring": {
+    "host": false,
+    "http": false,
+    "database": false,
+    "judge": false,
+    "backup": false,
+    "evidence": null
   },
   "https": {
     "publicHttps": false,
@@ -107,7 +155,12 @@
   "exitCriteria": {
     "contractFeatureMigration": "transport.legacy.calls == 0 && transport.feature.calls == 0",
     "contestRuntimeRetirement": "contestCompatibility.remaining == 0",
+    "remoteArchiveRetirement": "remoteArchive code/model counts and database counts are zero and migrationVerified is true",
+    "judgeCompatibilityRetirement": "judgeCompatibility.remainingColumns == 0",
+    "pitr": "all pitr flags are true",
+    "externalAlerting": "all externalAlerting flags are true",
+    "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-16T12:24:11.592Z"
+  "updatedAt": "2026-09-16T13:00:13.044Z"
 }

@@ -373,7 +373,7 @@ export async function lockRatingParticipantTx(tx: Prisma.TransactionClient, trai
 
 async function currentSubmissionRows(tx: Prisma.TransactionClient, training: any): Promise<ScoringSubmission[]> {
   const rows = await tx.submission.findMany({
-    where: { trainingId: training.id, submitScope: 'contest', submitMethod: { not: 'archive' }, createdAt: { lte: training.endTime } },
+    where: { trainingId: training.id, submitScope: 'contest', createdAt: { lte: training.endTime } },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: { id: true, userId: true, trainingProblemId: true, result: true, score: true, createdAt: true, submissionPhase: true, CurrentJudgeRun: { select: { status: true, result: true, score: true } } },
   })
@@ -860,7 +860,7 @@ export async function setFinalSubmission(trainingId: number, trainingProblemId: 
   const training = await requireContest(trainingId)
   if (training.format !== 'oi') fail(422, 'FINAL_SUBMISSION_UNSUPPORTED', '只有 OI 最终提交制支持手动指定最终提交')
   if (new Date() > training.endTime) fail(409, 'CONTEST_ENDED', '比赛结束后不能更改最终提交')
-  const submission = await prisma.submission.findFirst({ where: { id: submissionId, userId, trainingId, trainingProblemId, submitScope: 'contest', submitMethod: { not: 'archive' } } })
+  const submission = await prisma.submission.findFirst({ where: { id: submissionId, userId, trainingId, trainingProblemId, submitScope: 'contest' } })
   if (!submission) fail(404, 'SUBMISSION_NOT_FOUND', '提交不存在或不属于当前比赛题目')
   await prisma.$transaction(async tx => {
     await tx.submission.updateMany({ where: { userId, trainingId, trainingProblemId, submissionPhase: 'FINAL' }, data: { submissionPhase: null } })

@@ -15,7 +15,7 @@ export class AdminDataError extends Error {
 export async function rejudgeAllLocalSubmissions(requestedBy: string) {
   const submissions = await prisma.submission.findMany({
     where: {
-      problemInternalId: { not: null }, submitMethod: { not: 'archive' },
+      problemInternalId: { not: null },
       OR: [{ submitMethod: { in: ['local', 'demo_scenario'] } }, { oj: 'carits' }],
       AND: [currentJudgeCompletedWhere()],
     },

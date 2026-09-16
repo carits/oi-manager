@@ -43,6 +43,59 @@ function httpsStatus() {
   }
 }
 
+function remoteArchiveStatus() {
+  const retiredFiles = [
+    'apps/server/src/routes/archived-problems.ts',
+    'apps/server/src/modules/archived-problem/application/archived-problem.service.ts',
+    'apps/server/src/modules/platform-binding/binders/codeforces-archiver.ts',
+    'apps/server/src/modules/platform-binding/binders/luogu-archiver.ts',
+    'apps/server/src/lib/cf-code-fetcher.ts',
+  ]
+  const sourceFiles = [
+    'apps/server/src/app.ts',
+    'apps/server/src/modules/platform-binding/platform-binding.routes.ts',
+    'apps/server/src/modules/judge/application/judge-read-projection.ts',
+    'apps/web/src/features/submission/model/useSubmissionDetail.ts',
+  ]
+  const activePatterns = /sync-archive|sync-submissions|archived-problems|UserArchivedProblem|submitMethod\s*[:=]\s*['"]archive['"]/g
+  const activeReferences = sourceFiles.reduce((total, file) => {
+    if (!fs.existsSync(path.join(root, file))) return total
+    return total + (fs.readFileSync(path.join(root, file), 'utf8').match(activePatterns)?.length ?? 0)
+  }, 0)
+  const implementationFiles = retiredFiles.filter(file => fs.existsSync(path.join(root, file))).length
+  const evidenceFile = path.join(root, 'docs/operations/remote-archive-retirement-evidence.json')
+  const evidence = fs.existsSync(evidenceFile) ? readJson(evidenceFile) : null
+  return {
+    implementationFiles,
+    activeReferences,
+    modelPresent: /model\s+UserArchivedProblem\b/.test(fs.readFileSync(path.join(root, 'apps/server/prisma/schema.prisma'), 'utf8')),
+    databaseSubmissions: evidence?.databaseSubmissions ?? null,
+    databaseArchivedProblems: evidence?.databaseArchivedProblems ?? null,
+    migrationVerified: evidence?.migrationVerified === true,
+    evidence: evidence ? 'docs/operations/remote-archive-retirement-evidence.json' : null,
+  }
+}
+
+function judgeCompatibilityStatus() {
+  const schema = fs.readFileSync(path.join(root, 'apps/server/prisma/schema.prisma'), 'utf8')
+  const compatibilityColumns = [
+    'result', 'timeUsed', 'wallTimeUsed', 'memoryUsed', 'timeoutReason', 'metricSource',
+    'errorMessage', 'cases', 'score', 'subtasks', 'judgeId', 'judgeStarted',
+  ]
+  const submission = schema.match(/model Submission \{([\s\S]*?)\n\}/)?.[1] ?? ''
+  const remainingColumns = compatibilityColumns.filter(column => new RegExp(`^\\s*${column}\\s+`, 'm').test(submission))
+  return { remainingColumns: remainingColumns.length, columns: remainingColumns }
+}
+
+function evidenceStatus(file, keys) {
+  const absolute = path.join(root, 'docs/operations', file)
+  const evidence = fs.existsSync(absolute) ? readJson(absolute) : null
+  return {
+    ...Object.fromEntries(keys.map(key => [key, evidence?.[key] === true])),
+    evidence: evidence ? `docs/operations/${file}` : null,
+  }
+}
+
 function calculate() {
   const transport = auditTransport()
   const topDebt = [
@@ -50,7 +103,7 @@ function calculate() {
     ...transport.featureTransportDebt.map(item => ({ ...item, layer: 'feature' })),
   ].sort((left, right) => right.calls - left.calls || left.file.localeCompare(right.file)).slice(0, 12)
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     contracts: transport.contractFiles,
     featureSlices: transport.featureSlices,
     contractedBoundaries: transport.contractedBoundaries,
@@ -59,11 +112,21 @@ function calculate() {
       feature: { files: transport.remainingLegacyFeatureTransportFiles, calls: transport.remainingLegacyFeatureTransportCalls },
     },
     contestCompatibility: contestCompatibility(),
+    remoteArchive: remoteArchiveStatus(),
+    judgeCompatibility: judgeCompatibilityStatus(),
+    pitr: evidenceStatus('production-pitr-evidence.json', ['walArchive', 'offHostStorage', 'restoreExercise', 'rpoMet', 'rtoMet']),
+    externalAlerting: evidenceStatus('production-alerting-evidence.json', ['realRecipient', 'faultDelivered', 'recoveryDelivered']),
+    cloudMonitoring: evidenceStatus('production-cloud-monitoring-evidence.json', ['host', 'http', 'database', 'judge', 'backup']),
     https: httpsStatus(),
     topDebt,
     exitCriteria: {
       contractFeatureMigration: 'transport.legacy.calls == 0 && transport.feature.calls == 0',
       contestRuntimeRetirement: 'contestCompatibility.remaining == 0',
+      remoteArchiveRetirement: 'remoteArchive code/model counts and database counts are zero and migrationVerified is true',
+      judgeCompatibilityRetirement: 'judgeCompatibility.remainingColumns == 0',
+      pitr: 'all pitr flags are true',
+      externalAlerting: 'all externalAlerting flags are true',
+      cloudMonitoring: 'all cloudMonitoring flags are true',
       productionHttps: 'all https flags are true',
     },
   }
@@ -84,6 +147,8 @@ function summary(previous, current) {
     delta('legacy transport', previous?.transport?.legacy?.calls, current.transport.legacy.calls),
     delta('feature transport', previous?.transport?.feature?.calls, current.transport.feature.calls),
     delta('contest compatibility', previous?.contestCompatibility?.remaining, current.contestCompatibility.remaining),
+    delta('remote archive code', (previous?.remoteArchive?.implementationFiles ?? 0) + (previous?.remoteArchive?.activeReferences ?? 0), current.remoteArchive.implementationFiles + current.remoteArchive.activeReferences),
+    delta('judge compatibility columns', previous?.judgeCompatibility?.remainingColumns, current.judgeCompatibility.remainingColumns),
     `https ${Object.entries(current.https).filter(([key, value]) => key !== 'evidence' && value === true).length}/5`,
   ].join('\n')
 }
@@ -118,6 +183,8 @@ if (args.has('--gate')) {
     if (current.featureSlices < previous.featureSlices) regressions.push('feature slice count decreased')
     if (current.contractedBoundaries < previous.contractedBoundaries) regressions.push('contracted boundary count decreased')
     if (current.contestCompatibility.remaining > previous.contestCompatibility.remaining) regressions.push('contest compatibility debt increased')
+    if (previous.remoteArchive && current.remoteArchive.implementationFiles + current.remoteArchive.activeReferences > previous.remoteArchive.implementationFiles + previous.remoteArchive.activeReferences) regressions.push('remote archive code debt increased')
+    if (previous.judgeCompatibility && current.judgeCompatibility.remainingColumns > previous.judgeCompatibility.remainingColumns) regressions.push('judge compatibility debt increased')
     for (const key of ['publicHttps', 'secureCookie', 'csp', 'hsts', 'externalHttpsProbe']) {
       if (previous.https[key] === true && current.https[key] !== true) regressions.push(`HTTPS evidence regressed: ${key}`)
     }

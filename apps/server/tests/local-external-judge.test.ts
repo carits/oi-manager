@@ -135,53 +135,6 @@ describe('external-source local judging', () => {
     expect(response.body.code).toBe('LOCAL_JUDGE_NOT_CONFIGURED')
   })
 
-  it('rejects archive payloads at the code submission endpoint', async () => {
-    const { token, problem } = await fixture()
-    const response = await request(app)
-      .post('/api/submit')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        problemId: problem.problemId,
-        oj: problem.platform,
-        language: 'cpp',
-        code: 'int main() {}',
-        submitMethod: 'archive',
-      })
-
-    expect(response.status).toBe(400)
-    expect(response.body.code).toBe('USE_ARCHIVE_SYNC')
-  })
-
-  it('does not enqueue an imported archive record for rejudge', async () => {
-    const { actor, token, problem } = await fixture()
-    const archived = await prisma.submission.create({
-      data: {
-        userId: actor.user.id,
-        workspaceScope: 'personal',
-        oj: problem.platform,
-        problemId: problem.problemId,
-        problemInternalId: problem.id,
-        language: 'cpp',
-        code: '',
-        codeLength: 0,
-        result: 'accepted',
-        score: 100,
-        submitMethod: 'archive',
-        submitScope: 'problem',
-        ojRemoteId: 'remote-123',
-      },
-    })
-
-    const response = await request(app)
-      .post('/api/submit/rejudge')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ submissionId: archived.id })
-
-    expect(response.status).toBe(200)
-    expect(response.body).toEqual({ success: false, message: '远程归档记录不支持重新评测' })
-    expect((await prisma.submission.findUniqueOrThrow({ where: { id: archived.id } })).result).toBe('accepted')
-  })
-
   it('queues an external training problem locally using its judge config snapshot', async () => {
     const { actor, token, problem } = await fixture()
     const now = Date.now()

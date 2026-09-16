@@ -197,6 +197,12 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
+  "apps/server/src/modules/system/health.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
   "apps/server/src/modules/team-import/team-import.routes.ts": {
     "prisma": 0,
     "transaction": 0,
@@ -312,12 +318,6 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/admin-data.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/routes/archived-problems.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,

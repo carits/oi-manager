@@ -915,10 +915,6 @@ export async function rejudgeSubmission(submissionId: number, requestedBy = 'sys
     return { success: false, message: '提交不存在' }
   }
 
-  if (submission.submitMethod === 'archive') {
-    return { success: false, message: '远程归档记录不支持重新评测' }
-  }
-
   if (!submission.problemInternalId) {
     return { success: false, message: '提交缺少题目内部 ID' }
   }

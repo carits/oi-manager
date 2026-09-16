@@ -118,7 +118,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 ## 明确不作为缺陷修复的历史数据
 
 - 8 个没有本地测试数据、Judge Config 或本地提交的历史 HDU/洛谷活动题继续返回 `LOCAL_JUDGE_NOT_CONFIGURED`，不能伪造 Revision。
-- 无法证明历史评测版本的远程归档和旧个人提交保持 `legacy unpinned`。
+- 无法证明历史评测版本的旧个人提交保持 `legacy unpinned`；远端 OJ 代码归档已按退役迁移直接删除，不再属于支持的数据类型。
 - 交互题、通信题和提交答案题的 ACM 失败后提前停止属于后续性能优化，不影响当前判定正确性。
 
 ## 完成条件

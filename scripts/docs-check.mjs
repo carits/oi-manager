@@ -228,7 +228,6 @@ const routerPrefixes = {
   adminDataRouter: '/api/admin/data',
   migrationRouter: '/api/admin/migration',
   testGraphAdminRouter: '/api/admin',
-  archivedProblemsRouter: '/api/archived-problems',
   caritsRouter: '/api/carits',
   contributionRouter: '/api/contributions',
   platformContributionRouter: '/api/platform/contributions',
