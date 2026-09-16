@@ -91,6 +91,62 @@ export const OrganizationCreationApplicationPageSchema = z.object({
   totalPages: z.number().int().nonnegative(),
 })
 
+export const OrganizationManagedJoinApplicationSchema = z.object({
+  id: z.string().min(1),
+  realName: z.string(),
+  requestedRole: z.enum(['student', 'teacher']),
+  requestedRelationType: z.string(),
+  profileData: z.record(z.string(), z.unknown()).nullable().optional(),
+  message: z.string().nullable().optional(),
+  status: z.string(),
+  createdAt: DateTimeWireSchema,
+  decisionMessage: z.string().nullable().optional(),
+  internalReviewNote: z.string().nullable().optional(),
+  User: z.object({ username: z.string(), avatar: z.string().nullable().optional() }),
+})
+export type OrganizationManagedJoinApplication = z.infer<typeof OrganizationManagedJoinApplicationSchema>
+
+export const OrganizationManagedInvitationSchema = z.object({
+  id: z.string().min(1),
+  memberRole: z.enum(['student', 'teacher']),
+  relationType: z.string(),
+  status: z.string(),
+  createdAt: DateTimeWireSchema,
+  expiresAt: DateTimeWireSchema.nullable().optional(),
+  User: z.object({ username: z.string(), avatar: z.string().nullable().optional() }).optional(),
+})
+export type OrganizationManagedInvitation = z.infer<typeof OrganizationManagedInvitationSchema>
+
+const ManagedPageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
+  items: z.array(item), total: z.number().int().nonnegative(), pending: z.number().int().nonnegative(),
+  page: z.number().int().positive(), pageSize: z.number().int().positive(),
+})
+
+export const OrganizationCampusSummarySchema = z.object({
+  joinPolicy: OrganizationJoinPolicySchema,
+}).passthrough()
+
+export const OrganizationTeacherOptionPageSchema = z.object({
+  data: z.array(z.object({ membershipId: z.string().min(1), name: z.string() }).passthrough()),
+  total: z.number().int().nonnegative(), page: z.number().int().positive(), pageSize: z.number().int().positive(),
+  totalPages: z.number().int().nonnegative(),
+}).passthrough()
+
+const JoinDecisionBodySchema = z.object({
+  relationType: z.string().min(1),
+  headTeacherMembershipId: z.string().min(1).nullable().optional(),
+  profile: z.record(z.string(), z.unknown()),
+  decisionMessage: z.string().max(500).default(''),
+  internalReviewNote: z.string().max(1000).default(''),
+})
+
+const InvitationBodySchema = z.object({
+  username: z.string().trim().min(1).max(80),
+  memberRole: z.enum(['student', 'teacher']),
+  relationType: z.string().min(1),
+  message: z.string().trim().max(1000).default(''),
+})
+
 const CreationBodySchema = z.object({
   organizationType: z.literal('school').default('school'),
   name: z.string().trim().min(2).max(100),
@@ -153,5 +209,40 @@ export const OrganizationContracts = {
   cancelOrganizationApplication: defineApiEndpoint({
     key: 'organization.creation.cancel', method: 'POST', scope: 'account', data: OrganizationCreationApplicationSchema,
     body: z.object({}),
+  }),
+  managedJoinApplications: defineApiEndpoint({
+    key: 'organization.join.manage.list', method: 'GET', scope: 'organization',
+    data: ManagedPageSchema(OrganizationManagedJoinApplicationSchema),
+    query: PaginationQuerySchema.extend({ status: z.string().optional(), role: z.string().optional(), q: z.string().trim().max(100).optional() }),
+  }),
+  decideJoinApplication: defineApiEndpoint({
+    key: 'organization.join.manage.decide', method: 'POST', scope: 'organization',
+    data: z.object({ status: z.enum(['approved', 'rejected']), membershipId: z.string().optional() }),
+    body: JoinDecisionBodySchema,
+  }),
+  managedInvitations: defineApiEndpoint({
+    key: 'organization.invitation.manage.list', method: 'GET', scope: 'organization',
+    data: ManagedPageSchema(OrganizationManagedInvitationSchema),
+    query: PaginationQuerySchema.extend({ status: z.string().optional() }),
+  }),
+  createManagedInvitation: defineApiEndpoint({
+    key: 'organization.invitation.manage.create', method: 'POST', scope: 'organization',
+    data: OrganizationManagedInvitationSchema, body: InvitationBodySchema,
+  }),
+  revokeManagedInvitation: defineApiEndpoint({
+    key: 'organization.invitation.manage.revoke', method: 'POST', scope: 'organization',
+    data: z.object({ revoked: z.literal(true) }), body: z.object({}),
+  }),
+  updateJoinPolicy: defineApiEndpoint({
+    key: 'organization.join.policy.update', method: 'PATCH', scope: 'organization',
+    data: z.object({ joinPolicy: OrganizationJoinPolicySchema }),
+    body: z.object({ joinPolicy: OrganizationJoinPolicySchema }),
+  }),
+  campusSummary: defineApiEndpoint({
+    key: 'organization.campus.summary', method: 'GET', scope: 'organization', data: OrganizationCampusSummarySchema,
+  }),
+  teacherOptions: defineApiEndpoint({
+    key: 'organization.teacher.options', method: 'GET', scope: 'organization', data: OrganizationTeacherOptionPageSchema,
+    query: PaginationQuerySchema.extend({ q: z.string().optional(), status: z.string().optional(), role: z.string().optional() }),
   }),
 } as const

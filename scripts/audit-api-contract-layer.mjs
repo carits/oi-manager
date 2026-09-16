@@ -10,7 +10,6 @@ const failures = []
 // direct transport is forbidden and every completed feature slice must reduce
 // or remove its allowance. The target state is an empty object.
 const legacyTransportAllowances = {
-  'apps/web/src/components/organization/OrganizationJoinManagement.tsx': 10,
   'apps/web/src/components/organization-pages/teacher/school/components/TeachersTab.tsx': 6,
   'apps/web/src/components/management/StudentsManagementContent.tsx': 5,
   'apps/web/src/app/admin/schools/page.tsx': 5,
@@ -196,6 +195,7 @@ const contractedBoundaries = [
   ['apps/server/src/modules/problem/problem.judge-program.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/chat/chat.routes.ts', 'ChatContracts'],
   ['apps/server/src/modules/organization-join/organization-join.routes.ts', 'OrganizationContracts'],
+  ['apps/server/src/routes/organization-members.ts', 'OrganizationContracts'],
   ['apps/server/src/modules/organization-creation/organization-creation.routes.ts', 'OrganizationContracts'],
   ['apps/server/src/modules/notification/notification.routes.ts', 'NotificationContracts'],
   ['apps/server/src/routes/workspaces.ts', 'WorkspaceContracts'],
@@ -255,6 +255,9 @@ const contractedBoundaries = [
   ['apps/web/src/features/organization-account/ui/PersonalOrganizationsPage.tsx', 'getMyOrganizations'],
   ['apps/web/src/features/organization-account/ui/PersonalOrganizationsPage.tsx', 'createOrganizationJoinApplication'],
   ['apps/web/src/features/organization-account/ui/PersonalOrganizationsPage.tsx', 'createOrganizationApplication'],
+  ['apps/web/src/features/organization-account/ui/OrganizationJoinManagement.tsx', 'getOrganizationJoinApplications'],
+  ['apps/web/src/features/organization-account/ui/OrganizationJoinManagement.tsx', 'createOrganizationInvitation'],
+  ['apps/web/src/features/organization-account/ui/OrganizationJoinManagement.tsx', 'updateOrganizationJoinPolicy'],
   ['apps/web/src/features/notification/api/notificationApi.ts', 'NotificationContracts'],
   ['apps/web/src/features/notification/ui/NotificationBell.tsx', 'listContextNotifications'],
   ['apps/web/src/features/notification/ui/NotificationCenterPage.tsx', 'listAccountNotifications'],

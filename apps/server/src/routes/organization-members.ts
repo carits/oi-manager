@@ -1,5 +1,7 @@
 import { Router, type Response } from 'express'
+import { OrganizationContracts } from '@oi-manager/contracts'
 import { asyncHandler } from '../lib/asyncHandler'
+import { parseContractQuery, sendContractData, sendContractError } from '../lib/api-contract'
 import { parsePagination } from '../lib/pagination'
 import { authenticate, type AuthRequest } from '../middleware/auth'
 import {
@@ -50,6 +52,7 @@ function endpoint(label: string, capability: OrganizationCapability, handler: (r
     try {
       await handler(req, res, context)
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof OrganizationMemberError) {
         return res.status(error.statusCode).json({ success: false, ...(error.code ? { code: error.code } : {}), message: error.message })
       }
@@ -59,7 +62,7 @@ function endpoint(label: string, capability: OrganizationCapability, handler: (r
 }
 
 organizationMemberRouter.get('/campus', authenticate, endpoint('查看校园资料', 'organization.view', async (_req, res, context) => {
-  res.json({ success: true, data: await getCampus(context) })
+  sendContractData(res, OrganizationContracts.campusSummary, await getCampus(context))
 }))
 
 organizationMemberRouter.put('/campus', authenticate, endpoint('编辑校园资料', 'organization.settings', async (req, res, context) => {
@@ -88,8 +91,9 @@ organizationMemberRouter.get('/students', authenticate, endpoint('获取学生�
 }))
 
 organizationMemberRouter.get('/teachers', authenticate, endpoint('获取教师列表失败', 'membership.view.teachers', async (req, res, context) => {
-  const { page, pageSize } = parsePagination(req.query)
-  res.json({ success: true, data: await listOrganizationTeachers(context, req.query, page, pageSize) })
+  const query = parseContractQuery(OrganizationContracts.teacherOptions, req.query)
+  const { page, pageSize } = parsePagination(query)
+  sendContractData(res, OrganizationContracts.teacherOptions, await listOrganizationTeachers(context, query, page, pageSize))
 }))
 
 organizationMemberRouter.post('/students', authenticate, endpoint('创建学生失败', 'membership.manage.students', async (req, res, context) => {

@@ -60,26 +60,33 @@ organizationJoinRouter.post('/organization-join-applications/:id/cancel', authen
 }))
 
 organizationJoinRouter.get('/organizations/:organizationId/join-applications', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await listJoinApplications(actor(req), req.params.organizationId, req.query) })
+  const query = parseContractQuery(OrganizationContracts.managedJoinApplications, req.query)
+  sendContractData(res, OrganizationContracts.managedJoinApplications, await listJoinApplications(actor(req), req.params.organizationId, query))
 }))
 organizationJoinRouter.get('/organizations/:organizationId/join-applications/:id', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await getJoinApplication(actor(req), req.params.organizationId, req.params.id) })
 }))
 organizationJoinRouter.post('/organizations/:organizationId/join-applications/:id/approve', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await decideJoinApplication(actor(req), req.params.organizationId, req.params.id, 'approve', req.body || {}) })
+  const body = parseContractBody(OrganizationContracts.decideJoinApplication, req.body || {})
+  sendContractData(res, OrganizationContracts.decideJoinApplication, await decideJoinApplication(actor(req), req.params.organizationId, req.params.id, 'approve', body))
 }))
 organizationJoinRouter.post('/organizations/:organizationId/join-applications/:id/reject', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await decideJoinApplication(actor(req), req.params.organizationId, req.params.id, 'reject', req.body || {}) })
+  const body = parseContractBody(OrganizationContracts.decideJoinApplication, req.body || {})
+  sendContractData(res, OrganizationContracts.decideJoinApplication, await decideJoinApplication(actor(req), req.params.organizationId, req.params.id, 'reject', body))
 }))
 
 organizationJoinRouter.get('/organizations/:organizationId/invitations', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await listOrganizationInvitations(actor(req), req.params.organizationId, req.query) })
+  const query = parseContractQuery(OrganizationContracts.managedInvitations, req.query)
+  sendContractData(res, OrganizationContracts.managedInvitations, await listOrganizationInvitations(actor(req), req.params.organizationId, query))
 }))
 organizationJoinRouter.post('/organizations/:organizationId/invitations', authenticate, endpoint(async (req, res) => {
-  res.status(201).json({ success: true, data: await createOrganizationInvitation(actor(req), req.params.organizationId, req.body || {}) })
+  const body = parseContractBody(OrganizationContracts.createManagedInvitation, req.body || {})
+  sendContractData(res, OrganizationContracts.createManagedInvitation, await createOrganizationInvitation(actor(req), req.params.organizationId, body), 201)
 }))
 organizationJoinRouter.post('/organizations/:organizationId/invitations/:id/revoke', authenticate, endpoint(async (req, res) => {
-  await revokeOrganizationInvitation(actor(req), req.params.organizationId, req.params.id); res.json({ success: true })
+  parseContractBody(OrganizationContracts.revokeManagedInvitation, req.body || {})
+  await revokeOrganizationInvitation(actor(req), req.params.organizationId, req.params.id)
+  sendContractData(res, OrganizationContracts.revokeManagedInvitation, { revoked: true })
 }))
 organizationJoinRouter.post('/organization-invitations/:id/accept', authenticate, endpoint(async (req, res) => {
   parseContractBody(OrganizationContracts.respondInvitation, req.body || {})
@@ -90,5 +97,6 @@ organizationJoinRouter.post('/organization-invitations/:id/decline', authenticat
   sendContractData(res, OrganizationContracts.respondInvitation, await respondToInvitation(actor(req), req.params.id, 'decline'))
 }))
 organizationJoinRouter.patch('/organizations/:organizationId/join-policy', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await updateJoinPolicy(actor(req), req.params.organizationId, req.body?.joinPolicy) })
+  const body = parseContractBody(OrganizationContracts.updateJoinPolicy, req.body || {})
+  sendContractData(res, OrganizationContracts.updateJoinPolicy, await updateJoinPolicy(actor(req), req.params.organizationId, body.joinPolicy))
 }))

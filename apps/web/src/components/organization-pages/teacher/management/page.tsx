@@ -13,7 +13,7 @@ import StudentsManagementContent from '@/components/management/StudentsManagemen
 import TeachersManagementContent from '@/components/management/TeachersManagementContent'
 import { WalletPage } from '@/features/account-wallet'
 import { apiClient } from '@/lib/apiClient'
-import { JoinApplicationsManagement, OrganizationInvitationsManagement, OrganizationJoinSettings } from '@/components/organization/OrganizationJoinManagement'
+import { JoinApplicationsManagement, OrganizationInvitationsManagement, OrganizationJoinSettings } from '@/features/organization-account'
 import styles from '@/features/ranking/RankingPage.module.css'
 
 type Tab = 'students' | 'teachers' | 'applications' | 'invitations' | 'settings' | 'wallet'

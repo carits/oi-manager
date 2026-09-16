@@ -510,6 +510,29 @@ describe('shared API contract adapter', () => {
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ memberships: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })] }),
     }))
+
+    expect(parseContractQuery(OrganizationContracts.managedJoinApplications, { page: '1', pageSize: '50' }))
+      .toEqual({ page: 1, pageSize: 50 })
+    expect(() => parseContractBody(OrganizationContracts.createManagedInvitation, {
+      username: '', memberRole: 'teacher', relationType: 'employee', message: '',
+    })).toThrowError(ApiContractError)
+    expect(parseContractBody(OrganizationContracts.updateJoinPolicy, { joinPolicy: 'approval' }))
+      .toEqual({ joinPolicy: 'approval' })
+
+    const managed = responseStub()
+    sendContractData(managed.response, OrganizationContracts.managedJoinApplications, {
+      items: [{
+        id: 'application-1', realName: '学生甲', requestedRole: 'student', requestedRelationType: 'enrolled',
+        status: 'pending', createdAt: new Date('2026-09-15T00:00:00Z'), User: { username: 'student1' },
+        internalDatabaseField: 'removed',
+      }],
+      total: 1, pending: 1, page: 1, pageSize: 50,
+    })
+    expect(managed.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        items: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })],
+      }),
+    }))
   })
 
   it('guards notification queries and serializes notification dates', () => {
