@@ -1,9 +1,17 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-15
+last_verified: 2026-09-16
 source_of_truth: Git history
 ---
+
+## 2026-09-16 — Platform Binding 契约与 Feature Slice 收口
+
+- 账号、超级管理员和平台管理员的平台绑定页面统一迁入 `features/platform-binding/{api,ui}`，删除两套重复页面实现和旧共享样式；Route 只保留 Feature 公共入口装配。
+- 新增 `PlatformBindingContracts`，覆盖平台元数据、字段配置、绑定列表/详情、绑定、解绑和刷新；Server Route 与 Web Feature API 使用同一 Runtime Schema。
+- 统一页面改由服务端平台清单驱动，支持 textarea 配置字段、可见的加载错误与重试、绑定状态和不支持状态，避免三类账号页面继续分叉。
+- 生产同构 `platform-binding-contract` 2 文件 24/24、纯 Contract 19/19、Web 40 文件 181 项及三端构建和门禁通过；无数据库结构或业务数据迁移。
+- 提交 `376ac79` 已推送 `main`；API 蓝绿切换至 3302，Web BUILD_ID `5ng-oCR4lb3osPFeLfGDU` 完成 canary 与正式消息闭环（序号 218–221）。
 
 ## 2026-09-15 — Contribution 契约与 Feature Slice 收口
 

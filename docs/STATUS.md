@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-15
+last_verified: 2026-09-16
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-09-16: Frontend Feature Slice 与统一 API Contract Layer 第十五批完成并上线。账号、超级管理员和平台管理员的平台绑定页面统一迁入 `features/platform-binding/{api,ui}`，删除两套 330 行以上的重复实现与旧共享样式；平台元数据、字段配置、绑定列表/详情、绑定、解绑和刷新统一使用 Platform Binding Runtime Contract，Server 与 Web 在相同 Schema 边界 fail closed 校验。统一页面改为由服务端平台清单驱动，正确支持 textarea 字段、加载失败重试、绑定状态与不支持状态。新增生产同构 `platform-binding-contract` 测试范围，远端 2 文件 24/24 通过；门禁提升为 20 个 Contract 文件、21 个 Feature Slice、86 条契约边界且 0 违规，Web 40 文件 181 项、纯 Contract 19/19、Contracts/Server/Web 构建和 UI/导航/架构门禁通过。提交 `376ac79` 已推送 `main`；API 3303→3302，Web BUILD_ID `5ng-oCR4lb3osPFeLfGDU` 经 canary 与正式双账号消息闭环（序号 218–221）后提升。本批无 Prisma 或业务数据迁移，生产原有维护文件未改动。
 
 - 2026-09-15: Frontend Feature Slice 与统一 API Contract Layer 第十四批完成并上线。个人贡献记录和平台贡献/奖励审计整体迁入 `features/contribution/{api,ui}`，旧 `components/contribution` 与平台管理 Route 中的 650 行页面实现删除；贡献摘要、分页、排名、组织事件、审计证据及接受/拒绝/撤销/奖励重试统一使用 Contribution Runtime Contract，Server 对查询、决策请求和响应执行同一 Schema，超管决策改读规范 `accountRole`。新增生产同构 `contribution-contract` 测试范围。门禁提升为 19 个 Contract 文件、20 个 Feature Slice、83 条契约边界且 0 违规；Web 40 文件 181 项、生产同构 Contribution/Economy/Contract 4 文件 50/50、Contracts/Server/Web 构建和 UI/导航/文档/架构门禁通过。提交 `e1f73db`、`6d80be8` 已推送 `main`；API 3302→3303，Web BUILD_ID `R7Dwy3OoA0ZPPsk2q6NtW` 经 canary 与正式双账号消息闭环（序号 214–217）后提升。本批无 Prisma 或业务数据迁移，生产原有维护文件未改动。
 
