@@ -12,8 +12,10 @@ export const SubmissionCaseResultSchema = z.object({
 })
 
 export const SubmissionSubtaskResultSchema = z.object({
-  id: z.union([z.number(), z.string()]), type: z.string(), score: z.number(),
-  cases: z.array(SubmissionCaseResultSchema),
+  id: z.union([z.number(), z.string()]),
+  type: z.string().optional(),
+  score: z.number(),
+  cases: z.array(SubmissionCaseResultSchema).optional(),
 })
 
 const InputIoSchema = z.union([

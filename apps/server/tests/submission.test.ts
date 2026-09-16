@@ -18,6 +18,29 @@ function organizationRequest(token: string, organizationId: string) {
   return createAuthenticatedRequest(app, token, { organizationId })
 }
 
+async function attachFinalizedJudgeRun(submissionId: number, result: string, data: {
+  score?: number | null
+  cases?: string | null
+  subtasks?: string | null
+  errorMessage?: string | null
+  timeUsed?: number | null
+  wallTimeUsed?: number | null
+  memoryUsed?: number | null
+  metricSource?: string | null
+} = {}) {
+  const run = await prisma.judgeRun.create({
+    data: {
+      id: crypto.randomUUID(), submissionId, runNumber: 1, runType: 'NORMAL', status: 'FINALIZED', result,
+      score: data.score ?? null, cases: data.cases ?? null, subtasks: data.subtasks ?? null,
+      errorMessage: data.errorMessage ?? null, timeUsed: data.timeUsed ?? null,
+      wallTimeUsed: data.wallTimeUsed ?? null, memoryUsed: data.memoryUsed ?? null,
+      metricSource: data.metricSource ?? 'submission-test', finalizedAt: new Date(),
+    },
+  })
+  await prisma.submission.update({ where: { id: submissionId }, data: { currentJudgeRunId: run.id } })
+  return run
+}
+
 describe('提交记录学校数据隔离', () => {
   let schoolA: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>
   let schoolB: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>
@@ -469,8 +492,8 @@ describe('个人工作区提交详情权限', () => {
       workspaceMode: 'personal',
     })
 
-    const createPersonalSubmission = (userId: string, problemId: string) => prisma.submission.create({
-      data: {
+    const createPersonalSubmission = async (userId: string, problemId: string) => {
+      const submission = await prisma.submission.create({ data: {
         userId,
         organizationId: null,
         workspaceScope: 'personal',
@@ -484,8 +507,10 @@ describe('个人工作区提交详情权限', () => {
         score: 100,
         submitScope: 'problem',
         isGlobalVisible: true,
-      },
-    })
+      } })
+      await attachFinalizedJudgeRun(submission.id, 'accepted', { score: 100 })
+      return submission
+    }
     const ownSubmission = await createPersonalSubmission(owner.user.id, `PERSONAL-${role}-OWN`)
     const otherSubmission = await createPersonalSubmission(other.user.id, `PERSONAL-${role}-OTHER`)
 
@@ -633,6 +658,12 @@ describe('训练提交隔离', () => {
         isGlobalVisible: false
       }
     })
+    await attachFinalizedJudgeRun(trainingSubmission.id, 'accepted', {
+      score: 100,
+      cases: JSON.stringify([{ result: 'accepted', time: 100, memory: 1024 }]),
+      timeUsed: 100,
+      memoryUsed: 1024,
+    })
 
     // 创建题库提交（submitScope: 'problem'）
     problemSubmission = await prisma.submission.create({
@@ -742,6 +773,10 @@ describe('训练提交隔离', () => {
         isGlobalVisible: false,
       },
     })
+    await attachFinalizedJudgeRun(submission.id, 'ole', {
+      score: 0,
+      errorMessage: 'output limit exceeded',
+    })
 
     const listRes = await organizationRequest(ownerToken, schoolData.school.organizationId!)
       .get(`/api/trainings/${training.id}/submissions`)
@@ -765,16 +800,15 @@ describe('训练提交隔离', () => {
       where: { id: trainingProblem.id },
       include: { Problem: true },
     })
-    const runId = crypto.randomUUID()
     const runCases = JSON.stringify([{ result: 'accepted', time: 17, memory: 2048 }])
     const runSubtasks = JSON.stringify([{ id: 1, score: 100 }])
-    await prisma.judgeRun.create({
+    const current = await prisma.submission.findUniqueOrThrow({
+      where: { id: trainingSubmission.id },
+      select: { currentJudgeRunId: true },
+    })
+    await prisma.judgeRun.update({
+      where: { id: current.currentJudgeRunId! },
       data: {
-        id: runId,
-        submissionId: trainingSubmission.id,
-        runNumber: 1,
-        runType: 'NORMAL',
-        status: 'FINALIZED',
         result: 'accepted',
         score: 100,
         cases: runCases,
@@ -789,7 +823,6 @@ describe('训练提交隔离', () => {
     await prisma.submission.update({
       where: { id: trainingSubmission.id },
       data: {
-        currentJudgeRunId: runId,
         problemId: relation.Problem.problemId,
         result: 'wa',
         score: 0,
