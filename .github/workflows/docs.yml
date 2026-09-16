@@ -24,4 +24,5 @@ jobs:
         env:
           GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: pnpm architecture:progress:check
+      - run: pnpm architecture:progress:verify
 

@@ -3,7 +3,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const outputFile = path.join(root, 'docs/architecture-progress.json')
+const outputFile = process.env.ARCHITECTURE_PROGRESS_FILE
+  ? path.resolve(root, process.env.ARCHITECTURE_PROGRESS_FILE)
+  : path.join(root, 'docs/architecture-progress.json')
 const args = new Set(process.argv.slice(2))
 
 function readJson(file) {
@@ -87,6 +89,9 @@ function summary(previous, current) {
 }
 
 function loadGitVersion(ref) {
+  if (process.env.ARCHITECTURE_PROGRESS_BASE_FILE) {
+    try { return readJson(path.resolve(root, process.env.ARCHITECTURE_PROGRESS_BASE_FILE)) } catch { return null }
+  }
   try {
     return JSON.parse(execFileSync('git', ['show', `${ref}:docs/architecture-progress.json`], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }))
   } catch { return null }

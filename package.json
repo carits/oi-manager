@@ -77,6 +77,7 @@
     "architecture:inventory": "node scripts/generate-architecture-inventory.mjs",
     "architecture:progress": "node scripts/architecture-progress.mjs",
     "architecture:progress:check": "node scripts/architecture-progress.mjs --check --gate",
+    "architecture:progress:verify": "node scripts/verify-architecture-progress.mjs",
     "architecture:routes:baseline": "node scripts/audit-route-boundaries.mjs --update",
     "architecture:check": "node scripts/generate-architecture-inventory.mjs --check && node scripts/audit-route-boundaries.mjs && node scripts/audit-domain-state-writes.mjs && node scripts/audit-domain-boundaries.mjs && node scripts/audit-api-contract-layer.mjs && pnpm architecture:progress:check && pnpm db:baseline:check",
     "judge:slo": "pnpm --filter server exec tsx scripts/check-judge-slo.ts",
