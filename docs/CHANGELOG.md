@@ -12,6 +12,7 @@ source_of_truth: Git history
 - `AGENTS.md` 固化架构燃尽的选择、验证与退出条件；生产 HTTPS 只有出现独立外部证据文件后才能标记完成。
 - `STATUS.md` 仅保留当前说明与最近 rollout，历史流水归档到 `docs/history/STATUS-2026-09.md`，日常接手只需读取最近提交、机器状态与精简 STATUS。
 - 学生选择器迁入 Organization Feature，Assignment/Training 不再直接请求团队与学生 API；旧页面 transport 降至 19 文件/42 调用。
+- 生产同构组织测试 4 文件 40/40 与状态过期/指标反弹反向验证通过；API 切换至 3303，Web BUILD_ID `6s6HJjDUEg29eJxSLwH7e` 经 canary/正式消息闭环（序号 246–249）后提升。
 
 ## 2026-09-16 — 组织加入管理契约与 Feature Slice 收口
 

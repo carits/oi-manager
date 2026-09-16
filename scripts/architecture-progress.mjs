@@ -129,8 +129,13 @@ if (args.has('--gate')) {
 }
 
 if (!args.has('--check') && !args.has('--gate')) {
-  const next = { ...current, updatedAt: new Date().toISOString() }
-  fs.writeFileSync(outputFile, `${JSON.stringify(next, null, 2)}\n`)
+  const unchanged = checkedIn && JSON.stringify(metrics(checkedIn)) === JSON.stringify(metrics(current))
+  const next = { ...current, updatedAt: unchanged ? checkedIn.updatedAt : new Date().toISOString() }
+  const serialized = `${JSON.stringify(next, null, 2)}\n`
+  if (!fs.existsSync(outputFile) || fs.readFileSync(outputFile, 'utf8') !== serialized) {
+    fs.mkdirSync(path.dirname(outputFile), { recursive: true })
+    fs.writeFileSync(outputFile, serialized)
+  }
 }
 
 const previous = loadGitVersion(process.env.ARCHITECTURE_PROGRESS_BASE_REF || process.env.GITHUB_BASE_SHA || 'HEAD^')
