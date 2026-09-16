@@ -74,7 +74,8 @@ export const ProblemAdminListQuerySchema = PaginationQuerySchema.extend({
   keyword: z.string().optional(),
   ownerId: z.string().optional(),
   status: z.enum(["draft", "published", "archived"]).optional(),
-  sourceGroup: z.enum(["carits", "external"]).optional(),
+  // The service owns INVALID_PROBLEM_SOURCE_GROUP and its stable 400 code.
+  sourceGroup: z.string().optional(),
 });
 
 export const ProblemAdminListSchema = z.object({

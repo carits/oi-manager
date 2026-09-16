@@ -48,7 +48,9 @@ export const OjPlatformConfigInputSchema = z.object({
 
 export const OjFetchBatchInputSchema = z.object({
   platform: z.string().min(1),
-  problemIds: z.array(z.string().min(1)).min(1).max(200),
+  // Cardinality and element business validation remain in the service so the
+  // established domain-specific 400 response is preserved.
+  problemIds: z.array(z.unknown()).min(1),
 })
 
 export const OjFetchBatchResultSchema = z.object({
