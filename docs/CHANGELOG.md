@@ -5,6 +5,13 @@ last_verified: 2026-09-17
 source_of_truth: Git history
 ---
 
+## 2026-09-17 — 平台学校治理 Contract 化
+
+- 新增 `platform-organization` Feature Slice，统一封装超级管理员学校列表、详情、成员分页、直接创建、资料编辑、负责人操作、目录状态治理和组织创建申请审核。
+- 平台学校及创建申请 Server 路由接入共享 Organization Runtime Contract；审核命令使用独立响应 Schema，不再错误要求列表专用 Applicant 关联。
+- 四个学校管理 App 页面删除 14 次直接 API 调用，并移除学校列表对旧 `useSchools/useList` 裸传输的依赖；旧 Route/Component transport 降至 9 文件/12 调用。
+- 生产同构组织测试 4 文件 41/41，Contracts/Server/Web 构建与文档/架构门禁通过；`cdaab85`、`56ce753` 已部署，API 切换至 3302，Web BUILD_ID `zSnaXqkcQ0vgiTUODBPq1` 完成 canary 与正式消息闭环（序号 266–269）。
+
 ## 2026-09-17 — 组织学生管理 Contract 化
 
 - 学生列表、创建、编辑、启停、移出和主教练转移统一通过 Organization Feature API 与共享 Runtime Contract。

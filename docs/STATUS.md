@@ -13,6 +13,8 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 ## 最近 rollout
 
+- 2026-09-17: Frontend Feature Slice 与统一 API Contract Layer 第二十五批完成并上线。超级管理员学校列表、目录治理、学校详情、学生/教师分页、直接创建、资料编辑、负责人创建/转移，以及组织创建申请列表、详情与审批，统一进入新增的 `platform-organization` Feature API；对应 Server 路由使用共享 Organization Runtime Contract 校验查询、写入和成功响应，四个 App 页面不再直接调用传输层，学校列表也退出旧 `useSchools/useList` 间接裸传输。首轮生产同构测试准确发现审批结果不含列表专用 Applicant 关联，已拆分响应 Schema 并复跑通过。门禁现为 25 个 Feature Slice、117 条契约边界，旧 Route/Component 直连由 13 文件/26 调用降至 9 文件/12 调用。生产同构组织测试 4 文件 41/41、Contracts/Server/Web 构建和文档/架构门禁通过；提交 `cdaab85`、`56ce753` 已推送 `main`，API 3303→3302，Web BUILD_ID `zSnaXqkcQ0vgiTUODBPq1` 经 canary 和正式双账号消息闭环（序号 266–269）后提升。本批无数据库结构或业务数据迁移。
+
 - 2026-09-17: Frontend Feature Slice 与统一 API Contract Layer 第二十四批完成并上线。组织学生列表、创建、编辑、启停、移出和主教练转移统一进入 Organization Feature API；学生页面不再依赖通用 `useList/useDelete` 的隐式裸传输。迁移同时修复主教练选择此前发送教师 Profile ID、而服务端要求 Membership ID 的身份错配。旧 Route/Component 直连由 14 文件/31 调用降至 13 文件/26 调用。生产同构组织测试 4 文件 41/41、Server/Web 构建及文档/架构门禁通过；提交 `f61846d` 已推送 `main`，API 3302→3303，Web BUILD_ID `9LVMLCl3FfY_nLh20BM4B` 经 canary 和正式双账号消息闭环（序号 262–265）后提升。本批无数据库结构或业务数据迁移。
 
 - 2026-09-17: Frontend Feature Slice 与统一 API Contract Layer 第二十三批完成并上线。组织教师列表、创建、编辑、启停、移出和学校负责人转移统一进入 Organization Feature API；Server 对六类请求/响应执行共享 Runtime Contract，页面删除 endpoint 拼接和 `ApiResponse` 分支。旧 Route/Component 直连由 15 文件/37 调用降至 14 文件/31 调用，Feature UI/Model 保持 43 文件/242 调用。生产同构组织测试 4 文件 41/41、Contracts/Server/Web 构建及架构门禁通过；提交 `5124853` 已推送 `main`，API 3303→3302，Web BUILD_ID `f50UP_4UltYhbw5x3llwN` 经 canary 和正式双账号消息闭环（序号 258–261）后提升。本批无数据库结构或业务数据迁移。
