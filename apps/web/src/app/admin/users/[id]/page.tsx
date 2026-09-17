@@ -4,24 +4,8 @@ import { useEffect, useState } from 'react'
 import unifiedStyles from './page.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { useRouter, useParams } from 'next/navigation'
-import apiClient from '@/lib/apiClient'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
-
-interface UserDetail {
-  id: string
-  username: string
-  role: string
-  status: string
-  phone?: string
-  email?: string
-  bio?: string
-  createdAt: string
-  profile?: {
-    name: string
-    schoolName?: string
-    teamName?: string
-  }
-}
+import { getManagedUser, type ManagedUser as UserDetail } from '@/features/user-admin'
 
 export default function UserDetailPage() {
   const router = useRouter()
@@ -38,12 +22,7 @@ export default function UserDetailPage() {
 
   const fetchUser = async () => {
     try {
-      const result = await apiClient.get<UserDetail>(`/api/users/${userId}`)
-      if (result.success) {
-        setUser(result.data || null)
-      } else {
-        setError(result.message || '加载失败')
-      }
+      setUser(await getManagedUser(userId))
     } catch (e) {
       setError('网络错误')
       console.error('Fetch user error:', e)

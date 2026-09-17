@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Input } from '@/components/ui/FormControls'
-import apiClient from '@/lib/apiClient'
+import { resetManagedUserPassword } from '@/features/user-admin'
 import styles from './PasswordResetModal.module.css'
 
 interface PasswordResetModalProps {
@@ -35,14 +35,12 @@ export function PasswordResetModal({
     try {
       setLoading(true)
       setError('')
-      const result = await apiClient.post(`/api/users/${userId}/reset-password`, {
-        newPassword: password,
-      })
-      if (result.success) {
+      const result = await resetManagedUserPassword(userId, password)
+      if (result.ok) {
         onSuccess?.(password)
         onClose()
       } else {
-        setError(result.message || '重置失败')
+        setError(result.error.message || '重置失败')
       }
     } catch {
       setError('操作失败')

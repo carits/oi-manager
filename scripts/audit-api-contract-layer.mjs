@@ -10,15 +10,6 @@ const failures = []
 // direct transport is forbidden and every completed feature slice must reduce
 // or remove its allowance. The target state is an empty object.
 const legacyTransportAllowances = {
-  'apps/web/src/components/business/UserManagement.tsx': 2,
-  'apps/web/src/app/admin/users/page.tsx': 2,
-  'apps/web/src/app/platform-admin/users/page.tsx': 2,
-  'apps/web/src/components/team-import/ImportPreview.tsx': 1,
-  'apps/web/src/app/admin/users/new-platform-admin/page.tsx': 1,
-  'apps/web/src/components/ui/PasswordResetModal.tsx': 1,
-  'apps/web/src/components/telemetry/ClientTelemetry.tsx': 1,
-  'apps/web/src/components/feature/PlannedFeaturePage.tsx': 1,
-  'apps/web/src/app/admin/users/[id]/page.tsx': 1,
 }
 const legacyFeatureTransportAllowances = {
   'apps/web/src/features/training-session/ui/TrainingSessionWorkspace.tsx': 18,
@@ -91,6 +82,7 @@ const contractFiles = [
   'packages/contracts/src/solution-review.ts',
   'packages/contracts/src/submission.ts',
   'packages/contracts/src/team.ts',
+  'packages/contracts/src/telemetry.ts',
   'packages/contracts/src/training.ts',
   'packages/contracts/src/workspace.ts',
 ]
@@ -132,7 +124,9 @@ const slices = [
   { name: 'workspace', legacyDirectory: 'workspace', allowedAnyTokens: 0 },
   { name: 'auth', legacyDirectory: null, allowedAnyTokens: 0 },
   { name: 'user-profile', legacyDirectory: 'profile', allowedAnyTokens: 0 },
+  { name: 'user-admin', legacyDirectory: null, allowedAnyTokens: 0 },
   { name: 'team', legacyDirectory: 'team', allowedAnyTokens: 0 },
+  { name: 'telemetry', legacyDirectory: null, allowedAnyTokens: 0 },
   { name: 'data-market', legacyDirectory: 'data-market', allowedAnyTokens: 0 },
   { name: 'carits', legacyDirectory: null, allowedAnyTokens: 0 },
   { name: 'evaluation-credits', legacyDirectory: null, allowedAnyTokens: 0 },
@@ -196,6 +190,7 @@ const contractedBoundaries = [
   ['apps/server/src/routes/users.ts', 'IdentityContracts'],
   ['apps/server/src/routes/testdata.ts', 'ProblemContracts'],
   ['apps/server/src/modules/team/team.crud.routes.ts', 'TeamContracts'],
+  ['apps/server/src/modules/telemetry/telemetry.routes.ts', 'TelemetryContracts'],
   ['apps/server/src/modules/team/team.members.routes.ts', 'TeamContracts'],
   ['apps/server/src/modules/team/team.requests.routes.ts', 'TeamContracts'],
   ['apps/server/src/modules/team/team.invitations.routes.ts', 'TeamContracts'],
@@ -266,9 +261,12 @@ const contractedBoundaries = [
   ['apps/web/src/features/auth/ui/PasswordEditor.tsx', 'changeAccountPassword'],
   ['apps/web/src/features/user-profile/api/userProfileApi.ts', 'IdentityContracts'],
   ['apps/web/src/features/user-profile/ui/UserProfilePage.tsx', 'getPublicUserProfile'],
+  ['apps/web/src/features/user-admin/api/userAdminApi.ts', 'IdentityContracts'],
+  ['apps/web/src/app/admin/users/page.tsx', 'listManagedUsers'],
   ['apps/web/src/features/team/api/teamApi.ts', 'TeamContracts'],
   ['apps/web/src/features/team/ui/TeamDetailPage.tsx', 'useTeamDetail'],
   ['apps/web/src/features/team/ui/TeamInviteModal.tsx', 'inviteTeamMembers'],
+  ['apps/web/src/features/telemetry/api/telemetryApi.ts', 'TelemetryContracts'],
   ['apps/web/src/features/data-market/api/dataMarketApi.ts', 'DataMarketContracts'],
   ['apps/web/src/features/data-market/ui/DataMarketplace.tsx', 'listDataProducts'],
   ['apps/web/src/features/carits/api/caritsApi.ts', 'CaritsContracts'],

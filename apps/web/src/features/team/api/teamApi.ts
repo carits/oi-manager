@@ -27,6 +27,10 @@ export function listTeams(query: TeamListQuery) {
   return apiClient.queryContract(TeamContracts.list, `/api/teams${queryString(query)}`)
 }
 
+export function checkTeamId(id: string) {
+  return apiClient.queryContract(TeamContracts.checkId, `/api/teams/check-team-id?id=${encodeURIComponent(id)}`)
+}
+
 export function getMyTeams() {
   return apiClient.queryContract(TeamContracts.mine, '/api/teams/mine')
 }

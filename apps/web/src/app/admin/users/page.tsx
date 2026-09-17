@@ -12,19 +12,7 @@ import { Pagination } from '@/components/ui/Pagination'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { PasswordResetModal } from '@/components/ui/PasswordResetModal'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
-
-interface User {
-  id: string
-  username: string
-  role: string
-  status: string
-  createdAt: string
-  profile?: {
-    name: string
-    schoolName?: string
-  }
-}
+import { listManagedUsers, updateManagedUserStatus, type ManagedUser as User } from '@/features/user-admin'
 
 export default function AdminUsersPage() {
   const router = useRouter()
@@ -62,20 +50,9 @@ export default function AdminUsersPage() {
       params.append('page', pagination.page.toString())
       params.append('pageSize', pagination.pageSize.toString())
 
-      const result = await apiClient.get<{ users: User[]; page: number; pageSize: number; total: number; totalPages: number }>(`/api/users?${params.toString()}`)
-      if (result.success) {
-        setUsers(result.data?.users || [])
-        if (result.data) {
-          setPagination({
-            page: result.data.page,
-            pageSize: result.data.pageSize,
-            total: result.data.total,
-            totalPages: result.data.totalPages
-          })
-        }
-      } else {
-        setError(result.message || '加载失败')
-      }
+      const result = await listManagedUsers(Object.fromEntries(params))
+      setUsers(result.users)
+      setPagination({ page: result.page, pageSize: result.pageSize, total: result.total, totalPages: result.totalPages })
     } catch (e) {
       setError('网络错误')
       console.error('Fetch users error:', e)
@@ -98,12 +75,12 @@ export default function AdminUsersPage() {
     const { userId, newStatus } = toggleConfirm
 
     try {
-      const result = await apiClient.put(`/api/users/${userId}/status`, { status: newStatus, reason: '' })
-      if (result.success) {
+      const result = await updateManagedUserStatus(userId, newStatus as 'active' | 'disabled')
+      if (result.ok) {
         toast.success('状态更新成功')
         fetchUsers()
       } else {
-        toast.error(result.message || '更新失败')
+        toast.error(result.error.message || '更新失败')
       }
     } catch (e) {
       toast.error('网络错误')

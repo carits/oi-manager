@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineApiEndpoint } from './http'
+import { DateTimeWireSchema, defineApiEndpoint, PaginationQuerySchema } from './http'
 
 /** Global account identity. Organization jobs must never be stored here. */
 export const AccountRoleSchema = z.enum(['user', 'platform_admin', 'super_admin'])
@@ -73,6 +73,19 @@ export const PublicUserProfileSchema = z.object({
 })
 export type PublicUserProfile = z.infer<typeof PublicUserProfileSchema>
 
+export const ManagedUserSchema = z.object({
+  id: z.string().min(1), username: z.string().min(1), name: z.string().optional(), role: LegacyUserRoleSchema,
+  status: z.enum(['active', 'disabled']), avatar: z.string().nullable().optional(), phone: z.string().nullable().optional(),
+  email: z.string().nullable().optional(), bio: z.string().nullable().optional(), createdAt: DateTimeWireSchema,
+  profile: z.object({ name: z.string(), schoolName: z.string().optional(), teamName: z.string().optional() }).optional(),
+})
+export type ManagedUser = z.infer<typeof ManagedUserSchema>
+
+const ManagedUserPageSchema = z.object({
+  users: z.array(ManagedUserSchema), page: z.number().int().positive(), pageSize: z.number().int().positive(),
+  total: z.number().int().nonnegative(), totalPages: z.number().int().nonnegative(),
+})
+
 export const IdentityContracts = {
   publicProfile: defineApiEndpoint({
     key: 'identity.publicProfile',
@@ -80,6 +93,26 @@ export const IdentityContracts = {
     scope: 'context',
     query: PublicUserProfileQuerySchema,
     data: PublicUserProfileSchema,
+  }),
+  managedUsers: defineApiEndpoint({
+    key: 'identity.managedUsers', method: 'GET', scope: 'account',
+    query: PaginationQuerySchema.extend({ role: LegacyUserRoleSchema.optional(), status: z.enum(['active', 'disabled']).optional(), keyword: z.string().trim().max(100).optional() }),
+    data: ManagedUserPageSchema,
+  }),
+  managedUser: defineApiEndpoint({ key: 'identity.managedUser', method: 'GET', scope: 'account', data: ManagedUserSchema }),
+  createPlatformAdmin: defineApiEndpoint({
+    key: 'identity.platformAdmin.create', method: 'POST', scope: 'account',
+    body: z.object({ username: z.string().trim().min(3).max(80), password: z.string().min(6).max(200), name: z.string().trim().min(1).max(80), phone: z.string().max(30).optional(), email: z.string().max(160).optional(), bio: z.string().max(2000).optional() }),
+    data: z.object({ userId: z.string().min(1), username: z.string(), role: z.literal('platform_admin') }),
+  }),
+  updateManagedUserStatus: defineApiEndpoint({
+    key: 'identity.managedUser.status', method: 'PUT', scope: 'account',
+    body: z.object({ status: z.enum(['active', 'disabled']), reason: z.string().max(1000).default('') }),
+    data: z.object({ userId: z.string().min(1), status: z.enum(['active', 'disabled']) }),
+  }),
+  resetManagedUserPassword: defineApiEndpoint({
+    key: 'identity.managedUser.password.reset', method: 'POST', scope: 'account',
+    body: z.object({ newPassword: z.string().min(6).max(200) }), data: z.object({ reset: z.literal(true) }),
   }),
 } as const
 

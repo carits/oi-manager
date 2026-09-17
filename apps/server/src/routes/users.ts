@@ -1,10 +1,9 @@
 import { Router, type Response } from 'express'
 import { IdentityContracts } from '@oi-manager/contracts'
 import { authenticate, type AuthRequest, isPersonalContext } from '../middleware/auth'
-import { parseContractQuery, sendContractData, sendContractError } from '../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../lib/api-contract'
 import { passwordResetLimiter } from '../middleware/rateLimiter'
 import { asyncHandler } from '../lib/asyncHandler'
-import { parsePagination } from '../lib/pagination'
 import {
   createPlatformAdmin,
   getGlobalUser,
@@ -55,23 +54,26 @@ userRouter.get('/:userId/profile', authenticate, endpoint('获取用户资料失
 }))
 
 userRouter.get('/', authenticate, endpoint('获取用户列表失败', async (req, res) => {
-  const { page, pageSize, skip } = parsePagination(req.query)
-  res.json({ success: true, data: await listGlobalUsers(actor(req), req.query, page, pageSize, skip) })
+  const query = parseContractQuery(IdentityContracts.managedUsers, req.query)
+  sendContractData(res, IdentityContracts.managedUsers, await listGlobalUsers(actor(req), query, query.page, query.pageSize, (query.page - 1) * query.pageSize))
 }))
 
 userRouter.get('/:id', authenticate, endpoint('获取用户详情失败', async (req, res) => {
-  res.json({ success: true, data: await getGlobalUser(actor(req), req.params.id) })
+  sendContractData(res, IdentityContracts.managedUser, await getGlobalUser(actor(req), req.params.id))
 }))
 
 userRouter.post('/platform-admin', authenticate, endpoint('创建平台管理员失败', async (req, res) => {
-  res.status(201).json({ success: true, data: await createPlatformAdmin(actor(req), req.body) })
+  const body = parseContractBody(IdentityContracts.createPlatformAdmin, req.body)
+  sendContractData(res, IdentityContracts.createPlatformAdmin, await createPlatformAdmin(actor(req), body), 201)
 }))
 
 userRouter.put('/:id/status', authenticate, endpoint('更新用户状态失败', async (req, res) => {
-  res.json({ success: true, data: await updateGlobalUserStatus(actor(req), req.params.id, req.body) })
+  const body = parseContractBody(IdentityContracts.updateManagedUserStatus, req.body)
+  sendContractData(res, IdentityContracts.updateManagedUserStatus, await updateGlobalUserStatus(actor(req), req.params.id, body))
 }))
 
 userRouter.post('/:id/reset-password', authenticate, passwordResetLimiter, endpoint('重置用户密码失败', async (req, res) => {
-  await resetGlobalUserPassword(actor(req), req.params.id, req.body.newPassword)
-  res.json({ success: true, message: '密码已重置' })
+  const body = parseContractBody(IdentityContracts.resetManagedUserPassword, req.body)
+  await resetGlobalUserPassword(actor(req), req.params.id, body.newPassword)
+  sendContractData(res, IdentityContracts.resetManagedUserPassword, { reset: true })
 }))

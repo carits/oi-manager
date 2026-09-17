@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -92,6 +92,19 @@ describe('shared API contract adapter', () => {
       success: true,
       data: expect.objectContaining({ userType: 'student', school: { id: 'organization-1', name: '测试学校' } }),
     }))
+  })
+
+  it('guards global user administration and browser telemetry', () => {
+    expect(parseContractQuery(IdentityContracts.managedUsers, { page: '1', pageSize: '20', status: 'active', keyword: ' alice ' }))
+      .toEqual({ page: 1, pageSize: 20, status: 'active', keyword: 'alice' })
+    expect(() => parseContractBody(IdentityContracts.createPlatformAdmin, { username: 'admin2', password: '123', name: '管理员' }))
+      .toThrowError(ApiContractError)
+    expect(parseContractBody(IdentityContracts.updateManagedUserStatus, { status: 'disabled' }))
+      .toEqual({ status: 'disabled', reason: '' })
+    expect(parseContractBody(TelemetryContracts.clientError, { type: 'error', message: 'render failed', route: '/personal' }))
+      .toEqual({ type: 'error', message: 'render failed', route: '/personal' })
+    expect(() => parseContractBody(TelemetryContracts.clientError, { type: 'error', message: 'x', token: 'secret' }))
+      .toThrowError(ApiContractError)
   })
 
   it('guards Team membership commands and normalizes the detail wire format', () => {
@@ -614,6 +627,15 @@ describe('shared API contract adapter', () => {
       data: expect.objectContaining({
         items: [expect.objectContaining({ createdAt: '2026-09-15T00:00:00.000Z' })],
       }),
+    }))
+
+    const managedUser = responseStub()
+    sendContractData(managedUser.response, IdentityContracts.managedUser, {
+      id: 'user-1', username: 'teacher1', name: '教师甲', role: 'user', status: 'active',
+      createdAt: new Date('2026-09-15T00:00:00Z'), passwordHash: 'must-not-leak', sessionVersion: 7,
+    })
+    expect(managedUser.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.not.objectContaining({ passwordHash: expect.anything(), sessionVersion: expect.anything() }),
     }))
   })
 

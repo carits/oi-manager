@@ -25,7 +25,7 @@ export type ApiSuccessContract<T> = {
 
 export type ApiEnvelope<T> = ApiSuccessContract<T> | ApiErrorContract
 
-export const ContractScopeSchema = z.enum(['account', 'platform', 'organization', 'context'])
+export const ContractScopeSchema = z.enum(['public', 'account', 'platform', 'organization', 'context'])
 export type ContractScope = z.infer<typeof ContractScopeSchema>
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'

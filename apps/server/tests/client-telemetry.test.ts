@@ -31,7 +31,7 @@ describe('client telemetry', () => {
       .post('/api/telemetry/client-errors')
       .send({ type: 'error', message: 'x'.repeat(1001), secret: 'must-not-pass' })
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(422)
   })
 
   it('redacts credentials and never logs the raw stack', () => {

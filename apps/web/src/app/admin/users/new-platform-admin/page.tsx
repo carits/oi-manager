@@ -5,8 +5,8 @@ import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { useRouter } from 'next/navigation'
-import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
+import { createPlatformAdministrator } from '@/features/user-admin'
 
 export default function NewPlatformAdminPage() {
   const router = useRouter()
@@ -39,13 +39,13 @@ export default function NewPlatformAdminPage() {
     setLoading(true)
 
     try {
-      const result = await apiClient.post('/api/users/platform-admin', formData)
+      const result = await createPlatformAdministrator(formData)
 
-      if (result.success) {
+      if (result.ok) {
         toast.success('平台管理员创建成功')
         router.push('/admin/users')
       } else {
-        setError(result.message || '创建失败')
+        setError(result.error.message || '创建失败')
       }
     } catch (e) {
       setError('网络错误')

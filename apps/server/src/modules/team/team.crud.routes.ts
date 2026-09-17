@@ -109,23 +109,15 @@ teamCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
 // ==================== 校验团队ID唯一性 ====================
 
 teamCrudRouter.get('/check-team-id', authenticate, asyncHandler(async (req, res) => {
-  const { id } = req.query
-  if (!id || typeof id !== 'string') {
-    return res.json({ valid: false, message: '请输入团队ID' })
+  try {
+    const { id } = parseContractQuery(TeamContracts.checkId, req.query)
+    if (!/^[a-zA-Z0-9_]+$/.test(id)) return sendContractData(res, TeamContracts.checkId, { valid: false, message: '团队ID只能包含英文字母、数字和下划线' })
+    if (id.length < 2) return sendContractData(res, TeamContracts.checkId, { valid: false, message: '团队ID至少2个字符' })
+    if (!await isTeamIdAvailable(id)) return sendContractData(res, TeamContracts.checkId, { valid: false, message: '该团队ID已被使用' })
+    sendContractData(res, TeamContracts.checkId, { valid: true })
+  } catch (error) {
+    handleError(res, error, '校验团队 ID 失败')
   }
-  if (!/^[a-zA-Z0-9_]+$/.test(id as string)) {
-    return res.json({ valid: false, message: '团队ID只能包含英文字母、数字和下划线' })
-  }
-  if ((id as string).length < 2) {
-    return res.json({ valid: false, message: '团队ID至少2个字符' })
-  }
-  if ((id as string).length > 50) {
-    return res.json({ valid: false, message: '团队ID不能超过50个字符' })
-  }
-  if (!await isTeamIdAvailable(id as string)) {
-    return res.json({ valid: false, message: '该团队ID已被使用' })
-  }
-  res.json({ valid: true })
 }))
 
 // ==================== 团队详情 ====================

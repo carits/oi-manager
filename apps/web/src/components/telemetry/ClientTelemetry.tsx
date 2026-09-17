@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { apiClient } from '@/lib/apiClient'
+import { reportClientError } from '@/features/telemetry'
 
 type ClientErrorPayload = {
   type: 'error' | 'unhandledrejection' | 'resource'
@@ -39,12 +39,7 @@ export function ClientTelemetry() {
       const key = `${normalized.type}:${normalized.message}:${normalized.source || ''}:${normalized.line || 0}`
       if (sent.has(key) || sent.size >= 50) return
       sent.add(key)
-      void apiClient.post('/api/telemetry/client-errors', normalized, {
-        anonymous: true,
-        credentials: 'omit',
-        keepalive: true,
-        timeout: 2000,
-      })
+      void reportClientError(normalized)
     }
 
     const onError = (event: ErrorEvent) => {

@@ -107,6 +107,11 @@ const TeamActionSchema = z.object({ message: z.string().optional() }).passthroug
 const EmptyBodySchema = z.object({})
 
 export const TeamContracts = {
+  checkId: defineApiEndpoint({
+    key: 'team.checkId', method: 'GET', scope: 'context',
+    query: z.object({ id: z.string().trim().min(1).max(50) }),
+    data: z.object({ valid: z.boolean(), message: z.string().optional() }),
+  }),
   list: defineApiEndpoint({
     key: 'team.list', method: 'GET', scope: 'context', data: TeamListDataSchema,
     query: PaginationQuerySchema.extend({

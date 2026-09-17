@@ -14,7 +14,7 @@ import {
   CONFLICT_LABELS,
   isValidUsername
 } from './types'
-import apiClient from '@/lib/apiClient'
+import { checkTeamId } from '@/features/team'
 import { useToast } from '@/components/ui/Toast'
 
 const conflictColorStyle = (color: string): React.CSSProperties => ({ '--conflict-color': color } as React.CSSProperties)
@@ -149,13 +149,11 @@ export default function ImportPreview({
       }
       setTeamIdValidating(true)
       try {
-        const res = await apiClient.get<{ valid: boolean; message?: string }>(`/api/teams/check-team-id?id=${encodeURIComponent(teamId)}`)
-        if (res.success && res.data) {
-          if (!res.data.valid) {
-            setTeamIdError(res.data.message || '团队ID不可用')
-            setTeamIdValidating(false)
-            return
-          }
+        const result = await checkTeamId(teamId)
+        if (!result.valid) {
+          setTeamIdError(result.message || '团队ID不可用')
+          setTeamIdValidating(false)
+          return
         }
       } catch {
         // 校验接口失败不阻塞，继续成员校验
