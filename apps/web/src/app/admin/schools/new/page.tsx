@@ -5,9 +5,9 @@ import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { useRouter } from 'next/navigation'
-import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
 import { useToast } from '@/components/ui/Toast'
+import { createPlatformSchool } from '@/features/platform-organization'
 
 export default function NewSchoolPage() {
   const router = useRouter()
@@ -114,15 +114,15 @@ export default function NewSchoolPage() {
       // 组合省市区
       const region = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean).join('/')
 
-      const result = await apiClient.post('/api/platform/organizations', {
+      const result = await createPlatformSchool({
         ...formData,
         region: region || null,
         password: formData.password || formData.username
       })
-      if (result.success) {
+      if (result.ok) {
         router.push('/admin/schools')
       } else {
-        toast.error(result.message || '创建失败')
+        toast.error(result.error.message || '创建失败')
       }
     } catch {
       toast.error('创建失败')

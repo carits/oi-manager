@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { DateTimeWireSchema, defineApiEndpoint, PaginationQuerySchema } from './http'
 
+const NullableTextSchema = z.string().nullable()
+
 export const OrganizationJoinPolicySchema = z.enum(['invite_only', 'approval', 'closed'])
 export const OrganizationRelationshipSchema = z.object({
   id: z.string().min(1),
@@ -91,6 +93,72 @@ export const OrganizationCreationApplicationPageSchema = z.object({
   totalPages: z.number().int().nonnegative(),
 })
 
+const PlatformDirectoryStatusSchema = z.enum(['pending', 'verified', 'hidden', 'legacy'])
+const PlatformSchoolPrincipalSchema = z.object({
+  id: z.string().min(1), name: z.string().min(1), title: NullableTextSchema.optional(),
+  email: NullableTextSchema.optional(), user: z.object({ username: z.string() }).nullable().optional(),
+})
+const PlatformSchoolReferenceSummarySchema = z.object({
+  Membership: z.number().int().nonnegative(), Team: z.number().int().nonnegative(),
+  Training: z.number().int().nonnegative(), ProblemList: z.number().int().nonnegative(),
+  Problem: z.number().int().nonnegative(), Submission: z.number().int().nonnegative(),
+  JoinApplications: z.number().int().nonnegative(), Invitations: z.number().int().nonnegative(),
+})
+export const PlatformSchoolSchema = z.object({
+  id: z.string().min(1), schoolId: z.string().min(1), organizationId: z.string().min(1),
+  name: z.string().min(1), shortName: NullableTextSchema.optional(), region: NullableTextSchema,
+  schoolType: NullableTextSchema, schoolNature: NullableTextSchema.optional(), educationSystem: NullableTextSchema,
+  contactPerson: NullableTextSchema, contactPhone: NullableTextSchema, contactEmail: NullableTextSchema,
+  status: z.string(), directoryStatus: PlatformDirectoryStatusSchema, updatedAt: DateTimeWireSchema, createdAt: DateTimeWireSchema,
+  principal: PlatformSchoolPrincipalSchema.nullable(), _count: z.object({ students: z.number().int().nonnegative() }),
+  referenceSummary: PlatformSchoolReferenceSummarySchema.optional(),
+}).passthrough()
+export type PlatformSchool = z.infer<typeof PlatformSchoolSchema>
+
+const PlatformSchoolStudentSchema = z.object({
+  id: z.string().min(1), name: z.string(), enrollmentYear: z.number().int().nullable(), rating: z.number(),
+  user: z.object({ username: z.string() }), headTeacher: z.object({ name: z.string() }).nullable(),
+})
+export type PlatformSchoolStudent = z.infer<typeof PlatformSchoolStudentSchema>
+
+const PlatformSchoolTeacherSchema = z.object({
+  id: z.string().min(1), name: z.string(), title: NullableTextSchema, email: NullableTextSchema, phone: NullableTextSchema,
+  user: z.object({ id: z.string().min(1), username: z.string(), role: z.string(), status: z.string() }),
+})
+export type PlatformSchoolTeacher = z.infer<typeof PlatformSchoolTeacherSchema>
+
+export const PlatformOrganizationCreationApplicationSchema = OrganizationCreationApplicationSchema.extend({
+  internalReviewNote: z.string().nullable().optional(),
+  evidenceData: z.object({ note: z.string().optional() }).nullable().optional(),
+  Applicant: z.object({ username: z.string(), status: z.string(), role: z.string().optional() }),
+  ReviewedBy: z.object({ username: z.string() }).nullable().optional(),
+}).passthrough()
+export type PlatformOrganizationCreationApplication = z.infer<typeof PlatformOrganizationCreationApplicationSchema>
+
+const PlatformOrganizationCreationApplicationPageSchema = z.object({
+  items: z.array(PlatformOrganizationCreationApplicationSchema), total: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(), page: z.number().int().positive(), pageSize: z.number().int().positive(),
+  totalPages: z.number().int().nonnegative(),
+})
+
+const PlatformSchoolProfileBodySchema = z.object({
+  name: z.string().trim().min(1).max(100), region: NullableTextSchema.optional(), schoolType: NullableTextSchema.optional(),
+  educationSystem: z.string().min(1).optional(), contactPerson: NullableTextSchema.optional(),
+  contactPhone: NullableTextSchema.optional(), contactEmail: NullableTextSchema.optional(),
+})
+
+const PlatformPrincipalBodySchema = z.object({
+  username: z.string().trim().min(3).max(80), password: z.string().min(1).max(200),
+  teacherName: z.string().trim().min(1).max(80), teacherTitle: z.string().max(80).optional(),
+  email: z.string().max(160).optional(), phone: z.string().max(30).optional(),
+})
+
+const PlatformSchoolCreateBodySchema = PlatformSchoolProfileBodySchema.extend({
+  username: z.string().trim().min(3).max(80), password: z.string().min(1).max(200),
+  teacherName: z.string().trim().min(1).max(80), teacherTitle: z.string().max(80).optional(),
+  schoolType: z.string().optional(), educationSystem: z.string().default('6-3-3'),
+})
+
 export const OrganizationManagedJoinApplicationSchema = z.object({
   id: z.string().min(1),
   realName: z.string(),
@@ -122,7 +190,6 @@ const ManagedPageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
   page: z.number().int().positive(), pageSize: z.number().int().positive(),
 })
 
-const NullableTextSchema = z.string().nullable()
 export const OrganizationCampusSummarySchema = z.object({
   id: z.string().min(1), name: z.string().min(1), shortName: NullableTextSchema,
   description: NullableTextSchema, announcement: NullableTextSchema, region: NullableTextSchema,
@@ -233,6 +300,56 @@ const CreationBodySchema = z.object({
 })
 
 export const OrganizationContracts = {
+  platformSchools: defineApiEndpoint({
+    key: 'organization.platform.schools.list', method: 'GET', scope: 'account',
+    query: PaginationQuerySchema.extend({ directoryStatus: PlatformDirectoryStatusSchema.optional(), q: z.string().trim().max(100).optional() }),
+    data: z.object({ data: z.array(PlatformSchoolSchema), total: z.number().int().nonnegative(), page: z.number().int().positive(), pageSize: z.number().int().positive(), totalPages: z.number().int().nonnegative() }),
+  }),
+  platformSchool: defineApiEndpoint({
+    key: 'organization.platform.school.get', method: 'GET', scope: 'account', data: PlatformSchoolSchema,
+  }),
+  createPlatformSchool: defineApiEndpoint({
+    key: 'organization.platform.school.create', method: 'POST', scope: 'account', body: PlatformSchoolCreateBodySchema,
+    data: z.object({ organizationId: z.string().min(1) }),
+  }),
+  updatePlatformSchool: defineApiEndpoint({
+    key: 'organization.platform.school.update', method: 'PUT', scope: 'account', body: PlatformSchoolProfileBodySchema,
+    data: z.object({ updated: z.literal(true) }),
+  }),
+  updatePlatformSchoolDirectoryStatus: defineApiEndpoint({
+    key: 'organization.platform.school.directory-status', method: 'PATCH', scope: 'account',
+    body: z.object({ status: PlatformDirectoryStatusSchema, reason: z.string().trim().min(1).max(1000), expectedUpdatedAt: DateTimeWireSchema, confirmLegacy: z.boolean().optional() }),
+    data: z.object({ school: PlatformSchoolSchema, references: PlatformSchoolReferenceSummarySchema }),
+  }),
+  platformSchoolStudents: defineApiEndpoint({
+    key: 'organization.platform.school.students', method: 'GET', scope: 'account', query: PaginationQuerySchema,
+    data: z.object({ data: z.array(PlatformSchoolStudentSchema), total: z.number().int().nonnegative(), page: z.number().int().positive(), pageSize: z.number().int().positive(), totalPages: z.number().int().nonnegative() }),
+  }),
+  platformSchoolTeachers: defineApiEndpoint({
+    key: 'organization.platform.school.teachers', method: 'GET', scope: 'account', query: PaginationQuerySchema,
+    data: z.object({ data: z.array(PlatformSchoolTeacherSchema), total: z.number().int().nonnegative(), page: z.number().int().positive(), pageSize: z.number().int().positive(), totalPages: z.number().int().nonnegative() }),
+  }),
+  createPlatformSchoolPrincipal: defineApiEndpoint({
+    key: 'organization.platform.school.principal.create', method: 'POST', scope: 'account', body: PlatformPrincipalBodySchema,
+    data: z.object({ teacher: PlatformSchoolPrincipalSchema }),
+  }),
+  transferPlatformSchoolPrincipal: defineApiEndpoint({
+    key: 'organization.platform.school.principal.transfer', method: 'PUT', scope: 'account', body: z.object({ membershipId: z.string().min(1) }),
+    data: z.object({ principal: PlatformSchoolPrincipalSchema.nullable() }),
+  }),
+  platformCreationApplications: defineApiEndpoint({
+    key: 'organization.platform.creation.list', method: 'GET', scope: 'account',
+    query: PaginationQuerySchema.extend({ status: OrganizationCreationApplicationStatusSchema.optional(), q: z.string().trim().max(100).optional() }),
+    data: PlatformOrganizationCreationApplicationPageSchema,
+  }),
+  platformCreationApplication: defineApiEndpoint({
+    key: 'organization.platform.creation.get', method: 'GET', scope: 'account', data: PlatformOrganizationCreationApplicationSchema,
+  }),
+  decidePlatformCreationApplication: defineApiEndpoint({
+    key: 'organization.platform.creation.decide', method: 'POST', scope: 'account',
+    body: z.object({ decisionMessage: z.string().max(1000).default(''), internalReviewNote: z.string().max(2000).default('') }),
+    data: PlatformOrganizationCreationApplicationSchema,
+  }),
   directory: defineApiEndpoint({
     key: 'organization.directory', method: 'GET', scope: 'account', data: OrganizationDirectoryPageSchema,
     query: PaginationQuerySchema.extend({ q: z.string().trim().max(100).default('') }),

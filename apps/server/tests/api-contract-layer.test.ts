@@ -564,6 +564,31 @@ describe('shared API contract adapter', () => {
     expect(parseContractBody(OrganizationContracts.updateStudentStatus, { status: 'active' }))
       .toEqual({ status: 'active' })
 
+    expect(parseContractQuery(OrganizationContracts.platformSchools, {
+      page: '2', pageSize: '50', directoryStatus: 'legacy', q: ' School 1 ',
+    })).toEqual({ page: 2, pageSize: 50, directoryStatus: 'legacy', q: 'School 1' })
+    expect(() => parseContractQuery(OrganizationContracts.platformSchools, {
+      directoryStatus: 'deleted',
+    })).toThrowError(ApiContractError)
+    expect(parseContractBody(OrganizationContracts.updatePlatformSchoolDirectoryStatus, {
+      status: 'hidden', reason: '仅供平台内部教学使用', expectedUpdatedAt: '2026-09-15T00:00:00.000Z',
+    })).toEqual({ status: 'hidden', reason: '仅供平台内部教学使用', expectedUpdatedAt: '2026-09-15T00:00:00.000Z' })
+    expect(() => parseContractBody(OrganizationContracts.createPlatformSchool, {
+      name: '第一中学', username: 'principal1', password: '', teacherName: '负责人',
+    })).toThrowError(ApiContractError)
+
+    const platformSchool = responseStub()
+    sendContractData(platformSchool.response, OrganizationContracts.platformSchool, {
+      id: 'organization-1', schoolId: 'school-1', organizationId: 'organization-1', name: '第一中学',
+      shortName: null, region: '湖南省/长沙市', schoolType: '高中', schoolNature: '公办', educationSystem: '6-3-3',
+      contactPerson: null, contactPhone: null, contactEmail: null, status: 'active', directoryStatus: 'verified',
+      updatedAt: new Date('2026-09-15T00:00:00Z'), createdAt: new Date('2026-09-14T00:00:00Z'),
+      principal: null, _count: { students: 0 }, internalDatabaseField: 'removed',
+    })
+    expect(platformSchool.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ id: 'organization-1', updatedAt: '2026-09-15T00:00:00.000Z' }),
+    }))
+
     const campus = responseStub()
     sendContractData(campus.response, OrganizationContracts.campusSummary, {
       id: 'school-1', name: '第一中学', shortName: null, description: null, announcement: '校园公告', region: null,

@@ -6,46 +6,8 @@ import unifiedStyles from './page.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { Pagination } from '@/components/ui/Pagination'
-import apiClient from '@/lib/apiClient'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
-
-interface School {
-  id: string
-  name: string
-  region: string | null
-  schoolType: string | null
-  contactPerson: string | null
-  contactPhone: string | null
-  contactEmail: string | null
-  createdAt: string
-  principal: { id: string; name: string; title: string | null; email: string | null; user: { username: string } | null } | null
-  _count: {
-    students: number
-  }
-}
-
-interface Student {
-  id: string
-  name: string
-  enrollmentYear: number | null
-  rating: number
-  user: { username: string }
-  headTeacher: { name: string } | null
-}
-
-interface Teacher {
-  id: string
-  name: string
-  title: string | null
-  email: string | null
-  phone: string | null
-  user: {
-    id: string
-    username: string
-    role: string
-    status: string
-  }
-}
+import { getPlatformSchool, getPlatformSchoolStudents, getPlatformSchoolTeachers, type PlatformSchool as School, type PlatformSchoolStudent as Student, type PlatformSchoolTeacher as Teacher } from '@/features/platform-organization'
 
 export default function AdminSchoolDetailPage() {
   const params = useParams()
@@ -93,10 +55,7 @@ export default function AdminSchoolDetailPage() {
 
   const fetchSchool = async () => {
     try {
-      const result = await apiClient.get<School>(`/api/platform/organizations/${schoolId}`)
-      if (result.success) {
-        setSchool(result.data || null)
-      }
+      setSchool(await getPlatformSchool(schoolId))
     } catch (error) {
       console.error('Failed to fetch school:', error)
     } finally {
@@ -106,11 +65,9 @@ export default function AdminSchoolDetailPage() {
 
   const fetchStudents = async () => {
     try {
-      const result = await apiClient.get<{ data: Student[]; total: number }>(`/api/platform/organizations/${schoolId}/students?page=${studentPage}&pageSize=${pageSize}`)
-      if (result.success) {
-        setStudents(result.data?.data || [])
-        setStudentTotal(result.data?.total || 0)
-      }
+      const result = await getPlatformSchoolStudents(schoolId, studentPage, pageSize)
+      setStudents(result.data)
+      setStudentTotal(result.total)
     } catch (error) {
       console.error('Failed to fetch students:', error)
     }
@@ -118,11 +75,9 @@ export default function AdminSchoolDetailPage() {
 
   const fetchTeachers = async () => {
     try {
-      const result = await apiClient.get<{ data: Teacher[]; total: number }>(`/api/platform/organizations/${schoolId}/teachers?page=${teacherPage}&pageSize=${pageSize}`)
-      if (result.success) {
-        setTeachers(result.data?.data || [])
-        setTeacherTotal(result.data?.total || 0)
-      }
+      const result = await getPlatformSchoolTeachers(schoolId, teacherPage, pageSize)
+      setTeachers(result.data)
+      setTeacherTotal(result.total)
     } catch (error) {
       console.error('Failed to fetch teachers:', error)
     }

@@ -1,7 +1,8 @@
 import { Router, type Response } from 'express'
+import { OrganizationContracts } from '@oi-manager/contracts'
 import { asyncHandler } from '../lib/asyncHandler'
 import { authenticate, authorize, type AuthRequest } from '../middleware/auth'
-import { parsePagination } from '../lib/pagination'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../lib/api-contract'
 import {
   createPlatformOrganization,
   changePlatformOrganizationDirectoryStatus,
@@ -27,6 +28,7 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
     try {
       await handler(req, res)
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof PlatformOrganizationError) {
         return res.status(error.statusCode).json({
           success: false,
@@ -40,43 +42,48 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
 }
 
 platformOrganizationRouter.get('/', ...superAdminOnly, endpoint('获取学校列表失败', async (req, res) => {
-  const { page, pageSize, skip } = parsePagination(req.query)
-  res.json({ success: true, data: await listPlatformOrganizations(page, pageSize, skip, req.query) })
+  const query = parseContractQuery(OrganizationContracts.platformSchools, req.query)
+  sendContractData(res, OrganizationContracts.platformSchools, await listPlatformOrganizations(query.page, query.pageSize, (query.page - 1) * query.pageSize, query))
 }))
 
 platformOrganizationRouter.get('/:organizationId', ...superAdminOnly, endpoint('获取学校详情失败', async (req, res) => {
-  res.json({ success: true, data: await getPlatformOrganization(req.params.organizationId) })
+  sendContractData(res, OrganizationContracts.platformSchool, await getPlatformOrganization(req.params.organizationId))
 }))
 
 platformOrganizationRouter.post('/', ...superAdminOnly, endpoint('创建学校失败', async (req, res) => {
-  res.status(201).json({ success: true, data: await createPlatformOrganization(req.body, req.user!.userId) })
+  const body = parseContractBody(OrganizationContracts.createPlatformSchool, req.body)
+  sendContractData(res, OrganizationContracts.createPlatformSchool, await createPlatformOrganization(body, req.user!.userId), 201)
 }))
 
 platformOrganizationRouter.post('/:organizationId/principal', ...superAdminOnly, endpoint('创建学校负责人失败', async (req, res) => {
-  const teacher = await createPlatformOrganizationPrincipal(req.params.organizationId, req.body)
-  res.status(201).json({ success: true, data: { teacher } })
+  const body = parseContractBody(OrganizationContracts.createPlatformSchoolPrincipal, req.body)
+  const teacher = await createPlatformOrganizationPrincipal(req.params.organizationId, body)
+  sendContractData(res, OrganizationContracts.createPlatformSchoolPrincipal, { teacher }, 201)
 }))
 
 platformOrganizationRouter.put('/:organizationId', ...superAdminOnly, endpoint('更新学校失败', async (req, res) => {
-  await updatePlatformOrganization(req.params.organizationId, req.body)
-  res.json({ success: true })
+  const body = parseContractBody(OrganizationContracts.updatePlatformSchool, req.body)
+  await updatePlatformOrganization(req.params.organizationId, body)
+  sendContractData(res, OrganizationContracts.updatePlatformSchool, { updated: true })
 }))
 
 platformOrganizationRouter.patch('/:organizationId/directory-status', ...superAdminOnly, endpoint('更新学校目录状态失败', async (req, res) => {
-  res.json({ success: true, data: await changePlatformOrganizationDirectoryStatus(req.params.organizationId, req.body, req.user!.userId) })
+  const body = parseContractBody(OrganizationContracts.updatePlatformSchoolDirectoryStatus, req.body)
+  sendContractData(res, OrganizationContracts.updatePlatformSchoolDirectoryStatus, await changePlatformOrganizationDirectoryStatus(req.params.organizationId, body, req.user!.userId))
 }))
 
 platformOrganizationRouter.get('/:organizationId/students', ...superAdminOnly, endpoint('获取学校学生失败', async (req, res) => {
-  const { page, pageSize, skip } = parsePagination(req.query)
-  res.json({ success: true, data: await listPlatformOrganizationStudents(req.params.organizationId, page, pageSize, skip) })
+  const query = parseContractQuery(OrganizationContracts.platformSchoolStudents, req.query)
+  sendContractData(res, OrganizationContracts.platformSchoolStudents, await listPlatformOrganizationStudents(req.params.organizationId, query.page, query.pageSize, (query.page - 1) * query.pageSize))
 }))
 
 platformOrganizationRouter.get('/:organizationId/teachers', ...superAdminOnly, endpoint('获取学校教师失败', async (req, res) => {
-  const { page, pageSize, skip } = parsePagination(req.query)
-  res.json({ success: true, data: await listPlatformOrganizationTeachers(req.params.organizationId, page, pageSize, skip) })
+  const query = parseContractQuery(OrganizationContracts.platformSchoolTeachers, req.query)
+  sendContractData(res, OrganizationContracts.platformSchoolTeachers, await listPlatformOrganizationTeachers(req.params.organizationId, query.page, query.pageSize, (query.page - 1) * query.pageSize))
 }))
 
 platformOrganizationRouter.put('/:organizationId/principal', ...superAdminOnly, endpoint('转移学校负责人失败', async (req, res) => {
-  const principal = await transferPlatformOrganizationPrincipal(req.params.organizationId, req.body.membershipId)
-  res.json({ success: true, data: { principal } })
+  const body = parseContractBody(OrganizationContracts.transferPlatformSchoolPrincipal, req.body)
+  const principal = await transferPlatformOrganizationPrincipal(req.params.organizationId, body.membershipId)
+  sendContractData(res, OrganizationContracts.transferPlatformSchoolPrincipal, { principal })
 }))

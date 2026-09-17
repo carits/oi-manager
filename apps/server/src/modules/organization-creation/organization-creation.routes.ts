@@ -57,18 +57,21 @@ organizationCreationRouter.post('/organization-creation-applications/:id/cancel'
 }))
 
 organizationCreationRouter.get('/platform/organization-creation-applications', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await listOrganizationApplications(actor(req), req.query) })
+  const query = parseContractQuery(OrganizationContracts.platformCreationApplications, req.query)
+  sendContractData(res, OrganizationContracts.platformCreationApplications, await listOrganizationApplications(actor(req), query))
 }))
 organizationCreationRouter.get('/platform/organization-creation-applications/:id', authenticate, endpoint(async (req, res) => {
-  res.json({ success: true, data: await getOrganizationApplication(actor(req), req.params.id) })
+  sendContractData(res, OrganizationContracts.platformCreationApplication, await getOrganizationApplication(actor(req), req.params.id))
 }))
 organizationCreationRouter.post('/platform/organization-creation-applications/:id/approve', authenticate, endpoint(async (req, res) => {
-  const result = await mutation(req, 'organization-creation:approve', () => decideOrganizationApplication(actor(req), req.params.id, 'approve', req.body || {}))
+  const body = parseContractBody(OrganizationContracts.decidePlatformCreationApplication, req.body || {})
+  const result = await mutation(req, 'organization-creation:approve', () => decideOrganizationApplication(actor(req), req.params.id, 'approve', body))
   if (result.replayed) res.setHeader('X-Idempotent-Replay', 'true')
-  res.json({ success: true, data: result.value })
+  sendContractData(res, OrganizationContracts.decidePlatformCreationApplication, result.value)
 }))
 organizationCreationRouter.post('/platform/organization-creation-applications/:id/reject', authenticate, endpoint(async (req, res) => {
-  const result = await mutation(req, 'organization-creation:reject', () => decideOrganizationApplication(actor(req), req.params.id, 'reject', req.body || {}))
+  const body = parseContractBody(OrganizationContracts.decidePlatformCreationApplication, req.body || {})
+  const result = await mutation(req, 'organization-creation:reject', () => decideOrganizationApplication(actor(req), req.params.id, 'reject', body))
   if (result.replayed) res.setHeader('X-Idempotent-Replay', 'true')
-  res.json({ success: true, data: result.value })
+  sendContractData(res, OrganizationContracts.decidePlatformCreationApplication, result.value)
 }))

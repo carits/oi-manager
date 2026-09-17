@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { apiClient } from '@/lib/apiClient'
 import { createClientUUID } from '@/lib/uuid'
 import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
@@ -13,26 +12,24 @@ import { Pagination } from '@/components/ui/Pagination'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
-import { useSchools, type School } from '@/hooks/data/useSchools'
-import { useAuth } from '@/features/auth'
+import {
+  decidePlatformOrganizationCreationApplication,
+  getPlatformOrganizationCreationApplication,
+  getPlatformOrganizationCreationApplications,
+  getPlatformSchools,
+  updatePlatformSchoolDirectoryStatus,
+  type PlatformOrganizationCreationApplication as Application,
+  type PlatformSchool as School,
+} from '@/features/platform-organization'
 import { ActionMenu, ActionMenuItem } from '@/components/management/ManagementList'
 import { useToast } from '@/components/ui/Toast'
 import unifiedStyles from './page.unified.module.css'
 import styles from './page.module.css'
 
-type Application = {
-  id:string; name:string; region:string; schoolType:string; schoolNature?:string|null; educationSystem:string
-  applicantRealName:string; applicantTitle?:string|null; contactPerson?:string|null; contactPhone?:string|null
-  contactEmail?:string|null; description:string; evidenceData?:{note?:string}|null
-  status:'pending'|'approved'|'rejected'|'cancelled'; decisionMessage?:string|null; internalReviewNote?:string|null
-  createdAt:string; Applicant:{username:string;status:string}
-}
-type ApplicationPage = { items:Application[]; total:number; pending:number }
 const labels = { pending:'待审核', approved:'已通过', rejected:'已拒绝', cancelled:'已撤销' }
 const directoryLabels = { verified:'正式学校', pending:'待核验', hidden:'隐藏', legacy:'历史隔离' } as const
 
 export default function AdminSchoolsPage() {
-  const { sessionKey } = useAuth()
   const router = useRouter(); const pathname = usePathname(); const params = useSearchParams(); const toast = useToast()
   const tab = params.get('tab') === 'applications' ? 'applications' : 'schools'
   const [page,setPage] = useState(Number(params.get('page')) || 1); const [pageSize,setPageSize] = useState(20)
@@ -40,26 +37,28 @@ export default function AdminSchoolsPage() {
   const [directoryStatus,setDirectoryStatus] = useState<School['directoryStatus']>((params.get('directoryStatus') as School['directoryStatus']) || 'verified')
   const [schoolQuery,setSchoolQuery] = useState(params.get('schoolQ') || '')
   const [applications,setApplications] = useState<Application[]>([]); const [applicationTotal,setApplicationTotal] = useState(0)
+  const [schools,setSchools] = useState<School[]>([]); const [schoolTotal,setSchoolTotal] = useState(0); const [schoolLoading,setSchoolLoading] = useState(false); const [schoolError,setSchoolError] = useState('')
   const [pending,setPending] = useState(0); const [applicationLoading,setApplicationLoading] = useState(false)
   const [selected,setSelected] = useState<Application|null>(null); const [decision,setDecision] = useState(''); const [note,setNote] = useState(''); const [reviewing,setReviewing] = useState(false)
   const [directorySchool,setDirectorySchool] = useState<School|null>(null); const [directoryTarget,setDirectoryTarget] = useState<School['directoryStatus']>('pending'); const [directoryReason,setDirectoryReason] = useState(''); const [directorySaving,setDirectorySaving] = useState(false)
-  const { data, loading, error, refetch: reloadSchools } = useSchools({ page, pageSize, directoryStatus, q: schoolQuery || undefined }, sessionKey)
   const setUrl = useCallback((next:Record<string,string|null>) => { const search = new URLSearchParams(params.toString()); Object.entries(next).forEach(([key,value]) => value ? search.set(key,value) : search.delete(key)); router.replace(`${pathname}?${search}`) },[params,pathname,router])
-  const loadApplications = useCallback(async () => { setApplicationLoading(true); const response = await apiClient.get<ApplicationPage>(`/api/platform/organization-creation-applications?status=${encodeURIComponent(status)}&q=${encodeURIComponent(query)}&page=${page}&pageSize=${pageSize}`); setApplicationLoading(false); if (!response.success || !response.data) return toast.error(response.message || '加载失败'); setApplications(response.data.items); setApplicationTotal(response.data.total); setPending(response.data.pending) },[page,pageSize,query,status,toast])
+  const reloadSchools = useCallback(async () => { setSchoolLoading(true); setSchoolError(''); try { const response=await getPlatformSchools({page,pageSize,directoryStatus,q:schoolQuery||undefined}); setSchools(response.data); setSchoolTotal(response.total) } catch(error) { const message=error instanceof Error?error.message:'学校列表加载失败'; setSchoolError(message); toast.error(message) } finally { setSchoolLoading(false) } },[directoryStatus,page,pageSize,schoolQuery,toast])
+  const loadApplications = useCallback(async () => { setApplicationLoading(true); try { const response=await getPlatformOrganizationCreationApplications({status, q:query, page, pageSize}); setApplications(response.items); setApplicationTotal(response.total); setPending(response.pending) } catch(error) { toast.error(error instanceof Error?error.message:'加载失败') } finally { setApplicationLoading(false) } },[page,pageSize,query,status,toast])
+  useEffect(() => { if (tab === 'schools') void reloadSchools() },[reloadSchools,tab])
   useEffect(() => { if (tab === 'applications') void loadApplications() },[loadApplications,tab])
-  useEffect(() => { if (tab === 'schools') void apiClient.get<ApplicationPage>('/api/platform/organization-creation-applications?status=pending&pageSize=1').then(response => setPending(response.data?.pending || 0)) },[tab])
-  useEffect(() => { const id=params.get('applicationId'); if (!id || tab !== 'applications') return; void apiClient.get<Application>(`/api/platform/organization-creation-applications/${id}`).then(r => { if (r.success && r.data) openReview(r.data) }) },[params,tab])
+  useEffect(() => { if (tab === 'schools') void getPlatformOrganizationCreationApplications({status:'pending',pageSize:1}).then(response => setPending(response.pending)).catch(()=>undefined) },[tab])
+  useEffect(() => { const id=params.get('applicationId'); if (!id || tab !== 'applications') return; void getPlatformOrganizationCreationApplication(id).then(openReview).catch(()=>toast.error('申请详情加载失败')) },[params,tab,toast])
   const openReview = (item:Application) => { setSelected(item); setDecision(item.decisionMessage || ''); setNote(item.internalReviewNote || ''); if (params.get('applicationId') !== item.id) setUrl({applicationId:item.id}) }
   const closeReview = () => { setSelected(null); setUrl({applicationId:null}) }
-  const review = async (action:'approve'|'reject') => { if (!selected) return; if (action === 'reject' && !decision.trim()) return toast.error('请填写申请人可见的拒绝说明'); setReviewing(true); const response=await apiClient.post(`/api/platform/organization-creation-applications/${selected.id}/${action}`,{decisionMessage:decision,internalReviewNote:note},{headers:{'Idempotency-Key':createClientUUID()}}); setReviewing(false); if(!response.success)return toast.error(response.message||'审核失败'); toast.success(action==='approve'?'已同意并创建学校':'已拒绝申请'); closeReview(); await loadApplications() }
+  const review = async (action:'approve'|'reject') => { if (!selected) return; if (action === 'reject' && !decision.trim()) return toast.error('请填写申请人可见的拒绝说明'); setReviewing(true); const response=await decidePlatformOrganizationCreationApplication(selected.id,action,{decisionMessage:decision,internalReviewNote:note},createClientUUID()); setReviewing(false); if(!response.ok)return toast.error(response.error.message||'审核失败'); toast.success(action==='approve'?'已同意并创建学校':'已拒绝申请'); closeReview(); await loadApplications() }
   const openDirectoryChange=(school:School,target:School['directoryStatus'])=>{setDirectorySchool(school);setDirectoryTarget(target);setDirectoryReason('')}
-  const saveDirectoryChange=async()=>{if(!directorySchool||!directoryReason.trim())return toast.error('请填写状态变更原因');setDirectorySaving(true);const response=await apiClient.patch(`/api/platform/organizations/${directorySchool.id}/directory-status`,{status:directoryTarget,reason:directoryReason,expectedUpdatedAt:directorySchool.updatedAt,confirmLegacy:directoryTarget==='legacy'});setDirectorySaving(false);if(!response.success)return toast.error(response.message||'状态更新失败');toast.success(`已更新为${directoryLabels[directoryTarget]}`);setDirectorySchool(null);await reloadSchools()}
-  const total = tab === 'schools' ? data?.total || 0 : applicationTotal; const totalPages=Math.ceil(total/pageSize)
+  const saveDirectoryChange=async()=>{if(!directorySchool||!directoryReason.trim())return toast.error('请填写状态变更原因');setDirectorySaving(true);const response=await updatePlatformSchoolDirectoryStatus(directorySchool.id,{status:directoryTarget,reason:directoryReason,expectedUpdatedAt:directorySchool.updatedAt,confirmLegacy:directoryTarget==='legacy'});setDirectorySaving(false);if(!response.ok)return toast.error(response.error.message||'状态更新失败');toast.success(`已更新为${directoryLabels[directoryTarget]}`);setDirectorySchool(null);await reloadSchools()}
+  const total = tab === 'schools' ? schoolTotal : applicationTotal; const totalPages=Math.ceil(total/pageSize)
   const changeTab=(value:string)=>{setPage(1);setUrl({tab:value==='applications'?'applications':null,page:null,applicationId:null})}
   return <div className={unifiedStyles.u1}><main className={unifiedStyles.u2}>
     <PageHeader title="学校管理"><Button onClick={()=>router.push('/admin/schools/new')}>+ 直接创建学校</Button></PageHeader>
     <SegmentedControl label="学校管理页面" value={tab} onChange={changeTab} items={[{value:'schools',label:'学校列表'},{value:'applications',label:`创建申请${pending?` ${pending}`:''}`}]}/>
-    {tab==='schools' ? error ? <div className={unifiedStyles.u3}>{error}</div> : <><div className={styles.schoolTools}><SegmentedControl label="学校目录状态" value={directoryStatus} onChange={value=>{setDirectoryStatus(value);setPage(1);setUrl({directoryStatus:value==='verified'?null:value,page:null})}} items={Object.entries(directoryLabels).map(([value,label])=>({value:value as School['directoryStatus'],label}))}/><div className={styles.schoolSearch}><Input value={schoolQuery} onChange={e=>setSchoolQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){setPage(1);setUrl({schoolQ:schoolQuery||null,page:null});void reloadSchools()}}} placeholder="搜索学校名称、学校 ID 或组织 ID"/><Button onClick={()=>{setPage(1);setUrl({schoolQ:schoolQuery||null,page:null});void reloadSchools()}}>搜索</Button></div></div><Table data={data?.data||[]} loading={loading} emptyText="暂无学校数据" columns={[
+    {tab==='schools' ? schoolError ? <div className={unifiedStyles.u3}>{schoolError}</div> : <><div className={styles.schoolTools}><SegmentedControl label="学校目录状态" value={directoryStatus} onChange={value=>{setDirectoryStatus(value as School['directoryStatus']);setPage(1);setUrl({directoryStatus:value==='verified'?null:value,page:null})}} items={Object.entries(directoryLabels).map(([value,label])=>({value:value as School['directoryStatus'],label}))}/><div className={styles.schoolSearch}><Input value={schoolQuery} onChange={e=>setSchoolQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){setPage(1);setUrl({schoolQ:schoolQuery||null,page:null});void reloadSchools()}}} placeholder="搜索学校名称、学校 ID 或组织 ID"/><Button onClick={()=>{setPage(1);setUrl({schoolQ:schoolQuery||null,page:null});void reloadSchools()}}>搜索</Button></div></div><Table data={schools} loading={schoolLoading} emptyText="暂无学校数据" columns={[
       {key:'name',label:'学校名称'},{key:'directoryStatus',label:'目录状态',render:s=><Badge variant={s.directoryStatus==='verified'?'success':s.directoryStatus==='legacy'?'error':s.directoryStatus==='pending'?'pending':'neutral'}>{directoryLabels[s.directoryStatus]}</Badge>},{key:'schoolType',label:'类型',render:s=>s.schoolType||'-'},{key:'region',label:'区域',render:s=>s.region||'-'},
       {key:'principal',label:'负责人',render:s=>s.principal?s.principal.name:<span className={unifiedStyles.u4}>待指派</span>},{key:'contactPerson',label:'联系人',render:s=>s.contactPerson||'-'},
       ...(directoryStatus==='legacy'?[{key:'references',label:'关联数据',render:(s:School)=>{const r=s.referenceSummary;return r?`成员 ${r.Membership} · 团队 ${r.Team} · 活动 ${r.Training} · 题单 ${r.ProblemList}`:'-'}}]:[]),

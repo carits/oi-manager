@@ -5,29 +5,11 @@ import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { useParams, useRouter } from 'next/navigation'
-import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
 import { useToast } from '@/components/ui/Toast'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
-interface School {
-  id: string
-  name: string
-  region: string | null
-  schoolType: string | null
-  educationSystem: string | null
-  contactPerson: string | null
-  contactPhone: string | null
-  contactEmail: string | null
-  principal: { id: string; name: string; title: string | null; email: string | null; user: { username: string } | null } | null
-}
-
-interface Teacher {
-  id: string
-  name: string
-  title: string | null
-  user: { username: string; role: string } | null
-}
+import { createPlatformSchoolPrincipal, getPlatformSchool, getPlatformSchoolTeachers, transferPlatformSchoolPrincipal, updatePlatformSchool, type PlatformSchool as School, type PlatformSchoolTeacher as Teacher } from '@/features/platform-organization'
 
 export default function EditSchoolPage() {
   const params = useParams()
@@ -78,7 +60,7 @@ export default function EditSchoolPage() {
 
     setPrincipalSaving(true)
     try {
-      const result = await apiClient.post<any>(`/api/platform/organizations/${schoolId}/principal`, {
+      const result = await createPlatformSchoolPrincipal(schoolId, {
         username: principalData.username,
         password: principalData.password || principalData.username,
         teacherName: principalData.teacherName,
@@ -86,15 +68,15 @@ export default function EditSchoolPage() {
         email: principalData.email,
         phone: principalData.phone
       })
-      if (result.success) {
-        setPrincipal(result.data?.teacher || null)
-        setSelectedTeacherId(result.data?.teacher?.id || '')
+      if (result.ok) {
+        setPrincipal(result.data.teacher)
+        setSelectedTeacherId(result.data.teacher.id)
         setShowPrincipalForm(false)
         setPrincipalData({ username: '', password: '', teacherName: '', teacherTitle: '', email: '', phone: '' })
         // 重新获取教师列表
         fetchTeachers()
       } else {
-        setPrincipalError(result.message || '创建失败')
+        setPrincipalError(result.error.message || '创建失败')
       }
     } catch {
       setPrincipalError('网络错误')
@@ -125,10 +107,8 @@ export default function EditSchoolPage() {
 
   const fetchTeachers = async () => {
     try {
-      const result = await apiClient.get<{ data: Teacher[] }>(`/api/platform/organizations/${schoolId}/teachers`)
-      if (result.success) {
-        setTeachers(result.data?.data || [])
-      }
+      const result = await getPlatformSchoolTeachers(schoolId, 1, 100)
+      setTeachers(result.data)
     } catch (error) {
       console.error('Failed to fetch teachers:', error)
     }
@@ -136,10 +116,8 @@ export default function EditSchoolPage() {
 
   const fetchSchool = async () => {
     try {
-      const result = await apiClient.get<School>(`/api/platform/organizations/${schoolId}`)
-      if (result.success) {
-        const schoolData = result.data
-        if (schoolData) {
+      const schoolData = await getPlatformSchool(schoolId)
+      if (schoolData) {
           setFormData({
             name: schoolData.name || '',
             region: schoolData.region || '',
@@ -159,7 +137,6 @@ export default function EditSchoolPage() {
             if (parts.length >= 2) setSelectedCity(parts[1])
             if (parts.length >= 3) setSelectedDistrict(parts[2])
           }
-        }
       }
     } catch (error) {
       console.error('Failed to fetch school:', error)
@@ -178,27 +155,27 @@ export default function EditSchoolPage() {
       const region = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean).join('/')
 
       // 更新学校基本信息
-      const result = await apiClient.put<any>(`/api/platform/organizations/${schoolId}`, {
+      const result = await updatePlatformSchool(schoolId, {
         ...formData,
         region
       })
-      if (!result.success) {
-        toast.error(result.message || '保存失败')
+      if (!result.ok) {
+        toast.error(result.error.message || '保存失败')
         setSaving(false)
         return
       }
 
       // 如果选择了负责人且与当前不同，更新负责人
       if (selectedTeacherId && selectedTeacherId !== principal?.id) {
-        const principalResult = await apiClient.put<any>(`/api/platform/organizations/${schoolId}/principal`, { membershipId: selectedTeacherId })
-        if (!principalResult.success) {
-          toast.error(principalResult.message || '负责人更新失败')
+        const principalResult = await transferPlatformSchoolPrincipal(schoolId, selectedTeacherId)
+        if (!principalResult.ok) {
+          toast.error(principalResult.error.message || '负责人更新失败')
           setSaving(false)
           return
         }
 
         // 更新本地状态
-        if (principalResult.data?.principal) {
+        if (principalResult.data.principal) {
           setPrincipal(principalResult.data.principal)
           setSelectedTeacherId(principalResult.data.principal.id)
         }
