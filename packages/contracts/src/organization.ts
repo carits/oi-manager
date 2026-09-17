@@ -348,7 +348,7 @@ export const OrganizationContracts = {
   decidePlatformCreationApplication: defineApiEndpoint({
     key: 'organization.platform.creation.decide', method: 'POST', scope: 'account',
     body: z.object({ decisionMessage: z.string().max(1000).default(''), internalReviewNote: z.string().max(2000).default('') }),
-    data: PlatformOrganizationCreationApplicationSchema,
+    data: OrganizationCreationApplicationSchema.extend({ internalReviewNote: z.string().nullable().optional() }).passthrough(),
   }),
   directory: defineApiEndpoint({
     key: 'organization.directory', method: 'GET', scope: 'account', data: OrganizationDirectoryPageSchema,
