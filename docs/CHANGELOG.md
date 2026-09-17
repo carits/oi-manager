@@ -5,6 +5,13 @@ last_verified: 2026-09-17
 source_of_truth: Git history
 ---
 
+## 2026-09-17 — 旧页面 Transport 清零
+
+- 用户管理、团队 ID 校验与匿名客户端遥测统一迁入 Feature API 和共享 Runtime Contract；删除无调用的旧用户管理与功能占位组件。
+- 管理用户响应采用显式字段白名单，剥离密码哈希、会话版本和内部组织关联；新增真实路由测试覆盖列表、详情、启停、密码重置和平台管理员创建。
+- 架构门禁达到 26 个 Contract、27 个 Feature Slice、121 条边界，旧 Route/Component 直连从 9 文件/12 调用降至 `0/0`，P1-01 达成退出条件；Feature UI/Model 遗留保持 43 文件/242 调用。
+- 生产同构用户/遥测测试 36/36、团队测试 44/44，Contracts/Server/Web 构建与文档/架构门禁通过；提交 `df61522`、`40c8482`、`415ecf9` 已部署，API 切换至 3303，Web BUILD_ID `3z66XyF0b-4DpvWmdl-Su` 完成 canary 与提升前后消息闭环（序号 270–273）。
+
 ## 2026-09-17 — 平台学校治理 Contract 化
 
 - 新增 `platform-organization` Feature Slice，统一封装超级管理员学校列表、详情、成员分页、直接创建、资料编辑、负责人操作、目录状态治理和组织创建申请审核。
