@@ -10,19 +10,24 @@ const app = createTestApp()
 describe('managed user runtime contract', () => {
   it('lists and reads users without exposing authentication state', async () => {
     const admin = await createTestUser({ role: 'super_admin' })
-    const target = await createTestUser({ role: 'student' })
+    const target = await prisma.user.create({
+      data: {
+        id: crypto.randomUUID(), username: `managed_${crypto.randomUUID().slice(0, 8)}`,
+        passwordHash: await bcrypt.hash('managed-user-password', 4), role: 'user', status: 'active',
+      },
+    })
     const client = createAuthenticatedRequest(app, generateTokenFromUser(admin.user))
 
-    const list = await client.get(`/api/users?keyword=${encodeURIComponent(target.user.username)}`)
+    const list = await client.get(`/api/users?keyword=${encodeURIComponent(target.username)}`)
     expect(list.status).toBe(200)
     expect(list.body.data.users).toHaveLength(1)
-    expect(list.body.data.users[0]).toMatchObject({ id: target.user.id, username: target.user.username })
+    expect(list.body.data.users[0]).toMatchObject({ id: target.id, username: target.username })
     expect(list.body.data.users[0]).not.toHaveProperty('passwordHash')
     expect(list.body.data.users[0]).not.toHaveProperty('sessionVersion')
 
-    const detail = await client.get(`/api/users/${target.user.id}`)
+    const detail = await client.get(`/api/users/${target.id}`)
     expect(detail.status).toBe(200)
-    expect(detail.body.data).toMatchObject({ id: target.user.id, username: target.user.username })
+    expect(detail.body.data).toMatchObject({ id: target.id, username: target.username })
     expect(detail.body.data).not.toHaveProperty('passwordHash')
     expect(detail.body.data).not.toHaveProperty('OrganizationMembership')
   })
