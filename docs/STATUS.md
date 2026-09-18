@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-17
+last_verified: 2026-09-18
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
@@ -12,6 +12,8 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 - 本文件只保留最近五次 rollout。完整历史见 [2026-09 归档](archive/history/STATUS-2026-09.md) 与既有 archive 文档。
 
 ## 最近 rollout
+
+- 2026-09-18: Frontend Feature Slice 与统一 API Contract Layer 第二十六批完成并上线。题目编辑器的附件列表/删除、题面删除、外部 OJ 拉题和远端附件下载全部迁入 Problem Feature API 与共享 Runtime Contract；题面 PDF、附件和测试数据上传作为 multipart Raw Transport 首批写入机器可审计登记表，不再只靠注释约定。OJ 附件响应改为字段白名单，内部存储路径不会透传到浏览器。架构门禁现为 26 个 Contract、27 个 Feature Slice、124 条契约边界和 3 条 Raw Transport 登记；P1-02 Feature UI/Model 由 43 文件/242 调用降至 42 文件/234 调用。生产同构 `platform-problem-contract` 4 文件 42/42，Contracts/Server/Web 构建和文档/架构门禁通过；提交 `40287af` 已推送 `main`，API 3303→3302，Web BUILD_ID `1qOQxfw4pW1CK_cPOjnKn` 经 canary 与提升前后双账号消息闭环（序号 274–277）后上线。本批无数据库结构或业务数据迁移。
 
 - 2026-09-17: P1-01 旧 Route/Component 直连 API 已完成退出并上线。用户管理列表/详情、平台管理员创建、账号启停与密码重置迁入新增 `user-admin` Feature API，团队 ID 校验和匿名客户端遥测也接入共享 Runtime Contract；删除无调用的旧 `UserManagement` 与 `PlannedFeaturePage`。管理用户响应改为字段白名单，服务端会剥离密码哈希、会话版本及组织内部关联。架构门禁现为 26 个 Contract、27 个 Feature Slice、121 条契约边界，`legacyTransport.files/calls` 均为 `0`；P1-02 Feature UI/Model 仍为 43 文件/242 调用，继续作为下一阶段主债务。生产同构 `identity-contract` 4 文件 36/36、`team-contract` 2 文件 44/44，Contracts/Server/Web 构建和文档/架构门禁通过；提交 `df61522`、`40c8482`、`415ecf9` 已推送 `main`，API 3302→3303，Web BUILD_ID `3z66XyF0b-4DpvWmdl-Su` 经 canary 与提升前后双账号消息闭环（序号 270–273）后上线。本批无数据库结构或业务数据迁移。
 
