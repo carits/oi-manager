@@ -626,6 +626,64 @@ async function main() {
         },
       ],
     })
+    const canonicalContest = await prisma.contest.create({
+      data: {
+        id: 'e2e-canonical-contest',
+        runtimeTrainingId: contest.id,
+        createdBy: ids.principal,
+        organizationId: ids.organization,
+        title: contest.title,
+        description: contest.description,
+        contestDate: contestStartTime,
+        startAt: contestStartTime,
+        endAt: contestEndTime,
+        format: 'icpc',
+        status: 'finished',
+        type: 'contest',
+        teamId: ids.team,
+        scope: 'campus',
+        problemIdVisible: true,
+        solutionVisible: true,
+        ContestProblem: {
+          create: [
+            { id: 'e2e-canonical-contest-problem', runtimeTrainingProblemId: 'e2e-contest-problem', canonicalProblemId: ids.problem, orderIndex: 0, title: 'E2E A Plus B', ojName: 'internal', problemId: 'E2E-1000', points: 100 },
+            { id: 'e2e-canonical-contest-problem-b', runtimeTrainingProblemId: 'e2e-contest-problem-b', canonicalProblemId: ids.secondProblem, orderIndex: 1, title: 'E2E Sequence', ojName: 'internal', problemId: 'E2E-1001', points: 100 },
+            { id: 'e2e-canonical-contest-problem-c', runtimeTrainingProblemId: 'e2e-contest-problem-c', canonicalProblemId: ids.thirdProblem, orderIndex: 2, title: 'E2E Prefix Sum', ojName: 'internal', problemId: 'E2E-1002', points: 100 },
+          ],
+        },
+      },
+    })
+    await prisma.contest.create({
+      data: {
+        id: 'e2e-canonical-personal-contest',
+        runtimeTrainingId: personalContest.id,
+        createdBy: ids.personalStudent,
+        title: personalContest.title,
+        description: personalContest.description,
+        contestDate: personalContest.startTime,
+        startAt: personalContest.startTime,
+        endAt: personalContest.endTime,
+        format: 'ioi',
+        status: 'ongoing',
+        type: 'contest',
+        teamId: ids.personalTeam,
+        scope: 'personal',
+        problemIdVisible: true,
+        solutionVisible: false,
+        ContestProblem: {
+          create: {
+            id: 'e2e-canonical-personal-contest-problem',
+            runtimeTrainingProblemId: 'e2e-personal-contest-problem',
+            canonicalProblemId: ids.problem,
+            orderIndex: 0,
+            title: 'E2E A Plus B',
+            ojName: 'carits',
+            problemId: 'E2E-1000',
+            points: 100,
+          },
+        },
+      },
+    })
     await prisma.trainingParticipant.createMany({
       data: [
         {
@@ -670,8 +728,10 @@ async function main() {
       data: {
         id: 'e2e-contest-status',
         contestId: contest.id,
+        canonicalContestId: canonicalContest.id,
         userId: ids.campusStudent,
         contestProblemId: 'e2e-contest-problem',
+        canonicalContestProblemId: 'e2e-canonical-contest-problem',
         bestScore: 100,
         bestResult: 'accepted',
         attemptCount: 1,
