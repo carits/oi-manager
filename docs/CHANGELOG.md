@@ -5,12 +5,13 @@ last_verified: 2026-09-18
 source_of_truth: Git history
 ---
 
-## 2026-09-18 — 题目编辑器文件传输 Contract 化
+## 2026-09-18 — 题目编辑器文件传输与 Hack 配置 Contract 化
 
 - 题目附件列表/删除、题面删除、外部 OJ 拉题和远端附件下载统一进入 Problem Feature API 与共享 Runtime Contract，`ProblemForm` 不再直接调用 `apiClient`。
 - 题面 PDF、附件和测试数据上传登记为 3 条机器可审计 multipart Raw Transport；架构进度开始公开登记数量，Feature UI/Model 直连由 43 文件/242 调用降至 42 文件/234 调用。
 - OJ 下载附件和题目附件响应使用字段白名单，内部存储路径会在 Server Contract 边界被剥离。
-- 生产同构 Problem/OJ 测试 4 文件 42/42，Contracts/Server/Web 构建与文档/架构门禁通过；`40287af` 已部署，API 切换至 3302，Web BUILD_ID `1qOQxfw4pW1CK_cPOjnKn` 完成 canary 与提升前后消息闭环（序号 274–277）。
+- Hack 配置读取和保存统一进入 Problem Feature API；服务端校验乐观锁 revision、源码请求形状及成功响应，浏览器不再直接拼接端点或接收更新人等内部字段。Feature UI/Model 进一步降至 41 文件/232 调用，契约边界增至 126。
+- 两轮生产同构 Problem/OJ 测试均为 4 文件 42/42，Contracts/Server/Web 构建与文档/架构门禁通过；`40287af`、`998d017` 已部署，API 最终切换至 3303，Web BUILD_ID `kha6hbme__CJV6qx6fXE1` 完成两轮 canary 与提升前后消息闭环（序号 274–281）。
 
 ## 2026-09-17 — 旧页面 Transport 清零
 
