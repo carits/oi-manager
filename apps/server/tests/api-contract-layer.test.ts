@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, ProblemQualityContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -411,6 +411,42 @@ describe('shared API contract adapter', () => {
     })
     expect(noteResponse.json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.not.objectContaining({ ownerId: expect.anything() }),
+    }))
+  })
+
+  it('guards problem quality commands and dashboard projection', () => {
+    expect(parseContractBody(ProblemQualityContracts.requestEvaluation, { revisionId: 'revision-1' }))
+      .toEqual({ revisionId: 'revision-1' })
+    expect(() => parseContractBody(ProblemQualityContracts.submitExpert, {
+      algorithmicValueScore: 21, editorialScore: 5, originalityScore: 5, comment: 'a'.repeat(30),
+    })).toThrowError(ApiContractError)
+    expect(() => parseContractBody(ProblemQualityContracts.createSolutionProfile, {
+      key: 'quadratic', name: '暴力', expectedClass: 'wrong', expectedScoreMin: 0, expectedScoreMax: 30,
+      expectedSubtaskScores: [], submissionId: 0,
+    })).toThrowError(ApiContractError)
+
+    const dashboard = responseStub()
+    sendContractData(dashboard.response, ProblemQualityContracts.dashboard, {
+      permissions: { canManage: true, canExpertReview: false }, latestTestSetRevisionId: null,
+      testSetQuality: null, problemQuality: null, jobs: [], qualityHistory: [], solutionProfiles: [],
+      internalCorpusIdentity: 'must-not-leak',
+    })
+    expect(dashboard.json).toHaveBeenCalledWith({
+      success: true,
+      data: {
+        permissions: { canManage: true, canExpertReview: false }, latestTestSetRevisionId: null,
+        testSetQuality: null, problemQuality: null, jobs: [], qualityHistory: [], solutionProfiles: [],
+      },
+    })
+
+    const profile = responseStub()
+    sendContractData(profile.response, ProblemQualityContracts.createSolutionProfile, {
+      id: 'profile-1', key: 'quadratic', name: '暴力', expectedClass: 'wrong', expectedComplexity: null,
+      expectedScoreMin: 0, expectedScoreMax: 30, expectedSubtaskScores: [], submissionId: 42,
+      revision: 1, status: 'active', observed: null, definitionHash: 'must-not-leak',
+    })
+    expect(profile.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.not.objectContaining({ definitionHash: expect.anything() }),
     }))
   })
 

@@ -1,16 +1,16 @@
 {
   "schemaVersion": 2,
-  "contracts": 27,
+  "contracts": 28,
   "featureSlices": 27,
-  "contractedBoundaries": 130,
+  "contractedBoundaries": 132,
   "transport": {
     "legacy": {
       "files": 0,
       "calls": 0
     },
     "feature": {
-      "files": 36,
-      "calls": 224
+      "files": 35,
+      "calls": 218
     },
     "raw": {
       "registered": 6
@@ -165,5 +165,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-18T08:14:38.228Z"
+  "updatedAt": "2026-09-18T08:32:03.742Z"
 }

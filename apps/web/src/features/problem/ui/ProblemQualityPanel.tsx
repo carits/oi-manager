@@ -7,7 +7,14 @@ import { FormDialog } from '@/components/ui/Dialogs'
 import { Input, Textarea } from '@/components/ui/FormControls'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { useToast } from '@/components/ui/Toast'
-import apiClient from '@/lib/apiClient'
+import {
+  createProblemSolutionProfile,
+  getProblemQualityDashboard,
+  requestProblemQualityEvaluation,
+  runAutomatedProblemQuality,
+  submitExpertProblemQuality,
+  updateProblemSolutionProfile,
+} from '../api/problemQualityApi'
 import { displayScore, qualityJobPresentation, qualityStatusPresentation, type QualityStatus } from '../model/problem-quality-display'
 import styles from './ProblemQualityPanel.module.css'
 
@@ -159,9 +166,8 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   const [profileSubtasks, setProfileSubtasks] = useState('[]')
 
   const load = useCallback(async () => {
-    const result = await apiClient.get<QualityDashboard>(`/api/problems/${problemId}/quality`)
-    if (result.success && result.data) setData(result.data)
-    else toast.error(result.message || '质量评估加载失败')
+    try { setData(await getProblemQualityDashboard(problemId) as QualityDashboard) }
+    catch (error) { toast.error(error instanceof Error ? error.message : '质量评估加载失败') }
     setLoading(false)
   }, [problemId, toast])
 
@@ -177,8 +183,8 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
     if (!data?.latestTestSetRevisionId) return toast.error('题目尚无正式测试集版本')
     setBusy(true)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/quality-evaluation-jobs`, { revisionId: data.latestTestSetRevisionId })
-      if (!result.success) return toast.error(result.message || '质量评估入队失败')
+      const result = await requestProblemQualityEvaluation(problemId, data.latestTestSetRevisionId)
+      if (!result.ok) return toast.error(result.error.message || '质量评估入队失败')
       toast.success('质量评估已加入队列')
       await load()
     } finally { setBusy(false) }
@@ -187,8 +193,8 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   const runPqs = async () => {
     setBusy(true)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/problem-quality-assessments/automated`, {})
-      if (!result.success) return toast.error(result.message || '题目质量机器评估失败')
+      const result = await runAutomatedProblemQuality(problemId)
+      if (!result.ok) return toast.error(result.error.message || '题目质量机器评估失败')
       toast.success('题目质量机器评估已完成')
       await load()
     } finally { setBusy(false) }
@@ -198,13 +204,13 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
     if (!data?.problemQuality) return
     setBusy(true)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/problem-quality-assessments/${data.problemQuality.id}/expert-review`, {
+      const result = await submitExpertProblemQuality(problemId, data.problemQuality.id, {
         algorithmicValueScore: Number(algorithmicValueScore),
         editorialScore: Number(editorialScore),
         originalityScore: Number(originalityScore),
         comment,
       })
-      if (!result.success) return toast.error(result.message || '专家评估提交失败')
+      if (!result.ok) return toast.error(result.error.message || '专家评估提交失败')
       toast.success('专家评估已固化')
       setExpertOpen(false)
       setAlgorithmicValueScore(''); setEditorialScore(''); setOriginalityScore(''); setComment('')
@@ -228,7 +234,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
     }
     setBusy(true)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/solution-profiles`, {
+      const result = await createProblemSolutionProfile(problemId, {
         key: profileKey,
         name: profileName,
         expectedClass: profileClass,
@@ -238,7 +244,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
         expectedSubtaskScores,
         submissionId: Number(profileSubmissionId),
       })
-      if (!result.success) return toast.error(result.message || 'Reference Solution Profile 保存失败')
+      if (!result.ok) return toast.error(result.error.message || 'Reference Solution Profile 保存失败')
       toast.success('Reference Solution Profile 已保存，并已触发新版质量评估')
       setProfileOpen(false); resetProfileForm(); await load()
     } finally { setBusy(false) }
@@ -247,8 +253,8 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   const setProfileStatus = async (profile: SolutionProfile, status: SolutionProfile['status']) => {
     setBusy(true)
     try {
-      const result = await apiClient.patch(`/api/problems/${problemId}/solution-profiles/${profile.id}`, { expectedRevision: profile.revision, status })
-      if (!result.success) return toast.error(result.message || 'Profile 状态更新失败')
+      const result = await updateProblemSolutionProfile(problemId, profile.id, profile.revision, status)
+      if (!result.ok) return toast.error(result.error.message || 'Profile 状态更新失败')
       toast.success(status === 'active' ? 'Profile 已启用' : 'Profile 已停用')
       await load()
     } finally { setBusy(false) }
