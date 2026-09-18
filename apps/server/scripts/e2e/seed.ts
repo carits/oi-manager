@@ -20,6 +20,7 @@ if (parsedUrl.searchParams.get('schema') !== 'e2e') {
 const ids = {
   platformSchool: 'platform-school-00000000',
   school: 'school-default',
+  secondarySchool: 'school-secondary',
   superAdmin: 'e2e-super-admin',
   platformAdmin: 'e2e-platform-admin',
   principal: 'e2e-principal',
@@ -42,6 +43,7 @@ const ids = {
   personalProblemListSection: 'e2e-personal-problem-list-section',
   platformOrganization: 'org_platform-school-00000000',
   organization: 'org_school-default',
+  secondaryOrganization: 'org_school-secondary',
   stickerPack: 'e2e-sticker-pack',
   sticker: 'e2e-sticker-happy',
   trainingSession: 'e2e-training-session',
@@ -82,18 +84,21 @@ async function seedIdentityGraph(prisma: PrismaClient, passwordHash: string) {
     data: [
       { id: ids.platformOrganization, name: 'E2E Platform', type: 'platform', status: 'active' },
       { id: ids.organization, name: 'E2E School', type: 'school', status: 'active' },
+      { id: ids.secondaryOrganization, name: 'E2E Secondary School', type: 'school', status: 'active' },
     ],
   })
   await prisma.school.createMany({
     data: [
       { id: ids.platformSchool, name: 'E2E Platform', region: 'system', schoolType: 'platform', educationSystem: '6-3-3', status: 'active', directoryStatus: 'hidden', organizationId: ids.platformOrganization },
       { id: ids.school, name: 'E2E School', region: 'Zhejiang/Hangzhou', schoolType: 'middle', educationSystem: '6-3-3', status: 'active', directoryStatus: 'verified', organizationId: ids.organization },
+      { id: ids.secondarySchool, name: 'E2E Secondary School', region: 'Jiangsu/Nanjing', schoolType: 'middle', educationSystem: '6-3-3', status: 'active', directoryStatus: 'verified', organizationId: ids.secondaryOrganization },
     ],
   })
   await prisma.organizationMembership.createMany({
     data: [
       { id: 'e2e-membership-principal', organizationId: ids.organization, userId: ids.principal, memberRole: 'school_principal', relationType: 'employee', status: 'active', joinedAt: new Date() },
       { id: 'e2e-membership-teacher', organizationId: ids.organization, userId: ids.teacher, memberRole: 'teacher', relationType: 'employee', status: 'active', joinedAt: new Date() },
+      { id: 'e2e-membership-teacher-secondary', organizationId: ids.secondaryOrganization, userId: ids.teacher, memberRole: 'teacher', relationType: 'employee', status: 'active', joinedAt: new Date() },
       { id: 'e2e-membership-student', organizationId: ids.organization, userId: ids.campusStudent, memberRole: 'student', relationType: 'student', status: 'active', joinedAt: new Date() },
       { id: 'e2e-membership-personal-student', organizationId: ids.organization, userId: ids.personalStudent, memberRole: 'student', relationType: 'student', status: 'active', joinedAt: new Date() },
     ],
@@ -102,6 +107,7 @@ async function seedIdentityGraph(prisma: PrismaClient, passwordHash: string) {
     data: [
       { id: 'e2e-teacher-profile-principal', membershipId: 'e2e-membership-principal', name: 'E2E Principal', title: 'Head Coach', status: 'active' },
       { id: 'e2e-teacher-profile-teacher', membershipId: 'e2e-membership-teacher', name: 'E2E Teacher', title: 'Coach', status: 'active' },
+      { id: 'e2e-teacher-profile-teacher-secondary', membershipId: 'e2e-membership-teacher-secondary', name: 'E2E Teacher', title: 'Visiting Coach', status: 'active' },
     ],
   })
   await prisma.organizationStudentProfile.createMany({

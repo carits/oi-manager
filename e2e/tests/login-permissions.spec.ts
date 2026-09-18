@@ -4,6 +4,7 @@ import { loadFixtureIds } from '../fixtures/data'
 
 const ids = loadFixtureIds()
 const organizationBase = `/org/org_${ids.school}`
+const secondaryOrganizationBase = '/org/org_school-secondary'
 
 test.describe('login and permission boundaries @smoke @compact', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
@@ -69,6 +70,43 @@ test.describe('authenticated permission matrix @smoke', () => {
     const page = await context.newPage()
     await page.goto('/platform-admin')
     await expect(page).toHaveURL(/\/identity$/)
+    await context.close()
+  })
+
+  test('teacher keeps the correct SSR identity across personal and two organization contexts', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: accounts.teacher.storageState })
+    const page = await context.newPage()
+
+    await page.goto('/personal')
+    await expect(page).toHaveURL(/\/personal$/)
+
+    await page.goto(`${organizationBase}/overview`)
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/overview$`))
+    await expect.poll(async () => page.evaluate(async () => {
+      const response = await fetch('/api/auth/me', { headers: { 'X-OI-Organization-ID': 'org_school-default' } })
+      const payload = await response.json()
+      return payload.data?.organizationId
+    })).toBe('org_school-default')
+
+    await page.goto(`${secondaryOrganizationBase}/overview`)
+    await expect(page).toHaveURL(new RegExp(`${secondaryOrganizationBase.replaceAll('/', '\\/')}\/overview$`))
+    await expect.poll(async () => page.evaluate(async () => {
+      const response = await fetch('/api/auth/me', { headers: { 'X-OI-Organization-ID': 'org_school-secondary' } })
+      const payload = await response.json()
+      return payload.data?.organizationId
+    })).toBe('org_school-secondary')
+
+    await page.goto('/personal')
+    await expect(page).toHaveURL(/\/personal$/)
+    await context.close()
+  })
+
+  test('invalid organization context returns to identity without clearing the account session', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: accounts.teacher.storageState })
+    const page = await context.newPage()
+    await page.goto('/org/not-a-real-organization/overview')
+    await expect(page).toHaveURL(/\/identity\?organizationUnavailable=1/)
+    await expect(page.getByText('选择身份')).toBeVisible()
     await context.close()
   })
 

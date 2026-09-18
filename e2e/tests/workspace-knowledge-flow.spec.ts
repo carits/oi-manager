@@ -63,7 +63,7 @@ test.describe('知识广场跨工作区一致性 @smoke @compact', () => {
     await page.getByRole('menuitem', { name: /^个人/ }).click()
     await expect(page).toHaveURL(/\/personal\/knowledge$/)
     await page.getByRole('button', { name: '切换身份' }).click()
-    await page.getByRole('menuitem', { name: /E2E School/ }).click()
+    await page.getByRole('menuitem', { name: /^E2E School教师/ }).click()
     await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/knowledge$`))
     await context.close()
   })
