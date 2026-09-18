@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/features/auth'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
-import apiClient from '@/lib/apiClient'
+import { createProblemList } from '../api/problemListApi'
 import { FormField } from '@/components/ui/FormField'
 
 export default function NewProblemListPage() {
@@ -26,12 +26,12 @@ export default function NewProblemListPage() {
 
     setLoading(true)
     try {
-      const res = await apiClient.post('/api/problem-lists', {
+      const res = await createProblemList({
         title: title.trim(),
         description: description.trim() || undefined,
       })
-      if (res.success && res.data) {
-        router.push(`${pathPrefix}/problem-lists/${(res.data as { id: string }).id}`)
+      if (res.ok) {
+        router.push(`${pathPrefix}/problem-lists/${res.data.id}`)
       }
     } catch (e) {
       console.error('Failed to create', e)

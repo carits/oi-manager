@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -360,8 +360,15 @@ describe('shared API contract adapter', () => {
     const { response, json } = responseStub()
     sendContractData(response, ProblemContracts.getEditorDetail, {
       id: 'problem-1',
+      problemId: '1041',
       title: '整数求和',
       platform: 'carits',
+      description: '求和',
+      statementType: 'markdown',
+      statementPdfUrl: null,
+      difficulty: null,
+      timeLimit: 1000,
+      memoryLimit: 256,
       status: 'draft',
       statements: [],
       solutions: [],
@@ -371,6 +378,39 @@ describe('shared API contract adapter', () => {
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
       data: expect.objectContaining({ ownerName: 'teacher' }),
+    }))
+  })
+
+  it('guards problem-list CRUD and problem-note payloads', () => {
+    expect(parseContractQuery(ProblemListContracts.list, {
+      tab: 'mine', page: '2', pageSize: '20', keyword: '基础', ignored: 'drop-me',
+    })).toEqual({ tab: 'mine', page: 2, pageSize: 20, keyword: '基础' })
+    expect(() => parseContractBody(ProblemListContracts.create, { title: '   ' }))
+      .toThrowError(ApiContractError)
+    expect(parseContractBody(ProblemContracts.saveNote, { content: '# 思路' }))
+      .toEqual({ content: '# 思路' })
+
+    const listResponse = responseStub()
+    sendContractData(listResponse.response, ProblemListContracts.list, {
+      lists: [{
+        id: 'list-1', title: '基础题单', description: null, ownerId: 'user-1',
+        createdAt: new Date('2026-09-18T00:00:00Z'), updatedAt: new Date('2026-09-18T01:00:00Z'),
+        _count: { Entries: 3 }, _permission: 'admin', organizationId: 'must-not-leak',
+      }],
+      page: 1, pageSize: 20, total: 1, totalPages: 1,
+    })
+    expect(listResponse.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        lists: [expect.not.objectContaining({ organizationId: expect.anything() })],
+      }),
+    }))
+
+    const noteResponse = responseStub()
+    sendContractData(noteResponse.response, ProblemContracts.getNote, {
+      content: '# 思路', updatedAt: new Date('2026-09-18T02:00:00Z'), ownerId: 'must-not-leak',
+    })
+    expect(noteResponse.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.not.objectContaining({ ownerId: expect.anything() }),
     }))
   })
 

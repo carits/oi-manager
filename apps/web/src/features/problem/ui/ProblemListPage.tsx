@@ -7,8 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Search } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
-import { useResource } from '@/hooks/useResource'
-import apiClient from '@/lib/apiClient'
+import { deleteProblemList, useProblemLists } from '../api/problemListApi'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { Button } from '@/components/ui/Button'
 import { ActionMenu, ActionMenuItem } from '@/components/management/ManagementList'
@@ -23,7 +22,6 @@ import { Pagination } from '@/components/ui/Pagination'
 import styles from './ProblemList.module.css'
 
 interface ProblemListInfo { id: string; title: string; description: string | null; ownerId: string; createdAt: string; updatedAt: string; _count: { Entries: number }; _permission: 'admin' | 'edit' | 'view' }
-interface ProblemListPayload { lists?: ProblemListInfo[]; page: number; pageSize: number; total: number; totalPages: number }
 export interface ProblemListPageProps { canCreate?: boolean; displayMode?: 'table' | 'card' }
 
 function formatDate(dateString: string) {
@@ -47,10 +45,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const [searchInput, setSearchInput] = useState(keyword)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  const query = new URLSearchParams({ tab: activeTab, page: String(page), pageSize: '20' })
-  if (keyword) query.set('keyword', keyword)
-  if (teamId) query.set('teamId', teamId)
-  const resource = useResource<ProblemListPayload>(`/api/problem-lists?${query}`, { sessionKey, isEmpty: data => (data.lists || []).length === 0, dedupingInterval: 15000 })
+  const resource = useProblemLists({ tab: activeTab, page, pageSize: 20, keyword: keyword || undefined, teamId: teamId || undefined }, sessionKey)
   const lists = resource.data?.lists || []
 
   const updateLocation = (tab: 'mine' | 'shared', nextKeyword = keyword, nextPage = 1) => {
@@ -63,9 +58,9 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   }
 
   const deleteList = async (id: string) => {
-    const result = await apiClient.delete(`/api/problem-lists/${id}`)
+    const result = await deleteProblemList(id)
     setDeleteConfirm(null)
-    if (!result.success) return toast.error(result.message || '删除失败')
+    if (!result.ok) return toast.error(result.error.message || '删除失败')
     toast.success('题单已删除')
     await resource.retry()
   }

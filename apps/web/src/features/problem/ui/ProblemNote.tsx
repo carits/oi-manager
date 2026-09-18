@@ -7,7 +7,8 @@ import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { usePathname, useRouter } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
-import apiClient from '@/lib/apiClient'
+import { getProblemEditorDetail } from '../api/problemEditorApi'
+import { getProblemNote, saveProblemNote } from '../api/problemNoteApi'
 import { useToast } from '@/components/ui/Toast'
 import { Pencil } from 'lucide-react'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
@@ -93,23 +94,17 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
     try {
       setLoading(true)
       const [problemRes, noteRes] = await Promise.all([
-        apiClient.get<Problem>(`/api/problems/${problemId}`),
-        apiClient.get<ProblemNoteResponse>(`/api/problems/${problemId}/note`)
+        getProblemEditorDetail(problemId),
+        getProblemNote(problemId)
       ])
 
-      if (problemRes.success && problemRes.data) {
-        setProblem(problemRes.data)
-      } else {
-        toast.error('题目不存在')
-        router.push(`${pathPrefix}/problems`)
-        return
-      }
+      setProblem(problemRes)
 
-      if (noteRes.success && noteRes.data) {
-        const loadedContent = noteRes.data.content || ''
+      if (noteRes) {
+        const loadedContent = noteRes.content || ''
         setNoteContent(loadedContent)
         setLastSavedContent(loadedContent)
-        if (noteRes.data.content) {
+        if (noteRes.content) {
           isFirstLoad.current = false
         }
       }
@@ -124,8 +119,8 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
   const saveToServer = async (content: string) => {
     try {
       setNoteSaving(true)
-      const result = await apiClient.put(`/api/problems/${problemId}/note`, { content })
-      if (result.success) {
+      const result = await saveProblemNote(problemId, content)
+      if (result.ok) {
         setLastSavedContent(content)
         setNoteLastSaved(new Date())
       }

@@ -40,16 +40,24 @@ export const ProblemEditorMutationSchema = z.object(ProblemEditorMutationShape);
 
 export const ProblemEditorDetailSchema = z.object({
   id: z.string(),
+  problemId: z.string(),
   title: z.string(),
-  platform: z.string().nullable().optional(),
-  difficulty: z.string().nullable().optional(),
-  timeLimit: z.number().nullable().optional(),
-  memoryLimit: z.number().nullable().optional(),
+  platform: z.string(),
+  description: z.string().nullable(),
+  statementType: z.string(),
+  statementPdfUrl: z.string().nullable(),
+  difficulty: z.string().nullable(),
+  timeLimit: z.number().nullable(),
+  memoryLimit: z.number().nullable(),
   visibility: z.string().nullable().optional(),
   status: z.enum(["draft", "published", "archived"]),
   ojBindings: z.string().nullable().optional(),
-  statements: z.array(ProblemContentVersionSchema),
-  solutions: z.array(ProblemContentVersionSchema),
+  statements: z.array(ProblemContentVersionSchema.extend({
+    id: z.string(), content: z.string().nullable(), fileUrl: z.string().nullable(), isVisible: z.boolean(),
+  })),
+  solutions: z.array(ProblemContentVersionSchema.extend({
+    id: z.string(), content: z.string().nullable(), fileUrl: z.string().nullable(), isVisible: z.boolean(),
+  })),
   permissions: z.object({ canEdit: z.boolean().optional() }).passthrough(),
 }).passthrough();
 
@@ -89,6 +97,15 @@ export const ProblemHackConfigInputSchema = z.object({
   validatorProgramVersionId: z.string().nullable().optional(),
   classifierProgramVersionId: z.string().nullable().optional(),
   expectedRevision: z.number().int().nonnegative(),
+});
+
+export const ProblemNoteSchema = z.object({
+  content: z.string().nullable().optional(),
+  updatedAt: DateTimeWireSchema.optional(),
+});
+
+export const ProblemNoteInputSchema = z.object({
+  content: z.string().max(200_000),
 });
 
 export const ProblemAdminListItemSchema = z.object({
@@ -489,6 +506,14 @@ export const ProblemContracts = {
   saveHackConfig: defineApiEndpoint({
     key: "problem.hack-config.save", method: "PUT", scope: "context",
     body: ProblemHackConfigInputSchema, data: ProblemHackConfigSchema,
+  }),
+  getNote: defineApiEndpoint({
+    key: "problem.note.get", method: "GET", scope: "context",
+    data: ProblemNoteSchema,
+  }),
+  saveNote: defineApiEndpoint({
+    key: "problem.note.save", method: "PUT", scope: "context",
+    body: ProblemNoteInputSchema, data: ProblemNoteSchema,
   }),
   getJudgeSettings: defineApiEndpoint({
     key: "problem.judge-settings.get",

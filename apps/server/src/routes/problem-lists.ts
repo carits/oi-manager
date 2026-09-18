@@ -43,6 +43,8 @@ import {
 } from '../modules/problem-list/application/problem-list-share.service'
 import { createAssignmentFromProblemList } from '../modules/problem-list/application/problem-list-homework.service'
 import type { AuthRequest } from '../middleware/auth'
+import { ProblemListContracts } from '@oi-manager/contracts'
+import { parseContractBody, parseContractQuery, sendContractData } from '../lib/api-contract'
 
 export const problemListsRouter = Router()
 
@@ -71,8 +73,9 @@ function problemListEndpoint(label: string, handler: (req: AuthRequest, res: Res
  * 获取题单列表（我的 + 共享给我的）
  */
 problemListsRouter.get('/', authenticate, problemListEndpoint('获取题单列表失败', async (req, res) => {
-  const { page, pageSize, skip } = parsePagination(req.query)
-  res.json({ success: true, data: await listProblemLists(req.user!, req.query, page, pageSize, skip) })
+  const query = parseContractQuery(ProblemListContracts.list, req.query)
+  const { page, pageSize, skip } = parsePagination(query)
+  sendContractData(res, ProblemListContracts.list, await listProblemLists(req.user!, query, page, pageSize, skip))
 }))
 
 /**
@@ -80,7 +83,8 @@ problemListsRouter.get('/', authenticate, problemListEndpoint('获取题单列�
  * 创建题单（同时创建一个默认章节）
  */
 problemListsRouter.post('/', authenticate, problemListEndpoint('创建题单失败', async (req, res) => {
-  res.json({ success: true, data: await createProblemList(req.user!, req.body) })
+  const body = parseContractBody(ProblemListContracts.create, req.body)
+  sendContractData(res, ProblemListContracts.create, await createProblemList(req.user!, body), 201)
 }))
 
 /**
@@ -125,8 +129,9 @@ problemListsRouter.put('/:id', authenticate, problemListEndpoint('更新题单�
  * 硬删除题单（级联删除章节→条目→分享）
  */
 problemListsRouter.delete('/:id', authenticate, problemListEndpoint('删除题单失败', async (req, res) => {
+  parseContractBody(ProblemListContracts.delete, req.body || {})
   await deleteProblemList(req.user!, req.params.id)
-  res.json({ success: true, message: '删除成功' })
+  sendContractData(res, ProblemListContracts.delete, {})
 }))
 
 // ==================== 章节 CRUD ====================
