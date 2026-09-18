@@ -11,7 +11,8 @@ source_of_truth: Git history
 - 题面 PDF、附件和测试数据上传登记为 3 条机器可审计 multipart Raw Transport；架构进度开始公开登记数量，Feature UI/Model 直连由 43 文件/242 调用降至 42 文件/234 调用。
 - OJ 下载附件和题目附件响应使用字段白名单，内部存储路径会在 Server Contract 边界被剥离。
 - Hack 配置读取和保存统一进入 Problem Feature API；服务端校验乐观锁 revision、源码请求形状及成功响应，浏览器不再直接拼接端点或接收更新人等内部字段。Feature UI/Model 进一步降至 41 文件/232 调用，契约边界增至 126。
-- 两轮生产同构 Problem/OJ 测试均为 4 文件 42/42，Contracts/Server/Web 构建与文档/架构门禁通过；`40287af`、`998d017` 已部署，API 最终切换至 3303，Web BUILD_ID `kha6hbme__CJV6qx6fXE1` 完成两轮 canary 与提升前后消息闭环（序号 274–281）。
+- Judge 设置和 Test Graph 不再直接上传、下载或删除 Checker/Testdata；两个 UI 文件退出传输层，Checker/Testdata 删除进入 Runtime Contract，上传、单文件下载和导出 ZIP 登记为 Raw Transport。Feature UI/Model 降至 39 文件/229 调用，Raw Transport 登记增至 6。
+- 三轮生产同构 Problem/OJ 测试均为 4 文件 42/42，Contracts/Server/Web 构建与文档/架构门禁通过；`40287af`、`998d017`、`f3f053f` 已部署，API 最终切换至 3302，Web BUILD_ID `erILqISO1uiQmWAUOmQdv` 完成三轮 canary 与提升前后消息闭环（序号 274–285）。
 
 ## 2026-09-17 — 旧页面 Transport 清零
 
