@@ -5,6 +5,12 @@ last_verified: 2026-09-18
 source_of_truth: Git history
 ---
 
+## 2026-09-18 — 组织工作区 SSR 身份上下文修复
+
+- Next.js 根布局和组织 `RoleLayout` 现在从 `/org/:organizationId/*` 显式解析组织上下文，并在 SSR 请求 `/api/auth/me` 时发送 `X-OI-Organization-ID`；普通账号不再因全局角色为 `user` 被提前重定向回身份页。
+- 组织页面只使用 `organizationRole` 授权，个人与平台页面使用 `accountRole`；不存在、隔离或无成员关系的组织进入身份选择页，不再被误判成匿名会话。
+- 新增路由上下文、Session Header、组织拒绝分类和角色选择单测；Web 42 个测试文件 186 项、TypeScript 检查及本地/生产构建通过。提交 `dfed3f3` 已推送 `main`，Web BUILD_ID `HOIvma3yUqmx_GDuFOFMK` 经 canary、正式双账号消息探针（序号 294–297）和生产 SSR 探针后上线；生产探针确认个人→组织→个人均为 200，无效组织为 307 返回身份页。生产当前没有同时属于两个有效组织的普通账号，因此 A→B 由独立 Header/缓存隔离测试覆盖，未伪造线上成员关系。
+
 ## 2026-09-18 — 题目编辑器文件传输与 Hack 配置 Contract 化
 
 - 题目附件列表/删除、题面删除、外部 OJ 拉题和远端附件下载统一进入 Problem Feature API 与共享 Runtime Contract，`ProblemForm` 不再直接调用 `apiClient`。

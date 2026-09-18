@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-13
+last_verified: 2026-09-18
 source_of_truth: packages/contracts/src/identity.ts, auth middleware, authorization capabilities, role layouts
 ---
 
