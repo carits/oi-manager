@@ -103,6 +103,15 @@ async function seedIdentityGraph(prisma: PrismaClient, passwordHash: string) {
       { id: 'e2e-membership-personal-student', organizationId: ids.organization, userId: ids.personalStudent, memberRole: 'student', relationType: 'student', status: 'active', joinedAt: new Date() },
     ],
   })
+  await prisma.organizationMembershipRole.createMany({
+    data: [
+      { id: 'e2e-membership-role-principal', membershipId: 'e2e-membership-principal', roleKey: 'school_principal', source: 'e2e_seed' },
+      { id: 'e2e-membership-role-teacher', membershipId: 'e2e-membership-teacher', roleKey: 'teacher', source: 'e2e_seed' },
+      { id: 'e2e-membership-role-teacher-secondary', membershipId: 'e2e-membership-teacher-secondary', roleKey: 'teacher', source: 'e2e_seed' },
+      { id: 'e2e-membership-role-student', membershipId: 'e2e-membership-student', roleKey: 'student', source: 'e2e_seed' },
+      { id: 'e2e-membership-role-personal-student', membershipId: 'e2e-membership-personal-student', roleKey: 'student', source: 'e2e_seed' },
+    ],
+  })
   await prisma.organizationTeacherProfile.createMany({
     data: [
       { id: 'e2e-teacher-profile-principal', membershipId: 'e2e-membership-principal', name: 'E2E Principal', title: 'Head Coach', status: 'active' },

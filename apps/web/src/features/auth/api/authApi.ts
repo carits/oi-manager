@@ -2,13 +2,27 @@ import {
   AuthContracts,
   type ProfileUpdate,
 } from '@oi-manager/contracts'
-import { accountClient, organizationClient } from '@/lib/apiClient'
+import { accountClient, ApiError, organizationClient } from '@/lib/apiClient'
 
-export function loginAccount(username: string, password: string) {
-  return accountClient.mutateContract(AuthContracts.login, '/api/auth/login', {
+export async function loginAccount(username: string, password: string) {
+  const result = await accountClient.mutateContract(AuthContracts.login, '/api/auth/login', {
     username,
     password,
   })
+  if (!result.ok && result.error.status === 401) {
+    return {
+      ok: false as const,
+      error: new ApiError({
+        kind: 'http',
+        status: 401,
+        code: result.error.code,
+        message: '用户名或密码错误',
+        requestId: result.error.requestId,
+        retryable: false,
+      }),
+    }
+  }
+  return result
 }
 
 export function loadCurrentAccount(organizationId?: string) {
