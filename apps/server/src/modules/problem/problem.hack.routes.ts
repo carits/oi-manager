@@ -11,6 +11,8 @@ import {
   saveProblemHackConfig,
 } from './application/problem-hack-route.service'
 import { ContributionApplicationError } from '../contribution/application/contribution.service'
+import { ProblemContracts } from '@oi-manager/contracts'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 
 export const problemHackRouter = Router()
 
@@ -27,8 +29,9 @@ function sendHackError(error: unknown, res: any) {
 problemHackRouter.get('/:id/hack-config', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getProblemHackConfig(req.user!, req.params.id)
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.getHackConfig, data)
   } catch (error) {
+    if (sendContractError(error, res)) return
     return sendHackError(error, res)
   }
 }))
@@ -38,10 +41,11 @@ problemHackRouter.put('/:id/hack-config', authenticate, asyncHandler(async (req,
     const result = await saveProblemHackConfig({
       user: req.user!,
       problemId: req.params.id,
-      body: req.body,
+      body: parseContractBody(ProblemContracts.saveHackConfig, req.body),
     })
-    return res.json({ success: true, data: result.config, message: result.message })
+    return sendContractData(res, ProblemContracts.saveHackConfig, result.config)
   } catch (error) {
+    if (sendContractError(error, res)) return
     return sendHackError(error, res)
   }
 }))

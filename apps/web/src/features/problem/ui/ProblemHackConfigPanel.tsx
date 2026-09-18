@@ -3,18 +3,12 @@
 import { useEffect, useState } from 'react'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
-import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemHackConfigPanel.module.css'
+import { getProblemHackConfig, saveProblemHackConfig } from '../api/problemHackConfigApi'
+import type { ProblemHackConfig } from '@oi-manager/contracts'
 
-interface HackConfig {
-  enabled: boolean
-  mode: 'acm' | 'oi'
-  standardSource: string
-  validatorSource: string
-  classifierSource: string
-  revision: number
-}
+type HackConfig = ProblemHackConfig
 
 export function ProblemHackConfigPanel({ problemId, judgeMode, problemType }: {
   problemId: string
@@ -29,8 +23,10 @@ export function ProblemHackConfigPanel({ problemId, judgeMode, problemType }: {
   useEffect(() => {
     let mounted = true
     setLoading(true)
-    apiClient.get<HackConfig>(`/api/problems/${problemId}/hack-config`).then(result => {
-      if (mounted && result.success && result.data) setConfig(result.data)
+    getProblemHackConfig(problemId).then(result => {
+      if (mounted) setConfig(result)
+    }).catch(() => {
+      if (mounted) toast.error('Hack 配置加载失败')
     }).finally(() => { if (mounted) setLoading(false) })
     return () => { mounted = false }
   }, [problemId])
@@ -45,16 +41,16 @@ export function ProblemHackConfigPanel({ problemId, judgeMode, problemType }: {
   const save = async () => {
     setSaving(true)
     try {
-      const result = await apiClient.put<HackConfig>(`/api/problems/${problemId}/hack-config`, {
+      const result = await saveProblemHackConfig(problemId, {
         enabled: config.enabled,
         standardSource: config.standardSource,
         validatorSource: config.validatorSource,
         classifierSource: config.classifierSource,
         expectedRevision: config.revision,
-      }, { timeout: 150_000 })
-      if (!result.success || !result.data) return toast.error(result.message || '保存失败')
+      })
+      if (!result.ok) return toast.error(result.error.message || '保存失败')
       setConfig(result.data)
-      toast.success(result.message || 'Hack 配置已保存')
+      toast.success(config.enabled ? 'Hack 已启用' : 'Hack 配置已保存')
     } finally {
       setSaving(false)
     }

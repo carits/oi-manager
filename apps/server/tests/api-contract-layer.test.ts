@@ -389,6 +389,12 @@ describe('shared API contract adapter', () => {
     expect(() => parseContractBody(OjFetcherContracts.downloadAttachment, {
       problemId: 'problem-1', url: 'not-a-url', filename: 'data.zip',
     })).toThrowError(ApiContractError)
+    expect(parseContractBody(ProblemContracts.saveHackConfig, {
+      enabled: false, standardSource: '', validatorSource: '', classifierSource: '', expectedRevision: 0,
+    })).toEqual({ enabled: false, standardSource: '', validatorSource: '', classifierSource: '', expectedRevision: 0 })
+    expect(() => parseContractBody(ProblemContracts.saveHackConfig, {
+      enabled: false, standardSource: '', validatorSource: '', classifierSource: '', expectedRevision: -1,
+    })).toThrowError(ApiContractError)
 
     const jobResponse = responseStub()
     sendContractData(jobResponse.response, OjFetcherContracts.listJobs, {
@@ -445,6 +451,16 @@ describe('shared API contract adapter', () => {
     }])
     expect(attachments.json).toHaveBeenCalledWith(expect.objectContaining({
       data: [expect.not.objectContaining({ storageInternalPath: expect.anything() })],
+    }))
+
+    const hackConfig = responseStub()
+    sendContractData(hackConfig.response, ProblemContracts.getHackConfig, {
+      enabled: false, mode: 'oi', standardSource: '', standardLanguage: 'cpp17',
+      validatorSource: '', validatorLanguage: 'cpp17', classifierSource: '', classifierLanguage: 'cpp17',
+      revision: 0, updatedBy: 'must-not-leak',
+    })
+    expect(hackConfig.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.not.objectContaining({ updatedBy: expect.anything() }),
     }))
   })
 

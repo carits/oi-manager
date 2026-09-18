@@ -65,6 +65,32 @@ export const ProblemAttachmentSchema = z.object({
   uploadedAt: DateTimeWireSchema,
 });
 
+export const ProblemHackConfigSchema = z.object({
+  enabled: z.boolean(),
+  mode: z.enum(["acm", "oi"]),
+  standardSource: z.string(),
+  standardLanguage: z.string().optional(),
+  validatorSource: z.string(),
+  validatorLanguage: z.string().optional(),
+  classifierSource: z.string(),
+  classifierLanguage: z.string().optional(),
+  standardProgramVersionId: z.string().nullable().optional(),
+  validatorProgramVersionId: z.string().nullable().optional(),
+  classifierProgramVersionId: z.string().nullable().optional(),
+  revision: z.number().int().nonnegative(),
+});
+
+export const ProblemHackConfigInputSchema = z.object({
+  enabled: z.boolean(),
+  standardSource: z.string(),
+  validatorSource: z.string(),
+  classifierSource: z.string(),
+  standardProgramVersionId: z.string().nullable().optional(),
+  validatorProgramVersionId: z.string().nullable().optional(),
+  classifierProgramVersionId: z.string().nullable().optional(),
+  expectedRevision: z.number().int().nonnegative(),
+});
+
 export const ProblemAdminListItemSchema = z.object({
   id: z.string(),
   problemId: z.string(),
@@ -456,6 +482,14 @@ export const ProblemContracts = {
     key: "problem.statement.delete", method: "DELETE", scope: "context",
     body: z.object({}), data: z.object({}),
   }),
+  getHackConfig: defineApiEndpoint({
+    key: "problem.hack-config.get", method: "GET", scope: "context",
+    data: ProblemHackConfigSchema,
+  }),
+  saveHackConfig: defineApiEndpoint({
+    key: "problem.hack-config.save", method: "PUT", scope: "context",
+    body: ProblemHackConfigInputSchema, data: ProblemHackConfigSchema,
+  }),
   getJudgeSettings: defineApiEndpoint({
     key: "problem.judge-settings.get",
     method: "GET",
@@ -561,6 +595,8 @@ export type ProblemCreateInput = z.infer<typeof ProblemCreateInputSchema>;
 export type ProblemEditorDetail = z.infer<typeof ProblemEditorDetailSchema>;
 export type ProblemAdminListItem = z.infer<typeof ProblemAdminListItemSchema>;
 export type ProblemAttachment = z.infer<typeof ProblemAttachmentSchema>;
+export type ProblemHackConfig = z.infer<typeof ProblemHackConfigSchema>;
+export type ProblemHackConfigInput = z.infer<typeof ProblemHackConfigInputSchema>;
 export type ProblemTestGraphWorkspace = z.infer<typeof ProblemTestGraphWorkspaceSchema>;
 export type ProblemTestGraphSubtask = z.infer<typeof ProblemTestGraphSubtaskSchema>;
 export type ProblemTestGraphSaveInput = z.infer<typeof ProblemTestGraphSaveInputSchema>;
