@@ -117,7 +117,7 @@ testdataRouter.delete('/problems/:id/testdata/:fileId', authenticate, requireMan
       action: 'testdata', metadata: { problemId: req.params.id, filename: deleted.filename },
     })
     cleanupTestdataStaging(req.testdataUploadPath)
-    res.json({ success: true, message: 'Testdata file deleted' })
+    sendContractData(res, ProblemContracts.deleteTestdata, {})
   } catch (error) {
     cleanupTestdataStaging(req.testdataUploadPath)
     if (error instanceof TestdataApplicationError) {

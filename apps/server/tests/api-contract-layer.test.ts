@@ -395,6 +395,8 @@ describe('shared API contract adapter', () => {
     expect(() => parseContractBody(ProblemContracts.saveHackConfig, {
       enabled: false, standardSource: '', validatorSource: '', classifierSource: '', expectedRevision: -1,
     })).toThrowError(ApiContractError)
+    expect(parseContractBody(ProblemContracts.deleteChecker, {})).toEqual({})
+    expect(parseContractBody(ProblemContracts.deleteTestdata, {})).toEqual({})
 
     const jobResponse = responseStub()
     sendContractData(jobResponse.response, OjFetcherContracts.listJobs, {
@@ -462,6 +464,10 @@ describe('shared API contract adapter', () => {
     expect(hackConfig.json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.not.objectContaining({ updatedBy: expect.anything() }),
     }))
+
+    const deletion = responseStub()
+    sendContractData(deletion.response, ProblemContracts.deleteTestdata, {})
+    expect(deletion.json).toHaveBeenCalledWith({ success: true, data: {} })
   })
 
   it('guards OJ account secrets, configuration and operation results', () => {

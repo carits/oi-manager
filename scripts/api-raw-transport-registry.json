@@ -28,5 +28,35 @@
     "featureSymbol": "uploadProblemTestdata",
     "serverBoundary": "apps/server/src/routes/testdata.ts",
     "serverSymbol": "testdataUpload"
+  },
+  {
+    "key": "problem.checker.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/problems/:problemId/checker",
+    "featureApi": "apps/web/src/features/problem/api/problemJudgeSettingsApi.ts",
+    "featureSymbol": "uploadProblemChecker",
+    "serverBoundary": "apps/server/src/modules/problem/problem.judge.routes.ts",
+    "serverSymbol": "problemCheckerUpload"
+  },
+  {
+    "key": "problem.testdata.export",
+    "kind": "binary",
+    "method": "GET",
+    "route": "/api/problems/:problemId/testdata/export",
+    "featureApi": "apps/web/src/features/problem/api/problemFilesApi.ts",
+    "featureSymbol": "downloadProblemTestdataExport",
+    "serverBoundary": "apps/server/src/routes/testdata.ts",
+    "serverSymbol": "getTestdataExport"
+  },
+  {
+    "key": "problem.testdata.download",
+    "kind": "binary",
+    "method": "GET",
+    "route": "/api/problems/:problemId/testdata/files/:fileId/download",
+    "featureApi": "apps/web/src/features/problem/api/problemFilesApi.ts",
+    "featureSymbol": "downloadProblemTestdata",
+    "serverBoundary": "apps/server/src/routes/testdata.ts",
+    "serverSymbol": "resolveTestdataDownload"
   }
 ]

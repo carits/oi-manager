@@ -29,6 +29,18 @@ export const listProblemCheckers = (problemId: string) =>
     `${problemPath(problemId)}/checker`,
   );
 
+export const uploadProblemChecker = (problemId: string, file: File) => {
+  const form = new FormData(); form.append("file", file);
+  return apiClient.postFile(`${problemPath(problemId)}/checker`, form, { timeout: 120_000 });
+};
+
+export const deleteProblemChecker = (problemId: string, checkerId: string) =>
+  apiClient.mutateContract(
+    ProblemContracts.deleteChecker,
+    `${problemPath(problemId)}/checker/${encodeURIComponent(checkerId)}`,
+    {},
+  );
+
 export const listProblemTestdata = (problemId: string) =>
   apiClient.queryContract(
     ProblemContracts.listTestdata,

@@ -6,7 +6,6 @@ import unifiedStyles from './JudgeSettingsTab.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import yaml from 'js-yaml'
-import apiClient from '@/lib/apiClient'
 import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
@@ -17,12 +16,20 @@ import { ProblemJudgeAssetsPanel } from './ProblemJudgeAssetsPanel'
 import { JudgeTestdataPanel } from './JudgeTestdataPanel'
 import {
   getProblemJudgeSettings,
+  deleteProblemChecker,
   listProblemCheckers,
   listProblemTestdata,
   listProblemTestSetRevisions,
   saveProblemJudgeSettings,
   transitionProblemJudgeMode,
+  uploadProblemChecker,
 } from '../api/problemJudgeSettingsApi'
+import {
+  deleteProblemTestdata,
+  downloadProblemTestdata,
+  downloadProblemTestdataExport,
+  uploadProblemTestdata,
+} from '../api/problemFilesApi'
 import {
   CHECKER_INTERFACES,
   PROBLEM_TYPES,
@@ -342,7 +349,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     if (!files.length || !problemId) return
     try {
       setCheckerUploading(true)
-      for (const file of files) { const form = new FormData(); form.append("file", file); const result = await apiClient.postFile(`/api/problems/${problemId}/checker`, form, { timeout: 120000 }); if (!result.success) throw new Error(result.message || "上传失败") }
+      for (const file of files) { const result = await uploadProblemChecker(problemId, file); if (!result.success) throw new Error(result.message || "上传失败") }
       await fetchCheckerFiles(); toast.success("Checker 文件已上传")
       const cpp = files.find(file => /\.(cpp|cc|cxx)$/i.test(file.name)); if (cpp) setCheckerFile(cpp.name)
     } catch (error) { toast.error(error instanceof Error ? error.message : "Checker 上传失败") }
@@ -350,7 +357,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   }
 
   const handleCheckerDelete = async (file: CheckerFile) => {
-    setConfirmState({ message: `确定要删除 ${file.fileName} 吗？`, action: async () => { try { const result = await apiClient.delete(`/api/problems/${problemId}/checker/${file.id}`); if (result.success) { setCheckerFiles(prev => prev.filter(item => item.id !== file.id)); if (checkerFile === file.fileName) setCheckerFile(""); toast.success("Checker 文件已删除") } else toast.error(result.message || "删除失败") } catch { toast.error("删除失败") } } })
+    setConfirmState({ message: `确定要删除 ${file.fileName} 吗？`, action: async () => { try { const result = await deleteProblemChecker(problemId, file.id); if (result.ok) { setCheckerFiles(prev => prev.filter(item => item.id !== file.id)); if (checkerFile === file.fileName) setCheckerFile(""); toast.success("Checker 文件已删除") } else toast.error(result.error.message || "删除失败") } catch { toast.error("删除失败") } } })
   }
 
   // ==================== 保存配置 ====================
@@ -441,10 +448,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   // ==================== 测试数据操作 ====================
 
   const uploadTestdataFiles = async (files: File[], replace = false) => {
-    const formData = new FormData()
-    for (const file of files) formData.append('files', file)
-    if (replace) formData.append('replace', 'true')
-    return apiClient.postFile(`/api/problems/${problemId}/testdata`, formData, { timeout: 120000 })
+    return uploadProblemTestdata(problemId, files, replace)
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -514,9 +518,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       action: async () => {
         try {
           setDeletingFile(fileId)
-          const result = await apiClient.delete(`/api/problems/${problemId}/testdata/${fileId}`)
-          if (result.success) { toast.success('文件已删除'); fetchTestdata() }
-          else toast.error(result.message || '删除失败')
+          const result = await deleteProblemTestdata(problemId, fileId)
+          if (result.ok) { toast.success('文件已删除'); fetchTestdata() }
+          else toast.error(result.error.message || '删除失败')
         } catch { toast.error('删除失败') }
         finally { setDeletingFile(null) }
       }
@@ -530,7 +534,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     if (!problemId) return
     try {
       setDownloadingAll(true)
-      const result = await apiClient.download(`/api/problems/${problemId}/testdata/export`, { timeout: 120000 })
+      const result = await downloadProblemTestdataExport(problemId)
       const filename = filenameFromContentDisposition(result.contentDisposition, 'testdata.zip')
       saveBlobDownload(result.blob, filename)
     } catch { toast.error('\u4e0b\u8f7d\u5931\u8d25') }
@@ -541,7 +545,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     if (!problemId) return
     try {
       setDownloadingFile(file.id)
-      const result = await apiClient.download(`/api/problems/${problemId}/testdata/files/${file.id}/download`, { timeout: 60000 })
+      const result = await downloadProblemTestdata(problemId, file.id)
       const fallback = file.filename.split('/').pop() || file.filename
       const filename = filenameFromContentDisposition(result.contentDisposition, fallback)
       saveBlobDownload(result.blob, filename)

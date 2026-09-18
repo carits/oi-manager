@@ -30,7 +30,21 @@ export const uploadProblemAttachment = (problemId: string, file: File) => {
   return apiClient.postFile(`${problemPath(problemId)}/attachments`, form)
 }
 
-export const uploadProblemTestdata = (problemId: string, files: File[]) => {
+export const uploadProblemTestdata = (problemId: string, files: File[], replace = false) => {
   const form = new FormData(); for (const file of files) form.append('files', file)
-  return apiClient.postFile(`/api/problems/${encoded(problemId)}/testdata`, form)
+  if (replace) form.append('replace', 'true')
+  return apiClient.postFile(`/api/problems/${encoded(problemId)}/testdata`, form, { timeout: 120_000 })
 }
+
+export const deleteProblemTestdata = (problemId: string, fileId: string) =>
+  apiClient.mutateContract(
+    ProblemContracts.deleteTestdata,
+    `${problemPath(problemId)}/testdata/${encoded(fileId)}`,
+    {},
+  )
+
+export const downloadProblemTestdata = (problemId: string, fileId: string, timeout = 60_000) =>
+  apiClient.download(`${problemPath(problemId)}/testdata/files/${encoded(fileId)}/download`, { timeout })
+
+export const downloadProblemTestdataExport = (problemId: string) =>
+  apiClient.download(`${problemPath(problemId)}/testdata/export`, { timeout: 120_000 })

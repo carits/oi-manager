@@ -509,11 +509,19 @@ export const ProblemContracts = {
     scope: "context",
     data: z.array(ProblemCheckerFileSchema),
   }),
+  deleteChecker: defineApiEndpoint({
+    key: "problem.checker.delete", method: "DELETE", scope: "context",
+    body: z.object({}), data: z.object({}),
+  }),
   listTestdata: defineApiEndpoint({
     key: "problem.testdata.list",
     method: "GET",
     scope: "context",
     data: ProblemTestdataSchema,
+  }),
+  deleteTestdata: defineApiEndpoint({
+    key: "problem.testdata.delete", method: "DELETE", scope: "context",
+    body: z.object({}), data: z.object({}),
   }),
   listTestSetRevisions: defineApiEndpoint({
     key: "problem.test-set-revisions.list",

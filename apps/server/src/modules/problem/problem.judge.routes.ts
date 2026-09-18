@@ -66,7 +66,7 @@ problemJudgeRouter.post('/:id/checker', authenticate, problemCheckerUpload.singl
 problemJudgeRouter.delete('/:id/checker/:checkerId', authenticate, asyncHandler(async (req, res) => {
   try {
     await deleteProblemChecker(req.user!, req.params.id, req.params.checkerId)
-    return res.json({ success: true })
+    return sendContractData(res, ProblemContracts.deleteChecker, {})
   } catch (error) {
     return sendJudgeError(error, res)
   }

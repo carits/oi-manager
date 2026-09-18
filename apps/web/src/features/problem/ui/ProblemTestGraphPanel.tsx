@@ -12,7 +12,6 @@ import type {
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog, DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { Input, SearchField, Select } from '@/components/ui/FormControls'
-import apiClient from '@/lib/apiClient'
 import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemTestGraphPanel.unified.module.css'
@@ -26,6 +25,7 @@ import {
   saveProblemTestGraph,
   setProblemTestGraphTestcaseProtection,
 } from '../api/problemTestGraphApi'
+import { deleteProblemTestdata, downloadProblemTestdata, uploadProblemTestdata } from '../api/problemFilesApi'
 
 const MAX_SUBTASKS = 15
 const MAX_CASES_PER_SUBTASK = 10
@@ -344,10 +344,7 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   }
 
   const uploadFiles = async (files: File[], replace = false) => {
-    const form = new FormData()
-    files.forEach(file => form.append('files', file))
-    if (replace) form.append('replace', 'true')
-    return apiClient.postFile(`/api/problems/${problemId}/testdata`, form, { timeout: 120000 })
+    return uploadProblemTestdata(problemId, files, replace)
   }
 
   const handleUpload = async (files: File[]) => {
@@ -375,8 +372,8 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
 
   const removeFile = async () => {
     if (!deleteFile) return
-    const result = await apiClient.delete(`/api/problems/${problemId}/testdata/${deleteFile.id}`)
-    if (!result.success) return toast.error(result.message || '删除失败')
+    const result = await deleteProblemTestdata(problemId, deleteFile.id)
+    if (!result.ok) return toast.error(result.error.message || '删除失败')
     toast.success('测试数据文件已删除')
     setDeleteFile(null)
     await refreshPool()
@@ -384,7 +381,7 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
 
   const downloadFile = async (file: TestdataFile) => {
     try {
-      const result = await apiClient.download(`/api/problems/${problemId}/testdata/files/${file.id}/download`)
+      const result = await downloadProblemTestdata(problemId, file.id)
       saveBlobDownload(result.blob, filenameFromContentDisposition(result.contentDisposition, file.filename))
     } catch { toast.error('下载失败') }
   }
