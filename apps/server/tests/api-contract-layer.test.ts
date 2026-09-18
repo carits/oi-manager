@@ -383,6 +383,12 @@ describe('shared API contract adapter', () => {
     expect(parseContractBody(OjFetcherContracts.createBatch, {
       platform: 'luogu', problemIds: ['P1000', 'P1001'],
     })).toEqual({ platform: 'luogu', problemIds: ['P1000', 'P1001'] })
+    expect(parseContractBody(OjFetcherContracts.downloadAttachment, {
+      problemId: 'problem-1', url: 'https://www.luogu.com.cn/fe/api/problem/downloadAttachment/x', filename: 'data.zip',
+    })).toEqual({ problemId: 'problem-1', url: 'https://www.luogu.com.cn/fe/api/problem/downloadAttachment/x', filename: 'data.zip' })
+    expect(() => parseContractBody(OjFetcherContracts.downloadAttachment, {
+      problemId: 'problem-1', url: 'not-a-url', filename: 'data.zip',
+    })).toThrowError(ApiContractError)
 
     const jobResponse = responseStub()
     sendContractData(jobResponse.response, OjFetcherContracts.listJobs, {
@@ -410,6 +416,35 @@ describe('shared API contract adapter', () => {
     })
     expect(problemResponse.json).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ data: [expect.objectContaining({ problemId: '1041' })] }),
+    }))
+
+    const fetched = responseStub()
+    sendContractData(fetched.response, OjFetcherContracts.fetchProblem, {
+      title: 'A+B Problem', description: '计算两个整数之和。', timeLimit: 1000, memoryLimit: 128,
+      source: { platform: 'luogu', problemId: 'P1001', url: 'https://www.luogu.com.cn/problem/P1001' },
+      attachments: [{ filename: 'data.zip', downloadLink: 'https://www.luogu.com.cn/file/data.zip' }],
+    })
+    expect(fetched.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ title: 'A+B Problem' }),
+    }))
+
+    const downloaded = responseStub()
+    sendContractData(downloaded.response, OjFetcherContracts.downloadAttachment, {
+      id: 'file-1', fileName: 'data.zip', fileSize: 1024, fileUrl: '/api/files/file-1/download',
+      storageInternalPath: 'must-not-leak',
+    })
+    expect(downloaded.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.not.objectContaining({ storageInternalPath: expect.anything() }),
+    }))
+
+    const attachments = responseStub()
+    sendContractData(attachments.response, ProblemContracts.listAttachments, [{
+      id: 'attachment-1', problemId: 'problem-1', fileName: 'data.zip', fileSize: 1024,
+      fileUrl: '/api/files/file-1/download', description: null, uploadedAt: new Date('2026-09-17T00:00:00Z'),
+      storageInternalPath: 'must-not-leak',
+    }])
+    expect(attachments.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.not.objectContaining({ storageInternalPath: expect.anything() })],
     }))
   })
 

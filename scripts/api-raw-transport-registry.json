@@ -1,0 +1,32 @@
+[
+  {
+    "key": "problem.statement-pdf.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/problems/:problemId/statements/pdf",
+    "featureApi": "apps/web/src/features/problem/api/problemFilesApi.ts",
+    "featureSymbol": "uploadProblemStatementPdf",
+    "serverBoundary": "apps/server/src/modules/problem/problem.files.routes.ts",
+    "serverSymbol": "problemPdfUpload"
+  },
+  {
+    "key": "problem.attachment.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/problems/:problemId/attachments",
+    "featureApi": "apps/web/src/features/problem/api/problemFilesApi.ts",
+    "featureSymbol": "uploadProblemAttachment",
+    "serverBoundary": "apps/server/src/modules/problem/problem.files.routes.ts",
+    "serverSymbol": "problemAttachmentUpload"
+  },
+  {
+    "key": "problem.testdata.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/problems/:problemId/testdata",
+    "featureApi": "apps/web/src/features/problem/api/problemFilesApi.ts",
+    "featureSymbol": "uploadProblemTestdata",
+    "serverBoundary": "apps/server/src/routes/testdata.ts",
+    "serverSymbol": "testdataUpload"
+  }
+]

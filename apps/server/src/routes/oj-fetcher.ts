@@ -91,14 +91,12 @@ ojFetcherRouter.delete('/jobs/:id', ...adminOnly, adminEndpoint(async (req, res)
 }))
 
 ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, asyncHandler(async (req: Request, res: Response) => {
-  const { problemId, url, filename } = req.body || {}
-  if (![problemId, url, filename].every(value => typeof value === 'string' && value.trim())) {
-    return res.status(400).json({ success: false, message: '缺少必要参数' })
-  }
   try {
-    const data = await downloadManualProblemAsset((req as any).user, { problemId, url, filename })
-    res.json({ success: true, data })
+    const body = parseContractBody(OjFetcherContracts.downloadAttachment, req.body)
+    const data = await downloadManualProblemAsset((req as any).user, body)
+    sendContractData(res, OjFetcherContracts.downloadAttachment, data)
   } catch (error) {
+    if (sendContractError(error, res)) return
     if (error instanceof OjRemoteAssetError || (error && typeof error === 'object' && 'statusCode' in error)) {
       const status = Number((error as any).statusCode) || 500
       return res.status(status).json({ success: false, message: (error as Error).message })
@@ -125,7 +123,7 @@ ojFetcherRouter.get('/:platform/:problemId', ...authenticatedUsers, asyncHandler
   }
   try {
     const problem = await fetchProblemWithMetrics(platform as any, problemId)
-    res.json({ success: true, data: problem })
+    sendContractData(res, OjFetcherContracts.fetchProblem, problem)
   } catch (error) {
     if (error instanceof OjFetchError) {
       return res.status(OJ_ERROR_HTTP_STATUS[error.code] || 500).json({

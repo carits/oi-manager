@@ -110,6 +110,7 @@ function calculate() {
     transport: {
       legacy: { files: transport.remainingLegacyTransportFiles, calls: transport.remainingLegacyTransportCalls },
       feature: { files: transport.remainingLegacyFeatureTransportFiles, calls: transport.remainingLegacyFeatureTransportCalls },
+      raw: { registered: transport.registeredRawTransports },
     },
     contestCompatibility: contestCompatibility(),
     remoteArchive: remoteArchiveStatus(),
@@ -146,6 +147,7 @@ function summary(previous, current) {
     delta('boundaries', previous?.contractedBoundaries, current.contractedBoundaries),
     delta('legacy transport', previous?.transport?.legacy?.calls, current.transport.legacy.calls),
     delta('feature transport', previous?.transport?.feature?.calls, current.transport.feature.calls),
+    delta('registered raw transport', previous?.transport?.raw?.registered, current.transport.raw.registered),
     delta('contest compatibility', previous?.contestCompatibility?.remaining, current.contestCompatibility.remaining),
     delta('remote archive code', (previous?.remoteArchive?.implementationFiles ?? 0) + (previous?.remoteArchive?.activeReferences ?? 0), current.remoteArchive.implementationFiles + current.remoteArchive.activeReferences),
     delta('judge compatibility columns', previous?.judgeCompatibility?.remainingColumns, current.judgeCompatibility.remainingColumns),

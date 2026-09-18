@@ -68,7 +68,32 @@ export const OjFetchBatchResultSchema = z.object({
 
 const EmptyObjectSchema = z.object({})
 
+export const OjFetchedProblemSchema = z.object({
+  title: z.string(), description: z.string(), timeLimit: z.number().optional(), memoryLimit: z.number().optional(),
+  difficulty: z.string().optional(),
+  allowedLanguages: z.array(z.object({ id: z.string(), name: z.string() })).nullable().optional(),
+  source: z.object({ platform: z.string(), problemId: z.string(), url: z.string() }),
+  attachments: z.array(z.object({ filename: z.string(), downloadLink: z.string() })).optional(),
+  statements: z.array(z.object({
+    type: z.enum(['statement', 'solution']), format: z.enum(['markdown', 'pdf']),
+    language: z.enum(['zh', 'en']).nullable().optional(), content: z.string().optional(),
+    fileUrl: z.string().optional(), isVisible: z.boolean(),
+  })).optional(),
+})
+
+const DownloadedProblemAssetSchema = z.object({
+  id: z.string(), fileName: z.string(), fileSize: z.number().int().nonnegative(), fileUrl: z.string(),
+})
+
 export const OjFetcherContracts = {
+  fetchProblem: defineApiEndpoint({
+    key: 'oj-fetcher.problem.fetch', method: 'GET', scope: 'account', data: OjFetchedProblemSchema,
+  }),
+  downloadAttachment: defineApiEndpoint({
+    key: 'oj-fetcher.attachment.download', method: 'POST', scope: 'account',
+    body: z.object({ problemId: z.string().min(1), url: z.string().url(), filename: z.string().trim().min(1).max(255) }),
+    data: DownloadedProblemAssetSchema,
+  }),
   listJobs: defineApiEndpoint({
     key: 'oj-fetcher.jobs.list',
     method: 'GET',

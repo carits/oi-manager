@@ -2,15 +2,18 @@
   "schemaVersion": 2,
   "contracts": 26,
   "featureSlices": 27,
-  "contractedBoundaries": 121,
+  "contractedBoundaries": 124,
   "transport": {
     "legacy": {
       "files": 0,
       "calls": 0
     },
     "feature": {
-      "files": 43,
-      "calls": 242
+      "files": 42,
+      "calls": 234
+    },
+    "raw": {
+      "registered": 3
     }
   },
   "contestCompatibility": {
@@ -147,7 +150,7 @@
       "layer": "feature"
     },
     {
-      "file": "apps/web/src/features/problem/ui/ProblemForm.tsx",
+      "file": "apps/web/src/features/problem/ui/ProblemHackPanel.tsx",
       "calls": 8,
       "layer": "feature"
     }
@@ -162,5 +165,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-17T11:38:52.477Z"
+  "updatedAt": "2026-09-18T00:04:02.641Z"
 }

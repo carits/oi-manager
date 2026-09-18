@@ -9,14 +9,17 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { JudgeSettingsTab, JudgeSettingsTabHandle } from './JudgeSettingsTab'
-import apiClient from '@/lib/apiClient'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 import { ProblemContentVersions, type ProblemContentVersion } from './ProblemContentVersions'
 import { ProblemPublishingSettings, type ProblemOjBinding } from './ProblemPublishingSettings'
 import { ProblemAttachments } from './ProblemAttachments'
 import { createProblem, getProblemEditorDetail, updateProblem } from '../api/problemEditorApi'
-import type { ProblemCreateInput } from '@oi-manager/contracts'
+import type { ProblemAttachment, ProblemCreateInput } from '@oi-manager/contracts'
+import {
+  deleteProblemAttachment, deleteProblemStatement, downloadOjProblemAttachment, fetchOjProblem,
+  listProblemAttachments, uploadProblemAttachment, uploadProblemStatementPdf, uploadProblemTestdata,
+} from '../api/problemFilesApi'
 
 type OjBinding = ProblemOjBinding
 
@@ -24,23 +27,6 @@ interface OjAttachment {
   filename: string
   downloadLink: string
 }
-
-interface ProblemAttachment {
-  id: string
-  fileName: string
-  fileSize: number
-}
-
-interface FetchedOjProblem {
-  title: string
-  timeLimit?: number | null
-  memoryLimit?: number | null
-  difficulty?: string | null
-  description?: string | null
-  attachments?: OjAttachment[]
-}
-
-type UploadedStatement = { id: string; fileUrl: string }
 
 const requestErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error) return error.message || fallback
@@ -247,10 +233,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     if (!problemId) return
     try {
       setAttachmentsLoading(true)
-      const result = await apiClient.get<ProblemAttachment[]>(`/api/problems/${problemId}/attachments`)
-      if (result.success && result.data) {
-        setAttachments(result.data)
-      }
+      setAttachments(await listProblemAttachments(problemId))
     } catch (error) {
       console.error('Failed to fetch attachments:', error)
     } finally {
@@ -318,7 +301,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     if (stmt.id && mode === 'edit' && problemId) {
       // 如果是已保存的版本，调用 API 删除
       try {
-        await apiClient.delete(`/api/problems/${problemId}/statements/${stmt.id}`)
+        await deleteProblemStatement(problemId, stmt.id)
       } catch (error) {
         console.error('Failed to delete statement:', error)
       }
@@ -331,7 +314,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     const sol = solutions[index]
     if (sol.id && mode === 'edit' && problemId) {
       try {
-        await apiClient.delete(`/api/problems/${problemId}/statements/${sol.id}`)
+        await deleteProblemStatement(problemId, sol.id)
       } catch (error) {
         console.error('Failed to delete solution:', error)
       }
@@ -344,11 +327,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     if (!problemId) return
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('type', type)
-
-      const result = await apiClient.post<UploadedStatement>(`/api/problems/${problemId}/statements/pdf`, formData)
+      const result = await uploadProblemStatementPdf(problemId, type, file)
       if (result.success && result.data) {
         if (type === 'statement') {
           updateStatement(index, { fileUrl: result.data.fileUrl, id: result.data.id })
@@ -388,41 +367,38 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
     try {
       setFetchingFromOj(true)
-      const result = await apiClient.get<FetchedOjProblem>(`/api/oj-fetcher/${binding.platform}/${binding.problemId.trim()}`)
+      const problem = await fetchOjProblem(binding.platform, binding.problemId.trim())
 
-      if (result.success && result.data) {
-        const problem = result.data
-        // 自动填充表单
-        setForm(prev => ({
-          ...prev,
-          title: problem.title || prev.title,
-          timeLimit: problem.timeLimit ? String(problem.timeLimit) : prev.timeLimit,
-          memoryLimit: problem.memoryLimit ? String(problem.memoryLimit) : prev.memoryLimit,
-          difficulty: problem.difficulty || prev.difficulty
-        }))
+      // 自动填充表单
+      setForm(prev => ({
+        ...prev,
+        title: problem.title || prev.title,
+        timeLimit: problem.timeLimit ? String(problem.timeLimit) : prev.timeLimit,
+        memoryLimit: problem.memoryLimit ? String(problem.memoryLimit) : prev.memoryLimit,
+        difficulty: problem.difficulty || prev.difficulty
+      }))
 
-        // 如果没有题面，自动添加中文 Markdown 版本
-        if (problem.description && !hasStatement('markdown', 'zh')) {
-          addStatement('markdown', 'zh')
-          setTimeout(() => {
-            setStatements(prev => {
-              const updated = [...prev]
-              const idx = updated.findIndex(s => s.format === 'markdown' && s.language === 'zh')
-              if (idx !== -1) {
-                updated[idx] = { ...updated[idx], content: problem.description ?? null }
-              }
-              return updated
-            })
-          }, 100)
-        }
+      // 如果没有题面，自动添加中文 Markdown 版本
+      if (problem.description && !hasStatement('markdown', 'zh')) {
+        addStatement('markdown', 'zh')
+        setTimeout(() => {
+          setStatements(prev => {
+            const updated = [...prev]
+            const idx = updated.findIndex(s => s.format === 'markdown' && s.language === 'zh')
+            if (idx !== -1) {
+              updated[idx] = { ...updated[idx], content: problem.description ?? null }
+            }
+            return updated
+          })
+        }, 100)
+      }
 
-        // 处理附件
-        if (problem.attachments && problem.attachments.length > 0) {
-          setRemoteAttachments(problem.attachments)
-          toast.success(`已拉取题目：${problem.title}\n发现 ${problem.attachments.length} 个附件，请在附件标签页下载`)
-        } else {
-          toast.success(`已拉取题目：${problem.title}`)
-        }
+      // 处理附件
+      if (problem.attachments && problem.attachments.length > 0) {
+        setRemoteAttachments(problem.attachments)
+        toast.success(`已拉取题目：${problem.title}\n发现 ${problem.attachments.length} 个附件，请在附件标签页下载`)
+      } else {
+        toast.success(`已拉取题目：${problem.title}`)
       }
     } catch (error: unknown) {
       console.error('Failed to fetch from OJ:', error)
@@ -441,18 +417,18 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
     try {
       setDownloadingAttachment(attachment.filename)
-      const result = await apiClient.post('/api/oj-fetcher/download-attachment', {
+      const result = await downloadOjProblemAttachment({
         problemId,
         url: attachment.downloadLink,
         filename: attachment.filename,
       })
 
-      if (result.success) {
+      if (result.ok) {
         setRemoteAttachments(prev => prev.filter(a => a.filename !== attachment.filename))
         fetchAttachments()
         toast.success(`附件 "${attachment.filename}" 下载成功`)
       } else {
-        toast.error(result.message || '下载失败')
+        toast.error(result.error.message || '下载失败')
       }
     } catch (error: unknown) {
       console.error('Failed to download attachment:', error)
@@ -469,11 +445,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
     try {
       setUploadingAttachment(true)
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('description', '')
-
-      const result = await apiClient.post(`/api/problems/${problemId}/attachments`, formData)
+      const result = await uploadProblemAttachment(problemId, file)
 
       if (result.success) {
         fetchAttachments()
@@ -501,10 +473,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     setDeleteAttachmentConfirm({ isOpen: false, attachmentId: null })
 
     try {
-      const result = await apiClient.delete(`/api/problems/${problemId}/attachments/${attachmentId}`)
-      if (result.success) {
-        fetchAttachments()
-      }
+      await deleteProblemAttachment(problemId!, attachmentId)
+      fetchAttachments()
     } catch (error) {
       console.error('Failed to delete attachment:', error)
       toast.error('删除失败')
@@ -539,9 +509,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           const stagedFiles = judgeSettingsRef.current?.getStagedFiles?.()
           if (stagedFiles && stagedFiles.length > 0) {
             try {
-              const formData = new FormData()
-              for (const f of stagedFiles) formData.append('files', f)
-              await apiClient.postFile(`/api/problems/${createdId}/testdata`, formData)
+              await uploadProblemTestdata(createdId!, stagedFiles)
             } catch (e) {
               console.error('Failed to upload staged testdata:', e)
               toast.warning('测试数据上传失败，请到编辑页面重新上传')

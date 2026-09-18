@@ -6,6 +6,16 @@ const read = relative => fs.readFileSync(path.join(root, relative), 'utf8')
 const exists = relative => fs.existsSync(path.join(root, relative))
 const failures = []
 
+const rawTransportRegistryFile = 'scripts/api-raw-transport-registry.json'
+const rawTransportRegistry = JSON.parse(read(rawTransportRegistryFile))
+for (const entry of rawTransportRegistry) {
+  if (!['multipart', 'sse', 'binary'].includes(entry.kind)) failures.push(`invalid raw transport kind: ${entry.key}`)
+  if (!exists(entry.featureApi)) failures.push(`raw transport feature API is missing: ${entry.featureApi}`)
+  if (!exists(entry.serverBoundary)) failures.push(`raw transport server boundary is missing: ${entry.serverBoundary}`)
+  if (exists(entry.featureApi) && !read(entry.featureApi).includes(entry.featureSymbol)) failures.push(`raw transport feature symbol is missing: ${entry.key}`)
+  if (exists(entry.serverBoundary) && !read(entry.serverBoundary).includes(entry.serverSymbol)) failures.push(`raw transport server symbol is missing: ${entry.key}`)
+}
+
 // Temporary migration ledger for legacy page/component transport calls. New
 // direct transport is forbidden and every completed feature slice must reduce
 // or remove its allowance. The target state is an empty object.
@@ -37,7 +47,6 @@ const legacyFeatureTransportAllowances = {
   'apps/web/src/features/problem/ui/NewProblemListPage.tsx': 1,
   'apps/web/src/features/problem/ui/JudgeProgramWizard.tsx': 11,
   'apps/web/src/features/problem/ui/ProblemHackConfigPanel.tsx': 2,
-  'apps/web/src/features/problem/ui/ProblemForm.tsx': 9,
   'apps/web/src/features/problem/ui/ProblemDetail.tsx': 9,
   'apps/web/src/features/problem/ui/ProblemHackPanel.tsx': 8,
   'apps/web/src/features/problem/ui/ProblemNote.tsx': 3,
@@ -175,6 +184,7 @@ const contractedBoundaries = [
   ['apps/server/src/modules/problem/problem.judge.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.crud.routes.ts', 'ProblemContracts'],
   ['apps/server/src/routes/oj-fetcher.ts', 'OjFetcherContracts'],
+  ['apps/server/src/modules/problem/problem.files.routes.ts', 'ProblemContracts'],
   ['apps/server/src/routes/oj-accounts.ts', 'OjAccountContracts'],
   ['apps/server/src/modules/problem/problem.testset-revision.routes.ts', 'ProblemContracts'],
   ['apps/server/src/modules/problem/problem.test-graph.routes.ts', 'ProblemContracts'],
@@ -214,6 +224,8 @@ const contractedBoundaries = [
   ['apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx', 'saveTrainingDesign'],
   ['apps/web/src/features/problem/api/problemJudgeSettingsApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/problemEditorApi.ts', 'ProblemContracts'],
+  ['apps/web/src/features/problem/api/problemFilesApi.ts', 'ProblemContracts'],
+  ['apps/web/src/features/problem/api/problemFilesApi.ts', 'OjFetcherContracts'],
   ['apps/web/src/features/problem/api/platformProblemAdminApi.ts', 'OjFetcherContracts'],
   ['apps/web/src/features/problem/api/platformProblemAdminApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/problemTestGraphApi.ts', 'ProblemContracts'],
@@ -384,6 +396,7 @@ console.log(JSON.stringify({
   contractFiles: contractFiles.length,
   featureSlices: slices.length,
   contractedBoundaries: contractedBoundaries.length,
+  registeredRawTransports: rawTransportRegistry.length,
   remainingLegacyTransportFiles: Object.keys(legacyTransportAllowances).filter(exists).length,
   remainingLegacyTransportCalls,
   remainingLegacyFeatureTransportFiles: Object.keys(legacyFeatureTransportAllowances).filter(exists).length,

@@ -19,6 +19,8 @@ import {
   uploadProblemStatementPdf,
 } from './application/problem-file.service'
 import { problemAttachmentUpload, problemPdfUpload } from './application/problem-file-upload'
+import { ProblemContracts } from '@oi-manager/contracts'
+import { sendContractData, sendContractError } from '../../lib/api-contract'
 
 export const problemFilesRouter = Router()
 
@@ -27,6 +29,7 @@ function problemFileEndpoint(handler: (req: AuthRequest, res: Response) => Promi
     try {
       await handler(req, res)
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof ProblemFileApplicationError) {
         return res.status(error.statusCode).json({ success: false, message: error.message })
       }
@@ -47,7 +50,7 @@ problemFilesRouter.post('/:id/solution-pdf', authenticate, problemPdfUpload.sing
 
 // ==================== 获取题目附件列表 ====================
 problemFilesRouter.get('/:id/attachments', authenticate, problemFileEndpoint(async (req, res) => {
-  res.json({ success: true, data: await listProblemAttachments(req.user!, req.params.id) })
+  sendContractData(res, ProblemContracts.listAttachments, await listProblemAttachments(req.user!, req.params.id))
 }))
 
 // ==================== 上传附件 ====================
@@ -61,7 +64,7 @@ problemFilesRouter.post('/:id/attachments', authenticate, problemAttachmentUploa
 // ==================== 删除附件 ====================
 problemFilesRouter.delete('/:id/attachments/:attachmentId', authenticate, problemFileEndpoint(async (req, res) => {
   await deleteProblemAttachment(req.user!, req.params.id, req.params.attachmentId)
-  res.json({ success: true, message: '删除成功' })
+  sendContractData(res, ProblemContracts.deleteAttachment, {})
 }))
 
 // ==================== 上传题面/题解 PDF（新统一接口） ====================
@@ -85,5 +88,5 @@ problemFilesRouter.put('/:id/statements/:statementId/visibility', authenticate, 
 // ==================== 删除题面/题解版本 ====================
 problemFilesRouter.delete('/:id/statements/:statementId', authenticate, problemFileEndpoint(async (req, res) => {
   await deleteProblemStatement(req.user!, req.params.id, req.params.statementId)
-  res.json({ success: true, message: '删除成功' })
+  sendContractData(res, ProblemContracts.deleteStatement, {})
 }))

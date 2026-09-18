@@ -55,6 +55,16 @@ export const ProblemEditorDetailSchema = z.object({
 
 export const ProblemMutationResultSchema = z.object({ id: z.string() }).passthrough();
 
+export const ProblemAttachmentSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  fileName: z.string(),
+  fileSize: z.number().int().nonnegative(),
+  fileUrl: z.string(),
+  description: z.string().nullable(),
+  uploadedAt: DateTimeWireSchema,
+});
+
 export const ProblemAdminListItemSchema = z.object({
   id: z.string(),
   problemId: z.string(),
@@ -434,6 +444,18 @@ export const ProblemContracts = {
     body: z.object({}),
     data: z.object({}),
   }),
+  listAttachments: defineApiEndpoint({
+    key: "problem.attachments.list", method: "GET", scope: "context",
+    data: z.array(ProblemAttachmentSchema),
+  }),
+  deleteAttachment: defineApiEndpoint({
+    key: "problem.attachment.delete", method: "DELETE", scope: "context",
+    body: z.object({}), data: z.object({}),
+  }),
+  deleteStatement: defineApiEndpoint({
+    key: "problem.statement.delete", method: "DELETE", scope: "context",
+    body: z.object({}), data: z.object({}),
+  }),
   getJudgeSettings: defineApiEndpoint({
     key: "problem.judge-settings.get",
     method: "GET",
@@ -538,6 +560,7 @@ export type ProblemEditorMutation = z.infer<typeof ProblemEditorMutationSchema>;
 export type ProblemCreateInput = z.infer<typeof ProblemCreateInputSchema>;
 export type ProblemEditorDetail = z.infer<typeof ProblemEditorDetailSchema>;
 export type ProblemAdminListItem = z.infer<typeof ProblemAdminListItemSchema>;
+export type ProblemAttachment = z.infer<typeof ProblemAttachmentSchema>;
 export type ProblemTestGraphWorkspace = z.infer<typeof ProblemTestGraphWorkspaceSchema>;
 export type ProblemTestGraphSubtask = z.infer<typeof ProblemTestGraphSubtaskSchema>;
 export type ProblemTestGraphSaveInput = z.infer<typeof ProblemTestGraphSaveInputSchema>;
