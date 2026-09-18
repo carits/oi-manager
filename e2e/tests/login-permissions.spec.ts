@@ -41,7 +41,9 @@ test.describe('authenticated permission matrix @smoke', () => {
     const context = await browser.newContext({ storageState: accounts.campusStudent.storageState })
     const page = await context.newPage()
     await page.goto(`${organizationBase}/management`)
-    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/overview$`))
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/management$`))
+    await expect(page.getByRole('heading', { name: '无法访问该页面' })).toBeVisible()
+    await expect(page.getByText(/仅教师或学校负责人可以使用/)).toBeVisible()
     await page.goto('/admin/schools')
     await expect(page).toHaveURL(/\/identity$/)
     await context.close()
@@ -110,13 +112,13 @@ test.describe('authenticated permission matrix @smoke', () => {
     await context.close()
   })
 
-  test('teacher without contest management permission returns from statement selection', async ({ browser }) => {
+  test('teacher with contest management capability returns from statement selection', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
     const page = await context.newPage()
     await page.goto(`${organizationBase}/contests/${ids.contest}/statements`)
     await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/contests\/${ids.contest}$`))
     await expect(page.getByRole('heading', { name: 'E2E Finished Contest' })).toBeVisible()
-    await expect(page.getByText('无权管理活动题面')).toHaveCount(1)
+    await expect(page.getByText('无权管理活动题面')).toHaveCount(0)
     await context.close()
   })
 
