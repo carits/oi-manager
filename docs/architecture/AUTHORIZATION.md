@@ -67,6 +67,13 @@ Bearer 仅供脚本、测试与旧客户端兼容。缺少、无效、过期或�
 `organizationId` 是 `Organization.id`，用于请求头 `X-OI-Organization-ID` 和成员关系查询；
 `schoolId` 是 `School.id`，仅在组织具有关联学校时返回。二者不能互换。
 
+Web 的浏览器请求与 Next.js SSR 必须遵守相同的显式上下文规则。访问
+`/org/:organizationId/*` 时，根布局和组织 `RoleLayout` 都从可信路由参数解析 Organization ID，
+并在服务端请求 `/api/auth/me` 时携带 `X-OI-Organization-ID`。组织页面只使用响应中的
+`organizationRole` 校验页面岗位；个人和平台页面使用 `accountRole`。不得因为 SSR 缺少组织上下文而把
+全局 `user` 加入组织角色白名单，也不得把组织岗位重新写入 Cookie。组织不存在、被隔离或 Membership
+无效时返回身份选择页，不按匿名会话跳到登录页；浏览器 hydration 后的上下文刷新只作为导航兜底。
+
 组织加入申请和邀请不会改变账号全局角色。普通账号始终以 `user` 作为平台身份，进入学校 URL 后才从有效 Membership 解析学生、教师或负责人身份。完整状态机、审批边界和通知上下文见 [组织申请、邀请与成员关系](ORGANIZATION_JOIN.md)。
 
 ### 提交组织归属

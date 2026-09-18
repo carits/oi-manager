@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { Providers } from '@/components/Providers'
 import { ClientTelemetry } from '@/components/telemetry/ClientTelemetry'
 import { getServerSession } from '@/lib/serverSession'
+import { headers } from 'next/headers'
+import { organizationIdFromRequestPath } from '@/lib/serverRequestContext'
 
 export const metadata: Metadata = {
   title: 'Carits',
@@ -14,7 +16,10 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession()
+  const requestHeaders = await headers()
+  const requestedPath = requestHeaders.get('x-oi-request-path') || '/'
+  const organizationId = organizationIdFromRequestPath(requestedPath)
+  const session = await getServerSession(organizationId)
   const initialUser = session.state === 'authenticated' ? session.user : null
 
   return (
