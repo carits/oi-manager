@@ -12,7 +12,8 @@ source_of_truth: Git history
 - OJ 下载附件和题目附件响应使用字段白名单，内部存储路径会在 Server Contract 边界被剥离。
 - Hack 配置读取和保存统一进入 Problem Feature API；服务端校验乐观锁 revision、源码请求形状及成功响应，浏览器不再直接拼接端点或接收更新人等内部字段。Feature UI/Model 进一步降至 41 文件/232 调用，契约边界增至 126。
 - Judge 设置和 Test Graph 不再直接上传、下载或删除 Checker/Testdata；两个 UI 文件退出传输层，Checker/Testdata 删除进入 Runtime Contract，上传、单文件下载和导出 ZIP 登记为 Raw Transport。Feature UI/Model 降至 39 文件/229 调用，Raw Transport 登记增至 6。
-- 三轮生产同构 Problem/OJ 测试均为 4 文件 42/42，Contracts/Server/Web 构建与文档/架构门禁通过；`40287af`、`998d017`、`f3f053f` 已部署，API 最终切换至 3302，Web BUILD_ID `erILqISO1uiQmWAUOmQdv` 完成三轮 canary 与提升前后消息闭环（序号 274–285）。
+- 题单列表/创建/删除和题目笔记读写进入独立 Feature API 与共享 Runtime Contract；题单查询移除通用 `useResource(URL)` 裸传输，响应剥离组织内部字段与笔记所有者身份。Feature UI/Model 进一步降至 36 文件/224 调用，契约边界增至 130。
+- 最新生产同构 Problem/OJ 测试为 4 文件 43/43，Contracts/Server/Web 构建与文档/架构门禁通过；`40287af`、`998d017`、`f3f053f`、`768aa9c` 已部署，API 最终切换至 3303，Web BUILD_ID `_TX_1NaAr5U4Y4YZ7kU0i` 完成 canary 与提升前后消息闭环（序号 274–289）。
 
 ## 2026-09-17 — 旧页面 Transport 清零
 
