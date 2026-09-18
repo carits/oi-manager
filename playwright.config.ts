@@ -75,7 +75,9 @@ export default defineConfig({
       command: 'pnpm exec next build && pnpm exec next start -p 3100',
       cwd: webDir,
       url: 'http://127.0.0.1:3100/login',
-      timeout: 180_000,
+      // The production-like Next build can exceed three minutes on the
+      // two-core release host while the live services remain active.
+      timeout: 300_000,
       reuseExistingServer: false,
       env: {
         ...process.env,
