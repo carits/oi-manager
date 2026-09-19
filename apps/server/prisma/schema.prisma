@@ -549,7 +549,7 @@ model AiGenerationRequest {
 
 model Contest {
   id                    String                     @id
-  runtimeTrainingId     Int?                       @unique
+  publicId              Int                        @unique @default(autoincrement())
   createdBy             String?
   organizationId        String?
   title                 String
@@ -572,9 +572,9 @@ model Contest {
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @default(now())
   Team                  Team?                      @relation(fields: [teamId], references: [id])
-  RuntimeTraining       Training?                  @relation("ContestRuntimeTraining", fields: [runtimeTrainingId], references: [id], onDelete: Restrict)
   Organization          Organization?              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   ContestProblem        ContestProblem[]
+  ContestParticipant    ContestParticipant[]
   ContestProblemScore   ContestProblemScore[]
   ContestResource       ContestResource[]
   ContestResult         ContestResult[]
@@ -596,35 +596,55 @@ model Contest {
   @@index([finalizationStatus])
 }
 
+model ContestParticipant {
+  id                      String                       @id
+  contestId               String
+  userId                  String
+  userType                String
+  joinedAt                DateTime                     @default(now())
+  organizationIdSnapshot  String?
+  ratingStatus            RatingParticipantStatus      @default(REGISTERED)
+  ratingDisposition       RatingParticipantDisposition @default(NORMAL)
+  ratingDispositionReason String?
+  ratingDispositionBy     String?
+  ratingDispositionAt     DateTime?
+  firstSubmissionAt       DateTime?
+  ratingLockedAt          DateTime?
+  Contest                 Contest                      @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, userId, userType])
+  @@index([contestId])
+  @@index([userId])
+}
+
 model ContestProblem {
-  id                       String                     @id
-  contestId                String
-  runtimeTrainingProblemId String?                    @unique
-  canonicalProblemId       String?
-  testSetRevisionId        String?
-  orderIndex               Int
-  title                    String?
-  description              String?
-  ojName                   String?
-  problemId                String?
-  isCustom                 Boolean                    @default(false)
-  difficulty               String?
-  points                   Int?
-  statementType            String                     @default("none")
-  statementMarkdown        String?
-  solutionType             String                     @default("none")
-  solutionMarkdown         String?
-  solutionVisible          Boolean                    @default(false)
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @default(now())
-  Contest                  Contest                    @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  RuntimeTrainingProblem   TrainingProblem?           @relation("ContestRuntimeProblem", fields: [runtimeTrainingProblemId], references: [id], onDelete: Restrict)
-  CanonicalProblem         Problem?                   @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
-  TestSetRevision          ProblemTestSetRevision?    @relation("ContestProblemTestSetRevision", fields: [testSetRevisionId], references: [id], onDelete: Restrict)
-  ContestProblemScore      ContestProblemScore[]
-  ContestResource          ContestResource[]
-  ContestStatuses          ContestUserProblemStatus[] @relation("CanonicalContestProblemStatuses")
-  Submissions              Submission[]               @relation("CanonicalContestProblemSubmissions")
+  id                  String                     @id
+  contestId           String
+  canonicalProblemId  String?
+  testSetRevisionId   String?
+  orderIndex          Int
+  alias               String?
+  title               String?
+  description         String?
+  ojName              String?
+  problemId           String?
+  isCustom            Boolean                    @default(false)
+  difficulty          String?
+  points              Int?
+  statementType       String                     @default("none")
+  statementMarkdown   String?
+  solutionType        String                     @default("none")
+  solutionMarkdown    String?
+  solutionVisible     Boolean                    @default(false)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @default(now())
+  Contest             Contest                    @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  CanonicalProblem    Problem?                   @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
+  TestSetRevision     ProblemTestSetRevision?    @relation("ContestProblemTestSetRevision", fields: [testSetRevisionId], references: [id], onDelete: Restrict)
+  ContestProblemScore ContestProblemScore[]
+  ContestResource     ContestResource[]
+  ContestStatuses     ContestUserProblemStatus[] @relation("CanonicalContestProblemStatuses")
+  Submissions         Submission[]               @relation("CanonicalContestProblemSubmissions")
 
   @@unique([contestId, orderIndex])
   @@index([canonicalProblemId])
@@ -651,16 +671,16 @@ model ContestProblemScore {
 }
 
 model ContestRecord {
-  id                 String   @id
-  trainingId         Int
+  id                 String    @id
+  trainingId         Int?
   canonicalContestId String?
   userId             String
   userType           String
-  content            String   @default("")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @default(now())
-  Training           Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
-  CanonicalContest   Contest? @relation("CanonicalContestRecords", fields: [canonicalContestId], references: [id], onDelete: Restrict)
+  content            String    @default("")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now())
+  Training           Training? @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  CanonicalContest   Contest?  @relation("CanonicalContestRecords", fields: [canonicalContestId], references: [id], onDelete: Restrict)
 
   @@unique([trainingId, userId, userType])
   @@unique([canonicalContestId, userId, userType])
@@ -707,30 +727,28 @@ model ContestResult {
 }
 
 model ContestUserProblemStatus {
-  id                        String           @id
-  contestId                 Int?
-  canonicalContestId        String
-  userId                    String
-  contestProblemId          String?
-  canonicalContestProblemId String
-  bestScore                 Int?
-  bestResult                String?
-  attemptCount              Int              @default(0)
-  acAt                      DateTime?
-  frozenScore               Int?
-  frozenResult              String?
-  createdAt                 DateTime         @default(now())
-  updatedAt                 DateTime         @default(now())
-  Training                  Training?        @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  TrainingProblem           TrainingProblem? @relation(fields: [contestProblemId], references: [id], onDelete: Cascade)
-  CanonicalContest          Contest          @relation("CanonicalContestStatuses", fields: [canonicalContestId], references: [id], onDelete: Restrict)
-  CanonicalContestProblem   ContestProblem   @relation("CanonicalContestProblemStatuses", fields: [canonicalContestProblemId], references: [id], onDelete: Restrict)
-  User                      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String           @id
+  contestId         String
+  userId            String
+  contestProblemId  String
+  bestScore         Int?
+  bestResult        String?
+  attemptCount      Int              @default(0)
+  acAt              DateTime?
+  frozenScore       Int?
+  frozenResult      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @default(now())
+  Contest           Contest          @relation("CanonicalContestStatuses", fields: [contestId], references: [id], onDelete: Restrict)
+  ContestProblem    ContestProblem   @relation("CanonicalContestProblemStatuses", fields: [contestProblemId], references: [id], onDelete: Restrict)
+  User              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Training          Training?        @relation(fields: [trainingId], references: [id])
+  trainingId        Int?
+  TrainingProblem   TrainingProblem? @relation(fields: [trainingProblemId], references: [id])
+  trainingProblemId String?
 
   @@unique([contestId, userId, contestProblemId])
-  @@unique([canonicalContestId, userId, canonicalContestProblemId])
   @@index([contestId, userId])
-  @@index([canonicalContestId, userId])
   @@index([userId])
 }
 
@@ -949,15 +967,15 @@ model File {
 }
 
 model LoginLog {
-  id            String   @id
-  userId        String?
-  username      String
+  id                  String   @id
+  userId              String?
+  username            String
   accountRoleSnapshot String?
-  result        String
-  failureReason String?
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime @default(now())
+  result              String
+  failureReason       String?
+  ipAddress           String?
+  userAgent           String?
+  createdAt           DateTime @default(now())
 
   @@index([createdAt])
   @@index([result])
@@ -1161,7 +1179,7 @@ model Problem {
   SourceProblem                      Problem?                             @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
   CopiedProblems                     Problem[]                            @relation("ProblemCopies")
   BlogReferences                     BlogReference[]                      @relation("BlogReferenceProblem")
-  ContestAggregateProblems           ContestProblem[]                     @relation("ContestCanonicalProblem")
+  ContestProblems           ContestProblem[]                     @relation("ContestCanonicalProblem")
 
   @@unique([libraryKey, platform, problemId])
   @@index([createdAt])
@@ -2706,7 +2724,7 @@ model Organization {
   TrainingSession          TrainingSession[]
   Assignment               Assignment[]
   Submission               Submission[]
-  ContestAggregates        Contest[]
+  Contests        Contest[]
   RatingPools              RatingPool[]
   BlogPosts                BlogPost[]
   BlogSeries               BlogSeries[]
@@ -3644,7 +3662,7 @@ model ProblemTestSetRevision {
   PromotedCandidates              TestcaseCandidate[]               @relation("CandidatePromotedRevision")
   JudgeRuns                       JudgeRun[]
   SolutionContributions           SolutionContribution[]            @relation("SolutionContributionTargetRevision")
-  ContestAggregateProblems        ContestProblem[]                  @relation("ContestProblemTestSetRevision")
+  ContestProblems        ContestProblem[]                  @relation("ContestProblemTestSetRevision")
   SolutionContributionRevisions   SolutionContributionRevision[]    @relation("SolutionContributionRevisionTarget")
   SolutionVerifications           SolutionVerification[]            @relation("SolutionVerificationTestSetRevision")
   SolutionVersions                ProblemSolutionVersion[]          @relation("SolutionVersionTestSetRevision")
@@ -3955,32 +3973,32 @@ model TrainingSessionStage {
 }
 
 model TrainingSessionStageProblem {
-  id                       String                            @id @default(uuid())
-  stageId                  String
-  problemId                String
-  testSetRevisionId        String
-  alias                    String?
-  orderIndex               Int
-  unlockPolicy             Json?
-  targetScore              Int?
+  id                      String                            @id @default(uuid())
+  stageId                 String
+  problemId               String
+  testSetRevisionId       String
+  alias                   String?
+  orderIndex              Int
+  unlockPolicy            Json?
+  targetScore             Int?
   timePolicy              Json?
   stuckPolicy             Json?
-  hintPolicy               Json?
-  judgeConfigProjection    String?                           @db.Text
-  allowedSubtaskIds        Json?
-  strategyIntervalSeconds  Int?
-  scoreGoals               Json?
-  createdAt                DateTime                          @default(now())
-  updatedAt                DateTime                          @updatedAt
-  Stage                    TrainingSessionStage              @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  Problem                  Problem                           @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  TestSetRevision          ProblemTestSetRevision            @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
-  Progress                 TrainingSessionProblemProgress[]
-  Hints                    TrainingSessionHint[]
-  ScoreEvents              TrainingSessionScoreEvent[]
-  StrategyDecisions        TrainingSessionStrategyDecision[]
-  Submissions              Submission[]
-  Plans                    TrainingSessionStageProblemPlan[]
+  hintPolicy              Json?
+  judgeConfigProjection   String?                           @db.Text
+  allowedSubtaskIds       Json?
+  strategyIntervalSeconds Int?
+  scoreGoals              Json?
+  createdAt               DateTime                          @default(now())
+  updatedAt               DateTime                          @updatedAt
+  Stage                   TrainingSessionStage              @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  Problem                 Problem                           @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  TestSetRevision         ProblemTestSetRevision            @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
+  Progress                TrainingSessionProblemProgress[]
+  Hints                   TrainingSessionHint[]
+  ScoreEvents             TrainingSessionScoreEvent[]
+  StrategyDecisions       TrainingSessionStrategyDecision[]
+  Submissions             Submission[]
+  Plans                   TrainingSessionStageProblemPlan[]
 
   @@unique([stageId, problemId])
   @@unique([stageId, orderIndex])
@@ -4055,26 +4073,26 @@ model TrainingSessionStageParticipantAssignment {
 }
 
 model TrainingSessionStageProblemPlan {
-  id                       String                      @id @default(uuid())
-  stageId                  String
-  stageProblemId           String
-  groupId                  String?
-  orderIndex               Int
-  unlockPolicy             Json?
-  targetScore              Int?
-  scoreGoals               Json?
+  id                      String                      @id @default(uuid())
+  stageId                 String
+  stageProblemId          String
+  groupId                 String?
+  orderIndex              Int
+  unlockPolicy            Json?
+  targetScore             Int?
+  scoreGoals              Json?
   timePolicy              Json?
   stuckPolicy             Json?
-  hintPolicy               Json?
-  allowedSubtaskIds        Json?
-  judgeConfigProjection    String?                     @db.Text
-  strategyIntervalSeconds  Int?
-  rules                    Json?
-  createdAt                DateTime                    @default(now())
-  updatedAt                DateTime                    @updatedAt
-  Stage                    TrainingSessionStage        @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  StageProblem             TrainingSessionStageProblem @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
-  Group                    TrainingSessionStageGroup?  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  hintPolicy              Json?
+  allowedSubtaskIds       Json?
+  judgeConfigProjection   String?                     @db.Text
+  strategyIntervalSeconds Int?
+  rules                   Json?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  Stage                   TrainingSessionStage        @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  StageProblem            TrainingSessionStageProblem @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
+  Group                   TrainingSessionStageGroup?  @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([stageId, groupId, orderIndex])
   @@index([stageProblemId])
@@ -4662,7 +4680,6 @@ model Training {
   BlogReferences            BlogReference[]
   DataPurchases             DataPurchase[]
   DataEntitlements          DataEntitlement[]
-  ContestAggregate          Contest?                    @relation("ContestRuntimeTraining")
 
   @@index([organizationId])
   @@index([scope])
@@ -4738,7 +4755,6 @@ model TrainingProblem {
   ContentSnapshot           TrainingProblemContentSnapshot[]
   StatementSet              TrainingProblemStatementSet[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
-  ContestAggregateProblem   ContestProblem?                  @relation("ContestRuntimeProblem")
 
   @@unique([trainingId, alias])
   @@unique([trainingId, orderIndex])

@@ -390,7 +390,7 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
           : legacyStatementSnapshot?.snapshotFileId
           ? `/api/trainings/${id}/problems/${trainingProblem.id}/content-snapshot/statement/file`
           : contextualizeProblemFile(id, trainingProblem.id, problem.statementPdfUrl),
-        statements: snapshotStatement || problem.ProblemStatement.map(statement => ({
+        statements: snapshotStatement || problem.ProblemStatement.map((statement: any) => ({
           ...statement,
           content: contextualizeProblemContent(id, trainingProblem.id, statement.content),
           fileUrl: contextualizeProblemFile(id, trainingProblem.id, statement.fileUrl),

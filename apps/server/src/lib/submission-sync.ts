@@ -155,8 +155,8 @@ export async function syncTrainingProblemStatus(
  */
 export async function syncContestProblemStatus(
   userId: string,
-  canonicalContestId: string,
-  canonicalContestProblemId: string,
+  contestId: string,
+  contestProblemId: string,
   result: string | null,
   score: number | null,
 ): Promise<void> {
@@ -165,17 +165,17 @@ export async function syncContestProblemStatus(
 
     await prisma.contestUserProblemStatus.upsert({
       where: {
-        canonicalContestId_userId_canonicalContestProblemId: {
-          canonicalContestId,
+        contestId_userId_contestProblemId: {
+          contestId,
           userId,
-          canonicalContestProblemId,
+          contestProblemId,
         },
       },
       create: {
         id: crypto.randomUUID(),
-        canonicalContestId,
+        contestId,
         userId,
-        canonicalContestProblemId,
+        contestProblemId,
         bestScore: score,
         bestResult: result,
         attemptCount: 1,
@@ -199,16 +199,16 @@ export async function syncContestProblemStatus(
 
     logger.info('Contest problem status synced', {
       userId,
-      canonicalContestId,
-      canonicalContestProblemId,
+      contestId,
+      contestProblemId,
       result,
       isAc,
     })
   } catch (error) {
     logger.error('Failed to sync contest problem status', {
       userId,
-      canonicalContestId,
-      canonicalContestProblemId,
+      contestId,
+      contestProblemId,
       error: String(error),
     })
   }
@@ -335,7 +335,7 @@ export async function syncContestEndAC(contestId: number): Promise<void> {
     logger.info('Starting contest end AC sync', { contestId })
 
     const contest = await prisma.contest.findUnique({
-      where: { runtimeTrainingId: contestId },
+      where: { publicId: contestId },
       select: { id: true },
     })
     if (!contest) throw new Error('Contest runtime has no canonical aggregate')
@@ -361,7 +361,7 @@ export async function syncContestEndAC(contestId: number): Promise<void> {
 
     // 冻结比赛成绩
     const contestStatuses = await prisma.contestUserProblemStatus.findMany({
-      where: { canonicalContestId: contest.id },
+      where: { contestId: contest.id },
     })
 
     for (const status of contestStatuses) {

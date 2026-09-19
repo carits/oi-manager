@@ -5,7 +5,7 @@
  * 核心原则：真实 result 和展示 result 分开，数据库保留真实值，API 返回时脱敏
  */
 
-import { findActivityRuntimeForAccess } from '../contest/contest-query.facade'
+import { findActivityForAccess } from '../contest/contest-query.facade'
 import { canManageTraining } from './training.helpers'
 
 /** 训练运行时状态（不依赖数据库 status） */
@@ -105,7 +105,7 @@ export function getTrainingRuntimeStatus(training: TrainingForVisibility): Train
  * 判断用户是否为训练管理员
  */
 export async function isTrainingAdmin(userId: string, trainingId: number): Promise<boolean> {
-  const training = (await findActivityRuntimeForAccess(trainingId))?.runtime || null
+  const training = (await findActivityForAccess(trainingId))?.activity || null
   if (!training) return false
   return canManageTraining(userId, training)
 }

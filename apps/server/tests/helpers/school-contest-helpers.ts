@@ -5,7 +5,7 @@
 
 import crypto from 'node:crypto'
 import { prisma } from '../../src/prisma'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './legacy-contest-fixture'
 
 interface CreateTestSchoolContestOptions {
   schoolId: string
@@ -213,12 +213,8 @@ export async function createTestSubmission(options: {
       language: 'cpp',
       code: '#include <iostream>\nint main() { return 0; }',
       codeLength: 50,
-      result,
-      score,
-      timeUsed,
-      memoryUsed,
-      trainingId,
-      trainingProblemId,
+      trainingId: submitScope === 'contest' ? null : trainingId,
+      trainingProblemId: submitScope === 'contest' ? null : trainingProblemId,
       submitScope,
       canonicalContestId: canonicalProblem?.contestId || null,
       canonicalContestProblemId: canonicalProblem?.id || null,
@@ -228,7 +224,6 @@ export async function createTestSubmission(options: {
       problemInternalId: trainingProblem?.problemId ?? null,
       isGlobalVisible: submitScope === 'contest' ? false : true,
       ojRemoteId: null,
-      cases: cases ?? JSON.stringify([{ status: 'accepted', time: 100, memory: 1024 }]),
       createdAt: createdAt ?? new Date(),
     },
   })

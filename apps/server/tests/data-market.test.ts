@@ -6,7 +6,7 @@ import { createAuthenticatedRequest, createTestApp } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
-import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx } from './helpers/legacy-contest-fixture'
 
 const app = createTestApp()
 
@@ -148,7 +148,7 @@ describe('V1 data product marketplace', () => {
   it('restricts organization entitlements to active teachers and principals', async () => {
     const teacher = await createTestUser({ organization: { role: 'teacher' } })
     const student = await createTestUser({ organization: { role: 'student', organizationId: teacher.organization!.organizationId } })
-    const organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: teacher.organization!.organizationId } })).organizationId!
+    const organizationId = teacher.organization!.organizationId
     await postCarits({
       type: 'test_funding', idempotencyKey: `market-org-funding:${crypto.randomUUID()}`,
       referenceType: 'test', referenceId: organizationId, operatorUserId: manager.user.id,

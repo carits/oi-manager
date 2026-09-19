@@ -14,9 +14,13 @@ import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest
 import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
 
 const app = createTestApp()
+
+function createOrganizationRequest(token: string, organizationId: string) {
+  return createAuthenticatedRequest(app, token, { organizationId })
+}
 const testdataDirectories: string[] = []
 
 async function createConfiguredProblem(ownerId: string, prefix: string) {
@@ -155,7 +159,7 @@ describe('训练模块权限测试', () => {
   // ==================== A. 训练创建权限 ====================
   describe('训练创建权限', () => {
     it('A1: owner 可以创建训练', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .post(`/api/teams/${team.id}/trainings`)
         .send({
           title: '新训练',
@@ -171,7 +175,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('A2: admin 可以创建训练', async () => {
-      const res = await createAuthenticatedRequest(app, adminToken)
+      const res = await createOrganizationRequest(adminToken, schoolData.school.organizationId!)
         .post(`/api/teams/${team.id}/trainings`)
         .send({
           title: 'Admin创建的训练',
@@ -186,7 +190,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('A3: member 不能创建训练', async () => {
-      const res = await createAuthenticatedRequest(app, memberToken)
+      const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
         .post(`/api/teams/${team.id}/trainings`)
         .send({
           title: 'Member创建的训练',
@@ -201,7 +205,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('A4: 学生 member 不能创建训练', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .post(`/api/teams/${team.id}/trainings`)
         .send({
           title: '学生创建的训练',
@@ -215,7 +219,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('A5: 外人不能创建训练', async () => {
-      const res = await createAuthenticatedRequest(app, outsiderToken)
+      const res = await createOrganizationRequest(outsiderToken, schoolData.school.organizationId!)
         .post(`/api/teams/${team.id}/trainings`)
         .send({
           title: '外人创建的训练',
@@ -229,7 +233,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('A6: 旧 Training homework 写入通道已退役', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .post(`/api/teams/${team.id}/trainings`)
         .send({
           title: '不应创建的旧作业',
@@ -248,7 +252,7 @@ describe('训练模块权限测试', () => {
   // ==================== B. 训练查看权限 ====================
   describe('训练查看权限', () => {
     it('B1: owner 可以查看训练详情', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}`)
 
       expect(res.status).toBe(200)
@@ -257,7 +261,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('B2: admin 可以查看训练详情', async () => {
-      const res = await createAuthenticatedRequest(app, adminToken)
+      const res = await createOrganizationRequest(adminToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}`)
 
       expect(res.status).toBe(200)
@@ -265,7 +269,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('B3: member 可以查看训练详情', async () => {
-      const res = await createAuthenticatedRequest(app, memberToken)
+      const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}`)
 
       expect(res.status).toBe(200)
@@ -273,7 +277,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('B4: 学生 member 可以查看训练详情', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}`)
 
       expect(res.status).toBe(200)
@@ -281,14 +285,14 @@ describe('训练模块权限测试', () => {
     })
 
     it('B5: 外人不能查看训练详情', async () => {
-      const res = await createAuthenticatedRequest(app, outsiderToken)
+      const res = await createOrganizationRequest(outsiderToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}`)
 
       expect(res.status).toBe(403)
     })
 
     it('B6: overview 在一次响应中返回训练和题目摘要', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}/overview`)
 
       expect(res.status).toBe(200)
@@ -299,7 +303,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('B7: overview 同样执行资源归属校验', async () => {
-      const res = await createAuthenticatedRequest(app, outsiderToken)
+      const res = await createOrganizationRequest(outsiderToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}/overview`)
 
       expect(res.status).toBe(403)
@@ -337,13 +341,13 @@ describe('训练模块权限测试', () => {
         },
       })
 
-      const solution = await createAuthenticatedRequest(app, ownerToken)
+      const solution = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}/problems/${otherProblem.id}/solution`)
       expect(solution.status).toBe(200)
       expect(solution.body.data).toBeNull()
       expect(JSON.stringify(solution.body)).not.toContain('cross-training-secret')
 
-      const attachments = await createAuthenticatedRequest(app, ownerToken)
+      const attachments = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}/problems/${otherProblem.id}/attachments`)
       expect(attachments.status).toBe(200)
       expect(attachments.body.data).toEqual([])
@@ -353,7 +357,7 @@ describe('训练模块权限测试', () => {
   // ==================== C. 训练编辑权限 ====================
   describe('训练编辑权限', () => {
     it('C1: owner 可以编辑训练', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .put(`/api/trainings/${training.id}`)
         .send({ title: '更新后的标题' })
 
@@ -363,7 +367,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('C2: admin 可以编辑训练', async () => {
-      const res = await createAuthenticatedRequest(app, adminToken)
+      const res = await createOrganizationRequest(adminToken, schoolData.school.organizationId!)
         .put(`/api/trainings/${training.id}`)
         .send({ title: 'Admin更新的标题' })
 
@@ -372,7 +376,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('C3: member 不能编辑训练', async () => {
-      const res = await createAuthenticatedRequest(app, memberToken)
+      const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
         .put(`/api/trainings/${training.id}`)
         .send({ title: 'Member更新的标题' })
 
@@ -380,7 +384,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('C4: 学生不能编辑训练', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .put(`/api/trainings/${training.id}`)
         .send({ title: '学生更新的标题' })
 
@@ -390,7 +394,7 @@ describe('训练模块权限测试', () => {
 
   describe('提前结束比赛权限', () => {
     it('比赛管理员可以结束已开始的比赛并公开提交', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/finish`)
 
       expect(res.status).toBe(200)
@@ -400,7 +404,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('普通成员不能提前结束比赛', async () => {
-      const res = await createAuthenticatedRequest(app, memberToken)
+      const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/finish`)
 
       expect(res.status).toBe(403)
@@ -422,8 +426,9 @@ describe('训练模块权限测试', () => {
           createdBy: ownerUser.user.id,
         },
       })
+      await prisma.$transaction(tx => ensureContestAggregateTx(tx, upcoming.id))
 
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${upcoming.id}/start`)
 
       expect(res.status).toBe(200)
@@ -433,7 +438,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('普通成员不能立即开始比赛', async () => {
-      const res = await createAuthenticatedRequest(app, memberToken)
+      const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/start`)
 
       expect(res.status).toBe(403)
@@ -458,7 +463,7 @@ describe('训练模块权限测试', () => {
         }
       })
 
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .delete(`/api/trainings/${newTraining.id}`)
 
       expect(res.status).toBe(200)
@@ -466,7 +471,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('D2: admin 也可以删除训练', async () => {
-      const res = await createAuthenticatedRequest(app, adminToken)
+      const res = await createOrganizationRequest(adminToken, schoolData.school.organizationId!)
         .delete(`/api/trainings/${training.id}`)
 
       // admin 在当前实现中也可以删除训练
@@ -474,7 +479,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('D3: member 不能删除训练', async () => {
-      const res = await createAuthenticatedRequest(app, memberToken)
+      const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
         .delete(`/api/trainings/${training.id}`)
 
       expect(res.status).toBe(403)
@@ -487,7 +492,7 @@ describe('训练模块权限测试', () => {
       // 创建真实题目
       const problem = await createConfiguredProblem(ownerUser.user.id, 'E1')
 
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/problems`)
         .send({
           problemId: problem.id,
@@ -503,7 +508,7 @@ describe('训练模块权限测试', () => {
       // 创建真实题目
       const problem = await createConfiguredProblem(adminUser.user.id, 'E2')
 
-      const res = await createAuthenticatedRequest(app, adminToken)
+      const res = await createOrganizationRequest(adminToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/problems`)
         .send({
           problemId: problem.id,
@@ -532,7 +537,7 @@ describe('训练模块权限测试', () => {
         }
       })
 
-      const res = await createAuthenticatedRequest(app, memberToken)
+      const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/problems`)
         .send({
           problemId: problem.id,
@@ -560,7 +565,7 @@ describe('训练模块权限测试', () => {
         }
       })
 
-      const res = await createAuthenticatedRequest(app, outsiderToken)
+      const res = await createOrganizationRequest(outsiderToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/problems`)
         .send({
           problemId: problem.id,
@@ -575,7 +580,7 @@ describe('训练模块权限测试', () => {
   // ==================== F. 提交代码权限 ====================
   describe('提交代码权限', () => {
     it('F1: 学生可以提交代码', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/submit`)
         .send({
           problemId: 'TEST_001',
@@ -593,7 +598,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('F2: teacher member 可以提交代码', async () => {
-      const res = await createAuthenticatedRequest(app, memberToken)
+      const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/submit`)
         .send({
           problemId: 'TEST_002',
@@ -605,7 +610,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('F3: 外人不能提交代码', async () => {
-      const res = await createAuthenticatedRequest(app, outsiderToken)
+      const res = await createOrganizationRequest(outsiderToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${training.id}/submit`)
         .send({
           problemId: 'TEST_003',
@@ -621,7 +626,7 @@ describe('训练模块权限测试', () => {
   // ==================== G. 排名查看权限 ====================
   describe('排名查看权限', () => {
     it('G1: owner 可以查看排名', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -629,7 +634,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('G2: 学生可以查看排名', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -637,7 +642,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('G3: 外人不能查看排名', async () => {
-      const res = await createAuthenticatedRequest(app, outsiderToken)
+      const res = await createOrganizationRequest(outsiderToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${training.id}/ranking`)
 
       expect(res.status).toBe(403)
@@ -647,7 +652,7 @@ describe('训练模块权限测试', () => {
   // ==================== H. 训练列表权限 ====================
   describe('训练列表权限', () => {
     it('H1: 团队成员可以查看训练列表', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/teams/${team.id}/trainings`)
 
       expect(res.status).toBe(200)
@@ -656,7 +661,7 @@ describe('训练模块权限测试', () => {
     })
 
     it('H2: 外人不能查看团队训练列表', async () => {
-      const res = await createAuthenticatedRequest(app, outsiderToken)
+      const res = await createOrganizationRequest(outsiderToken, schoolData.school.organizationId!)
         .get(`/api/teams/${team.id}/trainings`)
 
       expect(res.status).toBe(403)
@@ -718,11 +723,12 @@ describe('OI 赛制可见性测试', () => {
         createdBy: ownerUser.user.id
       }
     })
+    await prisma.$transaction(tx => ensureContestAggregateTx(tx, oiTraining.id))
   })
 
   describe('OI 赛制排名隐藏', () => {
     it('OI-A1: 学生赛中看不到排名', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${oiTraining.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -733,7 +739,7 @@ describe('OI 赛制可见性测试', () => {
     })
 
     it('OI-A2: 管理员赛中可以看到排名', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${oiTraining.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -745,7 +751,7 @@ describe('OI 赛制可见性测试', () => {
 
   describe('OI 赛制题号隐藏', () => {
     it('OI-C1: 学生赛中看不到原题号', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${oiTraining.id}/problems`)
 
       expect(res.status).toBe(200)
@@ -790,19 +796,30 @@ describe('OI 赛制可见性测试', () => {
           language: 'cpp',
           code: 'int main(){}',
           codeLength: 12,
+          submitMethod: 'code',
+          submitScope: 'contest',
+          canonicalContestId: canonicalProblem.contestId,
+          canonicalContestProblemId: canonicalProblem.id,
+        },
+      })
+
+      const runId = crypto.randomUUID()
+      await prisma.judgeRun.create({
+        data: {
+          id: runId,
+          submissionId: submission.id,
+          runNumber: 1,
+          runType: 'NORMAL',
+          status: 'FINALIZED',
           result: 'accepted',
           score: 100,
           timeUsed: 1,
           memoryUsed: 1024,
-          submitMethod: 'code',
-          submitScope: 'contest',
-          trainingId: oiTraining.id,
-          trainingProblemId: trainingProblem.id,
-          canonicalContestId: canonicalProblem.contestId,
-          canonicalContestProblemId: canonicalProblem.id,
           cases: '[]',
+          finalizedAt: new Date(),
         },
       })
+      await prisma.submission.update({ where: { id: submission.id }, data: { currentJudgeRunId: runId } })
 
       const paths = [
         `/api/trainings/${oiTraining.id}/overview`,
@@ -812,7 +829,7 @@ describe('OI 赛制可见性测试', () => {
         `/api/trainings/${oiTraining.id}/submissions/${submission.id}`,
       ]
       for (const path of paths) {
-        const response = await createAuthenticatedRequest(app, studentToken).get(path)
+        const response = await createOrganizationRequest(studentToken, schoolData.school.organizationId!).get(path)
         expect(response.status).toBe(200)
         const body = JSON.stringify(response.body.data)
         expect(body).not.toContain(problem.problemId)
@@ -821,15 +838,15 @@ describe('OI 赛制可见性测试', () => {
         expect(body).not.toContain('"platform":"carits"')
       }
 
-      const managerResponse = await createAuthenticatedRequest(app, ownerToken)
+      const managerResponse = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${oiTraining.id}/submissions/${submission.id}`)
       expect(managerResponse.body.data.problemId).toBe('A')
       expect(managerResponse.body.data.oj).toBe('carits')
       expect(managerResponse.body.data.sourcePlatform).toBe('carits')
       expect(managerResponse.body.data.sourceProblemId).toBe(problem.problemId)
 
-      await prisma.training.update({ where: { id: oiTraining.id }, data: { status: 'finished', endTime: new Date(Date.now() - 1) } })
-      const afterContest = await createAuthenticatedRequest(app, studentToken)
+      await prisma.contest.update({ where: { publicId: oiTraining.id }, data: { status: 'finished', endAt: new Date(Date.now() - 1) } })
+      const afterContest = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${oiTraining.id}/submissions/${submission.id}`)
       expect(afterContest.body.data.problemId).toBe('A')
       expect(afterContest.body.data.oj).toBe('carits')
@@ -892,7 +909,7 @@ describe('训练状态可见性测试', () => {
         }
       })
 
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${upcomingTraining.id}`)
 
       expect(res.status).toBe(200)
@@ -914,7 +931,7 @@ describe('训练状态可见性测试', () => {
         }
       })
 
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${upcomingTraining.id}/problems`)
 
       // 学生不应该能看到题目详情
@@ -935,7 +952,7 @@ describe('训练状态可见性测试', () => {
         }
       })
 
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${upcomingTraining.id}/problems`)
 
       expect(res.status).toBe(200)
@@ -958,7 +975,7 @@ describe('训练状态可见性测试', () => {
         }
       })
 
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${ongoingTraining.id}/problems`)
 
       expect(res.status).toBe(200)

@@ -17,23 +17,23 @@
     }
   },
   "contestCompatibility": {
-    "remaining": 4,
+    "remaining": 0,
     "points": [
       {
         "key": "runtimeTrainingIdentity",
-        "active": true
+        "active": false
       },
       {
         "key": "trainingProjectionWriter",
-        "active": true
+        "active": false
       },
       {
         "key": "trainingRuntimeCreation",
-        "active": true
+        "active": false
       },
       {
         "key": "trainingProblemRuntime",
-        "active": true
+        "active": false
       }
     ]
   },
@@ -152,5 +152,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-19T16:35:02.850Z"
+  "updatedAt": "2026-09-19T17:36:19.603Z"
 }

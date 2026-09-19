@@ -15,7 +15,7 @@ import { prisma } from '../../prisma'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { canModifyProblem, canViewProblem } from '../problem/problem.access'
 import { createSolutionContribution, SolutionDomainError } from '../solution/solution.service'
-import { findContestRuntimeForBlogReview } from '../contest/contest-query.facade'
+import { findContestForBlogReview } from '../contest/contest-query.facade'
 
 const MAX_MARKDOWN_BYTES = 1024 * 1024
 const MAX_REFERENCES = 50
@@ -304,7 +304,6 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
       fail(404, 'BLOG_REFERENCE_NOT_FOUND', '只能引用自己参加过的已结算比赛榜单')
     }
     const contest = snapshot.Contest
-    if (contest.runtimeTrainingId === null) fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的比赛没有可访问的运行记录')
     let accessMode: BlogVisibility = BlogVisibility.PRIVATE
     if (contest.scope === 'platform') accessMode = BlogVisibility.PUBLIC
     else if (contest.organizationId && await activeOrganizationMember(db, user.userId, contest.organizationId)) accessMode = BlogVisibility.ORGANIZATION
@@ -318,11 +317,11 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
       referenceType: input.type,
       referenceId: contest.id,
       referenceVersionId: snapshot.id,
-      trainingId: contest.runtimeTrainingId,
+      trainingId: contest.publicId,
       standingSnapshotId: snapshot.id,
       accessMode,
       snapshotData: {
-        kind: 'contest-standing', trainingId: contest.runtimeTrainingId, contestId: contest.id, title: contest.title,
+        kind: 'contest-standing', trainingId: contest.publicId, contestId: contest.id, title: contest.title,
         organizationId: contest.organizationId,
         format: contest.format, standingRevision: snapshot.revision, scoringMode: snapshot.scoringMode,
         rank: entry.rank, score: entry.totalScore === null ? null : Number(entry.totalScore),
@@ -366,7 +365,6 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
   }
   const pool = change.Batch.Pool
   const contest = change.Batch.Contest
-  if (contest.runtimeTrainingId === null) fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的 Rating 变化没有可访问的运行记录')
   const accessMode = pool.scopeType === 'GLOBAL' ? BlogVisibility.PUBLIC : BlogVisibility.ORGANIZATION
   if (pool.scopeType === 'ORGANIZATION' && (!pool.organizationId || !await activeOrganizationMember(db, user.userId, pool.organizationId))) {
     fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的组织 Rating 变化不可访问')
@@ -377,14 +375,14 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
     referenceId: change.id,
     referenceVersionId: change.batchId,
     ratingChangeId: change.id,
-    trainingId: contest.runtimeTrainingId,
+    trainingId: contest.publicId,
     accessMode,
     snapshotData: {
       kind: 'rating-change', ratingChangeId: change.id, batchId: change.batchId,
       scope: pool.scopeType, organizationId: pool.organizationId, track: pool.track,
       ratingBefore: change.ratingBefore, appliedDelta: change.appliedDelta, ratingAfter: change.ratingAfter,
       rank: change.rank, fieldSize: change.fieldSize,
-      contest: { id: contest.runtimeTrainingId, contestId: contest.id, title: contest.title },
+      contest: { id: contest.publicId, contestId: contest.id, title: contest.title },
     },
   }
 }
@@ -1365,8 +1363,8 @@ export async function listTagBlogs(user: JwtPayload, tagId: string, query: any) 
 }
 
 export async function createBlogFromContest(user: JwtPayload, trainingId: number) {
-  const resolved = await findContestRuntimeForBlogReview(trainingId)
-  const training = resolved?.runtime
+  const resolved = await findContestForBlogReview(trainingId)
+  const training = resolved?.activity
   if (!training?.finalizedStandingId) fail(409, 'BLOG_CONTEST_NOT_FINALIZED', '比赛尚未生成固定榜单，不能创建复盘')
   await prisma.$transaction(tx => resolveReference(tx, user, {
     type: 'CONTEST_STANDING',

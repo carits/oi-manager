@@ -35,16 +35,12 @@ describe('platform contest lifecycle', () => {
       .send(body)
     expect(created.status).toBe(201)
 
-    const contest = await prisma.training.findUniqueOrThrow({
-      where: { id: created.body.data.id },
-    })
-    expect(contest).toMatchObject({ type: 'contest', scope: 'platform', teamId: null, organizationId: null })
-    const aggregate = await prisma.contest.findUniqueOrThrow({ where: { runtimeTrainingId: contest.id }, include: { RatingConfig: true } })
+    const aggregate = await prisma.contest.findUniqueOrThrow({ where: { publicId: created.body.data.id }, include: { RatingConfig: true } })
     expect(aggregate.RatingConfig).toMatchObject({ scope: 'NONE', track: 'IOI', revision: 1 })
-    expect(aggregate).toMatchObject({ title: contest.title, scope: 'platform', format: 'ioi', countRating: false })
+    expect(aggregate).toMatchObject({ title: body.title, scope: 'platform', format: 'ioi', countRating: false, teamId: null, organizationId: null })
 
     const configured = await request(app)
-      .put(`/api/trainings/${contest.id}/rating-config`)
+      .put(`/api/trainings/${aggregate.publicId}/rating-config`)
       .set('Cookie', `oi_session=${tokenFor(manager)}`)
       .send({ scope: 'GLOBAL', expectedRevision: 1, weight: 1, globalMinParticipants: 2, organizationMinParticipants: 2 })
     expect(configured.status).toBe(200)

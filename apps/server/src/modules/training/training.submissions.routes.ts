@@ -185,8 +185,8 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     // stores Problem.id. Resolve both to the stable TrainingProblem row.
     const trainingProblemByProblemId = new Map<string, typeof trainingProblems[number]>()
     for (const trainingProblem of trainingProblems) {
-      trainingProblemByProblemId.set(trainingProblem.Problem.problemId, trainingProblem)
-      trainingProblemByProblemId.set(trainingProblem.problemId, trainingProblem)
+      if (trainingProblem.Problem?.problemId) trainingProblemByProblemId.set(trainingProblem.Problem.problemId, trainingProblem)
+      if (trainingProblem.problemId) trainingProblemByProblemId.set(trainingProblem.problemId, trainingProblem)
     }
 
     const usernameMap = new Map<string, string>(users.map(u => [u.id, u.username] as [string, string]))

@@ -1,13 +1,13 @@
 import { prisma } from '../../../prisma'
-import { prepareDemoContestRuntimesTx } from '../../contest/contest-command.service'
-import { listCanonicalContestRuntimesForMaintenance } from '../../contest/contest-query.facade'
+import { prepareDemoContestsTx } from '../../contest/contest-command.service'
+import { listContestsForMaintenance } from '../../contest/contest-query.facade'
 
 export function findDemoUsers(usernames: string[]) {
   return prisma.user.findMany({ where: { username: { in: usernames } }, select: { id: true, username: true } })
 }
 
 export function findDemoTrainings(teamId: string, titlePrefix: string) {
-  return listCanonicalContestRuntimesForMaintenance({ teamId, titlePrefix, scope: 'campus' })
+  return listContestsForMaintenance({ teamId, titlePrefix, scope: 'campus' })
 }
 
 export function countDemoSubmissions(sourcePrefix: string) {
@@ -15,8 +15,8 @@ export function countDemoSubmissions(sourcePrefix: string) {
 }
 
 export function prepareDemoContestRuntimes(ids: number[], startTime: Date, endTime: Date) {
-  return prisma.$transaction(tx => prepareDemoContestRuntimesTx(tx, {
-    runtimeTrainingIds: ids,
+  return prisma.$transaction(tx => prepareDemoContestsTx(tx, {
+    publicIds: ids,
     startTime,
     endTime,
   }))
@@ -39,5 +39,5 @@ export async function demoSubmissionExists(sourceId: string) {
 }
 
 export function findDemoTrainingsByIds(ids: number[]) {
-  return listCanonicalContestRuntimesForMaintenance({ runtimeTrainingIds: ids })
+  return listContestsForMaintenance({ publicIds: ids })
 }

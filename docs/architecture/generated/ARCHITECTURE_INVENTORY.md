@@ -13,7 +13,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 205 |
+| Prisma models | 206 |
 | Prisma enums | 77 |
 | Legacy route adapters | 19 |
 | Module route adapters | 53 |
@@ -146,6 +146,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ChatStickerPack`
 - `ChatUserEvent`
 - `Contest`
+- `ContestParticipant`
 - `ContestProblem`
 - `ContestProblemScore`
 - `ContestRatingConfig`

@@ -68,20 +68,18 @@ delta = K(96) × weight × (actualPerformance - expectedPerformance)
 
 比赛端默认用自然语言显示计分范围、赛制 Track、影响强度、组织归属冻结以及未结算原因；底层 `GLOBAL/ORGANIZATION/BOTH` 和权重只放在规则详情。读取比赛 Rating 时为当前用户返回 `myChanges`，最终榜单可直接显示各范围的 `before → after (delta)`，不会改变不可变 Batch 或结算算法。
 
-## Contest 规范身份与兼容桥接
+## Contest 规范身份
 
-`Contest/ContestProblem` 是比赛及题目结构的规范聚合。`Contest.runtimeTrainingId` 与
-`ContestProblem.runtimeTrainingProblemId` 保留到旧运行子表的兼容桥接，并固定组织、时间、赛制、题目和
-TestSet Revision。`ContestRatingConfig`、`ContestStandingSnapshot`、`RatingBatch` 均只以 `contestId` 关联
-规范聚合。现有数字 `/trainings/:id` API 仅在入口通过 `Contest.runtimeTrainingId` 解析规范身份；数字 ID 不进入 Rating 事实。
+Contest/ContestProblem 是比赛及题目结构的唯一聚合。Contest.publicId 独立提供数字路由，
+不再借用 Training 主键；比赛创建、题目管理、生命周期、参赛者和最终结算均直接写入 Contest 领域。
+ContestRatingConfig、ContestStandingSnapshot、RatingBatch 只以 Contest UUID 关联。
 
-直接切换迁移先按 `Contest.runtimeTrainingId` 最后一次回填规范身份，并在任何缺失时 fail closed；随后删除三张
-Rating 表的 `trainingId`、运行外键和全部双向回填触发器。删除未终结比赛必须显式清理 Rating 子事实，规范外键
-统一使用 `RESTRICT`，禁止删除 Contest 后留下孤儿历史。
+直接切换迁移先按旧映射回填 publicId、题目别名和参赛者，在任何缺失或冲突时 fail closed；
+校验后删除 Contest/ContestProblem 的运行外键。ContestUserProblemStatus 只保留 Contest UUID，
+ContestParticipant 保存组织快照和 Rating 锁定事实。
 
-受保护的 `contest-aggregates` check/apply 同时报告配置、快照和批次是否存在无效 Contest 外键；异常比赛进入报告
-且不猜测迁移。Rating 查询、结算、到期发现、同池先后顺序和重放均从 Contest 关系进入，不再按裸 `trainingId`
-猜测或修补比赛身份。
+Rating 查询、结算、到期发现、同池先后顺序和重放均从 Contest 关系进入；历史
+Training(type=contest) 行不再读取、同步或作为失败回退。
 
 ## 最终结算和重放
 

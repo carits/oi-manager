@@ -16,7 +16,7 @@ import {
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
 import { resolveSubmissionIoSnapshot, submissionIoDto } from '../../judge/domain/submission-io'
-import { findActivityRuntimeForSubmission } from '../../contest/contest-query.facade'
+import { findActivityForSubmission } from '../../contest/contest-query.facade'
 import { organizationRoleFromRoleKeys } from '../../authorization/capabilities'
 
 export interface SubmissionQueryContext {
@@ -189,12 +189,11 @@ async function requireVisibleSubmission(
     include: {
       User: { select: { username: true, avatar: true } },
       OjAccount: { select: { username: true } },
+      CanonicalContest: { select: { publicId: true } },
       CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
     },
   })
   if (!submission) throw notFound()
-
-  if (expectedTrainingId !== undefined && submission.trainingId !== expectedTrainingId) throw notFound()
 
   let training: {
     id: number
@@ -210,10 +209,21 @@ async function requireVisibleSubmission(
     scope: string
   } | null = null
   let hasContestManagerAccess = false
-  if (submission.trainingId) {
-    const activity = await findActivityRuntimeForSubmission(submission.trainingId)
-    training = activity?.runtime ?? null
-    if (!training) throw notFound()
+  const activityPublicId = expectedTrainingId
+    ?? submission.trainingId
+    ?? submission.CanonicalContest?.publicId
+    ?? null
+  if (activityPublicId !== null) {
+    const activity = await findActivityForSubmission(activityPublicId)
+    if (!activity) throw notFound()
+    if (expectedTrainingId !== undefined) {
+      if (activity.source === 'contest') {
+        if (submission.canonicalContestId !== activity.contest.id) throw notFound()
+      } else if (submission.trainingId !== activity.activity.id) {
+        throw notFound()
+      }
+    }
+    training = activity.activity
     hasContestManagerAccess = context.isGlobalAdmin || await canManageTraining(context.userId, training)
 
     if (!hasContestManagerAccess) {
@@ -229,7 +239,7 @@ async function requireVisibleSubmission(
       }
     }
   }
-  if (!submission.trainingId && !context.isGlobalAdmin) {
+  if (activityPublicId === null && !context.isGlobalAdmin) {
     if (
       submission.workspaceScope !== context.workspaceScope
       || (context.workspaceScope === 'campus' && submission.organizationId !== context.organizationId)
@@ -288,7 +298,39 @@ export async function getSubmissionDetail(
     sourceProblemId = problem?.problemId || sourceProblemId
   }
 
-  if (submission.trainingId && access.training) {
+  if (submission.canonicalContestId && access.training) {
+    contestFormat = access.training.format || null
+    const contestProblem = await prisma.contestProblem.findFirst({
+      where: {
+        contestId: submission.canonicalContestId,
+        OR: [
+          ...(submission.canonicalContestProblemId ? [{ id: submission.canonicalContestProblemId }] : []),
+          { problemId: submission.problemId },
+          { CanonicalProblem: { problemId: submission.problemId } },
+        ],
+      },
+      select: {
+        id: true,
+        alias: true,
+        orderIndex: true,
+        title: true,
+        ojName: true,
+        problemId: true,
+        CanonicalProblem: {
+          select: { judgeConfig: true, title: true, platform: true, problemId: true },
+        },
+      },
+    })
+    if (contestProblem) {
+      trainingProblemId = contestProblem.id
+      problemAlias = contestProblem.alias
+      problemOrderIndex = contestProblem.orderIndex
+      problemJudgeConfig = contestProblem.CanonicalProblem?.judgeConfig || problemJudgeConfig
+      problemTitle = contestProblem.title || contestProblem.CanonicalProblem?.title || problemTitle
+      sourcePlatform = contestProblem.ojName || contestProblem.CanonicalProblem?.platform || sourcePlatform
+      sourceProblemId = contestProblem.problemId || contestProblem.CanonicalProblem?.problemId || sourceProblemId
+    }
+  } else if (submission.trainingId && access.training) {
     contestFormat = access.training.format || null
     const trainingProblem = submission.trainingProblemId
       ? await prisma.trainingProblem.findFirst({
@@ -341,10 +383,11 @@ export async function getSubmissionDetail(
   const hideProblemIdentity = access.training
     ? shouldHideTrainingProblemSource(access.training, access.hasContestManagerAccess)
     : false
-  const canViewCode = !submission.trainingId
+  const isActivitySubmission = Boolean(access.training)
+  const canViewCode = !isActivitySubmission
     || submission.userId === context.userId
     || access.hasContestManagerAccess
-  const hideRemoteId = Boolean(submission.trainingId && !access.hasContestManagerAccess)
+  const hideRemoteId = Boolean(isActivitySubmission && !access.hasContestManagerAccess)
 
   return {
     id: submission.id,
@@ -381,7 +424,7 @@ export async function getSubmissionDetail(
     errorMessage: hideOiDetail ? null : submission.errorMessage,
     judgeMode: judgePresentation.mode,
     judgeConfig: problemJudgeConfig ? { mode: judgePresentation.mode } : undefined,
-    trainingId: submission.trainingId,
+    trainingId: access.training?.id ?? submission.trainingId,
     trainingProblemId,
     problemAlias,
     problemOrderIndex,

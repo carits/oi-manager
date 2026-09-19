@@ -11,7 +11,7 @@ import { createTestApp } from './helpers/testRequest'
 import { generateTestToken } from './helpers/testToken'
 import { createTestSchoolContest, createTestSubmission } from './helpers/school-contest-helpers'
 import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from './helpers/testUser'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
 
 const app = createTestApp()
 

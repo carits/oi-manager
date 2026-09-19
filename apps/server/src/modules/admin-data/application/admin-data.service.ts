@@ -103,7 +103,7 @@ export async function fixHduMemory(defaultKB: unknown) {
 export async function cleanTrainingSubmissions(trainingId: unknown) {
   const id = Number(trainingId)
   if (!Number.isInteger(id) || id <= 0) throw new AdminDataError(400, '缺少 trainingId')
-  const result = await prisma.submission.deleteMany({ where: { submitScope: { in: ['training', 'contest'] }, trainingId: id } })
+  const result = await prisma.submission.deleteMany({ where: { submitScope: 'training', trainingId: id } })
   return { deleted: result.count, message: `已删除 ${result.count} 条提交` }
 }
 
@@ -123,7 +123,10 @@ export async function resetUserPassword(userId: unknown, newPassword: unknown) {
 export async function backfillTrainingParticipants(trainingId: unknown) {
   const parsedId = trainingId === undefined || trainingId === null || trainingId === '' ? undefined : Number(trainingId)
   if (parsedId !== undefined && (!Number.isInteger(parsedId) || parsedId <= 0)) throw new AdminDataError(400, 'trainingId 无效')
-  const trainings = await prisma.training.findMany({ where: parsedId ? { id: parsedId } : {}, select: { id: true, teamId: true, title: true } })
+  const trainings = await prisma.training.findMany({
+    where: { type: { not: 'contest' }, ...(parsedId ? { id: parsedId } : {}) },
+    select: { id: true, teamId: true, title: true },
+  })
   if (!trainings.length) throw new AdminDataError(404, '没有找到训练')
   let totalCreated = 0
   const details: Array<{ trainingId: number; title: string; created: number }> = []

@@ -19,7 +19,7 @@ import {
   JUDGE_RUN_TRANSITIONS,
   legacyResultToAttemptState,
 } from '../src/modules/judge/domain/judge-state'
-import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx } from './helpers/legacy-contest-fixture'
 
 describe('Judge domain state machine', () => {
   it('allows only declared JudgeRun transitions', () => {
@@ -258,10 +258,10 @@ describe('Judge lifecycle ownership and retries', () => {
     expect(await prisma.training.findUnique({
       where: { id: contest.id },
       select: { finalizationStatus: true },
-    })).toMatchObject({ finalizationStatus: 'HELD' })
+    })).toMatchObject({ finalizationStatus: 'FINALIZED' })
     expect(await prisma.contest.findUnique({
-      where: { runtimeTrainingId: contest.id },
-      select: { runtimeTrainingId: true },
-    })).toMatchObject({ runtimeTrainingId: contest.id })
+      where: { publicId: contest.id },
+      select: { publicId: true, finalizationStatus: true },
+    })).toMatchObject({ publicId: contest.id, finalizationStatus: 'HELD' })
   })
 })

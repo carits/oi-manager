@@ -14,12 +14,12 @@ import { generateTestToken } from './helpers/testToken'
 import { createTestProblem } from './helpers/problemListHelpers'
 import { prisma } from '../src/prisma'
 import {
-  createContestProblemRuntimeTx,
-  deleteContestProblemRuntimeTx,
-  reorderContestProblemRuntimesTx,
-  updateContestProblemRuntimeTx,
+  createContestProblemTx,
+  deleteContestProblemTx,
+  reorderContestProblemsTx,
+  updateContestProblemTx,
 } from '../src/modules/contest/contest-command.service'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
 
 const app = createTestApp()
 
@@ -509,8 +509,8 @@ describe('比赛类型区分测试', () => {
     expect(started.body.data.title).toBe('生命周期比赛')
 
     const afterStart = await prisma.contest.findUniqueOrThrow({
-      where: { runtimeTrainingId: contestId },
-      include: { RatingConfig: true, RuntimeTraining: true },
+      where: { publicId: contestId },
+      include: { RatingConfig: true },
     })
     expect(afterStart.status).toBe('ongoing')
     expect(afterStart.RatingConfig?.lockedAt).not.toBeNull()
@@ -522,12 +522,11 @@ describe('比赛类型区分测试', () => {
     expect(finished.body.data.finalizationStatus).toBe('JUDGING')
 
     const afterFinish = await prisma.contest.findUniqueOrThrow({
-      where: { runtimeTrainingId: contestId },
-      include: { RuntimeTraining: true },
+      where: { publicId: contestId },
     })
     expect(afterFinish.status).toBe('finished')
-    expect(afterFinish.endAt?.getTime()).toBe(afterFinish.RuntimeTraining?.endTime.getTime())
-    expect(afterFinish.RuntimeTraining?.finalizationStatus).toBe('JUDGING')
+    expect(afterFinish.endAt).not.toBeNull()
+    expect(afterFinish.finalizationStatus).toBe('JUDGING')
   })
 
   it('CT5: 比赛基本信息、赛制和结束时间通过统一命令同步', async () => {
@@ -557,8 +556,8 @@ describe('比赛类型区分测试', () => {
     expect(extended.status).toBe(200)
 
     const aggregate = await prisma.contest.findUniqueOrThrow({
-      where: { runtimeTrainingId: contestId },
-      include: { RatingConfig: true, RuntimeTraining: true },
+      where: { publicId: contestId },
+      include: { RatingConfig: true },
     })
     expect(aggregate.title).toBe('已编辑比赛')
     expect(aggregate.format).toBe('ioi')
@@ -580,7 +579,7 @@ describe('比赛类型区分测试', () => {
     expect(created.status).toBe(200)
     const contestId = created.body.data.id as number
     const aggregateBefore = await prisma.contest.findUniqueOrThrow({
-      where: { runtimeTrainingId: contestId },
+      where: { publicId: contestId },
     })
 
     const deleted = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
@@ -608,35 +607,32 @@ describe('比赛类型区分测试', () => {
     ])
 
     const [runtimeA, runtimeB] = await prisma.$transaction(async tx => {
-      const a = await createContestProblemRuntimeTx(tx, contestId, {
+      const a = await createContestProblemTx(tx, contestId, {
         id: crypto.randomUUID(), problemId: problemA.id, alias: 'A', points: 40,
       })
-      const b = await createContestProblemRuntimeTx(tx, contestId, {
+      const b = await createContestProblemTx(tx, contestId, {
         id: crypto.randomUUID(), problemId: problemB.id, alias: 'B', points: 60,
       })
       return [a.problem!, b.problem!]
     })
 
-    await prisma.$transaction(tx => updateContestProblemRuntimeTx(tx, contestId, runtimeA.id, {
+    await prisma.$transaction(tx => updateContestProblemTx(tx, contestId, runtimeA.id, {
       alias: 'X', points: 50,
     }))
-    await prisma.$transaction(tx => reorderContestProblemRuntimesTx(tx, contestId, [
+    await prisma.$transaction(tx => reorderContestProblemsTx(tx, contestId, [
       { id: runtimeB.id, orderIndex: 0 },
       { id: runtimeA.id, orderIndex: 1 },
     ]))
 
     const aggregateProblems = await prisma.contestProblem.findMany({
-      where: { Contest: { runtimeTrainingId: contestId } },
+      where: { Contest: { publicId: contestId } },
       orderBy: { orderIndex: 'asc' },
     })
-    expect(aggregateProblems.map(problem => [problem.runtimeTrainingProblemId, problem.orderIndex]))
+    expect(aggregateProblems.map(problem => [problem.id, problem.orderIndex]))
       .toEqual([[runtimeB.id, 0], [runtimeA.id, 1]])
     expect(aggregateProblems[1]).toMatchObject({ points: 50 })
 
-    await prisma.$transaction(tx => deleteContestProblemRuntimeTx(tx, contestId, runtimeA.id))
-    expect(await prisma.trainingProblem.findUnique({ where: { id: runtimeA.id } })).toBeNull()
-    expect(await prisma.contestProblem.findUnique({
-      where: { runtimeTrainingProblemId: runtimeA.id },
-    })).toBeNull()
+    await prisma.$transaction(tx => deleteContestProblemTx(tx, contestId, runtimeA.id))
+    expect(await prisma.contestProblem.findUnique({ where: { id: runtimeA.id } })).toBeNull()
   })
 })

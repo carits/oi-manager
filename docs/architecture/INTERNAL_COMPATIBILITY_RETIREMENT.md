@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-19
+last_verified: 2026-09-20
 source_of_truth: auth contracts, auth middleware, organization authorization, offline migration scripts
 ---
 
@@ -25,12 +25,15 @@ source_of_truth: auth contracts, auth middleware, organization authorization, of
 - `pnpm --filter server migrate:account-roles` 会先写快照，再校验成员关系、更新账号角色并复核；重复运行应报告零待迁移记录。
 - 数据修复必须在服务器运行，输出报告并保留快照；不得临时恢复在线维护接口。
 
-## 暂时保留的业务桥接
+## 业务桥接退役
 
-- Contest 到 Training 的历史桥接暂不删除。
-- JudgeRun 到 Submission 的历史桥接暂不删除。
-
-这两类桥接承载仍在使用的历史事实，不属于登录、路由或维护 API 兼容。本轮只记录边界，不改变其行为。
+- Contest 直接拥有公开数字 ID、题目、参赛者、生命周期和 Rating 事实；不再创建、更新或查询
+  Training(type=contest) 镜像，也不保留 runtimeTrainingId/runtimeTrainingProblemId。
+- 比赛题目状态只保存 Contest/ContestProblem 身份；旧整数比赛与题目键已删除。
+- Submission 只保存不可变提交意图，当前和历史执行结果只来自 JudgeRun/JudgeAttempt；
+  Submission 上的 12 个执行镜像列、轮询器和双写迁移服务已删除。
+- 历史 Training 比赛行可作为不再读取的旧数据保留，迁移后不会参与任何比赛业务写入或查询。
+- 架构门禁同时禁止恢复 Training 投影写入、旧 Contest 聚合服务和 Submission 结果镜像。
 
 ## 持续检查
 

@@ -4,7 +4,7 @@ import {
   CURRENT_JUDGE_RUN_SELECT,
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
-import { listContestRuntimesForDashboard } from '../../contest/contest-query.facade'
+import { listContestsForDashboard } from '../../contest/contest-query.facade'
 
 export interface DashboardActor {
   userId: string
@@ -56,7 +56,7 @@ export async function listMyHomeworks(actor: DashboardActor) {
 
 export async function listMyContests(actor: DashboardActor) {
   const teamIds = await currentTeamIds(actor)
-  const contests = await listContestRuntimesForDashboard({
+  const contests = await listContestsForDashboard({
     teamIds,
     resourceScope: actor.resourceScope,
     organizationId: actor.organizationId,
@@ -86,7 +86,7 @@ export async function getMyPersonalOverview(actor: DashboardActor) {
       orderBy: { joinedAt: 'desc' },
       take: 5,
     }),
-    listContestRuntimesForDashboard({
+    listContestsForDashboard({
       teamIds,
       resourceScope: 'personal',
       organizationId: null,

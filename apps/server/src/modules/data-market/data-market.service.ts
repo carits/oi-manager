@@ -8,7 +8,7 @@ import {
 } from '@prisma/client'
 import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../prisma'
-import { findContestRuntimeForLicense, listContestRuntimeIdsForLicenseScopes } from '../contest/contest-query.facade'
+import { findContestForLicense, listContestPublicIdsForLicenseScopes } from '../contest/contest-query.facade'
 import { postCaritsTransaction } from '../carits/application/carits-ledger.service'
 import { notificationService } from '../notification/notification.service'
 import { canModifyProblem, canViewProblem, isPlatformManager } from '../problem/problem.access'
@@ -233,9 +233,9 @@ async function purchaseScope(user: JwtPayload, licenseType: DataLicenseType, bod
   }
   const contestId = Number(body?.contestId)
   if (!Number.isInteger(contestId) || contestId <= 0) policyFail(422, 'DATA_LICENSE_SCOPE_REQUIRED', '比赛许可证必须指定有效的 contestId')
-  const resolved = await findContestRuntimeForLicense(contestId)
-  const contest = resolved?.runtime || null
-  const teamManager = contest?.Team?.TeamMember.some(member => member.userId === user.userId && member.status === 'active' && ['owner', 'admin'].includes(member.role))
+  const resolved = await findContestForLicense(contestId)
+  const contest = resolved?.activity || null
+  const teamManager = contest?.Team?.TeamMember.some((member: any) => member.userId === user.userId && member.status === 'active' && ['owner', 'admin'].includes(member.role))
   const organizationManager = contest?.organizationId
     ? await hasOrganizationCapability(user.userId, contest.organizationId, 'contest.manage')
     : false
@@ -317,7 +317,7 @@ async function accessibleScopeIds(user: JwtPayload) {
   const organizationIds = authorizations
     .filter(item => item.capabilities.has('contest.manage'))
     .map(item => item.organizationId)
-  const contests = await listContestRuntimeIdsForLicenseScopes({
+  const contests = await listContestPublicIdsForLicenseScopes({
     organizationIds,
     teamIds: teamMemberships.map(item => item.teamId),
   })

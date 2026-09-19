@@ -12,8 +12,8 @@ const platformDraft = {
 
 describe('platform problem access', () => {
   it('allows platform managers to manage platform drafts without an organization context', () => {
-    const platformAdmin = { userId: 'admin', role: 'platform_admin', username: 'platform-admin', workspaceMode: 'work' } as any
-    const superAdmin = { userId: 'super', role: 'super_admin', username: 'super-admin', workspaceMode: 'work' } as any
+    const platformAdmin = { userId: 'admin', accountRole: 'platform_admin', username: 'platform-admin' } as any
+    const superAdmin = { userId: 'super', accountRole: 'super_admin', username: 'super-admin' } as any
     expect(canViewProblem(platformAdmin, platformDraft)).toBe(true)
     expect(canModifyProblem(platformAdmin, platformDraft)).toBe(true)
     expect(canViewProblem(superAdmin, platformDraft)).toBe(true)
@@ -21,7 +21,7 @@ describe('platform problem access', () => {
   })
 
   it('does not grant school problem access to a platform manager without organization scope', () => {
-    const platformAdmin = { userId: 'admin', role: 'platform_admin', username: 'platform-admin', workspaceMode: 'work' } as any
+    const platformAdmin = { userId: 'admin', accountRole: 'platform_admin', username: 'platform-admin' } as any
     const schoolDraft = { ...platformDraft, libraryScope: 'school', organizationId: 'school-org' }
     expect(canViewProblem(platformAdmin, schoolDraft)).toBe(false)
     expect(canModifyProblem(platformAdmin, schoolDraft)).toBe(false)

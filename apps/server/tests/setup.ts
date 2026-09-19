@@ -7,6 +7,82 @@ const PLATFORM_PRINCIPAL_USER_ID = 'platform-principal-user-placeholder'
 const PLATFORM_MEMBERSHIP_ID = 'platform-principal-membership-placeholder'
 let cleanupTableList = ''
 
+async function ensureMigrationTriggers() {
+  const statements = [
+    `
+      CREATE OR REPLACE FUNCTION "blog_version_content_immutable"()
+      RETURNS TRIGGER AS $trigger$
+      BEGIN
+        IF TG_OP = 'DELETE' THEN
+          RAISE EXCEPTION '已发布博客版本不可删除';
+        END IF;
+        IF NEW."postId" IS DISTINCT FROM OLD."postId"
+          OR NEW."version" IS DISTINCT FROM OLD."version"
+          OR NEW."title" IS DISTINCT FROM OLD."title"
+          OR NEW."summary" IS DISTINCT FROM OLD."summary"
+          OR NEW."contentMarkdown" IS DISTINCT FROM OLD."contentMarkdown"
+          OR NEW."contentHash" IS DISTINCT FROM OLD."contentHash"
+          OR NEW."sourceVersionId" IS DISTINCT FROM OLD."sourceVersionId"
+          OR NEW."visibility" IS DISTINCT FROM OLD."visibility"
+          OR NEW."organizationIdSnapshot" IS DISTINCT FROM OLD."organizationIdSnapshot"
+          OR NEW."classificationSnapshot" IS DISTINCT FROM OLD."classificationSnapshot"
+          OR NEW."createdByUserId" IS DISTINCT FROM OLD."createdByUserId"
+          OR NEW."createdAt" IS DISTINCT FROM OLD."createdAt"
+          OR NEW."publishedAt" IS DISTINCT FROM OLD."publishedAt" THEN
+          RAISE EXCEPTION '已发布博客版本内容不可修改，只能创建新版本';
+        END IF;
+        IF NEW."status" IS DISTINCT FROM OLD."status"
+          AND NOT (OLD."status" = 'CURRENT' AND NEW."status" = 'SUPERSEDED') THEN
+          RAISE EXCEPTION '博客版本状态只能从 CURRENT 单向变为 SUPERSEDED';
+        END IF;
+        RETURN NEW;
+      END;
+      $trigger$ LANGUAGE plpgsql
+    `,
+    `DROP TRIGGER IF EXISTS "BlogPostVersion_prevent_content_mutation" ON "BlogPostVersion"`,
+    `
+      CREATE TRIGGER "BlogPostVersion_prevent_content_mutation"
+      BEFORE UPDATE OR DELETE ON "BlogPostVersion"
+      FOR EACH ROW EXECUTE FUNCTION "blog_version_content_immutable"()
+    `,
+    `
+      CREATE OR REPLACE FUNCTION "blog_reference_immutable"()
+      RETURNS TRIGGER AS $trigger$
+      BEGIN
+        RAISE EXCEPTION '已发布博客引用不可修改或删除';
+      END;
+      $trigger$ LANGUAGE plpgsql
+    `,
+    `DROP TRIGGER IF EXISTS "BlogReference_prevent_mutation" ON "BlogReference"`,
+    `
+      CREATE TRIGGER "BlogReference_prevent_mutation"
+      BEFORE UPDATE OR DELETE ON "BlogReference"
+      FOR EACH ROW EXECUTE FUNCTION "blog_reference_immutable"()
+    `,
+    `
+      CREATE OR REPLACE FUNCTION reject_blog_submission_snapshot_mutation()
+      RETURNS trigger AS $trigger$
+      BEGIN
+        RAISE EXCEPTION 'BlogSubmissionSnapshot is immutable';
+      END;
+      $trigger$ LANGUAGE plpgsql
+    `,
+    `DROP TRIGGER IF EXISTS "BlogSubmissionSnapshot_no_update" ON "BlogSubmissionSnapshot"`,
+    `
+      CREATE TRIGGER "BlogSubmissionSnapshot_no_update"
+      BEFORE UPDATE ON "BlogSubmissionSnapshot"
+      FOR EACH ROW EXECUTE FUNCTION reject_blog_submission_snapshot_mutation()
+    `,
+    `DROP TRIGGER IF EXISTS "BlogSubmissionSnapshot_no_delete" ON "BlogSubmissionSnapshot"`,
+    `
+      CREATE TRIGGER "BlogSubmissionSnapshot_no_delete"
+      BEFORE DELETE ON "BlogSubmissionSnapshot"
+      FOR EACH ROW EXECUTE FUNCTION reject_blog_submission_snapshot_mutation()
+    `,
+  ]
+  for (const statement of statements) await prisma.$executeRawUnsafe(statement)
+}
+
 // 测试夹具必须跟随当前 Prisma schema：User 不再直接关联 schoolId，
 // 校园关系通过 OrganizationMembership 与 OrganizationTeacherProfile 表达。
 async function ensurePlatformFixture() {
@@ -70,6 +146,7 @@ beforeAll(async () => {
   cleanupTableList = tables
     .map(({ tablename }) => `"${tablename.replaceAll('"', '""')}"`)
     .join(', ')
+  await ensureMigrationTriggers()
   await ensurePlatformFixture()
 })
 

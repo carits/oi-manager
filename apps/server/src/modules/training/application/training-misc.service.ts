@@ -14,8 +14,8 @@ import {
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
 import {
-  findActivityRuntimeForAccess,
-  findActivityRuntimeForOverview,
+  findActivityForAccess,
+  findActivityForOverview,
 } from '../../contest/contest-query.facade'
 
 export class TrainingMiscError extends Error {
@@ -64,7 +64,7 @@ function rewriteTrainingFileUrls(trainingId: number, trainingProblemId: string, 
 }
 
 async function requireAccessibleTraining(id: number, userId: string, hidden = false) {
-  const training = (await findActivityRuntimeForAccess(id))?.runtime || null
+  const training = (await findActivityForAccess(id))?.activity || null
   if (!training || !await canAccessTraining(userId, training)) {
     fail(hidden ? 404 : training ? 403 : 404, hidden ? 'RESOURCE_NOT_FOUND' : training ? 'TRAINING_ACCESS_DENIED' : 'TRAINING_NOT_FOUND', hidden ? '资源不存在' : training ? '无权限' : '训练不存在')
   }
@@ -72,7 +72,7 @@ async function requireAccessibleTraining(id: number, userId: string, hidden = fa
 }
 
 export async function getTrainingOverview(id: number, userId: string) {
-  const training = (await findActivityRuntimeForOverview(id))?.runtime || null
+  const training = (await findActivityForOverview(id))?.activity || null
   if (!training) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
   if (!await canAccessTraining(userId, training)) fail(403, 'TRAINING_ACCESS_DENIED', '无权查看该训练')
 
@@ -83,11 +83,13 @@ export async function getTrainingOverview(id: number, userId: string) {
     ? await prisma.submission.findMany({
         where: {
           submitScope: training.type === 'contest' ? 'contest' : 'training',
-          trainingId: id,
+          ...(training.type === 'contest'
+            ? { canonicalContestId: (training as any).canonicalContestId }
+            : { trainingId: id }),
           userId,
         },
         select: {
-          trainingProblemId: true, oj: true, problemId: true,
+          trainingProblemId: true, canonicalContestProblemId: true, oj: true, problemId: true,
           CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
         },
         orderBy: { createdAt: 'asc' },
@@ -100,7 +102,7 @@ export async function getTrainingOverview(id: number, userId: string) {
   const hideOiStatus = training.format === 'oi' && status !== 'finished' && !isAdmin
   const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
   const problems = canSeeProblems
-    ? training.TrainingProblem.map(problem => {
+    ? training.TrainingProblem.map((problem: any) => {
         const summary = {
           id: problem.id,
           points: problem.points,
@@ -124,11 +126,12 @@ export async function getTrainingOverview(id: number, userId: string) {
       })
     : []
   const problemStatus = canSeeProblems
-    ? training.TrainingProblem.map(problem => {
+    ? training.TrainingProblem.map((problem: any) => {
         const platform = problem.Problem.platform
         const platformProblemId = problem.Problem.problemId
         const matching = submissions.filter(submission =>
           submission.trainingProblemId === problem.id ||
+          submission.canonicalContestProblemId === problem.id ||
           submission.problemId === platformProblemId ||
           submission.problemId === `${platform}:${platformProblemId}`)
         const itemStatus = buildContestProblemStatus(training.format, matching)

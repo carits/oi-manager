@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
 import { createQueuedTrainingSubmission } from '../src/modules/training/training.submission.service'
 import { saveTrainingRecord } from '../src/modules/training/application/training-user-content.service'
 import { syncContestProblemStatus } from '../src/lib/submission-sync'
@@ -70,18 +70,16 @@ describe('canonical contest submission identity', () => {
     )
     const status = await prisma.contestUserProblemStatus.findUniqueOrThrow({
       where: {
-        canonicalContestId_userId_canonicalContestProblemId: {
-          canonicalContestId: fixture.contest.id,
+        contestId_userId_contestProblemId: {
+          contestId: fixture.contest.id,
           userId: fixture.participant.user.id,
-          canonicalContestProblemId: fixture.contestProblem.id,
+          contestProblemId: fixture.contestProblem.id,
         },
       },
     })
     expect(status).toMatchObject({
-      contestId: null,
-      contestProblemId: null,
-      canonicalContestId: fixture.contest.id,
-      canonicalContestProblemId: fixture.contestProblem.id,
+      contestId: fixture.contest.id,
+      contestProblemId: fixture.contestProblem.id,
     })
 
     const record = await saveTrainingRecord(

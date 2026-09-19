@@ -11,7 +11,7 @@ import {
   type ContentOption,
 } from '../../problem/problem.content.service'
 import { ContentSnapshotEditError, editActivityContentSnapshot } from '../training.content-snapshot.service'
-import { findActivityRuntimeForAccess } from '../../contest/contest-query.facade'
+import { findActivityForAccess } from '../../contest/contest-query.facade'
 
 export class TrainingContentError extends Error {
   constructor(
@@ -35,7 +35,7 @@ export function parseContentKind(value: string): ContentKind {
 }
 
 async function loadContext(trainingId: number, trainingProblemId: string) {
-  const training = (await findActivityRuntimeForAccess(trainingId))?.runtime || null
+  const training = (await findActivityForAccess(trainingId))?.activity || null
   const trainingProblem = await prisma.trainingProblem.findFirst({
     where: { id: trainingProblemId, trainingId },
   })
