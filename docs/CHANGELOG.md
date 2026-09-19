@@ -5,6 +5,13 @@ last_verified: 2026-09-19
 source_of_truth: Git history
 ---
 
+## 2026-09-19 — 仓库完成门禁按风险分级
+
+- 修正仓库规则与机器架构进度的冲突：旧 Transport 保持零、intentional raw transport 必须登记，Feature 内部 Transport 明确只作观察指标，不再要求归零或按调用数挑选迁移批次。
+- 完成门禁改为三级：局部实现执行定向验证；行为/契约变化更新归属文档与变更记录；架构、数据和发布变化执行完整文档、架构及相应 E2E 门禁。STATUS 只在当前运行事实变化时更新。
+- Contest runtime 的 4 个兼容点与 Judge 的 12 个兼容列继续视为真实未完成迁移，不在本轮直接删除；后续必须以业务迁移和证据清零。
+- `docs-check` 新增仓库规则一致性断言，防止再次写回“Feature transport 必须清零”或丢失风险分级。此变更只影响开发治理，不改变运行时代码或部署状态。
+
 ## 2026-09-19 — 内部兼容债务退役
 
 - 删除 `/student/**`、`/teacher/**` 旧页面以及一次性 Migration/Test Graph 管理 HTTP 路由；历史迁移能力仅保留为离线脚本、审计服务和文档。
