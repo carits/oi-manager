@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations, codex
-last_verified: 2026-08-12
+last_verified: 2026-09-19
 source_of_truth: AGENTS.md, package.json, Playwright configuration, remote runtime scripts
 ---
 
@@ -12,7 +12,7 @@ source_of_truth: AGENTS.md, package.json, Playwright configuration, remote runti
 登录页只使用用户名和密码，不再选择学生端、教师端或管理员端。成功登录后进入 `/identity`：
 平台管理员可选择平台管理、校园身份和个人；其他账号可选择其所有校园身份和个人。
 
-校园归属以 `OrganizationMembership` 为唯一事实来源。同一账号可加入多个校园，且可在不同校园拥有不同身份；学生和教师资料保存在组织内档案。旧 `User.schoolId`、`Student.schoolId`、`Teacher.schoolId` 仍只为兼容历史资源保留，新代码不得用它们决定校园权限或身份列表。
+校园归属以 `OrganizationMembership` 为唯一事实来源。同一账号可加入多个校园，且可在不同校园拥有不同身份；学生和教师资料保存在组织内档案。全局 `User` 不再保存校园归属，旧 `Student`、`Teacher` 模型和校园 `schoolId` 回退已经退役，不得恢复双模型读取。
 
 本文是 OI Manager 的 Codex 执行手册。新会话开始时先读本文，再按任务读取对应模块文档。`docs/archive/` 只用于追溯历史，不可作为当前操作依据。
 
@@ -23,7 +23,7 @@ source_of_truth: AGENTS.md, package.json, Playwright configuration, remote runti
 3. 不得重置、覆盖或删除未理解的改动。禁止 `git reset --hard`、`git checkout -- .`、`docker-compose down -v` 和无范围的删除命令。
 4. 不能把构建通过说成已部署，不能把静态扫描说成真实点击验证。只有命令实际成功后，才能声明已测试、已推送或已部署。
 5. 面向用户和维护者的说明文档一律使用中文。命令、路径、环境变量、协议、代码标识和第三方产品名称保持原写法。
-6. 任何完成的仓库任务都必须更新对应文档、`docs/CHANGELOG.md`，必要时更新 `docs/STATUS.md`，并运行 `pnpm docs:check`。
+6. 完成门禁按风险分级：局部实现执行定向验证；契约或用户行为变化更新归属文档与变更记录；架构、数据和发布变化执行完整文档与架构门禁。无论级别，只要现有活动文档会因此失真就必须同步修正。
 
 ## 服务器与目录
 
@@ -75,8 +75,8 @@ curl -fsS http://127.0.0.1:3002/api/health
 3. 用最小改动实现。涉及业务写入时，后端先完成认证、角色、作用域与资源归属校验；跨模型写入使用事务。
 4. 不通过数据库直接造数据。需要操作入口时，补充 API 与 API 测试，再由界面或 E2E 调用。
 5. 按风险运行构建、单测和 E2E；修改页面布局时还要用浏览器检查实际效果。
-6. 更新长期有效文档、变更记录和状态快照，运行 `pnpm docs:check` 与 `git diff --check`。
-7. 确认差异范围后提交、推送 `main`；需要公网可见时再构建并提升到 `3000`。
+6. 按下方风险级别更新必要文档并执行验证；所有任务至少运行 `git diff --check`，只有相应级别或受影响事实要求时才运行完整 `pnpm docs:check`。
+7. 确认差异范围后提交、推送 `main`；只有运行时内容需要公网可见时才构建并提升到 `3000`。
 
 ## 路由和按钮门禁
 
@@ -128,16 +128,26 @@ pnpm exec playwright test e2e/tests/internal-link-audit.spec.ts --project=chromi
 
 静态检查生成 `test-results/navigation-static-report.json`。其中“尚未迁移到统一路由函数”是待收敛清单，不等于真实点击已通过；“阻断问题”必须为零。
 
+## 完成门禁分级
+
+| 级别 | 典型范围 | 文档与记录 | 最低验证 |
+|---|---|---|---|
+| 局部实现 | CSS/UI、小缺陷、内部重构、测试补充；不改变公开契约、权限、Schema 或运行状态 | 仅在既有活动文档会失真时更新；不强制 CHANGELOG、STATUS、last_verified 或完整 docs:check | 受影响测试/构建 + `git diff --check`；视觉或交互改动必须看真实页面 |
+| 行为与契约 | API/Runtime Contract、用户可见行为、权限/隐私、运维命令语义 | 更新归属文档和 CHANGELOG；只刷新实际改动或复核文档的 last_verified | 模块测试、类型检查、构建及定向 API/浏览器验证；触及文档库存事实时运行 docs:check |
+| 架构、数据与发布 | 架构边界、Prisma/迁移、安全边界、部署回滚、生产状态、跨系统改动 | 更新归属文档和 CHANGELOG；当前状态变化时更新 STATUS | `pnpm docs:check`、相关架构/迁移门禁、按影响范围执行广泛测试或 E2E；部署时留存真实证据 |
+
+不要为了满足清单制造无意义文档改动。排查没有形成长期项目事实时无需留档；一旦改变长期事实，无论任务大小都要更新其唯一归属文档。
+
 ## 测试选择
 
 | 修改范围 | 最低验证 |
 |---|---|
-| 仅文档 | `pnpm docs:check`、`git diff --check` |
+| 仅文字且不影响文档库存事实 | `git diff --check`；活动文档结构或事实源变化时再运行 `pnpm docs:check` |
 | Web 组件或页面 | `pnpm --filter web test`、`pnpm --filter web build` |
 | API、权限或 Prisma | `pnpm --filter server prisma:generate`、`pnpm --filter server build`、`pnpm --filter server test` |
 | 路由、按钮、菜单、通知、返回链接或工作区 | Web 验证 + `pnpm routes:audit` + 对应角色实际点击巡检 |
 | Judge | `pnpm --filter @oi-manager/judge build`、`pnpm --filter @oi-manager/judge test` |
-| 跨端或高风险改动 | `pnpm build`、`pnpm test`、`pnpm docs:check`，并增加 E2E |
+| 跨端或高风险改动 | `pnpm build`、`pnpm test`、`pnpm docs:check`，并按风险增加 E2E |
 
 E2E 准备命令会重建 PostgreSQL 的 `e2e` schema 并写入固定 fixture：
 
@@ -227,6 +237,6 @@ git commit -m "fix: 中文说明"
 git push origin main
 ```
 
-完成前检查：代码、测试和文档是否一致；是否明确写出了未执行或失败的验证；`docs/CHANGELOG.md` 是否记录日期、结果和实际验证；`docs/STATUS.md` 是否更新变化的能力、端口、限制或最近验证；是否运行 `pnpm docs:check`；是否只在推送成功后声明“已推送”，只在 `preview:promote` 和健康检查成功后声明“已部署到 3000”。
+完成前检查：先判定风险级别；代码、测试和活动文档是否一致；是否明确写出了未执行或失败的验证；该级别要求的归属文档、CHANGELOG、STATUS 和门禁是否完成；是否只在推送成功后声明“已推送”，只在 `preview:promote` 和健康检查成功后声明“已部署到 3000”。
 
 最终回复应简明写清：改了什么、跑了什么、是否已推送、是否已部署、提交哈希，以及仍未覆盖的风险。

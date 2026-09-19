@@ -6,6 +6,24 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const docsRoot = path.join(root, 'docs')
 const errors = []
 
+const repositoryInstructions = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
+const architectureProgress = JSON.parse(
+  fs.readFileSync(path.join(docsRoot, 'architecture-progress.json'), 'utf8'),
+)
+
+if (/legacy and Feature UI\/Model transport calls are both zero/i.test(repositoryInstructions)) {
+  errors.push('AGENTS.md contains the retired requirement to reduce Feature-local transport to zero')
+}
+if (architectureProgress.exitCriteria?.contractFeatureMigration?.includes('feature-local transport is observational')
+  && !/Feature-local transport is observational and is not a zero target/i.test(repositoryInstructions)) {
+  errors.push('AGENTS.md does not match the architecture progress contract for observational Feature-local transport')
+}
+for (const tier of ['Tier 1: local implementation', 'Tier 2: behavior or contract', 'Tier 3: architecture, data, or release']) {
+  if (!repositoryInstructions.includes(tier)) {
+    errors.push(`AGENTS.md is missing risk gate: ${tier}`)
+  }
+}
+
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const fullPath = path.join(directory, entry.name)
