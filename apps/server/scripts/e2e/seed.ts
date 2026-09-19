@@ -361,8 +361,16 @@ async function main() {
     await prisma.trainingSession.create({ data: {
       id: ids.trainingSession, title: 'E2E 教练训练', description: '阶段控制与草稿测试', sessionType: 'ACM', status: 'SCHEDULED',
       organizationId: ids.organization, createdBy: ids.principal, scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000), rankingMode: 'PROGRESS_ONLY', peerVisibility: 'PROGRESS',
-      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, mode: 'SEQUENTIAL', advanceMode: 'MANUAL', problemAccessMode: 'SEQUENTIAL', submissionMode: 'ENABLED', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, testSetRevisionId: 'e2e-testset-revision', alias: 'A', orderIndex: 0 } } } },
+      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, kind: 'TRAINING', audienceMode: 'ALL', lifecycle: 'PENDING', endPolicy: 'MANUAL', accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, testSetRevisionId: 'e2e-testset-revision', alias: 'A', orderIndex: 0 } } } },
       Participants: { create: { id: 'e2e-training-participant', userId: ids.campusStudent, currentStageId: 'e2e-training-stage' } },
+    } })
+    await prisma.trainingSessionStageProblemPlan.create({ data: {
+      id: 'e2e-training-stage-problem-plan', stageId: 'e2e-training-stage', stageProblemId: 'e2e-training-stage-problem', groupId: null,
+      orderIndex: 0,
+    } })
+    await prisma.trainingSessionStageParticipantAssignment.create({ data: {
+      id: 'e2e-training-stage-assignment', stageId: 'e2e-training-stage', participantId: 'e2e-training-participant', groupId: null,
+      assignedBy: ids.principal, source: 'e2e-seed',
     } })
     await prisma.trainingSession.update({ where: { id: ids.trainingSession }, data: { currentStageId: 'e2e-training-stage' } })
 
