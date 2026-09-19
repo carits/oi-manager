@@ -10,7 +10,7 @@ export default function AdminProfilePage() {
         <h2 className={unifiedStyles.u2}>
           个人信息
         </h2>
-        <ProfileEditor userType="admin" />
+        <ProfileEditor />
       </div>
     </>
   )

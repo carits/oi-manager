@@ -11,11 +11,7 @@ import { updateAccountProfile, uploadAccountAvatar } from '../api/authApi'
 import { getAssetUrl } from '@/lib/assets'
 import { useToast } from '@/components/ui/Toast'
 
-interface ProfileEditorProps {
-  userType: 'teacher' | 'student' | 'admin'
-}
-
-export function ProfileEditor({ userType: _userType }: ProfileEditorProps) {
+export function ProfileEditor() {
   const { user, refreshUser } = useAuth()
   const toast = useToast()
   const [loading, setLoading] = useState(true)
