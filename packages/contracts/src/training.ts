@@ -89,7 +89,7 @@ export const TrainingTemplateDeleteResultSchema = z.object({ deleted: z.literal(
 const TrainingUserSummarySchema = z.object({ id: z.string(), username: z.string(), avatar: z.string().nullable().optional() }).passthrough()
 const TrainingRuntimeProblemSchema = z.object({
   id: z.string(), problemId: z.string(), alias: z.string().nullable().optional(), targetScore: z.number().int().nullable().optional(),
-  timePolicy: TrainingProblemTimePolicySchema.nullable().optional(), stuckPolicy: TrainingStuckPolicySchema.nullable().optional(), allowedSubtaskIds: z.array(z.number().int()).optional(),
+  timePolicy: TrainingProblemTimePolicySchema.nullable().optional(), stuckPolicy: TrainingStuckPolicySchema.nullable().optional(), allowedSubtaskIds: z.array(z.number().int()).nullable().optional(),
   strategyIntervalSeconds: z.number().int().nullable().optional(), unlockPolicy: TrainingUnlockPolicySchema.nullable().optional(),
   Problem: z.object({ problemId: z.string(), title: z.string(), platform: z.string() }).passthrough(),
   TestSetRevision: z.object({ revisionNumber: z.number().int(), mode: z.string() }).passthrough(),
