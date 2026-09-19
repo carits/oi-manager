@@ -20,21 +20,16 @@ describe('notification application service', () => {
 
   beforeEach(async () => {
     const school = await createTestSchoolWithPrincipal()
-    user = await createTestUser({ role: 'student', schoolId: school.school.id })
+    user = await createTestUser({ organization: { role: 'student', organizationId: school.school.organizationId! } })
     organizationId = (await prisma.organization.findFirstOrThrow({ where: { School: { id: school.school.id } } })).id
-    token = generateTokenFromUser({
-      id: user.user.id,
-      role: 'student',
-      username: user.user.username,
-      studentId: user.studentId,
-      schoolId: school.school.id,
-    })
+    token = generateTokenFromUser(user.user)
   })
 
   async function createNotification(sourceId = crypto.randomUUID()) {
     return prisma.userNotification.create({
       data: {
-        id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', type: 'info',
+        id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', contextType: 'organization',
+        contextKey: `organization:${organizationId}`, organizationId, type: 'info',
         title: '测试通知', body: '通知正文', sourceType: 'test', sourceId,
       },
     })
@@ -64,7 +59,8 @@ describe('notification application service', () => {
 
   it('returns an authoritative pagination cursor beyond the first 50 notifications', async () => {
     await prisma.userNotification.createMany({ data: Array.from({ length: 51 }, (_, index) => ({
-      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', type: 'info',
+      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', contextType: 'organization',
+      contextKey: `organization:${organizationId}`, organizationId, type: 'info',
       title: `通知 ${index}`, body: '通知正文', sourceType: 'pagination', sourceId: crypto.randomUUID(),
     })) })
     const first = await createAuthenticatedRequest(app, token, { organizationId }).get('/api/notifications?page=1&pageSize=50')
@@ -76,19 +72,21 @@ describe('notification application service', () => {
   })
 
   it('finds actionable notifications after more than one raw notification page', async () => {
-    const teacher = await createTestUser({ role: 'teacher', schoolId: user.schoolId })
-    const team = await createTestTeam({ schoolId: user.schoolId, scope: 'campus', ownerId: teacher.user.id, ownerType: 'teacher' })
+    const teacher = await createTestUser({ organization: { role: 'teacher', organizationId: user.organization!.organizationId } })
+    const team = await createTestTeam({ organizationId: user.organization!.organizationId, scope: 'campus', ownerId: teacher.user.id, ownerType: 'teacher' })
     const invitation = await prisma.teamMember.create({ data: {
       id: crypto.randomUUID(), teamId: team.id, userId: user.user.id, userType: 'student',
       role: 'member', status: 'pending', invitedBy: teacher.user.id, joinedAt: new Date(Date.now() - 60_000),
     } })
     await prisma.userNotification.create({ data: {
-      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', type: 'team_invitation',
+      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', contextType: 'organization',
+      contextKey: `organization:${organizationId}`, organizationId, type: 'team_invitation',
       title: '团队邀请', body: '请处理邀请', sourceType: 'team_member', sourceId: invitation.id,
       createdAt: new Date(Date.now() - 60_000),
     } })
     await prisma.userNotification.createMany({ data: Array.from({ length: 55 }, (_, index) => ({
-      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', type: 'info',
+      id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', contextType: 'organization',
+      contextKey: `organization:${organizationId}`, organizationId, type: 'info',
       title: `普通通知 ${index}`, body: '通知正文', sourceType: 'actionable-pagination', sourceId: crypto.randomUUID(),
       createdAt: new Date(),
     })) })
@@ -104,7 +102,8 @@ describe('notification application service', () => {
     const campus = await createNotification('campus')
     const personal = await prisma.userNotification.create({
       data: {
-        id: crypto.randomUUID(), userId: user.user.id, scope: 'personal', type: 'info',
+        id: crypto.randomUUID(), userId: user.user.id, scope: 'personal', contextType: 'account',
+        contextKey: 'account', type: 'info',
         title: '个人通知', body: '通知正文', sourceType: 'test', sourceId: 'personal',
       },
     })
@@ -127,7 +126,7 @@ describe('notification application service', () => {
         memberRole: 'student', relationType: 'enrolled', status: 'active', joinedAt: new Date(),
       },
     })
-    const firstOrganization = await prisma.organization.findFirstOrThrow({ where: { School: { id: user.schoolId } } })
+    const firstOrganization = await prisma.organization.findUniqueOrThrow({ where: { id: user.organization!.organizationId } })
     await prisma.userNotification.createMany({ data: [
       {
         id: crypto.randomUUID(), userId: user.user.id, scope: 'campus', contextType: 'organization',
@@ -149,10 +148,11 @@ describe('notification application service', () => {
   })
 
   it('does not reveal another user notification when marking it read', async () => {
-    const other = await createTestUser({ role: 'student', schoolId: user.schoolId })
+    const other = await createTestUser({ organization: { role: 'student', organizationId: user.organization!.organizationId } })
     const notification = await prisma.userNotification.create({
       data: {
-        id: crypto.randomUUID(), userId: other.user.id, scope: 'campus', type: 'info',
+        id: crypto.randomUUID(), userId: other.user.id, scope: 'campus', contextType: 'organization',
+        contextKey: `organization:${organizationId}`, organizationId, type: 'info',
         title: '他人通知', body: '通知正文', sourceType: 'test', sourceId: crypto.randomUUID(),
       },
     })

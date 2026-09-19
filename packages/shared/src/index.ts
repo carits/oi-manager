@@ -14,8 +14,6 @@ export type SchoolStatus = 'active' | 'disabled'
 // 教师状态
 export type TeacherStatus = 'active' | 'disabled'
 
-// 负责人转移结果
-export type PrincipalTransferResult = 'success' | 'failed'
 
 // 考试类型
 export type ExamType = 'weekly' | 'monthly' | 'topic' | 'mock'
@@ -81,16 +79,6 @@ export interface UpdateSchoolStatusRequest {
   status: SchoolStatus
 }
 
-// 指定负责人请求
-export interface SetPrincipalRequest {
-  teacherId: string
-}
-
-// 负责人转移请求
-export interface TransferPrincipalRequest {
-  newPrincipalTeacherId: string
-}
-
 // ========== 教师管理 DTO ==========
 
 // 创建教师请求（学校负责人）
@@ -121,24 +109,6 @@ export interface UpdateTeacherStatusRequest {
 // 重置密码请求
 export interface ResetPasswordRequest {
   newPassword: string
-}
-
-// ========== 日志 DTO ==========
-
-// 负责人转移日志
-export interface PrincipalTransferLog {
-  id: string
-  schoolId: string
-  schoolName: string
-  oldPrincipalTeacherId: string | null
-  oldPrincipalTeacherName: string | null
-  newPrincipalTeacherId: string
-  newPrincipalTeacherName: string
-  operatorUserId: string
-  operatorUsername: string
-  result: PrincipalTransferResult
-  message?: string
-  createdAt: string
 }
 
 // ========== 平台管理员 DTO ==========

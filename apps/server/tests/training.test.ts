@@ -73,16 +73,16 @@ describe('训练模块权限测试', () => {
     schoolData = await createTestSchoolWithPrincipal()
 
     // 创建用户
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    adminUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    memberUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
-    outsiderUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    adminUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    memberUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
+    outsiderUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
 
     // 创建团队（owner 是创建者）
     team = await createTestTeam({
-      schoolId: schoolData.school.id,
-      ownerId: ownerUser.teacherId
+      organizationId: schoolData.school.organizationId!,
+      ownerId: ownerUser.userId
     })
 
     // 添加团队成员
@@ -90,7 +90,7 @@ describe('训练模块权限测试', () => {
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: adminUser.teacherId!,
+        userId: adminUser.userId!,
         userType: 'teacher',
         role: 'admin',
         status: 'active',
@@ -102,7 +102,7 @@ describe('训练模块权限测试', () => {
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: memberUser.teacherId!,
+        userId: memberUser.userId!,
         userType: 'teacher',
         role: 'member',
         status: 'active',
@@ -114,7 +114,7 @@ describe('训练模块权限测试', () => {
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: studentUser.studentId!,
+        userId: studentUser.userId!,
         userType: 'student',
         role: 'member',
         status: 'active',
@@ -123,45 +123,15 @@ describe('训练模块权限测试', () => {
     })
 
     // 生成 token
-    ownerToken = generateTestToken({
-      userId: ownerUser.user.id,
-      role: 'teacher',
-      username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
 
-    adminToken = generateTestToken({
-      userId: adminUser.user.id,
-      role: 'teacher',
-      username: adminUser.user.username,
-      teacherId: adminUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    adminToken = generateTestToken({ userId: adminUser.user.id, username: adminUser.user.username, accountRole: 'user' })
 
-    memberToken = generateTestToken({
-      userId: memberUser.user.id,
-      role: 'teacher',
-      username: memberUser.user.username,
-      teacherId: memberUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    memberToken = generateTestToken({ userId: memberUser.user.id, username: memberUser.user.username, accountRole: 'user' })
 
-    studentToken = generateTestToken({
-      userId: studentUser.user.id,
-      role: 'student',
-      username: studentUser.user.username,
-      studentId: studentUser.studentId!,
-      schoolId: schoolData.school.id
-    })
+    studentToken = generateTestToken({ userId: studentUser.user.id, username: studentUser.user.username, accountRole: 'user' })
 
-    outsiderToken = generateTestToken({
-      userId: outsiderUser.user.id,
-      role: 'teacher',
-      username: outsiderUser.user.username,
-      teacherId: outsiderUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    outsiderToken = generateTestToken({ userId: outsiderUser.user.id, username: outsiderUser.user.username, accountRole: 'user' })
 
     // 创建训练（由 owner 创建）
     const now = Date.now()
@@ -708,19 +678,19 @@ describe('OI 赛制可见性测试', () => {
 
   beforeEach(async () => {
     schoolData = await createTestSchoolWithPrincipal()
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
 
     team = await createTestTeam({
-      schoolId: schoolData.school.id,
-      ownerId: ownerUser.teacherId
+      organizationId: schoolData.school.organizationId!,
+      ownerId: ownerUser.userId
     })
 
     await prisma.teamMember.create({
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: studentUser.studentId!,
+        userId: studentUser.userId!,
         userType: 'student',
         role: 'member',
         status: 'active',
@@ -728,21 +698,9 @@ describe('OI 赛制可见性测试', () => {
       }
     })
 
-    ownerToken = generateTestToken({
-      userId: ownerUser.user.id,
-      role: 'teacher',
-      username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
 
-    studentToken = generateTestToken({
-      userId: studentUser.user.id,
-      role: 'student',
-      username: studentUser.user.username,
-      studentId: studentUser.studentId!,
-      schoolId: schoolData.school.id
-    })
+    studentToken = generateTestToken({ userId: studentUser.user.id, username: studentUser.user.username, accountRole: 'user' })
 
     // 创建 OI 赛制训练（赛中）
     const now = Date.now()
@@ -893,19 +851,19 @@ describe('训练状态可见性测试', () => {
 
   beforeEach(async () => {
     schoolData = await createTestSchoolWithPrincipal()
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
 
     team = await createTestTeam({
-      schoolId: schoolData.school.id,
-      ownerId: ownerUser.teacherId
+      organizationId: schoolData.school.organizationId!,
+      ownerId: ownerUser.userId
     })
 
     await prisma.teamMember.create({
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: studentUser.studentId!,
+        userId: studentUser.userId!,
         userType: 'student',
         role: 'member',
         status: 'active',
@@ -913,21 +871,9 @@ describe('训练状态可见性测试', () => {
       }
     })
 
-    ownerToken = generateTestToken({
-      userId: ownerUser.user.id,
-      role: 'teacher',
-      username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
 
-    studentToken = generateTestToken({
-      userId: studentUser.user.id,
-      role: 'student',
-      username: studentUser.user.username,
-      studentId: studentUser.studentId!,
-      schoolId: schoolData.school.id
-    })
+    studentToken = generateTestToken({ userId: studentUser.user.id, username: studentUser.user.username, accountRole: 'user' })
   })
 
   describe('未开始训练可见性', () => {

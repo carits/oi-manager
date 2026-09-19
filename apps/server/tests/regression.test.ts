@@ -9,15 +9,7 @@ const app = createTestApp()
 type TestUser = Awaited<ReturnType<typeof createTestUser>>
 
 function tokenFor(user: TestUser) {
-  return generateTestToken({
-    userId: user.user.id,
-    username: user.user.username,
-    role: user.user.role,
-    schoolId: user.schoolId,
-    teacherId: user.teacherId,
-    studentId: user.studentId,
-    adminId: user.adminId,
-  })
+  return generateTestToken({ userId: user.user.id, username: user.user.username, accountRole: user.user.accountRole })
 }
 
 describe('current list and detail regressions', () => {
@@ -28,13 +20,13 @@ describe('current list and detail regressions', () => {
 
   beforeEach(async () => {
     school = (await createTestSchoolWithPrincipal()).school
-    principal = await createTestUser({ role: 'school_principal', schoolId: school.id })
-    teacher = await createTestUser({ role: 'teacher', schoolId: school.id })
-    superAdmin = await createTestUser({ role: 'super_admin' })
+    principal = await createTestUser({ organization: { role: 'school_principal', organizationId: school.organizationId! } })
+    teacher = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
   })
 
   it('paginates students inside the active organization', async () => {
-    for (let index = 0; index < 5; index += 1) await createTestUser({ role: 'student', schoolId: school.id })
+    for (let index = 0; index < 5; index += 1) await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
     const response = await request(app)
       .get(`/api/organizations/${school.organizationId}/members/students?page=1&pageSize=3`)
       .set('Cookie', `oi_session=${tokenFor(principal)}`)
@@ -45,9 +37,9 @@ describe('current list and detail regressions', () => {
   })
 
   it('never mixes student profiles from another organization', async () => {
-    const local = await createTestUser({ role: 'student', schoolId: school.id })
+    const local = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
     const otherSchool = (await createTestSchoolWithPrincipal('Other School')).school
-    const remote = await createTestUser({ role: 'student', schoolId: otherSchool.id })
+    const remote = await createTestUser({ organization: { role: 'student', organizationId: otherSchool.organizationId! } })
     const response = await request(app)
       .get(`/api/organizations/${school.organizationId}/members/students`)
       .set('Cookie', `oi_session=${tokenFor(principal)}`)
@@ -58,8 +50,8 @@ describe('current list and detail regressions', () => {
   })
 
   it('ordinary teachers only list students assigned to their organization membership', async () => {
-    const assigned = await createTestUser({ role: 'student', schoolId: school.id, headTeacherId: teacher.user.id })
-    const unassigned = await createTestUser({ role: 'student', schoolId: school.id })
+    const assigned = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId!, headTeacherMembershipId: teacher.organization!.membershipId } })
+    const unassigned = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
     const response = await request(app)
       .get(`/api/organizations/${school.organizationId}/members/students`)
       .set('Cookie', `oi_session=${tokenFor(teacher)}`)
@@ -92,7 +84,7 @@ describe('current list and detail regressions', () => {
     expect(local.body.data).toMatchObject({ id: teacher.user.id, userType: 'teacher' })
 
     const otherSchool = (await createTestSchoolWithPrincipal('Profile Other School')).school
-    const remoteTeacher = await createTestUser({ role: 'teacher', schoolId: otherSchool.id })
+    const remoteTeacher = await createTestUser({ organization: { role: 'teacher', organizationId: otherSchool.organizationId! } })
     const remote = await request(app)
       .get(`/api/users/${remoteTeacher.user.id}/profile?userType=teacher`)
       .set('Cookie', `oi_session=${tokenFor(principal)}`)
@@ -101,8 +93,8 @@ describe('current list and detail regressions', () => {
   })
 
   it('paginates global accounts and applies valid global-role and status filters', async () => {
-    await createTestUser({ role: 'platform_admin', status: 'active' })
-    await createTestUser({ role: 'platform_admin', status: 'disabled' })
+    await createTestUser({ accountRole: 'platform_admin', status: 'active' })
+    await createTestUser({ accountRole: 'platform_admin', status: 'disabled' })
     const response = await request(app)
       .get('/api/users?page=1&pageSize=10&role=platform_admin&status=active')
       .set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
@@ -114,9 +106,9 @@ describe('current list and detail regressions', () => {
   })
 
   it('sorts organization rating rankings in descending order', async () => {
-    await createTestUser({ role: 'student', schoolId: school.id, rating: 1500 })
-    await createTestUser({ role: 'student', schoolId: school.id, rating: 1200 })
-    await createTestUser({ role: 'student', schoolId: school.id, rating: 1800 })
+    await createTestUser({ organization: { role: 'student', organizationId: school.organizationId!, rating: 1500 } })
+    await createTestUser({ organization: { role: 'student', organizationId: school.organizationId!, rating: 1200 } })
+    await createTestUser({ organization: { role: 'student', organizationId: school.organizationId!, rating: 1800 } })
     const response = await request(app)
       .get(`/api/rankings/organizations/${school.organizationId}/rating`)
       .set('Cookie', `oi_session=${tokenFor(teacher)}`)
@@ -139,12 +131,12 @@ describe('current list and detail regressions', () => {
     expect(new Date(response.body.timestamp).toISOString()).toBe(response.body.timestamp)
   })
 
-  it('keeps the legacy school list retired', async () => {
+  it('does not expose the removed school list', async () => {
     const response = await request(app)
       .get('/api/schools')
       .set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
-    expect(response.status).toBe(410)
-    expect(response.body.code).toBe('LEGACY_SCHOOL_API_RETIRED')
+    expect(response.status).toBe(404)
+    expect(response.body).toEqual({ success: false, message: '接口不存在' })
     expect(await prisma.organization.count()).toBeGreaterThan(0)
   })
 })

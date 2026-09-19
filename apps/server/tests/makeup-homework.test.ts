@@ -23,15 +23,15 @@ describe('补题作业使用独立 Assignment', () => {
 
   beforeEach(async () => {
     const school = await createTestSchoolWithPrincipal()
-    owner = await createTestUser({ role: 'teacher', schoolId: school.school.id })
-    admin = await createTestUser({ role: 'teacher', schoolId: school.school.id })
-    student = await createTestUser({ role: 'student', schoolId: school.school.id })
-    outsider = await createTestUser({ role: 'teacher', schoolId: school.school.id })
+    owner = await createTestUser({ organization: { role: 'teacher', organizationId: school.school.organizationId! } })
+    admin = await createTestUser({ organization: { role: 'teacher', organizationId: school.school.organizationId! } })
+    student = await createTestUser({ organization: { role: 'student', organizationId: school.school.organizationId! } })
+    outsider = await createTestUser({ organization: { role: 'teacher', organizationId: school.school.organizationId! } })
     ownerToken = generateTokenFromUser(owner.user)
     adminToken = generateTokenFromUser(admin.user)
     studentToken = generateTokenFromUser(student.user)
     outsiderToken = generateTokenFromUser(outsider.user)
-    team = await createTestTeam({ schoolId: school.school.id, ownerId: owner.user.id })
+    team = await createTestTeam({ organizationId: school.school.organizationId!, ownerId: owner.user.id })
     await prisma.teamMember.createMany({ data: [
       { id: crypto.randomUUID(), teamId: team.id, userId: admin.user.id, userType: 'teacher', role: 'admin', status: 'active', joinedAt: new Date() },
       { id: crypto.randomUUID(), teamId: team.id, userId: student.user.id, userType: 'student', role: 'member', status: 'active', joinedAt: new Date() },

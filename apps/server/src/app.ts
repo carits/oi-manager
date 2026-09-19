@@ -16,13 +16,11 @@ import { ojFetcherRouter } from './routes/oj-fetcher'
 import { organizationMemberRouter } from './routes/organization-members'
 import { platformOrganizationRouter } from './routes/platform-organizations'
 import { problemListsRouter } from './routes/problem-lists'
-import { schoolProblemListsRouter } from './routes/school-problem-lists'
 import { statsRouter } from './routes/stats'
 import { submitRouter } from './routes/submit'
 import { submissionsRouter } from './routes/submissions'
 import { teamProblemListsRouter } from './routes/team-problem-lists'
 import { teamRouter } from './routes/teams'
-import { teacherRouter } from './routes/teachers'
 import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { testdataRouter } from './routes/testdata'
 import { userRouter } from './routes/users'
@@ -49,7 +47,6 @@ import { healthRouter } from './modules/system/health.routes'
 import { trainingEngineRouter } from './modules/training-engine/training-engine.routes'
 import { trainingsRouter } from './modules/training/training.routes'
 import { teamImportRouter } from './modules/team-import/team-import.routes'
-import { schoolRouter } from './modules/school/school.routes'
 import { getCorsOptions } from './config/cors'
 import { isProduction } from './config/env'
 import { STORAGE_ROOT } from './config/storage'
@@ -99,10 +96,8 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api/platform/organizations', platformOrganizationRouter)
   app.use('/api/milestones', milestoneRouter)
   app.use('/api/teams', teamRouter)
-  app.use('/api/schools', authenticate, schoolRouter)
   app.use('/api/users', authenticate, userRouter)
   app.use('/api/stats', authenticate, statsRouter)
-  app.use('/api/teachers', authenticate, teacherRouter)
   app.use('/api/problems', problemsRouter)
   app.use('/api', problemSelectionRouter)
   app.use('/api', judgeProgramTemplateRouter)
@@ -112,7 +107,6 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api/team-import', authenticate, teamImportRouter)
   app.use('/api/submissions', submissionsRouter)
   app.use('/api/problem-lists', problemListsRouter)
-  app.use('/api/schools', authenticate, schoolProblemListsRouter)
   app.use('/api/teams', teamProblemListsRouter)
   app.use('/api/oj-accounts', authenticate, ojAccountsRouter)
   app.use('/api/submit', submitRouter)
@@ -192,8 +186,10 @@ export function createApplication(options: ApplicationOptions = {}) {
 
     logger.error('unhandled_error', err, {
       requestId: req.requestId,
-      userId: (req as any).user?.userId,
-      role: (req as any).user?.role,
+      userId: req.user?.userId,
+      accountRole: req.user?.accountRole,
+      organizationRole: req.user?.organizationRole,
+      organizationId: req.user?.organizationId,
       action: 'unhandled_error',
       metadata: { path: req.path, method: req.method },
     })

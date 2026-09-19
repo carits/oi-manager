@@ -37,7 +37,6 @@ export const CurrentAccountSchema = z.object({
   organizationRole: OrganizationMembershipRoleSchema.optional(),
   workspaceMode: z.enum(['work', 'personal']).optional(),
   profile: z.unknown().optional(),
-  adminId: z.string().min(1).optional(),
 })
 export type CurrentAccount = z.infer<typeof CurrentAccountSchema>
 

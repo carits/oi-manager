@@ -16,12 +16,8 @@ describe('testdata application service', () => {
   const createdProblemIds: string[] = []
 
   beforeEach(async () => {
-    const administrator = await createTestUser({ role: 'platform_admin' })
-    token = generateTokenFromUser({
-      id: administrator.user.id,
-      role: 'platform_admin',
-      username: administrator.user.username,
-    })
+    const administrator = await createTestUser({ accountRole: 'platform_admin' })
+    token = generateTokenFromUser(administrator.user)
     problem = await createTestProblem({ ownerId: administrator.user.id })
     createdProblemIds.push(problem.id)
   })

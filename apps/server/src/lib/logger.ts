@@ -9,7 +9,7 @@ import { recordRuntimeEvent, type RuntimeEventKind } from './runtimeTelemetry'
 export interface LogMetadata {
   requestId?: string
   userId?: string
-  role?: string
+  accountRole?: string
   action?: string
   target?: string
   [key: string]: any
@@ -21,7 +21,7 @@ export interface LogEntry {
   message: string
   requestId?: string
   userId?: string
-  role?: string
+  accountRole?: string
   action?: string
   target?: string
   metadata?: Record<string, any>
@@ -179,26 +179,26 @@ export const logger = {
 /**
  * 创建请求级别的日志上下文
  */
-export function createRequestLogger(requestId: string, userId?: string, role?: string) {
+export function createRequestLogger(requestId: string, userId?: string, accountRole?: string) {
   return {
-    info(message: string, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'role'>): void {
-      logger.info(message, { requestId, userId, role, ...metadata })
+    info(message: string, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'accountRole'>): void {
+      logger.info(message, { requestId, userId, accountRole, ...metadata })
     },
 
-    warn(message: string, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'role'>): void {
-      logger.warn(message, { requestId, userId, role, ...metadata })
+    warn(message: string, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'accountRole'>): void {
+      logger.warn(message, { requestId, userId, accountRole, ...metadata })
     },
 
-    error(message: string, error?: Error | unknown, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'role'>): void {
-      logger.error(message, error, { requestId, userId, role, ...metadata })
+    error(message: string, error?: Error | unknown, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'accountRole'>): void {
+      logger.error(message, error, { requestId, userId, accountRole, ...metadata })
     },
 
-    audit(action: string, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'role'>): void {
-      logger.audit(action, { requestId, userId, role, ...metadata })
+    audit(action: string, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'accountRole'>): void {
+      logger.audit(action, { requestId, userId, accountRole, ...metadata })
     },
 
-    security(event: string, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'role'>): void {
-      logger.security(event, { requestId, userId, role, ...metadata })
+    security(event: string, metadata?: Omit<LogMetadata, 'requestId' | 'userId' | 'accountRole'>): void {
+      logger.security(event, { requestId, userId, accountRole, ...metadata })
     }
   }
 }

@@ -952,8 +952,7 @@ model LoginLog {
   id            String   @id
   userId        String?
   username      String
-  loginRole     String
-  userRole      String?
+  accountRoleSnapshot String?
   result        String
   failureReason String?
   ipAddress     String?
@@ -2725,7 +2724,6 @@ model OrganizationMembership {
   memberRole               String
   relationType             String
   status                   String                             @default("active")
-  invitedBy                String?
   joinedAt                 DateTime?
   createdAt                DateTime                           @default(now())
   updatedAt                DateTime                           @updatedAt
@@ -2757,7 +2755,7 @@ model OrganizationMembershipRole {
   id           String                 @id
   membershipId String
   roleKey      String
-  source       String                 @default("legacy_backfill")
+  source       String                 @default("application")
   grantedBy    String?
   createdAt    DateTime               @default(now())
   Membership   OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)

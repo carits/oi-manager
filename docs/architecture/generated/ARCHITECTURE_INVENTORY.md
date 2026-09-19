@@ -15,8 +15,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 |---|---:|
 | Prisma models | 205 |
 | Prisma enums | 77 |
-| Legacy route adapters | 22 |
-| Module route adapters | 54 |
+| Legacy route adapters | 19 |
+| Module route adapters | 53 |
 | systemd units | 8 |
 | Referenced environment keys | 485 |
 
@@ -35,12 +35,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/routes/organization-members.ts`
 - `apps/server/src/routes/platform-organizations.ts`
 - `apps/server/src/routes/problem-lists.ts`
-- `apps/server/src/routes/school-problem-lists.ts`
 - `apps/server/src/routes/stats.ts`
-- `apps/server/src/routes/students.ts`
 - `apps/server/src/routes/submissions.ts`
 - `apps/server/src/routes/submit.ts`
-- `apps/server/src/routes/teachers.ts`
 - `apps/server/src/routes/team-problem-lists.ts`
 - `apps/server/src/routes/teams.ts`
 - `apps/server/src/routes/testdata.ts`
@@ -81,7 +78,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/problem/problem.wrong-corpus.routes.ts`
 - `apps/server/src/modules/ranking/ranking.routes.ts`
 - `apps/server/src/modules/rating/rating-domain.routes.ts`
-- `apps/server/src/modules/school/school.routes.ts`
 - `apps/server/src/modules/solution/solution.routes.ts`
 - `apps/server/src/modules/system/health.routes.ts`
 - `apps/server/src/modules/team-import/team-import.routes.ts`

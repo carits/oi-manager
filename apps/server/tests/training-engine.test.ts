@@ -46,9 +46,9 @@ describe('Stage-driven Training Engine', () => {
   let problem: Awaited<ReturnType<typeof configuredProblem>>
 
   beforeEach(async () => {
-    coach = await createTestUser({ role: 'teacher' })
-    student = await createTestUser({ role: 'student', schoolId: coach.schoolId })
-    team = await createTestTeam({ schoolId: null, scope: 'personal', ownerId: coach.user.id, ownerType: 'user' })
+    coach = await createTestUser({ organization: { role: 'teacher' } })
+    student = await createTestUser({ organization: { role: 'student', organizationId: coach.organization!.organizationId } })
+    team = await createTestTeam({ organizationId: null, scope: 'personal', ownerId: coach.user.id, ownerType: 'user' })
     await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: student.user.id, userType: 'student', role: 'member', status: 'active', joinedAt: new Date() } })
     problem = await configuredProblem(coach.user.id)
   })
@@ -167,7 +167,7 @@ describe('Stage-driven Training Engine', () => {
   })
 
   it('previews explainable grouping and applies next-Stage changes only on transition', async () => {
-    const peer = await createTestUser({ role: 'student', schoolId: coach.schoolId })
+    const peer = await createTestUser({ organization: { role: 'student', organizationId: coach.organization!.organizationId } })
     await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: peer.user.id, userType: 'student', role: 'member', status: 'active', joinedAt: new Date() } })
     const token = generateTokenFromUser(coach.user)
     const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({

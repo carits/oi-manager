@@ -16,18 +16,14 @@ let securityUsers: Partial<Record<SecurityRole, Awaited<ReturnType<typeof create
 const tokenFor = (role: SecurityRole) => {
   const user = securityUsers[role]
   if (!user) throw new Error(`Missing security fixture for ${role}`)
-  return generateTestToken({
-    userId: user.user.id,
-    username: user.user.username,
-    role,
-  })
+  return generateTestToken({ userId: user.user.id, username: user.user.username, accountRole: user.user.accountRole })
 }
 
 beforeEach(async () => {
   securityUsers = {
-    student: await createTestUser({ role: 'student', username: 'security-student' }),
-    platform_admin: await createTestUser({ role: 'platform_admin', username: 'security-platform-admin' }),
-    super_admin: await createTestUser({ role: 'super_admin', username: 'security-super-admin' }),
+    student: await createTestUser({ organization: { role: 'student' }, username: 'security-student' }),
+    platform_admin: await createTestUser({ accountRole: 'platform_admin', username: 'security-platform-admin' }),
+    super_admin: await createTestUser({ accountRole: 'super_admin', username: 'security-super-admin' }),
   }
 })
 

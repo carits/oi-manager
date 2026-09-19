@@ -20,7 +20,7 @@ describe('retired remote code archive', () => {
     ['delete', '/api/archived-problems/1'],
     ['post', '/api/submissions/1/refetch-code'],
   ] as const)('does not expose %s %s', async (method, endpoint) => {
-    const actor = await createTestUser({ role: 'student' })
+    const actor = await createTestUser({ organization: { role: 'student' } })
     const response = await request(app)[method](endpoint)
       .set('Cookie', `oi_session=${generateTokenFromUser(actor.user)}`)
       .send({})
@@ -28,7 +28,7 @@ describe('retired remote code archive', () => {
   })
 
   it('rejects remote archive rows while retaining normal remote identity fields', async () => {
-    const actor = await createTestUser({ role: 'student' })
+    const actor = await createTestUser({ organization: { role: 'student' } })
     await expect(prisma.submission.create({
       data: {
         userId: actor.user.id,

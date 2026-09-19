@@ -13,7 +13,6 @@ import { authorizationRoleForContext } from '@/lib/serverRequestContext'
 interface RoleLayoutProps {
   children: ReactNode
   allowedRoles: string[]
-  loginRole: 'admin' | 'platform-admin' | 'teacher' | 'student'
   homePath: string
   contentClassName?: string
   requiredContext?: 'organization' | 'personal' | 'platform'
@@ -27,7 +26,6 @@ interface RoleLayoutProps {
 export async function RoleLayout({
   children,
   allowedRoles,
-  loginRole,
   homePath,
   contentClassName,
   requiredContext,

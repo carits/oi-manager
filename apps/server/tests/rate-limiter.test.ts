@@ -12,11 +12,7 @@ function fakeRequest(headers: Request['headers'] = {}, ip = '203.0.113.10'): Req
 }
 
 describe('global rate-limit identity', () => {
-  const token = generateTestToken({
-    userId: 'rate-limit-user',
-    role: 'student',
-    username: 'rate_limit_student'
-  })
+  const token = generateTestToken({ userId: 'rate-limit-user', username: 'rate_limit_student', accountRole: 'user' })
 
   it('uses a verified session-cookie user instead of the shared campus IP', () => {
     expect(getRateLimitKey(fakeRequest({ cookie: `other=value; oi_session=${token}` })))

@@ -65,11 +65,11 @@ describe('提交记录学校数据隔离', () => {
     schoolB = await createTestSchoolWithPrincipal('学校B')
 
     // 创建用户
-    teacherA = await createTestUser({ role: 'teacher', schoolId: schoolA.school.id })
-    teacherB = await createTestUser({ role: 'teacher', schoolId: schoolB.school.id })
-    studentA = await createTestUser({ role: 'student', schoolId: schoolA.school.id })
-    studentB = await createTestUser({ role: 'student', schoolId: schoolB.school.id })
-    superAdmin = await createTestUser({ role: 'super_admin', schoolId: 'platform-school-00000000' })
+    teacherA = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.school.organizationId! } })
+    teacherB = await createTestUser({ organization: { role: 'teacher', organizationId: schoolB.school.organizationId! } })
+    studentA = await createTestUser({ organization: { role: 'student', organizationId: schoolA.school.organizationId! } })
+    studentB = await createTestUser({ organization: { role: 'student', organizationId: schoolB.school.organizationId! } })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
 
     const secondMembershipId = crypto.randomUUID()
     await prisma.organizationMembership.create({
@@ -88,37 +88,13 @@ describe('提交记录学校数据隔离', () => {
     })
 
     // 生成 Token
-    teacherAToken = generateTestToken({
-      userId: teacherA.user.id,
-      role: 'teacher',
-      username: teacherA.user.username,
-      teacherId: teacherA.teacherId!,
-      schoolId: schoolA.school.id
-    })
+    teacherAToken = generateTestToken({ userId: teacherA.user.id, username: teacherA.user.username, accountRole: 'user' })
 
-    teacherBToken = generateTestToken({
-      userId: teacherB.user.id,
-      role: 'teacher',
-      username: teacherB.user.username,
-      teacherId: teacherB.teacherId!,
-      schoolId: schoolB.school.id
-    })
+    teacherBToken = generateTestToken({ userId: teacherB.user.id, username: teacherB.user.username, accountRole: 'user' })
 
-    studentAToken = generateTestToken({
-      userId: studentA.user.id,
-      role: 'student',
-      username: studentA.user.username,
-      studentId: studentA.studentId!,
-      schoolId: schoolA.school.id
-    })
+    studentAToken = generateTestToken({ userId: studentA.user.id, username: studentA.user.username, accountRole: 'user' })
 
-    superAdminToken = generateTestToken({
-      userId: superAdmin.user.id,
-      role: 'super_admin',
-      username: superAdmin.user.username,
-      adminId: superAdmin.adminId!,
-      schoolId: 'platform-school-00000000'
-    })
+    superAdminToken = generateTestToken({ userId: superAdmin.user.id, username: superAdmin.user.username, accountRole: 'super_admin' })
 
     // 创建测试题目
     const problem = await prisma.problem.create({
@@ -298,42 +274,18 @@ describe('提交详情权限', () => {
     schoolA = await createTestSchoolWithPrincipal('学校A')
     schoolB = await createTestSchoolWithPrincipal('学校B')
 
-    teacherA = await createTestUser({ role: 'teacher', schoolId: schoolA.school.id })
-    studentA = await createTestUser({ role: 'student', schoolId: schoolA.school.id })
-    studentB = await createTestUser({ role: 'student', schoolId: schoolB.school.id })
-    superAdmin = await createTestUser({ role: 'super_admin', schoolId: 'platform-school-00000000' })
+    teacherA = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.school.organizationId! } })
+    studentA = await createTestUser({ organization: { role: 'student', organizationId: schoolA.school.organizationId! } })
+    studentB = await createTestUser({ organization: { role: 'student', organizationId: schoolB.school.organizationId! } })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
 
-    teacherAToken = generateTestToken({
-      userId: teacherA.user.id,
-      role: 'teacher',
-      username: teacherA.user.username,
-      teacherId: teacherA.teacherId!,
-      schoolId: schoolA.school.id
-    })
+    teacherAToken = generateTestToken({ userId: teacherA.user.id, username: teacherA.user.username, accountRole: 'user' })
 
-    studentAToken = generateTestToken({
-      userId: studentA.user.id,
-      role: 'student',
-      username: studentA.user.username,
-      studentId: studentA.studentId!,
-      schoolId: schoolA.school.id
-    })
+    studentAToken = generateTestToken({ userId: studentA.user.id, username: studentA.user.username, accountRole: 'user' })
 
-    studentBToken = generateTestToken({
-      userId: studentB.user.id,
-      role: 'student',
-      username: studentB.user.username,
-      studentId: studentB.studentId!,
-      schoolId: schoolB.school.id
-    })
+    studentBToken = generateTestToken({ userId: studentB.user.id, username: studentB.user.username, accountRole: 'user' })
 
-    superAdminToken = generateTestToken({
-      userId: superAdmin.user.id,
-      role: 'super_admin',
-      username: superAdmin.user.username,
-      adminId: superAdmin.adminId!,
-      schoolId: 'platform-school-00000000'
-    })
+    superAdminToken = generateTestToken({ userId: superAdmin.user.id, username: superAdmin.user.username, accountRole: 'super_admin' })
 
     const problem = await prisma.problem.create({
       data: {
@@ -481,16 +433,9 @@ describe('提交详情权限', () => {
 describe('个人工作区提交详情权限', () => {
   it.each(['teacher', 'school_principal'] as const)('%s 在个人工作区只能查看自己的提交详情', async role => {
     const school = await createTestSchool({ name: `个人工作区-${role}` })
-    const owner = await createTestUser({ role, schoolId: school.id })
-    const other = await createTestUser({ role, schoolId: school.id })
-    const ownerToken = generateTestToken({
-      userId: owner.user.id,
-      role,
-      username: owner.user.username,
-      teacherId: owner.teacherId!,
-      schoolId: school.id,
-      workspaceMode: 'personal',
-    })
+    const owner = await createTestUser({ organization: { role: role, organizationId: school.organizationId! } })
+    const other = await createTestUser({ organization: { role: role, organizationId: school.organizationId! } })
+    const ownerToken = generateTestToken({ userId: owner.user.id, username: owner.user.username, workspaceMode: 'personal', accountRole: owner.user.accountRole })
 
     const createPersonalSubmission = async (userId: string, problemId: string) => {
       const submission = await prisma.submission.create({ data: {
@@ -551,11 +496,11 @@ describe('训练提交隔离', () => {
 
   beforeEach(async () => {
     schoolData = await createTestSchoolWithPrincipal()
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
 
     team = await createTestTeam({
-      schoolId: schoolData.school.id,
+      organizationId: schoolData.school.organizationId!,
       ownerId: ownerUser.user.id
     })
 
@@ -571,21 +516,9 @@ describe('训练提交隔离', () => {
       }
     })
 
-    ownerToken = generateTestToken({
-      userId: ownerUser.user.id,
-      role: 'teacher',
-      username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
 
-    studentToken = generateTestToken({
-      userId: studentUser.user.id,
-      role: 'student',
-      username: studentUser.user.username,
-      studentId: studentUser.studentId!,
-      schoolId: schoolData.school.id
-    })
+    studentToken = generateTestToken({ userId: studentUser.user.id, username: studentUser.user.username, accountRole: 'user' })
 
     // 创建题目
     const problem = await prisma.problem.create({

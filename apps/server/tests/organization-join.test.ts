@@ -6,7 +6,6 @@ import { organizationJoinRouter } from '../src/modules/organization-join/organiz
 import { notificationRouter } from '../src/modules/notification/notification.routes'
 import { workspaceRouter } from '../src/routes/workspaces'
 import { authenticate } from '../src/middleware/auth'
-import { applyOrganizationJoinMigration, inspectOrganizationJoinMigration } from '../src/modules/maintenance/application/organization-join-migration.service'
 import { prisma } from '../src/prisma'
 import { createTestSchoolWithPrincipal, createTestUser } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
@@ -25,14 +24,14 @@ beforeEach(async () => {
   organizationId = fixture.school.organizationId!
   await prisma.organization.update({ where: { id: organizationId }, data: { joinPolicy: 'approval' } })
   const principal = await prisma.user.findUniqueOrThrow({ where: { id: fixture.principal.userId } })
-  principalToken = generateTestToken({ userId: principal.id, username: principal.username, role: 'school_principal' })
-  const teacher = await createTestUser({ role: 'teacher', schoolId: fixture.school.id, username: `join-teacher-${crypto.randomUUID()}` })
+  principalToken = generateTestToken({ userId: principal.id, username: principal.username, accountRole: 'user' })
+  const teacher = await createTestUser({ organization: { role: 'teacher', organizationId: fixture.school.organizationId! }, username: `join-teacher-${crypto.randomUUID()}` })
   teacherMembershipId = (await prisma.organizationMembership.findUniqueOrThrow({ where: { organizationId_userId: { organizationId, userId: teacher.user.id } } })).id
-  teacherToken = generateTestToken({ userId: teacher.user.id, username: teacher.user.username, role: 'teacher' })
+  teacherToken = generateTestToken({ userId: teacher.user.id, username: teacher.user.username, accountRole: 'user' })
   const applicant = await prisma.user.create({ data: { id: crypto.randomUUID(), username: `join-applicant-${crypto.randomUUID()}`, passwordHash: 'test', role: 'user' } })
   await prisma.personalProfile.create({ data: { userId: applicant.id } })
   applicantId = applicant.id
-  applicantToken = generateTestToken({ userId: applicant.id, username: applicant.username, role: 'user', workspaceMode: 'personal' })
+  applicantToken = generateTestToken({ userId: applicant.id, username: applicant.username, workspaceMode: 'personal', accountRole: 'user' })
 })
 
 const auth = (token: string) => ({ Cookie: `oi_session=${token}` })
@@ -115,41 +114,16 @@ describe('organization join workflow', () => {
     expect(workspaces.body.data.workspaces).toEqual([expect.objectContaining({ type: 'personal' })])
 
     const direct = await request(app).get('/api/notifications').set(auth(principalToken)).set('X-OI-Organization-ID', organizationId)
-    expect(direct.status).toBe(404)
-    expect(direct.body.code).toBe('ORGANIZATION_NOT_AVAILABLE')
+    expect(direct.status).toBe(403)
+    expect(direct.body.code).toBe('ORGANIZATION_ACCESS_DENIED')
   })
 
-  it('migrates legacy pending memberships to invitations idempotently', async () => {
-    const principalMembership = await prisma.organizationMembership.findFirstOrThrow({
-      where: { organizationId, memberRole: 'school_principal', status: 'active' },
-    })
-    const legacyId = crypto.randomUUID()
-    await prisma.organizationMembership.create({
-      data: {
-        id: legacyId,
-        organizationId,
-        userId: applicantId,
-        memberRole: 'student',
-        relationType: 'school_student',
-        status: 'pending',
-        invitedBy: principalMembership.userId,
-      },
-    })
+  it('rejects an unknown organization invitation instead of consulting membership records', async () => {
+    const response = await request(app)
+      .post(`/api/organization-invitations/${crypto.randomUUID()}/accept`)
+      .set(auth(applicantToken))
 
-    const check = await inspectOrganizationJoinMigration()
-    expect(check.legacyInvitations).toBe(1)
-    expect(check.migratableInvitations).toBe(1)
-
-    const first = await applyOrganizationJoinMigration()
-    const second = await applyOrganizationJoinMigration()
-    expect(first.invitationsMigrated).toBe(1)
-    expect(first.relationsNormalized).toBeGreaterThanOrEqual(1)
-    expect(second.invitationsMigrated).toBe(0)
-    expect(second.relationsNormalized).toBe(0)
-
-    const invitation = await prisma.organizationInvitation.findUniqueOrThrow({ where: { id: legacyId } })
-    expect(invitation.status).toBe('pending')
-    expect(invitation.relationType).toBe('enrolled')
-    expect(invitation.invitedByMembershipId).toBe(principalMembership.id)
+    expect(response.status).toBe(404)
+    expect(response.body.code).toBe('ORGANIZATION_INVITATION_NOT_FOUND')
   })
 })

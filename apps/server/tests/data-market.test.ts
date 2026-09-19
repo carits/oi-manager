@@ -52,9 +52,9 @@ describe('V1 data product marketplace', () => {
   }
 
   beforeEach(async () => {
-    manager = await createTestUser({ role: 'platform_admin' })
-    buyer = await createTestUser({ role: 'student' })
-    outsider = await createTestUser({ role: 'student' })
+    manager = await createTestUser({ accountRole: 'platform_admin' })
+    buyer = await createTestUser({ organization: { role: 'student' } })
+    outsider = await createTestUser({ organization: { role: 'student' } })
     const problem = await createTestProblem({ ownerId: manager.user.id, title: 'Market quality problem' })
     problemId = problem.id
     const quality = await createQualityRevision(1)
@@ -146,9 +146,9 @@ describe('V1 data product marketplace', () => {
   })
 
   it('restricts organization entitlements to active teachers and principals', async () => {
-    const teacher = await createTestUser({ role: 'teacher' })
-    const student = await createTestUser({ role: 'student', schoolId: teacher.schoolId })
-    const organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: teacher.schoolId } })).organizationId!
+    const teacher = await createTestUser({ organization: { role: 'teacher' } })
+    const student = await createTestUser({ organization: { role: 'student', organizationId: teacher.organization!.organizationId } })
+    const organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: teacher.organization!.organizationId } })).organizationId!
     await postCarits({
       type: 'test_funding', idempotencyKey: `market-org-funding:${crypto.randomUUID()}`,
       referenceType: 'test', referenceId: organizationId, operatorUserId: manager.user.id,

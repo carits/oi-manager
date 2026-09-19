@@ -4,7 +4,7 @@ import { prisma } from '../src/prisma'
 import { postCarits } from '../src/modules/carits/application/carits-ledger.service'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestSchoolWithPrincipal, createTestUser } from './helpers/testUser'
-import { generateTokenFromUser } from './helpers/testToken'
+import { generateTestToken, generateTokenFromUser } from './helpers/testToken'
 import { createTestProblem } from './helpers/problemListHelpers'
 
 const app = createTestApp()
@@ -16,8 +16,8 @@ describe('contribution economy HTTP permissions', () => {
 
   beforeEach(async () => {
     user = await createTestUser()
-    platformAdmin = await createTestUser({ role: 'platform_admin' })
-    superAdmin = await createTestUser({ role: 'super_admin' })
+    platformAdmin = await createTestUser({ accountRole: 'platform_admin' })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
   })
 
   async function createPendingContribution() {
@@ -195,7 +195,9 @@ describe('contribution economy HTTP permissions', () => {
   it('denies organization wallet access after a school is isolated as legacy', async () => {
     const fixture = await createTestSchoolWithPrincipal(`Legacy wallet ${crypto.randomUUID()}`)
     const principal = await prisma.user.findUniqueOrThrow({ where: { id: fixture.principal.userId } })
-    const client = createAuthenticatedRequest(app, generateTokenFromUser(principal))
+    const client = createAuthenticatedRequest(app, generateTestToken({
+      userId: principal.id, username: principal.username, accountRole: 'user',
+    }))
     expect((await client.get(`/api/carits/organizations/${fixture.school.organizationId}`)).status).toBe(200)
     await prisma.school.update({ where: { id: fixture.school.id }, data: { directoryStatus: 'legacy', nameKey: null } })
     expect((await client.get(`/api/carits/organizations/${fixture.school.organizationId}`)).status).toBe(403)

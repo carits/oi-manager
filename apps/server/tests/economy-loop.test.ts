@@ -134,7 +134,7 @@ describe('Contribution, Carits and Evaluation Credits loop', () => {
 
   it('delivers a contribution reward once and reverses it without rewriting history', async () => {
     const user = await createTestUser()
-    const administrator = await createTestUser({ role: 'super_admin' })
+    const administrator = await createTestUser({ accountRole: 'super_admin' })
     const contributionId = crypto.randomUUID()
     await prisma.contributionEvent.create({ data: {
       id: contributionId, actorUserId: user.user.id, type: 'candidate_promoted', sourceType: 'testcase_candidate', sourceId: crypto.randomUUID(),
@@ -263,7 +263,7 @@ describe('Contribution, Carits and Evaluation Credits loop', () => {
     }
     expect(await prisma.contributionRewardDelivery.count({ where: { Contribution: { actorUserId: user.user.id }, status: 'posted' } })).toBe(10)
     expect(await prisma.contributionRewardDelivery.count({ where: { Contribution: { actorUserId: user.user.id }, status: 'deferred_budget', nextAttemptAt: { gt: new Date() } } })).toBe(1)
-    const administrator = await createTestUser({ role: 'super_admin' })
+    const administrator = await createTestUser({ accountRole: 'super_admin' })
     const posted = await prisma.contributionRewardDelivery.findFirstOrThrow({ where: { Contribution: { actorUserId: user.user.id }, status: 'posted' } })
     await revokeContribution(administrator.user.id, posted.contributionId, '确认测试奖励需要撤销并保留当日发行额度')
     await prisma.contributionRewardDelivery.updateMany({ where: { Contribution: { actorUserId: user.user.id }, status: 'deferred_budget' }, data: { nextAttemptAt: new Date(Date.now() - 1_000) } })
@@ -280,7 +280,7 @@ describe('Contribution, Carits and Evaluation Credits loop', () => {
 
   it('allows only one concurrent decision for a pending emergency contribution', async () => {
     const user = await createTestUser()
-    const administrator = await createTestUser({ role: 'super_admin' })
+    const administrator = await createTestUser({ accountRole: 'super_admin' })
     const contributionId = crypto.randomUUID()
     await prisma.contributionEvent.create({ data: {
       id: contributionId, actorUserId: user.user.id, type: 'candidate_promoted', sourceType: 'testcase_candidate', sourceId: crypto.randomUUID(),
@@ -335,7 +335,7 @@ describe('Contribution, Carits and Evaluation Credits loop', () => {
   })
 
   it('lets a super administrator requeue a persistently failed reward', async () => {
-    const user = await createTestUser(), administrator = await createTestUser({ role: 'super_admin' })
+    const user = await createTestUser(), administrator = await createTestUser({ accountRole: 'super_admin' })
     const contributionId = crypto.randomUUID()
     await prisma.contributionEvent.create({ data: {
       id: contributionId, actorUserId: user.user.id, type: 'candidate_promoted', sourceType: 'testcase_candidate', sourceId: crypto.randomUUID(), score: 100,

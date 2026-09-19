@@ -41,62 +41,26 @@ describe('训练路由兼容校级比赛', () => {
 
   beforeEach(async () => {
     schoolData = await createTestSchoolWithPrincipal()
-    principalUser = await createTestUser({ role: 'school_principal', schoolId: schoolData.school.id })
-    teacherUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
-    superAdminUser = await createTestUser({ role: 'super_admin', schoolId: schoolData.school.id })
+    principalUser = await createTestUser({ organization: { role: 'school_principal', organizationId: schoolData.school.organizationId! } })
+    teacherUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
+    superAdminUser = await createTestUser({ accountRole: 'super_admin' })
 
     otherSchoolData = await createTestSchoolWithPrincipal()
-    otherSchoolTeacher = await createTestUser({ role: 'teacher', schoolId: otherSchoolData.school.id })
-    otherSchoolStudent = await createTestUser({ role: 'student', schoolId: otherSchoolData.school.id })
+    otherSchoolTeacher = await createTestUser({ organization: { role: 'teacher', organizationId: otherSchoolData.school.organizationId! } })
+    otherSchoolStudent = await createTestUser({ organization: { role: 'student', organizationId: otherSchoolData.school.organizationId! } })
 
-    principalToken = generateTestToken({
-      userId: principalUser.user.id,
-      role: 'school_principal',
-      username: principalUser.user.username,
-      teacherId: principalUser.teacherId,
-      schoolId: schoolData.school.id,
-    })
-    teacherToken = generateTestToken({
-      userId: teacherUser.user.id,
-      role: 'teacher',
-      username: teacherUser.user.username,
-      teacherId: teacherUser.teacherId,
-      schoolId: schoolData.school.id,
-    })
-    studentToken = generateTestToken({
-      userId: studentUser.user.id,
-      role: 'student',
-      username: studentUser.user.username,
-      studentId: studentUser.studentId,
-      schoolId: schoolData.school.id,
-    })
-    superAdminToken = generateTestToken({
-      userId: superAdminUser.user.id,
-      role: 'super_admin',
-      username: superAdminUser.user.username,
-      adminId: superAdminUser.adminId,
-      schoolId: schoolData.school.id,
-    })
-    otherSchoolTeacherToken = generateTestToken({
-      userId: otherSchoolTeacher.user.id,
-      role: 'teacher',
-      username: otherSchoolTeacher.user.username,
-      teacherId: otherSchoolTeacher.teacherId,
-      schoolId: otherSchoolData.school.id,
-    })
-    otherSchoolStudentToken = generateTestToken({
-      userId: otherSchoolStudent.user.id,
-      role: 'student',
-      username: otherSchoolStudent.user.username,
-      studentId: otherSchoolStudent.studentId,
-      schoolId: otherSchoolData.school.id,
-    })
+    principalToken = generateTestToken({ userId: principalUser.user.id, username: principalUser.user.username, accountRole: 'user' })
+    teacherToken = generateTestToken({ userId: teacherUser.user.id, username: teacherUser.user.username, accountRole: 'user' })
+    studentToken = generateTestToken({ userId: studentUser.user.id, username: studentUser.user.username, accountRole: 'user' })
+    superAdminToken = generateTestToken({ userId: superAdminUser.user.id, username: superAdminUser.user.username, accountRole: 'super_admin' })
+    otherSchoolTeacherToken = generateTestToken({ userId: otherSchoolTeacher.user.id, username: otherSchoolTeacher.user.username, accountRole: 'user' })
+    otherSchoolStudentToken = generateTestToken({ userId: otherSchoolStudent.user.id, username: otherSchoolStudent.user.username, accountRole: 'user' })
 
     // 创建校级比赛（ongoing 状态）
     schoolContest = await createTestSchoolContest({
       schoolId: schoolData.school.id,
-      createdBy: teacherUser.teacherId!,
+      createdBy: teacherUser.userId!,
       title: '兼容性测试校级比赛',
       format: 'ioi',
       type: 'contest',
@@ -105,7 +69,7 @@ describe('训练路由兼容校级比赛', () => {
 
     // 创建题目并添加到比赛
     contestProblem = await createTestContestProblem({
-      ownerId: teacherUser.teacherId!,
+      ownerId: teacherUser.userId!,
       title: '兼容性测试题目',
     })
     trainingProblem = await addProblemToContest({
@@ -119,7 +83,7 @@ describe('训练路由兼容校级比赛', () => {
   // ==================== 详情 API ====================
   describe('详情 API: GET /api/trainings/:id', () => {
     it('TD1: 团队比赛详情 - 团队成员可访问', async () => {
-      const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: teacherUser.teacherId! })
+      const team = await createTestTeam({ organizationId: schoolData.school.organizationId!, ownerId: teacherUser.userId! })
       const teamTraining = await prisma.training.create({
         data: {
           organizationId: null,
@@ -131,7 +95,7 @@ describe('训练路由兼容校级比赛', () => {
           startTime: new Date(Date.now() - 3600000),
           endTime: new Date(Date.now() + 3600000),
           status: 'ongoing',
-          createdBy: teacherUser.teacherId!,
+          createdBy: teacherUser.userId!,
           updatedAt: new Date(),
         },
       })
@@ -195,7 +159,7 @@ describe('训练路由兼容校级比赛', () => {
   // ==================== 题目 API ====================
   describe('题目 API: GET /api/trainings/:id/problems', () => {
     it('TP1: 团队比赛题目 - 团队成员可访问', async () => {
-      const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: teacherUser.teacherId! })
+      const team = await createTestTeam({ organizationId: schoolData.school.organizationId!, ownerId: teacherUser.userId! })
       const teamTraining = await prisma.training.create({
         data: {
           organizationId: null,
@@ -207,11 +171,11 @@ describe('训练路由兼容校级比赛', () => {
           startTime: new Date(Date.now() - 3600000),
           endTime: new Date(Date.now() + 3600000),
           status: 'ongoing',
-          createdBy: teacherUser.teacherId!,
+          createdBy: teacherUser.userId!,
           updatedAt: new Date(),
         },
       })
-      const teamProblem = await createTestContestProblem({ ownerId: teacherUser.teacherId! })
+      const teamProblem = await createTestContestProblem({ ownerId: teacherUser.userId! })
       await addProblemToContest({ trainingId: teamTraining.id, problemId: teamProblem.id })
 
       const res = await createAuthenticatedRequest(app, teacherToken)
@@ -279,7 +243,7 @@ describe('训练路由兼容校级比赛', () => {
   // ==================== 排名 API ====================
   describe('排名 API: GET /api/trainings/:id/ranking', () => {
     it('TR1: 团队比赛排名 - 团队成员可访问', async () => {
-      const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: teacherUser.teacherId! })
+      const team = await createTestTeam({ organizationId: schoolData.school.organizationId!, ownerId: teacherUser.userId! })
       const teamContest = await prisma.training.create({
         data: {
           organizationId: null,
@@ -291,7 +255,7 @@ describe('训练路由兼容校级比赛', () => {
           startTime: new Date(Date.now() - 3600000),
           endTime: new Date(Date.now() + 3600000),
           status: 'ongoing',
-          createdBy: teacherUser.teacherId!,
+          createdBy: teacherUser.userId!,
           updatedAt: new Date(),
         },
       })
@@ -341,13 +305,13 @@ describe('训练路由兼容校级比赛', () => {
     })
 
     it('TR5: ICPC 每题只标记最早有效通过者为首 A', async () => {
-      const secondStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
-      const thirdStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
-      const failedStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const secondStudent = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
+      const thirdStudent = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
+      const failedStudent = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
       const startTime = new Date(Date.now() - 60 * 60 * 1000)
       const icpcContest = await createTestSchoolContest({
         schoolId: schoolData.school.id,
-        createdBy: teacherUser.teacherId!,
+        createdBy: teacherUser.userId!,
         title: 'ICPC 首 A 测试',
         format: 'icpc',
         type: 'contest',
@@ -355,7 +319,7 @@ describe('训练路由兼容校级比赛', () => {
         startTime,
       })
       const icpcProblem = await createTestContestProblem({
-        ownerId: teacherUser.teacherId!,
+        ownerId: teacherUser.userId!,
         title: '首 A 判定题目',
       })
       const icpcTrainingProblem = await addProblemToContest({
@@ -365,7 +329,7 @@ describe('训练路由兼容校级比赛', () => {
         points: 100,
       })
       const unsubmittedProblem = await createTestContestProblem({
-        ownerId: teacherUser.teacherId!,
+        ownerId: teacherUser.userId!,
         title: '未提交状态题目',
       })
       const unsubmittedTrainingProblem = await addProblemToContest({
@@ -479,7 +443,7 @@ describe('训练路由兼容校级比赛', () => {
     })
 
     it('TR6: IOI 排名包含没有测试点明细的已完成提交', async () => {
-      const noCasesStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const noCasesStudent = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
       const submission = await createTestSubmission({
         userId: noCasesStudent.user.id,
         trainingId: schoolContest.id,
@@ -500,17 +464,17 @@ describe('训练路由兼容校级比赛', () => {
     })
 
     it('TR7: ICPC 排队和评测中提交可打开但不计失败次数', async () => {
-      const pendingStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const pendingStudent = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
       const icpcContest = await createTestSchoolContest({
         schoolId: schoolData.school.id,
-        createdBy: teacherUser.teacherId!,
+        createdBy: teacherUser.userId!,
         title: 'ICPC 评测中状态测试',
         format: 'icpc',
         type: 'contest',
         status: 'ongoing',
         startTime: new Date(Date.now() - 60 * 60 * 1000),
       })
-      const problem = await createTestContestProblem({ ownerId: teacherUser.teacherId!, title: '等待评测题目' })
+      const problem = await createTestContestProblem({ ownerId: teacherUser.userId!, title: '等待评测题目' })
       const trainingProblemRow = await addProblemToContest({ trainingId: icpcContest.id, problemId: problem.id, alias: 'A', points: 100 })
       await createTestSubmission({
         userId: pendingStudent.user.id,
@@ -590,13 +554,13 @@ describe('训练路由兼容校级比赛', () => {
     it('ST1: upcoming 校级比赛 - 学校负责人可访问题目', async () => {
       const upcomingContest = await createTestSchoolContest({
         schoolId: schoolData.school.id,
-        createdBy: teacherUser.teacherId!,
+        createdBy: teacherUser.userId!,
         title: '未开始校级比赛',
         status: 'upcoming',
         startTime: new Date(Date.now() + 3600000),
         endTime: new Date(Date.now() + 7200000),
       })
-      const prob = await createTestContestProblem({ ownerId: teacherUser.teacherId! })
+      const prob = await createTestContestProblem({ ownerId: teacherUser.userId! })
       await addProblemToContest({ trainingId: upcomingContest.id, problemId: prob.id })
 
       const res = await createAuthenticatedRequest(app, principalToken)
@@ -609,13 +573,13 @@ describe('训练路由兼容校级比赛', () => {
     it('ST2: upcoming 校级比赛 - 创建者教师可访问题目', async () => {
       const upcomingContest = await createTestSchoolContest({
         schoolId: schoolData.school.id,
-        createdBy: teacherUser.teacherId!,
+        createdBy: teacherUser.userId!,
         title: '未开始校级比赛',
         status: 'upcoming',
         startTime: new Date(Date.now() + 3600000),
         endTime: new Date(Date.now() + 7200000),
       })
-      const prob = await createTestContestProblem({ ownerId: teacherUser.teacherId! })
+      const prob = await createTestContestProblem({ ownerId: teacherUser.userId! })
       await addProblemToContest({ trainingId: upcomingContest.id, problemId: prob.id })
 
       const res = await createAuthenticatedRequest(app, teacherToken)
@@ -628,13 +592,13 @@ describe('训练路由兼容校级比赛', () => {
     it('ST3: upcoming 校级比赛 - 本校学生不能访问题目', async () => {
       const upcomingContest = await createTestSchoolContest({
         schoolId: schoolData.school.id,
-        createdBy: teacherUser.teacherId!,
+        createdBy: teacherUser.userId!,
         title: '未开始校级比赛',
         status: 'upcoming',
         startTime: new Date(Date.now() + 3600000),
         endTime: new Date(Date.now() + 7200000),
       })
-      const prob = await createTestContestProblem({ ownerId: teacherUser.teacherId! })
+      const prob = await createTestContestProblem({ ownerId: teacherUser.userId! })
       await addProblemToContest({ trainingId: upcomingContest.id, problemId: prob.id })
 
       const res = await createAuthenticatedRequest(app, studentToken)
@@ -670,18 +634,18 @@ describe('团队比赛回归测试', () => {
 
   beforeEach(async () => {
     schoolData = await createTestSchoolWithPrincipal()
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
-    outsiderUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
+    outsiderUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
 
-    team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: ownerUser.teacherId! })
+    team = await createTestTeam({ organizationId: schoolData.school.organizationId!, ownerId: ownerUser.userId! })
 
     // 添加团队成员
     await prisma.teamMember.create({
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: studentUser.studentId!,
+        userId: studentUser.userId!,
         userType: 'student',
         role: 'member',
         status: 'active',
@@ -689,27 +653,9 @@ describe('团队比赛回归测试', () => {
       },
     })
 
-    ownerToken = generateTestToken({
-      userId: ownerUser.user.id,
-      role: 'teacher',
-      username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId,
-      schoolId: schoolData.school.id,
-    })
-    studentToken = generateTestToken({
-      userId: studentUser.user.id,
-      role: 'student',
-      username: studentUser.user.username,
-      studentId: studentUser.studentId,
-      schoolId: schoolData.school.id,
-    })
-    outsiderToken = generateTestToken({
-      userId: outsiderUser.user.id,
-      role: 'student',
-      username: outsiderUser.user.username,
-      studentId: outsiderUser.studentId,
-      schoolId: schoolData.school.id,
-    })
+    ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
+    studentToken = generateTestToken({ userId: studentUser.user.id, username: studentUser.user.username, accountRole: 'user' })
+    outsiderToken = generateTestToken({ userId: outsiderUser.user.id, username: outsiderUser.user.username, accountRole: 'user' })
 
     // 创建团队训练
     teamTraining = await prisma.training.create({
@@ -723,7 +669,7 @@ describe('团队比赛回归测试', () => {
         startTime: new Date(Date.now() - 3600000),
         endTime: new Date(Date.now() + 3600000),
         status: 'ongoing',
-        createdBy: ownerUser.teacherId!,
+        createdBy: ownerUser.userId!,
         updatedAt: new Date(),
       },
     })
@@ -740,7 +686,7 @@ describe('团队比赛回归测试', () => {
         startTime: new Date(Date.now() - 3600000),
         endTime: new Date(Date.now() + 3600000),
         status: 'ongoing',
-        createdBy: ownerUser.teacherId!,
+        createdBy: ownerUser.userId!,
         updatedAt: new Date(),
       },
     })
@@ -783,7 +729,7 @@ describe('团队比赛回归测试', () => {
   })
 
   it('RG4: 团队比赛题目正常', async () => {
-    const prob = await createTestContestProblem({ ownerId: ownerUser.teacherId! })
+    const prob = await createTestContestProblem({ ownerId: ownerUser.userId! })
     await addProblemToContest({ trainingId: teamContest.id, problemId: prob.id })
 
     const res = await createAuthenticatedRequest(app, studentToken)
@@ -812,7 +758,7 @@ describe('团队比赛回归测试', () => {
     // 同时创建校级比赛
     const schoolContest = await createTestSchoolContest({
       schoolId: schoolData.school.id,
-      createdBy: ownerUser.teacherId!,
+      createdBy: ownerUser.userId!,
       title: '共存测试校级比赛',
       format: 'ioi',
       type: 'contest',
@@ -832,7 +778,7 @@ describe('团队比赛回归测试', () => {
     // 团队比赛不应出现在校级比赛列表中
     const schoolContestList = await createAuthenticatedRequest(app, ownerToken)
       .get(`/api/schools/${schoolData.school.id}/contests`)
-    expect(schoolContestList.status).toBe(410)
-    expect(schoolContestList.body.code).toBe('LEGACY_SCHOOL_API_RETIRED')
+    expect(schoolContestList.status).toBe(404)
+    expect(schoolContestList.body).toEqual({ success: false, message: '接口不存在' })
   })
 })

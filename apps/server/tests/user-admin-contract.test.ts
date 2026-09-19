@@ -9,7 +9,7 @@ const app = createTestApp()
 
 describe('managed user runtime contract', () => {
   it('lists and reads users without exposing authentication state', async () => {
-    const admin = await createTestUser({ role: 'super_admin' })
+    const admin = await createTestUser({ accountRole: 'super_admin' })
     const target = await prisma.user.create({
       data: {
         id: crypto.randomUUID(), username: `managed_${crypto.randomUUID().slice(0, 8)}`,
@@ -33,8 +33,8 @@ describe('managed user runtime contract', () => {
   })
 
   it('validates mutations and persists status and password changes', async () => {
-    const admin = await createTestUser({ role: 'super_admin' })
-    const target = await createTestUser({ role: 'student' })
+    const admin = await createTestUser({ accountRole: 'super_admin' })
+    const target = await createTestUser({ organization: { role: 'student' } })
     const client = createAuthenticatedRequest(app, generateTokenFromUser(admin.user))
 
     const invalid = await client.put(`/api/users/${target.user.id}/status`).send({ status: 'archived' })
@@ -54,7 +54,7 @@ describe('managed user runtime contract', () => {
   })
 
   it('creates a platform administrator only from validated input', async () => {
-    const admin = await createTestUser({ role: 'super_admin' })
+    const admin = await createTestUser({ accountRole: 'super_admin' })
     const client = createAuthenticatedRequest(app, generateTokenFromUser(admin.user))
     const username = `platform_${crypto.randomUUID().slice(0, 8)}`
 

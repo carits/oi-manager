@@ -17,9 +17,9 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
   let testSetRevisionId: string
 
   beforeEach(async () => {
-    author = await createTestUser({ role: 'teacher' })
-    reviewer = await createTestUser({ role: 'school_principal', schoolId: author.schoolId })
-    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: author.schoolId } })).organizationId!
+    author = await createTestUser({ organization: { role: 'teacher' } })
+    reviewer = await createTestUser({ organization: { role: 'school_principal', organizationId: author.organization!.organizationId } })
+    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: author.organization!.organizationId } })).organizationId!
     problem = await createTestProblem({ ownerId: author.user.id, title: 'Editorial domain problem' })
     await prisma.problem.update({ where: { id: problem.id }, data: {
       libraryScope: 'school', libraryKey: `organization:${organizationId}`, organizationId,
@@ -77,7 +77,7 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     expect(submitted.status).toBe(200)
     expect(submitted.body.data.status).toBe('AUTO_CHECKING')
     expect(submitted.body.data.Revisions).toHaveLength(1)
-    const globalAdministrator = await createTestUser({ role: 'super_admin' })
+    const globalAdministrator = await createTestUser({ accountRole: 'super_admin' })
     const ordinaryLedger = await createAuthenticatedRequest(app, generateTokenFromUser(globalAdministrator.user))
       .get('/api/submissions?pageSize=100')
     expect(ordinaryLedger.status).toBe(200)
@@ -211,7 +211,7 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     expect(versions.map(item => item.visibilityPolicy)).toEqual(['MANAGER_ONLY', 'PUBLIC'])
     // School-library content is visible to active staff in that organization;
     // a public solution must not widen the underlying problem's audience.
-    const reader = await createTestUser({ role: 'teacher', schoolId: author.schoolId })
+    const reader = await createTestUser({ organization: { role: 'teacher', organizationId: author.organization!.organizationId } })
     const readerClient = createAuthenticatedRequest(app, generateTokenFromUser(reader.user))
     const publicCurrent = await readerClient.get(`/api/solutions/${first.body.data.solutionId}`)
       .set('X-OI-Organization-ID', organizationId)

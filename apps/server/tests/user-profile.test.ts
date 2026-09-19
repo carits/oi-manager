@@ -12,9 +12,9 @@ describe('public user profile contract', () => {
   let organizationId: string
 
   beforeEach(async () => {
-    viewer = await createTestUser({ role: 'teacher' })
-    student = await createTestUser({ role: 'student', schoolId: viewer.schoolId })
-    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: viewer.schoolId } })).organizationId!
+    viewer = await createTestUser({ organization: { role: 'teacher' } })
+    student = await createTestUser({ organization: { role: 'student', organizationId: viewer.organization!.organizationId } })
+    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: viewer.organization!.organizationId } })).organizationId!
   })
 
   it('returns only account profile data in personal context', async () => {
@@ -37,7 +37,7 @@ describe('public user profile contract', () => {
     expect(response.status).toBe(200)
     expect(response.body.data).toMatchObject({
       id: student.user.id,
-      profileId: student.studentProfileId,
+      profileId: student.organization!.studentProfileId,
       username: student.user.username,
       userType: 'student',
       school: { id: organizationId },

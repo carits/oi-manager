@@ -11,18 +11,16 @@ describe('account capability matrix', () => {
     }
   })
 
-  it('allows ordinary identities to use personal and organization workspaces without global access', () => {
-    for (const role of ['school_principal', 'teacher', 'student']) {
-      expect(isGlobalAdministrator(role)).toBe(false)
-      expect(hasAccountCapability(role, 'enter-personal-workspace')).toBe(true)
-      expect(hasAccountCapability(role, 'enter-organization-workspace')).toBe(true)
-      expect(hasAccountCapability(role, 'view-all-submissions')).toBe(false)
-    }
+  it('keeps ordinary account access separate from organization membership access', () => {
+    expect(isGlobalAdministrator('user')).toBe(false)
+    expect(hasAccountCapability('user', 'enter-personal-workspace')).toBe(true)
+    expect(hasAccountCapability('user', 'enter-organization-workspace')).toBe(false)
+    expect(hasAccountCapability('user', 'view-all-submissions')).toBe(false)
   })
 
-  it('limits organization management and platform secrets to explicit capabilities', () => {
-    expect(hasAccountCapability('school_principal', 'manage-organization')).toBe(true)
-    expect(hasAccountCapability('teacher', 'manage-organization')).toBe(false)
+  it('does not derive organization management from a global account role', () => {
+    expect(hasAccountCapability('user', 'manage-organization')).toBe(false)
+    expect(hasAccountCapability('super_admin', 'manage-organization')).toBe(false)
     expect(hasAccountCapability('super_admin', 'manage-platform-secrets')).toBe(true)
     expect(hasAccountCapability('platform_admin', 'manage-platform-secrets')).toBe(false)
   })
@@ -30,6 +28,9 @@ describe('account capability matrix', () => {
   it('fails closed for unknown, missing and legacy role strings', () => {
     expect(accountCapabilities(undefined)).toEqual([])
     expect(accountCapabilities('admin')).toEqual([])
+    expect(accountCapabilities('school_principal')).toEqual([])
+    expect(accountCapabilities('teacher')).toEqual([])
+    expect(accountCapabilities('student')).toEqual([])
     expect(hasAccountCapability('admin', 'enter-global-workspace')).toBe(false)
   })
 })

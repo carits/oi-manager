@@ -10,12 +10,7 @@ import { createTestSchool, createTestTeam, createTestUser } from './helpers/test
 const app = createTestApp()
 
 function tokenFor(user: Awaited<ReturnType<typeof createTestUser>>) {
-  return generateTestToken({
-    userId: user.user.id,
-    username: user.user.username,
-    role: user.user.role,
-    schoolId: user.schoolId,
-  })
+  return generateTestToken({ userId: user.user.id, username: user.user.username, accountRole: user.user.accountRole })
 }
 
 describe('file storage security', () => {
@@ -36,7 +31,7 @@ describe('file storage security', () => {
   })
 
   it('rejects a forged PNG through the multipart API', async () => {
-    const user = await createTestUser({ role: 'student' })
+    const user = await createTestUser({ organization: { role: 'student' } })
     const response = await request(app)
       .post('/api/files/upload')
       .set('Cookie', `oi_session=${tokenFor(user)}`)
@@ -52,8 +47,8 @@ describe('file storage security', () => {
   it('requires active membership and the matching organization for team files', async () => {
     const schoolA = await createTestSchool({ name: 'File School A' })
     const schoolB = await createTestSchool({ name: 'File School B' })
-    const member = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
-    const team = await createTestTeam({ schoolId: schoolA.id, ownerId: member.user.id, ownerType: 'teacher' })
+    const member = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.organizationId! } })
+    const team = await createTestTeam({ organizationId: schoolA.organizationId!, ownerId: member.user.id, ownerType: 'teacher' })
 
     const local = await request(app)
       .get(`/api/files/by-owner/team/${team.id}`)
@@ -90,8 +85,8 @@ describe('file storage security', () => {
   })
 
   it('does not let global administrators browse arbitrary user files', async () => {
-    const owner = await createTestUser({ role: 'student' })
-    const admin = await createTestUser({ role: 'platform_admin' })
+    const owner = await createTestUser({ organization: { role: 'student' } })
+    const admin = await createTestUser({ accountRole: 'platform_admin' })
     const response = await request(app)
       .get(`/api/files/by-owner/user/${owner.user.id}`)
       .set('Cookie', `oi_session=${tokenFor(admin)}`)
@@ -100,7 +95,7 @@ describe('file storage security', () => {
   })
 
   it('hides soft-deleted public file metadata from authenticated callers', async () => {
-    const user = await createTestUser({ role: 'student' })
+    const user = await createTestUser({ organization: { role: 'student' } })
     const file = await prisma.file.create({
       data: {
         id: crypto.randomUUID(),

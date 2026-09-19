@@ -8,8 +8,8 @@ import { createTestUser } from './helpers/testUser'
 import { createTestProblem } from './helpers/problemListHelpers'
 
 async function createContestFixture() {
-  const owner = await createTestUser({ role: 'teacher' })
-  const participant = await createTestUser({ role: 'student' })
+  const owner = await createTestUser({ organization: { role: 'teacher' } })
+  const participant = await createTestUser({ organization: { role: 'student' } })
   const problem = await createTestProblem({ ownerId: owner.user.id, title: 'Canonical contest identity' })
   const runtime = await prisma.training.create({
     data: {
@@ -94,7 +94,7 @@ describe('canonical contest submission identity', () => {
   })
 
   it('keeps ordinary training records outside the Contest aggregate', async () => {
-    const owner = await createTestUser({ role: 'teacher' })
+    const owner = await createTestUser({ organization: { role: 'teacher' } })
     const runtime = await prisma.training.create({
       data: {
         title: 'Ordinary training',

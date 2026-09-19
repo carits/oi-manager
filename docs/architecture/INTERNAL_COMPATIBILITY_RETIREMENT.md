@@ -14,6 +14,9 @@ source_of_truth: auth contracts, auth middleware, organization authorization, of
 - Session 只保存账号身份，不接受或续签旧 `role/schoolId/studentId/teacherId/studentMode` Claims。
 - 浏览器与自动化脚本统一使用 HttpOnly Cookie；服务端不读取 Bearer，前端不读取 localStorage Token。
 - `/api/auth/session/migrate`、`/api/admin/migration/**`、管理员测试图迁移和单题测试图迁移 HTTP 入口均已删除。
+- 组织邀请只使用 OrganizationInvitation；OrganizationMembership 只保留 active/disabled/archived 成员状态。
+- /api/students、/api/teachers、/api/schools 及学校题单旧接口已移除，不保留 410 路由。
+- 登录审计只保存 accountRoleSnapshot，请求日志分别记录账号角色与组织角色。
 - 生产 `User.role` 中的学生、教师、负责人历史值已通过可重跑脚本归一为 `user`，组织岗位仅来自成员关系。
 
 ## 保留的离线能力

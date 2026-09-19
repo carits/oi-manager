@@ -190,7 +190,7 @@ describe('authorization boundary', () => {
 
   it('uses normalized roles and explicit grants instead of memberRole at runtime', async () => {
     const school = await createTestSchool()
-    const member = await createTestUser({ role: 'student', schoolId: school.id })
+    const member = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
     const membership = await prisma.organizationMembership.findUniqueOrThrow({
       where: { organizationId_userId: { organizationId: school.organizationId!, userId: member.user.id } },
     })

@@ -17,10 +17,10 @@ describe('VJudge 式多题面版本与活动快照', () => {
   let organizationId: string
 
   beforeEach(async () => {
-    author = await createTestUser({ role: 'teacher' })
-    peer = await createTestUser({ role: 'teacher', schoolId: author.schoolId })
+    author = await createTestUser({ organization: { role: 'teacher' } })
+    peer = await createTestUser({ organization: { role: 'teacher', organizationId: author.organization!.organizationId } })
     problem = await createTestProblem({ ownerId: author.user.id, title: '多题面测试题' })
-    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: author.schoolId } })).organizationId!
+    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: author.organization!.organizationId } })).organizationId!
   })
 
   async function createVersion(name: string, visibility: 'private' | 'public' = 'private') {
@@ -166,7 +166,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
   it('管理员编辑活动题面会创建新集合并拒绝陈旧或非管理员写入', async () => {
     await prisma.problem.update({ where: { id: problem.id }, data: { description: '原始官方题面' } })
     const client = createAuthenticatedRequest(app, generateTokenFromUser(author.user))
-    const participant = await createTestUser({ role: 'student', schoolId: author.schoolId })
+    const participant = await createTestUser({ organization: { role: 'student', organizationId: author.organization!.organizationId } })
     const participantClient = createAuthenticatedRequest(app, generateTokenFromUser(participant.user))
     const training = await prisma.training.create({ data: {
       title: '活动快照编辑', startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),

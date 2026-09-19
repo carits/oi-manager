@@ -14,12 +14,8 @@ describe('OJ Account Management', () => {
     })
 
     it('should deny access for teacher role', async () => {
-      const { user } = await createTestUser({ role: 'teacher' })
-      const token = generateTestToken({
-        userId: user.id,
-        role: 'teacher',
-        username: user.username,
-      })
+      const { user } = await createTestUser({ organization: { role: 'teacher' } })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'user' })
       const res = await request(app)
         .get('/api/oj-accounts')
         .set('Cookie', `oi_session=${token}`)
@@ -27,13 +23,8 @@ describe('OJ Account Management', () => {
     })
 
     it('should allow access for platform_admin', async () => {
-      const { user } = await createTestUser({ role: 'platform_admin' })
-      const token = generateTestToken({
-        userId: user.id,
-        role: 'platform_admin',
-        username: user.username,
-        adminId: 'admin-id',
-      })
+      const { user } = await createTestUser({ accountRole: 'platform_admin' })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'platform_admin' })
       const res = await request(app)
         .get('/api/oj-accounts')
         .set('Cookie', `oi_session=${token}`)
@@ -42,13 +33,8 @@ describe('OJ Account Management', () => {
     })
 
     it('should allow access for super_admin', async () => {
-      const { user } = await createTestUser({ role: 'super_admin' })
-      const token = generateTestToken({
-        userId: user.id,
-        role: 'super_admin',
-        username: user.username,
-        adminId: 'admin-id',
-      })
+      const { user } = await createTestUser({ accountRole: 'super_admin' })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'super_admin' })
       const res = await request(app)
         .get('/api/oj-accounts')
         .set('Cookie', `oi_session=${token}`)
@@ -58,13 +44,8 @@ describe('OJ Account Management', () => {
 
   describe('CRUD operations', () => {
     async function getAdminToken() {
-      const { user } = await createTestUser({ role: 'platform_admin' })
-      return generateTestToken({
-        userId: user.id,
-        role: 'platform_admin',
-        username: user.username,
-        adminId: 'admin-id',
-      })
+      const { user } = await createTestUser({ accountRole: 'platform_admin' })
+      return generateTestToken({ userId: user.id, username: user.username, accountRole: 'platform_admin' })
     }
 
     it('should add an account with cookie', async () => {
@@ -231,13 +212,8 @@ describe('OJ Account Management', () => {
 
   describe('Stats', () => {
     it('should return platform stats', async () => {
-      const { user } = await createTestUser({ role: 'platform_admin' })
-      const token = generateTestToken({
-        userId: user.id,
-        role: 'platform_admin',
-        username: user.username,
-        adminId: 'admin-id',
-      })
+      const { user } = await createTestUser({ accountRole: 'platform_admin' })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'platform_admin' })
 
       await request(app)
         .post('/api/oj-accounts')
@@ -262,13 +238,8 @@ describe('OJ Account Management', () => {
 
   describe('Verify', () => {
     it('should mark account as error when no cookie', async () => {
-      const { user } = await createTestUser({ role: 'platform_admin' })
-      const token = generateTestToken({
-        userId: user.id,
-        role: 'platform_admin',
-        username: user.username,
-        adminId: 'admin-id',
-      })
+      const { user } = await createTestUser({ accountRole: 'platform_admin' })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'platform_admin' })
 
       // Create account with only password, no cookie
       const createRes = await request(app)
