@@ -8,7 +8,7 @@ import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from '.
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 import { lockRatingParticipantTx, processDueContestRatings } from '../src/modules/rating/application/contest-rating.service'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
 import { holdContestFinalizationForRejudgeTx } from '../src/modules/contest/contest-command.service'
 
 const app = createTestApp()
@@ -18,6 +18,25 @@ async function createContestRuntimeFixture(args: Prisma.TrainingCreateArgs) {
   const aggregate = await prisma.$transaction(tx => ensureContestAggregateTx(tx, runtime.id))
   if (!aggregate) throw new Error('Contest aggregate missing')
   return { ...runtime, canonicalContestId: aggregate.id }
+}
+
+async function createFinalizedContestSubmission(data: Prisma.SubmissionUncheckedCreateInput, result: string, score: number) {
+  const submission = await prisma.submission.create({ data })
+  const runId = crypto.randomUUID()
+  await prisma.judgeRun.create({
+    data: {
+      id: runId,
+      submissionId: submission.id,
+      runNumber: 1,
+      runType: 'NORMAL',
+      status: 'FINALIZED',
+      result,
+      score,
+      finalizedAt: data.createdAt instanceof Date ? data.createdAt : new Date(),
+    },
+  })
+  await prisma.submission.update({ where: { id: submission.id }, data: { currentJudgeRunId: runId } })
+  return submission
 }
 
 describe('Carits Multi-player Elo V1', () => {
@@ -144,7 +163,7 @@ describe('rating domain HTTP and persistence', () => {
     if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
     await prisma.contestRatingConfig.create({ data: { id: crypto.randomUUID(), contestId: contest.canonicalContestId, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
     for (const [index, user] of [first, second].entries()) {
-      await prisma.submission.create({ data: { userId: user.user.id, oj: 'carits', problemId: problem.problemId, problemInternalId: problem.id, language: 'cpp', code: 'int main(){}', codeLength: 12, result: index === 0 ? 'accepted' : 'wrong_answer', score: index === 0 ? 100 : 20, submitMethod: 'local', submitScope: 'contest', workspaceScope: 'campus', organizationId, trainingId: contest.id, trainingProblemId: trainingProblem.id, canonicalContestId: canonicalProblem.contestId, canonicalContestProblemId: canonicalProblem.id, createdAt: new Date(contest.startTime.getTime() + (index + 1) * 60_000) } })
+      await createFinalizedContestSubmission({ userId: user.user.id, oj: 'carits', problemId: problem.problemId, problemInternalId: problem.id, language: 'cpp', code: 'int main(){}', codeLength: 12, submitMethod: 'local', submitScope: 'contest', workspaceScope: 'campus', organizationId, trainingId: null, trainingProblemId: null, canonicalContestId: canonicalProblem.contestId, canonicalContestProblemId: canonicalProblem.id, createdAt: new Date(contest.startTime.getTime() + (index + 1) * 60_000) }, index === 0 ? 'accepted' : 'wrong_answer', index === 0 ? 100 : 20)
     }
     return contest
   }
@@ -162,7 +181,7 @@ describe('rating domain HTTP and persistence', () => {
     expect(again.status).toBe(200)
     expect(await prisma.contestStandingSnapshot.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
     expect(await prisma.ratingBatch.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
-    const canonical = await prisma.contest.findUniqueOrThrow({ where: { runtimeTrainingId: contest.id } })
+    const canonical = await prisma.contest.findUniqueOrThrow({ where: { publicId: contest.id } })
     expect(await prisma.contestRatingConfig.count({ where: { contestId: canonical.id } })).toBe(1)
     expect(await prisma.contestStandingSnapshot.count({ where: { contestId: canonical.id } })).toBe(1)
     expect(await prisma.ratingBatch.count({ where: { contestId: canonical.id } })).toBe(1)
@@ -260,7 +279,7 @@ describe('rating domain HTTP and persistence', () => {
     expect(changed.body.data.selectedOrganizationId).toBe(otherOrganizationId)
 
     await prisma.$transaction(tx => lockRatingParticipantTx(tx, contest, first.user.id, new Date()))
-    const participant = await prisma.trainingParticipant.findFirstOrThrow({ where: { trainingId: contest.id, userId: first.user.id } })
+    const participant = await prisma.contestParticipant.findFirstOrThrow({ where: { contestId: contest.canonicalContestId, userId: first.user.id } })
     expect(participant).toMatchObject({ organizationIdSnapshot: otherOrganizationId, ratingStatus: 'RATING_LOCKED' })
     expect(participant.firstSubmissionAt).not.toBeNull()
 
@@ -270,7 +289,7 @@ describe('rating domain HTTP and persistence', () => {
 
     await expect(prisma.$transaction(tx => lockRatingParticipantTx(tx, contest, second.user.id, new Date())))
       .rejects.toMatchObject({ code: 'RATING_ORGANIZATION_SELECTION_REQUIRED' })
-    expect(await prisma.trainingParticipant.findFirst({ where: { trainingId: contest.id, userId: second.user.id } })).toBeNull()
+    expect(await prisma.contestParticipant.findFirst({ where: { contestId: contest.canonicalContestId, userId: second.user.id } })).toBeNull()
   })
 
   it('allows GLOBAL participation without an organization and fixes organization contests automatically', async () => {
@@ -284,7 +303,7 @@ describe('rating domain HTTP and persistence', () => {
       scoringRules: { problemPolicy: 'LAST_SUBMISSION' }, rulesHash: 'global-fixture', createdBy: manager.user.id,
     } })
     await prisma.$transaction(tx => lockRatingParticipantTx(tx, globalContest, first.user.id, new Date()))
-    expect(await prisma.trainingParticipant.findFirst({ where: { trainingId: globalContest.id, userId: first.user.id } }))
+    expect(await prisma.contestParticipant.findFirst({ where: { contestId: globalContest.canonicalContestId, userId: first.user.id } }))
       .toMatchObject({ organizationIdSnapshot: null, ratingStatus: 'RATING_LOCKED' })
 
     const organizationContest = await createContestRuntimeFixture({ data: {
@@ -297,7 +316,7 @@ describe('rating domain HTTP and persistence', () => {
       scoringRules: { problemPolicy: 'LAST_SUBMISSION' }, rulesHash: 'organization-fixture', createdBy: manager.user.id,
     } })
     await prisma.$transaction(tx => lockRatingParticipantTx(tx, organizationContest, second.user.id, new Date()))
-    expect(await prisma.trainingParticipant.findFirst({ where: { trainingId: organizationContest.id, userId: second.user.id } }))
+    expect(await prisma.contestParticipant.findFirst({ where: { contestId: organizationContest.canonicalContestId, userId: second.user.id } }))
       .toMatchObject({ organizationIdSnapshot: organizationId, ratingStatus: 'RATING_LOCKED' })
   })
 
@@ -335,8 +354,8 @@ describe('rating domain HTTP and persistence', () => {
 
   it('audits participant disposition and serializes it with finalization', async () => {
     const contest = await createFinishedContest()
-    await prisma.trainingParticipant.createMany({ data: [first, second].map(user => ({
-      id: crypto.randomUUID(), trainingId: contest.id, userId: user.user.id, userType: 'student',
+    await prisma.contestParticipant.createMany({ data: [first, second].map(user => ({
+      id: crypto.randomUUID(), contestId: contest.canonicalContestId, userId: user.user.id, userType: 'student',
       organizationIdSnapshot: organizationId, ratingStatus: 'RATING_LOCKED', firstSubmissionAt: new Date(), ratingLockedAt: new Date(),
     })) })
 
@@ -347,7 +366,7 @@ describe('rating domain HTTP and persistence', () => {
     expect(finalization.status).toBe(200)
     expect([200, 409]).toContain(disposition.status)
 
-    const participant = await prisma.trainingParticipant.findFirstOrThrow({ where: { trainingId: contest.id, userId: second.user.id } })
+    const participant = await prisma.contestParticipant.findFirstOrThrow({ where: { contestId: contest.canonicalContestId, userId: second.user.id } })
     const audit = await prisma.organizationAuditLog.findFirst({ where: { organizationId, action: 'contest_rating_participant_disposition_updated', targetUserId: second.user.id } })
     if (disposition.status === 200) {
       expect(participant.ratingDisposition).toBe('EXCLUDE')
@@ -357,14 +376,14 @@ describe('rating domain HTTP and persistence', () => {
       expect(participant.ratingDisposition).toBe('NORMAL')
       expect(audit).toBeNull()
     }
-    expect((await prisma.training.findUniqueOrThrow({ where: { id: contest.id } })).finalizationStatus).toBe('FINALIZED')
+    expect((await prisma.contest.findUniqueOrThrow({ where: { id: contest.canonicalContestId } })).finalizationStatus).toBe('FINALIZED')
   })
 
   it('automatically finalizes due rated contests and is idempotent', async () => {
     const contest = await createFinishedContest({ title: 'Scheduler-rated contest' })
     const firstRun = await processDueContestRatings()
     expect(firstRun).toMatchObject({ scanned: 1, finalized: 1, waiting: 0, failed: 0 })
-    expect((await prisma.training.findUniqueOrThrow({ where: { id: contest.id } })).finalizationStatus).toBe('FINALIZED')
+    expect((await prisma.contest.findUniqueOrThrow({ where: { id: contest.canonicalContestId } })).finalizationStatus).toBe('FINALIZED')
     expect(await prisma.contestStandingSnapshot.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
     expect(await prisma.ratingBatch.count({ where: { contestId: contest.canonicalContestId } })).toBe(1)
 
@@ -395,8 +414,9 @@ describe('rating domain HTTP and persistence', () => {
     const contest = await createFinishedContest()
     const finalized = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`).set('X-OI-Organization-ID', organizationId)
     expect(finalized.status).toBe(200)
-    const secondSubmission = await prisma.submission.findFirstOrThrow({ where: { trainingId: contest.id, userId: second.user.id } })
-    await prisma.submission.update({ where: { id: secondSubmission.id }, data: { score: 100, result: 'accepted' } })
+    const secondSubmission = await prisma.submission.findFirstOrThrow({ where: { canonicalContestId: contest.canonicalContestId, userId: second.user.id } })
+    if (!secondSubmission.currentJudgeRunId) throw new Error('Current JudgeRun missing')
+    await prisma.judgeRun.update({ where: { id: secondSubmission.currentJudgeRunId }, data: { score: 100, result: 'accepted' } })
     expect(await prisma.$transaction(tx => holdContestFinalizationForRejudgeTx(tx, contest.id))).toBe(true)
 
     const rebuilt = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/rating/rebuild`).set('X-OI-Organization-ID', organizationId)

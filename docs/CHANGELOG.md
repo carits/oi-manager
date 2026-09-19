@@ -1,9 +1,17 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-19
+last_verified: 2026-09-20
 source_of_truth: Git history
 ---
+
+## 2026-09-20 — Contest 与 Judge 双模型兼容退役
+
+- Contest 获得独立 publicId，直接拥有题目、参赛者、生命周期和 Rating 事实；删除 runtimeTrainingId、runtimeTrainingProblemId、投影写入服务和自动补聚合维护服务。
+- ContestUserProblemStatus 删除旧 Training/TrainingProblem 整数身份，只保留带复合外键的 Contest/ContestProblem 身份；ContestRecord 强制每行只归属普通训练或比赛之一。
+- Submission 删除 result、score、cases、subtasks、时间、内存、错误、Judge 等 12 个执行镜像列；JudgeRun/JudgeAttempt 成为唯一执行事实来源。
+- 查询门面、命令、Rating、Dashboard、数据市场、博客、题目管理和测试夹具统一使用 Contest/Activity 语义，不再提供 Training 比赛回退。
+- 两项迁移先在生产备份恢复出的隔离数据库完整演练；比赛 773/773、题目 199/199、状态 702/702 对账一致，旧兼容列归零。
 
 ## 2026-09-19 — 仓库完成门禁按风险分级
 

@@ -86,30 +86,30 @@ if (!contestRating.includes("from '../../contest/contest-query.facade'")) {
   violations.push('Contest Rating bypasses the Contest query facade')
 }
 const trainingCrud = fs.readFileSync(path.join(modulesRoot, 'training/application/training-crud.service.ts'), 'utf8')
-if (!trainingCrud.includes('listPlatformContestRuntimes')) {
+if (!trainingCrud.includes('listPlatformContests')) {
   violations.push('Platform contest list bypasses the Contest query facade')
 }
 const dataMarket = fs.readFileSync(path.join(modulesRoot, 'data-market/data-market.service.ts'), 'utf8')
-if (!dataMarket.includes('findContestRuntimeForLicense') || !dataMarket.includes('listContestRuntimeIdsForLicenseScopes')) {
+if (!dataMarket.includes('findContestForLicense') || !dataMarket.includes('listContestPublicIdsForLicenseScopes')) {
   violations.push('Data Market contest license bypasses the Contest query facade')
 }
 const dashboard = fs.readFileSync(path.join(modulesRoot, 'dashboard/application/dashboard.service.ts'), 'utf8')
-if (!dashboard.includes('listContestRuntimesForDashboard')) {
+if (!dashboard.includes('listContestsForDashboard')) {
   violations.push('Dashboard contest discovery bypasses the Contest query facade')
 }
 const organizationMember = fs.readFileSync(path.join(modulesRoot, 'organization/application/organization-member.service.ts'), 'utf8')
-if (!organizationMember.includes('listContestRuntimesForDashboard')) {
+if (!organizationMember.includes('listContestsForDashboard')) {
   violations.push('Organization contest discovery bypasses the Contest query facade')
 }
 const trainingRanking = fs.readFileSync(path.join(modulesRoot, 'training/application/training-ranking.service.ts'), 'utf8')
-if (!trainingRanking.includes('findActivityRuntimeForRanking')) {
+if (!trainingRanking.includes('findActivityForRanking')) {
   violations.push('Contest ranking bypasses the Contest query facade')
 }
 const blog = fs.readFileSync(path.join(modulesRoot, 'blog/blog.service.ts'), 'utf8')
-if (!blog.includes('findContestRuntimeForBlogReview')) {
+if (!blog.includes('findContestForBlogReview')) {
   violations.push('Blog contest review bypasses the Contest query facade')
 }
-if (!contestRating.includes('listDueRatedContestRuntimes')) {
+if (!contestRating.includes('listDueRatedContests')) {
   violations.push('Rating scheduler bypasses the Contest query facade')
 }
 if (!contestRating.includes('beginContestFinalizationTx')
@@ -122,39 +122,39 @@ if (/training\.(?:update|updateMany)\([\s\S]{0,220}(?:finalizationStatus|finaliz
   violations.push('Contest Rating writes finalization state outside the Contest command service')
 }
 const submissionQuery = fs.readFileSync(path.join(modulesRoot, 'submission/application/submission-query.service.ts'), 'utf8')
-if (!submissionQuery.includes('findActivityRuntimeForSubmission')) {
+if (!submissionQuery.includes('findActivityForSubmission')) {
   violations.push('Submission contest detail bypasses the Contest query facade')
 }
 const trainingMisc = fs.readFileSync(path.join(modulesRoot, 'training/application/training-misc.service.ts'), 'utf8')
-if (!trainingMisc.includes('findActivityRuntimeForAccess') || !trainingMisc.includes('findActivityRuntimeForOverview')) {
+if (!trainingMisc.includes('findActivityForAccess') || !trainingMisc.includes('findActivityForOverview')) {
   violations.push('Activity overview or resource access bypasses the Contest query facade')
 }
 const trainingProblemQuery = fs.readFileSync(path.join(modulesRoot, 'training/application/training-problem-query.service.ts'), 'utf8')
-if (!trainingProblemQuery.includes('findActivityRuntimeForAccess')) {
+if (!trainingProblemQuery.includes('findActivityForAccess')) {
   violations.push('Activity problem access bypasses the Contest query facade')
 }
 const trainingScope = fs.readFileSync(path.join(modulesRoot, 'training/application/training-scope.service.ts'), 'utf8')
 const trainingVisibility = fs.readFileSync(path.join(modulesRoot, 'training/training.visibility.ts'), 'utf8')
-if (!trainingScope.includes('findActivityRuntimeForAccess') || !trainingVisibility.includes('findActivityRuntimeForAccess')) {
+if (!trainingScope.includes('findActivityForAccess') || !trainingVisibility.includes('findActivityForAccess')) {
   violations.push('Activity scope or visibility bypasses the Contest query facade')
 }
 const trainingContent = fs.readFileSync(path.join(modulesRoot, 'training/application/training-content-management.service.ts'), 'utf8')
-if (!trainingContent.includes('findActivityRuntimeForAccess')) {
+if (!trainingContent.includes('findActivityForAccess')) {
   violations.push('Activity content access bypasses the Contest query facade')
 }
 if (!judgeRun.includes('holdContestFinalizationForRejudgeTx')) {
   violations.push('Judge rejudge finalization bypasses the Contest command service')
 }
-if (!trainingCrud.includes('createContestRuntimeTx') || !organizationMember.includes('createContestRuntimeTx')) {
+if (!trainingCrud.includes('createContestTx') || !organizationMember.includes('createContestTx')) {
   violations.push('Contest creation bypasses the Contest command service')
 }
 if (!trainingCrud.includes('transitionContestLifecycleTx')) {
   violations.push('Contest lifecycle bypasses the Contest command service')
 }
-if (!trainingCrud.includes('updateContestRuntimeTx')) {
+if (!trainingCrud.includes('updateContestTx')) {
   violations.push('Contest metadata update bypasses the Contest command service')
 }
-if (!trainingCrud.includes('deleteContestRuntimeTx')) {
+if (!trainingCrud.includes('deleteContestTx')) {
   violations.push('Contest deletion bypasses the Contest command service')
 }
 const contestCommand = fs.readFileSync(path.join(modulesRoot, 'contest/contest-command.service.ts'), 'utf8')
@@ -166,19 +166,19 @@ if (contestFinalizationCommand.includes('ensureContestAggregateTx')
   || /tx\.training\.(?:update|updateMany)\s*\(/.test(contestFinalizationCommand)) {
   violations.push('Contest finalization still treats Training as the authoritative write model')
 }
-if (!contestFinalizationCommand.includes('projectContestRuntimeTx')
-  || !contestCommand.includes('projectContestRuntimeTx')) {
-  violations.push('Contest commands do not maintain the Training compatibility projection')
+const retiredContestAggregatePath = path.join(modulesRoot, 'contest/contest-aggregate.service.ts')
+if (fs.existsSync(retiredContestAggregatePath) || (contestFinalizationCommand + contestCommand).includes('projectContestRuntimeTx')) {
+  violations.push('Contest commands still contain the retired Training compatibility projection')
 }
 if (/prisma\.training\.findMany\([\s\S]{0,500}finalizationStatus/.test(contestQueryFacade)) {
   violations.push('Contest Rating discovery still reads lifecycle state from Training')
 }
 const trainingProblemManagement = fs.readFileSync(path.join(modulesRoot, 'training/application/training-problem-management.service.ts'), 'utf8')
 for (const command of [
-  'createContestProblemRuntimeTx',
-  'reorderContestProblemRuntimesTx',
-  'updateContestProblemRuntimeTx',
-  'deleteContestProblemRuntimeTx',
+  'createContestProblemTx',
+  'reorderContestProblemsTx',
+  'updateContestProblemTx',
+  'deleteContestProblemTx',
 ]) {
   if (!trainingProblemManagement.includes(command)) {
     violations.push(`Contest problem management bypasses ${command}`)

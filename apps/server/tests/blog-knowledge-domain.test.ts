@@ -6,7 +6,7 @@ import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
-import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx } from './helpers/legacy-contest-fixture'
 
 const app = createTestApp()
 
@@ -107,25 +107,25 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
   })
 
   it('fails closed across organization visibility and keeps unlisted posts out of discovery', async () => {
-    const school = await prisma.school.findUniqueOrThrow({ where: { id: author.organization!.organizationId } })
-    const member = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
+    const organizationId = author.organization!.organizationId
+    const member = await createTestUser({ organization: { role: 'student', organizationId: organizationId } })
     const schoolProblem = await createTestProblem({ ownerId: author.user.id, title: 'Private school problem' })
     await prisma.problem.update({ where: { id: schoolProblem.id }, data: {
       libraryScope: 'school',
-      libraryKey: `organization:${school.organizationId}`,
-      organizationId: school.organizationId,
+      libraryKey: `organization:${organizationId}`,
+      organizationId: organizationId,
       visibility: 'private',
     } })
 
     const created = await client(author).post('/api/blogs').send({
       slug: `school-${crypto.randomUUID().slice(0, 8)}`,
-      organizationId: school.organizationId,
+      organizationId: organizationId,
       title: 'School-only knowledge',
       contentMarkdown: 'This material belongs to the active school.',
       references: [{ type: 'PROBLEM', problemId: schoolProblem.id, relationType: 'PRIMARY_SUBJECT' }],
     })
     const postId = created.body.data.id
-    const schoolAuthor = organizationClient(author, school.organizationId)
+    const schoolAuthor = organizationClient(author, organizationId)
     expect((await schoolAuthor.post(`/api/blogs/${postId}/publish`).send({ expectedDraftRevision: 1, visibility: 'PUBLIC' })).body.code).toBe('BLOG_REFERENCE_VISIBILITY_CONFLICT')
     expect((await schoolAuthor.post(`/api/blogs/${postId}/publish`).send({ expectedDraftRevision: 1, visibility: 'ORGANIZATION' })).status).toBe(200)
     expect((await client(member).get(`/api/blogs/${postId}`)).status).toBe(200)
@@ -152,9 +152,9 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(visibleVersions.body.data.map((item: any) => item.version)).toEqual([2])
     expect((await client(reader).get(`/api/blogs/${privatePostId}/versions/${privateVersionId}`)).status).toBe(404)
 
-    const school = await prisma.school.findUniqueOrThrow({ where: { id: author.organization!.organizationId } })
-    const member = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
-    const organizationPost = await createProblemBlog({ slug: `organization-history-${crypto.randomUUID().slice(0, 8)}`, organizationId: school.organizationId })
+    const organizationId = author.organization!.organizationId
+    const member = await createTestUser({ organization: { role: 'student', organizationId: organizationId } })
+    const organizationPost = await createProblemBlog({ slug: `organization-history-${crypto.randomUUID().slice(0, 8)}`, organizationId: organizationId })
     const organizationPostId = organizationPost.body.data.id
     const organizationPublish = await client(author).post(`/api/blogs/${organizationPostId}/publish`).send({ expectedDraftRevision: 1, visibility: 'ORGANIZATION' })
     const organizationVersionId = organizationPublish.body.data.currentVersion.id
@@ -552,8 +552,6 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       language: 'cpp17',
       code: 'int main() { return 0; }',
       codeLength: 24,
-      result: 'accepted',
-      score: 100,
       submitMethod: 'local',
       submitScope: 'problem',
       workspaceScope: 'personal',
@@ -561,6 +559,26 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       inputFilename: 'answer.in',
       outputFilename: 'answer.out',
     } })
+    const runId = crypto.randomUUID()
+    await prisma.judgeRun.create({
+      data: {
+        id: runId,
+        submissionId: submission.id,
+        runNumber: 1,
+        runType: 'NORMAL',
+        status: 'FINALIZED',
+        result: 'accepted',
+        score: 100,
+        timeUsed: 1,
+        memoryUsed: 1024,
+        cases: '[]',
+        finalizedAt: new Date(),
+      },
+    })
+    await prisma.submission.update({
+      where: { id: submission.id },
+      data: { currentJudgeRunId: runId },
+    })
     const snapshot = await client(author).post(`/api/submissions/${submission.id}/blog-snapshots`).send({
       visibility: 'PLATFORM',
       includeCode: false,

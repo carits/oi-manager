@@ -5,8 +5,6 @@ const root = path.resolve(import.meta.dirname, '..')
 const sourceRoot = path.join(root, 'apps', 'server', 'src')
 const allowedHackWriter = 'apps/server/src/modules/problem/problem.hack-state.ts'
 const allowedTrainingWriters = new Set([
-  'apps/server/src/modules/contest/contest-command.service.ts',
-  'apps/server/src/modules/contest/contest-aggregate.service.ts',
   'apps/server/src/modules/training/application/training-crud.service.ts',
 ])
 
@@ -28,7 +26,7 @@ for (const file of walk(sourceRoot).filter(item => item.endsWith('.ts'))) {
     }
     if (!allowedTrainingWriters.has(relative)
       && /\.(?:training)\.(?:create|update|upsert|delete|createMany|updateMany|deleteMany)\s*\(/.test(line)) {
-      violations.push(`${relative}:${index + 1}: Training aggregate writes must use training CRUD or Contest command projection`)
+      violations.push(`${relative}:${index + 1}: Training aggregate writes must use training CRUD`)
     }
   })
 }

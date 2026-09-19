@@ -5,8 +5,6 @@ const mocks = vi.hoisted(() => ({
   stopAutoVerify: vi.fn(),
   startCron: vi.fn(),
   startAutoVerify: vi.fn(),
-  startPoller: vi.fn(),
-  stopPoller: vi.fn(),
   listPendingPlatforms: vi.fn(),
   recoverStaleJobs: vi.fn(),
 }))
@@ -16,10 +14,6 @@ vi.mock('../src/lib/cron-tasks', () => ({
 }))
 vi.mock('../src/modules/oj-account/application/oj-account.service', () => ({
   startAutoVerifyScheduler: mocks.startAutoVerify.mockImplementation(() => mocks.stopAutoVerify),
-}))
-vi.mock('../src/lib/submission-poller', () => ({
-  startSubmissionPoller: mocks.startPoller,
-  stopSubmissionPoller: mocks.stopPoller,
 }))
 vi.mock('../src/lib/logger', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 vi.mock('../src/modules/oj-fetcher/application/oj-fetcher-queue.service', () => ({
@@ -36,7 +30,6 @@ describe('singleton background service orchestration', () => {
     const services = startSchedulerServices()
     expect(mocks.startCron).toHaveBeenCalledTimes(1)
     expect(mocks.startAutoVerify).toHaveBeenCalledTimes(1)
-    expect(mocks.startPoller).not.toHaveBeenCalled()
 
     await services.stop()
     await services.stop()
@@ -46,11 +39,9 @@ describe('singleton background service orchestration', () => {
 
   it('starts only parallel-safe work in an executor', async () => {
     const services = startExecutorServices()
-    expect(mocks.startPoller).toHaveBeenCalledWith(5000)
     expect(mocks.startCron).not.toHaveBeenCalled()
     expect(mocks.startAutoVerify).not.toHaveBeenCalled()
     await services.stop()
     await services.stop()
-    expect(mocks.stopPoller).toHaveBeenCalledTimes(1)
   })
 })

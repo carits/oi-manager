@@ -11,7 +11,7 @@ import {
   getParticipantNames,
   requireTrainingStarted,
 } from '../training.helpers'
-import { findActivityRuntimeForRanking } from '../../contest/contest-query.facade'
+import { findActivityForRanking } from '../../contest/contest-query.facade'
 import { resolveOrganizationAuthorizationsForOrganization } from '../../authorization/capabilities'
 
 export class TrainingRankingError extends Error {
@@ -113,6 +113,9 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
   const adminFilter = excludedIds.length > 0
     ? Prisma.sql`AND p."userId" NOT IN (${Prisma.join(excludedIds)})`
     : Prisma.empty
+  const activityFilter = training.type === 'contest'
+    ? Prisma.sql`AND s."canonicalContestId" = ${training.canonicalContestId}`
+    : Prisma.sql`AND s."trainingId" = ${training.id}`
   const aggregated = training.format === 'oi'
     ? await prisma.$queryRaw<Array<{
       userId: string
@@ -132,13 +135,13 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
             WHEN run.status = 'RUNNING' THEN 'judging'
             WHEN run.status = 'CANCELLED' THEN COALESCE(run.result, 'judge_failed')
             WHEN run.status = 'FINALIZED' THEN COALESCE(run.result, 'unknown_error')
-            ELSE s.result
+            ELSE 'system_error'
           END AS result,
-          CASE WHEN s."currentJudgeRunId" IS NOT NULL THEN run.score ELSE s.score END AS score
+          run.score AS score
         FROM "Submission" s
-        LEFT JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
+        JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
         WHERE s."submitScope" = ${submitScope}
-          AND s."trainingId" = ${training.id}
+          ${activityFilter}
       ), selected AS (
         SELECT p.*, ROW_NUMBER() OVER (
           PARTITION BY p."userId", p."problemId"
@@ -169,13 +172,13 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
           WHEN run.status = 'RUNNING' THEN 'judging'
           WHEN run.status = 'CANCELLED' THEN COALESCE(run.result, 'judge_failed')
           WHEN run.status = 'FINALIZED' THEN COALESCE(run.result, 'unknown_error')
-          ELSE s.result
+          ELSE 'system_error'
         END AS result,
-        CASE WHEN s."currentJudgeRunId" IS NOT NULL THEN run.score ELSE s.score END AS score
+        run.score AS score
       FROM "Submission" s
-      LEFT JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
+      JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
       WHERE s."submitScope" = ${submitScope}
-        AND s."trainingId" = ${training.id}
+        ${activityFilter}
     )
     SELECT
       p."userId",
@@ -250,13 +253,15 @@ async function buildIcpcRanking(training: any, excludedIds: string[]) {
   const submissions = await prisma.submission.findMany({
     where: {
       submitScope,
-      trainingId: training.id,
+      ...(training.type === 'contest'
+        ? { canonicalContestId: training.canonicalContestId }
+        : { trainingId: training.id }),
       ...(excludedIds.length > 0 ? { NOT: { userId: { in: excludedIds } } } : {}),
       currentJudgeRunId: { not: null },
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: {
-      id: true, userId: true, problemId: true, score: true, result: true, createdAt: true,
+      id: true, userId: true, problemId: true, createdAt: true,
       CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
     },
   })
@@ -340,9 +345,9 @@ async function buildIcpcRanking(training: any, excludedIds: string[]) {
 }
 
 export async function getTrainingRanking(trainingId: number, userId: string) {
-  const resolved = await findActivityRuntimeForRanking(trainingId)
+  const resolved = await findActivityForRanking(trainingId)
   if (!resolved) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
-  const training = resolved.runtime
+  const training = resolved.activity
   if (!await canAccessTraining(userId, training)) fail(403, 'TRAINING_ACCESS_DENIED', '无权限')
   const notStarted = await requireTrainingStarted(training, userId)
   if (notStarted) fail(403, 'TRAINING_NOT_STARTED', notStarted)

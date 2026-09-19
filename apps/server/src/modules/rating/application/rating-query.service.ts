@@ -73,9 +73,9 @@ export async function getRatingHistory(input: { userId: string; requestingUserId
   if (!account) return { account: null, items: [], page, pageSize, total: 0, totalPages: 0 }
   const where = { accountId: account.id, Batch: { status: 'APPLIED' as const } }
   const [changes, total] = await Promise.all([
-    prisma.ratingChange.findMany({ where, include: { Batch: { include: { Contest: { select: { id: true, runtimeTrainingId: true, title: true, endAt: true } } } } }, orderBy: [{ Batch: { sequenceAt: 'desc' } }, { createdAt: 'desc' }], skip, take: pageSize }),
+    prisma.ratingChange.findMany({ where, include: { Batch: { include: { Contest: { select: { id: true, publicId: true, title: true, endAt: true } } } } }, orderBy: [{ Batch: { sequenceAt: 'desc' } }, { createdAt: 'desc' }], skip, take: pageSize }),
     prisma.ratingChange.count({ where }),
   ])
-  const pagination = paginatedResponse(changes.map(change => ({ id: change.id, contest: { id: change.Batch.Contest.runtimeTrainingId, canonicalId: change.Batch.Contest.id, title: change.Batch.Contest.title, endTime: change.Batch.Contest.endAt }, rank: change.rank, fieldSize: change.fieldSize, ratingBefore: change.ratingBefore, appliedDelta: change.appliedDelta, ratingAfter: change.ratingAfter, expectedPerformance: Number(change.expectedPerformance), actualPerformance: Number(change.actualPerformance), createdAt: change.createdAt })), total, page, pageSize)
+  const pagination = paginatedResponse(changes.map(change => ({ id: change.id, contest: { id: change.Batch.Contest.publicId, canonicalId: change.Batch.Contest.id, title: change.Batch.Contest.title, endTime: change.Batch.Contest.endAt }, rank: change.rank, fieldSize: change.fieldSize, ratingBefore: change.ratingBefore, appliedDelta: change.appliedDelta, ratingAfter: change.ratingAfter, expectedPerformance: Number(change.expectedPerformance), actualPerformance: Number(change.actualPerformance), createdAt: change.createdAt })), total, page, pageSize)
   return { account: accountDto(account), items: pagination.data, page, pageSize, total, totalPages: pagination.totalPages }
 }

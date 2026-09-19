@@ -4,7 +4,7 @@ import {
   CURRENT_JUDGE_RUN_SELECT,
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
-import { listContestRuntimesForDashboard } from '../../contest/contest-query.facade'
+import { listContestsForDashboard } from '../../contest/contest-query.facade'
 
 export interface DashboardActor {
   userId: string
@@ -56,7 +56,7 @@ export async function listMyHomeworks(actor: DashboardActor) {
 
 export async function listMyContests(actor: DashboardActor) {
   const teamIds = await currentTeamIds(actor)
-  const contests = await listContestRuntimesForDashboard({
+  const contests = await listContestsForDashboard({
     teamIds,
     resourceScope: actor.resourceScope,
     organizationId: actor.organizationId,
@@ -86,7 +86,7 @@ export async function getMyPersonalOverview(actor: DashboardActor) {
       orderBy: { joinedAt: 'desc' },
       take: 5,
     }),
-    listContestRuntimesForDashboard({
+    listContestsForDashboard({
       teamIds,
       resourceScope: 'personal',
       organizationId: null,
@@ -99,7 +99,7 @@ export async function getMyPersonalOverview(actor: DashboardActor) {
     prisma.submission.findMany({
       where: { userId: actor.userId, workspaceScope: 'personal' },
       select: {
-        id: true, oj: true, problemId: true, result: true, score: true, createdAt: true,
+        id: true, oj: true, problemId: true, createdAt: true,
         CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
       },
       orderBy: { createdAt: 'desc' },

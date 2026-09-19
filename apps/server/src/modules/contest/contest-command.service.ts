@@ -2,19 +2,13 @@ import type { Prisma } from '@prisma/client'
 import crypto from 'node:crypto'
 import logger from '../../lib/logger'
 import {
-  deleteContestProblemAggregateTx,
-  ensureContestAggregateTx,
-  projectContestRuntimeTx,
-  stageContestProblemOrderProjectionTx,
-  syncContestProblemAggregateTx,
-} from './contest-aggregate.service'
-import {
   defaultScoringRules,
   lockContestRatingConfigTx,
   trackForFormat,
 } from '../rating/application/contest-rating.service'
+import { contestAsActivity, contestProblemAsActivity } from './contest-activity-projection'
 
-export interface CreateContestRuntimeInput {
+export interface CreateContestInput {
   teamId: string | null
   organizationId: string | null
   scope: string
@@ -30,42 +24,8 @@ export interface CreateContestRuntimeInput {
   includeAdminInRanking: boolean
 }
 
-/**
- * Create the compatibility runtime and canonical Contest identity as one
- * command. Until lifecycle execution moves off Training, callers receive the
- * runtime row, but they must not assemble the dual write themselves.
- */
-export async function createContestRuntimeTx(
-  tx: Prisma.TransactionClient,
-  input: CreateContestRuntimeInput,
-) {
-  const runtime = await tx.training.create({
-    data: {
-      ...input,
-      type: 'contest',
-      updatedAt: new Date(),
-    },
-  })
-  const track = trackForFormat(runtime.format)
-  const scoringRules = defaultScoringRules(track)
-  const aggregate = await ensureContestAggregateTx(tx, runtime.id)
-  if (!aggregate) throw new Error('Failed to create canonical Contest aggregate')
-  await tx.contestRatingConfig.create({
-    data: {
-      id: crypto.randomUUID(),
-      contestId: aggregate.id,
-      scope: 'NONE',
-      track,
-      scoringRules,
-      rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
-      createdBy: runtime.createdBy,
-    },
-  })
-  return runtime
-}
-
 export interface ContestLifecycleMutation {
-  runtimeTrainingId: number
+  publicId: number
   actorUserId: string
   expectedStatus: string
   targetStatus: 'upcoming' | 'ongoing' | 'finished'
@@ -73,8 +33,8 @@ export interface ContestLifecycleMutation {
   endTime?: Date
 }
 
-export interface UpdateContestRuntimeInput {
-  runtimeTrainingId: number
+export interface UpdateContestInput {
+  publicId: number
   expected: {
     status: string
     format: string
@@ -93,225 +53,251 @@ export interface UpdateContestRuntimeInput {
   }
 }
 
-export interface PrepareDemoContestRuntimesInput {
-  runtimeTrainingIds: number[]
+export interface PrepareDemoContestsInput {
+  publicIds: number[]
   startTime: Date
   endTime: Date
 }
 
-function reportMissingCanonicalContest(
-  runtimeTrainingId: number,
-  consumer: string,
-  aggregateId?: string,
-) {
-  const message = aggregateId
-    ? 'Contest aggregate has no runtime'
-    : 'Contest runtime has no canonical aggregate'
-  logger.error(aggregateId ? 'contest_runtime_missing' : 'contest_aggregate_missing', new Error(message), {
-    action: 'contest_command',
-    metadata: { runtimeTrainingId, consumer, ...(aggregateId ? { contestId: aggregateId } : {}) },
+type ContestProblemCreateInput = {
+  id?: string
+  problemId: string
+  alias?: string | null
+  points?: number | null
+  testSetRevisionId?: string | null
+  titleSnapshot?: string | null
+  statementSnapshot?: string | null
+  sourcePlatformSnapshot?: string | null
+  sourceProblemIdSnapshot?: string | null
+}
+
+async function lockContest(tx: Prisma.TransactionClient, publicId: number) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${publicId}`}, 0)) IS NULL AS locked`
+}
+
+async function findContest(tx: Prisma.TransactionClient, publicId: number) {
+  return tx.contest.findUnique({
+    where: { publicId },
+    include: {
+      Team: true,
+      RatingConfig: true,
+      ContestProblem: {
+        include: { CanonicalProblem: true, ContestResource: true },
+        orderBy: { orderIndex: 'asc' },
+      },
+      _count: { select: { ContestProblem: true, Submissions: true } },
+    },
   })
 }
 
-/**
- * Delete an unfinalized contest aggregate and its compatibility runtime in
- * dependency order. The canonical Contest owns projection rows that still
- * reference TrainingProblem, so it must be removed before Training.
- */
-export async function deleteContestRuntimeTx(
-  tx: Prisma.TransactionClient,
-  runtimeTrainingId: number,
-) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
-
-  const aggregate = await tx.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { select: lifecycleRuntimeSelect } },
+function reportMissingContest(publicId: number, consumer: string) {
+  logger.error('contest_missing', new Error('Contest does not exist'), {
+    action: 'contest_command',
+    metadata: { publicId, consumer },
   })
-  const runtime = aggregate?.RuntimeTraining
-  if (!runtime) {
-    reportMissingCanonicalContest(runtimeTrainingId, 'delete', aggregate?.id)
+}
+
+export async function createContestTx(
+  tx: Prisma.TransactionClient,
+  input: CreateContestInput,
+) {
+  const contest = await tx.contest.create({
+    data: {
+      id: crypto.randomUUID(),
+      createdBy: input.createdBy,
+      organizationId: input.organizationId,
+      title: input.title,
+      description: input.description,
+      contestDate: input.startTime,
+      startAt: input.startTime,
+      endAt: input.endTime,
+      format: input.format,
+      status: input.status,
+      type: 'judged',
+      teamId: input.teamId,
+      scope: input.scope,
+      problemIdVisible: input.problemIdVisible,
+      solutionVisible: input.solutionVisible,
+      includeAdminInRanking: input.includeAdminInRanking,
+      updatedAt: new Date(),
+    },
+  })
+  const track = trackForFormat(input.format)
+  const scoringRules = defaultScoringRules(track)
+  await tx.contestRatingConfig.create({
+    data: {
+      id: crypto.randomUUID(),
+      contestId: contest.id,
+      scope: 'NONE',
+      track,
+      scoringRules,
+      rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
+      createdBy: input.createdBy,
+    },
+  })
+  return contestAsActivity(await findContest(tx, contest.publicId))
+}
+
+export async function deleteContestTx(
+  tx: Prisma.TransactionClient,
+  publicId: number,
+) {
+  await lockContest(tx, publicId)
+  const contest = await tx.contest.findUnique({
+    where: { publicId },
+    select: { id: true, finalizedStandingId: true },
+  })
+  if (!contest) {
+    reportMissingContest(publicId, 'delete')
     return { conflict: 'missing' as const }
   }
-  if (aggregate.finalizedStandingId) return { conflict: 'finalized' as const }
-
-  // An unfinalized draft has no durable Rating history. Remove compatibility
-  // rows explicitly before the canonical aggregate; their Contest foreign keys
-  // are intentionally RESTRICT so accidental historical deletion fails closed.
-  await tx.ratingBatch.deleteMany({ where: { contestId: aggregate.id } })
-  await tx.contestStandingSnapshot.deleteMany({ where: { contestId: aggregate.id } })
-  await tx.contestRatingConfig.deleteMany({ where: { contestId: aggregate.id } })
-  await tx.contest.delete({ where: { id: aggregate.id } })
-  await tx.training.delete({ where: { id: runtimeTrainingId } })
+  if (contest.finalizedStandingId) return { conflict: 'finalized' as const }
+  await tx.ratingBatch.deleteMany({ where: { contestId: contest.id } })
+  await tx.contestStandingSnapshot.deleteMany({ where: { contestId: contest.id } })
+  await tx.contestRatingConfig.deleteMany({ where: { contestId: contest.id } })
+  await tx.contest.delete({ where: { id: contest.id } })
   return { conflict: null }
 }
 
-export async function createContestProblemRuntimeTx(
+export async function createContestProblemTx(
   tx: Prisma.TransactionClient,
-  runtimeTrainingId: number,
-  data: Omit<Prisma.TrainingProblemUncheckedCreateInput, 'trainingId' | 'orderIndex'>,
+  publicId: number,
+  data: ContestProblemCreateInput,
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
-  const aggregate = await tx.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { select: { id: true } } },
+  await lockContest(tx, publicId)
+  const contest = await tx.contest.findUnique({
+    where: { publicId },
+    select: { id: true, solutionVisible: true },
   })
-  const runtime = aggregate?.RuntimeTraining
-  if (!runtime) reportMissingCanonicalContest(runtimeTrainingId, 'problem_create', aggregate?.id)
-  if (!runtime) return { conflict: 'missing' as const, problem: null }
-  const maxOrder = await tx.trainingProblem.aggregate({
-    where: { trainingId: runtimeTrainingId },
+  if (!contest) {
+    reportMissingContest(publicId, 'problem_create')
+    return { conflict: 'missing' as const, problem: null }
+  }
+  const problem = await tx.problem.findUnique({ where: { id: data.problemId } })
+  if (!problem) return { conflict: 'problem' as const, problem: null }
+  const maxOrder = await tx.contestProblem.aggregate({
+    where: { contestId: contest.id },
     _max: { orderIndex: true },
   })
-  const problem = await tx.trainingProblem.create({
+  const created = await tx.contestProblem.create({
     data: {
-      ...data,
-      trainingId: runtimeTrainingId,
+      id: data.id || crypto.randomUUID(),
+      contestId: contest.id,
+      canonicalProblemId: problem.id,
+      testSetRevisionId: data.testSetRevisionId || problem.latestTestSetRevisionId,
       orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
+      alias: data.alias ?? null,
+      title: data.titleSnapshot || problem.title,
+      ojName: data.sourcePlatformSnapshot || problem.platform,
+      problemId: data.sourceProblemIdSnapshot || problem.problemId,
+      difficulty: problem.difficulty,
+      points: data.points ?? null,
+      statementType: data.statementSnapshot ? 'snapshot' : 'none',
+      statementMarkdown: data.statementSnapshot || null,
+      solutionVisible: contest.solutionVisible,
+      updatedAt: new Date(),
     },
+    include: { CanonicalProblem: true, ContestResource: true },
   })
-  await syncContestProblemAggregateTx(tx, problem.id)
-  return { conflict: null, problem }
+  return { conflict: null, problem: contestProblemAsActivity(created, publicId) }
 }
 
-export async function reorderContestProblemRuntimesTx(
+export async function reorderContestProblemsTx(
   tx: Prisma.TransactionClient,
-  runtimeTrainingId: number,
+  publicId: number,
   orders: Array<{ id: string; orderIndex: number }>,
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
-  const aggregate = await tx.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { select: { id: true } } },
+  await lockContest(tx, publicId)
+  const contest = await tx.contest.findUnique({
+    where: { publicId },
+    select: { id: true, ContestProblem: { select: { id: true } } },
   })
-  if (!aggregate?.RuntimeTraining) {
-    reportMissingCanonicalContest(runtimeTrainingId, 'problem_reorder', aggregate?.id)
+  if (!contest) return { conflict: 'scope' as const }
+  const valid = new Set(contest.ContestProblem.map(problem => problem.id))
+  if (orders.length !== valid.size || orders.some(order => !valid.has(order.id))) {
     return { conflict: 'scope' as const }
   }
-  const existing = await tx.trainingProblem.findMany({
-    where: { trainingId: runtimeTrainingId, Training: { type: 'contest' } },
-    select: { id: true },
-  })
-  const valid = new Set(existing.map(problem => problem.id))
-  if (orders.length !== existing.length || orders.some(order => !valid.has(order.id))) {
-    return { conflict: 'scope' as const }
-  }
-  const expectedIndexes = new Set(existing.map((_, index) => index))
+  const expectedIndexes = new Set(contest.ContestProblem.map((_, index) => index))
   if (new Set(orders.map(order => order.id)).size !== orders.length
     || new Set(orders.map(order => order.orderIndex)).size !== orders.length
     || orders.some(order => !Number.isInteger(order.orderIndex) || !expectedIndexes.has(order.orderIndex))) {
     return { conflict: 'order' as const }
   }
   for (const order of orders) {
-    await tx.trainingProblem.update({ where: { id: order.id }, data: { orderIndex: -(order.orderIndex + 1) } })
-    await stageContestProblemOrderProjectionTx(tx, order.id, -(order.orderIndex + 1))
+    await tx.contestProblem.update({ where: { id: order.id }, data: { orderIndex: -(order.orderIndex + 1) } })
   }
   for (const order of orders) {
-    await tx.trainingProblem.update({ where: { id: order.id }, data: { orderIndex: order.orderIndex } })
-    await syncContestProblemAggregateTx(tx, order.id)
+    await tx.contestProblem.update({ where: { id: order.id }, data: { orderIndex: order.orderIndex } })
   }
   return { conflict: null }
 }
 
-export async function updateContestProblemRuntimeTx(
+export async function updateContestProblemTx(
   tx: Prisma.TransactionClient,
-  runtimeTrainingId: number,
-  trainingProblemId: string,
+  publicId: number,
+  contestProblemId: string,
   patch: { alias?: string | null; points?: number | null },
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
-  const aggregate = await tx.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { select: { id: true } } },
-  })
-  if (!aggregate?.RuntimeTraining) {
-    reportMissingCanonicalContest(runtimeTrainingId, 'problem_update', aggregate?.id)
-    return { conflict: 'scope' as const, problem: null }
-  }
-  const existing = await tx.trainingProblem.findFirst({
-    where: { id: trainingProblemId, trainingId: runtimeTrainingId, Training: { type: 'contest' } },
-    select: { id: true },
+  await lockContest(tx, publicId)
+  const contest = await tx.contest.findUnique({ where: { publicId }, select: { id: true } })
+  if (!contest) return { conflict: 'scope' as const, problem: null }
+  const existing = await tx.contestProblem.findFirst({
+    where: { id: contestProblemId, contestId: contest.id },
   })
   if (!existing) return { conflict: 'scope' as const, problem: null }
-  const problem = await tx.trainingProblem.update({
-    where: { id: trainingProblemId },
+  const problem = await tx.contestProblem.update({
+    where: { id: contestProblemId },
     data: {
       ...(patch.alias !== undefined && { alias: patch.alias }),
       ...(patch.points !== undefined && { points: patch.points }),
+      updatedAt: new Date(),
     },
+    include: { CanonicalProblem: true, ContestResource: true },
   })
-  await syncContestProblemAggregateTx(tx, trainingProblemId)
-  return { conflict: null, problem }
+  return { conflict: null, problem: contestProblemAsActivity(problem, publicId) }
 }
 
-export async function deleteContestProblemRuntimeTx(
+export async function deleteContestProblemTx(
   tx: Prisma.TransactionClient,
-  runtimeTrainingId: number,
-  trainingProblemId: string,
+  publicId: number,
+  contestProblemId: string,
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
-  const aggregate = await tx.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { select: { id: true } } },
+  await lockContest(tx, publicId)
+  const contest = await tx.contest.findUnique({ where: { publicId }, select: { id: true } })
+  if (!contest) return { conflict: 'scope' as const }
+  const deleted = await tx.contestProblem.deleteMany({
+    where: { id: contestProblemId, contestId: contest.id },
   })
-  if (!aggregate?.RuntimeTraining) {
-    reportMissingCanonicalContest(runtimeTrainingId, 'problem_delete', aggregate?.id)
-    return { conflict: 'scope' as const }
-  }
-  const existing = await tx.trainingProblem.findFirst({
-    where: { id: trainingProblemId, trainingId: runtimeTrainingId, Training: { type: 'contest' } },
-    select: { id: true },
-  })
-  if (!existing) return { conflict: 'scope' as const }
-  await deleteContestProblemAggregateTx(tx, trainingProblemId)
-  await tx.trainingProblem.delete({ where: { id: trainingProblemId } })
-  return { conflict: null }
+  return { conflict: deleted.count === 1 ? null : 'scope' as const }
 }
 
-const lifecycleRuntimeSelect = {
-  id: true,
-  type: true,
-  status: true,
-  format: true,
-  createdBy: true,
-  startTime: true,
-  endTime: true,
-  finalizationStatus: true,
-  finalizedStandingId: true,
-} as const
-
-/** Update canonical contest metadata and its compatibility projection. */
-export async function updateContestRuntimeTx(
+export async function updateContestTx(
   tx: Prisma.TransactionClient,
-  input: UpdateContestRuntimeInput,
+  input: UpdateContestInput,
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${input.runtimeTrainingId}`}, 0)) IS NULL AS locked`
-  const aggregate = await tx.contest.findUnique({
-    where: { runtimeTrainingId: input.runtimeTrainingId },
-    include: { RuntimeTraining: true },
-  })
-  const runtime = aggregate?.RuntimeTraining
-  if (!runtime) {
-    reportMissingCanonicalContest(input.runtimeTrainingId, 'metadata_update', aggregate?.id)
-    return { conflict: 'missing' as const, runtime: null }
+  const publicId = input.publicId
+  await lockContest(tx, publicId)
+  const contest = await findContest(tx, publicId)
+  if (!contest) {
+    reportMissingContest(publicId, 'metadata_update')
+    return { conflict: 'missing' as const, activity: null }
   }
-  const aggregateStartTime = aggregate.startAt || aggregate.contestDate
-  const aggregateEndTime = aggregate.endAt || aggregate.contestDate
-  if (aggregate.status !== input.expected.status
-    || aggregate.format !== input.expected.format
-    || aggregateStartTime.getTime() !== input.expected.startTime.getTime()
-    || aggregateEndTime.getTime() !== input.expected.endTime.getTime()) {
-    return { conflict: 'stale' as const, runtime }
+  const startTime = contest.startAt || contest.contestDate
+  const endTime = contest.endAt || contest.contestDate
+  const activity = contestAsActivity(contest)
+  if (contest.status !== input.expected.status
+    || contest.format !== input.expected.format
+    || startTime.getTime() !== input.expected.startTime.getTime()
+    || endTime.getTime() !== input.expected.endTime.getTime()) {
+    return { conflict: 'stale' as const, activity }
   }
-
-  if (input.patch.format !== undefined && input.patch.format !== aggregate.format) {
-    const existing = await tx.contestRatingConfig.findUnique({ where: { contestId: aggregate.id } })
-    if (existing?.lockedAt) return { conflict: 'rating_locked' as const, runtime }
-    if (existing) {
+  if (input.patch.format !== undefined && input.patch.format !== contest.format) {
+    if (contest.RatingConfig?.lockedAt) return { conflict: 'rating_locked' as const, activity }
+    if (contest.RatingConfig) {
       const track = trackForFormat(input.patch.format)
       const scoringRules = defaultScoringRules(track)
       await tx.contestRatingConfig.update({
-        where: { id: existing.id },
+        where: { id: contest.RatingConfig.id },
         data: {
           track,
           scoringRules,
@@ -321,9 +307,8 @@ export async function updateContestRuntimeTx(
       })
     }
   }
-
   await tx.contest.update({
-    where: { id: aggregate.id },
+    where: { id: contest.id },
     data: {
       ...(input.patch.title !== undefined && { title: input.patch.title }),
       ...(input.patch.description !== undefined && { description: input.patch.description }),
@@ -342,51 +327,26 @@ export async function updateContestRuntimeTx(
       updatedAt: new Date(),
     },
   })
-  const updated = await projectContestRuntimeTx(tx, aggregate.id)
-  if (!updated) {
-    reportMissingCanonicalContest(input.runtimeTrainingId, 'metadata_projection', aggregate.id)
-    return { conflict: 'missing' as const, runtime: null }
-  }
-  return { conflict: null, runtime: updated }
+  return { conflict: null, activity: contestAsActivity(await findContest(tx, publicId)) }
 }
 
-/**
- * Apply a contest clock/status transition behind the canonical command
- * boundary. Contest is authoritative; Training is updated in the same
- * transaction as a temporary compatibility projection.
- *
- * `expectedStatus` is a small CAS guard. A concurrent command wins cleanly;
- * the loser receives the current runtime instead of overwriting newer state.
- */
 export async function transitionContestLifecycleTx(
   tx: Prisma.TransactionClient,
   input: ContestLifecycleMutation,
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${input.runtimeTrainingId}`}, 0)) IS NULL AS locked`
-
-  const aggregate = await tx.contest.findUnique({
-    where: { runtimeTrainingId: input.runtimeTrainingId },
-    include: { RuntimeTraining: { select: lifecycleRuntimeSelect } },
-  })
-  const runtime = aggregate?.RuntimeTraining
-  if (!runtime) {
-    reportMissingCanonicalContest(input.runtimeTrainingId, 'lifecycle', aggregate?.id)
+  const publicId = input.publicId
+  await lockContest(tx, publicId)
+  const contest = await findContest(tx, publicId)
+  if (!contest) {
+    reportMissingContest(publicId, 'lifecycle')
     return null
   }
-
-  if (aggregate.status !== input.expectedStatus) {
-    return {
-      changed: false,
-      visibleSubmissionCount: 0,
-      runtime,
-    }
+  const activity = contestAsActivity(contest)
+  if (contest.status !== input.expectedStatus) {
+    return { changed: false, visibleSubmissionCount: 0, activity }
   }
-
   const update = await tx.contest.updateMany({
-    where: {
-      id: aggregate.id,
-      status: input.expectedStatus,
-    },
+    where: { id: contest.id, status: input.expectedStatus },
     data: {
       status: input.targetStatus,
       ...(input.startTime ? { startAt: input.startTime, contestDate: input.startTime } : {}),
@@ -396,80 +356,44 @@ export async function transitionContestLifecycleTx(
       updatedAt: new Date(),
     },
   })
-
-  if (!update.count) {
-    return {
-      changed: false,
-      visibleSubmissionCount: 0,
-      runtime,
-    }
-  }
-
+  if (!update.count) return { changed: false, visibleSubmissionCount: 0, activity }
   if (input.targetStatus !== 'upcoming') {
     await lockContestRatingConfigTx(
       tx,
-      input.runtimeTrainingId,
-      input.actorUserId || aggregate.createdBy || runtime.createdBy,
-      aggregate.format || runtime.format,
+      publicId,
+      input.actorUserId || contest.createdBy || '',
+      contest.format || 'ioi',
     )
   }
-
   const visibleSubmissionCount = input.targetStatus === 'finished'
     ? (await tx.submission.updateMany({
-        where: {
-          submitScope: 'contest',
-          canonicalContestId: aggregate.id,
-          isGlobalVisible: false,
-        },
+        where: { submitScope: 'contest', canonicalContestId: contest.id, isGlobalVisible: false },
         data: { isGlobalVisible: true },
       })).count
     : 0
-
-  const projectedRuntime = await projectContestRuntimeTx(tx, aggregate.id)
   return {
     changed: true,
     visibleSubmissionCount,
-    runtime: projectedRuntime,
+    activity: contestAsActivity(await findContest(tx, publicId)),
   }
 }
 
-/**
- * Re-open isolated development demo contests without bypassing the canonical
- * aggregate. The caller is still protected by the demo-only route guard.
- * Finalized contests are immutable and must be recreated instead of reset.
- */
-export async function prepareDemoContestRuntimesTx(
+export async function prepareDemoContestsTx(
   tx: Prisma.TransactionClient,
-  input: PrepareDemoContestRuntimesInput,
+  input: PrepareDemoContestsInput,
 ) {
-  const ids = [...new Set(input.runtimeTrainingIds)]
-  if (!ids.length) return []
-
-  const aggregates = await tx.contest.findMany({
-    where: { runtimeTrainingId: { in: ids } },
-    include: { RuntimeTraining: { select: lifecycleRuntimeSelect } },
-  })
-  const byRuntimeId = new Map(aggregates.flatMap(aggregate => aggregate.runtimeTrainingId === null
-    ? []
-    : [[aggregate.runtimeTrainingId, aggregate] as const]))
-
-  for (const runtimeTrainingId of ids) {
-    const aggregate = byRuntimeId.get(runtimeTrainingId)
-    if (!aggregate?.RuntimeTraining || aggregate.RuntimeTraining.type !== 'contest') {
-      reportMissingCanonicalContest(runtimeTrainingId, 'demo_prepare', aggregate?.id)
-      throw new Error(`Demo contest ${runtimeTrainingId} has no canonical aggregate`)
+  const ids = [...new Set(input.publicIds)]
+  const contests = await tx.contest.findMany({ where: { publicId: { in: ids } } })
+  const byId = new Map(contests.map(contest => [contest.publicId, contest]))
+  if (contests.length !== ids.length) throw new Error('One or more demo contests do not exist')
+  for (const publicId of ids) {
+    const contest = byId.get(publicId)!
+    if (contest.finalizedStandingId || contest.finalizationStatus === 'FINALIZED') {
+      throw new Error(`Demo contest ${publicId} is finalized and cannot be reset`)
     }
-    if (aggregate.finalizedStandingId || aggregate.finalizationStatus === 'FINALIZED') {
-      throw new Error(`Demo contest ${runtimeTrainingId} is finalized and cannot be reset`)
-    }
-  }
-
-  const runtimes = []
-  for (const runtimeTrainingId of ids) {
-    const aggregate = byRuntimeId.get(runtimeTrainingId)!
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
+    await lockContest(tx, publicId)
     await tx.contest.update({
-      where: { id: aggregate.id },
+      where: { id: contest.id },
       data: {
         status: 'ongoing',
         startAt: input.startTime,
@@ -480,55 +404,23 @@ export async function prepareDemoContestRuntimesTx(
         updatedAt: new Date(),
       },
     })
-    const runtime = await projectContestRuntimeTx(tx, aggregate.id)
-    if (!runtime) throw new Error(`Demo contest ${runtimeTrainingId} projection failed`)
-    runtimes.push(runtime)
   }
-  return runtimes
+  const refreshed = []
+  for (const publicId of ids) refreshed.push(contestAsActivity(await findContest(tx, publicId)))
+  return refreshed
 }
 
-const rejudgeRuntimeSelect = {
-  id: true,
-  type: true,
-  finalizationStatus: true,
-  finalizedStandingId: true,
-} as const
-
-/**
- * Put a finalized contest into the explicit post-rejudge hold state.
- *
- * Contest owns finalization state. Training is updated only as a compatibility
- * projection for consumers that have not yet moved to the aggregate.
- */
 export async function holdContestFinalizationForRejudgeTx(
   tx: Prisma.TransactionClient,
-  runtimeTrainingId: number,
+  publicId: number,
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-command:${runtimeTrainingId}`}, 0)) IS NULL AS locked`
-
-  const aggregate = await tx.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { select: rejudgeRuntimeSelect } },
-  })
-
-  const runtime = aggregate?.RuntimeTraining
-  if (!runtime) {
-    reportMissingCanonicalContest(runtimeTrainingId, 'rejudge', aggregate?.id)
-    return false
-  }
-  if (runtime.type !== 'contest') {
-    logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
-      action: 'contest_command',
-      metadata: { contestId: aggregate?.id, runtimeTrainingId, consumer: 'rejudge' },
-    })
-    return false
-  }
-  if (!aggregate.finalizedStandingId || aggregate.finalizationStatus !== 'FINALIZED') return false
-
+  await lockContest(tx, publicId)
+  const contest = await tx.contest.findUnique({ where: { publicId } })
+  if (!contest || !contest.finalizedStandingId || contest.finalizationStatus !== 'FINALIZED') return false
   const updated = await tx.contest.updateMany({
     where: {
-      id: aggregate.id,
-      finalizedStandingId: aggregate.finalizedStandingId,
+      id: contest.id,
+      finalizedStandingId: contest.finalizedStandingId,
       finalizationStatus: 'FINALIZED',
     },
     data: {
@@ -537,8 +429,5 @@ export async function holdContestFinalizationForRejudgeTx(
       updatedAt: new Date(),
     },
   })
-  if (!updated.count) return false
-
-  await projectContestRuntimeTx(tx, aggregate.id)
-  return true
+  return updated.count === 1
 }

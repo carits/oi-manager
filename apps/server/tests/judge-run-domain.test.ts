@@ -19,7 +19,7 @@ import {
   JUDGE_RUN_TRANSITIONS,
   legacyResultToAttemptState,
 } from '../src/modules/judge/domain/judge-state'
-import { ensureContestAggregateTx } from '../src/modules/contest/contest-aggregate.service'
+import { ensureContestAggregateTx } from './helpers/legacy-contest-fixture'
 
 describe('Judge domain state machine', () => {
   it('allows only declared JudgeRun transitions', () => {
@@ -159,7 +159,7 @@ describe('Judge lifecycle ownership and retries', () => {
       where: { id: fixture.submission.id },
       include: { CurrentJudgeRun: { include: { CurrentAttempt: true, Attempts: { orderBy: { attemptNumber: 'asc' } } } } },
     })
-    expect(afterRetry.result).toBe('queuing')
+    expect(afterRetry.CurrentJudgeRun?.status).toBe('RUNNING')
     expect(afterRetry.CurrentJudgeRun?.Attempts.map(item => item.state)).toEqual(['INFRA_ERROR', 'QUEUED'])
     expect(afterRetry.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ attemptNumber: 2, state: 'QUEUED' })
 
@@ -197,7 +197,7 @@ describe('Judge lifecycle ownership and retries', () => {
       where: { id: fixture.submission.id },
       include: { CurrentJudgeRun: { include: { CurrentAttempt: true } }, JudgeRuns: { orderBy: { runNumber: 'asc' } } },
     })
-    expect(stored.result).toBe('queuing')
+    expect(stored.CurrentJudgeRun?.status).toBe('QUEUED')
     expect(stored.JudgeRuns.map(item => item.status)).toEqual(['FINALIZED', 'QUEUED'])
     expect(stored.CurrentJudgeRun).toMatchObject({ runNumber: 2, runType: 'REJUDGE', rejudgeBatchId: queued.batch.id })
     expect(stored.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ attemptNumber: 1, state: 'QUEUED' })
@@ -258,10 +258,10 @@ describe('Judge lifecycle ownership and retries', () => {
     expect(await prisma.training.findUnique({
       where: { id: contest.id },
       select: { finalizationStatus: true },
-    })).toMatchObject({ finalizationStatus: 'HELD' })
+    })).toMatchObject({ finalizationStatus: 'FINALIZED' })
     expect(await prisma.contest.findUnique({
-      where: { runtimeTrainingId: contest.id },
-      select: { runtimeTrainingId: true },
-    })).toMatchObject({ runtimeTrainingId: contest.id })
+      where: { publicId: contest.id },
+      select: { publicId: true, finalizationStatus: true },
+    })).toMatchObject({ publicId: contest.id, finalizationStatus: 'HELD' })
   })
 })

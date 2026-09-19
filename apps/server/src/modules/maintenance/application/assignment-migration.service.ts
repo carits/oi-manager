@@ -12,7 +12,10 @@ async function loadLegacyHomeworks(db: typeof prisma | Prisma.TransactionClient 
       TrainingProblem: { orderBy: { orderIndex: 'asc' }, include: { Problem: { select: { latestTestSetRevisionId: true } }, TestSetRevision: { select: { id: true, problemId: true, judgeConfig: true, judgeConfigHash: true, mode: true } } } },
       TrainingParticipant: { orderBy: { joinedAt: 'asc' } },
       TrainingUserProblemStatus: true,
-      Submission: { orderBy: { id: 'asc' }, select: { id: true, userId: true, trainingProblemId: true, createdAt: true, score: true, result: true } },
+      Submission: { orderBy: { id: 'asc' }, select: {
+        id: true, userId: true, trainingProblemId: true, createdAt: true,
+        CurrentJudgeRun: { select: { score: true, result: true } },
+      } },
     },
   })
 }
@@ -35,7 +38,10 @@ function canonicalRows(rows: any[], memberships: any[]) {
     participants: row.TrainingParticipant.map((participant: any) => [participant.userId, participant.userType, participant.joinedAt]),
     problems: row.TrainingProblem.map((problem: any) => [problem.id, problem.problemId, problem.orderIndex, problem.testSetRevisionId, problem.Problem.latestTestSetRevisionId]),
     progress: row.TrainingUserProblemStatus.map((item: any) => [item.userId, item.trainingProblemId, item.bestScore, item.bestResult, item.attemptCount, item.acAt, item.updatedAt]),
-    submissions: row.Submission.map((submission: any) => [submission.id, submission.userId, submission.trainingProblemId, submission.createdAt, submission.score, submission.result]),
+    submissions: row.Submission.map((submission: any) => [
+      submission.id, submission.userId, submission.trainingProblemId, submission.createdAt,
+      submission.CurrentJudgeRun?.score ?? null, submission.CurrentJudgeRun?.result ?? 'system_error',
+    ]),
     memberships: memberships.filter(item => item.organizationId === (row.organizationId || row.Team?.organizationId)).map(item => [item.id, item.userId, item.memberRole]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   }))
 }
@@ -183,7 +189,13 @@ export async function applyAssignmentMigration(expectedReportHash: string) {
       for (const [legacyProblemId, assignmentProblemId] of problemMap) {
         for (const targetUserId of recipients) {
           const old = row.TrainingUserProblemStatus.find((item: any) => item.trainingProblemId === legacyProblemId && item.userId === targetUserId)
-          const submissions = row.Submission.filter((item: any) => item.trainingProblemId === legacyProblemId && item.userId === targetUserId)
+          const submissions = row.Submission
+            .filter((item: any) => item.trainingProblemId === legacyProblemId && item.userId === targetUserId)
+            .map((item: any) => ({
+              ...item,
+              score: item.CurrentJudgeRun?.score ?? null,
+              result: item.CurrentJudgeRun?.result ?? 'system_error',
+            }))
           const accepted = Boolean(old?.acAt) || ['accepted', 'ac'].includes(String(old?.bestResult || '').toLowerCase())
           const latest = submissions.at(-1)
           const best = submissions.reduce((current: any, item: any) => (Number(item.score ?? 0) > Number(current?.score ?? -1) ? item : current), null)

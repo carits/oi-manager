@@ -41,20 +41,55 @@ export async function getWrongCorpus(user: JwtPayload, problemId: string) {
 
 export async function rebuildWrongCorpus(user: JwtPayload, problemId: string) {
   await managed(user, problemId)
-  const rows = await prisma.submission.findMany({ where: { problemInternalId: problemId, submitMethod: 'local', OR: [
-    { CurrentJudgeRun: { is: { status: 'FINALIZED', OR: [{ result: { in: WRONG_RESULTS } }, { score: { lt: 100 } }] } } },
-    { CurrentJudgeRun: { is: null }, OR: [{ result: { in: WRONG_RESULTS } }, { score: { lt: 100 } }] },
-  ] }, orderBy: { createdAt: 'desc' }, take: 10_000, select: { id: true, language: true, code: true, result: true, score: true, inputFilename: true, outputFilename: true, subtasks: true, cases: true, TestSetRevision: { select: { Subtasks: { select: { subtaskId: true, score: true } } } }, CurrentJudgeRun: { select: { result: true, score: true, subtasks: true, cases: true, inputFilename: true, outputFilename: true, TestSetRevision: { select: { Subtasks: { select: { subtaskId: true, score: true } } } } } } } })
-  const submissions = rows.map(item => item.CurrentJudgeRun ? {
-    ...item,
-    result: item.CurrentJudgeRun.result,
-    score: item.CurrentJudgeRun.score,
-    subtasks: item.CurrentJudgeRun.subtasks,
-    cases: item.CurrentJudgeRun.cases,
-    inputFilename: item.CurrentJudgeRun.inputFilename,
-    outputFilename: item.CurrentJudgeRun.outputFilename,
-    TestSetRevision: item.CurrentJudgeRun.TestSetRevision,
-  } : item).filter(item => Boolean(item.result) && (WRONG_RESULTS.includes(item.result!) || (item.score ?? 100) < 100))
+  const rows = await prisma.submission.findMany({
+    where: {
+      problemInternalId: problemId,
+      submitMethod: 'local',
+      CurrentJudgeRun: {
+        is: {
+          status: 'FINALIZED',
+          OR: [{ result: { in: WRONG_RESULTS } }, { score: { lt: 100 } }],
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 10_000,
+    select: {
+      id: true,
+      language: true,
+      code: true,
+      CurrentJudgeRun: {
+        select: {
+          result: true,
+          score: true,
+          subtasks: true,
+          cases: true,
+          inputFilename: true,
+          outputFilename: true,
+          TestSetRevision: {
+            select: { Subtasks: { select: { subtaskId: true, score: true } } },
+          },
+        },
+      },
+    },
+  })
+  const submissions = rows.flatMap(item => {
+    const run = item.CurrentJudgeRun
+    if (!run?.result || (!WRONG_RESULTS.includes(run.result) && (run.score ?? 100) >= 100)) return []
+    return [{
+      id: item.id,
+      language: item.language,
+      code: item.code,
+      result: run.result,
+      score: run.score,
+      subtasks: run.subtasks,
+      cases: run.cases,
+      inputFilename: run.inputFilename,
+      outputFilename: run.outputFilename,
+      TestSetRevision: run.TestSetRevision,
+    }]
+  })
+
   const unique = new Map<string, typeof submissions[number]>()
   for (const item of submissions) {
     const sourceSha256 = hash(`${item.language}\0${normalizedSource(item.code)}`)

@@ -1,160 +1,115 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import logger from '../../lib/logger'
+import { contestActivityInclude, contestAsActivity } from './contest-activity-projection'
 
-const runtimeRatingInclude = {
-  Team: { select: { organizationId: true } },
-} as const
-
-/**
- * Canonical read boundary while Contest still delegates execution to Training.
- * New contest consumers must enter through this facade instead of interpreting
- * `Training.type = contest` themselves.
- */
-export async function findContestRuntimeForRating(runtimeTrainingId: number) {
-  const aggregate = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: {
-      RatingConfig: true,
-      RuntimeTraining: { include: runtimeRatingInclude },
-    },
+async function findContestByPublicId(publicId: number) {
+  return prisma.contest.findUnique({
+    where: { publicId },
+    include: contestActivityInclude,
   })
-  if (aggregate?.RuntimeTraining) {
-    if (aggregate.RuntimeTraining.type !== 'contest') {
-      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
-        action: 'contest_query', metadata: { contestId: aggregate.id, runtimeTrainingId },
-      })
-      return null
-    }
-    return {
-      contest: aggregate,
-      runtime: {
-        ...aggregate.RuntimeTraining,
-        RatingConfig: aggregate.RatingConfig,
-      },
-      source: 'aggregate' as const,
-    }
-  }
-  return null
 }
 
-export async function listPlatformContestRuntimes() {
-  const aggregates = await prisma.contest.findMany({
-    where: { scope: 'platform', teamId: null, organizationId: null, runtimeTrainingId: { not: null } },
-    include: {
-      RatingConfig: { select: { scope: true, track: true, lockedAt: true } },
-      RuntimeTraining: {
-        include: {
-          _count: { select: { TrainingProblem: true, TrainingParticipant: true } },
-        },
-      },
-    },
-  })
-  return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest'
-    ? [{ ...row.RuntimeTraining, RatingConfig: row.RatingConfig }]
-    : [])
+async function findOrdinaryTraining(publicId: number, include: Prisma.TrainingInclude = {}) {
+  const training = await prisma.training.findUnique({ where: { id: publicId }, include })
+  if (!training || training.type === 'contest') return null
+  return training
 }
 
-/**
- * Resolve disposable demo fixtures through the canonical Contest identity.
- * Maintenance code must not rediscover contests by querying
- * `Training.type = contest` directly.
- */
-export async function listCanonicalContestRuntimesForMaintenance(input: {
-  runtimeTrainingIds?: number[]
+export async function findContestForRating(publicId: number) {
+  const contest = await findContestByPublicId(publicId)
+  if (!contest) return null
+  return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+}
+
+export async function listPlatformContests() {
+  const contests = await prisma.contest.findMany({
+    where: { scope: 'platform', teamId: null, organizationId: null },
+    include: contestActivityInclude,
+  })
+  return contests.map(contestAsActivity)
+}
+
+export async function listContestsForMaintenance(input: {
+  publicIds?: number[]
   teamId?: string
   titlePrefix?: string
   scope?: string
 }) {
-  if (input.runtimeTrainingIds && input.runtimeTrainingIds.length === 0) return []
-  const aggregates = await prisma.contest.findMany({
+  if (input.publicIds && input.publicIds.length === 0) return []
+  const contests = await prisma.contest.findMany({
     where: {
-      runtimeTrainingId: input.runtimeTrainingIds ? { in: input.runtimeTrainingIds } : { not: null },
+      ...(input.publicIds && { publicId: { in: input.publicIds } }),
       ...(input.teamId !== undefined && { teamId: input.teamId }),
       ...(input.titlePrefix !== undefined && { title: { startsWith: input.titlePrefix } }),
       ...(input.scope !== undefined && { scope: input.scope }),
     },
-    include: { RuntimeTraining: true },
-    orderBy: { runtimeTrainingId: 'asc' },
+    include: contestActivityInclude,
+    orderBy: { publicId: 'asc' },
   })
-  return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
+  return contests.map(contestAsActivity)
 }
 
-/** Canonical finished-contest identities for administrative visibility repair. */
-export async function listFinishedContestRuntimeIds() {
+export async function listTeamContests(teamId: string, scope: string) {
+  const contests = await prisma.contest.findMany({
+    where: { teamId, scope },
+    include: contestActivityInclude,
+    orderBy: { startAt: 'desc' },
+  })
+  return contests.map(contestAsActivity)
+}
+
+export async function listFinishedContestPublicIds() {
   const rows = await prisma.contest.findMany({
-    where: {
-      status: 'finished',
-      runtimeTrainingId: { not: null },
-      RuntimeTraining: { is: { type: 'contest' } },
-    },
-    select: { runtimeTrainingId: true },
+    where: { status: 'finished' },
+    select: { publicId: true },
   })
-  return rows.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
+  return rows.map(row => row.publicId)
 }
 
-/** Canonical ids for consumers that persist or query Contest-owned facts. */
 export async function listFinishedContestIds() {
   const rows = await prisma.contest.findMany({
-    where: {
-      status: 'finished',
-      RuntimeTraining: { is: { type: 'contest' } },
-    },
+    where: { status: 'finished' },
     select: { id: true },
   })
   return rows.map(row => row.id)
 }
 
-const licenseRuntimeInclude = {
-  Team: { include: { TeamMember: true } },
-} as const
-
-/** Resolve the legacy numeric contest route identity through the aggregate. */
-export async function findContestRuntimeForLicense(runtimeTrainingId: number) {
-  const aggregate = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { include: licenseRuntimeInclude } },
+export async function findContestForLicense(publicId: number) {
+  const contest = await prisma.contest.findUnique({
+    where: { publicId },
+    include: {
+      ...contestActivityInclude,
+      Team: { include: { TeamMember: true } },
+    },
   })
-  if (aggregate?.RuntimeTraining?.type === 'contest') {
-    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
-  }
-  return null
+  if (!contest) return null
+  return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
 }
 
-/** Contest license visibility remains keyed by the public runtime id during cutover. */
-export async function listContestRuntimeIdsForLicenseScopes(input: {
+export async function listContestPublicIdsForLicenseScopes(input: {
   organizationIds: string[]
   teamIds: string[]
 }) {
   if (!input.organizationIds.length && !input.teamIds.length) return []
-  const scopeFilter = {
-    OR: [
-      ...(input.teamIds.length ? [{ teamId: { in: input.teamIds } }] : []),
-      ...(input.organizationIds.length ? [{ organizationId: { in: input.organizationIds } }] : []),
-    ],
-  }
-  const aggregates = await prisma.contest.findMany({
-    where: { runtimeTrainingId: { not: null }, ...scopeFilter },
-    select: { runtimeTrainingId: true },
+  const rows = await prisma.contest.findMany({
+    where: {
+      OR: [
+        ...(input.teamIds.length ? [{ teamId: { in: input.teamIds } }] : []),
+        ...(input.organizationIds.length ? [{ organizationId: { in: input.organizationIds } }] : []),
+      ],
+    },
+    select: { publicId: true },
   })
-  return aggregates.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
+  return rows.map(row => row.publicId)
 }
 
-const dashboardRuntimeInclude = {
-  _count: { select: { TrainingProblem: true } },
-} as const
-
-/**
- * Resolve the contest cards visible in one dashboard context. The dashboard
- * still returns the public runtime id while the aggregate becomes the only
- * place allowed to discover contest runtimes.
- */
-export async function listContestRuntimesForDashboard(input: {
+export async function listContestsForDashboard(input: {
   teamIds: string[]
   resourceScope: 'campus' | 'personal'
   organizationId?: string | null
 }) {
-  const aggregateScopes: Prisma.ContestWhereInput[] = [
+  const scopes: Prisma.ContestWhereInput[] = [
     ...(input.teamIds.length ? [{ teamId: { in: input.teamIds }, scope: input.resourceScope }] : []),
     ...(input.resourceScope === 'campus' && input.organizationId
       ? [{ organizationId: input.organizationId, teamId: null, scope: 'campus' }]
@@ -163,151 +118,63 @@ export async function listContestRuntimesForDashboard(input: {
       ? [{ teamId: null, organizationId: null, scope: 'platform' }]
       : []),
   ]
-  if (!aggregateScopes.length) return []
-
-  const aggregates = await prisma.contest.findMany({
-    where: { runtimeTrainingId: { not: null }, OR: aggregateScopes },
-    include: { RuntimeTraining: { include: dashboardRuntimeInclude } },
+  if (!scopes.length) return []
+  const contests = await prisma.contest.findMany({
+    where: { OR: scopes },
+    include: contestActivityInclude,
   })
-  return aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
+  return contests.map(contestAsActivity)
 }
 
-const rankingRuntimeInclude = {
-  TrainingProblem: {
-    orderBy: { orderIndex: 'asc' as const },
-    select: {
-      id: true,
-      problemId: true,
-      alias: true,
-      points: true,
-      orderIndex: true,
-      Problem: { select: { problemId: true } },
-    },
-  },
-} as const
-
-/**
- * Ranking is shared by training and contest routes. Contest runtimes resolve
- * through the aggregate first; ordinary training records remain direct.
- */
-export async function findActivityRuntimeForRanking(runtimeTrainingId: number) {
-  const aggregate = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { include: rankingRuntimeInclude } },
-  })
-  if (aggregate?.RuntimeTraining) {
-    if (aggregate.RuntimeTraining.type !== 'contest') {
-      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
-        action: 'contest_query',
-        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'ranking' },
-      })
-      return null
-    }
-    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
-  }
-
-  const runtime = await prisma.training.findUnique({
-    where: { id: runtimeTrainingId },
-    include: rankingRuntimeInclude,
-  })
-  if (!runtime) return null
-  if (runtime.type === 'contest') {
-    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
-      action: 'contest_query',
-      metadata: { runtimeTrainingId, consumer: 'ranking' },
-    })
-    return null
-  }
-  return { contest: null, runtime, source: 'training' as const }
-}
-
-const blogReviewRuntimeSelect = {
-  id: true,
-  title: true,
-  finalizedStandingId: true,
-  status: true,
-} as const
-
-/** Resolve the public runtime route identity before creating a contest review. */
-export async function findContestRuntimeForBlogReview(runtimeTrainingId: number) {
-  const aggregate = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { select: blogReviewRuntimeSelect } },
-  })
-  if (aggregate?.RuntimeTraining) {
-    return {
-      contest: aggregate,
-      runtime: {
-        ...aggregate.RuntimeTraining,
-        status: aggregate.status,
-        finalizedStandingId: aggregate.finalizedStandingId,
+export async function findActivityForRanking(publicId: number) {
+  const contest = await findContestByPublicId(publicId)
+  if (contest) return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+  const activity = await findOrdinaryTraining(publicId, {
+    TrainingProblem: {
+      orderBy: { orderIndex: 'asc' },
+      select: {
+        id: true, problemId: true, alias: true, points: true, orderIndex: true,
+        Problem: { select: { problemId: true } },
       },
-      source: 'aggregate' as const,
-    }
-  }
-  return null
+    },
+  })
+  return activity ? { contest: null, activity, source: 'training' as const } : null
 }
 
-/**
- * Discover due Rating work from canonical Contest lifecycle state. Training
- * is consulted only for execution ownership and a creator fallback during the
- * compatibility window. Rating eligibility is read from canonical Contest.
- */
-export async function listDueRatedContestRuntimes(now = new Date(), limit = 20) {
+export async function findContestForBlogReview(publicId: number) {
+  const contest = await findContestByPublicId(publicId)
+  if (!contest) return null
+  return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+}
+
+export async function listDueRatedContests(now = new Date(), limit = 20) {
   const rows = await prisma.contest.findMany({
     where: {
-      runtimeTrainingId: { not: null },
       endAt: { lte: now },
       finalizationStatus: { in: ['LIVE', 'JUDGING'] },
       RatingConfig: { isNot: null },
-      RuntimeTraining: { is: { type: 'contest' } },
     },
-    select: {
-      runtimeTrainingId: true,
-      createdBy: true,
-      endAt: true,
-      RuntimeTraining: { select: { createdBy: true } },
-    },
-    orderBy: [{ endAt: 'asc' }, { runtimeTrainingId: 'asc' }],
+    select: { publicId: true, createdBy: true, endAt: true },
+    orderBy: [{ endAt: 'asc' }, { publicId: 'asc' }],
     take: Math.max(1, Math.min(100, Math.trunc(limit))),
   })
-  return rows.flatMap(row => row.runtimeTrainingId === null || !row.endAt || !row.RuntimeTraining
-    ? []
-    : [{
-        id: row.runtimeTrainingId,
-        createdBy: row.createdBy || row.RuntimeTraining.createdBy,
-        endTime: row.endAt,
-      }])
+  return rows.flatMap(row => !row.endAt ? [] : [{
+    id: row.publicId,
+    createdBy: row.createdBy || '',
+    endTime: row.endAt,
+  }])
 }
 
-const submissionContextRuntimeSelect = {
-  id: true,
-  teamId: true,
-  organizationId: true,
-  createdBy: true,
-  format: true,
-  type: true,
-  status: true,
-  startTime: true,
-  endTime: true,
-  problemIdVisible: true,
-  scope: true,
-} as const
-
-/**
- * Resolve the immutable aggregate/problem identity stored on a new contest
- * submission. Numeric ids remain in the payload only for route compatibility.
- */
 export async function findCanonicalContestSubmissionIdentity(
-  runtimeTrainingId: number,
-  runtimeTrainingProblemId: string,
+  publicId: number,
+  contestProblemId: string,
 ) {
   const contest = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
+    where: { publicId },
     select: {
       id: true,
       ContestProblem: {
-        where: { runtimeTrainingProblemId },
+        where: { id: contestProblemId },
         select: { id: true },
         take: 1,
       },
@@ -317,159 +184,57 @@ export async function findCanonicalContestSubmissionIdentity(
   if (!contest || !problem) {
     logger.error('contest_submission_identity_missing', new Error('Contest submission identity is not mapped'), {
       action: 'contest_query',
-      metadata: { runtimeTrainingId, runtimeTrainingProblemId },
+      metadata: { publicId, contestProblemId },
     })
     return null
   }
   return { canonicalContestId: contest.id, canonicalContestProblemId: problem.id }
 }
 
-/**
- * Submission detail is shared by training and contest routes. Resolve mapped
- * contests through the aggregate while leaving ordinary training untouched.
- */
-export async function findActivityRuntimeForSubmission(runtimeTrainingId: number) {
-  const aggregate = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { select: submissionContextRuntimeSelect } },
-  })
-  if (aggregate?.RuntimeTraining) {
-    if (aggregate.RuntimeTraining.type !== 'contest') {
-      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
-        action: 'contest_query',
-        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'submission_detail' },
-      })
-      return null
-    }
-    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
-  }
-  const runtime = await prisma.training.findUnique({
-    where: { id: runtimeTrainingId },
-    select: submissionContextRuntimeSelect,
-  })
-  if (!runtime) return null
-  if (runtime.type === 'contest') {
-    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
-      action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'submission_detail' },
-    })
-    return null
-  }
-  return { contest: null, runtime, source: 'training' as const }
+export async function findActivityForSubmission(publicId: number) {
+  const contest = await findContestByPublicId(publicId)
+  if (contest) return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+  const activity = await findOrdinaryTraining(publicId)
+  return activity ? { contest: null, activity, source: 'training' as const } : null
 }
 
-/** Resolve the shared access checks used by activity resources and solutions. */
-export async function findActivityRuntimeForAccess(runtimeTrainingId: number) {
-  const aggregate = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: {
-      RuntimeTraining: { include: { Team: { select: { organizationId: true, scope: true } } } },
-    },
+export async function findActivityForAccess(publicId: number) {
+  const contest = await findContestByPublicId(publicId)
+  if (contest) return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+  const activity = await findOrdinaryTraining(publicId, {
+    Team: { select: { organizationId: true, scope: true } },
   })
-  if (aggregate?.RuntimeTraining) {
-    if (aggregate.RuntimeTraining.type !== 'contest') {
-      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
-        action: 'contest_query',
-        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'activity_access' },
-      })
-      return null
-    }
-    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
-  }
-  const runtime = await prisma.training.findUnique({
-    where: { id: runtimeTrainingId },
-    include: { Team: { select: { organizationId: true, scope: true } } },
-  })
-  if (!runtime) return null
-  if (runtime.type === 'contest') {
-    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
-      action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'activity_access' },
-    })
-    return null
-  }
-  return { contest: null, runtime, source: 'training' as const }
+  return activity ? { contest: null, activity, source: 'training' as const } : null
 }
 
-const detailRuntimeInclude = {
-  _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
-} as const
-
-/** Resolve activity detail and attach Contest-owned Rating configuration. */
-export async function findActivityRuntimeForDetail(runtimeTrainingId: number) {
-  const aggregate = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: {
-      RatingConfig: true,
-      RuntimeTraining: { include: detailRuntimeInclude },
-    },
+export async function findActivityForDetail(publicId: number) {
+  const contest = await findContestByPublicId(publicId)
+  if (contest) return contestAsActivity(contest)
+  const activity = await findOrdinaryTraining(publicId, {
+    _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
   })
-  if (aggregate?.RuntimeTraining) {
-    if (aggregate.RuntimeTraining.type !== 'contest') {
-      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
-        action: 'contest_query',
-        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'activity_detail' },
-      })
-      return null
-    }
-    return { ...aggregate.RuntimeTraining, RatingConfig: aggregate.RatingConfig }
-  }
-  const runtime = await prisma.training.findUnique({
-    where: { id: runtimeTrainingId },
-    include: detailRuntimeInclude,
-  })
-  if (!runtime) return null
-  if (runtime.type === 'contest') {
-    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
-      action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'activity_detail' },
-    })
-    return null
-  }
-  return { ...runtime, RatingConfig: null }
+  return activity ? { ...activity, RatingConfig: null } : null
 }
 
-const overviewRuntimeInclude = {
-  _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
-  TrainingProblem: {
-    include: {
-      Problem: {
-        select: {
-          id: true, title: true, platform: true, problemId: true, difficulty: true,
-          timeLimit: true, memoryLimit: true,
-          _count: { select: { ProblemAttachment: true } },
+export async function findActivityForOverview(publicId: number) {
+  const contest = await findContestByPublicId(publicId)
+  if (contest) return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+  const activity = await findOrdinaryTraining(publicId, {
+    _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
+    TrainingProblem: {
+      include: {
+        Problem: {
+          select: {
+            id: true, title: true, platform: true, problemId: true, difficulty: true,
+            timeLimit: true, memoryLimit: true,
+            _count: { select: { ProblemAttachment: true } },
+          },
         },
+        TrainingSolution: { select: { id: true, visible: true } },
+        _count: { select: { TrainingAttachment: true } },
       },
-      TrainingSolution: { select: { id: true, visible: true } },
-      _count: { select: { TrainingAttachment: true } },
+      orderBy: { orderIndex: 'asc' },
     },
-    orderBy: { orderIndex: 'asc' as const },
-  },
-} as const
-
-/** Resolve the participant-facing activity overview through Contest first. */
-export async function findActivityRuntimeForOverview(runtimeTrainingId: number) {
-  const aggregate = await prisma.contest.findUnique({
-    where: { runtimeTrainingId },
-    include: { RuntimeTraining: { include: overviewRuntimeInclude } },
   })
-  if (aggregate?.RuntimeTraining) {
-    if (aggregate.RuntimeTraining.type !== 'contest') {
-      logger.error('contest_runtime_type_mismatch', new Error('Contest runtime is not a contest'), {
-        action: 'contest_query',
-        metadata: { contestId: aggregate.id, runtimeTrainingId, consumer: 'activity_overview' },
-      })
-      return null
-    }
-    return { contest: aggregate, runtime: aggregate.RuntimeTraining, source: 'aggregate' as const }
-  }
-  const runtime = await prisma.training.findUnique({
-    where: { id: runtimeTrainingId },
-    include: overviewRuntimeInclude,
-  })
-  if (!runtime) return null
-  if (runtime.type === 'contest') {
-    logger.error('contest_aggregate_missing', new Error('Contest runtime has no canonical aggregate'), {
-      action: 'contest_query', metadata: { runtimeTrainingId, consumer: 'activity_overview' },
-    })
-    return null
-  }
-  return { contest: null, runtime, source: 'training' as const }
+  return activity ? { contest: null, activity, source: 'training' as const } : null
 }

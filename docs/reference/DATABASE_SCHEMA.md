@@ -63,13 +63,14 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `RatingBatch` | 以规范 `contestId` 归属比赛和 RatingPool 的不可变结算/重放批次 |
 | `CaritsLedgerEntry` | 交易内按账户聚合的双向分录；posted 后不得追加、修改或删除 |
 | `CaritsTransaction` | 平衡的 Carits 交易、幂等业务引用、请求指纹及冲正关系；同键差异载荷必须拒绝 |
-| `Contest` | 规范比赛聚合；通过唯一 `runtimeTrainingId` 桥接兼容运行态，并直接拥有 Rating 配置、最终榜单快照和结算批次 |
-| `ContestProblem` | 既有比赛题目；桥接运行题目并固定 Canonical Problem 与 TestSet Revision |
+| `Contest` | 唯一比赛聚合；以独立 `publicId` 支持数字路由，并直接拥有题目、参赛者、生命周期、Rating 配置、最终榜单快照和结算批次 |
+| `ContestParticipant` | 比赛参赛者与 Rating 锁定事实；保存比赛内用户身份、组织快照、处置状态和首交时间 |
+| `ContestProblem` | 比赛题目；固定 Canonical Problem、TestSet Revision、序号、别名与内容快照，不关联 TrainingProblem |
 | `ContestProblemScore` | 以 Prisma schema 为准 |
-| `ContestRecord` | 比赛/训练共用记录；普通训练只保存 `trainingId`，比赛记录同时保存规范 `canonicalContestId` |
+| `ContestRecord` | 活动记录；普通训练使用 `trainingId`，比赛使用 `canonicalContestId`，数据库约束每行只能归属一类活动 |
 | `ContestResource` | 以 Prisma schema 为准 |
 | `ContestResult` | 以 Prisma schema 为准 |
-| `ContestUserProblemStatus` | 比赛用户题目状态；新记录只写必填的规范 Contest/ContestProblem 身份，旧整数键仅供历史读取且可空 |
+| `ContestUserProblemStatus` | 比赛用户题目状态；只保存必填的 Contest/ContestProblem 身份，不含旧 Training 整数键 |
 | `ContributionEvent` | Candidate/Hack 正式晋升产生的版本化声誉事实及证据快照 |
 | `ContributionRewardDelivery` | 贡献事件的 Carits 奖励投递，含租约、fencing、按毛发放统计的日预算、有界重试、入账与冲正引用 |
 | `ContributionProject` | 以 Prisma schema 为准 |
@@ -174,7 +175,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `RatingPool` | 全局或指定组织的独立 OI、IOI、ACM Rating 参数空间 |
 | `RatingRebuildJob` | 赛后重测引起的 Rating 池重放审计与结果报告 |
 | `SolutionSimilarityCheck` | 题解投稿 Revision 的正文/代码相似度风险提示、来源声明和审核匹配证据 |
-| `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，以提交级 IO 固化 stdin/stdout 或文件名，并通过 `currentJudgeRunId` 指向当前逻辑评测；比赛提交以规范 Contest/ContestProblem 为身份、以 Training/TrainingProblem 为 Judge 运行路由，旧整数比赛键仅作历史读取 |
+| `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，以提交级 IO 固化 stdin/stdout 或文件名，并通过 `currentJudgeRunId` 指向当前逻辑评测；比赛提交只使用 Contest/ContestProblem 身份，执行结果只存于 JudgeRun/JudgeAttempt |
 | `Team` | 以 Prisma schema 为准 |
 | `TeamJoinRequest` | 以 Prisma schema 为准 |
 | `TeamMember` | 以 Prisma schema 为准 |

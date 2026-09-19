@@ -21,12 +21,13 @@ function auditTransport() {
 
 function contestCompatibility() {
   const schema = fs.readFileSync(path.join(root, 'apps/server/prisma/schema.prisma'), 'utf8')
-  const aggregate = fs.readFileSync(path.join(root, 'apps/server/src/modules/contest/contest-aggregate.service.ts'), 'utf8')
+  const aggregatePath = path.join(root, 'apps/server/src/modules/contest/contest-aggregate.service.ts')
+  const aggregate = fs.existsSync(aggregatePath) ? fs.readFileSync(aggregatePath, 'utf8') : ''
   const command = fs.readFileSync(path.join(root, 'apps/server/src/modules/contest/contest-command.service.ts'), 'utf8')
   const points = [
     { key: 'runtimeTrainingIdentity', active: /\bruntimeTrainingId\s+Int\??\b/.test(schema) },
-    { key: 'trainingProjectionWriter', active: /export async function projectContestRuntimeTx\b/.test(aggregate) },
-    { key: 'trainingRuntimeCreation', active: /createContestRuntimeTx[\s\S]*?tx\.training\.create\s*\(/.test(command) },
+    { key: 'trainingProjectionWriter', active: fs.existsSync(aggregatePath) || /export async function projectContestRuntimeTx\b/.test(aggregate + command) },
+    { key: 'trainingRuntimeCreation', active: /tx\.training\.create\s*\(/.test(command) },
     { key: 'trainingProblemRuntime', active: /tx\.trainingProblem\.(?:create|update|delete|findMany|findFirst)\s*\(/.test(command) },
   ]
   return { remaining: points.filter(point => point.active).length, points }

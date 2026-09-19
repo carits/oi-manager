@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client'
+import { getAccountRole } from '../../../middleware/auth'
 import { prisma } from '../../../prisma'
 import { logger } from '../../../lib/logger'
 import { fileService } from '../../../lib/storage'
@@ -13,13 +14,18 @@ import {
 } from '../training.helpers'
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
-import { findActivityRuntimeForDetail, listPlatformContestRuntimes } from '../../contest/contest-query.facade'
+import {
+  findActivityForAccess,
+  findActivityForDetail,
+  listTeamContests,
+  listPlatformContests as listCanonicalPlatformContests,
+} from '../../contest/contest-query.facade'
 import { resolveOrganizationAuthorization } from '../../authorization/capabilities'
 import {
-  createContestRuntimeTx,
-  deleteContestRuntimeTx,
+  createContestTx,
+  deleteContestTx,
   transitionContestLifecycleTx,
-  updateContestRuntimeTx,
+  updateContestTx,
 } from '../../contest/contest-command.service'
 
 export class TrainingCrudError extends Error {
@@ -52,15 +58,18 @@ export async function listTeamTrainings(params: {
     fail(403, 'TRAINING_ACCESS_DENIED', '无权限查看该团队训练')
   }
 
-  const trainings = await prisma.training.findMany({
+  const includeTrainings = params.typeFilter !== 'contest'
+  const includeContests = !params.typeFilter || params.typeFilter === 'contest'
+
+  const trainings = includeTrainings ? await prisma.training.findMany({
     where: {
       teamId: params.teamId,
       scope: team.scope,
-      ...(params.typeFilter ? { type: params.typeFilter } : {}),
+      type: params.typeFilter || { not: 'contest' },
     },
     include: { _count: { select: { TrainingProblem: true } } },
     orderBy: { startTime: 'desc' },
-  })
+  }) : []
   const participantCounts = new Map<number, number>()
   if (trainings.length > 0) {
     const rows = await prisma.$queryRaw<Array<{ trainingId: number; count: bigint }>>`
@@ -74,8 +83,12 @@ export async function listTeamTrainings(params: {
     for (const row of rows) participantCounts.set(Number(row.trainingId), Number(row.count))
   }
 
+
+  const contests = includeContests
+    ? await listTeamContests(params.teamId, team.scope)
+    : []
   const now = new Date()
-  return sortTrainingListForDisplay(trainings.map(training => ({
+  const ordinaryActivities = trainings.map(training => ({
     id: training.id,
     title: training.title,
     description: training.description,
@@ -88,7 +101,8 @@ export async function listTeamTrainings(params: {
     problemCount: training._count.TrainingProblem,
     participantCount: participantCounts.get(training.id) || 0,
     createdAt: training.createdAt.toISOString(),
-  })))
+  }))
+  return sortTrainingListForDisplay([...ordinaryActivities, ...contests])
 }
 
 export async function createTeamTraining(params: {
@@ -119,7 +133,7 @@ export async function createTeamTraining(params: {
   const activityType = type || 'training'
   const training = await prisma.$transaction(async tx => {
     if (activityType === 'contest') {
-      return createContestRuntimeTx(tx, {
+      return createContestTx(tx, {
         teamId: params.teamId,
         organizationId: null,
         scope: team.scope,
@@ -163,7 +177,7 @@ export async function createTeamTraining(params: {
 export async function listPlatformContests(userId: string) {
   const user = await prisma.user.findFirst({ where: { id: userId, status: 'active' }, select: { id: true } })
   if (!user) fail(403, 'PLATFORM_CONTEST_ACCESS_DENIED', '账号不可用')
-  const contests = await listPlatformContestRuntimes()
+  const contests = await listCanonicalPlatformContests()
   const now = new Date()
   return sortTrainingListForDisplay(contests.map(contest => ({
     id: contest.id,
@@ -184,7 +198,7 @@ export async function listPlatformContests(userId: string) {
 }
 
 export async function createPlatformContest(params: { user: any; input: any }) {
-  if (!['super_admin', 'platform_admin'].includes(params.user.role)) {
+  if (!['super_admin', 'platform_admin'].includes(getAccountRole(params.user) || '')) {
     fail(403, 'PLATFORM_CONTEST_MANAGE_DENIED', '只有平台管理员可以创建平台比赛')
   }
   const title = typeof params.input.title === 'string' ? params.input.title.trim() : ''
@@ -199,7 +213,7 @@ export async function createPlatformContest(params: { user: any; input: any }) {
   if (startTime <= new Date()) fail(400, 'START_TIME_IN_PAST', '开始时间不能早于当前时间')
 
   const contest = await prisma.$transaction(async tx => {
-    const row = await createContestRuntimeTx(tx, {
+    const row = await createContestTx(tx, {
       teamId: null,
       organizationId: null,
       scope: 'platform',
@@ -216,7 +230,7 @@ export async function createPlatformContest(params: { user: any; input: any }) {
     })
     await tx.platformAuditLog.create({ data: {
       id: crypto.randomUUID(), actorUserId: params.user.userId,
-      action: 'platform_contest_created', targetType: 'training', targetId: String(row.id),
+      action: 'platform_contest_created', targetType: 'contest', targetId: String(row.id),
       metadata: { format: row.format, startTime: row.startTime, endTime: row.endTime },
     } })
     return row
@@ -231,13 +245,13 @@ export async function synchronizeTrainingStatus(training: any, now: Date) {
   const synchronization = await prisma.$transaction(async tx => {
     if (training.type === 'contest') {
       const result = await transitionContestLifecycleTx(tx, {
-        runtimeTrainingId: training.id,
+        publicId: training.id,
         actorUserId: training.createdBy,
         expectedStatus: training.status,
         targetStatus: computedStatus as 'upcoming' | 'ongoing' | 'finished',
       })
       return {
-        status: result?.runtime?.status || computedStatus,
+        status: result?.activity?.status || computedStatus,
         visibleCount: result?.visibleSubmissionCount || 0,
       }
     }
@@ -260,7 +274,7 @@ export async function synchronizeTrainingStatus(training: any, now: Date) {
 }
 
 export async function getTrainingDetail(id: number, userId: string) {
-  const training = await findActivityRuntimeForDetail(id)
+  const training = await findActivityForDetail(id)
   if (!training) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
   if (!await canAccessTraining(userId, training)) {
     fail(403, 'TRAINING_ACCESS_DENIED', '无权限查看该训练')
@@ -301,7 +315,7 @@ export async function getTrainingDetail(id: number, userId: string) {
 }
 
 async function requireManagedTraining(id: number, userId: string, deniedMessage: string) {
-  const training = await prisma.training.findUnique({ where: { id } })
+  const training = (await findActivityForAccess(id))?.activity
   if (!training) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
   if (!await canManageTraining(userId, training)) {
     fail(403, 'TRAINING_MANAGE_DENIED', deniedMessage)
@@ -342,8 +356,8 @@ export async function updateTraining(id: number, userId: string, input: any) {
       }),
     }
     if (training.type === 'contest') {
-      const result = await updateContestRuntimeTx(tx, {
-        runtimeTrainingId: id,
+      const result = await updateContestTx(tx, {
+        publicId: id,
         expected: {
           status: training.status,
           format: training.format,
@@ -354,7 +368,7 @@ export async function updateTraining(id: number, userId: string, input: any) {
       })
       if (result.conflict === 'rating_locked') fail(409, 'RATING_CONFIG_FROZEN', '比赛开始后不能修改赛制或 Rating Track')
       if (result.conflict) fail(409, 'CONTEST_UPDATE_STALE', '比赛配置已被其他管理员修改，请刷新后重试')
-      return result.runtime!
+      return result.activity!
     }
     return tx.training.update({ where: { id }, data: patch })
   })
@@ -370,8 +384,8 @@ export async function updateTrainingEndTime(id: number, userId: string, endTime:
   if (end <= training.startTime) fail(400, 'INVALID_TIME_RANGE', '结束时间必须晚于开始时间')
   return prisma.$transaction(async tx => {
     if (training.type === 'contest') {
-      const result = await updateContestRuntimeTx(tx, {
-        runtimeTrainingId: id,
+      const result = await updateContestTx(tx, {
+        publicId: id,
         expected: {
           status: training.status,
           format: training.format,
@@ -381,7 +395,7 @@ export async function updateTrainingEndTime(id: number, userId: string, endTime:
         patch: { endTime: end },
       })
       if (result.conflict) fail(409, 'CONTEST_UPDATE_STALE', '比赛配置已被其他管理员修改，请刷新后重试')
-      return result.runtime!
+      return result.activity!
     }
     return tx.training.update({ where: { id }, data: { endTime: end } })
   })
@@ -399,13 +413,13 @@ export async function startTraining(id: number, userId: string) {
   const started = await prisma.$transaction(async tx => {
     if (training.type === 'contest') {
       const result = await transitionContestLifecycleTx(tx, {
-        runtimeTrainingId: id,
+        publicId: id,
         actorUserId: userId,
         expectedStatus: training.status,
         targetStatus: 'ongoing',
         startTime: now,
       })
-      return result?.runtime || training
+      return result?.activity || training
     }
     const row = await tx.training.update({ where: { id }, data: { status: 'ongoing', startTime: now } })
     return row
@@ -424,13 +438,13 @@ export async function finishTraining(id: number, userId: string) {
   const finished = await prisma.$transaction(async tx => {
     if (training.type === 'contest') {
       const result = await transitionContestLifecycleTx(tx, {
-        runtimeTrainingId: id,
+        publicId: id,
         actorUserId: userId,
         expectedStatus: training.status,
         targetStatus: 'finished',
         endTime: now,
       })
-      return result?.runtime || training
+      return result?.activity || training
     }
     const updated = await tx.training.update({
       where: { id }, data: { status: 'finished', endTime: now },
@@ -442,7 +456,7 @@ export async function finishTraining(id: number, userId: string) {
 }
 
 export async function deleteTraining(id: number, userId: string) {
-  const training = await prisma.training.findUnique({ where: { id } })
+  const training = (await findActivityForAccess(id))?.activity
   if (!training) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
   const isAdmin = await canManageTraining(userId, training)
   if (training.createdBy !== userId && !isAdmin) {
@@ -451,12 +465,14 @@ export async function deleteTraining(id: number, userId: string) {
   if (training.type === 'contest' && training.finalizedStandingId) {
     fail(409, 'FINALIZED_CONTEST_DELETE_FORBIDDEN', '已生成最终榜单的比赛必须永久保留；如需隐藏请使用归档能力')
   }
-  const snapshotFiles = await prisma.trainingProblemContentSnapshot.findMany({
-    where: { TrainingProblem: { trainingId: id }, snapshotFileId: { not: null } },
-    select: { snapshotFileId: true },
-  })
+  const snapshotFiles = training.type === 'contest'
+    ? []
+    : await prisma.trainingProblemContentSnapshot.findMany({
+        where: { TrainingProblem: { trainingId: id }, snapshotFileId: { not: null } },
+        select: { snapshotFileId: true },
+      })
   if (training.type === 'contest') {
-    const deleted = await prisma.$transaction(tx => deleteContestRuntimeTx(tx, id))
+    const deleted = await prisma.$transaction(tx => deleteContestTx(tx, id))
     if (deleted.conflict === 'missing') fail(404, 'TRAINING_NOT_FOUND', '比赛不存在')
     if (deleted.conflict === 'finalized') {
       fail(409, 'FINALIZED_CONTEST_DELETE_FORBIDDEN', '已生成最终榜单的比赛必须永久保留；如需隐藏请使用归档能力')

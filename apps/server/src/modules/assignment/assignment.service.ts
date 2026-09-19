@@ -642,7 +642,7 @@ export async function submitAssignmentSolution(userId: string, assignmentId: str
   const created = await createQueuedSubmissionWithRun({
     userId, workspaceScope: 'campus', organizationId: assignment.organizationId,
     oj: problem.Problem.platform, problemId: problem.Problem.problemId, language, code,
-    codeLength: Buffer.byteLength(code, 'utf8'), result: 'queuing', submitMethod: 'local', problemInternalId: problem.problemId,
+    codeLength: Buffer.byteLength(code, 'utf8'), submitMethod: 'local', problemInternalId: problem.problemId,
     submitScope: 'assignment', assignmentId, assignmentProblemId, assignmentRecipientId: recipient.id, submissionPhase,
     testSetRevisionId: problem.testSetRevisionId, judgeConfigHash: problem.judgeConfigHash, judgeConfigSnapshot: problem.judgeConfigSnapshot,
     ...io, isGlobalVisible: true,
@@ -679,7 +679,7 @@ export async function syncAssignmentSubmission(submission: { id: number; userId:
       where: { assignmentProblemId: problem.id, assignmentRecipientId: recipient.id },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: {
-        id: true, result: true, score: true, submissionPhase: true, createdAt: true,
+        id: true, submissionPhase: true, createdAt: true,
         submitMethod: true, problemInternalId: true,
         CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
       },

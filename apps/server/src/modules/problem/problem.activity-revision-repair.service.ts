@@ -1,5 +1,6 @@
 import yaml from 'js-yaml'
 import { prisma } from '../../prisma'
+import { currentJudgeInProgressWhere } from '../judge/application/judge-read-projection'
 
 export class ActivityRevisionRepairError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -165,7 +166,7 @@ export async function repairActivityRevisionPins(input: {
       const submissionWhere = { trainingId: input.trainingId, trainingProblemId: item.id }
       const [submissionCount, inProgressCount] = await Promise.all([
         tx.submission.count({ where: submissionWhere }),
-        tx.submission.count({ where: { ...submissionWhere, result: { in: ['queuing', 'judging'] } } }),
+        tx.submission.count({ where: { ...submissionWhere, AND: [currentJudgeInProgressWhere()] } }),
       ])
       if (inProgressCount > 0) {
         throw new ActivityRevisionRepairError(409, 'REVISION_REPAIR_IN_PROGRESS', `${item.alias || item.Problem.title} 仍有 ${inProgressCount} 条提交正在排队或评测`)

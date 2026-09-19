@@ -54,9 +54,9 @@ flowchart LR
 
 - TestSet Revision 是正式评测数据的不可变事实；YAML 只允许由结构化模型单向生成。
 - 已创建活动固定 Revision，题库 Hack/Candidate 的新 Revision 不直接传播到活动。
-- `Contest/ContestProblem` 是比赛发现、跨领域查询和命令定位的规范入口；运行比赛必须先通过 `Contest.runtimeTrainingId` 定位兼容执行对象，缺失映射时查询和写入均 fail closed，不再读取或修改裸 `Training(type=contest)`，也不会由普通业务请求自动补建聚合。
-- `Contest` 保存标题、说明、赛制、范围、时间、可见性、生命周期、Rating 终结状态与最终榜单指针；Rating 结算、重放和更早比赛阻塞判断均读取这些规范字段。
-- `Training(type=contest)` 暂时保留参与者、Judge 路由等运行关系。新比赛 `Submission` 与 `ContestUserProblemStatus` 只写 `canonicalContestId/canonicalContestProblemId`；旧整数 `contestId/contestProblemId` 已改为可空历史读取字段，应用和数据库不再为新记录双写。数据库 CHECK、复合外键与 CAS 保证规范 ContestProblem 必须属于同一 Contest。`ContestRecord` 因同时承载普通训练记录而继续保存运行 `trainingId`，比赛记录必须同时保存规范 `canonicalContestId`。Rating 三类事实仍处在独立兼容阶段。所有比赛创建、编辑、生命周期、题目结构、提交和终结写入必须经过规范边界。
+- Contest/ContestProblem 是比赛发现、跨领域查询和命令定位的唯一入口；Contest.publicId 直接承担数字路由，业务代码不再读取或修改 Training(type=contest)。
+- Contest 保存标题、说明、赛制、范围、时间、可见性、生命周期、参赛者、Rating 终结状态与最终榜单指针；比赛题目与状态只引用 Contest UUID。
+- Submission 只保存提交意图和 Contest/ContestProblem 身份，JudgeRun/JudgeAttempt 保存全部执行结果；ContestRecord 的 Training 与 Contest 归属互斥，数据库 CHECK、复合外键与 CAS 阻止双身份和跨比赛题目。
 
 ## Submission 与 Judge
 

@@ -3,8 +3,8 @@ import bcrypt from 'bcryptjs'
 import { calculateGrade, getAllGrades } from '@oi-manager/shared/utils/grade'
 import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
-import { listContestRuntimesForDashboard } from '../../contest/contest-query.facade'
-import { createContestRuntimeTx } from '../../contest/contest-command.service'
+import { listContestsForDashboard } from '../../contest/contest-query.facade'
+import { createContestTx } from '../../contest/contest-command.service'
 import { syncOrganizationMembershipBaseRole } from '../../authorization/membership-role-assignment'
 import type { OrganizationCapability } from '../../authorization/capabilities'
 
@@ -114,7 +114,7 @@ async function memberTeamIds(actor: OrganizationActor) {
 export async function listOrganizationActivities(actor: OrganizationActor, type: 'homework' | 'contest') {
   const teamIds = await memberTeamIds(actor)
   const trainings = type === 'contest'
-    ? await listContestRuntimesForDashboard({
+    ? await listContestsForDashboard({
       teamIds,
       resourceScope: 'campus',
       organizationId: actor.organizationId,
@@ -140,7 +140,7 @@ export async function createOrganizationContest(actor: OrganizationActor, body: 
     badRequest('请填写有效的比赛名称和时间范围')
   }
   return prisma.$transaction(async tx => {
-    return createContestRuntimeTx(tx, {
+    return createContestTx(tx, {
       title, description: typeof body.description === 'string' ? body.description.trim() || null : null,
       format, scope: 'campus', teamId: null, organizationId: actor.organizationId, startTime, endTime,
       createdBy: actor.userId, problemIdVisible: Boolean(body.problemIdVisible), solutionVisible: Boolean(body.solutionVisible),

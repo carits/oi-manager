@@ -58,7 +58,17 @@ describe('JudgeRun switch-read projection', () => {
     expect(projectSubmissionJudgeResult({ ...compatibility, CurrentJudgeRun: run('CANCELLED') }).result).toBe('judge_failed')
   })
 
-  it('keeps archive and legacy rows without a JudgeRun on compatibility fields', () => {
-    expect(projectSubmissionJudgeResult({ ...compatibility, CurrentJudgeRun: null })).toMatchObject(compatibility)
+  it('fails closed when a submission has no JudgeRun', () => {
+    expect(projectSubmissionJudgeResult({ ...compatibility, CurrentJudgeRun: null })).toMatchObject({
+      result: 'system_error',
+      score: null,
+      cases: null,
+      subtasks: null,
+      timeUsed: null,
+      wallTimeUsed: null,
+      memoryUsed: null,
+      timeoutReason: null,
+      metricSource: null,
+    })
   })
 })

@@ -3,7 +3,6 @@ import { BlogVisibility } from '@prisma/client'
 import { prisma } from '../../../prisma'
 import { SubmissionQueryError } from './submission-query.service'
 
-const ACTIVE_RESULTS = new Set(['queuing', 'queued', 'pending', 'judging', 'running', 'compiling'])
 const ALLOWED_VISIBILITY = new Set<BlogVisibility>([BlogVisibility.PRIVATE, BlogVisibility.PLATFORM, BlogVisibility.PUBLIC])
 
 export async function createSubmissionBlogSnapshot(userId: string, submissionId: number, body: any) {
@@ -21,9 +20,8 @@ export async function createSubmissionBlogSnapshot(userId: string, submissionId:
   if (!submission || submission.userId !== userId) {
     throw new SubmissionQueryError(404, 'SUBMISSION_NOT_FOUND', '提交记录不存在')
   }
-  const result = submission.CurrentJudgeRun?.result || submission.result
+  const result = submission.CurrentJudgeRun?.result
   const finalized = submission.CurrentJudgeRun?.status === 'FINALIZED'
-    || (!submission.CurrentJudgeRun && !ACTIVE_RESULTS.has(String(result || '').toLowerCase()))
   if (!finalized || !result) throw new SubmissionQueryError(409, 'SUBMISSION_NOT_FINALIZED', '评测完成后才能创建博客引用快照')
   const problem = submission.problemInternalId ? await prisma.problem.findUnique({
     where: { id: submission.problemInternalId },
@@ -44,9 +42,9 @@ export async function createSubmissionBlogSnapshot(userId: string, submissionId:
     sourceProblemId: problem?.problemId || submission.problemId,
     problemTitle: problem?.title || null,
     result,
-    score: submission.CurrentJudgeRun?.score ?? submission.score,
-    timeUsed: submission.CurrentJudgeRun?.timeUsed ?? submission.timeUsed,
-    memoryUsed: submission.CurrentJudgeRun?.memoryUsed ?? submission.memoryUsed,
+    score: submission.CurrentJudgeRun?.score ?? null,
+    timeUsed: submission.CurrentJudgeRun?.timeUsed ?? null,
+    memoryUsed: submission.CurrentJudgeRun?.memoryUsed ?? null,
     language: submission.language,
     inputFilename: submission.inputFilename,
     outputFilename: submission.outputFilename,
