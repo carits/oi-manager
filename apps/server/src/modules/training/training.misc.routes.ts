@@ -14,7 +14,6 @@ import {
   getTrainingProblemAttachments,
   getTrainingProblemSolution,
   getTrainingSolutions,
-  resolveTrainingProblems,
   TrainingMiscError,
 } from './application/training-misc.service'
 
@@ -99,12 +98,3 @@ trainingMiscRouter.get('/trainings/:id/problems/:problemId/files/:fileId', authe
     return sendTrainingMiscError(error, res)
   }
 }, '下载训练题目资源失败'))
-
-trainingMiscRouter.post('/resolve-problems', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try {
-    const data = await resolveTrainingProblems(req.user!, req.body.items)
-    return res.json({ success: true, data })
-  } catch (error) {
-    return sendTrainingMiscError(error, res)
-  }
-}, '解析失败'))

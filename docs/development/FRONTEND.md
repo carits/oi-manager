@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-15
+last_verified: 2026-09-19
 source_of_truth: apps/web/src
 ---
 
@@ -23,11 +23,12 @@ source_of_truth: apps/web/src
 - 学校负责人继承教师页面。
 - 平台管理员不会通过 `super_admin` 判断获得超管页面。
 
-导航集中在 `config/navigation.ts`。所有角色根据 `workspaceMode` 选择工作或个人配置，且均使用
-`AppShell` 的左侧抽屉导航。角色 layout 始终只创建一个 `AppShell`，首页不再自行嵌套 Shell。
+导航集中在 `config/navigation.ts`。所有角色根据账号与 URL 工作区上下文选择导航配置，角色 layout
+始终只创建一个 `AppShell`，首页不再自行嵌套 Shell。
 
-导航默认隐藏，只能通过顶部菜单按钮主动打开；不会因悬停、路由切换、刷新或工作区切换自行显示。
-展开状态按 `userId + role + workspaceMode` 写入本机偏好。账号身份卡位于展开侧栏左下角，点击后向上
+`AppShell` 只有两种响应式形态：`>=1100px` 默认展开 232px 完整侧栏，可完全收起；`<1100px`
+默认隐藏导航，顶部菜单打开带遮罩的完整抽屉。不存在 72px 图标 rail。桌面偏好按
+`userId + accountRole + personal|organizationId` 写入本机；抽屉开关不持久化。账号身份卡位于展开侧栏左下角，点击后向上
 打开资料、安全、平台绑定和退出菜单，顶部不重复展示头像。
 
 账号级 UI 能力集中在 `lib/capabilities.ts`。全局管理员工作区、个人/校园工作区、全量评测记录、
@@ -58,6 +59,8 @@ Organization Account、Notification、Workspace、Auth、User Profile、Team 与
 Feature Slice。路由和跨域组件只能从 `@/features/<feature>` 根入口或根级按页面公共入口引用，不得深层导入
 `api/model/ui`，也不得在 `components` 下重新建立同名业务目录。根级按页面入口用于保持 Next.js 路由的切块
 边界，避免一个聚合 barrel 将同一 Feature 的全部管理工作台装入首屏。
+
+Training Session 前端只呈现一套 Stage 驱动模型。创建入口可以“快速创建一个 Stage”或“使用 Stage 模板”，但不得形成普通训练/教练带练两套 DTO。设计器按课堂语言配置 Stage，并通过 `features/training-session/api` 调用共享 Runtime Contract；SSE 是登记的 Raw Transport。基础名单只选择参与者，Stage 分组和题目 Plan 在结构编辑器中维护。题目添加只允许共享的“平台 + 题号”组件，不恢复题库浏览或题单选题。
 
 普通题目页的多题面工作区以左侧版本栏作为版本名称、身份和创建入口的唯一展示位置；右侧
 只渲染题面正文，不重复标题、作者、语言、格式、来源或派生入口。只有用户自己的版本在右侧

@@ -10,7 +10,7 @@
     },
     "feature": {
       "files": 35,
-      "calls": 218
+      "calls": 179
     },
     "raw": {
       "registered": 6
@@ -96,7 +96,7 @@
   "topDebt": [
     {
       "file": "apps/web/src/features/contest/ui/TrainingFormModal.tsx",
-      "calls": 22,
+      "calls": 19,
       "layer": "feature"
     },
     {
@@ -106,12 +106,7 @@
     },
     {
       "file": "apps/web/src/features/problem/ui/ProblemListDetailPage.tsx",
-      "calls": 18,
-      "layer": "feature"
-    },
-    {
-      "file": "apps/web/src/features/training-session/ui/TrainingSessionWorkspace.tsx",
-      "calls": 18,
+      "calls": 17,
       "layer": "feature"
     },
     {
@@ -135,11 +130,6 @@
       "layer": "feature"
     },
     {
-      "file": "apps/web/src/features/training-session/ui/TrainingSessionListPage.tsx",
-      "calls": 10,
-      "layer": "feature"
-    },
-    {
       "file": "apps/web/src/features/problem/ui/ProblemDetail.tsx",
       "calls": 9,
       "layer": "feature"
@@ -153,6 +143,16 @@
       "file": "apps/web/src/features/problem/ui/ProblemHackPanel.tsx",
       "calls": 8,
       "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/problem/ui/StatementVersionWorkspace.tsx",
+      "calls": 7,
+      "layer": "feature"
+    },
+    {
+      "file": "apps/web/src/features/blog/ui/BlogSeriesManager.tsx",
+      "calls": 5,
+      "layer": "feature"
     }
   ],
   "exitCriteria": {
@@ -165,5 +165,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-18T08:32:03.742Z"
+  "updatedAt": "2026-09-19T11:07:18.728Z"
 }

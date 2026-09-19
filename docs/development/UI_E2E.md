@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-11
+last_verified: 2026-09-19
 source_of_truth: playwright.config.ts and e2e directory
 ---
 
@@ -76,6 +76,12 @@ pnpm routes:audit
 - `headed`：本地可视调试。
 - `live`：手动真实 OJ/Judge 探针，不作为合并门禁。
 - `routes:audit`：扫描前端跳转表达式，生成 `test-results/navigation-static-report.json`；不存在静态路径、缺失动态标识和已知禁止父路径会阻断。
+
+AppShell 响应式门禁在 `human-ux-navigation.spec.ts` 覆盖 `1440×900`、`1100×800`、`1099×800`、
+`1024×768`、`800×900` 和 `390×844`。测试必须证明不存在 compact rail，桌面收起偏好可恢复、
+窄屏抽屉不持久化，且 Logo 唯一、焦点恢复、背景滚动锁定和水平溢出检查均通过。
+
+Training Engine 双角色套件必须用“平台 + 题号”完成快速创建和模板编排，并跑通“热身 → 分层 → 讲解 → 重新分层 → 补题”。教师中途即时换组、延时、提前结束并追加未来 Stage；学生不刷新收到 SSE，当前要求与历史进度分离。套件同时断言界面没有“普通训练 / 教练带练”、上一阶段、题库浏览器或题单选题入口。
 
 ## 真实点击巡检
 

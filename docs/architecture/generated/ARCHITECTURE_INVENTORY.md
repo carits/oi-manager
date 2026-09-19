@@ -13,10 +13,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 200 |
-| Prisma enums | 74 |
+| Prisma models | 205 |
+| Prisma enums | 77 |
 | Legacy route adapters | 24 |
-| Module route adapters | 53 |
+| Module route adapters | 54 |
 | systemd units | 8 |
 | Referenced environment keys | 486 |
 
@@ -63,6 +63,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/organization-creation/organization-creation.routes.ts`
 - `apps/server/src/modules/organization-join/organization-join.routes.ts`
 - `apps/server/src/modules/platform-binding/platform-binding.routes.ts`
+- `apps/server/src/modules/problem-selection/problem-selection.routes.ts`
 - `apps/server/src/modules/problem/problem.ai.routes.ts`
 - `apps/server/src/modules/problem/problem.candidate.routes.ts`
 - `apps/server/src/modules/problem/problem.crud.routes.ts`
@@ -280,7 +281,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingSession`
 - `TrainingSessionCommand`
 - `TrainingSessionEvent`
-- `TrainingSessionGroup`
 - `TrainingSessionHint`
 - `TrainingSessionHintAccess`
 - `TrainingSessionOverlay`
@@ -289,7 +289,13 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingSessionProblemProgress`
 - `TrainingSessionScoreEvent`
 - `TrainingSessionStage`
+- `TrainingSessionStageGroup`
+- `TrainingSessionStageGroupChange`
+- `TrainingSessionStageParticipantAssignment`
 - `TrainingSessionStageProblem`
+- `TrainingSessionStageProblemPlan`
+- `TrainingSessionStageRuntimeSnapshot`
+- `TrainingSessionStageTimeAdjustment`
 - `TrainingSessionStrategyDecision`
 - `TrainingSessionTemplate`
 - `TrainingSessionTemplateStage`
@@ -371,17 +377,20 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TestSetQualityIncidentStatus`
 - `TestSetQualityStatus`
 - `TestcaseCandidateStatus`
-- `TrainingEngineAdvanceMode`
+- `TrainingEngineGroupChangeEffectiveMode`
 - `TrainingEngineHintOpenMode`
 - `TrainingEngineJoinMode`
 - `TrainingEnginePauseMode`
 - `TrainingEnginePeerVisibility`
-- `TrainingEngineProblemAccessMode`
 - `TrainingEngineProgressStatus`
 - `TrainingEngineRankingMode`
 - `TrainingEngineSessionStatus`
 - `TrainingEngineSessionType`
-- `TrainingEngineStageMode`
+- `TrainingEngineStageAccessPolicy`
+- `TrainingEngineStageAudienceMode`
+- `TrainingEngineStageEndPolicy`
+- `TrainingEngineStageKind`
+- `TrainingEngineStageLifecycle`
 - `TrainingEngineSubmissionMode`
 - `TrainingEngineTargetType`
 

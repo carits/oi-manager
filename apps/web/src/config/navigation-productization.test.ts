@@ -60,4 +60,16 @@ describe('human navigation productization', () => {
       expect(config.items.find(item => item.label === '知识广场')).toEqual(expect.objectContaining({ href: '/blog', scope: 'global' }))
     }
   })
+
+  it('keeps AppShell navigation to full sidebar or full drawer without a compact rail', () => {
+    const shell = fs.readFileSync(new URL('../components/AppShell.tsx', import.meta.url), 'utf8')
+    const styles = fs.readFileSync(new URL('../components/AppShell.module.css', import.meta.url), 'utf8')
+    expect(shell).toContain("matchMedia('(min-width: 1100px)')")
+    expect(shell).toContain("'expanded' : 'collapsed'")
+    expect(shell).toContain("'drawer' : 'closed'")
+    expect(shell).not.toContain("'compact'")
+    expect(styles).not.toContain('--rail-width')
+    expect(styles).not.toContain('.sidebar:not(.sidebarOpen)')
+    expect(styles).toContain('@media (min-width: 1100px)')
+  })
 })

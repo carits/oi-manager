@@ -204,6 +204,7 @@ const routerPrefixes = {
   teamImportRouter: '/api/team-import',
   submissionsRouter: '/api/submissions',
   problemListsRouter: '/api/problem-lists',
+  problemSelectionRouter: '/api',
   schoolProblemListsRouter: '/api/schools',
   teamProblemListsRouter: '/api/teams',
   ojAccountsRouter: '/api/oj-accounts',

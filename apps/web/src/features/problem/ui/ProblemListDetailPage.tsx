@@ -18,6 +18,7 @@ import { getAssetUrl } from '@/lib/assets'
 import { AlertTriangle, Edit3, Send, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
+import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
 
 const avatarStyle = (avatar?: string | null): React.CSSProperties => ({
   '--problem-list-avatar': avatar ? `url(${getAssetUrl(avatar)})` : 'none',
@@ -96,7 +97,6 @@ interface ContextProblem {
 }
 
 interface OjBindingSummary { platform?: string }
-interface ResolveEntriesResponse { resolved?: NewRow['resolved'][] }
 interface ProblemListWire extends Partial<ListDetail> {
   sections?: SectionInfo[]
   ProblemListSection?: Array<Partial<SectionInfo> & { ProblemListEntry?: EntryInfo[] }>
@@ -223,68 +223,26 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
   // ---------- 新行操作 ----------
 
-  const getLastOjPlatform = () => {
-    // 1. 优先用 localStorage 记住的
-    const saved = localStorage.getItem('lastOjPlatform')
-    if (saved) return saved
-    // 2. 从当前题单已有条目中找最后一个 ojName
-    if (detail?.Sections) {
-      const allEntries = detail.Sections.flatMap(s => s.Entries)
-      for (let i = allEntries.length - 1; i >= 0; i--) {
-        if (allEntries[i].ojName) return allEntries[i].ojName!
-      }
-    }
-    return 'carits'
-  }
-
-  const addNewRow = (sectionId: string) => {
-    const row: NewRow = {
+  const addResolvedRows = (sectionId: string, problems: SelectedCanonicalProblem[]) => {
+    setNewRows(current => [...current, ...problems.map(problem => ({
       id: `temp-${++tempIdCounter}`,
       sectionId,
-      ojName: getLastOjPlatform(),
-      problemCode: '',
+      ojName: problem.platform,
+      problemCode: problem.problemCode,
       alias: '',
       notes: '',
       resolving: false,
-      resolved: null,
+      resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
       saving: false,
-    }
-    setNewRows(prev => [...prev, row])
+    }))])
   }
 
   const updateNewRow = (rowId: string, updates: Partial<NewRow>) => {
     setNewRows(prev => prev.map(r => r.id === rowId ? { ...r, ...updates } : r))
-    if (updates.ojName) localStorage.setItem('lastOjPlatform', updates.ojName)
   }
 
   const removeNewRow = (rowId: string) => {
     setNewRows(prev => prev.filter(r => r.id !== rowId))
-  }
-
-  const resolveTimerRef = useRef<Record<string, NodeJS.Timeout>>({})
-
-  const handleResolveRow = (row: NewRow) => {
-    if (resolveTimerRef.current[row.id]) clearTimeout(resolveTimerRef.current[row.id])
-    if (!row.problemCode.trim()) {
-      updateNewRow(row.id, { resolved: null, resolving: false })
-      return
-    }
-    updateNewRow(row.id, { resolving: true })
-    resolveTimerRef.current[row.id] = setTimeout(async () => {
-      try {
-        const res = await apiClient.post<ResolveEntriesResponse>(`/api/problem-lists/${listId}/entries/resolve`, {
-          items: [{ ojName: row.ojName, problemCode: row.problemCode.trim() }]
-        })
-        if (res.success && res.data) {
-          const resolved = res.data.resolved
-          if (resolved && resolved.length > 0) {
-            updateNewRow(row.id, { resolved: resolved[0], resolving: false })
-          }
-        }
-      } catch {
-        updateNewRow(row.id, { resolving: false })
-      }
-    }, 500)
   }
 
   /** 批量保存某章节所有已解析的新行 */
@@ -578,17 +536,10 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                           <TableRow key={row.id} className={unifiedStyles.u38}>
                             <TableCell className={unifiedStyles.u23}>{section.Entries.length + sectionNewRows.indexOf(row) + 1}</TableCell>
                             <TableCell className={unifiedStyles.u25}>
-                              <Select aria-label="选择" value={row.ojName} onChange={e => updateNewRow(row.id, { ojName: e.target.value, resolved: null })}
-                                className={unifiedStyles.u39}>
-                                {OJ_PLATFORMS_NO_ALL.map(oj => <option key={oj.value} value={oj.value}>{oj.label}</option>)}
-                              </Select>
+                              {getOjPlatformLabel(null, row.ojName)}
                             </TableCell>
                             <TableCell className={unifiedStyles.u25}>
-                              <Input type="text" value={row.problemCode}
-                                onChange={e => { updateNewRow(row.id, { problemCode: e.target.value, resolved: null }); handleResolveRow({ ...row, problemCode: e.target.value }) }}
-                                placeholder="输入题号" autoFocus
-                                className={unifiedStyles.u40}
-                              />
+                              {row.problemCode}
                             </TableCell>
                             <TableCell className={unifiedStyles.u27}>
                               {row.saving ? <span className={unifiedStyles.u41}>保存中...</span>
@@ -623,10 +574,11 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                 {/* 添加题目 + 保存按钮 */}
                 {canEdit && !isStudentView && (
                   <div className={unifiedStyles.u49}>
-                    <Button variant="ghost" onClick={() => addNewRow(section.id)}
-                      className={unifiedStyles.u50}>
-                      + 添加一道题目
-                    </Button>
+                    <QuickProblemInput
+                      existingProblemIds={[...section.Entries.map(entry => entry.problemId), ...sectionNewRows.flatMap(row => row.resolved?.problemId ? [row.resolved.problemId] : [])]}
+                      onResolved={(problems) => addResolvedRows(section.id, problems)}
+                      autoFocus={false}
+                    />
                     {sectionNewRows.length > 0 && (
                       <Button variant="primary"
                         onClick={() => saveAllSectionRows(section.id)}

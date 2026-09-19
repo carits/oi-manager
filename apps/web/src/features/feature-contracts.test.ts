@@ -23,6 +23,13 @@ import {
   SimilarityComparisonSchema,
   SubmissionDetailSchema,
   TrainingDesignSchema,
+  TrainingGroupSuggestionSchema,
+  TrainingStageGroupChangeInputSchema,
+  TrainingStageTimeExtensionInputSchema,
+  TrainingStageTransitionInputSchema,
+  TrainingProblemTimePolicySchema,
+  TrainingStuckPolicySchema,
+  TrainingTemplateSchema,
   TrainingStructureInputSchema,
   WorkspaceContracts,
   WorkspaceListSchema,
@@ -73,6 +80,7 @@ describe('feature slice contracts', () => {
       id: 'user-1', username: 'teacher1', avatar: null, bio: '简介', userType: 'teacher',
       school: { id: 'organization-1', name: '测试学校' },
     }).success).toBe(true)
+
   })
 
   it('accepts the assignment matrix projection returned by the application service', () => {
@@ -109,6 +117,7 @@ describe('feature slice contracts', () => {
       }],
       pagination: { page: 1, pageSize: 40, total: 1, totalPages: 1 },
     }).success).toBe(true)
+
   })
 
   it('keeps public blog metadata and review excerpts in shared runtime schemas', () => {
@@ -164,11 +173,13 @@ describe('feature slice contracts', () => {
         id: 'stage-1',
         clientKey: 'stage-1',
         name: '热身',
-        mode: 'SEQUENTIAL',
-        advanceMode: 'MANUAL',
-        problemAccessMode: 'SEQUENTIAL',
-        submissionMode: 'NORMAL',
+        kind: 'TRAINING',
+        audienceMode: 'ALL',
+        endPolicy: 'MANUAL',
+        accessPolicy: 'SEQUENTIAL',
+        submissionMode: 'ENABLED',
         Problems: [],
+        Groups: [],
       }],
       issues: [],
     }).success).toBe(true)
@@ -180,12 +191,32 @@ describe('feature slice contracts', () => {
       stages: [{
         clientKey: 'draft-stage-1',
         name: '热身',
-        mode: 'SEQUENTIAL',
-        advanceMode: 'MANUAL',
-        problemAccessMode: 'SEQUENTIAL',
-        submissionMode: 'NORMAL',
+        kind: 'TRAINING',
+        audienceMode: 'ALL',
+        endPolicy: 'MANUAL',
+        accessPolicy: 'SEQUENTIAL',
+        submissionMode: 'ENABLED',
         problems: [],
+        groups: [],
       }],
+    }).success).toBe(true)
+
+    expect(TrainingStageTransitionInputSchema.safeParse({ expectedRevision: 3, action: 'advance', stageId: 'stage-1', outcome: 'completed' }).success).toBe(true)
+    expect(TrainingStageTransitionInputSchema.safeParse({ expectedRevision: 3, action: 'back', stageId: 'stage-1' }).success).toBe(false)
+    expect(TrainingStageGroupChangeInputSchema.safeParse({ expectedRevision: 3, participantId: 'participant-1', toGroupId: 'group-2', effectiveMode: 'immediate', reason: '根据课堂观察调整' }).success).toBe(true)
+    expect(TrainingStageGroupChangeInputSchema.safeParse({ expectedRevision: 3, participantId: 'participant-1', toGroupId: 'group-2', effectiveMode: 'immediate', reason: '' }).success).toBe(false)
+    expect(TrainingStageTimeExtensionInputSchema.safeParse({ expectedRevision: 3, seconds: 600, reason: '课堂需要继续讲解' }).success).toBe(true)
+    expect(TrainingStageTimeExtensionInputSchema.safeParse({ expectedRevision: 3, seconds: 30, reason: '太短' }).success).toBe(false)
+    expect(TrainingGroupSuggestionSchema.safeParse({
+      stageId: 'stage-2',
+      suggestions: [{ participantId: 'participant-1', user: { id: 'user-1', username: 'alice' }, groupId: 'group-1', groupName: '基础巩固', reason: '上一阶段完成 1 题；按可解释的蛇形均衡顺序建议分组' }],
+    }).success).toBe(true)
+    expect(TrainingProblemTimePolicySchema.safeParse({ mode: 'HARD', limitSeconds: 600 }).success).toBe(true)
+    expect(TrainingProblemTimePolicySchema.safeParse({ mode: 'HARD' }).success).toBe(false)
+    expect(TrainingStuckPolicySchema.safeParse({ minActiveSeconds: 600, minAttempts: 3, noImprovementSeconds: 300 }).success).toBe(true)
+    expect(TrainingTemplateSchema.safeParse({
+      key: 'database:template-1', name: '分层课堂', sessionType: 'GENERAL', description: '', source: 'organization',
+      stages: [{ name: '分层', description: '', kind: 'TRAINING', audienceMode: 'GROUPED', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', groups: [{ clientKey: 'foundation', name: '基础组' }] }],
     }).success).toBe(true)
   })
 

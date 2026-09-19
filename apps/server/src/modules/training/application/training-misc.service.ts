@@ -1,7 +1,6 @@
 import { prisma } from '../../../prisma'
 import { fileService } from '../../../lib/storage'
 import { getAdapter, getSupportedPlatforms } from '../../../oj-adapters'
-import { findAccessibleProblem, findUsableProblemByExternalId } from '../../problem/problem.access'
 import {
   canAccessTraining,
   canManageTraining,
@@ -28,7 +27,6 @@ export class TrainingMiscError extends Error {
     super(message)
   }
 }
-
 function fail(statusCode: number, code: string, message: string): never {
   throw new TrainingMiscError(statusCode, code, message)
 }
@@ -447,33 +445,4 @@ export async function downloadTrainingProblemFile(params: {
     ...download,
     disposition: file.category === 'attachment' ? 'attachment' : 'inline',
   }
-}
-
-export async function resolveTrainingProblems(user: any, items: unknown) {
-  if (!Array.isArray(items) || items.length === 0) fail(400, 'INVALID_ITEMS', '参数错误')
-  const resolved = []
-  for (const raw of items) {
-    const item = raw as { ojName?: string; problemCode?: string }
-    if (!item.ojName || !item.problemCode) {
-      resolved.push({ problemId: '', title: '题库中未找到', ojName: item.ojName || '', problemCode: item.problemCode || '', found: false, created: false })
-      continue
-    }
-    let matched: { id: string; title: string } | null = null
-    if (item.ojName === 'carits') {
-      let problem = await findAccessibleProblem(user, item.problemCode, 'use').catch(() => null)
-      if (!problem) problem = await findUsableProblemByExternalId(user, 'carits', item.problemCode)
-      if (problem) matched = { id: problem.id, title: problem.title }
-    } else {
-      const problem = await findUsableProblemByExternalId(user, item.ojName, item.problemCode)
-      if (problem) matched = { id: problem.id, title: problem.title }
-    }
-    resolved.push(matched ? {
-      problemId: matched.id, title: matched.title, ojName: item.ojName,
-      problemCode: item.problemCode, found: true, created: false,
-    } : {
-      problemId: '', title: '题库中未找到', ojName: item.ojName,
-      problemCode: item.problemCode, found: false, created: false,
-    })
-  }
-  return { resolved }
 }

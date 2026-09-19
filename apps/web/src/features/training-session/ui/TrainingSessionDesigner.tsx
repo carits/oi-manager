@@ -1,37 +1,50 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw } from "lucide-react";
-import { apiClient } from "@/lib/apiClient";
 import { PageFrame } from "@/components/ui/PageFrame";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
-import { Checkbox, Input, Textarea } from "@/components/ui/FormControls";
+import { Checkbox, Input, Select, Textarea } from "@/components/ui/FormControls";
 import { ConfirmDialog, FormDialog } from "@/components/ui/Dialogs";
 import { Empty } from "@/components/ui/Empty";
 import { PageLoadingFrame } from "@/components/ui/PageLoadingFrame";
 import { useToast } from "@/components/ui/Toast";
 import { TrainingDesignAuxiliary } from "./TrainingDesignAuxiliary";
-import { TrainingProblemPool } from "./TrainingProblemPool";
 import { TrainingStageTimeline } from "./TrainingStageTimeline";
 import { TrainingProblemChain } from "./TrainingProblemChain";
 import styles from "./TrainingEngine.module.css";
 import { useUnsavedChanges } from "@/components/navigation/UnsavedChangesProvider";
 import {
   getTrainingDesign,
+  getTrainingDesignProblem,
+  createTrainingTemplate,
+  publishTraining,
   saveTrainingDesign,
   validateTrainingDesign,
 } from "../api/trainingSessionApi";
-import type { Assignment, Design, DesignProblem, Issue, ProblemPage, ProblemSummary, SourceGroup, Stage } from "../model/trainingDesign";
+import type { Assignment, Design, DesignProblem, Issue, Stage } from "../model/trainingDesign";
 import { createTrainingDesignDraft, moveItem, newTrainingDesignKey, normalizeAssignments, normalizeProblemOrder } from "../model/trainingDesign";
+import { QuickProblemInput, type SelectedCanonicalProblem } from "@/features/problem-selection";
 
 const newKey = newTrainingDesignKey;
+
+const copyStageAsDraft = (stage: Stage): Stage => ({
+  ...stage,
+  id: undefined,
+  lifecycle: "PENDING",
+  clientKey: newKey(),
+  name: `${stage.name}（副本）`,
+  Problems: stage.Problems.map(problem => ({ ...problem, id: undefined, assignmentId: undefined, clientKey: newKey() })),
+  Groups: stage.Groups.map(group => ({ ...group, id: undefined, clientKey: newKey(), Problems: group.Problems.map(problem => ({ ...problem, id: undefined, assignmentId: undefined, clientKey: newKey() })) })),
+});
 
 export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const router = useRouter(),
     pathname = usePathname(),
+    searchParams = useSearchParams(),
     toast = useToast();
   const [design, setDesign] = useState<Design | null>(null),
     [stages, setStages] = useState<Stage[]>([]);
@@ -44,26 +57,30 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     [publishing, setPublishing] = useState(false),
     [dirty, setDirty] = useState(false);
   useUnsavedChanges(`training-session-design:${sessionId}`, dirty);
-  const [issues, setIssues] = useState<Issue[]>([]),
-    [source, setSource] = useState<SourceGroup>("carits"),
-    [query, setQuery] = useState(""),
-    [page, setPage] = useState(1);
-  const [pool, setPool] = useState<ProblemSummary[]>([]),
-    [poolTotal, setPoolTotal] = useState(0),
-    [poolLoading, setPoolLoading] = useState(false);
+  const [issues, setIssues] = useState<Issue[]>([]);
   const [draggedStage, setDraggedStage] = useState<number | null>(null),
     [draggedProblem, setDraggedProblem] = useState<number | null>(null);
   const [pendingRemovalConfirm, setPendingRemovalConfirm] = useState(false),
-    [multiProblem, setMultiProblem] = useState<DesignProblem | null>(null),
-    [multiStages, setMultiStages] = useState<string[]>([]);
+    [problemTarget, setProblemTarget] = useState<"current" | "multiple">("current"),
+    [targetStages, setTargetStages] = useState<string[]>([]);
+  const [templateOpen, setTemplateOpen] = useState(false),
+    [templateName, setTemplateName] = useState(""),
+    [templateScope, setTemplateScope] = useState<"personal" | "organization" | "team">("personal"),
+    [templateSaving, setTemplateSaving] = useState(false);
   const runtimePath = pathname.replace(/\/design$/, "");
+  const copyRequestHandled = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const contractData = await getTrainingDesign(sessionId);
       const data = createTrainingDesignDraft(contractData);
-      const loadedStages = data.stages;
+      let loadedStages = data.stages;
+      const requestedCopyId = copyRequestHandled.current ? null : searchParams.get("copyStage");
+      if (requestedCopyId) copyRequestHandled.current = true;
+      const source = requestedCopyId ? loadedStages.find(stage => stage.id === requestedCopyId) : undefined;
+      const copied = source ? copyStageAsDraft(source) : undefined;
+      if (copied) loadedStages = [...loadedStages, copied];
       setDesign(data);
       setStages(loadedStages);
       setTitle(data.session.title);
@@ -72,50 +89,26 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       setActiveStageKey((current) =>
         loadedStages.some((stage) => stage.clientKey === current)
           ? current
-          : loadedStages[0]?.clientKey || "",
+          : copied?.clientKey || loadedStages[0]?.clientKey || "",
       );
-      setDirty(false);
+      setDirty(Boolean(copied));
+      if (requestedCopyId && typeof window !== "undefined") window.history.replaceState(window.history.state, "", pathname);
     } catch {
       toast.error("训练设计加载失败");
     } finally {
       setLoading(false);
     }
-  }, [sessionId, toast]);
+  }, [pathname, searchParams, sessionId, toast]);
   useEffect(() => {
     void load();
   }, [load]);
-  const loadPool = useCallback(async () => {
-    if (!design) return;
-    setPoolLoading(true);
-    const params = new URLSearchParams({ page: String(page), pageSize: "20" });
-    if (query.trim()) params.set("keyword", query.trim());
-    if (source === "school") params.set("library", "school");
-    else {
-      params.set("library", "platform");
-      params.set("sourceGroup", source);
-    }
-    const response = await apiClient.get<ProblemPage>(
-      `/api/problems?${params}`,
-    );
-    setPoolLoading(false);
-    if (!response.success || !response.data) {
-      setPool([]);
-      setPoolTotal(0);
-      return;
-    }
-    setPool(response.data.data || []);
-    setPoolTotal(response.data.total || 0);
-  }, [design, page, query, source]);
-  useEffect(() => {
-    void loadPool();
-  }, [loadPool]);
-
   const activeStage =
     stages.find((stage) => stage.clientKey === activeStageKey) || null;
+  const activeStageReadOnly = Boolean(activeStage?.lifecycle && activeStage.lifecycle !== "PENDING");
   const updateStage = (clientKey: string, updater: (stage: Stage) => Stage) => {
     setStages((current) =>
       current.map((stage) =>
-        stage.clientKey === clientKey ? updater(stage) : stage,
+        stage.clientKey === clientKey && (!stage.lifecycle || stage.lifecycle === "PENDING") ? updater(stage) : stage,
       ),
     );
     setDirty(true);
@@ -129,32 +122,24 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       clientKey: newKey(),
       name: `新阶段 ${stages.length + 1}`,
       description: "",
-      mode: "FREE",
-      advanceMode: "MANUAL",
-      problemAccessMode: "STAGE_ONLY",
+      kind: "TRAINING",
+      audienceMode: "ALL",
+      endPolicy: "MANUAL",
+      accessPolicy: "ALL_AT_ONCE",
       submissionMode: "ENABLED",
       Problems: [],
+      Groups: [],
     };
     replaceStages((current) => [...current, stage]);
     setActiveStageKey(stage.clientKey);
   };
   const copyStage = (stage: Stage) => {
-    const copy: Stage = {
-      ...stage,
-      id: undefined,
-      clientKey: newKey(),
-      name: `${stage.name}（副本）`,
-      Problems: stage.Problems.map((problem) => ({
-        ...problem,
-        id: undefined,
-        assignmentId: undefined,
-        clientKey: newKey(),
-      })),
-    };
+    const copy = copyStageAsDraft(stage);
     replaceStages((current) => [...current, copy]);
     setActiveStageKey(copy.clientKey);
   };
   const removeStage = (stage: Stage) => {
+    if (stage.lifecycle && stage.lifecycle !== "PENDING") return toast.error("已开始 Stage 永久只读，只能复制为新的未来 Stage");
     replaceStages((current) =>
       current.filter((item) => item.clientKey !== stage.clientKey),
     );
@@ -166,14 +151,12 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   };
 
   const fetchDesignProblem = async (problemId: string) => {
-    const response = await apiClient.get<DesignProblem>(
-      `/api/training-sessions/${sessionId}/design-problems/${problemId}`,
-    );
-    if (!response.success || !response.data) {
-      toast.error(response.message || "题目不可用");
+    try {
+      return await getTrainingDesignProblem(sessionId, problemId) as DesignProblem;
+    } catch {
+      toast.error("题目不可用");
       return null;
     }
-    return response.data;
   };
   const assignmentFromProblem = (problem: DesignProblem): Assignment => ({
     clientKey: newKey(),
@@ -192,48 +175,24 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     subtasks: problem.subtasks,
     unlockPolicy: { mode: "ANY", conditions: [{ type: "AC" }] },
   });
-  const addProblem = async (problem: ProblemSummary) => {
-    if (!activeStage) return;
-    if (activeStage.Problems.some((item) => item.problemId === problem.id))
-      return toast.error("当前阶段已包含该题");
-    const detail = await fetchDesignProblem(problem.id);
-    if (!detail) return;
-    updateStage(activeStage.clientKey, (stage) => ({
+  const addResolvedProblems = async (problems: SelectedCanonicalProblem[]) => {
+    const destinationKeys = (problemTarget === "current" ? (activeStage ? [activeStage.clientKey] : []) : targetStages).filter(key => {
+      const stage = stages.find(item => item.clientKey === key);
+      return stage && (!stage.lifecycle || stage.lifecycle === "PENDING");
+    });
+    if (!destinationKeys.length) return toast.error("请先选择目标阶段");
+    const details: DesignProblem[] = [];
+    for (const problem of problems) {
+      const detail = await fetchDesignProblem(problem.id);
+      if (detail) details.push(detail);
+    }
+    if (!details.length) return;
+    replaceStages((current) => current.map((stage) => destinationKeys.includes(stage.clientKey) ? {
       ...stage,
-      Problems: [...stage.Problems, assignmentFromProblem(detail)],
-    }));
-  };
-  const openMultiAdd = async (problem: ProblemSummary) => {
-    const detail = await fetchDesignProblem(problem.id);
-    if (!detail) return;
-    setMultiProblem(detail);
-    setMultiStages(
-      stages
-        .filter(
-          (stage) =>
-            !stage.Problems.some((item) => item.problemId === problem.id),
-        )
-        .map((stage) => stage.clientKey),
-    );
-  };
-  const confirmMultiAdd = () => {
-    if (!multiProblem) return;
-    replaceStages((current) =>
-      current.map((stage) =>
-        multiStages.includes(stage.clientKey) &&
-        !stage.Problems.some((item) => item.problemId === multiProblem.id)
-          ? {
-              ...stage,
-              Problems: [
-                ...stage.Problems,
-                assignmentFromProblem(multiProblem),
-              ],
-            }
-          : stage,
-      ),
-    );
-    setMultiProblem(null);
-    setMultiStages([]);
+      ...(stage.audienceMode === "GROUPED" ? {
+        Groups: stage.Groups.map((group, index) => index === 0 ? { ...group, Problems: [...group.Problems, ...details.filter(problem => !group.Problems.some(item => item.problemId === problem.id)).map(assignmentFromProblem)] } : group),
+      } : { Problems: [...stage.Problems, ...details.filter(problem => !stage.Problems.some(item => item.problemId === problem.id)).map(assignmentFromProblem)] }),
+    } : stage));
   };
   const updateProblem = (
     clientKey: string,
@@ -242,53 +201,35 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     if (!activeStage) return;
     updateStage(activeStage.clientKey, (stage) => ({
       ...stage,
-      Problems: stage.Problems.map((problem) =>
-        problem.clientKey === clientKey ? updater(problem) : problem,
-      ),
+      ...(stage.audienceMode === "GROUPED" ? { Groups: stage.Groups.map((group, index) => index === 0 ? { ...group, Problems: group.Problems.map(problem => problem.clientKey === clientKey ? updater(problem) : problem) } : group) } : { Problems: stage.Problems.map((problem) => problem.clientKey === clientKey ? updater(problem) : problem) }),
     }));
   };
   const moveProblemToStage = (problem: Assignment, targetStageKey: string) => {
-    if (!activeStage || targetStageKey === activeStage.clientKey) return;
+    if (!activeStage || activeStageReadOnly || targetStageKey === activeStage.clientKey) return;
     const target = stages.find((stage) => stage.clientKey === targetStageKey);
     if (
       !target ||
-      target.Problems.some((item) => item.problemId === problem.problemId)
+      (target.lifecycle && target.lifecycle !== "PENDING") ||
+      ((target.audienceMode === "GROUPED" ? target.Groups[0]?.Problems : target.Problems) || []).some((item) => item.problemId === problem.problemId)
     )
       return toast.error("目标阶段已包含该题");
     replaceStages((current) =>
       current.map((stage) =>
         stage.clientKey === activeStage.clientKey
-          ? {
-              ...stage,
-              Problems: normalizeProblemOrder(
-                stage.Problems.filter(
-                  (item) => item.clientKey !== problem.clientKey,
-                ),
-              ),
-            }
+          ? stage.audienceMode === "GROUPED" ? { ...stage, Groups: stage.Groups.map((group, index) => index === 0 ? { ...group, Problems: normalizeProblemOrder(group.Problems.filter(item => item.clientKey !== problem.clientKey)) } : group) } : { ...stage, Problems: normalizeProblemOrder(stage.Problems.filter((item) => item.clientKey !== problem.clientKey)) }
           : stage.clientKey === targetStageKey
-            ? {
-                ...stage,
-                Problems: normalizeProblemOrder([...stage.Problems, problem]),
-              }
+            ? stage.audienceMode === "GROUPED" ? { ...stage, Groups: stage.Groups.map((group, index) => index === 0 ? { ...group, Problems: normalizeProblemOrder([...group.Problems, problem]) } : group) } : { ...stage, Problems: normalizeProblemOrder([...stage.Problems, problem]) }
             : stage,
       ),
     );
     setActiveStageKey(targetStageKey);
   };
-  const updateToLatest = async (problem: Assignment) => {
+  const updateToLatest = async (problem: Assignment, groupClientKey?: string) => {
     const detail = await fetchDesignProblem(problem.problemId);
     if (!detail) return;
-    updateProblem(problem.clientKey, (current) => ({
-      ...current,
-      testSetRevisionId: detail.revision.id,
-      TestSetRevision: detail.revision,
-      latestRevision: detail.revision,
-      subtasks: detail.subtasks,
-      allowedSubtaskIds: current.allowedSubtaskIds.filter((id) =>
-        detail.subtasks.some((subtask) => subtask.id === id),
-      ),
-    }));
+    const updater = (current: Assignment) => ({ ...current, testSetRevisionId: detail.revision.id, TestSetRevision: detail.revision, latestRevision: detail.revision, subtasks: detail.subtasks, allowedSubtaskIds: current.allowedSubtaskIds.filter(id => detail.subtasks.some(subtask => subtask.id === id)) });
+    if (activeStage?.audienceMode === "GROUPED" && groupClientKey) updateStage(activeStage.clientKey, stage => ({ ...stage, Groups: stage.Groups.map(group => group.clientKey === groupClientKey ? { ...group, Problems: group.Problems.map(current => current.clientKey === problem.clientKey ? updater(current) : current) } : group) }));
+    else updateProblem(problem.clientKey, updater);
   };
 
   const requestBody = (confirmDependentRemoval = false) => ({
@@ -301,12 +242,13 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       clientKey: stage.clientKey,
       name: stage.name,
       description: stage.description,
-      mode: stage.mode,
-      durationSeconds: stage.durationSeconds || null,
-      advanceMode: stage.advanceMode,
-      problemAccessMode: stage.problemAccessMode,
+      kind: stage.kind,
+      audienceMode: stage.audienceMode,
+      endPolicy: stage.endPolicy,
+      accessPolicy: stage.accessPolicy,
       submissionMode: stage.submissionMode,
-      targetScore: stage.targetScore ?? null,
+      plannedDurationSeconds: stage.plannedDurationSeconds || null,
+      defaultTargetScore: stage.defaultTargetScore ?? null,
       completionThreshold: stage.completionThreshold ?? null,
       minDurationSeconds: stage.minDurationSeconds ?? null,
       rules: stage.rules || undefined,
@@ -318,11 +260,34 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         alias: problem.alias || null,
         unlockPolicy: problem.unlockPolicy || undefined,
         targetScore: problem.targetScore ?? null,
-        timeLimitSeconds: problem.timeLimitSeconds ?? null,
+        scoreGoals: problem.scoreGoals,
+        timePolicy: problem.timePolicy || undefined,
+        stuckPolicy: problem.stuckPolicy || undefined,
         allowedSubtaskIds: problem.allowedSubtaskIds,
         strategyIntervalSeconds: problem.strategyIntervalSeconds ?? null,
-        maxContinuousWorkSeconds: problem.maxContinuousWorkSeconds ?? null,
-        forceSwitchOnTimeout: Boolean(problem.forceSwitchOnTimeout),
+      })),
+      groups: stage.Groups.map((group) => ({
+        id: group.id,
+        clientKey: group.clientKey,
+        name: group.name,
+        accessPolicy: group.accessPolicy,
+        submissionMode: group.submissionMode,
+        rules: group.rules || undefined,
+        participantIds: group.participantIds,
+        problems: group.Problems.map((problem) => ({
+          assignmentId: problem.assignmentId,
+          clientKey: problem.clientKey,
+          problemId: problem.problemId,
+          testSetRevisionId: problem.testSetRevisionId,
+          alias: problem.alias || null,
+          unlockPolicy: problem.unlockPolicy || undefined,
+          targetScore: problem.targetScore ?? null,
+          scoreGoals: problem.scoreGoals,
+          timePolicy: problem.timePolicy || undefined,
+          stuckPolicy: problem.stuckPolicy || undefined,
+          allowedSubtaskIds: problem.allowedSubtaskIds,
+          strategyIntervalSeconds: problem.strategyIntervalSeconds ?? null,
+        })),
       })),
     })),
   });
@@ -367,14 +332,21 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     if (!design || dirty) return toast.error("请先保存当前编排");
     if (!(await validate())) return;
     setPublishing(true);
-    const response = await apiClient.post(
-      `/api/training-sessions/${sessionId}/publish`,
-      { expectedRevision: design.statusRevision },
-    );
+    const response = await publishTraining(sessionId, { expectedRevision: design.statusRevision });
     setPublishing(false);
-    if (!response.success) return toast.error(response.message || "发布失败");
+    if (!response.ok) return toast.error(response.error.message || "发布失败");
     toast.success("训练已发布，结构已永久冻结");
     router.push(runtimePath);
+  };
+  const saveAsTemplate = async () => {
+    if (!templateName.trim()) return;
+    setTemplateSaving(true);
+    const response = await createTrainingTemplate(sessionId, { name: templateName.trim(), scope: templateScope });
+    setTemplateSaving(false);
+    if (!response.ok) return toast.error(response.error.message || "保存模板失败");
+    toast.success("训练模板已保存，可在创建训练时直接使用");
+    setTemplateOpen(false);
+    setTemplateName("");
   };
 
   const flowPreview = useMemo(
@@ -382,7 +354,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       stages
         .map(
           (stage) =>
-            `${stage.name}：${stage.Problems.length ? stage.Problems.map((problem) => problem.alias || problem.Problem.problemId).join(" → ") : ["TEACHING", "REVIEW"].includes(stage.mode) ? "（可留空）" : "（待分配）"}`,
+            `${stage.name}：${stage.audienceMode === "GROUPED" ? `${stage.Groups.length} 个分组` : stage.Problems.length ? stage.Problems.map((problem) => problem.alias || problem.Problem.problemId).join(" → ") : ["TEACHING", "REVIEW"].includes(stage.kind) ? "（可留空）" : "（待分配）"}`,
         )
         .join("  →  "),
     [stages],
@@ -402,7 +374,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       <PageFrame>
         <Empty
           title="训练结构已冻结"
-          description="只有 DRAFT 训练可以编排；如需改变顺序，请复制为新训练。"
+          description="已结束训练不能再编排；已运行 Stage 永久只读。"
           action={
             <Button onClick={() => router.push(runtimePath)}>
               返回运行工作台
@@ -417,7 +389,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       <div className={styles.stack}>
         <PageHeader
           title={`编排：${design.session.title}`}
-          description="结构只能在 DRAFT 状态修改；发布后请复制为新训练再调整。"
+          description={design.session.status === "DRAFT" ? "发布前可编辑全部 Stage；开始后只有未来 Stage 可调整。" : "运行中和历史 Stage 永久只读；可继续编辑、追加或复制未来 Stage。"}
           breadcrumbs={[
             { label: "教练训练", href: runtimePath.replace(/\/[^/]+$/, "") },
             { label: "训练设计" },
@@ -435,6 +407,9 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               <Button variant="secondary" onClick={() => void validate()}>
                 发布检查
               </Button>
+              <Button variant="outline" disabled={dirty} title={dirty ? "请先保存当前编排" : undefined} onClick={() => { setTemplateName(`${title || design.session.title}模板`); setTemplateScope(design.session.organizationId ? "organization" : design.session.teamId ? "team" : "personal"); setTemplateOpen(true); }}>
+                保存为模板
+              </Button>
               <Button
                 onClick={() => void save()}
                 loading={saving}
@@ -442,15 +417,11 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               >
                 保存编排
               </Button>
-              <Button
+              {design.session.status === "DRAFT" && <Button
                 onClick={() => void publish()}
                 loading={publishing}
-                disabled={
-                  dirty || issues.some((issue) => issue.severity === "error")
-                }
-              >
-                发布训练
-              </Button>
+                disabled={dirty || issues.some((issue) => issue.severity === "error")}
+              >发布训练</Button>}
             </>
           }
         />
@@ -558,28 +529,37 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               onUpdateProblem={updateProblem}
               onMoveProblemToStage={moveProblemToStage}
               onUpdateToLatest={updateToLatest}
+              readOnly={activeStageReadOnly}
             />
-            <TrainingProblemPool
-              stages={stages}
-              activeStage={activeStage}
-              source={source}
-              query={query}
-              page={page}
-              pool={pool}
-              total={poolTotal}
-              loading={poolLoading}
-              onSourceChange={(nextSource) => {
-                setSource(nextSource);
-                setPage(1);
-              }}
-              onQueryChange={(nextQuery) => {
-                setQuery(nextQuery);
-                setPage(1);
-              }}
-              onPageChange={setPage}
-              onAdd={(problem) => void addProblem(problem)}
-              onMultiAdd={(problem) => void openMultiAdd(problem)}
-            />
+            <section className={styles.designColumn} aria-label="按题号添加">
+              <header><div><strong>按题号添加</strong><small>题目将固定当前正式评测版本</small></div></header>
+              <div className={styles.designColumnBody}>
+                <label className={styles.field}>
+                  添加到
+                  <Select value={problemTarget} onChange={event => {
+                    const next = event.target.value as "current" | "multiple";
+                    setProblemTarget(next);
+                    if (next === "multiple" && !targetStages.length) setTargetStages(activeStage ? [activeStage.clientKey] : []);
+                  }}>
+                    <option value="current">当前阶段</option>
+                    <option value="multiple">选择多个阶段</option>
+                  </Select>
+                </label>
+                {problemTarget === "multiple" && <div className={styles.stack}>{stages.map(stage => <Checkbox
+                  key={stage.clientKey}
+                  label={stage.name}
+                  description={`${stage.Problems.length} 道题`}
+                  checked={targetStages.includes(stage.clientKey)}
+                  disabled={Boolean(stage.lifecycle && stage.lifecycle !== "PENDING")}
+                  onChange={event => setTargetStages(current => event.target.checked ? [...current, stage.clientKey] : current.filter(key => key !== stage.clientKey))}
+                />)}</div>}
+                <QuickProblemInput
+                  disabled={!activeStage || activeStageReadOnly || (problemTarget === "multiple" && !targetStages.length)}
+                  existingProblemIds={problemTarget === "current" ? activeStage?.Problems.map(item => item.problemId) : []}
+                  onResolved={addResolvedProblems}
+                />
+              </div>
+            </section>
           </div>
         )}
 
@@ -588,6 +568,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             sessionId={sessionId}
             mode="roster"
             stages={stages}
+            onStagesChange={replaceStages}
             onChanged={load}
           />
         )}
@@ -650,51 +631,23 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           loading={saving}
         />
         <FormDialog
-          isOpen={Boolean(multiProblem)}
-          onClose={() => setMultiProblem(null)}
-          title="加入多个阶段"
-          description={
-            multiProblem
-              ? `${multiProblem.problemId} · ${multiProblem.title}`
-              : ""
-          }
-          dirty={multiStages.length > 0}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setMultiProblem(null)}>
-                取消
-              </Button>
-              <Button onClick={confirmMultiAdd} disabled={!multiStages.length}>
-                确认分配
-              </Button>
-            </>
-          }
+          isOpen={templateOpen}
+          onClose={() => setTemplateOpen(false)}
+          onSubmit={() => void saveAsTemplate()}
+          title="保存 Stage 模板"
+          description="模板只保存 Stage、分组和训练规则骨架，不复制题目、学员、提交或运行进度。"
+          submitText="保存模板"
+          submitDisabled={!templateName.trim()}
+          loading={templateSaving}
+          dirty={Boolean(templateName)}
         >
           <div className={styles.stack}>
-            {stages.map((stage) => (
-              <Checkbox
-                key={stage.clientKey}
-                label={stage.name}
-                description={
-                  stage.Problems.some(
-                    (item) => item.problemId === multiProblem?.id,
-                  )
-                    ? "已存在，不会重复加入"
-                    : `${stage.Problems.length} 道题`
-                }
-                disabled={stage.Problems.some(
-                  (item) => item.problemId === multiProblem?.id,
-                )}
-                checked={multiStages.includes(stage.clientKey)}
-                onChange={(event) =>
-                  setMultiStages((current) =>
-                    event.target.checked
-                      ? [...current, stage.clientKey]
-                      : current.filter((key) => key !== stage.clientKey),
-                  )
-                }
-              />
-            ))}
+            <label className={styles.field}>模板名称<Input autoFocus maxLength={100} value={templateName} onChange={event => setTemplateName(event.target.value)} /></label>
+            <label className={styles.field}>可用范围<Select value={templateScope} onChange={event => setTemplateScope(event.target.value as "personal" | "organization" | "team")}>
+              <option value="personal">仅我可用</option>
+              {design.session.organizationId && <option value="organization">当前学校管理员可用</option>}
+              {design.session.teamId && <option value="team">当前团队管理员可用</option>}
+            </Select></label>
           </div>
         </FormDialog>
       </div>

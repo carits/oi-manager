@@ -12,6 +12,8 @@ export type UnlockCondition = {
   value?: number
 }
 export type UnlockPolicy = { mode: 'ANY' | 'ALL'; conditions: UnlockCondition[] }
+export type ProblemTimePolicy = { mode: 'NONE' } | { mode: 'SOFT' | 'HARD' | 'SWITCH_REQUIRED'; limitSeconds: number }
+export type StuckPolicy = { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }
 export type Assignment = {
   id?: string
   assignmentId?: string
@@ -21,31 +23,44 @@ export type Assignment = {
   alias?: string | null
   unlockPolicy?: UnlockPolicy | null
   targetScore?: number | null
-  timeLimitSeconds?: number | null
+  scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>
+  timePolicy?: ProblemTimePolicy | null
+  stuckPolicy?: StuckPolicy | null
   strategyIntervalSeconds?: number | null
-  maxContinuousWorkSeconds?: number | null
-  forceSwitchOnTimeout?: boolean
   allowedSubtaskIds: number[]
   Problem: ProblemSummary
   TestSetRevision: Revision
   latestRevision?: Revision | null
   subtasks: Subtask[]
 }
+export type StageGroup = {
+  id?: string
+  clientKey: string
+  name: string
+  accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
+  submissionMode: 'ENABLED' | 'DISABLED'
+  participantIds: string[]
+  rules?: Record<string, unknown> | null
+  Problems: Assignment[]
+}
 export type Stage = {
   id?: string
   clientKey: string
   name: string
   description?: string | null
-  mode: string
-  durationSeconds?: number | null
-  advanceMode: string
-  problemAccessMode: string
-  submissionMode: string
-  targetScore?: number | null
+  kind: 'TRAINING' | 'TEACHING' | 'REVIEW'
+  audienceMode: 'ALL' | 'GROUPED'
+  lifecycle?: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'ENDED_EARLY' | 'SKIPPED'
+  endPolicy: 'MANUAL' | 'TIME' | 'COMPLETION' | 'HYBRID'
+  accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
+  submissionMode: 'ENABLED' | 'DISABLED'
+  plannedDurationSeconds?: number | null
+  defaultTargetScore?: number | null
   completionThreshold?: number | null
   minDurationSeconds?: number | null
   rules?: Record<string, unknown> | null
   Problems: Assignment[]
+  Groups: StageGroup[]
 }
 export type Issue = {
   path: string
@@ -80,13 +95,10 @@ export type ProblemPage = {
 }
 export type SourceGroup = 'school' | 'carits' | 'external'
 
-export const stageModes = [
-  ['FREE', '自由训练'],
-  ['SEQUENTIAL', '顺序训练'],
-  ['FOCUS', '聚焦阶段'],
-  ['SCORE_PROGRESSIVE', '分数递进'],
+export const stageKinds = [
+  ['TRAINING', '训练'],
   ['TEACHING', '统一讲解'],
-  ['REVIEW', '复盘补题'],
+  ['REVIEW', '复盘'],
 ] as const
 
 export const conditionLabels: Record<UnlockCondition['type'], string> = {
@@ -135,6 +147,7 @@ export const createTrainingDesignDraft = (data: TrainingDesignContract): Design 
       allowedSubtaskIds: problem.allowedSubtaskIds || [],
       subtasks: problem.subtasks || [],
     }))),
+    Groups: (stage.Groups || []).map(group => ({ ...group, clientKey: group.clientKey || group.id || newTrainingDesignKey(), participantIds: group.participantIds || [], Problems: normalizeAssignments((group.Problems || []).map(problem => ({ ...problem, clientKey: problem.clientKey || problem.assignmentId || problem.id || newTrainingDesignKey(), allowedSubtaskIds: problem.allowedSubtaskIds || [], subtasks: problem.subtasks || [] }))) })),
   })),
 })
 

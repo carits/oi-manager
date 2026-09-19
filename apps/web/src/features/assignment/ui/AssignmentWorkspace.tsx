@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Plus, Send, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Send, Trash2 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import apiClient from '@/lib/apiClient'
@@ -13,8 +13,9 @@ import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormField } from '@/components/ui/FormField'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { Pagination } from '@/components/ui/Pagination'
 import { SubmissionCodeEditor, clearSubmissionDraft } from '@/features/submission'
+import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { Pagination } from '@/components/ui/Pagination'
 import { Section } from '@/components/ui/Section'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Table } from '@/components/ui/Table'
@@ -31,8 +32,6 @@ import type {
   AssignmentProgressRecipient as ContractProgressRecipient,
 } from '@oi-manager/contracts'
 
-interface ProblemListItem { id: string; platform: string; problemId: string; title: string; difficulty?: string | null }
-interface ProblemListResponse { data: ProblemListItem[]; total: number }
 interface RevisionSummary { id: string; revisionNumber: number; mode: 'acm' | 'oi'; judgeConfigHash: string }
 interface RevisionList { latestTestSetRevisionId: string | null; revisions: RevisionSummary[] }
 interface ValidationResult { valid: boolean; issues: Array<{ path: string; code: string; message: string }> }
@@ -56,7 +55,6 @@ const toLocalInput = (value?: string | null) => value ? new Date(new Date(value)
 
 function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChange: (value: Assignment) => void }) {
   const { organizationId } = useParams<{ organizationId: string }>()
-  const { sessionKey } = useAuth()
   const toast = useToast()
   const [saving, setSaving] = useState<string | null>(null)
   const [title, setTitle] = useState(assignment.title)
@@ -81,10 +79,6 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   const [solutionReleasePolicy, setSolutionReleasePolicy] = useState(assignment.solutionReleasePolicy)
   const [problemDraft, setProblemDraft] = useState(assignment.Problems)
   const [rosterDraft, setRosterDraft] = useState(() => new Set(assignment.Recipients.map(item => item.userId)))
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [library, setLibrary] = useState<'school' | 'carits' | 'external'>('school')
-  const [problemPickerPage, setProblemPickerPage] = useState(1)
-  const [problemPickerQuery, setProblemPickerQuery] = useState('')
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [confirmPublish, setConfirmPublish] = useState(false)
   const [designStep, setDesignStep] = useState(0)
@@ -97,11 +91,6 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   // update the corresponding draft explicitly so unrelated saves cannot erase it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignment.id])
-
-  const problemPickerParams = new URLSearchParams({ library: library === 'school' ? 'school' : 'platform', page: String(problemPickerPage), pageSize: '20' })
-  if (library !== 'school') problemPickerParams.set('sourceGroup', library)
-  if (problemPickerQuery.trim()) problemPickerParams.set('keyword', problemPickerQuery.trim())
-  const problemResource = useResource<ProblemListResponse>(pickerOpen ? `/api/problems?${problemPickerParams}` : null, { sessionKey, isEmpty: data => data.data.length === 0 })
 
   const mutate = async (endpoint: string, method: 'PATCH' | 'PUT' | 'POST', body: unknown, key: string) => {
     setSaving(key)
@@ -198,17 +187,22 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     if (saved) setDesignStep(target)
   }
 
-  const addProblem = async (problem: ProblemListItem) => {
-    if (problemDraft.some(item => item.problemId === problem.id)) return
-    const result = await apiClient.get<RevisionList>(`/api/problems/${problem.id}/test-set-revisions`)
-    if (!result.success || !result.data?.latestTestSetRevisionId) return toast.error(result.message || '该题没有可用的正式测试版本')
-    const revision = result.data.revisions.find(item => item.id === result.data!.latestTestSetRevisionId)
-    if (!revision) return toast.error('该题最新测试版本不可用')
-    setProblemDraft(current => [...current, {
-      id: `draft-${problem.id}`, problemId: problem.id, testSetRevisionId: revision.id, orderIndex: current.length,
-      category: 'REQUIRED', required: true, maxScore: 100, judgeMaxScore: 100, targetScore: 100, weight: 100,
-      completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE', Problem: { ...problem, allowedLanguages: null }, TestSetRevision: revision,
-    }])
+  const addProblems = async (problems: SelectedCanonicalProblem[]) => {
+    const additions: AssignmentProblem[] = []
+    for (const problem of problems) {
+      if (problemDraft.some(item => item.problemId === problem.id) || additions.some(item => item.problemId === problem.id)) continue
+      const result = await apiClient.get<RevisionList>(`/api/problems/${problem.id}/test-set-revisions`)
+      if (!result.success || !result.data?.latestTestSetRevisionId) { toast.error(`${problem.problemCode}：${result.message || '没有可用的正式测试版本'}`); continue }
+      const revision = result.data.revisions.find(item => item.id === result.data!.latestTestSetRevisionId)
+      if (!revision) { toast.error(`${problem.problemCode}：最新测试版本不可用`); continue }
+      additions.push({
+        id: `draft-${problem.id}`, problemId: problem.id, testSetRevisionId: revision.id, orderIndex: 0,
+        category: 'REQUIRED', required: true, maxScore: 100, judgeMaxScore: 100, targetScore: 100, weight: 100,
+        completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
+        Problem: { id: problem.id, platform: problem.platform, problemId: problem.problemCode, title: problem.title, difficulty: problem.difficulty, allowedLanguages: null }, TestSetRevision: revision,
+      })
+    }
+    if (additions.length) setProblemDraft(current => [...current, ...additions].map((item, orderIndex) => ({ ...item, orderIndex })))
   }
 
   const move = (index: number, delta: number) => setProblemDraft(current => {
@@ -276,8 +270,8 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     </Section>
     </>}
     {designStep === 1 && <>
-    <Section title="选择题目" description="必做题计入基础成绩；选做题和挑战题只在高级设置启用后加分。作业发布后，题库更新不会改变本次成绩。" actions={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => setPickerOpen(true)}>添加题目</Button>}>
-      <div className={styles.stack}>{problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
+    <Section title="选择题目" description="选择平台并输入题号；作业发布后，题库更新不会改变本次成绩。">
+      <div className={styles.stack}><QuickProblemInput existingProblemIds={problemDraft.map(item => item.problemId)} onResolved={addProblems} />{problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
         <span className={styles.problemIdentity}><strong>{index + 1}. {item.Problem.problemId} · {item.Problem.title}</strong><span>发布后使用固定的测试数据</span></span>
         <div className={styles.problemControls}>
           <FormField label="类别"><Select aria-label={`${item.Problem.title} 类别`} value={item.category} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, category: event.target.value as AssignmentProblem['category'], required: event.target.value === 'REQUIRED' } : row))}><option value="REQUIRED">必做</option><option value="OPTIONAL">选做</option><option value="CHALLENGE">挑战</option></Select></FormField>
@@ -304,13 +298,6 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
       <Button variant="secondary" disabled={designStep === 0 || Boolean(saving)} onClick={() => void changeStep(designStep - 1)}>上一步</Button>
       {designStep < 3 && <Button loading={Boolean(saving)} onClick={() => void changeStep(designStep + 1)}>下一步</Button>}
     </div>
-    <FormDialog isOpen={pickerOpen} onClose={() => setPickerOpen(false)} title="添加题目" description="将使用当前可用的测试数据；发布后不再跟随题库更新。" size="lg">
-      <Tabs label="题库范围" value={library} onChange={value => { setLibrary(value); setProblemPickerPage(1) }} items={[{ value: 'school', label: '校内题库' }, { value: 'carits', label: 'Carits 平台题库' }, { value: 'external', label: '其他题库' }]} />
-      <Input aria-label="搜索题目" placeholder="搜索题号或标题" value={problemPickerQuery} onChange={event => { setProblemPickerQuery(event.target.value); setProblemPickerPage(1) }} />
-      <AsyncRegion state={problemResource.state} onRetry={problemResource.retry} emptyText="当前题库没有可用题目" skeletonRows={5}>
-        {data => <><div className={styles.pickerList}>{data.data.map(problem => <div className={styles.pickerItem} key={problem.id}><span className={styles.problemIdentity}><strong>{problem.problemId} · {problem.title}</strong><span>{problem.platform} · {problem.difficulty || '未标注难度'}</span></span><Button size="sm" variant="secondary" disabled={problemDraft.some(item => item.problemId === problem.id)} onClick={() => void addProblem(problem)}>{problemDraft.some(item => item.problemId === problem.id) ? '已添加' : '添加'}</Button></div>)}</div><Pagination currentPage={problemPickerPage} totalPages={Math.max(1, Math.ceil(data.total / 20))} total={data.total} pageSize={20} onPageChange={setProblemPickerPage} showQuickJumper={false} /></>}
-      </AsyncRegion>
-    </FormDialog>
     <ConfirmDialog isOpen={confirmPublish} onClose={() => setConfirmPublish(false)} onConfirm={() => void publish()} loading={saving === 'publish'} title="发布并冻结作业？" message={`发布后将固定 ${problemDraft.length} 道题和${rosterMode === 'DYNAMIC' ? '发布时生成的学生名单' : ` ${rosterDraft.size} 名学生`}，不能再修改结构。请确认各配置区域均已保存。`} confirmText="确认发布" />
   </div>
 }
