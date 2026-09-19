@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
 import request from 'supertest'
-import jwt from 'jsonwebtoken'
 import { createTestApp } from './helpers/testRequest'
 import { createTestUser, createTestSchoolWithPrincipal } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
@@ -40,7 +39,7 @@ describe('Authentication Module', () => {
       expect(res.body.data.accountRole).toBe('user')
       expect(res.body.data.token).toBeUndefined()
       expect(res.body.data.userId).toBe(user.id)
-      expect(res.body.data.role).toBe('user')
+      expect(res.body.data).not.toHaveProperty('role')
       expect(res.headers['set-cookie']?.[0]).toContain('oi_session=')
       expect(res.headers['set-cookie']?.[0]).toContain('HttpOnly')
       expect(res.headers['set-cookie']?.[0]).toContain('SameSite=Lax')
@@ -53,8 +52,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/login')
         .send({
           username: user.username,
-          password: 'wrongpassword',
-          role: 'student'
+          password: 'wrongpassword'
         })
 
       expect(res.status).toBe(401)
@@ -67,8 +65,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/login')
         .send({
           username: 'nonexistentuser',
-          password: 'anypassword',
-          role: 'student'
+          password: 'anypassword'
         })
 
       expect(res.status).toBe(401)
@@ -86,8 +83,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/login')
         .send({
           username: user.username,
-          password,
-          role: 'student'
+          password
         })
 
       expect(res.status).toBe(401)
@@ -95,7 +91,10 @@ describe('Authentication Module', () => {
       expect(res.body.message).toContain('禁用')
     })
 
-    it('should ignore legacy login role and use the account identity', async () => {
+    it.each([
+      { role: 'student' },
+      { mode: 'campus' },
+    ])('rejects retired login fields: %o', async retiredField => {
       const { user, password } = await createTestUser({ role: 'teacher' })
 
       const res = await request(app)
@@ -103,12 +102,11 @@ describe('Authentication Module', () => {
         .send({
           username: user.username,
           password,
-          role: 'student'
+          ...retiredField,
         })
 
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      expect(res.body.data.next).toBe('/identity')
+      expect(res.status).toBe(400)
+      expect(res.body.success).toBe(false)
     })
 
     it('should allow a student to use the same unified login request', async () => {
@@ -118,8 +116,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/login')
         .send({
           username: user.username,
-          password,
-          role: 'admin'
+          password
         })
 
       expect(res.status).toBe(200)
@@ -138,8 +135,8 @@ describe('Authentication Module', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      expect(res.body.data.role).toBe('user')
       expect(res.body.data.accountRole).toBe('user')
+      expect(res.body.data).not.toHaveProperty('role')
     })
 
     it('should create login log on successful login', async () => {
@@ -149,8 +146,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/login')
         .send({
           username: user.username,
-          password,
-          role: 'student'
+          password
         })
 
       const log = await prisma.loginLog.findFirst({
@@ -167,8 +163,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/login')
         .send({
           username: user.username,
-          password: 'wrongpassword',
-          role: 'student'
+          password: 'wrongpassword'
         })
 
       const log = await prisma.loginLog.findFirst({
@@ -181,15 +176,12 @@ describe('Authentication Module', () => {
 
   describe('POST /api/auth/register', () => {
     it('should register a new student successfully', async () => {
-      const { school } = await createTestSchoolWithPrincipal('注册测试学校')
       const uniqueUsername = `reg_${Math.random().toString(36).slice(2, 8)}`
       const res = await request(app)
         .post('/api/auth/register')
         .send({
           username: uniqueUsername,
-          password: 'password123',
-          name: 'New Student',
-          schoolId: school.id
+          password: 'password123'
         })
 
       expect(res.status).toBe(200)
@@ -198,19 +190,18 @@ describe('Authentication Module', () => {
       expect(res.body.data.token).toBeUndefined()
     })
 
-    it('should reject registration with non-student role', async () => {
+    it('should reject retired registration identity fields', async () => {
       const res = await request(app)
         .post('/api/auth/register')
         .send({
           username: 'newteacher',
           password: 'password123',
-          role: 'teacher',
-          name: 'New Teacher'
+          role: 'teacher'
         })
 
       expect(res.status).toBe(400)
       expect(res.body.success).toBe(false)
-      expect(res.body.message).toContain('学生')
+      expect(res.body.message).toContain('格式无效')
     })
 
     it('should reject duplicate username', async () => {
@@ -220,8 +211,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/register')
         .send({
           username: user.username,
-          password: 'password123',
-          name: 'Another Student'
+          password: 'password123'
         })
 
       expect(res.status).toBe(400)
@@ -234,8 +224,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/register')
         .send({
           username: 'ab', // Too short
-          password: 'password123',
-          name: 'Test'
+          password: 'password123'
         })
 
       expect(res.status).toBe(400)
@@ -261,20 +250,20 @@ describe('Authentication Module', () => {
       const { user, studentId } = await createTestUser({ role: 'student' })
       const token = generateTestToken({
         userId: user.id,
-        role: 'student',
         username: user.username,
         studentId
       })
 
       const res = await request(app)
         .get('/api/auth/me')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
       expect(res.body.data.userId).toBe(user.id)
       expect(res.body.data.username).toBe(user.username)
-      expect(res.body.data.role).toBe('user')
+      expect(res.body.data.accountRole).toBe('user')
+      expect(res.body.data).not.toHaveProperty('role')
     })
 
     it('accepts the HttpOnly session cookie without a bearer token', async () => {
@@ -283,7 +272,7 @@ describe('Authentication Module', () => {
 
       const login = await agent
         .post('/api/auth/login')
-        .send({ username: user.username, password, role: 'student' })
+        .send({ username: user.username, password })
 
       expect(login.status).toBe(200)
 
@@ -298,7 +287,7 @@ describe('Authentication Module', () => {
 
       await agent
         .post('/api/auth/login')
-        .send({ username: user.username, password, role: 'student' })
+        .send({ username: user.username, password })
 
       const logout = await agent
         .post('/api/auth/logout')
@@ -308,19 +297,17 @@ describe('Authentication Module', () => {
       expect(logout.body.code).toBe('CSRF_ORIGIN_REJECTED')
     })
 
-    it('still checks the origin when cookie and bearer credentials are both present', async () => {
+    it('still checks the origin when a session cookie is present', async () => {
       const { user, password } = await createTestUser({ role: 'student' })
       const login = await request(app)
         .post('/api/auth/login')
-        .send({ username: user.username, password, role: 'student' })
+        .send({ username: user.username, password })
       const sessionCookie = login.headers['set-cookie']?.[0]?.split(';')[0]
 
-      const bearerToken = generateTestToken({ userId: user.id, role: user.role, username: user.username })
       const logout = await request(app)
         .post('/api/auth/logout')
         .set('Origin', 'https://untrusted.example')
         .set('Cookie', sessionCookie || '')
-        .set('Authorization', `Bearer ${bearerToken}`)
 
       expect(logout.status).toBe(403)
       expect(logout.body.code).toBe('CSRF_ORIGIN_REJECTED')
@@ -330,7 +317,7 @@ describe('Authentication Module', () => {
       const { user, password } = await createTestUser({ role: 'student' })
       const login = await request(app)
         .post('/api/auth/login')
-        .send({ username: user.username, password, role: 'student' })
+        .send({ username: user.username, password })
       const sessionCookie = login.headers['set-cookie']?.[0]?.split(';')[0]
 
       const logout = await request(app)
@@ -348,7 +335,7 @@ describe('Authentication Module', () => {
 
       await agent
         .post('/api/auth/login')
-        .send({ username: user.username, password, role: 'student' })
+        .send({ username: user.username, password })
 
       const logout = await agent.post('/api/auth/logout')
       expect(logout.status).toBe(200)
@@ -366,7 +353,7 @@ describe('Authentication Module', () => {
     it('should return 401 with invalid token', async () => {
       const res = await request(app)
         .get('/api/auth/me')
-        .set('Authorization', 'Bearer invalidtoken')
+        .set('Cookie', 'oi_session=invalidtoken')
 
       expect(res.status).toBe(401)
       expect(res.body.success).toBe(false)
@@ -392,26 +379,28 @@ describe('Authentication Module', () => {
           },
         },
       })
-      const token = generateTestToken({ userId: created.user.id, role: 'teacher', username: created.user.username })
+      const token = generateTestToken({ userId: created.user.id, username: created.user.username })
 
-      const account = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)
+      const account = await request(app).get('/api/auth/me').set('Cookie', `oi_session=${token}`)
       expect(account.status).toBe(200)
-      expect(account.body.data.role).toBe('user')
+      expect(account.body.data.accountRole).toBe('user')
+      expect(account.body.data).not.toHaveProperty('role')
       expect(account.body.data.organizationId).toBeUndefined()
       expect(account.body.data.organizationRole).toBeUndefined()
 
       const campus = await request(app).get('/api/auth/me')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('X-OI-Organization-ID', organizationB.id)
       expect(campus.status).toBe(200)
-      expect(campus.body.data).toMatchObject({ organizationId: organizationB.id, organizationRole: 'student', role: 'student' })
+      expect(campus.body.data).toMatchObject({ organizationId: organizationB.id, organizationRole: 'student', accountRole: 'user' })
+      expect(campus.body.data).not.toHaveProperty('role')
     })
 
     it('returns 503 instead of invalidating the session when account lookup fails', async () => {
       const { user } = await createTestUser({ role: 'student' })
-      const token = generateTestToken({ userId: user.id, role: 'student', username: user.username })
+      const token = generateTestToken({ userId: user.id, username: user.username })
       const lookup = vi.spyOn(prisma.user, 'findUnique').mockRejectedValueOnce(new Error('database unavailable'))
-      const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)
+      const res = await request(app).get('/api/auth/me').set('Cookie', `oi_session=${token}`)
       lookup.mockRestore()
       expect(res.status).toBe(503)
       expect(res.body.code).toBe('AUTH_SERVICE_UNAVAILABLE')
@@ -422,19 +411,18 @@ describe('Authentication Module', () => {
       const organization = await prisma.organization.findFirstOrThrow({ where: { School: { id: school.id } } })
       const token = generateTestToken({
         userId: principal.userId,
-        role: 'school_principal',
         username: principal.username,
-        teacherId: principal.teacherId,
-        schoolId: school.id
       })
 
       const res = await request(app)
         .get('/api/auth/me')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('X-OI-Organization-ID', organization.id)
 
       expect(res.status).toBe(200)
-      expect(res.body.data.schoolId).toBe(school.id)
+      expect(res.body.data.organizationId).toBe(organization.id)
+      expect(res.body.data.organizationRole).toBe('school_principal')
+      expect(res.body.data).not.toHaveProperty('schoolId')
     })
   })
 
@@ -449,10 +437,11 @@ describe('Authentication Module', () => {
 
       const login = await agent
         .post('/api/auth/login')
-        .send({ username: user.username, password, role: loginRole, workspaceMode: 'work' })
+        .send({ username: user.username, password, workspaceMode: 'work' })
 
       expect(login.status).toBe(200)
-      expect(login.body.data.role).toBe('user')
+      expect(login.body.data.accountRole).toBe('user')
+      expect(login.body.data).not.toHaveProperty('role')
       expect(login.body.data.accountRole).toBe('user')
       expect(login.body.data.workspaceMode).toBe('work')
 
@@ -467,7 +456,8 @@ describe('Authentication Module', () => {
 
       const me = await agent.get('/api/auth/me')
       expect(me.status).toBe(200)
-      expect(me.body.data.role).toBe('user')
+      expect(me.body.data.accountRole).toBe('user')
+      expect(me.body.data).not.toHaveProperty('role')
       expect(me.body.data.workspaceMode).toBe('personal')
 
       const profile = await prisma.personalProfile.findUnique({ where: { userId: user.id } })
@@ -489,9 +479,9 @@ describe('Authentication Module', () => {
 
       const login = await agent
         .post('/api/auth/login')
-        .send({ username: user.username, password, role: loginRole, workspaceMode: 'work' })
+        .send({ username: user.username, password, workspaceMode: 'work' })
       expect(login.status).toBe(200)
-      expect(login.body.data.role).toBe(role)
+      expect(login.body.data.accountRole).toBe(role)
       expect(login.body.data.workspaceMode).toBe('work')
 
       const switched = await agent
@@ -501,7 +491,7 @@ describe('Authentication Module', () => {
 
       const me = await agent.get('/api/auth/me')
       expect(me.status).toBe(200)
-      expect(me.body.data.role).toBe(role)
+      expect(me.body.data.accountRole).toBe(role)
       expect(me.body.data.workspaceMode).toBe('work')
     })
 
@@ -511,7 +501,7 @@ describe('Authentication Module', () => {
 
       await agent
         .post('/api/auth/login')
-        .send({ username: user.username, password, role: 'teacher', workspaceMode: 'work' })
+        .send({ username: user.username, password, workspaceMode: 'work' })
 
       const invalid = await agent
         .post('/api/auth/switch-workspace')
@@ -524,39 +514,9 @@ describe('Authentication Module', () => {
   })
 
   describe('POST /api/auth/session/migrate', () => {
-    it('reissues legacy sessions with canonical account-only claims', async () => {
-      const { user } = await createTestUser({ role: 'teacher' })
-      const legacyToken = generateTestToken({
-        userId: user.id,
-        role: 'teacher',
-        username: user.username,
-        teacherId: user.id,
-        schoolId: 'school-from-legacy-token',
-        studentMode: 'campus',
-      })
-
-      const response = await request(app)
-        .post('/api/auth/session/migrate')
-        .set('Authorization', `Bearer ${legacyToken}`)
-
-      expect(response.status).toBe(200)
-      const cookieValue = response.headers['set-cookie']?.[0]?.split(';')[0]?.split('=')[1]
-      expect(cookieValue).toBeTruthy()
-      const claims = jwt.verify(decodeURIComponent(cookieValue!), process.env.JWT_SECRET!) as Record<string, unknown>
-      expect(claims).toMatchObject({
-        userId: user.id,
-        accountRole: 'user',
-        role: 'user',
-        username: user.username,
-        workspaceMode: 'work',
-      })
-      expect(claims).not.toHaveProperty('teacherId')
-      expect(claims).not.toHaveProperty('studentId')
-      expect(claims).not.toHaveProperty('schoolId')
-      expect(claims).not.toHaveProperty('studentMode')
-      expect(claims).not.toHaveProperty('organizationId')
-      expect(claims).not.toHaveProperty('organizationRole')
-      expect(claims).not.toHaveProperty('organizationCapabilities')
+    it('is retired instead of silently rewriting old sessions', async () => {
+      const response = await request(app).post('/api/auth/session/migrate')
+      expect(response.status).toBe(404)
     })
   })
 
@@ -594,14 +554,13 @@ describe('Authentication Module', () => {
       const { user, password } = await createTestUser({ role: 'student' })
       const token = generateTestToken({
         userId: user.id,
-        role: 'student',
         username: user.username,
         studentId: user.studentId
       })
 
       const res = await request(app)
         .put('/api/auth/password')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({
           currentPassword: password,
           newPassword: 'newpassword123'
@@ -615,14 +574,13 @@ describe('Authentication Module', () => {
       const { user } = await createTestUser({ role: 'student' })
       const token = generateTestToken({
         userId: user.id,
-        role: 'student',
         username: user.username,
         studentId: user.studentId
       })
 
       const res = await request(app)
         .put('/api/auth/password')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({
           currentPassword: 'wrongpassword',
           newPassword: 'newpassword123'
@@ -637,14 +595,13 @@ describe('Authentication Module', () => {
       const { user, password } = await createTestUser({ role: 'student' })
       const token = generateTestToken({
         userId: user.id,
-        role: 'student',
         username: user.username,
         studentId: user.studentId
       })
 
       const res = await request(app)
         .put('/api/auth/password')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({
           currentPassword: password,
           newPassword: password
@@ -659,14 +616,13 @@ describe('Authentication Module', () => {
       const { user, password } = await createTestUser({ role: 'student' })
       const token = generateTestToken({
         userId: user.id,
-        role: 'student',
         username: user.username,
         studentId: user.studentId
       })
 
       const res = await request(app)
         .put('/api/auth/password')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({
           currentPassword: password,
           newPassword: '123' // Too short
@@ -693,14 +649,13 @@ describe('Authentication Module', () => {
       const { user } = await createTestUser({ role: 'student' })
       const token = generateTestToken({
         userId: user.id,
-        role: 'student',
         username: user.username,
         studentId: user.studentId
       })
 
       const res = await request(app)
         .put('/api/auth/profile')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({
           name: 'Updated Name',
           bio: 'Updated bio'

@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 const baseUrl = String(process.env.BASE_URL || 'http://127.0.0.1:3002').replace(/\/$/, '')
-const authToken = String(process.env.AUTH_TOKEN || '')
+const sessionToken = String(process.env.SESSION_TOKEN || '')
 const timeoutMs = Number(process.env.PROBE_TIMEOUT_MS || 180_000)
 
-if (!authToken) {
-  console.error('AUTH_TOKEN is required')
+if (!sessionToken) {
+  console.error('SESSION_TOKEN is required')
   process.exit(2)
 }
 
 const headers = {
-  Authorization: `Bearer ${authToken}`,
+  Cookie: `oi_session=${sessionToken}`,
   'Content-Type': 'application/json',
 }
 

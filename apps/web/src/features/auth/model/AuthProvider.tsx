@@ -12,7 +12,6 @@ import {
 import { useSWRConfig } from 'swr'
 import { usePathname } from 'next/navigation'
 import { AUTH_UNAUTHORIZED_EVENT, ORGANIZATION_UNAVAILABLE_EVENT } from '@/lib/apiClient'
-import { clearAuth, clearLegacyBrowserToken, setAdminId, setRole, setUserId } from '@/lib/auth'
 import type { CurrentAccount, WorkspaceSummary } from '@oi-manager/contracts'
 import {
   loadCurrentAccount,
@@ -43,12 +42,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-function storeAccountMetadata(user: AuthUser): void {
-  setRole(user.accountRole)
-  setUserId(user.userId)
-  setAdminId(user.adminId || null)
-}
-
 export function AuthProvider({
   children,
   initialUser = null,
@@ -69,15 +62,9 @@ export function AuthProvider({
   )
 
   useEffect(() => {
-    clearLegacyBrowserToken()
-    if (initialUser) storeAccountMetadata(initialUser)
-  }, [initialUser])
-
-  useEffect(() => {
     const handleUnauthorized = () => {
       if (!user) return
       void mutateCache(() => true, undefined, { revalidate: false })
-      clearAuth()
       setUser(null)
       setStatus('anonymous')
       const target = `${window.location.pathname}${window.location.search}`
@@ -116,8 +103,7 @@ export function AuthProvider({
       if (cancelled) return
       setUser(nextUser)
       setStatus('authenticated')
-      storeAccountMetadata(nextUser)
-    }).catch(() => {
+      }).catch(() => {
       if (!cancelled) setStatus('degraded')
     })
     return () => { cancelled = true }
@@ -138,7 +124,6 @@ export function AuthProvider({
     setUser(nextUser)
     setStatus('authenticated')
     await mutateCache(() => true, undefined, { revalidate: false })
-    storeAccountMetadata(nextUser)
     return { success: true }
   }
 
@@ -149,7 +134,6 @@ export function AuthProvider({
       return
     }
     await mutateCache(() => true, undefined, { revalidate: false })
-    clearAuth()
     setUser(null)
     setStatus('anonymous')
     window.location.assign('/login')
@@ -160,7 +144,6 @@ export function AuthProvider({
       const nextUser = await loadCurrentAccount()
       setUser(nextUser)
       setStatus('authenticated')
-      storeAccountMetadata(nextUser)
     } catch {
       setStatus('degraded')
     }

@@ -17,7 +17,7 @@ export class OrganizationJoinError extends Error {
 
 export type JoinActor = {
   userId: string
-  role: string
+  accountRole: string
   organizationId?: string | null
   organizationMembershipId?: string | null
 }
@@ -36,7 +36,7 @@ const relationForRole = (role: string, value: unknown) => {
 }
 
 function requirePersonalActor(actor: JoinActor) {
-  if (isGlobal(actor.role)) error(403, 'ORGANIZATION_JOIN_FORBIDDEN', '全局管理员不能申请加入学校')
+  if (isGlobal(actor.accountRole)) error(403, 'ORGANIZATION_JOIN_FORBIDDEN', '全局管理员不能申请加入学校')
 }
 
 async function expireInvitations() {
@@ -334,7 +334,7 @@ export async function respondToInvitation(actor: JoinActor, id: string, decision
 export async function updateJoinPolicy(actor: JoinActor, organizationId: string, value: unknown) {
   const policy = text(value, 32)
   if (!['invite_only', 'approval', 'closed'].includes(policy)) error(422, 'ORGANIZATION_JOIN_POLICY_INVALID', '加入策略无效')
-  if (actor.role !== 'super_admin') {
+  if (actor.accountRole !== 'super_admin') {
     const manager = await managerMembership(actor, organizationId)
     const authorization = await resolveOrganizationAuthorization(actor.userId, organizationId)
     if (!authorization?.capabilities.has('organization.settings') || authorization.membershipId !== manager.id) {

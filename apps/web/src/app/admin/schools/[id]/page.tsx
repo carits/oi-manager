@@ -247,8 +247,8 @@ export default function AdminSchoolDetailPage() {
                             <TableCell className={unifiedStyles.u21}>{teacher.user.username}</TableCell>
                             <TableCell className={unifiedStyles.u21}>{teacher.title || '-'}</TableCell>
                             <TableCell className={unifiedStyles.u21}>
-                              <span className={`${unifiedStyles.roleBadge} ${teacher.user.role === 'school_principal' ? unifiedStyles.principalBadge : unifiedStyles.teacherBadge}`}>
-                                {teacher.user.role === 'school_principal' ? '负责人' : '教师'}
+                              <span className={`${unifiedStyles.roleBadge} ${teacher.user.organizationRole === 'school_principal' ? unifiedStyles.principalBadge : unifiedStyles.teacherBadge}`}>
+                                {teacher.user.organizationRole === 'school_principal' ? '负责人' : '教师'}
                               </span>
                             </TableCell>
                             <TableCell className={unifiedStyles.u21}>

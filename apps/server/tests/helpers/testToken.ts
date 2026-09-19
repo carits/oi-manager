@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
-import type { JwtPayload, UserRole } from '../../../../packages/shared/src'
+import type { JwtPayload } from '../../../../packages/shared/src'
+import type { AccountRole, OrganizationMembershipRole } from '../../../../packages/contracts/src'
 
 const JWT_SECRET = 'test-secret-key-for-testing-only'
 
@@ -9,7 +10,7 @@ const JWT_SECRET = 'test-secret-key-for-testing-only'
 export function generateTestToken(payload: {
   userId: string
   sessionVersion?: number
-  role: UserRole
+  role: AccountRole | OrganizationMembershipRole
   username: string
   teacherId?: string
   studentId?: string
@@ -18,7 +19,8 @@ export function generateTestToken(payload: {
   workspaceMode?: 'work' | 'personal'
   studentMode?: 'campus' | 'personal'
 }): string {
-  return jwt.sign({ workspaceMode: 'work', ...payload }, JWT_SECRET, { expiresIn: '1h' })
+  const accountRole: AccountRole = payload.role === 'super_admin' || payload.role === 'platform_admin' ? payload.role : 'user'
+  return jwt.sign({ userId: payload.userId, sessionVersion: payload.sessionVersion, accountRole, username: payload.username, workspaceMode: payload.workspaceMode || 'work' }, JWT_SECRET, { expiresIn: '1h' })
 }
 
 /**
@@ -27,7 +29,7 @@ export function generateTestToken(payload: {
 export function generateTokenFromUser(user: {
   id: string
   sessionVersion?: number
-  role: UserRole
+  role: AccountRole | OrganizationMembershipRole
   username: string
   teacherId?: string
   studentId?: string
@@ -35,8 +37,6 @@ export function generateTokenFromUser(user: {
   workspaceMode?: 'work' | 'personal'
   studentMode?: 'campus' | 'personal'
 }): string {
-  // Compatibility tests may deliberately include claims emitted by older
-  // clients. Production renewal must strip these fields.
   const payload = {
     userId: user.id,
     sessionVersion: user.sessionVersion,

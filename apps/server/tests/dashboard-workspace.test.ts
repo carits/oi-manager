@@ -36,10 +36,10 @@ describe('dashboard and workspace application routes', () => {
   })
 
   it('keeps global statistics admin-only and returns current aggregate fields', async () => {
-    const denied = await request(app).get('/api/stats/global').set('Authorization', `Bearer ${tokenFor(student)}`)
+    const denied = await request(app).get('/api/stats/global').set('Cookie', `oi_session=${tokenFor(student)}`)
     expect(denied.status).toBe(403)
 
-    const response = await request(app).get('/api/stats/global').set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+    const response = await request(app).get('/api/stats/global').set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
     expect(response.status).toBe(200)
     expect(response.body.data).toEqual(expect.objectContaining({
       totalSchools: expect.any(Number),
@@ -54,7 +54,7 @@ describe('dashboard and workspace application routes', () => {
   it('lists the active campus and personal workspace without crossing organizations', async () => {
     const response = await request(app)
       .get('/api/workspaces')
-      .set('Authorization', `Bearer ${tokenFor(student)}`)
+      .set('Cookie', `oi_session=${tokenFor(student)}`)
       .set('x-oi-organization-id', school.organizationId!)
     expect(response.status).toBe(200)
     expect(response.body.data.workspaces).toEqual(expect.arrayContaining([
@@ -66,14 +66,14 @@ describe('dashboard and workspace application routes', () => {
   it('serves campus contest lists and a personal overview through their explicit contexts', async () => {
     const contests = await request(app)
       .get('/api/me/contests')
-      .set('Authorization', `Bearer ${tokenFor(student)}`)
+      .set('Cookie', `oi_session=${tokenFor(student)}`)
       .set('x-oi-organization-id', school.organizationId!)
     expect(contests.status).toBe(200)
     expect(contests.body.data).toEqual(expect.any(Array))
 
     const overview = await request(app)
       .get('/api/me/overview')
-      .set('Authorization', `Bearer ${tokenFor(student, 'personal')}`)
+      .set('Cookie', `oi_session=${tokenFor(student, 'personal')}`)
     expect(overview.status).toBe(200)
     expect(overview.body.data.profile).toMatchObject({ username: student.user.username, rating: 1200 })
     expect(overview.body.data).toEqual(expect.objectContaining({

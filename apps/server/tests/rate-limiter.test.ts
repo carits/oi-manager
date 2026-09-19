@@ -18,18 +18,13 @@ describe('global rate-limit identity', () => {
     username: 'rate_limit_student'
   })
 
-  it('uses a verified bearer user instead of the shared campus IP', () => {
-    expect(getRateLimitKey(fakeRequest({ authorization: `Bearer ${token}` })))
-      .toBe('user:rate-limit-user')
-  })
-
   it('uses a verified session-cookie user instead of the shared campus IP', () => {
     expect(getRateLimitKey(fakeRequest({ cookie: `other=value; oi_session=${token}` })))
       .toBe('user:rate-limit-user')
   })
 
   it('keeps invalid credentials in the anonymous IP bucket', () => {
-    const key = getRateLimitKey(fakeRequest({ authorization: 'Bearer forged-token' }))
+    const key = getRateLimitKey(fakeRequest({ cookie: 'oi_session=forged-token' }))
     expect(key).toMatch(/^ip:/)
     expect(key).not.toContain('forged-token')
   })

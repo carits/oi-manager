@@ -24,7 +24,7 @@ describe('administrator entry without User.schoolId', () => {
     const admin = await createAdmin('platform_admin')
     const login = await request(app).post('/api/auth/login').send({ username: admin.username, password: admin.password })
     expect(login.status).toBe(200)
-    expect(login.body.data.role).toBe('platform_admin')
+    expect(login.body.data.accountRole).toBe('platform_admin')
     expect(login.body.data.next).toBe('/platform-admin')
 
     const agent = request.agent(app)
@@ -32,7 +32,7 @@ describe('administrator entry without User.schoolId', () => {
     expect(session.status).toBe(200)
     const me = await agent.get('/api/auth/me')
     expect(me.status).toBe(200)
-    expect(me.body.data.role).toBe('platform_admin')
+    expect(me.body.data.accountRole).toBe('platform_admin')
     expect(me.body.data.schoolId).toBeUndefined()
     const workspaces = await agent.get('/api/workspaces')
     expect(workspaces.status).toBe(200)
@@ -40,12 +40,11 @@ describe('administrator entry without User.schoolId', () => {
     expect(workspaces.body.data.workspaces[0].type).toBe('platform')
   })
 
-  it('repairs a legacy token role from the database', async () => {
+  it('rejects a token without the canonical account role claim', async () => {
     const admin = await createAdmin('platform_admin')
     const token = jwt.sign({ userId: admin.id, username: admin.username, role: 'teacher', workspaceMode: 'work' }, getJwtSecret(), { expiresIn: '1h' })
-    const me = await request(app).get('/api/auth/me').set('Authorization', 'Bearer ' + token)
-    expect(me.status).toBe(200)
-    expect(me.body.data.role).toBe('platform_admin')
+    const me = await request(app).get('/api/auth/me').set('Cookie', 'oi_session=' + token)
+    expect(me.status).toBe(401)
   })
 
   it.each(['platform_admin', 'super_admin'] as const)(
@@ -56,8 +55,8 @@ describe('administrator entry without User.schoolId', () => {
       const secondUserId = crypto.randomUUID()
       await prisma.user.createMany({
         data: [
-          { id: firstUserId, username: 'submitter_' + firstUserId.slice(0, 8), passwordHash: 'test', role: 'student', status: 'active' },
-          { id: secondUserId, username: 'submitter_' + secondUserId.slice(0, 8), passwordHash: 'test', role: 'student', status: 'active' },
+          { id: firstUserId, username: 'submitter_' + firstUserId.slice(0, 8), passwordHash: 'test', role: 'user', status: 'active' },
+          { id: secondUserId, username: 'submitter_' + secondUserId.slice(0, 8), passwordHash: 'test', role: 'user', status: 'active' },
         ],
       })
       const visibleSubmission = await prisma.submission.create({
@@ -91,14 +90,14 @@ describe('administrator entry without User.schoolId', () => {
         },
       })
       const token = jwt.sign(
-        { userId: admin.id, username: admin.username, role, workspaceMode: 'work' },
+        { userId: admin.id, username: admin.username, accountRole: role, sessionVersion: 1, workspaceMode: 'work' },
         getJwtSecret(),
         { expiresIn: '1h' },
       )
 
       const response = await request(app)
         .get('/api/submissions?pageSize=100')
-        .set('Authorization', 'Bearer ' + token)
+        .set('Cookie', 'oi_session=' + token)
 
       expect(response.status).toBe(200)
       expect(response.body.data.scope).toBe('all')

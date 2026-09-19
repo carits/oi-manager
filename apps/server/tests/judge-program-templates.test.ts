@@ -22,7 +22,7 @@ describe('Judge program template API', () => {
     const token = await authenticatedToken()
     const response = await request(app)
       .get('/api/judge-program-templates')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
 
     expect(response.status).toBe(200)
     expect(response.body.data.templates).toHaveLength(8)
@@ -44,7 +44,7 @@ describe('Judge program template API', () => {
     const token = await authenticatedToken()
     const response = await request(app)
       .get('/api/judge-program-templates/classifier-cpp17-v1')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
 
     expect(response.status).toBe(200)
     expect(response.body.data).toMatchObject({
@@ -63,7 +63,7 @@ describe('Judge program template API', () => {
     const token = await authenticatedToken()
     const response = await request(app)
       .get('/api/judge-program-templates/generator-python3-v1')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
 
     expect(response.status).toBe(200)
     expect(response.body.data.protocol).toBe('oj.generator/v1')
@@ -78,7 +78,7 @@ describe('Judge program template API', () => {
     const token = await authenticatedToken()
     const response = await request(app)
       .get('/api/judge-program-templates/not-a-template')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
 
     expect(response.status).toBe(404)
     expect(response.body.code).toBe('PROGRAM_TEMPLATE_NOT_FOUND')

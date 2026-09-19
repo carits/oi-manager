@@ -83,7 +83,7 @@ export default function UserDetailPage() {
               </div>
               <div>
                 <label className={unifiedStyles.u9}>角色</label>
-                <p className={unifiedStyles.u10}>{getRoleLabel(user.role)}</p>
+                <p className={unifiedStyles.u10}>{getRoleLabel(user.accountRole)}</p>
               </div>
               <div>
                 <label className={unifiedStyles.u9}>状态</label>

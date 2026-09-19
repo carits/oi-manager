@@ -17,7 +17,7 @@ export const adminDataRouter = Router()
 
 adminDataRouter.use(authenticate)
 adminDataRouter.use((req: any, res, next) => {
-  if (!['super_admin', 'platform_admin'].includes(req.user?.role)) {
+  if (!['super_admin', 'platform_admin'].includes(req.user?.accountRole)) {
     return res.status(403).json({ success: false, message: '需要管理员权限' })
   }
   next()

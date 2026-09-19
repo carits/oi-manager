@@ -11,7 +11,7 @@ import { getAdapter, getSupportedPlatforms } from '../../oj-adapters'
 import {
   canAccessTraining,
   canManageTraining,
-  getUserTypeForTeam,
+  getUserTypeForTraining,
   parseTrainingId,
   requireTrainingStarted,
 } from './training.helpers'
@@ -351,7 +351,7 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
     }
 
     const isAdmin = await canManageTraining(userId, training)
-    const userType = await getUserTypeForTeam(userId)
+    const userType = await getUserTypeForTraining(userId, id)
     const detail = await getTrainingProblemDetailData(id, problemId, userId, userType)
     if (!detail) return res.status(403).json({ success: false, message: '题目不属于该训练' })
     const { trainingProblem, note, statementSet, legacyStatementSnapshot } = detail

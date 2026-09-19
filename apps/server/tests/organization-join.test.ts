@@ -35,7 +35,7 @@ beforeEach(async () => {
   applicantToken = generateTestToken({ userId: applicant.id, username: applicant.username, role: 'user', workspaceMode: 'personal' })
 })
 
-const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
+const auth = (token: string) => ({ Cookie: `oi_session=${token}` })
 
 describe('organization join workflow', () => {
   it('does not intercept unrelated public API routes', async () => {

@@ -54,7 +54,7 @@ describe('external-source local judging', () => {
     const { actor, token, problem } = await fixture()
     const response = await request(app)
       .post('/api/submit')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
       .send({
         problemId: problem.problemId,
         oj: problem.platform,
@@ -80,7 +80,7 @@ describe('external-source local judging', () => {
     const { token, problem } = await fixture(null, false)
     const response = await request(app)
       .post('/api/submit')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
       .send({
         problemId: problem.problemId,
         oj: problem.platform,
@@ -96,7 +96,7 @@ describe('external-source local judging', () => {
 
   it('persists independent submission IO in Submission and JudgeRun', async () => {
     const { token, problem } = await fixture()
-    const response = await request(app).post('/api/submit').set('Authorization', `Bearer ${token}`).send({
+    const response = await request(app).post('/api/submit').set('Cookie', `oi_session=${token}`).send({
       problemId: problem.problemId, oj: problem.platform, language: 'cpp',
       code: 'int main() { return 0; }', submitMethod: 'local',
       inputFilename: 'travel.in', outputFilename: 'answer.txt',
@@ -109,7 +109,7 @@ describe('external-source local judging', () => {
 
   it('rejects unsafe submission IO before creating a record', async () => {
     const { token, problem } = await fixture()
-    const response = await request(app).post('/api/submit').set('Authorization', `Bearer ${token}`).send({
+    const response = await request(app).post('/api/submit').set('Cookie', `oi_session=${token}`).send({
       problemId: problem.problemId, oj: problem.platform, language: 'cpp',
       code: 'int main() { return 0; }', inputFilename: '../travel.in',
     })
@@ -122,7 +122,7 @@ describe('external-source local judging', () => {
     const { token, problem } = await fixture('mode: acm\ncases: []\n', false)
     const response = await request(app)
       .post('/api/submit')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
       .send({
         problemId: problem.problemId,
         oj: problem.platform,
@@ -167,7 +167,7 @@ describe('external-source local judging', () => {
 
     const response = await request(app)
       .post(`/api/trainings/${training.id}/submit`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
       .send({
         trainingProblemId: trainingProblem.id,
         language: 'cpp',

@@ -31,7 +31,7 @@ source_of_truth: Prisma schema, organization-join, organization-creation and sch
 
 ## 创建学校
 
-状态正常的普通账号能提交学校创建申请，`super_admin/platform_admin` 不使用个人申请入口。新账号的全局角色为 `user`；生产库中尚未归一的 `student/teacher/school_principal` 历史角色也按普通账号兼容，不在本流程中改写其角色。一个账号可以同时加入或负责多个学校，但同时最多一条 pending 创建申请，滚动 24 小时最多提交 3 次。被拒绝的同一规范化学校名称对原申请人冷却 24 小时。
+状态正常的普通账号能提交学校创建申请，`super_admin/platform_admin` 不使用个人申请入口。新账号的全局角色为 `user`；生产库账号全局角色已归一，组织岗位不再从 `User.role` 兼容解析。一个账号可以同时加入或负责多个学校，但同时最多一条 pending 创建申请，滚动 24 小时最多提交 3 次。被拒绝的同一规范化学校名称对原申请人冷却 24 小时。
 
 正式学校名称按 NFKC、去除首尾空白、合并连续空白和小写化生成 `School.nameKey`，在 `pending/verified/hidden` 学校间全局唯一；`legacy` 的 `nameKey` 为 null，不占用正式名称。超管批准和直接创建共用 `createSchoolOrganizationCore()`：一次事务内创建 Organization、`verified` School、`school_principal/employee` Membership、TeacherProfile、负责人指针和审计。批准只增加组织身份，申请人的 `User.role` 仍为 `user`，工作区由 `/api/workspaces` 动态读取。
 
@@ -48,8 +48,6 @@ organization:<organizationId>
 
 ## 兼容迁移
 
-`GET/POST /api/admin/migration/organization-join` 受超级管理员与 `ENABLE_MAINTENANCE_API=true` 双重保护。检查和应用过程会迁移旧 pending/rejected Membership 邀请、规范 relationType，并尽可能解析旧 campus 通知的组织；无法解析的通知取消操作入口并进入报告。迁移期保留旧 Membership 和旧邀请响应接口，稳定发布周期后再清理。
+组织邀请、通知、relationType 与学校名称键已完成迁移。后续一致性检查使用服务器离线审计任务；发现无法解析通知、关系冲突或名称碰撞时停止，不猜测归属。
 
-`GET/POST /api/admin/migration/school-name-keys` 以同样的超管维护门禁检查/幂等回填历史学校 `nameKey`。发现标准化后重名时 apply 停止并返回报告，不自动合并。
-
-`GET/POST /api/admin/migration/school-directory-status` 使用检查报告哈希保护迁移窗口，将 `school-test-*`、`school-temp-*` 标记为 `legacy`，平台内部学校标记为 `hidden`，默认正式学校标记为 `verified`。迁移不删除或归档任何成员、团队、活动、题单和提交。超管可以在学校管理中恢复单个 legacy 学校到 `pending`，恢复时必须重新通过名称唯一校验。
+历史学校目录状态由离线审计任务维护。任务不删除成员、团队、活动、题单和提交；恢复 legacy 学校时仍必须通过名称唯一校验。

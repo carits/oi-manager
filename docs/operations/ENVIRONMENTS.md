@@ -65,7 +65,6 @@ Web/API/Judge 使用构建产物；Router 通过 readiness、原子上游切换�
 - CSP 通过构建输入 `CSP_MODE=report-only|enforce` 分阶段发布；完整切换和回滚顺序见 [TLS 发布手册](TLS_ROLLOUT.md)。
 - `CORS_ORIGINS`、`CSRF_TRUSTED_ORIGINS` 只包含正式域名。
 - JWT、Judge Token、账号加密密钥使用独立强随机值。
-- `ALLOW_UNAUTHENTICATED_JUDGE=false`、`ENABLE_MAINTENANCE_API=false`。
 - 外部告警和异机日志/备份必须有真实送达及校验和证据。
 
 完整变量见[环境变量参考](../reference/ENVIRONMENT_VARIABLES.md)，部署操作见

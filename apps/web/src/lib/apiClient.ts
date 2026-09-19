@@ -237,8 +237,7 @@ export class ApiClient {
         parsed.status === 401 &&
         typeof window !== 'undefined' &&
         !endpoint.startsWith('/api/auth/login') &&
-        !endpoint.startsWith('/api/auth/register') &&
-        !endpoint.startsWith('/api/auth/session/migrate')
+        !endpoint.startsWith('/api/auth/register')
       ) {
         window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT))
       }

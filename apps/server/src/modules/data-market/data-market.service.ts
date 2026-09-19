@@ -239,7 +239,7 @@ async function purchaseScope(user: JwtPayload, licenseType: DataLicenseType, bod
   const organizationManager = contest?.organizationId
     ? await hasOrganizationCapability(user.userId, contest.organizationId, 'contest.manage')
     : false
-  if (!contest || (!isPlatformManager(user.accountRole || user.role) && !teamManager && !organizationManager)) policyFail(403, 'DATA_LICENSE_SCOPE_FORBIDDEN', '只有真实比赛所属团队或组织的管理员可以购买比赛许可证')
+  if (!contest || (!isPlatformManager(user.accountRole) && !teamManager && !organizationManager)) policyFail(403, 'DATA_LICENSE_SCOPE_FORBIDDEN', '只有真实比赛所属团队或组织的管理员可以购买比赛许可证')
   return { buyerOrganizationId: contest.organizationId || contest.Team?.organizationId || null, contestId, payer: { ownerType: 'USER' as const, userId: user.userId } }
 }
 
@@ -325,14 +325,14 @@ async function accessibleScopeIds(user: JwtPayload) {
 }
 
 function entitlementVisible(user: JwtPayload, entitlement: DataEntitlement, scopes: { organizations: string[]; contests: number[] }) {
-  if (isPlatformManager(user.accountRole || user.role)) return true
+  if (isPlatformManager(user.accountRole)) return true
   if (entitlement.licenseType === 'PERSONAL') return entitlement.buyerUserId === user.userId
   if (entitlement.licenseType === 'ORGANIZATION') return Boolean(entitlement.buyerOrganizationId && scopes.organizations.includes(entitlement.buyerOrganizationId))
   return Boolean(entitlement.contestId && scopes.contests.includes(entitlement.contestId))
 }
 
 function entitlementVisibilityWhere(user: JwtPayload, scopes: { organizations: string[]; contests: number[] }) {
-  return isPlatformManager(user.accountRole || user.role) ? {} : { OR: [
+  return isPlatformManager(user.accountRole) ? {} : { OR: [
     { licenseType: 'PERSONAL' as const, buyerUserId: user.userId },
     { licenseType: 'ORGANIZATION' as const, buyerOrganizationId: { in: scopes.organizations } },
     { licenseType: 'CONTEST' as const, contestId: { in: scopes.contests } },

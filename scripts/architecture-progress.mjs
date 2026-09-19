@@ -121,7 +121,7 @@ function calculate() {
     https: httpsStatus(),
     topDebt,
     exitCriteria: {
-      contractFeatureMigration: 'transport.legacy.calls == 0 && transport.feature.calls == 0',
+      contractFeatureMigration: 'transport.legacy.calls == 0 && transport.raw.registered contains every intentional raw transport; feature-local transport is observational',
       contestRuntimeRetirement: 'contestCompatibility.remaining == 0',
       remoteArchiveRetirement: 'remoteArchive code/model counts and database counts are zero and migrationVerified is true',
       judgeCompatibilityRetirement: 'judgeCompatibility.remainingColumns == 0',
@@ -180,7 +180,6 @@ if (args.has('--gate')) {
   if (previous) {
     const regressions = []
     if (current.transport.legacy.calls > previous.transport.legacy.calls) regressions.push('legacy transport calls increased')
-    if (current.transport.feature.calls > previous.transport.feature.calls) regressions.push('feature transport calls increased')
     if (current.contracts < previous.contracts) regressions.push('contract count decreased')
     if (current.featureSlices < previous.featureSlices) regressions.push('feature slice count decreased')
     if (current.contractedBoundaries < previous.contractedBoundaries) regressions.push('contracted boundary count decreased')

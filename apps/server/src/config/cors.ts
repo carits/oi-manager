@@ -38,7 +38,7 @@ export function getCorsOptions(): CorsOptions {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+      allowedHeaders: ['Content-Type', 'Idempotency-Key'],
       exposedHeaders: ['Content-Disposition', 'X-Request-ID'] // 允许前端读取文件名和请求编号
     }
   }
@@ -50,7 +50,7 @@ export function getCorsOptions(): CorsOptions {
     origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    allowedHeaders: ['Content-Type', 'Idempotency-Key'],
     exposedHeaders: ['Content-Disposition', 'X-Request-ID'] // 允许前端读取文件名和请求编号
   }
 }

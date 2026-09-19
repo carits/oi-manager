@@ -6,7 +6,6 @@ import { parseContractBody, sendContractData, sendContractError } from '../../li
 import {
   findManageableProblem,
   getTestGraphWorkspace,
-  migrateProblemTestGraph,
   registerProblemTestcases,
   saveProblemTestGraph,
 } from './application/problem-route.service'
@@ -18,24 +17,6 @@ problemTestGraphRouter.get('/:id/test-graph', authenticate, asyncHandler(async (
   const problem = await findManageableProblem(req.user!, req.params.id)
   if (!problem) return res.status(404).json({ success: false, message: '题目不存在' })
   sendContractData(res, ProblemContracts.getTestGraph, await getTestGraphWorkspace(problem.id))
-}))
-
-problemTestGraphRouter.post('/:id/test-graph/migrate', authenticate, asyncHandler(async (req, res) => {
-  const problem = await findManageableProblem(req.user!, req.params.id)
-  if (!problem) return res.status(404).json({ success: false, message: '题目不存在' })
-  try {
-    parseContractBody(ProblemContracts.migrateTestGraph, req.body ?? {})
-  } catch (error) {
-    if (sendContractError(error, res)) return
-    throw error
-  }
-  const result = await migrateProblemTestGraph(problem.id, req.user!.userId)
-  if (!result.ok) {
-    return res.status(422).json({
-      success: false, code: result.code, message: result.issues.join('；'), data: { issues: result.issues },
-    })
-  }
-  sendContractData(res, ProblemContracts.migrateTestGraph, result.workspace)
 }))
 
 problemTestGraphRouter.post('/:id/test-graph/testcases', authenticate, asyncHandler(async (req, res) => {

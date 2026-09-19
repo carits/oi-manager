@@ -50,7 +50,7 @@ export function PlatformProblemManagementPage() {
   const tabParam = searchParams.get('tab')
   const toast = useToast()
   const { user } = useAuth()
-  const canManageCredentials = hasAccountCapability(user?.role, 'manage-platform-secrets')
+  const canManageCredentials = hasAccountCapability(user?.accountRole, 'manage-platform-secrets')
   const [confirmState, setConfirmState] = useState<{ id: string; message: string; action: () => Promise<void> } | null>(null)
 
   // 从URL参数获取当前tab，默认为 'fetch'

@@ -17,7 +17,7 @@ import { resolveNavigationContext } from '@/lib/navigationContext'
 export function WorkspaceSwitcher() {
   const { user } = useAuth()
   const pathname = usePathname()
-  const isGlobalAdmin = isGlobalAdministrator(user?.role)
+  const isGlobalAdmin = isGlobalAdministrator(user?.accountRole)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])

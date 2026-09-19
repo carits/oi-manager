@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { BookOpenText, ChevronDown, Link2, LogOut, Menu, PanelLeftClose, PenLine, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { useAuth } from '@/features/auth'
-import { getNavConfig, getActiveNavItem, roleNames, UserRole } from '@/config/navigation'
+import { getNavConfig, getActiveNavItem, roleNames, NavigationRole } from '@/config/navigation'
 import { getSidebarNavigationPreference, setSidebarNavigationOpen } from '@/lib/auth'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import { SessionUnavailable } from './SessionUnavailable'
@@ -54,11 +54,7 @@ export function AppShell({ children }: AppShellProps) {
       setDrawerOpen(false)
       if (!persistent) return
 
-      let preference = getSidebarNavigationPreference(user.userId, user.accountRole, contextKey)
-      if (preference === null && user.role !== user.accountRole) {
-        preference = getSidebarNavigationPreference(user.userId, user.role, contextKey)
-        if (preference !== null) setSidebarNavigationOpen(user.userId, user.accountRole, contextKey, preference === 'open')
-      }
+      const preference = getSidebarNavigationPreference(user.userId, user.accountRole, contextKey)
       setDesktopSidebarExpanded(preference === null ? true : preference === 'open')
     }
     syncNavigation()
@@ -67,7 +63,7 @@ export function AppShell({ children }: AppShellProps) {
     return () => {
       persistentSidebar.removeEventListener('change', syncNavigation)
     }
-  }, [organizationId, contextKind, user?.accountRole, user?.role, user?.userId])
+  }, [organizationId, contextKind, user?.accountRole, user?.userId])
 
   useEffect(() => {
     if (isPersistentSidebar || !drawerOpen) return
@@ -130,10 +126,12 @@ export function AppShell({ children }: AppShellProps) {
 
   if (!user) return <SessionUnavailable message="当前会话不可用，请重新登录" />
 
-  const accountRole = user.accountRole as UserRole
+  const accountRole = user.accountRole as NavigationRole
   const context = contextKind
   const isGlobalAdmin = isGlobalAdministrator(accountRole)
-  const role = navigationContext.role as UserRole
+  const role = (navigationContext.workspace === 'organization'
+    ? navigationContext.organizationRole || navigationContext.accountRole
+    : navigationContext.accountRole) as NavigationRole
   const navConfig = getNavConfig(role, context)
   const resolvedNavConfig = organizationId ? {
     ...navConfig,
@@ -141,7 +139,7 @@ export function AppShell({ children }: AppShellProps) {
   } : navConfig
   const activeItem = getActiveNavItem(pathname, role, context)
   const isPersonal = context === 'personal'
-  const roleName = roleNames[role] || user.role
+  const roleName = roleNames[role] || user.accountRole
   const profile = user.profile as { name?: string } | undefined
   const visibleName = isPersonal ? user.username : profile?.name || user.username
   const userContext = isPersonal ? '个人账号' : `@${user.username}`

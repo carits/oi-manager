@@ -1,7 +1,6 @@
 type ContextRoleUser = {
   accountRole?: string | null
   organizationRole?: string | null
-  role?: string | null
 }
 
 export function validOrganizationContextId(value: string): string | undefined {
@@ -29,5 +28,5 @@ export function authorizationRoleForContext(
   if (requiredContext === 'personal' || requiredContext === 'platform') {
     return user.accountRole || undefined
   }
-  return user.role || undefined
+  return user.organizationRole || user.accountRole || undefined
 }

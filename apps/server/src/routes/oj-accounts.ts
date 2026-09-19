@@ -19,7 +19,7 @@ export const ojAccountsRouter = Router()
 
 ojAccountsRouter.use(authenticate)
 ojAccountsRouter.use((req: any, res, next) => {
-  if (!['platform_admin', 'super_admin'].includes(req.user?.role)) {
+  if (!['platform_admin', 'super_admin'].includes(req.user?.accountRole)) {
     return res.status(403).json({ success: false, message: '无权限访问' })
   }
   next()

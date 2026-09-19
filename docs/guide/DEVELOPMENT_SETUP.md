@@ -44,7 +44,6 @@ DATABASE_URL=postgresql://oi:oi_password@127.0.0.1:5432/oi_manager?schema=public
 JWT_SECRET=replace-with-a-development-secret
 JUDGE_TOKEN=replace-with-the-same-development-token
 ALLOW_UNAUTHENTICATED_JUDGE=false
-ENABLE_MAINTENANCE_API=false
 ACCOUNT_ENCRYPT_KEY=replace-with-32-char-dev-key
 RATE_LIMIT_MAX=2000
 ```

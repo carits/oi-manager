@@ -156,7 +156,7 @@
     }
   ],
   "exitCriteria": {
-    "contractFeatureMigration": "transport.legacy.calls == 0 && transport.feature.calls == 0",
+    "contractFeatureMigration": "transport.legacy.calls == 0 && transport.raw.registered contains every intentional raw transport; feature-local transport is observational",
     "contestRuntimeRetirement": "contestCompatibility.remaining == 0",
     "remoteArchiveRetirement": "remoteArchive code/model counts and database counts are zero and migrationVerified is true",
     "judgeCompatibilityRetirement": "judgeCompatibility.remainingColumns == 0",
@@ -165,5 +165,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-19T11:07:18.728Z"
+  "updatedAt": "2026-09-19T13:01:57.028Z"
 }

@@ -18,7 +18,7 @@ app.use('/api/chat', chatRouter)
 app.use('/api/platform/chat-reports', chatReportAdminRouter)
 app.use('/api/platform', chatStickerAdminRouter)
 
-const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
+const auth = (token: string) => ({ Cookie: `oi_session=${token}` })
 let alice: any, bob: any, outsider: any, admin: any
 let aliceToken = '', bobToken = '', outsiderToken = '', adminToken = ''
 

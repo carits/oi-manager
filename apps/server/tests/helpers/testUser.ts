@@ -1,12 +1,12 @@
 import { prisma } from '../../src/prisma'
 import bcrypt from 'bcryptjs'
-import type { UserRole } from '../../../../packages/shared/src'
+import type { AccountRole, OrganizationMembershipRole } from '../../../../packages/contracts/src'
 
 const PLATFORM_SCHOOL_ID = 'platform-school-00000000'
 const TEST_BCRYPT_ROUNDS = 4
 
 interface CreateTestUserOptions {
-  role?: UserRole
+  role?: AccountRole | OrganizationMembershipRole
   username?: string
   password?: string
   schoolId?: string
@@ -20,7 +20,7 @@ interface CreatedTestUser {
     id: string
     username: string
     passwordHash: string
-    role: UserRole
+    role: AccountRole | OrganizationMembershipRole
     status: string
     teacherId?: string
     studentId?: string
@@ -70,12 +70,13 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
 
   const userId = crypto.randomUUID()
   const passwordHash = await bcrypt.hash(password, TEST_BCRYPT_ROUNDS)
+  const accountRole: AccountRole = role === 'super_admin' || role === 'platform_admin' ? role : 'user'
   const user = await prisma.user.create({
     data: {
       id: userId,
       username: username || `t_${Math.random().toString(36).slice(2, 8)}`,
       passwordHash,
-      role,
+      role: accountRole,
       status,
     },
   })
@@ -147,7 +148,7 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
       id: user.id,
       username: user.username,
       passwordHash,
-      role: user.role as UserRole,
+      role: user.role as AccountRole | OrganizationMembershipRole,
       status: user.status,
       teacherId,
       studentId,

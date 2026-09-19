@@ -12,7 +12,7 @@ app.use(express.json())
 app.use('/api', organizationCreationRouter)
 
 let applicantId = '', applicantToken = '', superAdminToken = '', platformAdminToken = ''
-const auth = (token:string) => ({ Authorization:`Bearer ${token}` })
+const auth = (token:string) => ({ Cookie: `oi_session=${token}` })
 const payload = (name=`测试学校 ${crypto.randomUUID()}`) => ({
   organizationType:'school', name, shortName:'测试学校', schoolType:'高中', schoolNature:'公办', educationSystem:'6-3-3',
   region:'湖南省/长沙市/岳麓区', applicantRealName:'申请人', applicantTitle:'信息教师', description:'用于本校信息学竞赛课程、日常训练与校内测试管理。', evidenceNote:'可以由学校行政人员核验。',

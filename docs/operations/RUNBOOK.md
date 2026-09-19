@@ -366,18 +366,7 @@ pnpm --filter server exec prisma studio
 
 ## 贡献奖励与 Evaluation Credits
 
-首次启用经济闭环必须采用 expand 迁移，不能跳过受保护的迁移检查：
-
-1. 按发布流程创建并验证数据库备份，再执行 Prisma `migrate deploy`。
-2. 只在候选 API slot 临时开启 `ENABLE_MAINTENANCE_API=true`，调用
-   `GET /api/admin/migration/economy-loop` 取得检查报告。
-3. 报告中存在孤儿 Evaluation Ledger、不平衡的 posted Carits 交易或无法解释的旧预占时停止；
-   不得手工改流水绕过检查。
-4. 复核报告后将原 `reportHash` 提交给 `POST /api/admin/migration/economy-loop`，
-   幂等创建 `REWARD_POOL` 和 `RESOURCE_SINK` 系统账户。
-5. 关闭候选 slot 的维护 API，先以 `CONTRIBUTION_REWARD_MODE=observe` 启动单例 Scheduler。
-   observe 模式只计数到期奖励，不领取、不入账。
-6. 对照贡献事件、待投递数、拟发金额和账本不变性后，再切换为 `enabled` 并重启单例 Scheduler。
+首次启用经济闭环必须先创建并验证数据库备份，再执行 Prisma `migrate deploy`。迁移检查与系统账户初始化通过服务器离线审计脚本完成：脚本必须输出孤儿 Evaluation Ledger、不平衡 posted 交易、旧预占和系统账户状态；存在阻塞项时立即停止，不得手工改流水。审计通过后先以 `CONTRIBUTION_REWARD_MODE=observe` 启动单例 Scheduler，核对拟发金额与账本不变性，再切换为 `enabled`。HTTP 不提供维护迁移入口。
 
 日常运行中：
 

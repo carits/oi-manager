@@ -75,11 +75,11 @@ DRAFT → SCHEDULED → OPEN → OVERDUE → CLOSED → REVIEWING
 
 ## 历史迁移
 
-超级管理员使用 `/api/admin/migration/assignments` 的 check/apply：
+运维人员在服务器运行 Assignment 离线迁移任务：
 
-1. check 固定旧 homework、成员关系、题目 Revision、参与者、进度和提交的规范化报告哈希；
+1. 只读审计固定旧 homework、成员关系、题目 Revision、参与者、进度和提交的规范化报告哈希；
 2. 缺学校、创建人身份、有效学生、题目或可靠 Revision 的记录进入阻断报告，不猜测迁移；
-3. apply 使用 advisory lock 和 Serializable 事务，按 `legacyTrainingId` 幂等创建作业；
+3. 应用阶段使用 advisory lock 和 Serializable 事务，按 `legacyTrainingId` 幂等创建作业；
 4. 旧 `Training`、活动题目、提交、成绩和排行榜保持不变，提交只补充 Assignment 上下文；
 5. 迁移验证完成后 Web 切到新域，旧写入口再单独退役。
 

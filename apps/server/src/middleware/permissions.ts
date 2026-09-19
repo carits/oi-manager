@@ -15,7 +15,7 @@ import {
 function logPermissionDenied(req: AuthRequest, action: string, resourceType: string, resourceId: string, reason?: string): void {
   logger.security('permission_denied', {
     userId: req.user?.userId,
-    role: req.user?.role,
+    role: req.user?.accountRole,
     action: 'access_resource',
     metadata: { resourceType, resourceId, attemptedAction: action, reason }
   })

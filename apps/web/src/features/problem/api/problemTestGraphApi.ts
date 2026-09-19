@@ -14,13 +14,6 @@ export const getProblemTestGraph = (problemId: string) =>
     `${problemPath(problemId)}/test-graph`,
   )
 
-export const migrateProblemTestGraph = (problemId: string) =>
-  apiClient.mutateContract(
-    ProblemContracts.migrateTestGraph,
-    `${problemPath(problemId)}/test-graph/migrate`,
-    {},
-  )
-
 export const saveProblemTestGraph = (
   problemId: string,
   body: ProblemTestGraphSaveInput,

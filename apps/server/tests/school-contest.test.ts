@@ -35,7 +35,7 @@ function organizationRequest(
   token: string,
   organizationId?: string,
 ) {
-  const call = request(app)[method](url).set('Authorization', `Bearer ${token}`)
+  const call = request(app)[method](url).set('Cookie', `oi_session=${token}`)
   return organizationId ? call.set('x-oi-organization-id', organizationId) : call
 }
 

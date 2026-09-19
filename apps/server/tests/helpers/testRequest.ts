@@ -22,7 +22,7 @@ export function createAuthenticatedRequest(
   options: { organizationId?: string } = {},
 ) {
   const authenticated = (test: any) => {
-    const withToken = test.set('Authorization', `Bearer ${token}`)
+    const withToken = test.set('Cookie', `oi_session=${token}`)
     return options.organizationId
       ? withToken.set('X-OI-Organization-ID', options.organizationId)
       : withToken

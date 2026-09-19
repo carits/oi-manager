@@ -24,7 +24,7 @@ export const organizationJoinRouter = Router()
 
 function actor(req: AuthRequest): JoinActor {
   return {
-    userId: req.user!.userId, role: req.user!.role, organizationId: req.user!.organizationId,
+    userId: req.user!.userId, accountRole: req.user!.accountRole, organizationId: req.user!.organizationId,
     organizationMembershipId: req.user!.organizationMembershipId,
   }
 }

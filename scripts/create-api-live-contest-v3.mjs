@@ -14,12 +14,13 @@ for (const key of ['DEMO_TEACHER_USERNAME', 'DEMO_TEACHER_PASSWORD', 'DEMO_PLATF
 }
 
 async function request(path, options = {}) {
-  const headers = { ...(options.token ? { Authorization: 'Bearer ' + options.token } : {}), ...(options.headers || {}) }
+  const headers = { ...(options.session ? { Cookie: options.session } : {}), ...(options.headers || {}) }
   let body = options.form
   if (options.body !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(options.body) }
   const response = await fetch(base + path, { method: options.method || 'GET', headers, body })
   const data = await response.json().catch(() => ({ success: false, message: 'HTTP ' + response.status }))
   if (!response.ok || !data.success) throw new Error((options.method || 'GET') + ' ' + path + '：' + (data.message || response.status))
+  if (path === '/auth/login') return { ...data.data, session: response.headers.get('set-cookie')?.split(';')[0] }
   return data.data
 }
 function list(value) { return Array.isArray(value) ? value : value?.items || value?.students || value?.problems || value?.submissions || [] }
@@ -32,7 +33,7 @@ function upload(files, description) {
 async function login(username, password) {
   if (login.count > 0) await new Promise(resolve => setTimeout(resolve, 13000))
   login.count += 1
-  return (await request('/auth/login', { method: 'POST', body: { username, password } })).token
+  return (await request('/auth/login', { method: 'POST', body: { username, password } })).session
 }
 login.count = 0
 
@@ -64,22 +65,22 @@ function judgeConfig(task) {
   }
 }
 
-async function ensureStudents(teacherToken) {
-  const current = list(await request('/students?page=1&pageSize=100', { token: teacherToken }))
+async function ensureStudents(teacherSession) {
+  const current = list(await request('/students?page=1&pageSize=100', { session: teacherSession }))
   const result = []
   for (const spec of students) {
     let student = current.find(item => item.user?.username === spec.username)
-    if (!student) student = await request('/students', { token: teacherToken, method: 'POST', body: { ...spec, enrollmentYear: 2025, targetContest: 'CSP-S' } })
-    await request('/students/' + student.id, { token: teacherToken, method: 'PUT', body: { password: studentPassword } })
+    if (!student) student = await request('/students', { session: teacherSession, method: 'POST', body: { ...spec, enrollmentYear: 2025, targetContest: 'CSP-S' } })
+    await request('/students/' + student.id, { session: teacherSession, method: 'PUT', body: { password: studentPassword } })
     result.push({ ...spec, id: student.id })
   }
   return result
 }
 
-async function ensureTeam(teacherToken) {
-  const teams = list(await request('/teams?view=mine&page=1&pageSize=100', { token: teacherToken }))
+async function ensureTeam(teacherSession) {
+  const teams = list(await request('/teams?view=mine&page=1&pageSize=100', { session: teacherSession }))
   const existing = teams.find(item => item.id === 'live_contest_v3_team')
-  return existing || request('/teams', { token: teacherToken, method: 'POST', body: {
+  return existing || request('/teams', { session: teacherSession, method: 'POST', body: {
     id: 'live_contest_v3_team',
     name: '赛时演示 V3 队',
     description: '20 小时进行中的 OI、IOI、ICPC 复杂赛时数据。',
@@ -87,26 +88,26 @@ async function ensureTeam(teacherToken) {
   } })
 }
 
-async function ensureMembers(teacherToken, team, members) {
-  const detail = await request('/teams/' + team.id, { token: teacherToken })
+async function ensureMembers(teacherSession, team, members) {
+  const detail = await request('/teams/' + team.id, { session: teacherSession })
   const active = new Set((detail.members || []).filter(item => item.status === 'active').map(item => item.userId))
   const usernames = members.filter(member => !active.has(member.id)).map(member => member.username)
-  if (usernames.length) await request('/teams/' + team.id + '/members', { token: teacherToken, method: 'POST', body: { usernames, role: 'member' } })
+  if (usernames.length) await request('/teams/' + team.id + '/members', { session: teacherSession, method: 'POST', body: { usernames, role: 'member' } })
   for (const member of members) {
-    const token = await login(member.username, studentPassword)
-    const invitations = list(await request('/teams/invitations', { token }))
+    const session = await login(member.username, studentPassword)
+    const invitations = list(await request('/teams/invitations', { session }))
     const invitation = invitations.find(item => item.teamId === team.id)
-    if (invitation) await request('/teams/invitations/' + invitation.id + '/accept', { token, method: 'POST' })
+    if (invitation) await request('/teams/invitations/' + invitation.id + '/accept', { session, method: 'POST' })
   }
 }
 
-async function ensureProblems(teacherToken) {
-  const current = list(await request('/problems?library=school&page=1&pageSize=100', { token: teacherToken }))
+async function ensureProblems(teacherSession) {
+  const current = list(await request('/problems?library=school&page=1&pageSize=100', { session: teacherSession }))
   const result = []
   for (const task of tasks) {
     let problem = current.find(item => item.title === task.title)
     if (!problem) {
-      problem = await request('/problems', { token: teacherToken, method: 'POST', body: {
+      problem = await request('/problems', { session: teacherSession, method: 'POST', body: {
         title: task.title,
         description: task.desc + '\n\n样例、题解与测试数据说明见附件。',
         statementType: 'markdown',
@@ -122,24 +123,24 @@ async function ensureProblems(teacherToken) {
         { name: (index + 1) + '.in', content: test[0] },
         { name: (index + 1) + '.out', content: test[1] },
       ])
-      await request('/problems/' + problem.id + '/attachments', { token: teacherToken, method: 'POST', form: upload([{ field: 'file', name: '样例说明.md', content: '# 样例解释\n\n' + task.desc + '\n\n' + task.solution + '\n' }], '样例解释') })
-      await request('/problems/' + problem.id + '/testdata', { token: teacherToken, method: 'POST', form: upload(files) })
-      await request('/problems/' + problem.id + '/judge-config', { token: teacherToken, method: 'PUT', body: { problemType: 'standard', timeLimit: 1000, memoryLimit: 256, config: judgeConfig(task) } })
+      await request('/problems/' + problem.id + '/attachments', { session: teacherSession, method: 'POST', form: upload([{ field: 'file', name: '样例说明.md', content: '# 样例解释\n\n' + task.desc + '\n\n' + task.solution + '\n' }], '样例解释') })
+      await request('/problems/' + problem.id + '/testdata', { session: teacherSession, method: 'POST', form: upload(files) })
+      await request('/problems/' + problem.id + '/judge-config', { session: teacherSession, method: 'PUT', body: { problemType: 'standard', timeLimit: 1000, memoryLimit: 256, config: judgeConfig(task) } })
     }
     result.push({ ...task, id: problem.id })
   }
   return result
 }
 
-async function ensureContests(teacherToken, team, problems) {
-  const current = list(await request('/teams/' + team.id + '/trainings?type=contest', { token: teacherToken }))
+async function ensureContests(teacherSession, team, problems) {
+  const current = list(await request('/teams/' + team.id + '/trainings?type=contest', { session: teacherSession }))
   const now = Date.now()
   const result = []
   for (const format of ['oi', 'ioi', 'icpc']) {
     const title = '赛时演示 V3 ' + format.toUpperCase() + ' 20 小时赛'
     let contest = current.find(item => item.title === title)
     if (!contest) {
-      contest = await request('/teams/' + team.id + '/trainings', { token: teacherToken, method: 'POST', body: {
+      contest = await request('/teams/' + team.id + '/trainings', { session: teacherSession, method: 'POST', body: {
         title,
         description: '赛时演示 V3：8 题、8 人、复杂提交时间线，覆盖 AC、WA、部分分与赛制可见性。',
         format,
@@ -150,19 +151,19 @@ async function ensureContests(teacherToken, team, problems) {
         solutionVisible: true,
       } })
       for (const [index, problem] of problems.entries()) {
-        await request('/trainings/' + contest.id + '/problems', { token: teacherToken, method: 'POST', body: { problemId: problem.id, alias: String.fromCharCode(65 + index), points: 100 } })
+        await request('/trainings/' + contest.id + '/problems', { session: teacherSession, method: 'POST', body: { problemId: problem.id, alias: String.fromCharCode(65 + index), points: 100 } })
       }
     }
-    result.push(await request('/trainings/' + contest.id, { token: teacherToken }))
+    result.push(await request('/trainings/' + contest.id, { session: teacherSession }))
   }
   return result
 }
 
-async function waitForJudge(teacherToken, contests) {
+async function waitForJudge(teacherSession, contests) {
   const deadline = Date.now() + 20 * 60 * 1000
   while (Date.now() < deadline) {
     const states = await Promise.all(contests.map(async contest => {
-      const payload = await request('/trainings/' + contest.id + '/submissions?page=1&pageSize=500', { token: teacherToken })
+      const payload = await request('/trainings/' + contest.id + '/submissions?page=1&pageSize=500', { session: teacherSession })
       return list(payload.submissions || payload).some(item => item.result === 'queuing' || item.result === 'judging')
     }))
     if (!states.some(Boolean)) return
@@ -172,17 +173,17 @@ async function waitForJudge(teacherToken, contests) {
 }
 
 async function main() {
-  const teacherToken = await login(teacherName, teacherPassword)
-  const adminToken = await login(adminName, adminPassword)
-  const members = await ensureStudents(teacherToken)
-  const team = await ensureTeam(teacherToken)
-  await ensureMembers(teacherToken, team, members)
-  const problems = await ensureProblems(teacherToken)
-  const contests = await ensureContests(teacherToken, team, problems)
+  const teacherSession = await login(teacherName, teacherPassword)
+  const adminSession = await login(adminName, adminPassword)
+  const members = await ensureStudents(teacherSession)
+  const team = await ensureTeam(teacherSession)
+  await ensureMembers(teacherSession, team, members)
+  const problems = await ensureProblems(teacherSession)
+  const contests = await ensureContests(teacherSession, team, problems)
   const headers = { 'x-demo-scenario-key': scenarioKey }
-  const prepare = await request('/admin/demo-scenario/v3/prepare', { token: adminToken, method: 'POST', headers })
-  const events = await request('/admin/demo-scenario/v3/events', { token: adminToken, method: 'POST', headers })
-  await waitForJudge(teacherToken, contests)
+  const prepare = await request('/admin/demo-scenario/v3/prepare', { session: adminSession, method: 'POST', headers })
+  const events = await request('/admin/demo-scenario/v3/events', { session: adminSession, method: 'POST', headers })
+  await waitForJudge(teacherSession, contests)
   console.log(JSON.stringify({ success: true, prepare, events, students: members.map(item => item.username), contests: contests.map(item => ({ id: item.id, title: item.title })) }, null, 2))
 }
 

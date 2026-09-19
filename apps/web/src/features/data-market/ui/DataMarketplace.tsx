@@ -36,7 +36,7 @@ export function DataMarketplace() {
   const [incident, setIncident] = useState({ revisionId: '', severity: 'CRITICAL', type: '', description: '' })
   const [incidents, setIncidents] = useState<Incident[]>([]), [incidentFixes, setIncidentFixes] = useState<Record<string, string>>({})
   const [upgradeTarget, setUpgradeTarget] = useState<Record<string, string>>({})
-  const canManage = canManageDataMarketplace(user?.role, user?.organizationRole)
+  const canManage = canManageDataMarketplace(user?.accountRole, user?.organizationRole)
   const load = useCallback(async () => { setLoading(true); try { const [a, b] = await Promise.all([listDataProducts(), listDataEntitlements()]); setProducts(a); setEntitlements(b) } catch (error) { toast.error(error instanceof Error ? error.message : '读取数据市场失败') } finally { setLoading(false) } }, [toast])
   useEffect(() => { void load() }, [load])
 

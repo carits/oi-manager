@@ -9,63 +9,48 @@ source_of_truth: packages/contracts/src/identity.ts, auth middleware, authorizat
 
 ## 登录入口
 
-登录 API 使用唯一的用户名和密码入口。`POST /api/auth/login` 接收 `workspaceMode`；缺省或旧
-`mode: "campus"` 等价于 `work`，`mode: "personal"` 保持兼容。非法模式返回 `400`。
-
-成功登录响应中的账号身份将历史持久化角色规范为 `user | platform_admin | super_admin`；普通账号的组织成员关系只用于当前校园工作区的成员身份。
-`super_admin` 和 `platform_admin` 永远保留全局角色，不会被学校成员关系覆盖。
+登录 API 只有一个入口。`POST /api/auth/login` 仅接收用户名、密码和规范的 `workspaceMode`；旧 `role`、`mode`、`studentMode` 等字段会被严格拒绝。普通账号的校园岗位只从当前组织的有效成员关系解析，平台管理员与超级管理员使用独立的全局 `accountRole`。
 
 登录失败保护使用“规范化用户名五分钟失败桶 + 高阈值 IP 一分钟失败洪泛桶”；机房共享网络中的成功登录不会占用失败额度。注册保留较高的共享 IP 上限，已登录密码操作按 `userId` 分桶。API 反向代理只信任 loopback，客户端不能伪造转发 IP。
 
 ## JWT
 
 ```ts
-interface JwtPayload {
+interface SessionJwtPayload {
   userId: string
   sessionVersion?: number
   accountRole: 'user' | 'super_admin' | 'platform_admin'
-  role: 'user' | 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
+  username: string
+  workspaceMode?: 'work' | 'personal'
+}
+
+interface JwtPayload extends SessionJwtPayload {
   organizationRole?: 'student' | 'teacher' | 'school_principal'
   organizationCapabilities?: string[]
   organizationId?: string
   organizationMembershipId?: string
-  username: string
-  adminId?: string
-  teacherId?: string
-  studentId?: string
-  schoolId?: string
-  workspaceMode: 'work' | 'personal'
-  /** @deprecated compatibility for old student sessions */
-  studentMode?: 'campus' | 'personal'
 }
 ```
 
-浏览器只使用同域 HttpOnly Session Cookie，登录、注册和工作区切换响应不向 JavaScript 返回 JWT。
-Bearer 仅供脚本、测试与旧客户端兼容。缺少、无效、过期或被撤销的会话返回 `401`；已登录但角色或资源范围不足返回 `403`；数据库/认证依赖暂时故障返回 `503 AUTH_SERVICE_UNAVAILABLE`，浏览器不会因此清除会话。
+浏览器和同仓脚本均使用 HttpOnly Session Cookie；登录、注册和工作区切换响应不向 JavaScript 返回 JWT。鉴权中间件不读取 Bearer Token，也不迁移 localStorage Token。缺少、无效、过期或被撤销的会话返回 `401`；已登录但角色或资源范围不足返回 `403`；数据库或认证依赖故障返回 `503 AUTH_SERVICE_UNAVAILABLE`。
 
-`User.sessionVersion` 是账号级会话代数。修改密码、管理员重置密码或“退出其他设备”会原子递增；当前浏览器同时获得新 Cookie，其他旧 Token 在下一次请求返回 `401 SESSION_REVOKED`。迁移前未携带该声明的 Token 按第 1 代兼容。
+`User.sessionVersion` 是账号级会话代数。修改密码、管理员重置密码或“退出其他设备”会原子递增；当前浏览器同时获得新 Cookie，其他旧 Cookie 在下一次请求返回 `401 SESSION_REVOKED`。没有 `accountRole` 的历史 JWT 直接失效，不再自动修复或续签。
 
-新签名 Session 使用独立的 `SessionJwtPayload`，只持久化 `userId/sessionVersion/accountRole/username/workspaceMode`；
-组织 ID、Membership ID、组织岗位与 Capability 都是请求期事实，绝不能写入 Cookie。历史 Token 中的
-`studentId/teacherId/schoolId/studentMode` 在剩余有效期内仅被 JWT 解析器容忍，不参与身份或权限计算；登录、切换工作区、
-会话迁移、改密或退出其他设备任一续签动作都会通过字段白名单移除这些旧 Claims。服务端业务消费的是认证中间件重建后的
-`JwtPayload` 请求身份，不得直接把解码前的 Session Claims 传入领域服务。
+Session 只持久化 `userId/sessionVersion/accountRole/username/workspaceMode`。组织 ID、成员关系 ID、组织岗位与 Capability 都由请求 URL 和 `X-OI-Organization-ID` 在请求期解析，绝不能写入 Cookie。
 
 ## 工作区模式
 
-- `role` 是账号平台身份；普通账号通常为 `user`。学校学生/教师/负责人身份只从当前 URL 对应的有效 Membership 解析。
+- `accountRole` 是账号平台身份；学校学生、教师、负责人身份只从当前 URL 对应的有效 Membership 解析。
 - `workspaceMode=work`：进入管理或校园工作台，业务资源使用 `resourceScope=campus`。
 - `workspaceMode=personal`：五种角色共用个人工作区，业务资源使用 `resourceScope=personal`。
 - 管理员工作区是严格独立的：超级管理员只进入 `/admin`，平台管理员只进入 `/platform-admin`；管理员不创建或切换个人/校园工作区。
 - 全局管理员查看训练/比赛时不受当前工作区 scope 预过滤限制；仍由 `canAccessTraining`、组织关系和比赛管理权限决定最终可见范围。普通账号继续只能访问当前 `resourceScope` 的资源。
-- `POST /api/auth/switch-workspace` 为旧客户端保留并刷新 Cookie；响应不返回 Token。当前 Web 以 URL 与工作区目录切换身份。
-- 旧 `studentMode` 仅作为尚未过期的历史 JWT 输入被容忍；新 Session 不再写入，也没有运行时工作区语义。
-- 旧 JWT 中的 `schoolId` 仅在历史 Token 自然过期前被容忍且不会续签，不再隐式选择组织。校园请求必须显式携带
-  `X-OI-Organization-ID`，服务端再按该组织校验当前活动 Membership；账号级请求因此不会漂移到“最早加入的学校”。
+- `POST /api/auth/switch-workspace` 只切换规范的 `workspaceMode` 并刷新 Cookie；响应不返回 Token。
+- 校园请求必须显式携带 `X-OI-Organization-ID`，服务端按该组织校验当前活动 Membership；账号级请求不隐式选择学校。
 - 个人工作区只输出用户名、头像、公开简介和个人 Rating，不输出实名、学校、职称或后台岗位。
 
 `organizationId` 是 `Organization.id`，用于请求头 `X-OI-Organization-ID` 和成员关系查询；
-`schoolId` 是 `School.id`，仅在组织具有关联学校时返回。二者不能互换。
+`School.id` 仅属于学校资料模型，不参与认证、授权或组织上下文。
 
 Web 的浏览器请求与 Next.js SSR 必须遵守相同的显式上下文规则。访问
 `/org/:organizationId/*` 时，根布局和组织 `RoleLayout` 都从可信路由参数解析 Organization ID，
@@ -112,14 +97,7 @@ Web 的浏览器请求与 Next.js SSR 必须遵守相同的显式上下文规则
 一个含混的 `role` 后按取值猜测身份来源。普通“登录即可读取”的路由只使用 `authenticate`，资源、平台和组织范围继续由领域
 Policy 校验，不能用学生/教师/负责人枚举代替登录态。
 
-`OrganizationMembershipRole` 与 `OrganizationMembershipCapability` 是组织授权的唯一事实源。认证中间件先把持久化兼容角色规范为
-`accountRole`，再按请求中的组织 ID 解析唯一基础 RoleAssignment 和 CapabilityGrant；缺少基础角色或同时存在多个基础角色时返回
-`403 ORGANIZATION_AUTHORIZATION_INCOMPLETE`，不会猜测或按更高岗位兜底。生产已完成 20,186 条 Membership 对账，授权路径不再读取
-`memberRole` 的旧能力映射，也没有 hybrid/legacy 运行开关。成员、题库、团队导入、组织钱包、Assignment、Training、Rating、
-Data Market 与 Candidate 预算均消费规范 Capability；`problem.manage` 保留教师 own、负责人 all 的资源范围。
-所有创建、恢复、导入和负责人转移必须在同一事务调用
-`syncOrganizationMembershipBaseRole()`；`memberRole` 只保留学生/教师资料判别和岗位展示用途。受保护的
-`GET/POST /api/admin/migration/membership-roles` 继续作为幂等一致性检查和修复入口，并同时报告缺失、冲突基础角色和未知角色。
+`OrganizationMembershipRole` 与 `OrganizationMembershipCapability` 是组织授权的唯一事实源。认证中间件按请求中的组织 ID 解析唯一基础 RoleAssignment 和 CapabilityGrant；缺少基础角色或同时存在多个基础角色时返回 `403 ORGANIZATION_AUTHORIZATION_INCOMPLETE`。生产数据已通过离线审计归一，运行时不读取旧角色映射，也不暴露在线迁移开关。后续一致性检查和修复只能通过受控离线脚本执行。
 
 资源所有权回归矩阵同时固定以下边界：平台管理员和超级管理员都可读取全局提交；组织活动只有负责人、
 创建者和超级管理员可管理，平台管理员仅有全局只读访问；校园团队同样只有 owner/admin 与超级管理员
@@ -133,11 +111,9 @@ Data Market 与 Candidate 预算均消费规范 Capability；`problem.manage` �
 - 读取只返回配置状态和脱敏信息，不返回 Cookie 原文。
 - 抓题任务：`super_admin` 和 `platform_admin`。
 
-### 维护 API
+### 离线迁移与审计
 
-- `/api/admin/migration/*`：先认证，再要求 `super_admin`。
-- `ENABLE_MAINTENANCE_API !== true` 时统一返回 `404`。
-- 操作完成后必须立即关闭开关。
+一次性数据修复只通过服务器离线脚本运行，先生成审计报告与快照，再在事务中应用。HTTP 不提供通用迁移或修复入口。
 
 ### 评测机
 
@@ -171,9 +147,7 @@ Data Market 与 Candidate 预算均消费规范 Capability；`problem.manage` �
 
 组织上下文明确返回 `ORGANIZATION_ACCESS_DENIED` 或 `ORGANIZATION_NOT_AVAILABLE` 时，当前 `/org/:id` 页面清除该组织缓存并回到身份选择；普通资源级 `403` 不触发工作区退出。
 
-浏览器登录由 Server 设置同域 `HttpOnly`、`SameSite=Lax` 会话 Cookie；正式环境同时要求
-HTTPS 和 `Secure=true`。鉴权中间件暂时兼容 Bearer Token，供脚本、测试与旧会话一次性
-迁移使用。旧 Token 迁移成功后会从 `localStorage` 清除，不能再把它作为浏览器长期会话来源。
+浏览器登录由 Server 设置同域 `HttpOnly`、`SameSite=Lax` 会话 Cookie；正式环境同时要求 HTTPS 和 `Secure=true`。鉴权中间件只读取 Cookie，不支持 Bearer 或 localStorage Token。
 
 账号资料只编辑用户名之外的全局字段：用户名只读，头像、邮箱、手机号和简介属于账号。学校真实姓名属于各自 Membership Profile，不允许账号页将某一学校姓名冒充为全局姓名。
 

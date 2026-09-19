@@ -243,7 +243,7 @@ export async function listPlatformOrganizationTeachers(organizationId: string, p
   ])
   const rows = profiles.map(profile => ({
     id: profile.membershipId, name: profile.name, title: profile.title, email: profile.email, phone: profile.phone,
-    user: { ...profile.Membership.User, role: profile.Membership.memberRole },
+    user: { ...profile.Membership.User, organizationRole: profile.Membership.memberRole },
   }))
   return paginatedResponse(rows, total, page, pageSize)
 }

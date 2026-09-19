@@ -39,7 +39,7 @@ describe('file storage security', () => {
     const user = await createTestUser({ role: 'student' })
     const response = await request(app)
       .post('/api/files/upload')
-      .set('Authorization', `Bearer ${tokenFor(user)}`)
+      .set('Cookie', `oi_session=${tokenFor(user)}`)
       .attach('file', Buffer.from('not a png'), { filename: 'avatar.png', contentType: 'image/png' })
       .field('category', 'avatar')
       .field('ownerType', 'user')
@@ -57,7 +57,7 @@ describe('file storage security', () => {
 
     const local = await request(app)
       .get(`/api/files/by-owner/team/${team.id}`)
-      .set('Authorization', `Bearer ${tokenFor(member)}`)
+      .set('Cookie', `oi_session=${tokenFor(member)}`)
       .set('x-oi-organization-id', schoolA.organizationId!)
     expect(local.status).toBe(200)
 
@@ -74,7 +74,7 @@ describe('file storage security', () => {
     })
     const crossOrganization = await request(app)
       .get(`/api/files/by-owner/team/${team.id}`)
-      .set('Authorization', `Bearer ${tokenFor(member)}`)
+      .set('Cookie', `oi_session=${tokenFor(member)}`)
       .set('x-oi-organization-id', schoolB.organizationId!)
     expect(crossOrganization.status).toBe(403)
 
@@ -84,7 +84,7 @@ describe('file storage security', () => {
     })
     const inactive = await request(app)
       .get(`/api/files/by-owner/team/${team.id}`)
-      .set('Authorization', `Bearer ${tokenFor(member)}`)
+      .set('Cookie', `oi_session=${tokenFor(member)}`)
       .set('x-oi-organization-id', schoolA.organizationId!)
     expect(inactive.status).toBe(403)
   })
@@ -94,7 +94,7 @@ describe('file storage security', () => {
     const admin = await createTestUser({ role: 'platform_admin' })
     const response = await request(app)
       .get(`/api/files/by-owner/user/${owner.user.id}`)
-      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .set('Cookie', `oi_session=${tokenFor(admin)}`)
 
     expect(response.status).toBe(403)
   })
@@ -120,7 +120,7 @@ describe('file storage security', () => {
     })
     const response = await request(app)
       .get(`/api/files/${file.id}`)
-      .set('Authorization', `Bearer ${tokenFor(user)}`)
+      .set('Cookie', `oi_session=${tokenFor(user)}`)
     expect(response.status).toBe(404)
   })
 })

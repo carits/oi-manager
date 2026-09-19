@@ -52,7 +52,7 @@ function resolveRequestedLibrary(
 ): 'platform' | 'school' {
   if (query.library === 'platform' || query.visibility === 'public') return 'platform'
   if (query.library === 'school' || query.visibility === 'private') return 'school'
-  return isPersonalContext(user) || isPlatformManager(user.accountRole || user.role) ? 'platform' : 'school'
+  return isPersonalContext(user) || isPlatformManager(user.accountRole) ? 'platform' : 'school'
 }
 
 function requireLibraryAccess(user: JwtPayload, library: 'platform' | 'school') {
@@ -76,7 +76,7 @@ export async function listProblems(input: {
   const where: any = library === 'platform'
     ? {
         libraryScope: 'platform',
-        ...(isPlatformManager(input.user.accountRole || input.user.role) && !personalWorkspace ? {} : { status: 'published' }),
+        ...(isPlatformManager(input.user.accountRole) && !personalWorkspace ? {} : { status: 'published' }),
       }
     : {
         libraryScope: 'school',
@@ -175,7 +175,7 @@ function validateVersion(version: any) {
 }
 
 export async function createProblem(user: JwtPayload, body: any) {
-  const platformManager = isPlatformManager(user.accountRole || user.role)
+  const platformManager = isPlatformManager(user.accountRole)
   const organizationCreator = Boolean(user.organizationId && requestHasOrganizationCapability(user, 'problem.create'))
   if (!organizationCreator && !platformManager) {
     fail(403, 'TEACHER_ONLY', '只有教师或平台管理员可以创建题目')

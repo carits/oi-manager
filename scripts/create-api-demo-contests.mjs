@@ -11,7 +11,7 @@ for (const key of ['DEMO_TEACHER_USERNAME', 'DEMO_TEACHER_PASSWORD', 'DEMO_STUDE
 }
 
 async function request(path, options = {}) {
-  const headers = options.token ? { Authorization: 'Bearer ' + options.token } : {}
+  const headers = options.session ? { Cookie: options.session } : {}
   let body
   if (options.form) body = options.form
   else if (options.body !== undefined) {
@@ -21,15 +21,16 @@ async function request(path, options = {}) {
   const response = await fetch(base + path, { method: options.method || 'GET', headers, body })
   const json = await response.json().catch(() => ({ success: false, message: 'HTTP ' + response.status }))
   if (!response.ok || !json.success) throw new Error((options.method || 'GET') + ' ' + path + '：' + (json.message || response.status))
+  if (path === '/auth/login') return { ...json.data, session: response.headers.get('set-cookie')?.split(';')[0] }
   return json.data
 }
 
 async function login(username, password, role) {
   const data = await request('/auth/login', {
     method: 'POST',
-    body: { username, password, role, workspaceMode: 'work' },
+    body: { username, password, workspaceMode: 'work' },
   })
-  return data.token
+  return data.session
 }
 
 let loginCount = 0
@@ -39,9 +40,9 @@ async function throttledLogin(username, password, role) {
     await new Promise(resolve => setTimeout(resolve, 61000))
     loginCount = 0
   }
-  const token = await login(username, password, role)
+  const session = await login(username, password, role)
   loginCount += 1
-  return token
+  return session
 }
 
 function items(data) {
@@ -91,30 +92,30 @@ const sources = [
   '#include <bits/stdc++.h>\nusing namespace std;int main(){string s;if(cin>>s){int a=0;for(char c:s){c=tolower((unsigned char)c);if(string("aeiou").find(c)!=string::npos)++a;}cout<<a<<"\\n";}}\n',
 ]
 
-async function ensureStudents(teacherToken) {
-  const current = items(await request('/students?page=1&pageSize=100', { token: teacherToken }))
+async function ensureStudents(teacherSession) {
+  const current = items(await request('/students?page=1&pageSize=100', { session: teacherSession }))
   const result = []
   for (const spec of studentSpecs) {
     let student = current.find(item => item.user?.username === spec.username)
     if (!student) {
       student = await request('/students', {
-        token: teacherToken,
+        token: teacherSession,
         method: 'POST',
         body: { ...spec, enrollmentYear: 2025, targetContest: 'CSP-S' },
       })
     }
-    await request('/students/' + student.id, { token: teacherToken, method: 'PUT', body: { password: studentPassword } })
-    result.push({ ...spec, id: student.id, token: await throttledLogin(spec.username, studentPassword, 'student') })
+    await request('/students/' + student.id, { session: teacherSession, method: 'PUT', body: { password: studentPassword } })
+    result.push({ ...spec, id: student.id, session: await throttledLogin(spec.username, studentPassword, 'student') })
   }
   return result
 }
 
-async function ensureTeam(teacherToken) {
-  const current = items(await request('/teams?view=mine&page=1&pageSize=100', { token: teacherToken }))
+async function ensureTeam(teacherSession) {
+  const current = items(await request('/teams?view=mine&page=1&pageSize=100', { session: teacherSession }))
   let team = current.find(item => item.id === 'demo_contest_team')
   if (!team) {
     team = await request('/teams', {
-      token: teacherToken,
+      token: teacherSession,
       method: 'POST',
       body: { id: 'demo_contest_team', name: '演示竞赛训练队', description: '展示三种赛制比赛、提交、题解附件和排名。', isPublic: false },
     })
@@ -122,32 +123,32 @@ async function ensureTeam(teacherToken) {
   return team
 }
 
-async function ensureMembers(teacherToken, team, students) {
-  const detail = await request('/teams/' + team.id, { token: teacherToken })
+async function ensureMembers(teacherSession, team, students) {
+  const detail = await request('/teams/' + team.id, { session: teacherSession })
   const activeIds = new Set((detail.members || []).filter(member => member.status === 'active').map(member => member.userId))
   const invitees = students.filter(student => !activeIds.has(student.id)).map(student => student.username)
   if (invitees.length) {
     await request('/teams/' + team.id + '/members', {
-      token: teacherToken,
+      token: teacherSession,
       method: 'POST',
       body: { usernames: invitees, role: 'member' },
     })
   }
   for (const student of students) {
-    const invitations = items(await request('/teams/invitations', { token: student.token }))
+    const invitations = items(await request('/teams/invitations', { session: student.session }))
     const invitation = invitations.find(item => item.teamId === team.id)
-    if (invitation) await request('/teams/invitations/' + invitation.id + '/accept', { token: student.token, method: 'POST' })
+    if (invitation) await request('/teams/invitations/' + invitation.id + '/accept', { session: student.session, method: 'POST' })
   }
 }
 
-async function ensureProblems(teacherToken) {
-  const current = items(await request('/problems?library=school&page=1&pageSize=100', { token: teacherToken }))
+async function ensureProblems(teacherSession) {
+  const current = items(await request('/problems?library=school&page=1&pageSize=100', { session: teacherSession }))
   const result = []
   for (const spec of problemSpecs) {
     let problem = current.find(item => item.title === spec.title)
     if (!problem) {
       problem = await request('/problems', {
-        token: teacherToken,
+        token: teacherSession,
         method: 'POST',
         body: {
           title: spec.title,
@@ -163,12 +164,12 @@ async function ensureProblems(teacherToken) {
         },
       })
       await request('/problems/' + problem.id + '/attachments', {
-        token: teacherToken,
+        token: teacherSession,
         method: 'POST',
         form: makeForm([{ field: 'file', name: '样例说明.md', content: '# 样例解释\n' + spec.description + '\n' }], '样例输入输出与解题说明'),
       })
       await request('/problems/' + problem.id + '/testdata', {
-        token: teacherToken,
+        token: teacherSession,
         method: 'POST',
         form: makeForm([
           { name: '1.in', content: spec.input },
@@ -183,15 +184,15 @@ async function ensureProblems(teacherToken) {
   return result
 }
 
-async function ensureContests(teacherToken, team, problems) {
-  const current = items(await request('/teams/' + team.id + '/trainings?type=contest', { token: teacherToken }))
+async function ensureContests(teacherSession, team, problems) {
+  const current = items(await request('/teams/' + team.id + '/trainings?type=contest', { session: teacherSession }))
   const now = Date.now()
   const result = []
   for (const spec of contests) {
     let contest = current.find(item => item.title === spec.title)
     if (!contest) {
       contest = await request('/teams/' + team.id + '/trainings', {
-        token: teacherToken,
+        token: teacherSession,
         method: 'POST',
         body: {
           title: spec.title,
@@ -206,24 +207,24 @@ async function ensureContests(teacherToken, team, problems) {
       })
       for (const [index, problem] of problems.entries()) {
         await request('/trainings/' + contest.id + '/problems', {
-          token: teacherToken,
+          token: teacherSession,
           method: 'POST',
           body: { problemId: problem.id, alias: String.fromCharCode(65 + index), points: 100 },
         })
       }
     }
-    result.push({ ...spec, ...(await request('/trainings/' + contest.id, { token: teacherToken })) })
+    result.push({ ...spec, ...(await request('/trainings/' + contest.id, { session: teacherSession })) })
   }
   return result
 }
 
-async function createSubmissions(teacherToken, contest, students) {
-  await request('/trainings/' + contest.id + '/start', { token: teacherToken, method: 'POST' })
-  const old = await request('/trainings/' + contest.id + '/submissions?page=1&pageSize=200', { token: teacherToken }).catch(() => null)
+async function createSubmissions(teacherSession, contest, students) {
+  await request('/trainings/' + contest.id + '/start', { session: teacherSession, method: 'POST' })
+  const old = await request('/trainings/' + contest.id + '/submissions?page=1&pageSize=200', { session: teacherSession }).catch(() => null)
   const previous = items(old)
   const existing = new Set(previous.map(item => item.userId + ':' + item.trainingProblemId))
   const wrongExisting = new Set(previous.filter(item => item.result !== 'accepted').map(item => item.userId + ':' + item.trainingProblemId))
-  const data = await request('/trainings/' + contest.id + '/problems', { token: teacherToken })
+  const data = await request('/trainings/' + contest.id + '/problems', { session: teacherSession })
   const problems = items(data)
   if (problems.length !== problemSpecs.length) {
     throw new Error('比赛题目数量不完整，无法生成演示提交：' + contest.title)
@@ -234,14 +235,14 @@ async function createSubmissions(teacherToken, contest, students) {
       // 每场都保留可见的错误记录；ICPC 的错误还会计入负次数。
       if ((studentIndex + problemIndex) % 3 === 0 && !wrongExisting.has(key)) {
         await request('/trainings/' + contest.id + '/submit', {
-          token: student.token,
+          token: student.session,
           method: 'POST',
           body: { trainingProblemId: problem.id, language: 'cpp', code: '#include <bits/stdc++.h>\nint main(){return 0;}\n' },
         })
       }
       if (existing.has(key)) continue
       await request('/trainings/' + contest.id + '/submit', {
-        token: student.token,
+        token: student.session,
         method: 'POST',
         body: { trainingProblemId: problem.id, language: 'cpp', code: sources[problemIndex] },
       })
@@ -249,11 +250,11 @@ async function createSubmissions(teacherToken, contest, students) {
   }
 }
 
-async function waitForJudge(teacherToken, ids) {
+async function waitForJudge(teacherSession, ids) {
   const deadline = Date.now() + 480000
   while (Date.now() < deadline) {
     const states = await Promise.all(ids.map(async id => {
-      const data = await request('/trainings/' + id + '/submissions?page=1&pageSize=200', { token: teacherToken })
+      const data = await request('/trainings/' + id + '/submissions?page=1&pageSize=200', { session: teacherSession })
       return items(data.submissions || data).some(item => item.result === 'queuing' || item.result === 'judging')
     }))
     if (!states.some(Boolean)) return
@@ -263,18 +264,18 @@ async function waitForJudge(teacherToken, ids) {
 }
 
 async function main() {
-  const teacherToken = await throttledLogin(teacherName, teacherPassword, 'teacher')
-  const team = await ensureTeam(teacherToken)
-  const students = await ensureStudents(teacherToken)
-  await ensureMembers(teacherToken, team, students)
-  const problems = await ensureProblems(teacherToken)
-  const all = await ensureContests(teacherToken, team, problems)
+  const teacherSession = await throttledLogin(teacherName, teacherPassword, 'teacher')
+  const team = await ensureTeam(teacherSession)
+  const students = await ensureStudents(teacherSession)
+  await ensureMembers(teacherSession, team, students)
+  const problems = await ensureProblems(teacherSession)
+  const all = await ensureContests(teacherSession, team, problems)
   // 已结束比赛不重新开启；首次创建时“已结束”比赛仍是 upcoming，会先完成提交再结束。
   const active = all.filter(item => item.state !== '未开始' && item.status !== 'finished')
-  for (const contest of active) await createSubmissions(teacherToken, contest, students)
-  await waitForJudge(teacherToken, active.map(item => item.id))
+  for (const contest of active) await createSubmissions(teacherSession, contest, students)
+  await waitForJudge(teacherSession, active.map(item => item.id))
   for (const contest of all.filter(item => item.state === '已结束')) {
-    await request('/trainings/' + contest.id + '/finish', { token: teacherToken, method: 'POST' })
+    await request('/trainings/' + contest.id + '/finish', { session: teacherSession, method: 'POST' })
   }
   console.log(JSON.stringify({
     success: true,

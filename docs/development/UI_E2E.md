@@ -20,7 +20,6 @@ Playwright 不复用 `3000/3002` 开发服务：
 | 文件存储 | `test-results/storage` |
 | 测试数据 | `test-results/testdata` |
 | 后台任务 | `DISABLE_BACKGROUND_JOBS=true` |
-| 维护 API | `ENABLE_MAINTENANCE_API=false` |
 
 `test:ui:prepare` 会验证 URL 明确包含 `schema=e2e`，重建 schema，并重新创建独立文件存储与
 `test-results/testdata` 后写入确定性 fixture。它拒绝 `public` 或没有 schema 的数据库。

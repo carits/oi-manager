@@ -75,12 +75,10 @@ Account Identity
 `organization.settings`。教师只能管理归属自己的学生这一资源范围同样从 Capability 派生，不能回退到 `memberRole` 分支。
 
 批量解析器为列表、通知和排名提供与详情策略相同的 Capability 投影；组织加入/邀请、作业范围、补题作业、全校训练名单、
-组织数据许可证、Candidate 管理预算和比赛管理员排除均不得再次查询 `memberRole` 决定权限。旧 Team/Problem HTTP 兼容层仍在
-逐项迁移，属于明确登记的退出工作，完成前不得把 `Request.user.role` 的校园岗位判断扩展到新代码。
+组织数据许可证、Candidate 管理预算和比赛管理员排除均不得再次查询 `memberRole` 决定权限。组织资源只使用规范路由和 Capability 策略；不得重新引入 `Request.user.role` 的校园岗位判断。
 
 所有 Membership 创建、恢复、导入和负责人转移都在原业务事务内同步基础 RoleAssignment；附加岗位和显式能力不会因基础岗位
-变化而被误删。受保护的 `/api/admin/migration/membership-roles` check/apply 保留为一致性修复工具：未知角色 fail closed，
-缺失或冲突的基础角色按 `memberRole` 幂等修复。
+变化而被误删。角色一致性检查与修复仅通过服务器离线任务执行：未知角色 fail closed，缺失或冲突的基础角色按成员关系幂等修复。
 
 ## 通知与工作区
 

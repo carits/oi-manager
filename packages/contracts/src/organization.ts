@@ -123,14 +123,14 @@ export type PlatformSchoolStudent = z.infer<typeof PlatformSchoolStudentSchema>
 
 const PlatformSchoolTeacherSchema = z.object({
   id: z.string().min(1), name: z.string(), title: NullableTextSchema, email: NullableTextSchema, phone: NullableTextSchema,
-  user: z.object({ id: z.string().min(1), username: z.string(), role: z.string(), status: z.string() }),
+  user: z.object({ id: z.string().min(1), username: z.string(), organizationRole: z.string(), status: z.string() }),
 })
 export type PlatformSchoolTeacher = z.infer<typeof PlatformSchoolTeacherSchema>
 
 export const PlatformOrganizationCreationApplicationSchema = OrganizationCreationApplicationSchema.extend({
   internalReviewNote: z.string().nullable().optional(),
   evidenceData: z.object({ note: z.string().optional() }).nullable().optional(),
-  Applicant: z.object({ username: z.string(), status: z.string(), role: z.string().optional() }),
+  Applicant: z.object({ username: z.string(), status: z.string(), accountRole: z.string().optional() }),
   ReviewedBy: z.object({ username: z.string() }).nullable().optional(),
 }).passthrough()
 export type PlatformOrganizationCreationApplication = z.infer<typeof PlatformOrganizationCreationApplicationSchema>

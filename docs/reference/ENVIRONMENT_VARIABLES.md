@@ -23,7 +23,6 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | `CORS_ORIGINS` | 正式必需 | 开发允许 localhost | 逗号分隔来源 |
 | `JUDGE_TOKEN` | 非 test 必需 | 无 | Judge 认证 |
 | `ALLOW_UNAUTHENTICATED_JUDGE` | 否 | `false` | 仅 loopback 测试例外 |
-| `ENABLE_MAINTENANCE_API` | 否 | `false` | 开启超管迁移接口 |
 | `ACCOUNT_ENCRYPT_KEY` | 正式/OJ 账号必需 | 无 | OJ 账号字段加密 |
 | `RATE_LIMIT_MAX` | 否 | 配置默认值 | 每分钟限流 |
 | `LOGIN_ACCOUNT_FAILED_MAX` | 否 | `10/5分钟` | 同一规范化用户名的失败登录上限；成功不计数 |

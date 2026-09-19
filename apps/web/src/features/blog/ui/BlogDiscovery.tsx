@@ -43,7 +43,7 @@ export function BlogDiscovery({ workspaceBasePath = '/blog', embedded = false }:
 
   useEffect(() => { void load() }, [load])
 
-  const isGlobalAdmin = isGlobalAdministrator(user?.role)
+  const isGlobalAdmin = isGlobalAdministrator(user?.accountRole)
   const managementHref = user?.accountRole === 'super_admin' ? '/admin' : '/platform-admin'
   return <main className={`${styles.page} ${embedded ? styles.embedded : ''}`}>
     <header className={styles.header}><div>{!embedded && <Link href="/" className={styles.brand}>Carits</Link>}<h1>知识广场</h1><p>浏览作者公开发布的题解、训练复盘和竞赛经验。</p></div>{isAuthenticated && !isGlobalAdmin ? <Link href="/personal/blogs" className={styles.authorLink}>我的文章</Link> : isAuthenticated && isGlobalAdmin ? <Link href={managementHref} className={styles.authorLink}>管理工作台</Link> : <Link href={`/login?next=${encodeURIComponent(workspaceBasePath)}`} className={styles.authorLink}>登录</Link>}</header>

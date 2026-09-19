@@ -33,7 +33,7 @@ sequenceDiagram
   participant DB as PostgreSQL
   Browser->>Next: 打开角色页面
   Next-->>Browser: 页面与客户端组件
-  Browser->>Next: /api/* + Bearer JWT
+  Browser->>Next: /api/* + HttpOnly Session Cookie
   Next->>API: rewrite /api/*
   API->>API: authenticate + authorize + resource check
   API->>DB: Prisma query/transaction

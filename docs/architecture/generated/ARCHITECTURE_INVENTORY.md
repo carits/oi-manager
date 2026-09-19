@@ -15,10 +15,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 |---|---:|
 | Prisma models | 205 |
 | Prisma enums | 77 |
-| Legacy route adapters | 24 |
+| Legacy route adapters | 22 |
 | Module route adapters | 54 |
 | systemd units | 8 |
-| Referenced environment keys | 486 |
+| Referenced environment keys | 485 |
 
 ## HTTP adapter ownership
 
@@ -29,7 +29,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/routes/demo-scenario.ts`
 - `apps/server/src/routes/files.ts`
 - `apps/server/src/routes/me.ts`
-- `apps/server/src/routes/migration.ts`
 - `apps/server/src/routes/milestones.ts`
 - `apps/server/src/routes/oj-accounts.ts`
 - `apps/server/src/routes/oj-fetcher.ts`
@@ -44,7 +43,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/routes/teachers.ts`
 - `apps/server/src/routes/team-problem-lists.ts`
 - `apps/server/src/routes/teams.ts`
-- `apps/server/src/routes/test-graph-admin.ts`
 - `apps/server/src/routes/testdata.ts`
 - `apps/server/src/routes/users.ts`
 - `apps/server/src/routes/workspaces.ts`
@@ -467,7 +465,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ASSIGNMENT_TEST_SCHEMA`
 - `ASSIGNMENT_TEST_SCOPE`
 - `AUDIT_DIR`
-- `AUTH_TOKEN`
 - `BACKEND_URL`
 - `BACKGROUND_WORKER_LOCK_NAME`
 - `BACKUP_DIR`
@@ -564,7 +561,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `EMAIL_TO`
 - `ENABLE_DEMO_SCENARIO_API`
 - `ENABLE_LOG_ARCHIVE`
-- `ENABLE_MAINTENANCE_API`
 - `ENV_FILE`
 - `EVALUATION_LIMITS`
 - `EXECUTOR_INSTANCE`
@@ -833,6 +829,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SERVICE_RESTART_MAX_DELTA`
 - `SERVICE_USER`
 - `SESSION_COOKIE_NAME`
+- `SESSION_TOKEN`
 - `SINCE_HOURS`
 - `SITE`
 - `SKIP_JUDGE_RECOVERY`

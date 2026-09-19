@@ -36,7 +36,7 @@ describe('testdata application service', () => {
   const postFiles = (problemId: string, files: Array<{ name: string; content: string }>, replace = false) => {
     let call = request(app)
       .post(`/api/problems/${problemId}/testdata`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
       .field('replace', String(replace))
     for (const file of files) call = call.attach('files', Buffer.from(file.content), file.name)
     return call
@@ -52,14 +52,14 @@ describe('testdata application service', () => {
 
     const listed = await request(app)
       .get(`/api/problems/${problem.id}/testdata`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
     expect(listed.status).toBe(200)
     expect(listed.body.data.pairs).toEqual([{ input: '1.in', output: '1.out' }])
 
     const input = listed.body.data.files.find((file: { filename: string }) => file.filename === '1.in')
     const downloaded = await request(app)
       .get(`/api/problems/${problem.id}/testdata/files/${input.id}/download`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
     expect(downloaded.status).toBe(200)
     expect(Buffer.from(downloaded.body).toString()).toBe('1 2\n')
   })
@@ -74,7 +74,7 @@ describe('testdata application service', () => {
     expect(replaced.status).toBe(200)
     const downloaded = await request(app)
       .get(`/api/problems/${problem.id}/testdata/files/${replaced.body.data.files[0].id}/download`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
     expect(Buffer.from(downloaded.body).toString()).toBe('new\n')
   })
 
@@ -85,7 +85,7 @@ describe('testdata application service', () => {
     const fileId = uploaded.body.data.files[0].id
     const response = await request(app)
       .get(`/api/problems/${other.id}/testdata/files/${fileId}/download`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
     expect(response.status).toBe(404)
   })
 
@@ -94,12 +94,12 @@ describe('testdata application service', () => {
     const fileId = uploaded.body.data.files[0].id
     const deleted = await request(app)
       .delete(`/api/problems/${problem.id}/testdata/${fileId}`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
     expect(deleted.status).toBe(200)
 
     const downloaded = await request(app)
       .get(`/api/problems/${problem.id}/testdata/files/${fileId}/download`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
     expect(downloaded.status).toBe(404)
     expect(fs.existsSync(path.join(TESTDATA_DIR, problem.id, 'unused.in'))).toBe(false)
   })

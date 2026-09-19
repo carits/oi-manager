@@ -1,7 +1,7 @@
 // 统一导航配置
-import type { LegacyUserRole } from '@oi-manager/contracts'
+import type { AccountRole, OrganizationMembershipRole } from '@oi-manager/contracts'
 
-export type UserRole = LegacyUserRole
+export type NavigationRole = AccountRole | OrganizationMembershipRole
 
 export interface NavItem {
   label: string
@@ -12,7 +12,7 @@ export interface NavItem {
 }
 
 export interface NavConfig {
-  role: UserRole
+  role: NavigationRole
   items: NavItem[]
 }
 
@@ -133,7 +133,7 @@ export const personalNav: NavConfig = {
 }
 
 // 角色到导航配置的映射
-export const roleNavMap: Record<UserRole, NavConfig> = {
+export const roleNavMap: Record<NavigationRole, NavConfig> = {
   super_admin: superAdminNav,
   platform_admin: platformAdminNav,
   school_principal: schoolManagerNav,
@@ -143,8 +143,8 @@ export const roleNavMap: Record<UserRole, NavConfig> = {
 }
 
 // 根据角色获取导航配置
-export function getNavConfig(role: UserRole | string, context?: string): NavConfig {
-  const validRole = role as UserRole
+export function getNavConfig(role: NavigationRole | string, context?: string): NavConfig {
+  const validRole = role as NavigationRole
   // 全局管理员没有个人工作区，始终使用平台管理导航。
   if (validRole === 'super_admin') return superAdminNav
   if (validRole === 'platform_admin') return platformAdminNav
@@ -157,7 +157,7 @@ export function getNavConfig(role: UserRole | string, context?: string): NavConf
 }
 
 // 根据路径获取当前激活的 nav item
-export function getActiveNavItem(href: string, role: UserRole | string, context?: string): string {
+export function getActiveNavItem(href: string, role: NavigationRole | string, context?: string): string {
   const config = getNavConfig(role, context)
   const pathname = href.split('?')[0]
   const organizationModule = context !== 'personal' ? pathname.match(/^\/org\/[^/]+\/([^/]+)/)?.[1] : null
@@ -185,7 +185,7 @@ export function getActiveNavItem(href: string, role: UserRole | string, context?
 }
 
 // 角色显示名称
-export const roleLabels: Record<UserRole, string> = {
+export const roleLabels: Record<NavigationRole, string> = {
   super_admin: '超管',
   platform_admin: '平台管理员',
   school_principal: '学校负责人',
@@ -195,7 +195,7 @@ export const roleLabels: Record<UserRole, string> = {
 }
 
 // 角色中文名称
-export const roleNames: Record<UserRole, string> = {
+export const roleNames: Record<NavigationRole, string> = {
   super_admin: '超级管理员',
   platform_admin: '平台管理员',
   school_principal: '学校负责人',

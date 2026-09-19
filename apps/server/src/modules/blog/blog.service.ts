@@ -966,7 +966,7 @@ export async function reportBlogContent(user: JwtPayload, postId: string, body: 
 }
 
 function requireBlogModerator(user: JwtPayload) {
-  if (!['platform_admin', 'super_admin'].includes(user.accountRole || user.role)) fail(403, 'BLOG_MODERATION_FORBIDDEN', '只有平台管理员可以执行博客治理')
+  if (!['platform_admin', 'super_admin'].includes(user.accountRole)) fail(403, 'BLOG_MODERATION_FORBIDDEN', '只有平台管理员可以执行博客治理')
 }
 
 export async function listBlogReports(user: JwtPayload, query: any) {
@@ -1342,7 +1342,7 @@ export async function listBlogTags(user: JwtPayload, query: any) {
 }
 
 export async function createBlogTag(user: JwtPayload, body: any, system = false) {
-  if (system && !['super_admin', 'platform_admin'].includes(user.accountRole || user.role)) fail(403, 'BLOG_TAG_ADMIN_REQUIRED', '只有平台管理员可以创建系统标签')
+  if (system && !['super_admin', 'platform_admin'].includes(user.accountRole)) fail(403, 'BLOG_TAG_ADMIN_REQUIRED', '只有平台管理员可以创建系统标签')
   const tag = normalizedName(body?.name, 'name', 30)
   const kind: BlogTagKind = system ? 'SYSTEM' : 'USER'
   const scopeKey = system ? 'system' : `user:${user.userId}`

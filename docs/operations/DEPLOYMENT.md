@@ -90,12 +90,12 @@ pnpm preview:promote
 ```
 
 Validator / Classifier / STD / Generator 改动发布后，使用短期超级管理员
-Bearer Token 在不可见的草稿题上执行一次完整线上闭环。探针会创建初始 OI
+Session Token（通过 Cookie 发送） 在不可见的草稿题上执行一次完整线上闭环。探针会创建初始 OI
 Revision、异步编译并预检四类程序、激活版本、生成正式测试点并发布下一
 Revision，最后提交一个 Generator Candidate 并确认 Classifier 命中 Subtask：
 
 ```bash
-BASE_URL=http://127.0.0.1:3002 AUTH_TOKEN='<short-lived token>' pnpm judge:workflow:live
+BASE_URL=http://127.0.0.1:3002 SESSION_TOKEN='<short-lived token>' pnpm judge:workflow:live
 ```
 
 探针不输出认证信息或程序源码，只输出草稿题 ID、版本号、程序版本 ID 和候选

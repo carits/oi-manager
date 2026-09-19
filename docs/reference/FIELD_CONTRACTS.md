@@ -65,13 +65,11 @@ const LoginRequestSchema = z.object({
   username: z.string().trim().min(1).max(64),
   password: z.string().min(1).max(256),
   workspaceMode: z.enum(['work', 'personal']).optional(),
-  mode: z.enum(['campus', 'personal']).optional(), // deprecated compatibility
-})
+}).strict()
 
 const LoginResponseDataSchema = z.object({
   userId: z.string(),
   accountRole: z.enum(['user', 'platform_admin', 'super_admin']),
-  role: LegacyUserRoleSchema, // 当前请求上下文展示角色，兼容旧客户端
   username: z.string(),
   workspaceMode: z.enum(['work', 'personal']),
   avatar: z.string().nullable().optional(),
@@ -82,7 +80,7 @@ const LoginResponseDataSchema = z.object({
 Schema 与 TypeScript 类型均来自 `packages/contracts/src/auth.ts`。登录响应不返回 JWT、管理员/教师/学生
 扩展实体 ID 或学校 ID；账号身份使用 `accountRole`，组织岗位在进入明确组织上下文后单独解析。
 
-`workspaceMode` 是会话工作区。旧请求字段 `mode` 仅用于兼容旧客户端，不出现在响应中。
+`workspaceMode` 是唯一会话工作区字段。旧 `mode`、`role` 和 `studentMode` 输入会被严格拒绝。
 
 `schoolId` 始终是 `School.id`，仅在当前组织关联学校时出现；`organizationId` 是
 `Organization.id`，用于成员关系与 `X-OI-Organization-ID`。调用方不得用组织 ID 填充

@@ -2,7 +2,6 @@ import express from 'express'
 import request from 'supertest'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ojFetcherRouter } from '../src/routes/oj-fetcher'
-import { migrationRouter } from '../src/routes/migration'
 import { prisma } from '../src/prisma'
 import { generateTestToken } from './helpers/testToken'
 import { createTestUser } from './helpers/testUser'
@@ -10,7 +9,6 @@ import { createTestUser } from './helpers/testUser'
 const app = express()
 app.use(express.json())
 app.use('/api/oj-fetcher', ojFetcherRouter)
-app.use('/api/admin/migration', migrationRouter)
 
 type SecurityRole = 'student' | 'platform_admin' | 'super_admin'
 let securityUsers: Partial<Record<SecurityRole, Awaited<ReturnType<typeof createTestUser>>>> = {}
@@ -34,7 +32,6 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  process.env.ENABLE_MAINTENANCE_API = 'false'
   await prisma.ojPlatformConfig.deleteMany({
     where: { platform: { in: ['security-test', 'carits'] } },
   })
@@ -44,7 +41,7 @@ describe('sensitive route boundaries', () => {
   it('lets an authenticated regular account use non-admin OJ reads', async () => {
     const response = await request(app)
       .get('/api/oj-fetcher/not-a-platform/1000')
-      .set('Authorization', `Bearer ${tokenFor('student')}`)
+      .set('Cookie', `oi_session=${tokenFor('student')}`)
 
     expect(response.status).toBe(400)
     expect(response.body.error?.code).toBe('PLATFORM_NOT_SUPPORTED')
@@ -56,12 +53,12 @@ describe('sensitive route boundaries', () => {
 
     const student = await request(app)
       .get('/api/oj-fetcher/jobs')
-      .set('Authorization', `Bearer ${tokenFor('student')}`)
+      .set('Cookie', `oi_session=${tokenFor('student')}`)
     expect(student.status).toBe(403)
 
     const platformAdmin = await request(app)
       .get('/api/oj-fetcher/jobs?pageSize=1')
-      .set('Authorization', `Bearer ${tokenFor('platform_admin')}`)
+      .set('Cookie', `oi_session=${tokenFor('platform_admin')}`)
     expect(platformAdmin.status).toBe(200)
   })
 
@@ -79,12 +76,12 @@ describe('sensitive route boundaries', () => {
 
     const platformAdmin = await request(app)
       .get('/api/oj-fetcher/platforms/carits/config')
-      .set('Authorization', `Bearer ${tokenFor('platform_admin')}`)
+      .set('Cookie', `oi_session=${tokenFor('platform_admin')}`)
     expect(platformAdmin.status).toBe(403)
 
     const superAdmin = await request(app)
       .get('/api/oj-fetcher/platforms/carits/config')
-      .set('Authorization', `Bearer ${tokenFor('super_admin')}`)
+      .set('Cookie', `oi_session=${tokenFor('super_admin')}`)
     expect(superAdmin.status).toBe(200)
     expect(superAdmin.body.data).toMatchObject({
       configured: true,
@@ -98,29 +95,18 @@ describe('sensitive route boundaries', () => {
   it('rejects unknown OJ configuration platforms and oversized batches', async () => {
     const unknown = await request(app)
       .get('/api/oj-fetcher/platforms/security-test/config')
-      .set('Authorization', `Bearer ${tokenFor('super_admin')}`)
+      .set('Cookie', `oi_session=${tokenFor('super_admin')}`)
     expect(unknown.status).toBe(400)
 
     const oversized = await request(app)
       .post('/api/oj-fetcher/jobs/batch')
-      .set('Authorization', `Bearer ${tokenFor('platform_admin')}`)
+      .set('Cookie', `oi_session=${tokenFor('platform_admin')}`)
       .send({ platform: 'carits', problemIds: Array.from({ length: 201 }, (_, index) => String(index + 1)) })
     expect(oversized.status).toBe(400)
   })
 
-  it('requires super admin and an explicit maintenance flag', async () => {
-    const anonymous = await request(app)
-      .post('/api/admin/migration/migrate-submission-scope')
-    expect(anonymous.status).toBe(401)
-
-    const student = await request(app)
-      .post('/api/admin/migration/migrate-submission-scope')
-      .set('Authorization', `Bearer ${tokenFor('student')}`)
-    expect(student.status).toBe(403)
-
-    const disabled = await request(app)
-      .post('/api/admin/migration/migrate-submission-scope')
-      .set('Authorization', `Bearer ${tokenFor('super_admin')}`)
-    expect(disabled.status).toBe(404)
+  it('does not expose retired migration HTTP endpoints', async () => {
+    const response = await request(app).post('/api/admin/migration/migrate-submission-scope')
+    expect(response.status).toBe(404)
   })
 })

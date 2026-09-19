@@ -99,7 +99,7 @@ export function useTrainingActions(
             ? 'platform' as const
             : 'organization' as const
         const platformBasePath = currentPath.startsWith('/admin/') ? '/admin' as const : '/platform-admin' as const
-        router.push(teamId ? `${basePath}/${teamId}?tab=${listKind === 'contest' ? 'contest' : listKind}` : listHref(listKind, { workspace, organizationId, platformBasePath, role: 'teacher' }))
+        router.push(teamId ? `${basePath}/${teamId}?tab=${listKind === 'contest' ? 'contest' : listKind}` : listHref(listKind, { workspace, organizationId, platformBasePath, accountRole: 'user', organizationRole: 'teacher' }))
         return true
       } else {
         toast.error(res.message || '删除失败')

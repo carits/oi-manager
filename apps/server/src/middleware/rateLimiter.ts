@@ -20,11 +20,7 @@ function requestIpKey(req: Request): string {
 }
 
 export function getRateLimitKey(req: Request): string {
-  const authorization = req.headers.authorization
-  const bearerToken = authorization?.startsWith('Bearer ')
-    ? authorization.slice('Bearer '.length)
-    : null
-  const token = bearerToken || getSessionToken(req)
+  const token = getSessionToken(req)
 
   if (token) {
     try {
