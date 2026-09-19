@@ -87,7 +87,7 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
     updateRequestContext(req, result.user.id, result.user.role)
     logger.audit('login_success', {
       userId: result.user.id, action: 'login', target: username,
-      metadata: { userRole: result.user.role, loginMode: 'unified', ip: clientIp(req) },
+      metadata: { accountRole: result.accountRole, ip: clientIp(req) },
     })
     const responseData = LoginResponseDataSchema.parse({
       userId: result.user.id,

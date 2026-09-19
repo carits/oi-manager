@@ -22,14 +22,14 @@ export type LoginAccountResult =
 async function writeLoginLog(data: {
   userId?: string
   username: string
-  userRole?: string
+  accountRoleSnapshot?: string
   result: string
   failureReason?: string
   ipAddress: string
   userAgent: string
 }) {
   await prisma.loginLog.create({
-    data: { id: crypto.randomUUID(), loginRole: 'unified', ...data },
+    data: { id: crypto.randomUUID(), ...data },
   })
 }
 
@@ -50,14 +50,14 @@ export async function loginAccount(params: {
   }
   if (!await bcrypt.compare(params.password, user.passwordHash)) {
     await writeLoginLog({
-      username: params.username, userRole: user.role, result: 'failed_wrong_password', failureReason: '密码错误',
+      username: params.username, accountRoleSnapshot: user.role, result: 'failed_wrong_password', failureReason: '密码错误',
       ipAddress: params.ipAddress, userAgent: params.userAgent,
     })
     return { ok: false, message: '用户名或密码错误' }
   }
   if (user.status === 'disabled') {
     await writeLoginLog({
-      userId: user.id, username: params.username, userRole: user.role,
+      userId: user.id, username: params.username, accountRoleSnapshot: user.role,
       result: 'failed_account_disabled', failureReason: '账号已被禁用',
       ipAddress: params.ipAddress, userAgent: params.userAgent,
     })
@@ -66,7 +66,7 @@ export async function loginAccount(params: {
   const parsedAccountRole = AccountRoleSchema.safeParse(user.role)
   if (!parsedAccountRole.success) {
     await writeLoginLog({
-      userId: user.id, username: params.username, userRole: user.role, result: 'failed_invalid_account_role',
+      userId: user.id, username: params.username, accountRoleSnapshot: user.role, result: 'failed_invalid_account_role',
       failureReason: '账号全局角色未归一', ipAddress: params.ipAddress, userAgent: params.userAgent,
     })
     return { ok: false, message: '账号权限配置无效，请联系管理员' }
@@ -77,8 +77,8 @@ export async function loginAccount(params: {
     prisma.personalProfile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} }),
     prisma.loginLog.create({
       data: {
-        id: crypto.randomUUID(), userId: user.id, username: params.username, loginRole: 'unified',
-        userRole: user.role, result: 'success', ipAddress: params.ipAddress, userAgent: params.userAgent,
+        id: crypto.randomUUID(), userId: user.id, username: params.username,
+        accountRoleSnapshot: user.role, result: 'success', ipAddress: params.ipAddress, userAgent: params.userAgent,
       },
     }),
   ])

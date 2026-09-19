@@ -1,18 +1,22 @@
-import { prisma } from '../../src/prisma'
 import bcrypt from 'bcryptjs'
 import type { AccountRole, OrganizationMembershipRole } from '../../../../packages/contracts/src'
+import { prisma } from '../../src/prisma'
 
-const PLATFORM_SCHOOL_ID = 'platform-school-00000000'
 const TEST_BCRYPT_ROUNDS = 4
 
+interface TestOrganizationMembershipOptions {
+  role: OrganizationMembershipRole
+  organizationId?: string
+  headTeacherMembershipId?: string
+  rating?: number
+}
+
 interface CreateTestUserOptions {
-  role?: AccountRole | OrganizationMembershipRole
+  accountRole?: AccountRole
   username?: string
   password?: string
-  schoolId?: string
   status?: 'active' | 'disabled'
-  headTeacherId?: string
-  rating?: number
+  organization?: TestOrganizationMembershipOptions
 }
 
 interface CreatedTestUser {
@@ -20,57 +24,32 @@ interface CreatedTestUser {
     id: string
     username: string
     passwordHash: string
-    role: AccountRole | OrganizationMembershipRole
+    accountRole: AccountRole
     status: string
-    teacherId?: string
-    studentId?: string
+  }
+  userId: string
+  password: string
+  accountRole: AccountRole
+  organization: {
+    organizationId: string
+    membershipId: string
+    role: OrganizationMembershipRole
     teacherProfileId?: string
     studentProfileId?: string
-    adminId?: string
-    schoolId?: string
-  }
-  password: string
-  teacherId?: string
-  studentId?: string
-  teacherProfileId?: string
-  studentProfileId?: string
-  adminId?: string
-  schoolId?: string
-}
-
-async function organizationIdForSchool(schoolId: string): Promise<string> {
-  const school = await prisma.school.findUnique({ where: { id: schoolId } })
-  if (!school) throw new Error(`Test school ${schoolId} does not exist`)
-  if (school.organizationId) return school.organizationId
-
-  const organizationId = `org-${crypto.randomUUID()}`
-  await prisma.$transaction([
-    prisma.organization.create({
-      data: { id: organizationId, name: school.name, type: 'school', status: 'active' },
-    }),
-    prisma.school.update({ where: { id: school.id }, data: { organizationId } }),
-  ])
-  return organizationId
+  } | null
 }
 
 export async function createTestUser(options: CreateTestUserOptions = {}): Promise<CreatedTestUser> {
   const {
-    role = 'student',
+    accountRole = 'user',
     username,
     password = 'test123456',
     status = 'active',
-    headTeacherId,
-    rating = 1200,
+    organization,
   } = options
-  let schoolId = options.schoolId
-  if (!schoolId && role !== 'super_admin' && role !== 'platform_admin') {
-    schoolId = (await createTestSchool()).id
-  }
-  if (!schoolId && (role === 'super_admin' || role === 'platform_admin')) schoolId = PLATFORM_SCHOOL_ID
 
   const userId = crypto.randomUUID()
   const passwordHash = await bcrypt.hash(password, TEST_BCRYPT_ROUNDS)
-  const accountRole: AccountRole = role === 'super_admin' || role === 'platform_admin' ? role : 'user'
   const user = await prisma.user.create({
     data: {
       id: userId,
@@ -81,65 +60,63 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
     },
   })
 
-  let teacherId: string | undefined
-  let studentId: string | undefined
-  let teacherProfileId: string | undefined
-  let studentProfileId: string | undefined
-  let adminId: string | undefined
-  if (role === 'super_admin' || role === 'platform_admin') {
-    adminId = user.id
-  } else if (schoolId) {
-    const organizationId = await organizationIdForSchool(schoolId)
+  let organizationFixture: CreatedTestUser['organization'] = null
+  if (organization) {
+    const organizationId = organization.organizationId || (await createTestSchool()).organizationId!
     const membershipId = crypto.randomUUID()
-    const memberRole = role === 'school_principal' ? 'school_principal' : role
     await prisma.organizationMembership.create({
       data: {
         id: membershipId,
         organizationId,
         userId: user.id,
-        memberRole,
-        relationType: role === 'student' ? 'enrolled' : 'employee',
+        memberRole: organization.role,
+        relationType: organization.role === 'student' ? 'enrolled' : 'employee',
         status: 'active',
         joinedAt: new Date(),
         RoleAssignments: {
-          create: { id: crypto.randomUUID(), roleKey: memberRole, source: 'test_fixture' },
+          create: { id: crypto.randomUUID(), roleKey: organization.role, source: 'test_fixture' },
         },
       },
     })
 
-    if (role === 'student') {
-      const headTeacherMembership = headTeacherId
-        ? await prisma.organizationMembership.findFirst({
-            where: { organizationId, userId: headTeacherId, status: 'active' },
-            select: { id: true },
-          })
-        : null
+    let teacherProfileId: string | undefined
+    let studentProfileId: string | undefined
+    if (organization.role === 'student') {
       const profile = await prisma.organizationStudentProfile.create({
         data: {
           id: crypto.randomUUID(),
           membershipId,
           name: 'Test student',
-          rating,
-          headTeacherMembershipId: headTeacherMembership?.id || null,
+          rating: organization.rating ?? 1200,
+          headTeacherMembershipId: organization.headTeacherMembershipId || null,
           status: 'active',
         },
       })
-      studentId = user.id
       studentProfileId = profile.id
     } else {
       const profile = await prisma.organizationTeacherProfile.create({
         data: {
           id: crypto.randomUUID(),
           membershipId,
-          name: `Test ${role}`,
+          name: `Test ${organization.role}`,
           status: 'active',
         },
       })
-      teacherId = user.id
       teacherProfileId = profile.id
-      if (role === 'school_principal') {
-        await prisma.school.update({ where: { id: schoolId }, data: { currentPrincipalMembershipId: membershipId } })
+      if (organization.role === 'school_principal') {
+        await prisma.school.update({
+          where: { organizationId },
+          data: { currentPrincipalMembershipId: membershipId },
+        })
       }
+    }
+
+    organizationFixture = {
+      organizationId,
+      membershipId,
+      role: organization.role,
+      teacherProfileId,
+      studentProfileId,
     }
   }
 
@@ -148,26 +125,17 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
       id: user.id,
       username: user.username,
       passwordHash,
-      role: user.role as AccountRole | OrganizationMembershipRole,
+      accountRole: user.role as AccountRole,
       status: user.status,
-      teacherId,
-      studentId,
-      teacherProfileId,
-      studentProfileId,
-      adminId,
-      schoolId,
     },
+    userId: user.id,
     password,
-    teacherId,
-    studentId,
-    teacherProfileId,
-    studentProfileId,
-    adminId,
-    schoolId,
+    accountRole,
+    organization: organizationFixture,
   }
 }
 
-export async function createTestSchool(options: { name?: string; principalTeacherId?: string } = {}) {
+export async function createTestSchool(options: { name?: string; principalMembershipId?: string } = {}) {
   const idSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const organizationId = `org-test-${idSuffix}`
   const schoolId = `school-test-${idSuffix}`
@@ -180,30 +148,26 @@ export async function createTestSchool(options: { name?: string; principalTeache
     data: { id: schoolId, name, organizationId, status: 'active', directoryStatus: 'verified' },
   })
 
-  if (options.principalTeacherId) {
-    const membership = await prisma.organizationMembership.findFirst({
-      where: { organizationId, userId: options.principalTeacherId, status: 'active' },
-      select: { id: true },
+  if (options.principalMembershipId) {
+    return prisma.school.update({
+      where: { id: school.id },
+      data: { currentPrincipalMembershipId: options.principalMembershipId },
     })
-    if (membership) {
-      return prisma.school.update({
-        where: { id: school.id },
-        data: { currentPrincipalMembershipId: membership.id },
-      })
-    }
   }
   return school
 }
 
 export async function createTestSchoolWithPrincipal(schoolName?: string) {
   const school = await createTestSchool({ name: schoolName })
-  const principalUser = await createTestUser({ role: 'school_principal', schoolId: school.id })
+  const principalUser = await createTestUser({
+    organization: { role: 'school_principal', organizationId: school.organizationId! },
+  })
   return {
     school,
     principal: {
-      userId: principalUser.user.id,
-      teacherId: principalUser.teacherId!,
-      teacherProfileId: principalUser.teacherProfileId!,
+      userId: principalUser.userId,
+      membershipId: principalUser.organization!.membershipId,
+      teacherProfileId: principalUser.organization!.teacherProfileId!,
       username: principalUser.user.username,
     },
   }
@@ -211,21 +175,20 @@ export async function createTestSchoolWithPrincipal(schoolName?: string) {
 
 export async function createTestTeam(options: {
   name?: string
-  schoolId: string | null
+  organizationId: string | null
   ownerId?: string
   ownerType?: 'teacher' | 'student' | 'user'
   isPublic?: boolean
   scope?: 'campus' | 'personal'
-} = { schoolId: '' }) {
+} = { organizationId: null }) {
   const {
     name,
-    schoolId,
+    organizationId,
     ownerId,
     ownerType = 'teacher',
     isPublic = true,
     scope = 'campus',
   } = options
-  const organizationId = schoolId ? await organizationIdForSchool(schoolId) : null
   const team = await prisma.team.create({
     data: {
       id: `team_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,

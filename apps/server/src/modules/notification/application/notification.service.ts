@@ -12,7 +12,6 @@ function isAccountView(query: Record<string, unknown>) {
 }
 
 async function notificationAccess(user: AuthUser, query: Record<string, unknown> = {}) {
-  const scope = getResourceScope(user)
   if (isAccountView(query)) {
     const memberships = await prisma.organizationMembership.findMany({
       where: {
@@ -41,7 +40,7 @@ async function notificationAccess(user: AuthUser, query: Record<string, unknown>
   if (user.organizationId) contexts.push({ contextKey: `organization:${user.organizationId}` })
   return {
     organizationIds: user.organizationId ? [user.organizationId] : [],
-    where: { userId: user.userId, OR: [...contexts, { contextKey: 'legacy:campus', scope }] },
+    where: { userId: user.userId, OR: contexts },
   }
 }
 
@@ -62,7 +61,7 @@ async function resolveNotificationRows(
     const match = row.contextKey.match(/^organization:(.+)$/)
     return match ? [match[1]] : []
   }))]
-  const [teamMembers, administratorMemberships, organizationInvitations, legacyOrganizationInvitations, joinApplications, creationApplications, organizations] = await Promise.all([
+  const [teamMembers, administratorMemberships, organizationInvitations, joinApplications, creationApplications, organizations] = await Promise.all([
     teamInvitationIds.length || joinRequestIds.length
       ? prisma.teamMember.findMany({
           where: { id: { in: [...teamInvitationIds, ...joinRequestIds] } },
@@ -85,11 +84,6 @@ async function resolveNotificationRows(
     organizationInvitationIds.length ? prisma.organizationInvitation.findMany({
       where: { id: { in: organizationInvitationIds }, userId: user.userId }, select: { id: true, status: true, expiresAt: true },
     }) : [],
-    organizationInvitationIds.length
-      ? prisma.organizationMembership.findMany({
-          where: { id: { in: organizationInvitationIds }, userId: user.userId }, select: { id: true, status: true },
-        })
-      : [],
     joinApplicationIds.length ? prisma.organizationJoinApplication.findMany({
       where: {
         id: { in: joinApplicationIds },
@@ -105,7 +99,7 @@ async function resolveNotificationRows(
   ])
   const teamMemberById = new Map(teamMembers.map(member => [member.id, member]))
   const administratorTeamIds = new Set(administratorMemberships.map(member => member.teamId))
-  const organizationInvitationById = new Map([...legacyOrganizationInvitations, ...organizationInvitations].map(invitation => [invitation.id, invitation]))
+  const organizationInvitationById = new Map(organizationInvitations.map(invitation => [invitation.id, invitation]))
   const joinApplicationById = new Map(joinApplications.map(application => [application.id, application]))
   const creationApplicationById = new Map(creationApplications.map(application => [application.id, application]))
   const actionableIds = new Set(rows.flatMap(row => {
@@ -126,7 +120,7 @@ async function resolveNotificationRows(
     }
     if (row.type === 'organization_invitation') {
       const invitation = organizationInvitationById.get(row.sourceId)
-      return invitation?.status === 'pending' && (!('expiresAt' in invitation) || !invitation.expiresAt || invitation.expiresAt > new Date()) ? [row.id] : []
+      return invitation?.status === 'pending' && (!invitation.expiresAt || invitation.expiresAt > new Date()) ? [row.id] : []
     }
     if (row.type === 'organization_join_application_received') {
       return joinApplicationById.get(row.sourceId)?.status === 'pending' ? [row.id] : []

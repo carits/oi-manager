@@ -13,13 +13,8 @@ app.use('/api/submit', submitRouter)
 app.use('/api', trainingsRouter)
 
 async function fixture(judgeConfig: string | null = 'mode: acm\ncases: []\n', withTestdata = true) {
-  const actor = await createTestUser({ role: 'platform_admin' })
-  const token = generateTestToken({
-    userId: actor.user.id,
-    username: actor.user.username,
-    role: 'platform_admin',
-    workspaceMode: 'personal',
-  })
+  const actor = await createTestUser({ accountRole: 'platform_admin' })
+  const token = generateTestToken({ userId: actor.user.id, username: actor.user.username, workspaceMode: 'personal', accountRole: 'platform_admin' })
   const suffix = crypto.randomUUID()
   const problem = await prisma.problem.create({
     data: {

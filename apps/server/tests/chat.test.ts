@@ -30,10 +30,10 @@ async function user(username: string, role = 'user') {
 
 beforeEach(async () => {
   alice = await user('chat-alice'); bob = await user('chat-bob'); outsider = await user('chat-outsider'); admin = await user('chat-admin', 'platform_admin')
-  aliceToken = generateTestToken({ userId: alice.id, username: alice.username, role: 'user', workspaceMode: 'personal' })
-  bobToken = generateTestToken({ userId: bob.id, username: bob.username, role: 'user', workspaceMode: 'personal' })
-  outsiderToken = generateTestToken({ userId: outsider.id, username: outsider.username, role: 'user', workspaceMode: 'personal' })
-  adminToken = generateTestToken({ userId: admin.id, username: admin.username, role: 'platform_admin', workspaceMode: 'work' })
+  aliceToken = generateTestToken({ userId: alice.id, username: alice.username, workspaceMode: 'personal', accountRole: 'user' })
+  bobToken = generateTestToken({ userId: bob.id, username: bob.username, workspaceMode: 'personal', accountRole: 'user' })
+  outsiderToken = generateTestToken({ userId: outsider.id, username: outsider.username, workspaceMode: 'personal', accountRole: 'user' })
+  adminToken = generateTestToken({ userId: admin.id, username: admin.username, workspaceMode: 'work', accountRole: 'platform_admin' })
 })
 
 async function befriend() {
@@ -56,7 +56,7 @@ async function stickerArchive() {
 describe('account direct chat', () => {
   it('imports, publishes, sends and retires an immutable platform sticker pack', async () => {
     const superAdmin = await user('sticker-super-admin', 'super_admin')
-    const superToken = generateTestToken({ userId: superAdmin.id, username: superAdmin.username, role: 'super_admin', workspaceMode: 'work' })
+    const superToken = generateTestToken({ userId: superAdmin.id, username: superAdmin.username, workspaceMode: 'work', accountRole: 'super_admin' })
     const staged = await request(app).post('/api/platform/chat-sticker-imports').set(auth(superToken)).attach('archive', await stickerArchive(), 'stickers.zip')
     expect(staged.status).toBe(201)
     expect(staged.body.data.report.totals).toMatchObject({ count: 1 })

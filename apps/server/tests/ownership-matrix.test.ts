@@ -23,13 +23,13 @@ describe('resource ownership permission matrix', () => {
   beforeEach(async () => {
     schoolA = await createTestSchool({ name: 'Ownership school A' })
     schoolB = await createTestSchool({ name: 'Ownership school B' })
-    principal = await createTestUser({ role: 'school_principal', schoolId: schoolA.id })
-    creator = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
-    otherTeacher = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
-    student = await createTestUser({ role: 'student', schoolId: schoolA.id })
-    outsider = await createTestUser({ role: 'teacher', schoolId: schoolB.id })
-    superAdmin = await createTestUser({ role: 'super_admin' })
-    platformAdmin = await createTestUser({ role: 'platform_admin' })
+    principal = await createTestUser({ organization: { role: 'school_principal', organizationId: schoolA.organizationId! } })
+    creator = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.organizationId! } })
+    otherTeacher = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.organizationId! } })
+    student = await createTestUser({ organization: { role: 'student', organizationId: schoolA.organizationId! } })
+    outsider = await createTestUser({ organization: { role: 'teacher', organizationId: schoolB.organizationId! } })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
+    platformAdmin = await createTestUser({ accountRole: 'platform_admin' })
   })
 
   it('separates activity participation from activity management', async () => {
@@ -64,7 +64,7 @@ describe('resource ownership permission matrix', () => {
   })
 
   it('keeps campus team management narrower than global read access', async () => {
-    const team = await createTestTeam({ schoolId: schoolA.id, ownerId: creator.user.id })
+    const team = await createTestTeam({ organizationId: schoolA.organizationId!, ownerId: creator.user.id })
     await prisma.teamMember.create({
       data: {
         id: crypto.randomUUID(),
@@ -111,7 +111,7 @@ describe('resource ownership permission matrix', () => {
     const user = (created: Awaited<ReturnType<typeof createTestUser>>, organizationId?: string) => ({
       userId: created.user.id,
       username: created.user.username,
-      role: created.user.role,
+      role: created.user.accountRole,
       workspaceMode: 'work' as const,
       organizationId,
     })

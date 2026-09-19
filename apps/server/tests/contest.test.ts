@@ -50,11 +50,11 @@ describe('比赛赛制可见性测试', () => {
 
   beforeEach(async () => {
     schoolData = await createTestSchoolWithPrincipal()
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
 
     team = await createTestTeam({
-      schoolId: schoolData.school.id,
+      organizationId: schoolData.school.organizationId!,
       ownerId: ownerUser.user.id
     })
 
@@ -70,21 +70,9 @@ describe('比赛赛制可见性测试', () => {
       }
     })
 
-    ownerToken = generateTestToken({
-      userId: ownerUser.user.id,
-      role: 'teacher',
-      username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
 
-    studentToken = generateTestToken({
-      userId: studentUser.user.id,
-      role: 'student',
-      username: studentUser.user.username,
-      studentId: studentUser.studentId!,
-      schoolId: schoolData.school.id
-    })
+    studentToken = generateTestToken({ userId: studentUser.user.id, username: studentUser.user.username, accountRole: 'user' })
   })
 
   // ==================== IOI 赛制（实时可见） ====================
@@ -294,13 +282,13 @@ describe('比赛创建权限测试', () => {
 
   beforeEach(async () => {
     schoolData = await createTestSchoolWithPrincipal()
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    adminUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    memberUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    adminUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    memberUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
 
     team = await createTestTeam({
-      schoolId: schoolData.school.id,
+      organizationId: schoolData.school.organizationId!,
       ownerId: ownerUser.user.id
     })
 
@@ -340,37 +328,13 @@ describe('比赛创建权限测试', () => {
       }
     })
 
-    ownerToken = generateTestToken({
-      userId: ownerUser.user.id,
-      role: 'teacher',
-      username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
 
-    adminToken = generateTestToken({
-      userId: adminUser.user.id,
-      role: 'teacher',
-      username: adminUser.user.username,
-      teacherId: adminUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    adminToken = generateTestToken({ userId: adminUser.user.id, username: adminUser.user.username, accountRole: 'user' })
 
-    memberToken = generateTestToken({
-      userId: memberUser.user.id,
-      role: 'teacher',
-      username: memberUser.user.username,
-      teacherId: memberUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    memberToken = generateTestToken({ userId: memberUser.user.id, username: memberUser.user.username, accountRole: 'user' })
 
-    studentToken = generateTestToken({
-      userId: studentUser.user.id,
-      role: 'student',
-      username: studentUser.user.username,
-      studentId: studentUser.studentId!,
-      schoolId: schoolData.school.id
-    })
+    studentToken = generateTestToken({ userId: studentUser.user.id, username: studentUser.user.username, accountRole: 'user' })
   })
 
   it('CA1: owner 可以创建比赛', async () => {
@@ -442,18 +406,12 @@ describe('比赛类型区分测试', () => {
 
   beforeEach(async () => {
     schoolData = await createTestSchoolWithPrincipal()
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
     team = await createTestTeam({
-      schoolId: schoolData.school.id,
+      organizationId: schoolData.school.organizationId!,
       ownerId: ownerUser.user.id
     })
-    ownerToken = generateTestToken({
-      userId: ownerUser.user.id,
-      role: 'teacher',
-      username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId!,
-      schoolId: schoolData.school.id
-    })
+    ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
   })
 
   it('CT1: 创建训练（type=training）', async () => {

@@ -22,7 +22,7 @@ const root = path.join(process.cwd(), 'testdata')
 const createdDirectories: string[] = []
 
 async function fixture(mode: 'acm' | 'oi' = 'acm') {
-  const owner = await createTestUser({ role: 'platform_admin' })
+  const owner = await createTestUser({ accountRole: 'platform_admin' })
   const contributor = await createTestUser()
   const problemId = crypto.randomUUID()
   const directory = path.join(root, problemId)

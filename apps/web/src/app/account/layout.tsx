@@ -5,7 +5,6 @@ export default function AccountLayout({ children }: { children: ReactNode }) {
   return (
     <RoleLayout
       allowedRoles={['super_admin', 'platform_admin', 'school_principal', 'teacher', 'student', 'user']}
-      loginRole="student"
       homePath="/account/profile"
     >
       {children}

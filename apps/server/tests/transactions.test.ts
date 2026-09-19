@@ -9,31 +9,23 @@ const app = createTestApp()
 const unique = (prefix: string) => `${prefix}_${crypto.randomUUID().slice(0, 8)}`
 
 function tokenFor(user: Awaited<ReturnType<typeof createTestUser>>) {
-  return generateTestToken({
-    userId: user.user.id,
-    role: user.user.role,
-    username: user.user.username,
-    schoolId: user.schoolId,
-    teacherId: user.teacherId,
-    studentId: user.studentId,
-    adminId: user.adminId,
-  })
+  return generateTestToken({ userId: user.user.id, username: user.user.username, accountRole: user.user.accountRole })
 }
 
 describe('current transactional resource flows', () => {
   let superAdmin: Awaited<ReturnType<typeof createTestUser>>
 
   beforeEach(async () => {
-    superAdmin = await createTestUser({ role: 'super_admin' })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
   })
 
-  it('retires the legacy school endpoint instead of mutating old models', async () => {
+  it('does not expose the removed school endpoint', async () => {
     const response = await request(app)
       .post('/api/schools')
       .set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
       .send({ name: 'Legacy school' })
-    expect(response.status).toBe(410)
-    expect(response.body.code).toBe('LEGACY_SCHOOL_API_RETIRED')
+    expect(response.status).toBe(404)
+    expect(response.body).toEqual({ success: false, message: '接口不存在' })
   })
 
   it('creates organization, school, principal membership and profile atomically', async () => {
@@ -62,7 +54,7 @@ describe('current transactional resource flows', () => {
   })
 
   it('rejects duplicate principal usernames without creating a partial organization', async () => {
-    const existing = await createTestUser({ role: 'teacher' })
+    const existing = await createTestUser({ organization: { role: 'teacher' } })
     const name = unique('No Partial School')
     const response = await request(app)
       .post('/api/platform/organizations')
@@ -79,7 +71,7 @@ describe('current transactional resource flows', () => {
       .send({ name: 'Missing principal' })
     expect(incomplete.status).toBe(400)
 
-    const platformAdmin = await createTestUser({ role: 'platform_admin' })
+    const platformAdmin = await createTestUser({ accountRole: 'platform_admin' })
     const denied = await request(app)
       .post('/api/platform/organizations')
       .set('Cookie', `oi_session=${tokenFor(platformAdmin)}`)
@@ -89,7 +81,7 @@ describe('current transactional resource flows', () => {
 
   it('creates a student user, membership and profile in the active organization', async () => {
     const { school } = await createTestSchoolWithPrincipal()
-    const teacher = await createTestUser({ role: 'teacher', schoolId: school.id })
+    const teacher = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
     const username = unique('student')
     const response = await request(app)
       .post(`/api/organizations/${school.organizationId}/members/students`)
@@ -110,7 +102,7 @@ describe('current transactional resource flows', () => {
   it('rejects cross-organization student creation before writing a user', async () => {
     const { school: schoolA } = await createTestSchoolWithPrincipal('School A')
     const { school: schoolB } = await createTestSchoolWithPrincipal('School B')
-    const teacher = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
+    const teacher = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.organizationId! } })
     const username = unique('cross_student')
     const response = await request(app)
       .post(`/api/organizations/${schoolB.organizationId}/members/students`)
@@ -123,7 +115,7 @@ describe('current transactional resource flows', () => {
 
   it('transfers the principal membership and demotes the previous principal atomically', async () => {
     const { school } = await createTestSchoolWithPrincipal()
-    const next = await createTestUser({ role: 'teacher', schoolId: school.id })
+    const next = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
     const nextMembership = await prisma.organizationMembership.findFirstOrThrow({
       where: { organizationId: school.organizationId!, userId: next.user.id, status: 'active' },
     })
@@ -146,7 +138,7 @@ describe('current transactional resource flows', () => {
   })
 
   it('updates account status atomically', async () => {
-    const target = await createTestUser({ role: 'teacher' })
+    const target = await createTestUser({ organization: { role: 'teacher' } })
     const response = await request(app)
       .put(`/api/users/${target.user.id}/status`)
       .set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
@@ -157,7 +149,7 @@ describe('current transactional resource flows', () => {
 
   it('creates a campus team with an active owner in the request organization', async () => {
     const { school } = await createTestSchoolWithPrincipal()
-    const teacher = await createTestUser({ role: 'teacher', schoolId: school.id })
+    const teacher = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
     const response = await request(app)
       .post('/api/teams')
       .set('Cookie', `oi_session=${tokenFor(teacher)}`)

@@ -7,8 +7,8 @@ import { generateTestToken } from './helpers/testToken'
 const app = createTestApp()
 
 async function authenticatedToken() {
-  const { user } = await createTestUser({ role: 'platform_admin' })
-  return generateTestToken({ userId: user.id, username: user.username, role: 'platform_admin' })
+  const { user } = await createTestUser({ accountRole: 'platform_admin' })
+  return generateTestToken({ userId: user.id, username: user.username, accountRole: 'platform_admin' })
 }
 
 describe('Judge program template API', () => {

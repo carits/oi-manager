@@ -14,8 +14,8 @@ describe('problem Hack HTTP boundary', () => {
   let problem: Awaited<ReturnType<typeof createTestProblem>>
 
   beforeEach(async () => {
-    manager = await createTestUser({ role: 'platform_admin' })
-    student = await createTestUser({ role: 'student' })
+    manager = await createTestUser({ accountRole: 'platform_admin' })
+    student = await createTestUser({ organization: { role: 'student' } })
     problem = await createTestProblem({ ownerId: manager.user.id, title: 'Hack API 测试题' })
     const judgeConfig = JSON.stringify({
       mode: 'acm',

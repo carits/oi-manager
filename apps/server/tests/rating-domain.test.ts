@@ -128,10 +128,10 @@ describe('rating domain HTTP and persistence', () => {
   beforeEach(async () => {
     const school = (await createTestSchoolWithPrincipal(`Rating ${crypto.randomUUID()}`)).school
     organizationId = school.organizationId!
-    manager = await createTestUser({ role: 'school_principal', schoolId: school.id })
-    first = await createTestUser({ role: 'student', schoolId: school.id })
-    second = await createTestUser({ role: 'student', schoolId: school.id })
-    managerToken = generateTestToken({ userId: manager.user.id, username: manager.user.username, role: manager.user.role, schoolId: school.id, teacherId: manager.teacherId })
+    manager = await createTestUser({ organization: { role: 'school_principal', organizationId: school.organizationId! } })
+    first = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
+    second = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
+    managerToken = generateTestToken({ userId: manager.user.id, username: manager.user.username, accountRole: manager.user.accountRole })
   })
 
   async function createFinishedContest(options: { title?: string; startHoursAgo?: number; endHoursAgo?: number } = {}) {
@@ -184,7 +184,7 @@ describe('rating domain HTTP and persistence', () => {
   })
 
   it('rejects GLOBAL and BOTH for an organization contest even when the actor is a platform administrator', async () => {
-    const platformAdmin = await createTestUser({ role: 'platform_admin' })
+    const platformAdmin = await createTestUser({ accountRole: 'platform_admin' })
     const platformMembership = await prisma.organizationMembership.create({ data: {
       id: crypto.randomUUID(), organizationId, userId: platformAdmin.user.id,
       memberRole: 'teacher', relationType: 'employee', status: 'active', joinedAt: new Date(),
@@ -193,7 +193,7 @@ describe('rating domain HTTP and persistence', () => {
       id: crypto.randomUUID(), membershipId: platformMembership.id, roleKey: 'teacher',
       source: 'test', grantedBy: manager.user.id,
     } })
-    const platformToken = generateTestToken({ userId: platformAdmin.user.id, username: platformAdmin.user.username, role: platformAdmin.user.role })
+    const platformToken = generateTestToken({ userId: platformAdmin.user.id, username: platformAdmin.user.username, accountRole: platformAdmin.user.accountRole })
     const future = await createContestRuntimeFixture({ data: { title: 'Organization-only rating contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: platformAdmin.user.id } })
 
     for (const scope of ['GLOBAL', 'BOTH']) {
@@ -208,9 +208,9 @@ describe('rating domain HTTP and persistence', () => {
   })
 
   it('allows only NONE for a personal-team contest', async () => {
-    const team = await createTestTeam({ schoolId: null, ownerId: manager.user.id, ownerType: 'teacher', scope: 'personal' })
+    const team = await createTestTeam({ organizationId: null, ownerId: manager.user.id, ownerType: 'teacher', scope: 'personal' })
     const future = await createContestRuntimeFixture({ data: { title: 'Personal team contest', format: 'icpc', type: 'contest', scope: 'personal', teamId: team.id, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: manager.user.id } })
-    const personalToken = generateTestToken({ userId: manager.user.id, username: manager.user.username, role: manager.user.role })
+    const personalToken = generateTestToken({ userId: manager.user.id, username: manager.user.username, accountRole: manager.user.accountRole })
     const config = await createAuthenticatedRequest(app, personalToken).get(`/api/trainings/${future.id}/rating-config`)
     expect(config.status, JSON.stringify(config.body)).toBe(200)
     expect(config.body.data).toMatchObject({ context: 'personal_team', allowedScopes: ['NONE'] })
@@ -238,7 +238,7 @@ describe('rating domain HTTP and persistence', () => {
       id: crypto.randomUUID(), contestId: contest.canonicalContestId, scope: 'BOTH', track: 'IOI',
       scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'both-fixture', createdBy: manager.user.id,
     } })
-    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, role: first.user.role })
+    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, accountRole: first.user.accountRole })
 
     const initial = await createAuthenticatedRequest(app, firstToken).get(`/api/trainings/${contest.id}/rating-participation`)
     expect(initial.status).toBe(200)
@@ -302,7 +302,7 @@ describe('rating domain HTTP and persistence', () => {
   })
 
   it('keeps Rating history private to the authenticated user', async () => {
-    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, role: first.user.role, schoolId: first.schoolId })
+    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, accountRole: first.user.accountRole })
     const own = await createAuthenticatedRequest(app, firstToken).get(`/api/ratings/users/${first.user.id}/history?track=OI`)
     expect(own.status).toBe(200)
 
@@ -312,7 +312,7 @@ describe('rating domain HTTP and persistence', () => {
   })
 
   it('returns competition ranks across ties and preserves full-pool rank when filtering', async () => {
-    const fourth = await createTestUser({ role: 'student', schoolId: (await prisma.school.findFirstOrThrow({ where: { organizationId } })).id })
+    const fourth = await createTestUser({ organization: { role: 'student', organizationId: organizationId } })
     const pool = await prisma.ratingPool.create({ data: { id: crypto.randomUUID(), scopeType: 'GLOBAL', organizationId: null, track: 'OI' } })
     const rows = [
       [manager.user.id, 1700],
@@ -321,7 +321,7 @@ describe('rating domain HTTP and persistence', () => {
       [fourth.user.id, 1500],
     ] as const
     await prisma.ratingAccount.createMany({ data: rows.map(([userId, rating]) => ({ id: crypto.randomUUID(), poolId: pool.id, userId, rating, peakRating: rating })) })
-    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, role: first.user.role, schoolId: first.schoolId })
+    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, accountRole: first.user.accountRole })
 
     const leaderboard = await createAuthenticatedRequest(app, firstToken).get('/api/ratings/global/OI')
     expect(leaderboard.status).toBe(200)

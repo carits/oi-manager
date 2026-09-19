@@ -8,18 +8,13 @@ import { prisma } from '../src/prisma'
 const app = createTestApp()
 
 function tokenFor(account: Awaited<ReturnType<typeof createTestUser>>) {
-  return generateTestToken({
-    userId: account.user.id,
-    username: account.user.username,
-    role: account.user.role,
-    workspaceMode: 'personal',
-  })
+  return generateTestToken({ userId: account.user.id, username: account.user.username, workspaceMode: 'personal', accountRole: account.user.accountRole })
 }
 
 describe('platform contest lifecycle', () => {
   it('lets only platform managers create an account-level contest with a default frozen-domain config', async () => {
-    const participant = await createTestUser({ role: 'user' })
-    const manager = await createTestUser({ role: 'platform_admin' })
+    const participant = await createTestUser({ accountRole: 'user' })
+    const manager = await createTestUser({ accountRole: 'platform_admin' })
     const body = {
       title: 'Carits Platform Rating Test',
       format: 'ioi',
@@ -57,8 +52,8 @@ describe('platform contest lifecycle', () => {
   })
 
   it('shows platform contests in personal discovery and allows an active account to open them', async () => {
-    const participant = await createTestUser({ role: 'user' })
-    const manager = await createTestUser({ role: 'super_admin' })
+    const participant = await createTestUser({ accountRole: 'user' })
+    const manager = await createTestUser({ accountRole: 'super_admin' })
     const created = await request(app)
       .post('/api/platform-contests')
       .set('Cookie', `oi_session=${tokenFor(manager)}`)

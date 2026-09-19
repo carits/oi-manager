@@ -11,7 +11,7 @@ const app = createTestApp()
 describe('bounded Candidate HTTP boundary', () => {
   let manager: Awaited<ReturnType<typeof createTestUser>>, student: Awaited<ReturnType<typeof createTestUser>>, problem: Awaited<ReturnType<typeof createTestProblem>>
   beforeEach(async () => {
-    manager = await createTestUser({ role: 'platform_admin' }); student = await createTestUser({ role: 'student' }); problem = await createTestProblem({ ownerId: manager.user.id, title: 'Candidate API 测试题' })
+    manager = await createTestUser({ accountRole: 'platform_admin' }); student = await createTestUser({ organization: { role: 'student' } }); problem = await createTestProblem({ ownerId: manager.user.id, title: 'Candidate API 测试题' })
     for (const kind of ['standard', 'validator']) {
       const programId = crypto.randomUUID(), versionId = crypto.randomUUID()
       await prisma.problemJudgeProgram.create({ data: { id: programId, problemId: problem.id, kind, name: kind, language: 'cpp17', currentVersionId: versionId, createdBy: manager.user.id } })

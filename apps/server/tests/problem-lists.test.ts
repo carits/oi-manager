@@ -30,38 +30,38 @@ describe('题单权限模块', () => {
     schoolData = await createTestSchoolWithPrincipal('权限测试学校')
 
     // 创建用户：owner 是教师，edit/view 也是教师（同校），stranger 是另一个学校的教师
-    ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    editUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
-    viewUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
-    strangerUser = await createTestUser({ role: 'teacher' })
+    ownerUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    editUser = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
+    viewUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
+    strangerUser = await createTestUser({ organization: { role: 'teacher' } })
 
     // 生成 token
     ownerToken = generateTokenFromUser({
       id: ownerUser.user.id,
       role: 'teacher',
       username: ownerUser.user.username,
-      teacherId: ownerUser.teacherId,
+      teacherId: ownerUser.userId,
       schoolId: schoolData.school.id,
     })
     editToken = generateTokenFromUser({
       id: editUser.user.id,
       role: 'teacher',
       username: editUser.user.username,
-      teacherId: editUser.teacherId,
+      teacherId: editUser.userId,
       schoolId: schoolData.school.id,
     })
     viewToken = generateTokenFromUser({
       id: viewUser.user.id,
       role: 'student',
       username: viewUser.user.username,
-      studentId: viewUser.studentId,
+      studentId: viewUser.userId,
       schoolId: schoolData.school.id,
     })
     strangerToken = generateTokenFromUser({
       id: strangerUser.user.id,
       role: 'teacher',
       username: strangerUser.user.username,
-      teacherId: strangerUser.teacherId,
+      teacherId: strangerUser.userId,
     })
 
     // 创建题单
@@ -74,14 +74,14 @@ describe('题单权限模块', () => {
     await shareTestProblemList({
       problemListId: testList.list.id,
       targetType: 'teacher',
-      targetId: editUser.teacherId!,
+      targetId: editUser.userId!,
       permission: 'edit',
       sharedBy: ownerUser.user.id,
     })
     await shareTestProblemList({
       problemListId: testList.list.id,
       targetType: 'student',
-      targetId: viewUser.studentId!,
+      targetId: viewUser.userId!,
       permission: 'view',
       sharedBy: ownerUser.user.id,
     })
@@ -106,12 +106,12 @@ describe('题单权限模块', () => {
     })
 
     it('学生可创建题单', async () => {
-      const studentUser = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const studentUser = await createTestUser({ organization: { role: 'student', organizationId: schoolData.school.organizationId! } })
       const token = generateTokenFromUser({
         id: studentUser.user.id,
         role: 'student',
         username: studentUser.user.username,
-        studentId: studentUser.studentId,
+        studentId: studentUser.userId,
         schoolId: schoolData.school.id,
       })
       const res = await createAuthenticatedRequest(app, token)
@@ -274,7 +274,7 @@ describe('题单权限模块', () => {
       await shareTestProblemList({
         problemListId: list.list.id,
         targetType: 'teacher',
-        targetId: editUser.teacherId!,
+        targetId: editUser.userId!,
         permission: 'edit',
         sharedBy: ownerUser.user.id,
       })
@@ -395,7 +395,7 @@ describe('题单权限模块', () => {
 
     it('空题单不能发布作业', async () => {
       const team = await createTestTeam({
-        schoolId: schoolData.school.id,
+        organizationId: schoolData.school.organizationId!,
         ownerId: ownerUser.user.id,
         ownerType: 'teacher',
       })
@@ -413,7 +413,7 @@ describe('题单权限模块', () => {
     })
 
     it('创建 DRAFT Assignment 并固定题单题目的当前 Revision', async () => {
-      const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: ownerUser.user.id })
+      const team = await createTestTeam({ organizationId: schoolData.school.organizationId!, ownerId: ownerUser.user.id })
       const revision = await prisma.problemTestSetRevision.create({ data: {
         id: crypto.randomUUID(), problemId: testProblem.id, revisionNumber: 1, mode: 'acm', source: 'initial',
         judgeConfig: '{"mode":"acm","cases":[]}', judgeConfigHash: 'problem-list-config', graphHash: 'problem-list-graph', testdataPath: '.', createdBy: ownerUser.user.id,
@@ -457,17 +457,17 @@ describe('题单权限模块', () => {
     })
 
     it('owner 添加分享 → 200', async () => {
-      const anotherTeacher = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
+      const anotherTeacher = await createTestUser({ organization: { role: 'teacher', organizationId: schoolData.school.organizationId! } })
       const res = await createAuthenticatedRequest(app, ownerToken)
         .post(`/api/problem-lists/${testList.list.id}/shares`)
-        .send({ targetType: 'teacher', targetId: anotherTeacher.teacherId, permission: 'view' })
+        .send({ targetType: 'teacher', targetId: anotherTeacher.userId, permission: 'view' })
       expect(res.status).toBe(200)
     })
 
     it('不能分享给其他校园成员', async () => {
       const res = await createAuthenticatedRequest(app, ownerToken)
         .post(`/api/problem-lists/${testList.list.id}/shares`)
-        .send({ targetType: 'teacher', targetId: strangerUser.teacherId, permission: 'view' })
+        .send({ targetType: 'teacher', targetId: strangerUser.userId, permission: 'view' })
       expect(res.status).toBe(400)
       expect(res.body.message).toBe('分享对象不属于当前校园或身份不匹配')
     })
@@ -475,21 +475,21 @@ describe('题单权限模块', () => {
     it('分享对象身份必须与目标类型一致', async () => {
       const res = await createAuthenticatedRequest(app, ownerToken)
         .post(`/api/problem-lists/${testList.list.id}/shares`)
-        .send({ targetType: 'student', targetId: editUser.teacherId, permission: 'view' })
+        .send({ targetType: 'student', targetId: editUser.userId, permission: 'view' })
       expect(res.status).toBe(400)
     })
 
     it('非 owner 添加分享 → 403', async () => {
       const res = await createAuthenticatedRequest(app, editToken)
         .post(`/api/problem-lists/${testList.list.id}/shares`)
-        .send({ targetType: 'teacher', targetId: strangerUser.teacherId, permission: 'view' })
+        .send({ targetType: 'teacher', targetId: strangerUser.userId, permission: 'view' })
       expect(res.status).toBe(403)
     })
 
     it('分享权限不能为 admin → 400', async () => {
       const res = await createAuthenticatedRequest(app, ownerToken)
         .post(`/api/problem-lists/${testList.list.id}/shares`)
-        .send({ targetType: 'teacher', targetId: strangerUser.teacherId, permission: 'admin' })
+        .send({ targetType: 'teacher', targetId: strangerUser.userId, permission: 'admin' })
       expect(res.status).toBe(400)
     })
 
@@ -498,7 +498,7 @@ describe('题单权限模块', () => {
       const share = await shareTestProblemList({
         problemListId: testList.list.id,
         targetType: 'teacher',
-        targetId: strangerUser.teacherId!,
+        targetId: strangerUser.userId!,
         permission: 'view',
         sharedBy: ownerUser.user.id,
       })
@@ -512,7 +512,7 @@ describe('题单权限模块', () => {
       const share = await shareTestProblemList({
         problemListId: otherList.list.id,
         targetType: 'teacher',
-        targetId: editUser.teacherId!,
+        targetId: editUser.userId!,
         permission: 'view',
         sharedBy: ownerUser.user.id,
       })

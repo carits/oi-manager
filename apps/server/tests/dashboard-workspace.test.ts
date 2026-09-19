@@ -12,16 +12,7 @@ app.use('/api/workspaces', workspaceRouter)
 type TestUser = Awaited<ReturnType<typeof createTestUser>>
 
 function tokenFor(user: TestUser, workspaceMode: 'work' | 'personal' = 'work') {
-  return generateTestToken({
-    userId: user.user.id,
-    username: user.user.username,
-    role: user.user.role,
-    schoolId: user.schoolId,
-    teacherId: user.teacherId,
-    studentId: user.studentId,
-    adminId: user.adminId,
-    workspaceMode,
-  })
+  return generateTestToken({ userId: user.user.id, username: user.user.username, workspaceMode, accountRole: user.user.accountRole })
 }
 
 describe('dashboard and workspace application routes', () => {
@@ -31,8 +22,8 @@ describe('dashboard and workspace application routes', () => {
 
   beforeEach(async () => {
     school = (await createTestSchoolWithPrincipal()).school
-    student = await createTestUser({ role: 'student', schoolId: school.id })
-    superAdmin = await createTestUser({ role: 'super_admin' })
+    student = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
   })
 
   it('keeps global statistics admin-only and returns current aggregate fields', async () => {

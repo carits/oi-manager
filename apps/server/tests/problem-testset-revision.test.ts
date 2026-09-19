@@ -25,7 +25,7 @@ const root = path.join(process.cwd(), 'testdata')
 const createdDirectories: string[] = []
 
 async function fixture() {
-  const owner = await createTestUser({ role: 'platform_admin' })
+  const owner = await createTestUser({ accountRole: 'platform_admin' })
   const problemId = crypto.randomUUID()
   const directory = path.join(root, problemId)
   createdDirectories.push(directory)
@@ -84,9 +84,9 @@ afterEach(async () => {
 describe('immutable problem TestSet Revisions', () => {
   it('updates only an unfrozen activity and reports the pinned revision state', async () => {
     const { owner, problem, directory, config } = await fixture()
-    const manager = await createTestUser({ role: 'teacher' })
+    const manager = await createTestUser({ organization: { role: 'teacher' } })
     const team = await createTestTeam({
-      schoolId: null,
+      organizationId: null,
       ownerId: manager.user.id,
       ownerType: 'user',
       scope: 'personal',

@@ -142,9 +142,9 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 /**
  * 更新请求日志上下文（在认证后调用）
  */
-export function updateRequestContext(req: Request, userId: string, role: string): void {
+export function updateRequestContext(req: Request, userId: string, accountRole: string): void {
   if (req.requestId) {
-    req.requestLogger = createRequestLogger(req.requestId, userId, role)
+    req.requestLogger = createRequestLogger(req.requestId, userId, accountRole)
   }
 }
 

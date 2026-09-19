@@ -21,11 +21,11 @@ const payload = (name=`测试学校 ${crypto.randomUUID()}`) => ({
 beforeEach(async () => {
   const applicant = await prisma.user.create({ data:{ id:crypto.randomUUID(), username:`creation-user-${crypto.randomUUID()}`, passwordHash:'test', role:'user', status:'active' } })
   await prisma.personalProfile.create({ data:{ userId:applicant.id } })
-  applicantId=applicant.id; applicantToken=generateTestToken({userId:applicant.id,username:applicant.username,role:'user',workspaceMode:'personal'})
+  applicantId=applicant.id; applicantToken=generateTestToken({ userId:applicant.id, username:applicant.username, workspaceMode:'personal', accountRole: 'user' })
   const admin = await prisma.user.create({ data:{ id:crypto.randomUUID(), username:`creation-admin-${crypto.randomUUID()}`, passwordHash:'test', role:'super_admin', status:'active' } })
-  superAdminToken=generateTestToken({userId:admin.id,username:admin.username,role:'super_admin'})
+  superAdminToken=generateTestToken({ userId:admin.id, username:admin.username, accountRole: 'super_admin' })
   const platformAdmin = await prisma.user.create({ data:{ id:crypto.randomUUID(), username:`creation-platform-${crypto.randomUUID()}`, passwordHash:'test', role:'platform_admin', status:'active' } })
-  platformAdminToken=generateTestToken({userId:platformAdmin.id,username:platformAdmin.username,role:'platform_admin'})
+  platformAdminToken=generateTestToken({ userId:platformAdmin.id, username:platformAdmin.username, accountRole: 'platform_admin' })
 })
 
 describe('organization creation applications', () => {
@@ -70,7 +70,7 @@ describe('organization creation applications', () => {
 
   it('allows a legacy school principal account to apply for another school without changing its role', async () => {
     await prisma.user.update({where:{id:applicantId},data:{role:'school_principal'}})
-    const principalToken=generateTestToken({userId:applicantId,username:'legacy-principal',role:'school_principal'})
+    const principalToken=generateTestToken({ userId:applicantId, username:'legacy-principal', accountRole: 'user' })
     const created=await request(app).post('/api/organization-creation-applications').set(auth(principalToken)).send(payload())
     expect(created.status).toBe(201)
     expect((await prisma.user.findUniqueOrThrow({where:{id:applicantId}})).role).toBe('school_principal')

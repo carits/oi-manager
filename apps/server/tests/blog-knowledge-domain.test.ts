@@ -17,8 +17,8 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
   let revisionId: string
 
   beforeEach(async () => {
-    author = await createTestUser({ role: 'teacher' })
-    reader = await createTestUser({ role: 'student' })
+    author = await createTestUser({ organization: { role: 'teacher' } })
+    reader = await createTestUser({ organization: { role: 'student' } })
     problem = await createTestProblem({ ownerId: author.user.id, title: 'Knowledge domain problem' })
     revisionId = crypto.randomUUID()
     await prisma.problemTestSetRevision.create({ data: {
@@ -107,8 +107,8 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
   })
 
   it('fails closed across organization visibility and keeps unlisted posts out of discovery', async () => {
-    const school = await prisma.school.findUniqueOrThrow({ where: { id: author.schoolId } })
-    const member = await createTestUser({ role: 'student', schoolId: school.id })
+    const school = await prisma.school.findUniqueOrThrow({ where: { id: author.organization!.organizationId } })
+    const member = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
     const schoolProblem = await createTestProblem({ ownerId: author.user.id, title: 'Private school problem' })
     await prisma.problem.update({ where: { id: schoolProblem.id }, data: {
       libraryScope: 'school',
@@ -152,8 +152,8 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(visibleVersions.body.data.map((item: any) => item.version)).toEqual([2])
     expect((await client(reader).get(`/api/blogs/${privatePostId}/versions/${privateVersionId}`)).status).toBe(404)
 
-    const school = await prisma.school.findUniqueOrThrow({ where: { id: author.schoolId } })
-    const member = await createTestUser({ role: 'student', schoolId: school.id })
+    const school = await prisma.school.findUniqueOrThrow({ where: { id: author.organization!.organizationId } })
+    const member = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
     const organizationPost = await createProblemBlog({ slug: `organization-history-${crypto.randomUUID().slice(0, 8)}`, organizationId: school.organizationId })
     const organizationPostId = organizationPost.body.data.id
     const organizationPublish = await client(author).post(`/api/blogs/${organizationPostId}/publish`).send({ expectedDraftRevision: 1, visibility: 'ORGANIZATION' })
@@ -426,7 +426,7 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
   })
 
   it('keeps controlled tags and ordered series linked without mutating historical classification', async () => {
-    const superAdmin = await createTestUser({ role: 'super_admin' })
+    const superAdmin = await createTestUser({ accountRole: 'super_admin' })
     expect((await client(author).post('/api/platform/blog-tags').send({ name: 'Graph' })).status).toBe(403)
     const systemTag = await client(superAdmin).post('/api/platform/blog-tags').send({ name: 'Graph' })
     expect(systemTag.status).toBe(201)

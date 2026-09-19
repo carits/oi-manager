@@ -29,16 +29,7 @@ describe('学校私有题库隔离', () => {
   let superAdminToken: string
 
   const tokenFor = (account: Awaited<ReturnType<typeof createTestUser>>, workspaceMode: 'work' | 'personal' = 'work') =>
-    generateTestToken({
-      userId: account.user.id,
-      role: account.user.role,
-      username: account.user.username,
-      teacherId: account.teacherId,
-      studentId: account.studentId,
-      adminId: account.adminId,
-      schoolId: account.schoolId,
-      workspaceMode,
-    })
+    generateTestToken({ userId: account.user.id, username: account.user.username, workspaceMode, accountRole: account.user.accountRole })
 
   const organizationRequest = (token: string, organizationId: string) =>
     createAuthenticatedRequest(app, token, { organizationId })
@@ -49,12 +40,12 @@ describe('学校私有题库隔离', () => {
   beforeEach(async () => {
     schoolA = await createTestSchoolWithPrincipal('隔离测试学校 A')
     schoolB = await createTestSchoolWithPrincipal('隔离测试学校 B')
-    ownerA = await createTestUser({ role: 'teacher', schoolId: schoolA.school.id })
-    peerA = await createTestUser({ role: 'teacher', schoolId: schoolA.school.id })
-    teacherB = await createTestUser({ role: 'teacher', schoolId: schoolB.school.id })
-    studentA = await createTestUser({ role: 'student', schoolId: schoolA.school.id })
-    platformAdmin = await createTestUser({ role: 'platform_admin' })
-    superAdmin = await createTestUser({ role: 'super_admin' })
+    ownerA = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.school.organizationId! } })
+    peerA = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.school.organizationId! } })
+    teacherB = await createTestUser({ organization: { role: 'teacher', organizationId: schoolB.school.organizationId! } })
+    studentA = await createTestUser({ organization: { role: 'student', organizationId: schoolA.school.organizationId! } })
+    platformAdmin = await createTestUser({ accountRole: 'platform_admin' })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
 
     ownerAToken = tokenFor(ownerA)
     peerAToken = tokenFor(peerA)
@@ -62,14 +53,7 @@ describe('学校私有题库隔离', () => {
     studentAToken = tokenFor(studentA)
     platformAdminToken = tokenFor(platformAdmin)
     superAdminToken = tokenFor(superAdmin)
-    principalAToken = generateTestToken({
-      userId: schoolA.principal.userId,
-      role: 'school_principal',
-      username: schoolA.principal.username,
-      teacherId: schoolA.principal.teacherId,
-      schoolId: schoolA.school.id,
-      workspaceMode: 'work',
-    })
+    principalAToken = generateTestToken({ userId: schoolA.principal.userId, username: schoolA.principal.username, workspaceMode: 'work', accountRole: 'user' })
   })
 
   async function createSchoolProblem(status: 'draft' | 'published' = 'draft', suffix = crypto.randomUUID()) {

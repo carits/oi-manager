@@ -185,7 +185,7 @@ async function activateMembership(tx: Prisma.TransactionClient, input: { organiz
   if (existing?.status === 'active') error(409, 'ORGANIZATION_ALREADY_MEMBER', '该用户已经是学校成员')
   if (existing?.status === 'disabled') error(409, 'ORGANIZATION_MEMBERSHIP_DISABLED', '该成员已停用，请先在成员管理中启用')
   const membership = existing
-    ? await tx.organizationMembership.update({ where: { id: existing.id }, data: { memberRole: input.role, relationType: input.relationType, status: 'active', invitedBy: null, joinedAt: new Date() } })
+    ? await tx.organizationMembership.update({ where: { id: existing.id }, data: { memberRole: input.role, relationType: input.relationType, status: 'active', joinedAt: new Date() } })
     : await tx.organizationMembership.create({ data: { id: crypto.randomUUID(), organizationId: input.organizationId, userId: input.userId, memberRole: input.role, relationType: input.relationType, status: 'active', joinedAt: new Date() } })
   await syncOrganizationMembershipBaseRole(tx, membership.id, input.role, { source: 'organization_join' })
   if (input.role === 'student') {

@@ -44,10 +44,10 @@ describe('independent assignment domain', () => {
   let organizationId: string
 
   beforeEach(async () => {
-    teacher = await createTestUser({ role: 'teacher' })
-    student = await createTestUser({ role: 'student', schoolId: teacher.schoolId })
-    outsider = await createTestUser({ role: 'student' })
-    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: teacher.schoolId! } })).organizationId!
+    teacher = await createTestUser({ organization: { role: 'teacher' } })
+    student = await createTestUser({ organization: { role: 'student', organizationId: teacher.organization!.organizationId } })
+    outsider = await createTestUser({ organization: { role: 'student' } })
+    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: teacher.organization!.organizationId! } })).organizationId!
     problem = await configuredProblem(teacher.user.id)
   })
 
@@ -88,7 +88,7 @@ describe('independent assignment domain', () => {
     expect(frozen.body.code).toBe('ASSIGNMENT_FROZEN')
     expect((await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/assignments/${assignmentId}`)).status).toBe(200)
     expect((await createAuthenticatedRequest(app, generateTokenFromUser(outsider.user)).get(`/api/assignments/${assignmentId}`)).status).toBe(404)
-    const peerTeacher = await createTestUser({ role: 'teacher', schoolId: teacher.schoolId })
+    const peerTeacher = await createTestUser({ organization: { role: 'teacher', organizationId: teacher.organization!.organizationId } })
     const peerList = await createAuthenticatedRequest(app, generateTokenFromUser(peerTeacher.user)).get(`/api/assignments?organizationId=${organizationId}`)
     expect(peerList.status).toBe(200)
     expect(peerList.body.data.items.some((item: any) => item.id === assignmentId)).toBe(false)

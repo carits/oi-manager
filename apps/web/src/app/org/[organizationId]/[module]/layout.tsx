@@ -14,7 +14,6 @@ export default async function OrgLayout({
   return (
     <RoleLayout
       allowedRoles={['student', 'teacher', 'school_principal']}
-      loginRole="student"
       homePath="/identity"
       requiredContext="organization"
       organizationId={validatedOrganizationId}

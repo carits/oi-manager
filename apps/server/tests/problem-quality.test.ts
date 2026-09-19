@@ -81,8 +81,8 @@ async function activateProgram(problemId: string, createdBy: string, kind: 'stan
 
 async function qualityFixture(options: QualityFixtureOptions = {}) {
   const mode = options.mode || 'acm'
-  const manager = await createTestUser({ role: 'platform_admin' })
-  const student = await createTestUser({ role: 'student' })
+  const manager = await createTestUser({ accountRole: 'platform_admin' })
+  const student = await createTestUser({ organization: { role: 'student' } })
   const problemId = crypto.randomUUID()
   const problemDirectory = path.join(testdataRoot, problemId)
   createdProblemDirectories.push(problemDirectory)

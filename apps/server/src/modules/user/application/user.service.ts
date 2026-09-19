@@ -139,7 +139,7 @@ export async function createPlatformAdmin(actor: UserActor, body: any) {
       role: 'platform_admin', phone: phone || null, email: email || null, bio: bio || null,
     },
   })
-  return { userId: user.id, username: user.username, accountRole: user.role, adminId: undefined }
+  return { userId: user.id, username: user.username, accountRole: user.role }
 }
 
 function protectAdminTarget(actor: UserActor, targetRole: string, message: string) {

@@ -25,7 +25,7 @@ describe('Authentication Module', () => {
 
     it('should login successfully with correct credentials', async () => {
       // 创建测试用户
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
 
       const res = await request(app)
         .post('/api/auth/login')
@@ -46,7 +46,7 @@ describe('Authentication Module', () => {
     })
 
     it('should fail with wrong password', async () => {
-      const { user } = await createTestUser({ role: 'student' })
+      const { user } = await createTestUser({ organization: { role: 'student' } })
 
       const res = await request(app)
         .post('/api/auth/login')
@@ -74,10 +74,7 @@ describe('Authentication Module', () => {
     })
 
     it('should fail with disabled account', async () => {
-      const { user, password } = await createTestUser({
-        role: 'student',
-        status: 'disabled'
-      })
+      const { user, password } = await createTestUser({ organization: { role: 'student' }, status: 'disabled' })
 
       const res = await request(app)
         .post('/api/auth/login')
@@ -95,7 +92,7 @@ describe('Authentication Module', () => {
       { role: 'student' },
       { mode: 'campus' },
     ])('rejects retired login fields: %o', async retiredField => {
-      const { user, password } = await createTestUser({ role: 'teacher' })
+      const { user, password } = await createTestUser({ organization: { role: 'teacher' } })
 
       const res = await request(app)
         .post('/api/auth/login')
@@ -110,7 +107,7 @@ describe('Authentication Module', () => {
     })
 
     it('should allow a student to use the same unified login request', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
 
       const res = await request(app)
         .post('/api/auth/login')
@@ -124,7 +121,7 @@ describe('Authentication Module', () => {
     })
 
     it('should allow a school principal to login without selecting a terminal', async () => {
-      const { user, password } = await createTestUser({ role: 'school_principal' })
+      const { user, password } = await createTestUser({ organization: { role: 'school_principal' } })
 
       const res = await request(app)
         .post('/api/auth/login')
@@ -140,7 +137,7 @@ describe('Authentication Module', () => {
     })
 
     it('should create login log on successful login', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
 
       await request(app)
         .post('/api/auth/login')
@@ -157,7 +154,7 @@ describe('Authentication Module', () => {
     })
 
     it('should create login log on failed login', async () => {
-      const { user } = await createTestUser({ role: 'student' })
+      const { user } = await createTestUser({ organization: { role: 'student' } })
 
       await request(app)
         .post('/api/auth/login')
@@ -205,7 +202,7 @@ describe('Authentication Module', () => {
     })
 
     it('should reject duplicate username', async () => {
-      const { user } = await createTestUser({ role: 'student' })
+      const { user } = await createTestUser({ organization: { role: 'student' } })
 
       const res = await request(app)
         .post('/api/auth/register')
@@ -247,12 +244,8 @@ describe('Authentication Module', () => {
 
   describe('GET /api/auth/me', () => {
     it('should return user info with valid token', async () => {
-      const { user, studentId } = await createTestUser({ role: 'student' })
-      const token = generateTestToken({
-        userId: user.id,
-        username: user.username,
-        studentId
-      })
+      const { user, userId: studentId } = await createTestUser({ organization: { role: 'student' } })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'user' })
 
       const res = await request(app)
         .get('/api/auth/me')
@@ -267,7 +260,7 @@ describe('Authentication Module', () => {
     })
 
     it('accepts the HttpOnly session cookie without a bearer token', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
       const agent = request.agent(app)
 
       const login = await agent
@@ -282,7 +275,7 @@ describe('Authentication Module', () => {
     })
 
     it('rejects a cross-origin mutation made with a session cookie', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
       const agent = request.agent(app)
 
       await agent
@@ -298,7 +291,7 @@ describe('Authentication Module', () => {
     })
 
     it('still checks the origin when a session cookie is present', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
       const login = await request(app)
         .post('/api/auth/login')
         .send({ username: user.username, password })
@@ -314,7 +307,7 @@ describe('Authentication Module', () => {
     })
 
     it('allows development preview ports on the same host', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
       const login = await request(app)
         .post('/api/auth/login')
         .send({ username: user.username, password })
@@ -330,7 +323,7 @@ describe('Authentication Module', () => {
     })
 
     it('clears the session cookie on logout', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
       const agent = request.agent(app)
 
       await agent
@@ -362,7 +355,7 @@ describe('Authentication Module', () => {
     it('keeps account context organization-free and resolves the exact requested membership', async () => {
       const schoolA = await createTestSchoolWithPrincipal('身份学校 A')
       const schoolB = await createTestSchoolWithPrincipal('身份学校 B')
-      const created = await createTestUser({ role: 'teacher', schoolId: schoolA.school.id })
+      const created = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.school.organizationId! } })
       await prisma.user.update({ where: { id: created.user.id }, data: { role: 'user' } })
       const organizationB = await prisma.organization.findFirstOrThrow({ where: { School: { id: schoolB.school.id } } })
       await prisma.organizationMembership.create({
@@ -379,7 +372,7 @@ describe('Authentication Module', () => {
           },
         },
       })
-      const token = generateTestToken({ userId: created.user.id, username: created.user.username })
+      const token = generateTestToken({ userId: created.user.id, username: created.user.username, accountRole: 'user' })
 
       const account = await request(app).get('/api/auth/me').set('Cookie', `oi_session=${token}`)
       expect(account.status).toBe(200)
@@ -397,8 +390,8 @@ describe('Authentication Module', () => {
     })
 
     it('returns 503 instead of invalidating the session when account lookup fails', async () => {
-      const { user } = await createTestUser({ role: 'student' })
-      const token = generateTestToken({ userId: user.id, username: user.username })
+      const { user } = await createTestUser({ organization: { role: 'student' } })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'user' })
       const lookup = vi.spyOn(prisma.user, 'findUnique').mockRejectedValueOnce(new Error('database unavailable'))
       const res = await request(app).get('/api/auth/me').set('Cookie', `oi_session=${token}`)
       lookup.mockRestore()
@@ -409,10 +402,7 @@ describe('Authentication Module', () => {
     it('returns school info only when the request names the organization', async () => {
       const { school, principal } = await createTestSchoolWithPrincipal()
       const organization = await prisma.organization.findFirstOrThrow({ where: { School: { id: school.id } } })
-      const token = generateTestToken({
-        userId: principal.userId,
-        username: principal.username,
-      })
+      const token = generateTestToken({ userId: principal.userId, username: principal.username, accountRole: 'user' })
 
       const res = await request(app)
         .get('/api/auth/me')
@@ -427,12 +417,11 @@ describe('Authentication Module', () => {
   })
 
   describe('POST /api/auth/switch-workspace', () => {
-    it.each([
-      ['school_principal', 'teacher'],
-      ['teacher', 'teacher'],
-      ['student', 'student']
-    ] as const)('keeps the %s membership while the account role remains normalized', async (role, loginRole) => {
-      const { user, password } = await createTestUser({ role })
+    it.each(['school_principal', 'teacher', 'student'] as const)(
+      'keeps the %s membership while the account role remains normalized',
+      async role => {
+
+      const { user, password } = await createTestUser({ organization: { role } })
       const agent = request.agent(app)
 
       const login = await agent
@@ -470,11 +459,11 @@ describe('Authentication Module', () => {
       expect(restored.body.data.workspaceMode).toBe('work')
     })
 
-    it.each([
-      ['super_admin', 'admin'],
-      ['platform_admin', 'admin'],
-    ] as const)('keeps the %s role and rejects a personal workspace', async (role, loginRole) => {
-      const { user, password } = await createTestUser({ role })
+    it.each(['super_admin', 'platform_admin'] as const)(
+      'keeps the %s role and rejects a personal workspace',
+      async role => {
+
+      const { user, password } = await createTestUser({ accountRole: role })
       const agent = request.agent(app)
 
       const login = await agent
@@ -496,7 +485,7 @@ describe('Authentication Module', () => {
     })
 
     it('rejects an invalid workspace without changing the session', async () => {
-      const { user, password } = await createTestUser({ role: 'teacher' })
+      const { user, password } = await createTestUser({ organization: { role: 'teacher' } })
       const agent = request.agent(app)
 
       await agent
@@ -522,7 +511,7 @@ describe('Authentication Module', () => {
 
   describe('PUT /api/auth/password', () => {
     it('revokes other sessions while keeping the password-changing browser signed in', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
       const current = request.agent(app)
       const other = request.agent(app)
       await current.post('/api/auth/login').send({ username: user.username, password })
@@ -537,7 +526,7 @@ describe('Authentication Module', () => {
     })
 
     it('can revoke other devices without signing out the current browser', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
       const current = request.agent(app)
       const other = request.agent(app)
       await current.post('/api/auth/login').send({ username: user.username, password })
@@ -551,12 +540,8 @@ describe('Authentication Module', () => {
     })
 
     it('should change password successfully', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
-      const token = generateTestToken({
-        userId: user.id,
-        username: user.username,
-        studentId: user.studentId
-      })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'user' })
 
       const res = await request(app)
         .put('/api/auth/password')
@@ -571,12 +556,8 @@ describe('Authentication Module', () => {
     })
 
     it('should fail with wrong current password', async () => {
-      const { user } = await createTestUser({ role: 'student' })
-      const token = generateTestToken({
-        userId: user.id,
-        username: user.username,
-        studentId: user.studentId
-      })
+      const { user } = await createTestUser({ organization: { role: 'student' } })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'user' })
 
       const res = await request(app)
         .put('/api/auth/password')
@@ -592,12 +573,8 @@ describe('Authentication Module', () => {
     })
 
     it('should fail when new password is same as current', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
-      const token = generateTestToken({
-        userId: user.id,
-        username: user.username,
-        studentId: user.studentId
-      })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'user' })
 
       const res = await request(app)
         .put('/api/auth/password')
@@ -613,12 +590,8 @@ describe('Authentication Module', () => {
     })
 
     it('should fail with invalid new password format', async () => {
-      const { user, password } = await createTestUser({ role: 'student' })
-      const token = generateTestToken({
-        userId: user.id,
-        username: user.username,
-        studentId: user.studentId
-      })
+      const { user, password } = await createTestUser({ organization: { role: 'student' } })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'user' })
 
       const res = await request(app)
         .put('/api/auth/password')
@@ -646,12 +619,8 @@ describe('Authentication Module', () => {
 
   describe('PUT /api/auth/profile', () => {
     it('should update profile successfully', async () => {
-      const { user } = await createTestUser({ role: 'student' })
-      const token = generateTestToken({
-        userId: user.id,
-        username: user.username,
-        studentId: user.studentId
-      })
+      const { user } = await createTestUser({ organization: { role: 'student' } })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'user' })
 
       const res = await request(app)
         .put('/api/auth/profile')

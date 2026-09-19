@@ -12,15 +12,9 @@ describe('Team Operations', () => {
   describe('Team Creation', () => {
     it('should create a new team successfully', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: teacher, userId: teacherId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: teacher.id, username: teacher.username, accountRole: 'user' })
 
       const res = await request(app)
         .post('/api/teams')
@@ -53,15 +47,9 @@ describe('Team Operations', () => {
 
     it('should not create team without name', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: teacher, userId: teacherId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: teacher.id, username: teacher.username, accountRole: 'user' })
 
       const res = await request(app)
         .post('/api/teams')
@@ -78,18 +66,12 @@ describe('Team Operations', () => {
   describe('Team Member Management', () => {
     it('should add teacher member to team', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: newMember, teacherId: newMemberId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { user: newMember, userId: newMemberId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId })
 
-      const token = generateTestToken({
-        userId: owner.id,
-        role: 'teacher',
-        username: owner.username,
-        teacherId: ownerId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: owner.id, username: owner.username, accountRole: 'user' })
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
@@ -112,18 +94,12 @@ describe('Team Operations', () => {
 
     it('should add student member to team', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: newMember, studentId: newMemberId } = await createTestUser({ role: 'student', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { user: newMember, userId: newMemberId } = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId })
 
-      const token = generateTestToken({
-        userId: owner.id,
-        role: 'teacher',
-        username: owner.username,
-        teacherId: ownerId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: owner.id, username: owner.username, accountRole: 'user' })
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
@@ -140,10 +116,10 @@ describe('Team Operations', () => {
 
     it('should remove member from team', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: member, studentId: memberId } = await createTestUser({ role: 'student', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { user: member, userId: memberId } = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId })
 
       // Add member first
       await prisma.teamMember.create({
@@ -158,13 +134,7 @@ describe('Team Operations', () => {
         }
       })
 
-      const token = generateTestToken({
-        userId: owner.id,
-        role: 'teacher',
-        username: owner.username,
-        teacherId: ownerId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: owner.id, username: owner.username, accountRole: 'user' })
 
       const res = await request(app)
         .delete(`/api/teams/${team.id}/members/${memberId}?memberType=student`)
@@ -183,11 +153,11 @@ describe('Team Operations', () => {
 
     it('should deny non-admin from adding members', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: regularMember, teacherId: regularMemberId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { teacherId: newMemberId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { user: regularMember, userId: regularMemberId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { userId: newMemberId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId })
 
       // Add regular member (not admin)
       await prisma.teamMember.create({
@@ -202,13 +172,7 @@ describe('Team Operations', () => {
         }
       })
 
-      const token = generateTestToken({
-        userId: regularMember.id,
-        role: 'teacher',
-        username: regularMember.username,
-        teacherId: regularMemberId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: regularMember.id, username: regularMember.username, accountRole: 'user' })
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
@@ -226,10 +190,10 @@ describe('Team Operations', () => {
   describe('Team Role Management', () => {
     it('should change member role to admin', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: member, teacherId: memberId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { user: member, userId: memberId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId })
 
       // Add member first
       await prisma.teamMember.create({
@@ -244,13 +208,7 @@ describe('Team Operations', () => {
         }
       })
 
-      const token = generateTestToken({
-        userId: owner.id,
-        role: 'teacher',
-        username: owner.username,
-        teacherId: ownerId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: owner.id, username: owner.username, accountRole: 'user' })
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/admins`)
@@ -275,10 +233,10 @@ describe('Team Operations', () => {
   describe('Team Ownership Transfer', () => {
     it('should transfer ownership to another member', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: newOwner, teacherId: newOwnerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { user: newOwner, userId: newOwnerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId })
 
       // Add new owner as member first
       await prisma.teamMember.create({
@@ -293,13 +251,7 @@ describe('Team Operations', () => {
         }
       })
 
-      const token = generateTestToken({
-        userId: owner.id,
-        role: 'teacher',
-        username: owner.username,
-        teacherId: ownerId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: owner.id, username: owner.username, accountRole: 'user' })
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/transfer`)
@@ -326,14 +278,14 @@ describe('Team Operations', () => {
     })
 
     it('transfers a personal team between generic user identities', async () => {
-      const owner = await createTestUser({ role: 'teacher' })
-      const nextOwner = await createTestUser({ role: 'platform_admin' })
+      const owner = await createTestUser({ organization: { role: 'teacher' } })
+      const nextOwner = await createTestUser({ accountRole: 'platform_admin' })
       await prisma.personalProfile.createMany({
         data: [{ userId: owner.user.id }, { userId: nextOwner.user.id }],
         skipDuplicates: true
       })
       const team = await createTestTeam({
-        schoolId: null,
+        organizationId: null,
         ownerId: owner.user.id,
         ownerType: 'user',
         scope: 'personal'
@@ -348,14 +300,7 @@ describe('Team Operations', () => {
           status: 'active'
         }
       })
-      const token = generateTestToken({
-        userId: owner.user.id,
-        role: 'teacher',
-        username: owner.user.username,
-        teacherId: owner.teacherId,
-        schoolId: owner.schoolId,
-        workspaceMode: 'personal'
-      })
+      const token = generateTestToken({ userId: owner.user.id, username: owner.user.username, workspaceMode: 'personal', accountRole: 'user' })
 
       const response = await request(app)
         .post(`/api/teams/${team.id}/transfer`)
@@ -379,19 +324,13 @@ describe('Team Operations', () => {
   describe('Team Listing', () => {
     it('should list teams for a school', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: teacher, userId: teacherId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
       // Create multiple teams
-      await createTestTeam({ schoolId: school.id, ownerId: teacherId, name: 'Team 1' })
-      await createTestTeam({ schoolId: school.id, ownerId: teacherId, name: 'Team 2' })
+      await createTestTeam({ organizationId: school.organizationId!, ownerId: teacherId, name: 'Team 1' })
+      await createTestTeam({ organizationId: school.organizationId!, ownerId: teacherId, name: 'Team 2' })
 
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: teacher.id, username: teacher.username, accountRole: 'user' })
 
       const res = await request(app)
         .get(`/api/teams/organization/${school.organizationId}`)
@@ -405,10 +344,10 @@ describe('Team Operations', () => {
 
     it('should list teams for a student', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: student, studentId } = await createTestUser({ role: 'student', schoolId: school.id })
+      const { user: teacher, userId: teacherId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { user: student, userId: studentId } = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId: teacherId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId: teacherId })
 
       // Add student to team
       await prisma.teamMember.create({
@@ -423,13 +362,7 @@ describe('Team Operations', () => {
         }
       })
 
-      const token = generateTestToken({
-        userId: student.id,
-        role: 'student',
-        username: student.username,
-        studentId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: student.id, username: student.username, accountRole: 'user' })
 
       const res = await request(app)
         .get('/api/teams/mine')
@@ -444,17 +377,11 @@ describe('Team Operations', () => {
   describe('Team Detail', () => {
     it('should get team details', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId, name: 'Test Team' })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId, name: 'Test Team' })
 
-      const token = generateTestToken({
-        userId: owner.id,
-        role: 'teacher',
-        username: owner.username,
-        teacherId: ownerId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: owner.id, username: owner.username, accountRole: 'user' })
 
       const res = await request(app)
         .get(`/api/teams/${team.id}`)
@@ -470,17 +397,11 @@ describe('Team Operations', () => {
   describe('Team Deletion', () => {
     it('should delete team as owner', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId })
 
-      const token = generateTestToken({
-        userId: owner.id,
-        role: 'teacher',
-        username: owner.username,
-        teacherId: ownerId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: owner.id, username: owner.username, accountRole: 'user' })
 
       const res = await request(app)
         .delete(`/api/teams/${team.id}`)
@@ -499,10 +420,10 @@ describe('Team Operations', () => {
 
     it('should deny non-owner from deleting team', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: admin, teacherId: adminId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: owner, userId: ownerId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
+      const { user: admin, userId: adminId } = await createTestUser({ organization: { role: 'teacher', organizationId: school.organizationId! } })
 
-      const team = await createTestTeam({ schoolId: school.id, ownerId })
+      const team = await createTestTeam({ organizationId: school.organizationId!, ownerId })
 
       // Add admin
       await prisma.teamMember.create({
@@ -517,13 +438,7 @@ describe('Team Operations', () => {
         }
       })
 
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'teacher',
-        username: admin.username,
-        teacherId: adminId,
-        schoolId: school.id
-      })
+      const token = generateTestToken({ userId: admin.id, username: admin.username, accountRole: 'user' })
 
       const res = await request(app)
         .delete(`/api/teams/${team.id}`)
@@ -538,51 +453,30 @@ describe('Team Operations', () => {
     it('creates personal teams and keeps both team scopes isolated', async () => {
       const { school: schoolA } = await createTestSchoolWithPrincipal()
       const { school: schoolB } = await createTestSchoolWithPrincipal()
-      const { user, studentId } = await createTestUser({
-        role: 'student',
-        schoolId: schoolA.id,
-        username: `personal_${shortId()}`
-      })
-      const { user: otherUser } = await createTestUser({
-        role: 'student',
-        schoolId: schoolB.id
-      })
+      const { user, userId: studentId } = await createTestUser({ organization: { role: 'student', organizationId: schoolA.organizationId! }, username: `personal_${shortId()}` })
+      const { user: otherUser } = await createTestUser({ organization: { role: 'student', organizationId: schoolB.organizationId! } })
       await prisma.personalProfile.createMany({
         data: [{ userId: user.id }, { userId: otherUser.id }],
         skipDuplicates: true
       })
 
       const campusTeam = await createTestTeam({
-        schoolId: schoolA.id,
+        organizationId: schoolA.organizationId!,
         ownerId: studentId,
         ownerType: 'student',
         scope: 'campus',
         name: 'Campus only'
       })
       const otherPersonalTeam = await createTestTeam({
-        schoolId: null,
+        organizationId: null,
         ownerId: otherUser.id,
         ownerType: 'user',
         scope: 'personal',
         name: 'Personal global'
       })
 
-      const personalToken = generateTestToken({
-        userId: user.id,
-        role: 'student',
-        username: user.username,
-        studentId,
-        schoolId: schoolA.id,
-        workspaceMode: 'personal'
-      })
-      const campusToken = generateTestToken({
-        userId: user.id,
-        role: 'student',
-        username: user.username,
-        studentId,
-        schoolId: schoolA.id,
-        workspaceMode: 'work'
-      })
+      const personalToken = generateTestToken({ userId: user.id, username: user.username, workspaceMode: 'personal', accountRole: 'user' })
+      const campusToken = generateTestToken({ userId: user.id, username: user.username, workspaceMode: 'work', accountRole: 'user' })
 
       const createResponse = await request(app)
         .post('/api/teams')
@@ -621,26 +515,15 @@ describe('Team Operations', () => {
     it('uses usernames for personal teams instead of real names', async () => {
       const { school } = await createTestSchoolWithPrincipal()
       const username = `display_${shortId()}`
-      const { user, studentId } = await createTestUser({
-        role: 'student',
-        schoolId: school.id,
-        username
-      })
+      const { user, userId: studentId } = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! }, username })
       await prisma.personalProfile.create({ data: { userId: user.id } })
       const team = await createTestTeam({
-        schoolId: null,
+        organizationId: null,
         ownerId: user.id,
         ownerType: 'user',
         scope: 'personal'
       })
-      const token = generateTestToken({
-        userId: user.id,
-        role: 'student',
-        username,
-        studentId,
-        schoolId: school.id,
-        workspaceMode: 'personal'
-      })
+      const token = generateTestToken({ userId: user.id, username, workspaceMode: 'personal', accountRole: 'user' })
 
       const response = await request(app)
         .get(`/api/teams/${team.id}`)
@@ -658,18 +541,8 @@ describe('Team Operations', () => {
       const { school: schoolB } = await createTestSchoolWithPrincipal()
       const usernameA = `rank_a_${shortId()}`
       const usernameB = `rank_b_${shortId()}`
-      const studentA = await createTestUser({
-        role: 'student',
-        schoolId: schoolA.id,
-        username: usernameA,
-        rating: 1600
-      })
-      const studentB = await createTestUser({
-        role: 'student',
-        schoolId: schoolB.id,
-        username: usernameB,
-        rating: 1500
-      })
+      const studentA = await createTestUser({ organization: { role: 'student', organizationId: schoolA.organizationId!, rating: 1600 }, username: usernameA })
+      const studentB = await createTestUser({ organization: { role: 'student', organizationId: schoolB.organizationId!, rating: 1500 }, username: usernameB })
       await prisma.personalProfile.createMany({
         data: [
           { userId: studentA.user.id, rating: 1600 },
@@ -677,14 +550,7 @@ describe('Team Operations', () => {
         ],
         skipDuplicates: true
       })
-      const personalToken = generateTestToken({
-        userId: studentA.user.id,
-        role: 'student',
-        username: usernameA,
-        studentId: studentA.studentId,
-        schoolId: schoolA.id,
-        workspaceMode: 'personal'
-      })
+      const personalToken = generateTestToken({ userId: studentA.user.id, username: usernameA, workspaceMode: 'personal', accountRole: 'user' })
 
       const response = await request(app)
         .get('/api/rankings/personal/rating?pageSize=200')
@@ -705,15 +571,8 @@ describe('Team Operations', () => {
 
     it('rejects the personal ranking in campus mode', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const student = await createTestUser({ role: 'student', schoolId: school.id })
-      const token = generateTestToken({
-        userId: student.user.id,
-        role: 'student',
-        username: student.user.username,
-        studentId: student.studentId,
-        schoolId: school.id,
-        workspaceMode: 'work'
-      })
+      const student = await createTestUser({ organization: { role: 'student', organizationId: school.organizationId! } })
+      const token = generateTestToken({ userId: student.user.id, username: student.user.username, workspaceMode: 'work', accountRole: 'user' })
 
       const response = await request(app)
         .get('/api/rankings/personal/rating')

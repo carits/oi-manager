@@ -18,15 +18,7 @@ const app = createTestApp()
 type TestUser = Awaited<ReturnType<typeof createTestUser>>
 
 function tokenFor(user: TestUser) {
-  return generateTestToken({
-    userId: user.user.id,
-    username: user.user.username,
-    role: user.user.role,
-    schoolId: user.schoolId,
-    teacherId: user.teacherId,
-    studentId: user.studentId,
-    adminId: user.adminId,
-  })
+  return generateTestToken({ userId: user.user.id, username: user.user.username, accountRole: user.user.accountRole })
 }
 
 function organizationRequest(
@@ -55,13 +47,13 @@ describe('organization contest contract', () => {
   beforeEach(async () => {
     schoolA = (await createTestSchoolWithPrincipal('Contest School A')).school
     schoolB = (await createTestSchoolWithPrincipal('Contest School B')).school
-    principal = await createTestUser({ role: 'school_principal', schoolId: schoolA.id })
-    teacher = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
-    otherTeacher = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
-    student = await createTestUser({ role: 'student', schoolId: schoolA.id })
-    remoteTeacher = await createTestUser({ role: 'teacher', schoolId: schoolB.id })
-    superAdmin = await createTestUser({ role: 'super_admin' })
-    platformAdmin = await createTestUser({ role: 'platform_admin' })
+    principal = await createTestUser({ organization: { role: 'school_principal', organizationId: schoolA.organizationId! } })
+    teacher = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.organizationId! } })
+    otherTeacher = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.organizationId! } })
+    student = await createTestUser({ organization: { role: 'student', organizationId: schoolA.organizationId! } })
+    remoteTeacher = await createTestUser({ organization: { role: 'teacher', organizationId: schoolB.organizationId! } })
+    superAdmin = await createTestUser({ accountRole: 'super_admin' })
+    platformAdmin = await createTestUser({ accountRole: 'platform_admin' })
   })
 
   describe('GET /api/organizations/:organizationId/members/activities/contests', () => {
@@ -81,8 +73,8 @@ describe('organization contest contract', () => {
 
     it('returns school contests and only team contests visible through active membership', async () => {
       const schoolContest = await createTestSchoolContest({ schoolId: schoolA.id, createdBy: teacher.user.id, title: 'School contest' })
-      const visibleTeam = await createTestTeam({ schoolId: schoolA.id, ownerId: student.user.id, ownerType: 'student' })
-      const hiddenTeam = await createTestTeam({ schoolId: schoolA.id })
+      const visibleTeam = await createTestTeam({ organizationId: schoolA.organizationId!, ownerId: student.user.id, ownerType: 'student' })
+      const hiddenTeam = await createTestTeam({ organizationId: schoolA.organizationId! })
       const visibleTeamContest = await prisma.training.create({
         data: {
           title: 'Visible team contest', format: 'icpc', type: 'contest', scope: 'campus',
