@@ -421,7 +421,7 @@ describe('学校私有题库隔离', () => {
     const versionId = version.body.data.id as string
     const uploaded = await request(app)
       .post(`/api/problems/${problemId}/statement-versions/${versionId}/pdf`)
-      .set('Authorization', `Bearer ${ownerAToken}`)
+      .set('Cookie', `oi_session=${ownerAToken}`)
       .set('X-OI-Organization-ID', schoolA.school.organizationId)
       .attach('file', Buffer.from('%PDF-1.4\nschool statement'), {
         filename: 'statement.pdf',

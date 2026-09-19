@@ -80,10 +80,6 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `GET` | `/api/platform/blog-reports/:id` | 填写原因并写平台审计后读取固化证据 |
 | `POST` | `/api/platform/blog-reports/:id/decision` | 处理举报并可隐藏评论、暂停或移除文章 |
 | `PUT` | `/api/platform/blogs/:id/featured` | 平台治理人员设置或退役社区精选 |
-| `GET` | `/api/admin/migration/contest-aggregates` | 超管检查 Training 比赛、题目 Revision 桥接及 Rating 配置/榜单/批次的规范 Contest 身份 |
-| `POST` | `/api/admin/migration/contest-aggregates` | 超管按 reportHash 幂等建立可确认的比赛、题目 Revision 与 Rating 身份桥接 |
-| `GET` | `/api/admin/migration/membership-roles` | 超管检查组织成员规范化角色回填并返回 reportHash |
-| `POST` | `/api/admin/migration/membership-roles` | 超管按 reportHash 幂等创建旧 memberRole 对应的角色分配 |
 | `GET` | `/api/ratings/me` | 读取本人全部全局/组织 OI、IOI、ACM Rating 账户 |
 | `GET` | `/api/ratings/global/:track` | 分页读取指定 Track 的全局 Rating 榜 |
 | `GET` | `/api/ratings/organizations/:organizationId/:track` | 有效组织成员读取组织 Rating 榜 |
@@ -120,8 +116,6 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `POST` | `/api/assignments/:id/release` | 发布最终成绩快照 |
 | `POST` | `/api/assignments/:id/archive` | 归档已发布成绩的作业 |
 | `POST` | `/api/assignments/:id/cancel` | 取消尚未进入终态的作业 |
-| `GET` | `/api/admin/migration/assignments` | 超管检查旧 homework 到独立 Assignment 的幂等迁移并返回 reportHash |
-| `POST` | `/api/admin/migration/assignments` | 超管按 reportHash 在事务中迁移可确认的旧作业 |
 | `GET` | `/api/chat/privacy` | 读取账号的跨关系完整用户名发现设置 |
 | `PATCH` | `/api/chat/privacy` | 修改账号的跨关系完整用户名发现设置 |
 | `GET` | `/api/chat/users/search` | 按共享关系模糊搜索或按隐私设置精确搜索账号 |
@@ -238,25 +232,15 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `PUT` | `/api/problems/:id/hack-config` | 编译检查并保存 STD、Validator、Classifier 和 Hack 开关 |
 | `GET` | `/api/problems/:id/hacks` | 查看自己的 Hack 记录；题目管理者查看全部 |
 | `POST` | `/api/problems/:id/hacks` | 以直接数据或生成器发起题目级 Hack；证明程序支持提交级文件 IO |
-| `GET` | `/api/admin/migration/judge-program-protocols` | 超管检查旧程序协议并生成 reportHash，列出歧义版本 |
-| `POST` | `/api/admin/migration/judge-program-protocols` | 超管按 reportHash 幂等迁移旧程序协议；歧义记录不修改 |
 | `GET` | `/api/problems/:id/hacks/:hackId` | 查看有权限的 Hack 详情 |
 | `POST` | `/api/problems/:id/hacks/:hackId/retry` | 题目管理者重新执行系统错误任务 |
 | `GET` | `/api/problems/:id/test-graph` | 题目管理者读取规范化 OI 测试图和迁移检查结果 |
 | `PUT` | `/api/problems/:id/test-graph` | 校验并保存 Subtask/Group/Testcase 测试图 |
-| `POST` | `/api/problems/:id/test-graph/migrate` | 题目管理者显式检查并幂等迁移单题旧 OI 配置 |
 | `POST` | `/api/problems/:id/test-graph/testcases` | 将当前题目的输入与答案文件配对注册为稳定 Testcase |
 | `PATCH` | `/api/problems/:id/test-graph/testcases/:testcaseId/protection` | 题目管理者填写原因后永久保护测试点；写入平台审计 |
 | `GET` | `/api/problems/:id/test-set-revisions` | 题目管理者列出正式测试版本历史 |
 | `GET` | `/api/problems/:id/test-set-revisions/:revisionId` | 读取单个不可变 Revision 和只读 Judge 投影 |
 | `POST` | `/api/problems/:id/judge-mode-transition` | 显式创建 ACM/OI 模式转换 Revision 并关闭 Hack |
-| `GET` | `/api/admin/problem-test-graph/migration` | 超级管理员检查旧 OI 配置迁移条件 |
-| `POST` | `/api/admin/problem-test-graph/migration` | 超级管理员通过 API 幂等迁移合法题目 |
-| `GET` | `/api/admin/problem-test-set-revisions/migration` | 超级管理员检查历史题目和活动快照能否安全固定 Revision |
-| `POST` | `/api/admin/problem-test-set-revisions/migration` | 超级管理员通过 API 幂等生成 Revision 并固定活动/提交 |
-| `GET` | `/api/admin/submission-io/migration` | 超级管理员检查旧题文件名前缀可回填的 Submission/JudgeRun |
-| `POST` | `/api/admin/submission-io/migration` | 超级管理员幂等固化历史提交实际文件 IO，不改变评测结果 |
-| `POST` | `/api/admin/problem-test-set-revisions/activity-pin-repair` | 超级管理员预览/执行冻结活动的安全版本恢复；仅允许相同测试数据布局、相同非计分配置的直接 `admin_edit` 或历史迁移 `initial` 后继 Revision，并同步活动题与历史提交指针 |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/test-set-update` | 活动管理员比较固定 Revision 与题库最新版及冻结状态 |
 | `POST` | `/api/trainings/:id/problems/:trainingProblemId/test-set-update` | 仅在未开始且无提交时手动固定到指定 Revision |
 | `GET` | `/api/readiness` | 蓝绿 API 候选的关键依赖 readiness；只检查数据库，Revision 投影一致性由独立运维诊断检查 |
@@ -432,14 +416,11 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/admin/demo-scenario/v2/prepare` | 见对应路由实现 |
 | `POST` | `/api/admin/demo-scenario/v3/events` | 见对应路由实现 |
 | `POST` | `/api/admin/demo-scenario/v3/prepare` | 见对应路由实现 |
-| `POST` | `/api/admin/migration/migrate-problem-status` | 见对应路由实现 |
-| `POST` | `/api/admin/migration/migrate-submission-scope` | 见对应路由实现 |
 | `POST` | `/api/auth/avatar` | 见对应路由实现 |
 | `POST` | `/api/auth/login` | 见对应路由实现 |
 | `POST` | `/api/auth/sessions/revoke` | 递增会话代数、退出其他设备并为当前浏览器换发 HttpOnly Cookie |
 | `POST` | `/api/auth/logout` | 见对应路由实现 |
 | `POST` | `/api/auth/register` | 见对应路由实现 |
-| `POST` | `/api/auth/session/migrate` | 见对应路由实现 |
 | `POST` | `/api/auth/switch-workspace` | 见对应路由实现 |
 | `POST` | `/api/files/upload` | 见对应路由实现 |
 | `POST` | `/api/notifications/read-all` | 见对应路由实现 |
@@ -453,12 +434,6 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/organizations/:organizationId/invitations/:id/revoke` | 撤回待处理邀请 |
 | `POST` | `/api/organization-invitations/:id/accept` | 接受本人学校邀请 |
 | `POST` | `/api/organization-invitations/:id/decline` | 拒绝本人学校邀请 |
-| `GET` | `/api/admin/migration/organization-join` | 超管检查旧组织邀请与通知迁移 |
-| `POST` | `/api/admin/migration/organization-join` | 超管幂等执行旧组织邀请与通知迁移 |
-| `GET` | `/api/admin/migration/school-name-keys` | 超管检查历史学校名称标准化迁移 |
-| `POST` | `/api/admin/migration/school-name-keys` | 超管幂等回填历史学校 `nameKey` |
-| `GET` | `/api/admin/migration/school-directory-status` | 超管检查历史学校隔离范围、引用和报告哈希 |
-| `POST` | `/api/admin/migration/school-directory-status` | 超管按报告哈希幂等应用目录状态迁移 |
 | `POST` | `/api/platform/organization-creation-applications/:id/approve` | 超管批准申请并原子创建学校 |
 | `POST` | `/api/platform/organization-creation-applications/:id/reject` | 超管拒绝学校创建申请 |
 | `POST` | `/api/oj-accounts` | 见对应路由实现 |
@@ -595,10 +570,6 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/training-sessions/:id/problems/:stageProblemId/hints` | 获取当前学员已满足条件的提示 |
 | `POST` | `/api/training-sessions/:id/hints/:hintId/open` | 幂等记录并打开提示 |
 | `POST` | `/api/training-sessions/:id/strategy-decisions` | 记录 ACM 策略训练决策 |
-| `GET` | `/api/admin/migration/training-engine` | 超管检查旧训练迁移，不修改数据 |
-| `POST` | `/api/admin/migration/training-engine` | 超管以 reportHash 幂等迁移旧训练 |
-| `GET` | `/api/admin/migration/economy-loop` | 超管检查 Carits 账户、已入账交易、Evaluation Ledger 孤儿和旧预占 |
-| `POST` | `/api/admin/migration/economy-loop` | 超管携 reportHash 创建系统发行/资源沉淀账户并写迁移审计 |
 | `PUT` | `/api/users/:id/status` | 见对应路由实现 |
 | `GET` | `/api/problems/:id/checker` | 题目 Checker 文件列表 |
 | `GET` | `/api/problems/:id/checker/:fileName/download` | 下载 Checker 源码 |

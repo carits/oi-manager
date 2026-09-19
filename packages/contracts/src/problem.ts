@@ -566,13 +566,6 @@ export const ProblemContracts = {
     scope: "context",
     data: ProblemTestGraphWorkspaceSchema,
   }),
-  migrateTestGraph: defineApiEndpoint({
-    key: "problem.test-graph.migrate",
-    method: "POST",
-    scope: "context",
-    body: z.object({}),
-    data: ProblemTestGraphWorkspaceSchema,
-  }),
   saveTestGraph: defineApiEndpoint({
     key: "problem.test-graph.save",
     method: "PUT",

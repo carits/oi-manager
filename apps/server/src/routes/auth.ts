@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
-import type { JwtPayload, SessionJwtPayload, UserRole } from '@oi-manager/shared'
+import type { JwtPayload, SessionJwtPayload } from '@oi-manager/shared'
 import {
-  accountRoleFromLegacy,
   AuthContracts,
   LoginRequestSchema,
   LoginResponseDataSchema,
@@ -40,18 +39,11 @@ function clientIp(req: Request) {
   return req.ip || req.socket?.remoteAddress || 'unknown'
 }
 
-function workspaceMode(value: unknown): WorkspaceMode | null {
-  if (value === undefined || value === null || value === '' || value === 'campus' || value === 'work') return 'work'
-  return value === 'personal' ? 'personal' : null
-}
-
 function renewablePayload(payload: SessionJwtPayload): SessionJwtPayload {
-  const accountRole = accountRoleFromLegacy(payload.accountRole || payload.role)
   return {
     userId: payload.userId,
     sessionVersion: payload.sessionVersion,
-    accountRole,
-    role: accountRole,
+    accountRole: payload.accountRole,
     username: payload.username,
     workspaceMode: payload.workspaceMode === 'personal' ? 'personal' : 'work',
   }
@@ -76,8 +68,7 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
       return res.status(400).json({ success: false, message: '用户名或密码格式无效' })
     }
     const { username, password } = input.data
-    const requestedMode = workspaceMode(input.data.workspaceMode ?? input.data.mode)
-    if (!requestedMode) return res.status(400).json({ success: false, message: '无效的工作区模式' })
+    const requestedMode: WorkspaceMode = input.data.workspaceMode || 'work'
     const result = await loginAccount({
       username, password, workspaceMode: requestedMode,
       ipAddress: clientIp(req), userAgent: req.headers['user-agent'] || 'unknown',
@@ -89,8 +80,7 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
     issueToken(res, {
       userId: result.user.id,
       sessionVersion: result.user.sessionVersion,
-      accountRole: accountRoleFromLegacy(result.role),
-      role: result.role,
+      accountRole: result.accountRole,
       username: result.user.username,
       workspaceMode: result.workspaceMode,
     })
@@ -101,12 +91,11 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
     })
     const responseData = LoginResponseDataSchema.parse({
       userId: result.user.id,
-      accountRole: accountRoleFromLegacy(result.user.role as UserRole),
-      role: result.role,
+      accountRole: result.accountRole,
       username: result.user.username,
       workspaceMode: result.workspaceMode,
       avatar: result.user.avatar,
-      next: result.isGlobalAdmin ? (result.role === 'super_admin' ? '/admin' : '/platform-admin') : '/identity',
+      next: result.isGlobalAdmin ? (result.accountRole === 'super_admin' ? '/admin' : '/platform-admin') : '/identity',
     })
     sendContractData(res, AuthContracts.login, responseData)
   } catch (error) {
@@ -118,12 +107,9 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
 
 authRouter.post('/register', registerLimiter, async (req, res) => {
   try {
-    if (req.body?.role && req.body.role !== 'student') {
-      return res.status(400).json({ success: false, message: '仅支持注册学生账号' })
-    }
     const input = RegisterRequestSchema.safeParse(req.body || {})
     if (!input.success) return res.status(400).json({ success: false, message: '注册信息格式无效' })
-    const { username, password, role } = input.data
+    const { username, password } = input.data
     const usernameCheck = validateUsername(username)
     if (!usernameCheck.valid) return res.status(400).json({ success: false, message: usernameCheck.message })
     const passwordCheck = validatePassword(password)
@@ -131,10 +117,10 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     const user = await registerPersonalAccount(username, password)
     if (!user) return res.status(400).json({ success: false, message: '用户名已存在' })
     issueToken(res, {
-      userId: user.id, sessionVersion: user.sessionVersion, accountRole: 'user', role: 'user' as UserRole, username: user.username, workspaceMode: 'personal',
+      userId: user.id, sessionVersion: user.sessionVersion, accountRole: 'user', username: user.username, workspaceMode: 'personal',
     })
     sendContractData(res, AuthContracts.register, LoginResponseDataSchema.parse({
-      userId: user.id, accountRole: 'user', role: 'user', username: user.username,
+      userId: user.id, accountRole: 'user', username: user.username,
       workspaceMode: 'personal', next: '/personal', avatar: user.avatar,
     }))
   } catch (error) {
@@ -154,8 +140,7 @@ authRouter.get('/me', authenticate, async (req, res) => {
     sendContractData(res, AuthContracts.me, {
         userId: user.id,
         username: user.username,
-        accountRole: accountRoleFromLegacy(user.role as UserRole),
-        role: result.isGlobalAdmin ? accountRoleFromLegacy(user.role as UserRole) : (result.organizationRole || accountRoleFromLegacy(user.role as UserRole)),
+        accountRole: user.role,
         avatar: user.avatar,
         phone: user.phone,
         email: user.email,
@@ -163,7 +148,6 @@ authRouter.get('/me', authenticate, async (req, res) => {
         organizationId: result.organizationId || undefined,
         organizationMembershipId: membership?.id,
         organizationRole: result.organizationRole || undefined,
-        schoolId: result.schoolId,
         workspaceMode: result.isGlobalAdmin ? 'work' : (payload.workspaceMode === 'personal' ? 'personal' : 'work'),
         profile: result.profile,
     })
@@ -175,28 +159,23 @@ authRouter.get('/me', authenticate, async (req, res) => {
 })
 
 authRouter.post('/switch-workspace', authenticate, async (req, res) => {
-  const requestedMode = req.body?.workspaceMode ?? req.body?.mode
+  const requestedMode = req.body?.workspaceMode
   const mode: WorkspaceMode | null = requestedMode === 'work' || requestedMode === 'personal' ? requestedMode : null
   if (!mode) {
     return res.status(400).json({ success: false, message: '无效的工作区模式' })
   }
   try {
     const payload = (req as any).user as JwtPayload
-    if (mode === 'personal' && ['super_admin', 'platform_admin'].includes(payload.role)) {
+    if (mode === 'personal' && ['super_admin', 'platform_admin'].includes(payload.accountRole)) {
       return res.status(403).json({ success: false, message: '管理员不具备个人工作区' })
     }
-    const role = await resolveWorkspaceSwitch(payload.userId, payload.role, mode)
-    issueToken(res, { ...renewablePayload(payload), role: role as UserRole, workspaceMode: mode })
-    res.json({ success: true, data: { workspaceMode: mode, role } })
+    await resolveWorkspaceSwitch(payload.userId, mode)
+    issueToken(res, { ...renewablePayload(payload), workspaceMode: mode })
+    res.json({ success: true, data: { workspaceMode: mode } })
   } catch (error) {
     logger.error('switch_workspace_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
-})
-
-authRouter.post('/session/migrate', authenticate, (req, res) => {
-  issueToken(res, renewablePayload((req as any).user as JwtPayload))
-  res.json({ success: true })
 })
 
 authRouter.post('/logout', (_req, res) => {
@@ -219,7 +198,7 @@ authRouter.put('/profile', authenticate, async (req, res) => {
     }
     const user = await updateAccountProfile((req as any).user, { avatar, phone, email, bio })
     sendContractData(res, AuthContracts.updateProfile, {
-        userId: user.id, username: user.username, role: user.role, avatar: user.avatar,
+        userId: user.id, username: user.username, accountRole: user.role, avatar: user.avatar,
         phone: user.phone, email: user.email, bio: user.bio,
     })
   } catch (error) {

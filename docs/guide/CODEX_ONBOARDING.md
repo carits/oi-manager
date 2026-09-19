@@ -109,9 +109,9 @@ Feature 内登记的 Raw Transport 例外。
 不得手写身份前缀后再拼接详情地址。尤其要避免“详情页存在，但父列表页不存在”的错误：
 
 ```text
-正确详情：/teacher/school/contests/:cid
-错误父路径：/teacher/school/contests
-正确列表：/teacher/contests
+正确详情：/org/:organizationId/contests/:cid
+错误路径：缺少 organizationId 的组织页面
+正确列表：/org/:organizationId/contests
 ```
 
 路由或按钮变更至少运行：

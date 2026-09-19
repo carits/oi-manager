@@ -10,9 +10,9 @@ export function hasOrganizationContext(user: JwtPayload | undefined, organizatio
 }
 
 export function hasOrganizationWalletAccess(user: JwtPayload | undefined, organizationId: string) {
-  return hasOrganizationContext(user, organizationId) && (user?.role === 'school_principal' || user?.role === 'teacher')
+  return hasOrganizationContext(user, organizationId) && (user?.organizationRole === 'school_principal' || user?.organizationRole === 'teacher')
 }
 
 export function isPlatformAdministrator(user: JwtPayload | undefined) {
-  return user?.role === 'platform_admin' || user?.role === 'super_admin'
+  return user?.accountRole === 'platform_admin' || user?.accountRole === 'super_admin'
 }

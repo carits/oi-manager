@@ -96,9 +96,7 @@ export const routePatterns = [
   '/profile/student/[id]',
   '/profile/teacher/[id]',
   '/profile/user/[id]',
-  '/student/[[...legacy]]',
   '/super_admin',
-  '/teacher/[[...legacy]]',
 ] as const
 
 export type RoutePattern = typeof routePatterns[number]
@@ -120,8 +118,6 @@ export function routeOwner(pattern: RoutePattern): RouteOwner {
 }
 
 export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
-  if (pattern === '/student/[[...legacy]]') return '/student'
-  if (pattern === '/teacher/[[...legacy]]') return '/teacher'
 
   if (pattern === '/org/[organizationId]/[module]') {
     return `/org/org_${ids.school}/overview`

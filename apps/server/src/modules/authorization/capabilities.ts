@@ -131,22 +131,6 @@ export async function resolveOrganizationAuthorization(
   return authorizationFromMembership(account.role, membership)
 }
 
-/**
- * Distinguish an unavailable legacy organization from an unrelated organization
- * without exposing legacy organizations to users who never belonged to them.
- */
-export async function isUnavailableLegacyOrganizationMember(userId: string, organizationId: string): Promise<boolean> {
-  return Boolean(await prisma.organizationMembership.findFirst({
-    where: {
-      userId,
-      organizationId,
-      status: 'active',
-      Organization: { status: 'active', School: { directoryStatus: 'legacy' } },
-    },
-    select: { id: true },
-  }))
-}
-
 /** Resolve every active organization authorization for one account in one query. */
 export async function resolveOrganizationAuthorizationsForUser(
   userId: string,

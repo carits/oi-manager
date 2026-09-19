@@ -1,11 +1,8 @@
-import type { AccountRole, LegacyUserRole, OrganizationMembershipRole, WorkspaceContext } from '@oi-manager/contracts'
+import type { AccountRole, OrganizationMembershipRole, WorkspaceContext } from '@oi-manager/contracts'
 
 export * from './oj-platforms'
 
 export type { AccountRole, OrganizationMembershipRole, WorkspaceContext }
-
-/** @deprecated Use AccountRole globally and OrganizationMembershipRole inside an organization. */
-export type UserRole = LegacyUserRole
 
 export type ResourceScope = 'campus' | 'personal'
 export type ProblemLibraryScope = 'platform' | 'school'
@@ -32,14 +29,12 @@ export type FileType = 'statement' | 'ranklist' | 'editorial' | 'solution' | 'sl
 // 任务状态
 export type TaskStatus = 'pending' | 'done' | 'review'
 
-/** Minimal claims that may be persisted in a signed browser or Bearer session. */
+/** Minimal claims that may be persisted in a signed HttpOnly Cookie session. */
 export interface SessionJwtPayload {
   userId: string
   /** Incremented whenever all existing sessions must be revoked. */
   sessionVersion?: number
-  role: UserRole
-  /** Canonical account-wide identity. `role` remains a compatibility view. */
-  accountRole?: AccountRole
+  accountRole: AccountRole
   username: string
   workspaceMode?: 'work' | 'personal'
 }
@@ -167,7 +162,7 @@ export interface ResetUserPasswordRequest {
 
 // 用户列表查询参数
 export interface GetUsersQueryParams {
-  role?: UserRole
+  accountRole?: AccountRole
   status?: 'active' | 'disabled'
   keyword?: string
   page?: number
@@ -178,7 +173,7 @@ export interface GetUsersQueryParams {
 export interface UserDetailResponse {
   id: string
   username: string
-  role: UserRole
+  accountRole: AccountRole
   status: string
   avatar?: string
   phone?: string

@@ -30,7 +30,7 @@ export default function CampusManagementPage() {
   const params = useParams<{ organizationId?: string }>()
   const [organizationId, setOrganizationId] = useState(params.organizationId || '')
   const [loadingWorkspace, setLoadingWorkspace] = useState(!params.organizationId)
-  const role = user?.organizationRole || user?.role
+  const role = user?.organizationRole
   const isPrincipal = role === 'school_principal'
   const requestedTab = searchParams.get('tab')
   const resolvedTab: Tab = requestedTab === 'teachers' && isPrincipal ? 'teachers' : requestedTab === 'settings' && isPrincipal ? 'settings' : requestedTab === 'applications' || requestedTab === 'invitations' || requestedTab === 'wallet' ? requestedTab : 'students'

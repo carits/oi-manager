@@ -17,7 +17,7 @@ import {
 
 export const organizationCreationRouter = Router()
 
-const actor = (req: AuthRequest) => ({ userId: req.user!.userId, role: req.user!.role })
+const actor = (req: AuthRequest) => ({ userId: req.user!.userId, accountRole: req.user!.accountRole })
 
 function endpoint(handler: (req: AuthRequest, res: Response) => Promise<unknown>) {
   return asyncHandler(async (req: AuthRequest, res: Response) => {

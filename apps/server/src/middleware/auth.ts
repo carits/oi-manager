@@ -1,19 +1,18 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-import { JwtPayload, UserRole, ResourceScope } from '@oi-manager/shared'
-import { accountRoleFromLegacy, type AccountRole } from '@oi-manager/contracts'
+import { JwtPayload, ResourceScope } from '@oi-manager/shared'
+import { AccountRoleSchema, type AccountRole } from '@oi-manager/contracts'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { getSessionToken } from '../lib/sessionCookie'
 import { prisma } from '../prisma'
 import logger from '../lib/logger'
-import { isUnavailableLegacyOrganizationMember, organizationRoleFromRoleKeys, resolveOrganizationAuthorization } from '../modules/authorization/capabilities'
+import { organizationRoleFromRoleKeys, resolveOrganizationAuthorization } from '../modules/authorization/capabilities'
 
 // 全局类型扩展：让 Express Request.user 使用 JwtPayload 类型
 declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload
-      authSource?: 'cookie' | 'bearer'
     }
   }
 }
@@ -23,12 +22,7 @@ export interface AuthRequest extends Request {
 }
 
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization
-  const bearerToken = authHeader?.startsWith('Bearer ')
-    ? authHeader.substring(7)
-    : null
-  const cookieToken = getSessionToken(req)
-  const token = bearerToken || cookieToken
+  const token = getSessionToken(req)
 
   if (!token) {
     return res.status(401).json({ success: false, message: '未授权，请先登录' })
@@ -45,10 +39,13 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
   }
 
   try {
+    const signedAccountRole = AccountRoleSchema.safeParse(decoded.accountRole)
+    if (!signedAccountRole.success) {
+      return res.status(401).json({ success: false, code: 'INVALID_SESSION', message: '登录状态无效，请重新登录' })
+    }
     decoded.workspaceMode = decoded.workspaceMode === 'personal' ? 'personal' : 'work'
 
-    // 角色以数据库中的全局账号为准，兼容管理员在旧版本生成的 teacher/student token。
-    // 组织成员关系只用于普通账号切换校园身份，不能覆盖全局管理员权限。
+    // Account identity always comes from the current database record.
     const account = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: { role: true, status: true, sessionVersion: true }
@@ -60,9 +57,12 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       return res.status(401).json({ success: false, code: 'SESSION_REVOKED', message: '登录状态已失效，请重新登录' })
     }
     decoded.sessionVersion = account.sessionVersion
-    const accountRole = accountRoleFromLegacy(account.role as UserRole)
+    const parsedAccountRole = AccountRoleSchema.safeParse(account.role)
+    if (!parsedAccountRole.success) {
+      return res.status(403).json({ success: false, code: 'ACCOUNT_ROLE_INVALID', message: '账号权限配置无效' })
+    }
+    const accountRole = parsedAccountRole.data
     decoded.accountRole = accountRole
-    decoded.role = accountRole as UserRole
     delete decoded.organizationId
     delete decoded.organizationMembershipId
     delete decoded.organizationRole
@@ -75,9 +75,6 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     if (organizationId) {
       const authorization = await resolveOrganizationAuthorization(decoded.userId, organizationId)
       if (!authorization) {
-        if (await isUnavailableLegacyOrganizationMember(decoded.userId, organizationId)) {
-          return res.status(404).json({ success: false, code: 'ORGANIZATION_NOT_AVAILABLE', message: '组织不可用' })
-        }
         return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
       }
       const organizationRole = organizationRoleFromRoleKeys(authorization.roleKeys)
@@ -86,14 +83,8 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       decoded.organizationMembershipId = authorization.membershipId
       decoded.organizationRole = organizationRole
       decoded.organizationCapabilities = [...authorization.capabilities].sort()
-      // 平台管理员/超级管理员是全局身份，进入学校上下文时仍须保留管理员权限。
-      // 普通账号才根据当前校园成员关系切换为老师/学生身份。
-      if (accountRole !== 'super_admin' && accountRole !== 'platform_admin') {
-        decoded.role = organizationRole as UserRole
-      }
     }
     req.user = decoded
-    req.authSource = bearerToken ? 'bearer' : 'cookie'
     next()
   } catch (error) {
     logger.error('authentication_service_error', error, {
@@ -110,9 +101,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
  * genuinely anonymous request remains valid. Invalid supplied credentials are
  * still rejected instead of being silently downgraded to anonymous access. */
 export async function optionalAuthenticate(req: AuthRequest, res: Response, next: NextFunction) {
-  const hasBearer = Boolean(req.headers.authorization?.startsWith('Bearer '))
-  const hasCookie = Boolean(getSessionToken(req))
-  if (!hasBearer && !hasCookie) return next()
+  if (!getSessionToken(req)) return next()
   return authenticate(req, res, next)
 }
 
@@ -120,9 +109,8 @@ export function getActiveOrganizationId(user?: JwtPayload): string | undefined {
   return user?.organizationId
 }
 
-export function getAccountRole(user?: Pick<JwtPayload, 'accountRole' | 'role'>): AccountRole | undefined {
-  if (!user) return undefined
-  return user.accountRole || accountRoleFromLegacy(user.role)
+export function getAccountRole(user?: Pick<JwtPayload, 'accountRole'>): AccountRole | undefined {
+  return user?.accountRole
 }
 
 /** Global account authorization. Organization permissions must use capabilities. */
@@ -141,14 +129,13 @@ export function authorize(...roles: AccountRole[]) {
 }
 
 // 检查是否为管理员（super_admin 或 platform_admin）
-export function isAdmin(role: UserRole | AccountRole): boolean {
-  const accountRole = accountRoleFromLegacy(role)
+export function isAdmin(accountRole: AccountRole): boolean {
   return accountRole === 'super_admin' || accountRole === 'platform_admin'
 }
 
 // 检查是否为超级管理员
-export function isSuperAdmin(role: UserRole | AccountRole): boolean {
-  return accountRoleFromLegacy(role) === 'super_admin'
+export function isSuperAdmin(accountRole: AccountRole): boolean {
+  return accountRole === 'super_admin'
 }
 
 export function isPersonalContext(user?: JwtPayload): boolean {

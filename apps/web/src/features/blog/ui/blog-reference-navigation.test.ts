@@ -12,8 +12,8 @@ const reference = (patch: Partial<PublishedBlogReference>): PublishedBlogReferen
 })
 
 describe('published blog reference navigation', () => {
-  const personal = { workspace: 'personal', role: 'user' } as const
-  const platform = { workspace: 'platform', role: 'platform_admin', platformBasePath: '/platform-admin' } as const
+  const personal = { workspace: 'personal', accountRole: 'user' } as const
+  const platform = { workspace: 'platform', accountRole: 'platform_admin', platformBasePath: '/platform-admin' } as const
 
   it('links platform and organization problems to their readable workspace', () => {
     expect(referenceHref(reference({ type: 'PROBLEM' }), personal)).toBe('/personal/problems/problem-internal-id')

@@ -20,7 +20,6 @@ import { listProblemTestSetRevisions } from '../api/problemJudgeSettingsApi'
 import {
   getProblemTestGraph,
   getProblemTestSetRevision,
-  migrateProblemTestGraph,
   registerProblemTestGraphTestcases,
   saveProblemTestGraph,
   setProblemTestGraphTestcaseProtection,
@@ -148,7 +147,6 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [migrating, setMigrating] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [selectedSubtaskId, setSelectedSubtaskId] = useState<number | null>(null)
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null)
@@ -156,7 +154,6 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   const [query, setQuery] = useState('')
   const [manualInputId, setManualInputId] = useState('')
   const [manualOutputId, setManualOutputId] = useState('')
-  const [confirmMigration, setConfirmMigration] = useState(false)
   const [deleteFile, setDeleteFile] = useState<TestdataFile | null>(null)
   const [replacementFiles, setReplacementFiles] = useState<File[] | null>(null)
   const [draggedSubtask, setDraggedSubtask] = useState<number | null>(null)
@@ -218,17 +215,6 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
     baseFingerprint.current = graphFingerprint(next.revision, draft)
     setSelectedSubtaskId(draft[0]?.id ?? null)
     setSelectedGroupKey(null)
-  }
-
-  const migrate = async () => {
-    setMigrating(true)
-    try {
-      const result = await migrateProblemTestGraph(problemId)
-      if (!result.ok) return toast.error(result.error.message || '迁移失败')
-      replaceGraphData(result.data)
-      toast.success('测试图迁移完成')
-      setConfirmMigration(false)
-    } finally { setMigrating(false) }
   }
 
   const save = async () => {
@@ -409,7 +395,7 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
 
   if (loading) return <div className={styles.loading}>正在加载数据与分组工作台…</div>
   if (!graph) return <div className={styles.error}>测试图加载失败，请重新进入页面。</div>
-  if (!graph.migrated) return <section className={styles.migrationCard}><div><h3>此题尚未迁移到 OI Test Graph</h3><p>迁移会把当前 YAML Subtask、测试点和依赖转换为关系型 Test Graph，并保持 Judge 投影一致。迁移不会重测历史提交。</p></div>{graph.migrationIssues?.length ? <ul>{graph.migrationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : null}<Button variant="primary" disabled={!graph.canMigrate} onClick={() => setConfirmMigration(true)}>迁移并进入工作台</Button>{!graph.canMigrate && <p className={styles.blocked}>当前配置不能安全迁移，请先修复上述问题。</p>}<ConfirmDialog isOpen={confirmMigration} onClose={() => setConfirmMigration(false)} onConfirm={migrate} title="迁移此题的 OI 测试图？" message="系统将基于当前评测配置创建 Subtask、Official Group、Hack Gate 和 Testcase 关系，并生成等价 Judge 投影。" confirmText="确认迁移" loading={migrating} /></section>
+  if (!graph.migrated) return <section className={styles.migrationCard}><div><h3>测试图尚未初始化</h3><p>请由运维人员运行离线迁移审计任务，页面不再提供历史数据迁移操作。</p></div>{graph.migrationIssues?.length ? <ul>{graph.migrationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : null}</section>
 
   return <section className={styles.root}>
     <header className={styles.toolbar}>

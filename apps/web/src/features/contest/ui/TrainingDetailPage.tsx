@@ -90,7 +90,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         : 'organization' as const,
     organizationId,
     platformBasePath,
-    role: user?.organizationRole || 'teacher',
+    accountRole: user?.accountRole || 'user',
+    organizationRole: user?.organizationRole || undefined,
   }
 
   const validTabs: TabType[] = ['problems', 'submissions', 'solutions', 'attachments', 'ranking']

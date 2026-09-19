@@ -185,11 +185,36 @@ export async function canManageTraining(
   return false
 }
 
-/** 获取用户的 userType 用于训练上下文 */
-export async function getUserTypeForTeam(userId: string): Promise<string> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+/** 按比赛所属组织或团队确定用户类型，避免从全局账号角色推断校园身份。 */
+export async function getUserTypeForTraining(userId: string, trainingId: number): Promise<'teacher' | 'student'> {
+  const [user, training] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    prisma.training.findUnique({
+      where: { id: trainingId },
+      select: { organizationId: true, teamId: true, Team: { select: { organizationId: true } } },
+    }),
+  ])
   if (user?.role === 'super_admin' || user?.role === 'platform_admin') return 'teacher'
-  if (user?.role === 'teacher' || user?.role === 'school_principal') return 'teacher'
+  if (!training) return 'student'
+
+  const organizationId = training.organizationId || training.Team?.organizationId
+  if (organizationId) {
+    const membership = await prisma.organizationMembership.findFirst({
+      where: { organizationId, userId, status: 'active' },
+      select: { RoleAssignments: { select: { roleKey: true } } },
+    })
+    const organizationRole = membership
+      ? organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey))
+      : null
+    if (organizationRole === 'teacher' || organizationRole === 'school_principal') return 'teacher'
+  }
+  if (training.teamId) {
+    const teamMember = await prisma.teamMember.findFirst({
+      where: { teamId: training.teamId, userId, status: 'active' },
+      select: { userType: true },
+    })
+    if (teamMember?.userType === 'teacher') return 'teacher'
+  }
   return 'student'
 }
 

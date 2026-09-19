@@ -250,7 +250,7 @@ export async function createJudgeProgram(input: CreateProgramInput) {
     await auditProgram(tx, { problemId: input.problemId, programId: id, versionId, actorUserId: input.user.userId, action: 'version_created', metadata: { kind: identity.kind, language: identity.language, protocol: identity.protocol, sourceSha256 } })
     return { program, version }
   })
-  logger.audit('judge_program_version_created', { userId: input.user.userId, role: input.user.role, problemId: input.problemId, programId: created.program.id, versionId: created.version.id, kind: identity.kind, language: identity.language, protocol: identity.protocol, sourceSha256 })
+  logger.audit('judge_program_version_created', { userId: input.user.userId, role: input.user.accountRole, problemId: input.problemId, programId: created.program.id, versionId: created.version.id, kind: identity.kind, language: identity.language, protocol: identity.protocol, sourceSha256 })
   return created
 }
 
@@ -277,7 +277,7 @@ export async function createJudgeProgramVersion(input: Omit<CreateProgramInput, 
     await auditProgram(tx, { problemId: input.problemId, programId: program.id, versionId: created.id, actorUserId: input.user.userId, action: 'version_created', metadata: { kind: identity.kind, language: identity.language, protocol: identity.protocol, sourceSha256 } })
     return created
   })
-  logger.audit('judge_program_version_created', { userId: input.user.userId, role: input.user.role, problemId: input.problemId, programId: program.id, versionId: version.id, kind: identity.kind, language: identity.language, protocol: identity.protocol, sourceSha256 })
+  logger.audit('judge_program_version_created', { userId: input.user.userId, role: input.user.accountRole, problemId: input.problemId, programId: program.id, versionId: version.id, kind: identity.kind, language: identity.language, protocol: identity.protocol, sourceSha256 })
   return version
 }
 
@@ -429,7 +429,7 @@ export async function updateJudgeProgram(input: { user: JwtPayload; problemId: s
     await auditProgram(tx, { problemId: input.problemId, programId: program.id, versionId: selected?.id, actorUserId: input.user.userId, action: selected ? 'version_activated' : input.status === 'archived' ? 'program_retired' : 'program_updated', metadata: selected ? { previousVersionId: program.currentVersionId } : undefined })
     return result
   })
-  if (selected) logger.audit('judge_program_version_activated', { userId: input.user.userId, role: input.user.role, problemId: input.problemId, programId: program.id, versionId: selected.id, kind: program.kind })
+  if (selected) logger.audit('judge_program_version_activated', { userId: input.user.userId, role: input.user.accountRole, problemId: input.problemId, programId: program.id, versionId: selected.id, kind: program.kind })
   if (program.kind === 'classifier' || program.kind === 'validator' || program.kind === 'standard') {
     await refreshAdmittedCandidateStages(input.problemId)
     await queueAwaitingCandidateEvaluations(input.problemId)

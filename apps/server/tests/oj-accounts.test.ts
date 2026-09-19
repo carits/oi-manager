@@ -22,7 +22,7 @@ describe('OJ Account Management', () => {
       })
       const res = await request(app)
         .get('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
       expect(res.status).toBe(403)
     })
 
@@ -36,7 +36,7 @@ describe('OJ Account Management', () => {
       })
       const res = await request(app)
         .get('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
     })
@@ -51,7 +51,7 @@ describe('OJ Account Management', () => {
       })
       const res = await request(app)
         .get('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
       expect(res.status).toBe(200)
     })
   })
@@ -71,7 +71,7 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       const res = await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({
           platform: 'hdu',
           username: 'testuser',
@@ -94,7 +94,7 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       const res = await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({
           platform: 'hdu',
           username: 'pwuser',
@@ -113,13 +113,13 @@ describe('OJ Account Management', () => {
       // First add
       await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'dup_user', cookie: 'cookie1' })
 
       // Second add - should fail
       const res = await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'dup_user', cookie: 'cookie2' })
 
       expect(res.status).toBe(409)
@@ -129,7 +129,7 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       const res = await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ cookie: 'some_cookie' })
 
       expect(res.status).toBe(400)
@@ -139,7 +139,7 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       const res = await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'nocreds' })
 
       expect(res.status).toBe(400)
@@ -149,16 +149,16 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'list_user1', cookie: 'c1' })
       await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'codeforces', username: 'list_user2', cookie: 'c2' })
 
       const res = await request(app)
         .get('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
 
       expect(res.status).toBe(200)
       expect(res.body.data.length).toBeGreaterThanOrEqual(2)
@@ -168,16 +168,16 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'filter_hdu', cookie: 'c' })
       await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'codeforces', username: 'filter_cf', cookie: 'c' })
 
       const res = await request(app)
         .get('/api/oj-accounts?platform=hdu')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
 
       expect(res.status).toBe(200)
       expect(res.body.data.every((a: any) => a.platform === 'hdu')).toBe(true)
@@ -187,14 +187,14 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       const createRes = await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'update_user', cookie: 'old_cookie' })
 
       const id = createRes.body.data.id
 
       const res = await request(app)
         .put(`/api/oj-accounts/${id}`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ cookie: 'new_cookie' })
 
       expect(res.status).toBe(200)
@@ -206,14 +206,14 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       const createRes = await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'delete_user', cookie: 'c' })
 
       const id = createRes.body.data.id
 
       const res = await request(app)
         .delete(`/api/oj-accounts/${id}`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -223,7 +223,7 @@ describe('OJ Account Management', () => {
       const token = await getAdminToken()
       const res = await request(app)
         .delete('/api/oj-accounts/nonexistent-id')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
 
       expect(res.status).toBe(404)
     })
@@ -241,16 +241,16 @@ describe('OJ Account Management', () => {
 
       await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'stats_user1', cookie: 'c1' })
       await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'stats_user2', cookie: 'c2' })
 
       const res = await request(app)
         .get('/api/oj-accounts/stats')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -273,14 +273,14 @@ describe('OJ Account Management', () => {
       // Create account with only password, no cookie
       const createRes = await request(app)
         .post('/api/oj-accounts')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ platform: 'hdu', username: 'no_cookie_user', password: 'pass123' })
 
       const id = createRes.body.data.id
 
       const res = await request(app)
         .post(`/api/oj-accounts/${id}/verify`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
 
       expect(res.status).toBe(200)
       expect(res.body.data.status).toBe('error')

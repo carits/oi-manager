@@ -13,14 +13,14 @@ export class UserApplicationError extends Error {
 
 export interface UserActor {
   userId: string
-  role: string
+  accountRole: string
   organizationId?: string | null
   personalContext: boolean
 }
 
 function fail(statusCode: number, message: string): never { throw new UserApplicationError(statusCode, message) }
 function requireAdmin(actor: UserActor) {
-  if (actor.role !== 'super_admin' && actor.role !== 'platform_admin') fail(403, '权限不足')
+  if (actor.accountRole !== 'super_admin' && actor.accountRole !== 'platform_admin') fail(403, '权限不足')
 }
 
 export async function getUserProfile(actor: UserActor, userId: string, requestedType: unknown) {
@@ -90,10 +90,10 @@ export async function listGlobalUsers(actor: UserActor, query: any, page: number
   requireAdmin(actor)
   const keyword = typeof query.keyword === 'string' ? query.keyword.trim() : ''
   const status = query.status === 'active' || query.status === 'disabled' ? query.status : undefined
-  const role = typeof query.role === 'string' ? query.role : undefined
-  const allowedRoles = actor.role === 'platform_admin' ? ['user'] : ['user', 'platform_admin', 'super_admin']
+  const accountRole = typeof query.accountRole === 'string' ? query.accountRole : undefined
+  const allowedRoles = actor.accountRole === 'platform_admin' ? ['user'] : ['user', 'platform_admin', 'super_admin']
   const where = {
-    role: role && allowedRoles.includes(role) ? role : { in: allowedRoles },
+    role: accountRole && allowedRoles.includes(accountRole) ? accountRole : { in: allowedRoles },
     ...(status ? { status } : {}),
     ...(keyword ? { username: { contains: keyword, mode: 'insensitive' as const } } : {}),
   }
@@ -101,7 +101,7 @@ export async function listGlobalUsers(actor: UserActor, query: any, page: number
     prisma.user.findMany({ where, skip, take: pageSize, orderBy: { createdAt: 'desc' } }),
     prisma.user.count({ where }),
   ])
-  return { users: users.map(user => ({ ...user, name: user.username })), ...paginatedResponse([], total, page, pageSize) }
+  return { users: users.map(({ role, ...user }) => ({ ...user, accountRole: role, name: user.username })), ...paginatedResponse([], total, page, pageSize) }
 }
 
 export async function getGlobalUser(actor: UserActor, userId: string) {
@@ -120,11 +120,12 @@ export async function getGlobalUser(actor: UserActor, userId: string) {
     },
   })
   if (!user) fail(404, '用户不存在')
-  return user
+  const { role, ...account } = user
+  return { ...account, accountRole: role }
 }
 
 export async function createPlatformAdmin(actor: UserActor, body: any) {
-  if (actor.role !== 'super_admin') fail(403, '只有超级管理员可以创建平台管理员')
+  if (actor.accountRole !== 'super_admin') fail(403, '只有超级管理员可以创建平台管理员')
   const { username, password, name, phone, email, bio } = body
   const usernameValidation = validateUsername(username)
   if (!usernameValidation.valid) fail(400, usernameValidation.message || '用户名无效')
@@ -138,11 +139,11 @@ export async function createPlatformAdmin(actor: UserActor, body: any) {
       role: 'platform_admin', phone: phone || null, email: email || null, bio: bio || null,
     },
   })
-  return { userId: user.id, username: user.username, role: user.role, adminId: undefined }
+  return { userId: user.id, username: user.username, accountRole: user.role, adminId: undefined }
 }
 
 function protectAdminTarget(actor: UserActor, targetRole: string, message: string) {
-  if (actor.role === 'platform_admin' && (targetRole === 'platform_admin' || targetRole === 'super_admin')) fail(403, message)
+  if (actor.accountRole === 'platform_admin' && (targetRole === 'platform_admin' || targetRole === 'super_admin')) fail(403, message)
 }
 
 export async function updateGlobalUserStatus(actor: UserActor, userId: string, body: any) {
@@ -156,7 +157,7 @@ export async function updateGlobalUserStatus(actor: UserActor, userId: string, b
     prisma.user.update({ where: { id: target.id }, data: { status } }),
     prisma.userStatusLog.create({
       data: {
-        id: crypto.randomUUID(), targetId: target.id, operatorId: actor.userId, operatorRole: actor.role,
+        id: crypto.randomUUID(), targetId: target.id, operatorId: actor.userId, operatorRole: actor.accountRole,
         oldStatus: target.status, newStatus: status, reason: String(body.reason || ''),
       },
     }),

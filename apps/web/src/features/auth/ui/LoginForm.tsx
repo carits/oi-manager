@@ -22,8 +22,8 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      const isGlobalAdmin = isGlobalAdministrator(user.role)
-      router.replace(nextPath || (isGlobalAdmin ? getRoleHome(user.role, 'organization') : '/identity'))
+      const isGlobalAdmin = isGlobalAdministrator(user.accountRole)
+      router.replace(nextPath || (isGlobalAdmin ? getRoleHome(user.accountRole, 'organization') : '/identity'))
     }
   }, [isAuthenticated, nextPath, router, user])
 

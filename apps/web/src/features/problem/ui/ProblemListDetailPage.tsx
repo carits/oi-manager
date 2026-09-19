@@ -194,7 +194,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
   const canEdit = detail?._permission === 'admin' || detail?._permission === 'edit'
   const isAdmin = detail?._permission === 'admin'
-  const isStudentView = user?.role === 'student' && !isPersonalPath(pathname)
+  const isStudentView = user?.organizationRole === 'student' && !isPersonalPath(pathname)
 
   useEffect(() => { fetchDetail() }, [listId])
 

@@ -4,9 +4,9 @@ import { accountClient } from '@/lib/apiClient'
 export type { ManagedUser }
 const encoded = (value: string) => encodeURIComponent(value)
 
-export function listManagedUsers(query: { role?: string; status?: string; keyword?: string; page?: number; pageSize?: number } = {}) {
+export function listManagedUsers(query: { accountRole?: string; status?: string; keyword?: string; page?: number; pageSize?: number } = {}) {
   const params = new URLSearchParams({ page: String(query.page ?? 1), pageSize: String(query.pageSize ?? 20) })
-  if (query.role) params.set('role', query.role)
+  if (query.accountRole) params.set('accountRole', query.accountRole)
   if (query.status) params.set('status', query.status)
   if (query.keyword) params.set('keyword', query.keyword)
   return accountClient.queryContract(IdentityContracts.managedUsers, `/api/users?${params}`)

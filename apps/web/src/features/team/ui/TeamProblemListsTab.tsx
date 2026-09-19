@@ -57,7 +57,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
   const { user } = useAuth()
   const pathname = usePathname()
   const problemListsPrefix = currentWorkspacePrefix(pathname, '/personal/problem-lists', '/problem-lists')
-  const isStudent = user?.role === 'student'
+  const isStudent = user?.organizationRole === 'student'
   const effectiveCanManage = canManage && !isStudent
   const toast = useToast()
   const [items, setItems] = useState<TeamProblemListItem[]>([])

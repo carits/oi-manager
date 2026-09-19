@@ -96,7 +96,7 @@ async function resolveNotificationRows(
         organizationId: accountView ? { in: organizationIds } : (user.organizationId || '__none__'),
       }, select: { id: true, status: true },
     }) : [],
-    creationApplicationIds.length && user.role === 'super_admin' ? prisma.organizationCreationApplication.findMany({
+    creationApplicationIds.length && user.accountRole === 'super_admin' ? prisma.organizationCreationApplication.findMany({
       where: { id: { in: creationApplicationIds } }, select: { id: true, status: true },
     }) : [],
     rowOrganizationIds.length ? prisma.organization.findMany({

@@ -4,7 +4,7 @@ import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
 import {
   canAccessTraining,
-  getUserTypeForTeam,
+  getUserTypeForTraining,
   parseTrainingId,
   requireTrainingStarted,
 } from './training.helpers'
@@ -21,7 +21,7 @@ async function context(req: AuthRequest, res: any) {
   if (!await canAccessTraining(userId, training)) { res.status(403).json({ success: false, message: '无权限' }); return null }
   const notStarted = await requireTrainingStarted(training, userId)
   if (notStarted) { res.status(403).json({ success: false, message: notStarted }); return null }
-  return { trainingId, userId, userType: await getUserTypeForTeam(userId) }
+  return { trainingId, userId, userType: await getUserTypeForTraining(userId, trainingId) }
 }
 
 trainingNotesRouter.get('/trainings/:id/problems/:problemId/note', authenticate, asyncHandler(async (req: AuthRequest, res) => {

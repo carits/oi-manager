@@ -24,7 +24,7 @@ describe('problem Judge configuration boundary', () => {
   it('uploads, replaces, downloads and deletes one safe Checker source', async () => {
     const first = await request(app)
       .post(`/api/problems/${problem.id}/checker`)
-      .set('Authorization', `Bearer ${managerToken}`)
+      .set('Cookie', `oi_session=${managerToken}`)
       .attach('file', Buffer.from('#include <iostream>\nint main() { return 0; }\n'), {
         filename: 'checker.cpp',
         contentType: 'text/plain',
@@ -35,7 +35,7 @@ describe('problem Judge configuration boundary', () => {
     const replacementSource = '#include <iostream>\nint main() { return 1; }\n'
     const replacement = await request(app)
       .post(`/api/problems/${problem.id}/checker`)
-      .set('Authorization', `Bearer ${managerToken}`)
+      .set('Cookie', `oi_session=${managerToken}`)
       .attach('file', Buffer.from(replacementSource), {
         filename: 'checker.cpp',
         contentType: 'text/plain',
@@ -45,7 +45,7 @@ describe('problem Judge configuration boundary', () => {
 
     const download = await request(app)
       .get(`/api/problems/${problem.id}/checker/checker.cpp/download`)
-      .set('Authorization', `Bearer ${managerToken}`)
+      .set('Cookie', `oi_session=${managerToken}`)
     expect(download.status).toBe(200)
     expect(download.text).toContain('return 1')
 
@@ -61,7 +61,7 @@ describe('problem Judge configuration boundary', () => {
   it('rejects binary source content and hides Checker management from participants', async () => {
     const binary = await request(app)
       .post(`/api/problems/${problem.id}/checker`)
-      .set('Authorization', `Bearer ${managerToken}`)
+      .set('Cookie', `oi_session=${managerToken}`)
       .attach('file', Buffer.from([0, 1, 2, 3, 4]), {
         filename: 'checker.cpp',
         contentType: 'text/plain',

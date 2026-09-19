@@ -20,7 +20,7 @@ export const userRouter = Router()
 function actor(req: AuthRequest): UserActor {
   return {
     userId: req.user!.userId,
-    role: req.user!.role,
+    accountRole: req.user!.accountRole,
     organizationId: req.user!.organizationId,
     personalContext: isPersonalContext(req.user),
   }

@@ -43,7 +43,7 @@ export async function listProblemLists(
   if (teamId) {
     const team = await prisma.team.findUnique({ where: { id: teamId }, select: { scope: true } })
     const member = await prisma.teamMember.findFirst({ where: { teamId, userId, status: 'active' }, select: { id: true } })
-    if (!team || team.scope !== scope || (!member && (user.accountRole || user.role) !== 'super_admin')) fail(403, '无权限查看该团队题单')
+    if (!team || team.scope !== scope || (!member && (user.accountRole) !== 'super_admin')) fail(403, '无权限查看该团队题单')
     where.TeamProblemList = { some: { teamId } }
   }
 

@@ -22,7 +22,7 @@ describe('retired remote code archive', () => {
   ] as const)('does not expose %s %s', async (method, endpoint) => {
     const actor = await createTestUser({ role: 'student' })
     const response = await request(app)[method](endpoint)
-      .set('Authorization', `Bearer ${generateTokenFromUser(actor.user)}`)
+      .set('Cookie', `oi_session=${generateTokenFromUser(actor.user)}`)
       .send({})
     expect(response.status).toBe(404)
   })

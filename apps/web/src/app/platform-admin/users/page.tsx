@@ -40,7 +40,7 @@ export default function PlatformAdminUsersPage() {
   const fetchUsers = async () => {
     try {
       const params = new URLSearchParams()
-      if (filters.role) params.append('role', filters.role)
+      if (filters.role) params.append('accountRole', filters.role)
       if (filters.status) params.append('status', filters.status)
       if (filters.keyword) params.append('keyword', filters.keyword)
       params.append('page', pagination.page.toString())
@@ -197,7 +197,7 @@ export default function PlatformAdminUsersPage() {
                       <TableRow key={user.id} className={unifiedStyles.u16}>
                         <TableCell className={unifiedStyles.u17}>{user.username}</TableCell>
                         <TableCell className={unifiedStyles.u18}>{user.profile?.name || '-'}</TableCell>
-                        <TableCell className={unifiedStyles.u18}>{getRoleLabel(user.role)}</TableCell>
+                        <TableCell className={unifiedStyles.u18}>{getRoleLabel(user.accountRole)}</TableCell>
                         <TableCell className={unifiedStyles.u18}>{user.profile?.schoolName || '-'}</TableCell>
                         <TableCell className={unifiedStyles.u18}>
                           <span className={`${unifiedStyles.statusBadge} ${user.status === 'active' ? unifiedStyles.statusActive : unifiedStyles.statusInactive}`}>

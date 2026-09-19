@@ -18,8 +18,7 @@ export class WorkspaceError extends Error {
 
 export interface WorkspaceActor {
   userId: string
-  role: string
-  accountRole?: string
+  accountRole: string
   organizationId?: string | null
   organizationMembershipId?: string | null
 }
@@ -38,7 +37,7 @@ function relationLabel(memberRole: string, relationType: string) {
 }
 
 export async function listWorkspaces(actor: WorkspaceActor): Promise<WorkspaceSummary[]> {
-  const accountRole = actor.accountRole || actor.role
+  const accountRole = actor.accountRole
   if (accountRole === 'super_admin' || accountRole === 'platform_admin') {
     return [{
       type: 'platform' as const,

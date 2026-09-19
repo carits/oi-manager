@@ -3,7 +3,8 @@
  * 团队模块类型定义
  */
 
-import type { UserRole, JwtPayload } from '@oi-manager/shared'
+import type { JwtPayload } from '@oi-manager/shared'
+import type { AccountRole } from '@oi-manager/contracts'
 
 // ==================== 基础类型 ====================
 

@@ -17,7 +17,7 @@ export interface ProblemAccessRecord {
 
 export const isPlatformManager = (role: string) => role === 'platform_admin' || role === 'super_admin'
 const isOrganizationContext = (user: JwtPayload) => Boolean(user.organizationId)
-const accountRole = (user: JwtPayload) => user.accountRole || (isPlatformManager(user.role) ? user.role : 'user')
+const accountRole = (user: JwtPayload) => user.accountRole
 
 export function problemLibraryKey(scope: ProblemLibraryScope, organizationId?: string | null): string {
   return scope === 'school' ? `organization:${organizationId}` : 'platform'

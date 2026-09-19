@@ -44,7 +44,7 @@ export default function AdminUsersPage() {
   const fetchUsers = async () => {
     try {
       const params = new URLSearchParams()
-      if (filters.role) params.append('role', filters.role)
+      if (filters.role) params.append('accountRole', filters.role)
       if (filters.status) params.append('status', filters.status)
       if (filters.keyword) params.append('keyword', filters.keyword)
       params.append('page', pagination.page.toString())
@@ -120,7 +120,7 @@ export default function AdminUsersPage() {
         <main className={unifiedStyles.u2}>
           <div className={unifiedStyles.u3}>
             <h2 className={unifiedStyles.u4}>账号管理</h2>
-            {currentUser?.role === 'super_admin' && (
+            {currentUser?.accountRole === 'super_admin' && (
               <Button variant="ghost"
                 onClick={() => router.push('/admin/users/new-platform-admin')}
                 className={unifiedStyles.u5}
@@ -211,7 +211,7 @@ export default function AdminUsersPage() {
                       <TableRow key={user.id} className={unifiedStyles.u17}>
                         <TableCell className={unifiedStyles.u18}>{user.username}</TableCell>
                         <TableCell className={unifiedStyles.u19}>{user.profile?.name || '-'}</TableCell>
-                        <TableCell className={unifiedStyles.u19}>{getRoleLabel(user.role)}</TableCell>
+                        <TableCell className={unifiedStyles.u19}>{getRoleLabel(user.accountRole)}</TableCell>
                         <TableCell className={unifiedStyles.u19}>{user.profile?.schoolName || '-'}</TableCell>
                         <TableCell className={unifiedStyles.u19}>
                           <span className={`${unifiedStyles.statusBadge} ${user.status === 'active' ? unifiedStyles.statusActive : unifiedStyles.statusInactive}`}>

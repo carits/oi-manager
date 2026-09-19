@@ -3,7 +3,8 @@
  * 平台绑定模块类型定义
  */
 
-import type { UserRole, JwtPayload } from '@oi-manager/shared'
+import type { JwtPayload } from '@oi-manager/shared'
+import type { AccountRole } from '@oi-manager/contracts'
 
 // ==================== 基础类型 ====================
 
@@ -103,6 +104,6 @@ export interface UnbindResult {
 /** 用户身份信息（从 JWT 提取） */
 export interface UserIdentity {
   userId: string
-  role: UserRole
+  accountRole: AccountRole
   username: string
 }

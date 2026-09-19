@@ -24,7 +24,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .post('/api/teams')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
         .send({
           id: `team_${shortId()}`,
@@ -65,7 +65,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .post('/api/teams')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
         .send({
           schoolId: school.id
@@ -93,7 +93,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
         .send({
           members: [{ userId: newMemberId, userType: 'teacher' }],
@@ -127,7 +127,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
         .send({
           members: [{ userId: newMemberId, userType: 'student' }],
@@ -168,7 +168,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .delete(`/api/teams/${team.id}/members/${memberId}?memberType=student`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
@@ -212,7 +212,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/members`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
         .send({
           members: [{ userId: newMemberId, userType: 'teacher' }],
@@ -254,7 +254,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/admins`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
         .send({
           memberId: memberId,
@@ -303,7 +303,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .post(`/api/teams/${team.id}/transfer`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
         .send({
           newOwnerId: newOwnerId,
@@ -359,7 +359,7 @@ describe('Team Operations', () => {
 
       const response = await request(app)
         .post(`/api/teams/${team.id}/transfer`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .send({ newOwnerId: nextOwner.user.id, newOwnerType: 'user' })
 
       expect(response.status).toBe(200)
@@ -395,7 +395,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .get(`/api/teams/organization/${school.organizationId}`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
@@ -433,7 +433,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .get('/api/teams/mine')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
@@ -458,7 +458,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .get(`/api/teams/${team.id}`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
@@ -484,7 +484,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .delete(`/api/teams/${team.id}`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
@@ -527,7 +527,7 @@ describe('Team Operations', () => {
 
       const res = await request(app)
         .delete(`/api/teams/${team.id}`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(403)
@@ -586,7 +586,7 @@ describe('Team Operations', () => {
 
       const createResponse = await request(app)
         .post('/api/teams')
-        .set('Authorization', `Bearer ${personalToken}`)
+        .set('Cookie', `oi_session=${personalToken}`)
         .send({
           id: `personal_team_${shortId()}`,
           name: 'My personal team',
@@ -601,7 +601,7 @@ describe('Team Operations', () => {
 
       const personalList = await request(app)
         .get('/api/teams?view=all')
-        .set('Authorization', `Bearer ${personalToken}`)
+        .set('Cookie', `oi_session=${personalToken}`)
 
       expect(personalList.status).toBe(200)
       expect(personalList.body.data.summary.memberCount).toBeGreaterThanOrEqual(1)
@@ -612,7 +612,7 @@ describe('Team Operations', () => {
 
       const campusDetail = await request(app)
         .get(`/api/teams/${createResponse.body.data.id}`)
-        .set('Authorization', `Bearer ${campusToken}`)
+        .set('Cookie', `oi_session=${campusToken}`)
         .set('x-oi-organization-id', schoolA.organizationId!)
 
       expect(campusDetail.status).toBe(403)
@@ -644,7 +644,7 @@ describe('Team Operations', () => {
 
       const response = await request(app)
         .get(`/api/teams/${team.id}`)
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
 
       expect(response.status).toBe(200)
       expect(response.body.data.owner.name).toBe(username)
@@ -688,7 +688,7 @@ describe('Team Operations', () => {
 
       const response = await request(app)
         .get('/api/rankings/personal/rating?pageSize=200')
-        .set('Authorization', `Bearer ${personalToken}`)
+        .set('Cookie', `oi_session=${personalToken}`)
 
       expect(response.status).toBe(200)
       const rows = response.body.data.items.filter((row: any) =>
@@ -699,7 +699,7 @@ describe('Team Operations', () => {
 
       const schoolResponse = await request(app)
         .get(`/api/rankings/organizations/${schoolA.organizationId}/rating`)
-        .set('Authorization', `Bearer ${personalToken}`)
+        .set('Cookie', `oi_session=${personalToken}`)
       expect(schoolResponse.status).toBe(403)
     })
 
@@ -717,7 +717,7 @@ describe('Team Operations', () => {
 
       const response = await request(app)
         .get('/api/rankings/personal/rating')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', `oi_session=${token}`)
         .set('x-oi-organization-id', school.organizationId!)
 
       expect(response.status).toBe(403)

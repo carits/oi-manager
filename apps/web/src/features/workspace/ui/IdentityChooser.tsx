@@ -29,12 +29,12 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
   }
 
   useEffect(() => {
-    if (isGlobalAdministrator(user.role)) {
-      window.location.replace(getRoleHome(user.role, 'organization'))
+    if (isGlobalAdministrator(user.accountRole)) {
+      window.location.replace(getRoleHome(user.accountRole, 'organization'))
       return
     }
     void load()
-  }, [user.role])
+  }, [user.accountRole])
 
   const enter = (workspace: WorkspaceSummary) => {
     setEntering(workspace.organizationId || workspace.type)

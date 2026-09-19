@@ -4,10 +4,11 @@ import { knowledgeHref, navigationHome, resolveNavigationContext } from './navig
 
 describe('navigation context', () => {
   it('keeps organization, personal and platform identities explicit', () => {
-    const organization = resolveNavigationContext('/org/school-1/knowledge', { role: 'user', organizationRole: 'teacher' })
+    const organization = resolveNavigationContext('/org/school-1/knowledge', { accountRole: 'user', organizationRole: 'teacher' })
     expect(organization).toEqual({
       workspace: 'organization',
-      role: 'teacher',
+      accountRole: 'user',
+      organizationRole: 'teacher',
       organizationId: 'school-1',
       basePath: '/org/school-1',
       homeHref: '/org/school-1/overview',
@@ -15,9 +16,9 @@ describe('navigation context', () => {
     expect(knowledgeHref(organization)).toBe('/org/school-1/knowledge')
     expect(navigationHome(organization)).toBe('/org/school-1/overview')
 
-    expect(knowledgeHref(resolveNavigationContext('/personal/knowledge', { role: 'user' }))).toBe('/personal/knowledge')
-    expect(resolveNavigationContext('/account/profile', { role: 'super_admin' })).toEqual({ workspace: 'platform', role: 'super_admin', basePath: '/admin', homeHref: '/admin', platformBasePath: '/admin' })
-    expect(resolveNavigationContext('/account/profile', { role: 'platform_admin' })).toEqual({ workspace: 'platform', role: 'platform_admin', basePath: '/platform-admin', homeHref: '/platform-admin', platformBasePath: '/platform-admin' })
+    expect(knowledgeHref(resolveNavigationContext('/personal/knowledge', { accountRole: 'user' }))).toBe('/personal/knowledge')
+    expect(resolveNavigationContext('/account/profile', { accountRole: 'super_admin' })).toEqual({ workspace: 'platform', accountRole: 'super_admin', basePath: '/admin', homeHref: '/admin', platformBasePath: '/admin' })
+    expect(resolveNavigationContext('/account/profile', { accountRole: 'platform_admin' })).toEqual({ workspace: 'platform', accountRole: 'platform_admin', basePath: '/platform-admin', homeHref: '/platform-admin', platformBasePath: '/platform-admin' })
   })
 
   it('uses one root AuthProvider and does not recreate identity inside RoleLayout', () => {

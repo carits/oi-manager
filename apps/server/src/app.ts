@@ -9,7 +9,6 @@ import { adminDataRouter } from './routes/admin-data'
 import { authRouter } from './routes/auth'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { filesRouter } from './routes/files'
-import { migrationRouter } from './routes/migration'
 import { meRouter } from './routes/me'
 import { milestoneRouter } from './routes/milestones'
 import { ojAccountsRouter } from './routes/oj-accounts'
@@ -26,7 +25,6 @@ import { teamRouter } from './routes/teams'
 import { teacherRouter } from './routes/teachers'
 import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { testdataRouter } from './routes/testdata'
-import { testGraphAdminRouter } from './routes/test-graph-admin'
 import { userRouter } from './routes/users'
 import { workspaceRouter } from './routes/workspaces'
 import { aiTokenAdminRouter } from './modules/ai/ai-token.routes'
@@ -123,8 +121,6 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api', trainingEngineRouter)
   app.use('/api', assignmentRouter)
   app.use('/api/admin/data', authenticate, adminDataRouter)
-  app.use('/api/admin', testGraphAdminRouter)
-  app.use('/api/admin/migration', authenticate, migrationRouter)
   app.use('/api/rankings', rankingRouter)
   app.use('/api', ratingDomainRouter)
   app.use('/api/me', meRouter)

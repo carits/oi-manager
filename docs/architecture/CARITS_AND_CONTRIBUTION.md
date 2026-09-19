@@ -124,5 +124,4 @@ Scheduler 每 30 秒运行一次有界对账，每轮最多检查 100 条 `reser
 - 普通用户响应不返回 Hidden Holdout、Kill Vector、Corpus 源码或 Selector 内部权重。
 
 `CONTRIBUTION_REWARD_MODE=observe` 可让 Worker 只统计待结算数量而不领取任务；正式开启使用 `enabled`。
-账本与额度迁移必须先调用受保护的 `/api/admin/migration/economy-loop` check，之后携带
-`reportHash` apply；检测到异常账户、不平衡已入账交易或孤儿额度流水时 fail closed。
+账本与额度迁移必须通过服务器离线审计脚本执行；脚本先生成快照和报告，再在事务中应用。检测到异常账户、不平衡已入账交易或孤儿额度流水时 fail closed。

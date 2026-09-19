@@ -17,6 +17,7 @@ import {
 } from '../../judge/application/judge-read-projection'
 import { resolveSubmissionIoSnapshot, submissionIoDto } from '../../judge/domain/submission-io'
 import { findActivityRuntimeForSubmission } from '../../contest/contest-query.facade'
+import { organizationRoleFromRoleKeys } from '../../authorization/capabilities'
 
 export interface SubmissionQueryContext {
   userId: string
@@ -88,7 +89,18 @@ export async function listSubmissions(context: SubmissionQueryContext, input: Su
     prisma.submission.findMany({
       where,
       include: {
-        User: { select: { username: true, role: true } },
+        User: {
+          select: {
+            username: true,
+            OrganizationMembership: {
+              where: { status: 'active' },
+              select: {
+                organizationId: true,
+                RoleAssignments: { select: { roleKey: true } },
+              },
+            },
+          },
+        },
         CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -130,14 +142,18 @@ export async function listSubmissions(context: SubmissionQueryContext, input: Su
     submissions: submissions.map(rawSubmission => {
       const submission = projectSubmissionJudgeResult(rawSubmission)
       const problemInternalId = submission.problemInternalId || lookup.get(`${submission.oj}:${submission.problemId}`) || null
+      const membership = submission.User.OrganizationMembership.find(item => item.organizationId === submission.organizationId)
+      const organizationRole = membership
+        ? organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey))
+        : null
       return {
         id: submission.id,
         userId: submission.userId,
         userType: context.isPersonal
           ? 'user'
-          : submission.User.role === 'student'
+          : organizationRole === 'student'
             ? 'student'
-            : submission.User.role === 'teacher' || submission.User.role === 'school_principal'
+            : organizationRole === 'teacher' || organizationRole === 'school_principal'
               ? 'teacher'
               : 'user',
         username: submission.User.username,
@@ -171,7 +187,7 @@ async function requireVisibleSubmission(
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
     include: {
-      User: { select: { username: true, avatar: true, role: true } },
+      User: { select: { username: true, avatar: true } },
       OjAccount: { select: { username: true } },
       CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
     },

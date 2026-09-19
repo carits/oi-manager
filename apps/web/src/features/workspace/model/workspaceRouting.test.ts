@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 
 describe('组织路由能力', () => {
-  const organization = { workspace: 'organization' as const, organizationId: 'org_1', role: 'student' }
+  const organization = { workspace: 'organization' as const, organizationId: 'org_1', accountRole: 'user', organizationRole: 'student' }
   it('只生成组织和个人规范路径', () => {
     expect(resourceHref('team', organization, 'team_1')).toBe('/org/org_1/teams/team_1')
     expect(resourceHref('contest', organization, 18)).toBe('/org/org_1/contests/18')
@@ -12,12 +12,12 @@ describe('组织路由能力', () => {
     expect(notificationTeamHref('organization', 'org_1', 'team:team_1')).toBe('/org/org_1/teams/team_1')
   })
   it('缺少组织上下文时拒绝生成资源地址', () => {
-    expect(resourceHref('team', { workspace: 'organization', role: 'teacher' }, 'team_1')).toBeNull()
-    expect(fallbackHref({ workspace: 'organization', role: 'teacher' })).toBe('/identity')
+    expect(resourceHref('team', { workspace: 'organization', accountRole: 'user', organizationRole: 'teacher' }, 'team_1')).toBeNull()
+    expect(fallbackHref({ workspace: 'organization', accountRole: 'user', organizationRole: 'teacher' })).toBe('/identity')
     expect(canNavigate(null)).toBe(false)
   })
   it('个人路径保持隔离', () => {
-    const personal = { workspace: 'personal' as const, role: 'student' }
+    const personal = { workspace: 'personal' as const, accountRole: 'user' }
     expect(resourceHref('team', personal, 'team_1')).toBe('/personal/teams/team_1')
     expect(listHref('contest', personal)).toBe('/personal/contests')
     expect(notificationTeamHref('personal', undefined, 'team:team_1')).toBe('/personal/teams/team_1')

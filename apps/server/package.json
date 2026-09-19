@@ -17,7 +17,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
-    "migrate:school-problem-files": "tsx scripts/migrate-school-problem-files.ts"
+    "migrate:school-problem-files": "tsx scripts/migrate-school-problem-files.ts",
+    "migrate:account-roles": "tsx scripts/migrate-account-roles.ts"
   },
   "dependencies": {
     "@oi-manager/contracts": "workspace:*",

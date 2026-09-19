@@ -29,14 +29,14 @@ describe('platform contest lifecycle', () => {
 
     const denied = await request(app)
       .post('/api/platform-contests')
-      .set('Authorization', `Bearer ${tokenFor(participant)}`)
+      .set('Cookie', `oi_session=${tokenFor(participant)}`)
       .send(body)
     expect(denied.status).toBe(403)
     expect(denied.body.code).toBe('PLATFORM_CONTEST_MANAGE_DENIED')
 
     const created = await request(app)
       .post('/api/platform-contests')
-      .set('Authorization', `Bearer ${tokenFor(manager)}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
       .send(body)
     expect(created.status).toBe(201)
 
@@ -50,7 +50,7 @@ describe('platform contest lifecycle', () => {
 
     const configured = await request(app)
       .put(`/api/trainings/${contest.id}/rating-config`)
-      .set('Authorization', `Bearer ${tokenFor(manager)}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
       .send({ scope: 'GLOBAL', expectedRevision: 1, weight: 1, globalMinParticipants: 2, organizationMinParticipants: 2 })
     expect(configured.status).toBe(200)
     expect(configured.body.data).toMatchObject({ scope: 'GLOBAL', context: 'platform' })
@@ -61,7 +61,7 @@ describe('platform contest lifecycle', () => {
     const manager = await createTestUser({ role: 'super_admin' })
     const created = await request(app)
       .post('/api/platform-contests')
-      .set('Authorization', `Bearer ${tokenFor(manager)}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
       .send({
         title: 'Public Platform Contest',
         format: 'icpc',
@@ -71,9 +71,9 @@ describe('platform contest lifecycle', () => {
     expect(created.status).toBe(201)
 
     const [directory, personal, detail] = await Promise.all([
-      request(app).get('/api/platform-contests').set('Authorization', `Bearer ${tokenFor(participant)}`),
-      request(app).get('/api/me/contests').set('Authorization', `Bearer ${tokenFor(participant)}`),
-      request(app).get(`/api/trainings/${created.body.data.id}`).set('Authorization', `Bearer ${tokenFor(participant)}`),
+      request(app).get('/api/platform-contests').set('Cookie', `oi_session=${tokenFor(participant)}`),
+      request(app).get('/api/me/contests').set('Cookie', `oi_session=${tokenFor(participant)}`),
+      request(app).get(`/api/trainings/${created.body.data.id}`).set('Cookie', `oi_session=${tokenFor(participant)}`),
     ])
     expect(directory.status).toBe(200)
     expect(directory.body.data).toEqual(expect.arrayContaining([expect.objectContaining({ id: created.body.data.id, scope: 'platform' })]))

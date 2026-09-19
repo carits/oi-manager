@@ -1,10 +1,10 @@
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
-import type { JwtPayload, UserRole } from '@oi-manager/shared'
+import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../prisma'
 import { fileService } from '../../lib/storage'
 import logger from '../../lib/logger'
-import { accountRoleFromLegacy } from '@oi-manager/contracts'
+import { AccountRoleSchema, type AccountRole } from '@oi-manager/contracts'
 import { organizationRoleFromRoleKeys } from '../authorization/capabilities'
 
 export type WorkspaceMode = 'work' | 'personal'
@@ -14,15 +14,10 @@ export type LoginAccountResult =
   | {
       ok: true
       user: { id: string; username: string; role: string; avatar: string | null; sessionVersion: number }
-      role: UserRole
+      accountRole: AccountRole
       workspaceMode: WorkspaceMode
       isGlobalAdmin: boolean
     }
-
-async function resolveSchoolId(organizationId?: string | null) {
-  if (!organizationId) return undefined
-  return (await prisma.school.findUnique({ where: { organizationId }, select: { id: true } }))?.id
-}
 
 async function writeLoginLog(data: {
   userId?: string
@@ -68,7 +63,16 @@ export async function loginAccount(params: {
     })
     return { ok: false, message: '该账号已被禁用，请联系管理员' }
   }
-  const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(user.role)
+  const parsedAccountRole = AccountRoleSchema.safeParse(user.role)
+  if (!parsedAccountRole.success) {
+    await writeLoginLog({
+      userId: user.id, username: params.username, userRole: user.role, result: 'failed_invalid_account_role',
+      failureReason: '账号全局角色未归一', ipAddress: params.ipAddress, userAgent: params.userAgent,
+    })
+    return { ok: false, message: '账号权限配置无效，请联系管理员' }
+  }
+  const accountRole = parsedAccountRole.data
+  const isGlobalAdmin = accountRole === 'super_admin' || accountRole === 'platform_admin'
   await prisma.$transaction([
     prisma.personalProfile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} }),
     prisma.loginLog.create({
@@ -81,7 +85,7 @@ export async function loginAccount(params: {
   return {
     ok: true,
     user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar, sessionVersion: user.sessionVersion },
-    role: accountRoleFromLegacy(user.role as UserRole) as UserRole,
+    accountRole,
     workspaceMode: isGlobalAdmin ? 'work' : params.workspaceMode,
     isGlobalAdmin,
   }
@@ -140,17 +144,15 @@ export async function loadCurrentAccount(
     membership,
     organizationRole,
     organizationId,
-    schoolId: await resolveSchoolId(organizationId),
     profile,
     isGlobalAdmin,
   }
 }
 
-export async function resolveWorkspaceSwitch(userId: string, globalRole: string, workspaceMode: WorkspaceMode) {
+export async function resolveWorkspaceSwitch(userId: string, workspaceMode: WorkspaceMode) {
   if (workspaceMode === 'personal') {
     await prisma.personalProfile.upsert({ where: { userId }, create: { userId }, update: {} })
   }
-  return globalRole
 }
 
 export async function updateAccountProfile(

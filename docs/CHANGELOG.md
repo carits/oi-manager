@@ -5,6 +5,16 @@ last_verified: 2026-09-19
 source_of_truth: Git history
 ---
 
+## 2026-09-19 — 内部兼容债务退役
+
+- 删除 `/student/**`、`/teacher/**` 旧页面以及一次性 Migration/Test Graph 管理 HTTP 路由；历史迁移能力仅保留为离线脚本、审计服务和文档。
+- 登录与会话契约只接受 `accountRole`、`organizationRole` 和 `workspaceMode`；删除 `LegacyUserRole`、旧 `mode`、`studentMode`、旧角色 JWT 解析和 session migration。
+- 浏览器认证收敛为 HttpOnly Cookie-only；Server 不再接受 Bearer 网页 JWT，Web 不再读取或迁移 localStorage Token，文件代理和演示脚本同步使用 Cookie。
+- 生产账号角色已通过可重跑迁移任务统一为 `user / platform_admin / super_admin`；18,696 条旧校园角色完成迁移，幂等复跑剩余 0，校园身份只从当前组织 Membership RoleAssignment 解析。
+- 平台学校教师、训练上下文和提交列表不再把组织角色伪装成通用 `role`；跨组织身份按当前比赛或提交所属组织解析。
+- 架构门禁继续阻止旧 Transport、Route/Component 裸调用和跨 Feature 传输；Feature 内部已登记 Transport 改为观察指标，不再为了归零制造空包装层。
+- Contest → Training runtime 与 JudgeRun → Submission 兼容仍按既定迁移保留，本轮未进行危险的一刀删除。
+
 ## 2026-09-19 — Training Engine Stage 驱动统一模型
 
 - 统一训练领域：`TrainingSession` 表示一堂课，Stage 表示时间轴；普通刷题只是一 Stage 快速模板，不再维护“普通训练 / 教练带练”双模式。

@@ -17,19 +17,16 @@ export async function GET(
 
   const headers: Record<string, string> = {}
 
-  // 私有访问需要 token
+  // Private downloads forward the HttpOnly browser session cookie.
   if (!isPublic) {
-    const tokenFromQuery = url.searchParams.get('token')
-    const tokenFromCookie = request.cookies.get('token')?.value
-    const token = tokenFromQuery || tokenFromCookie
-
-    if (!token) {
+    const cookie = request.headers.get('cookie')
+    if (!cookie) {
       return NextResponse.json(
         { success: false, message: '未登录' },
         { status: 401 }
       )
     }
-    headers['Authorization'] = `Bearer ${token}`
+    headers.Cookie = cookie
   }
 
   try {

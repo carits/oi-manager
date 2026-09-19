@@ -49,7 +49,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
     expect((await peerClient.get(`/api/problems/${problem.id}/statement-versions/${versionId}`)).status).toBe(404)
 
     await request(app).patch(`/api/problems/${problem.id}/statement-versions/${versionId}`)
-      .set('Authorization', `Bearer ${generateTokenFromUser(author.user)}`).send({ visibility: 'public' })
+      .set('Cookie', `oi_session=${generateTokenFromUser(author.user)}`).send({ visibility: 'public' })
     expect((await peerClient.get(`/api/problems/${problem.id}/statement-versions/${versionId}`)).status).toBe(200)
     const derived = await peerClient.post(`/api/problems/${problem.id}/statement-versions`).send({
       name: '派生版本', language: 'zh', visibility: 'private', source: { type: 'user', id: versionId },
@@ -74,7 +74,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
 
     const pdf = await request(app)
       .post(`/api/problems/${problem.id}/my-content/solution/pdf`)
-      .set('Authorization', `Bearer ${generateTokenFromUser(author.user)}`)
+      .set('Cookie', `oi_session=${generateTokenFromUser(author.user)}`)
       .field('language', 'zh')
       .attach('file', Buffer.from('%PDF-1.4\npersonal solution'), {
         filename: 'solution.pdf',
@@ -96,7 +96,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
     const other = await createTestProblem({ ownerId: author.user.id, title: '另一道题' })
     const client = createAuthenticatedRequest(app, generateTokenFromUser(author.user))
     const response = await request(app).patch(`/api/problems/${other.id}/statement-versions/${created.body.data.id}`)
-      .set('Authorization', `Bearer ${generateTokenFromUser(author.user)}`).send({ name: '越权修改' })
+      .set('Cookie', `oi_session=${generateTokenFromUser(author.user)}`).send({ name: '越权修改' })
     expect(response.status).toBe(400)
     const stored = await prisma.userProblemContent.findUniqueOrThrow({ where: { id: created.body.data.id } })
     expect(stored.name).toBe('作用域版本')
@@ -261,7 +261,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
     } })
     const response = await request(app)
       .post(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}/pdf`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `oi_session=${token}`)
       .attach('file', Buffer.from('%PDF-1.4\nreplacement'), { filename: 'replacement.pdf', contentType: 'application/pdf' })
     expect(response.status).toBe(200)
     const latest = await prisma.trainingProblemStatementSet.findFirstOrThrow({

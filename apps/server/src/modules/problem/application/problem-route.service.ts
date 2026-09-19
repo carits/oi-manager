@@ -68,7 +68,7 @@ export async function listOwnProblemSubmissions(
 async function noteIdentity(user: JwtPayload, problemId: string) {
   const problem = await findAccessibleProblem(user, problemId, 'view')
   if (!problem) return { error: 'not_found' as const }
-  const owner = await getOwnerInfo(user.userId, user.role)
+  const owner = await getOwnerInfo(user.userId, user.organizationRole || user.accountRole)
   if (!owner) return { error: 'owner_missing' as const }
   return { ownerId: owner.ownerId, userType: user.organizationRole === 'student' ? 'student' : 'teacher' }
 }

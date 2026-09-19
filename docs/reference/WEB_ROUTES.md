@@ -1,13 +1,13 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-11
+last_verified: 2026-09-19
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
 # 页面路由
 
-本清单由实际页面生成并与 E2E 路由清单同步。组织页面统一使用组织路径，个人页面使用个人路径，平台页面使用平台路径。教师和学生旧路径仅保留退役提示页，不承担业务功能。
+本清单由实际页面生成并与 E2E 路由清单同步。组织页面统一使用组织路径，个人页面使用个人路径，平台页面使用平台路径。旧教师端和学生端页面已删除，不属于可访问路由。
 
 | 路径 | 访问范围 | 用途 |
 |---|---|---|
@@ -103,6 +103,4 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/profile/student/[id]` | 见页面权限布局 | 当前页面 |
 | `/profile/teacher/[id]` | 见页面权限布局 | 当前页面 |
 | `/profile/user/[id]` | 见页面权限布局 | 当前页面 |
-| `/student/[[...legacy]]` | 见页面权限布局 | 当前页面 |
 | `/super_admin` | 见页面权限布局 | 当前页面 |
-| `/teacher/[[...legacy]]` | 见页面权限布局 | 当前页面 |

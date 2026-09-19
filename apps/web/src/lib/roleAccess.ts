@@ -1,8 +1,3 @@
-import type { LegacyUserRole } from '@oi-manager/contracts'
-
-/** @deprecated Prefer AccountRole or OrganizationMembershipRole at the call site. */
-export type AppRole = LegacyUserRole
-
 export function getRoleHome(role?: string, context: 'organization' | 'personal' | 'platform' = 'organization'): string {
   if (role === 'super_admin') return '/admin'
   if (role === 'platform_admin') return '/platform-admin'

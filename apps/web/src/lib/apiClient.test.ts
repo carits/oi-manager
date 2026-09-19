@@ -44,11 +44,9 @@ describe('parseApiResponse', () => {
   })
   it('uses cookie-only browser authentication and keeps account APIs out of the organization context', async () => {
     vi.stubGlobal('window', {
-      localStorage: { getItem: () => 'account-token' },
       location: { pathname: '/org/org-school/overview' },
       dispatchEvent: vi.fn(),
     })
-    vi.stubGlobal('localStorage', { getItem: () => 'account-token' })
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ success: true, data: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     await accountClient.get('/api/chat/unread')
     const options = fetchMock.mock.calls[0][1] as RequestInit
@@ -58,7 +56,6 @@ describe('parseApiResponse', () => {
 
   it('can send anonymous telemetry without account or workspace headers', async () => {
     vi.stubGlobal('window', {
-      localStorage: { getItem: () => 'secret-bearer-token' },
       location: { pathname: '/org/org-secret/problems' },
       dispatchEvent: vi.fn(),
     })
