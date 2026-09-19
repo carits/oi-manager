@@ -4,8 +4,11 @@ import { accounts } from '../fixtures/auth'
 const organizationBase = '/org/org_school-default'
 
 test.describe('Human UX navigation foundation @smoke @compact', () => {
-  test('desktop opens the grouped navigation and keeps a compact rail after collapse', async ({ browser }) => {
+  test('desktop opens the grouped navigation and fully hides it after collapse', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
+    await context.addInitScript(() => {
+      for (const key of Object.keys(localStorage)) if (key.startsWith('sidebarNavigation:')) localStorage.removeItem(key)
+    })
     const page = await context.newPage()
     await page.goto(`${organizationBase}/overview`)
 
@@ -17,12 +20,89 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     await expect(navigation.getByRole('link', { name: '评测记录' })).toBeVisible()
 
     await page.getByRole('button', { name: '收起导航' }).first().click()
-    await expect(page.locator('[data-navigation-mode="compact"]')).toBeVisible()
-    await expect(navigation).toBeVisible()
-    await expect(navigation.getByRole('link', { name: '作业' })).toBeVisible()
+    await expect(page.locator('[data-navigation-mode="collapsed"]')).toBeVisible()
+    await expect(navigation).toBeHidden()
+    await expect(page.getByRole('button', { name: '显示导航' })).toBeVisible()
+    await expect(page.locator('header img[alt="Carits"]')).toBeVisible()
     await page.reload()
-    await expect(page.locator('[data-navigation-mode="compact"]')).toBeVisible()
+    await expect(page.locator('[data-navigation-mode="collapsed"]')).toBeVisible()
+    await expect(navigation).toBeHidden()
     await context.close()
+  })
+
+  test('navigation has only persistent-sidebar and drawer responsive modes', async ({ browser }) => {
+    const viewports = [
+      { width: 1100, height: 800, mode: 'expanded', persistent: true },
+      { width: 1099, height: 800, mode: 'closed', persistent: false },
+      { width: 1024, height: 768, mode: 'closed', persistent: false },
+      { width: 800, height: 900, mode: 'closed', persistent: false },
+      { width: 390, height: 844, mode: 'closed', persistent: false },
+    ] as const
+
+    for (const viewport of viewports) {
+      const context = await browser.newContext({ storageState: accounts.teacher.storageState, viewport })
+      await context.addInitScript(() => {
+        for (const key of Object.keys(localStorage)) if (key.startsWith('sidebarNavigation:')) localStorage.removeItem(key)
+      })
+      const page = await context.newPage()
+      await page.goto(`${organizationBase}/overview`)
+      const shell = page.locator('[data-navigation-mode]')
+      const navigation = page.getByRole('navigation', { name: '教师主导航' })
+      await expect(shell).toHaveAttribute('data-navigation-mode', viewport.mode)
+
+      if (viewport.persistent) {
+        await expect(navigation).toBeVisible()
+      } else {
+        await expect(navigation).toBeHidden()
+        await page.getByRole('button', { name: '显示导航' }).click()
+        await expect(shell).toHaveAttribute('data-navigation-mode', 'drawer')
+        await expect(navigation).toBeVisible()
+        const box = await page.locator('#app-sidebar').boundingBox()
+        expect(box?.width).toBe(232)
+        await expect(page.locator('#app-sidebar').getByRole('button', { name: '关闭导航' })).toBeFocused()
+        await expect(page.locator('body')).toHaveCSS('overflow', 'hidden')
+        const drawerLogos = await page.locator('img[alt="Carits"]').evaluateAll(images => images.filter(image => {
+          const style = getComputedStyle(image)
+          const rect = image.getBoundingClientRect()
+          return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0
+        }).length)
+        expect(drawerLogos).toBe(1)
+        await page.keyboard.press('Escape')
+        await expect(shell).toHaveAttribute('data-navigation-mode', 'closed')
+        await expect(page.getByRole('button', { name: '显示导航' })).toBeFocused()
+      }
+
+      const visibleLogos = await page.locator('img[alt="Carits"]').evaluateAll(images => images.filter(image => {
+        const style = getComputedStyle(image)
+        const rect = image.getBoundingClientRect()
+        return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0
+      }).length)
+      expect(visibleLogos).toBe(1)
+      const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
+      expect(horizontalOverflow).toBe(false)
+      await context.close()
+    }
+
+    const preferenceContext = await browser.newContext({ storageState: accounts.teacher.storageState, viewport: { width: 1100, height: 800 } })
+    await preferenceContext.addInitScript(() => {
+      for (const key of Object.keys(localStorage)) if (key.startsWith('sidebarNavigation:')) localStorage.removeItem(key)
+    })
+    const preferencePage = await preferenceContext.newPage()
+    await preferencePage.goto(`${organizationBase}/overview`)
+    const preferenceShell = preferencePage.locator('[data-navigation-mode]')
+    await expect(preferenceShell).toHaveAttribute('data-navigation-mode', 'expanded')
+    await preferencePage.setViewportSize({ width: 800, height: 900 })
+    await expect(preferenceShell).toHaveAttribute('data-navigation-mode', 'closed')
+    await preferencePage.getByRole('button', { name: '显示导航' }).click()
+    await expect(preferenceShell).toHaveAttribute('data-navigation-mode', 'drawer')
+    await preferencePage.locator('[data-navigation-backdrop]').click({ position: { x: 400, y: 100 } })
+    await expect(preferenceShell).toHaveAttribute('data-navigation-mode', 'closed')
+    await preferencePage.getByRole('button', { name: '显示导航' }).click()
+    await preferencePage.reload()
+    await expect(preferenceShell).toHaveAttribute('data-navigation-mode', 'closed')
+    await preferencePage.setViewportSize({ width: 1100, height: 800 })
+    await expect(preferenceShell).toHaveAttribute('data-navigation-mode', 'expanded')
+    await preferenceContext.close()
   })
 
   test('student receives direct home and submission entries', async ({ browser }) => {

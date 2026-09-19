@@ -77,10 +77,11 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
         peerVisibility: 'PROGRESS', joinMode: 'FROM_BEGINNING', settings: { migratedFromLegacyTrainingId: row.id },
       } })
       const stage = await tx.trainingSessionStage.create({ data: {
-        sessionId: session.id, name: '完整训练', orderIndex: 0, mode: 'FREE', advanceMode: 'TIME',
-        durationSeconds: Math.max(60, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000)),
-        problemAccessMode: 'ALL', submissionMode: 'ENABLED', status: status === 'ENDED' ? 'completed' : status === 'RUNNING' ? 'running' : 'pending',
-        startedAt: status === 'RUNNING' || status === 'ENDED' ? row.startTime : null, endedAt: status === 'ENDED' ? row.endTime : null,
+        sessionId: session.id, name: '完整训练', orderIndex: 0, kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'TIME',
+        plannedDurationSeconds: Math.max(60, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000)),
+        accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', lifecycle: status === 'ENDED' ? 'COMPLETED' : status === 'RUNNING' ? 'RUNNING' : 'PENDING',
+        startedAt: status === 'RUNNING' || status === 'ENDED' ? row.startTime : null, runningSince: status === 'RUNNING' ? row.startTime : null, endedAt: status === 'ENDED' ? row.endTime : null,
+        activeElapsedSeconds: status === 'ENDED' ? Math.max(0, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000)) : 0,
       } })
       await tx.trainingSession.update({ where: { id: session.id }, data: { currentStageId: stage.id } })
       const stageProblems = new Map<string, string>()
@@ -90,18 +91,21 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
           stageId: stage.id, problemId: problem.problemId, testSetRevisionId: revisionId, alias: problem.alias,
           orderIndex: problem.orderIndex, targetScore: problem.points || (row.format === 'acm' ? 100 : null), judgeConfigProjection: problem.judgeConfigSnapshot,
         } })
+        await tx.trainingSessionStageProblemPlan.create({ data: { stageId: stage.id, stageProblemId: created.id, orderIndex: problem.orderIndex, targetScore: problem.points || (row.format === 'acm' ? 100 : null), judgeConfigProjection: problem.judgeConfigSnapshot } })
         stageProblems.set(problem.id, created.id)
       }
       const participantByUser = new Map<string, string>()
       for (const old of row.TrainingParticipant) {
         if (participantByUser.has(old.userId)) continue
         const participant = await tx.trainingSessionParticipant.create({ data: { sessionId: session.id, userId: old.userId, joinedAt: old.joinedAt, currentStageId: stage.id } })
+        await tx.trainingSessionStageParticipantAssignment.create({ data: { stageId: stage.id, participantId: participant.id, source: 'legacy_migration' } })
         participantByUser.set(old.userId, participant.id)
       }
       for (const old of row.TrainingUserProblemStatus) {
         let participantId = participantByUser.get(old.userId)
         if (!participantId) {
           const participant = await tx.trainingSessionParticipant.create({ data: { sessionId: session.id, userId: old.userId, currentStageId: stage.id } })
+          await tx.trainingSessionStageParticipantAssignment.create({ data: { stageId: stage.id, participantId: participant.id, source: 'legacy_migration' } })
           participantId = participant.id; participantByUser.set(old.userId, participant.id)
         }
         const stageProblemId = stageProblems.get(old.trainingProblemId)

@@ -32,7 +32,6 @@ import {
   addProblemListEntry,
   deleteProblemListEntry,
   reorderProblemListEntries,
-  resolveProblemListEntries,
   updateProblemListEntry,
 } from '../modules/problem-list/application/problem-list-entry.service'
 import {
@@ -178,14 +177,6 @@ problemListsRouter.put('/:id/sections/reorder', authenticate, problemListEndpoin
  */
 problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, problemListEndpoint('添加题目失败', async (req, res) => {
   res.json({ success: true, data: await addProblemListEntry(req.user!, req.params.sectionId, req.body) })
-}))
-
-/**
- * POST /api/problem-lists/:id/entries/resolve
- * 批量解析题号 → 查找/创建 Problem 记录（不创建 Entry，仅预览）
- */
-problemListsRouter.post('/:id/entries/resolve', authenticate, problemListEndpoint('解析题号失败', async (req, res) => {
-  res.json({ success: true, data: await resolveProblemListEntries(req.user!, req.params.id, req.body.items) })
 }))
 
 /**

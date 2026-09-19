@@ -9,13 +9,15 @@ describe('contest and assignment productization regressions', () => {
     expect(source).toContain('organizationId=${encodeURIComponent(organizationId)}&view=mine')
   })
 
-  it('uses a five-step contest wizard with a visible problem picker', () => {
+  it('uses a five-step contest wizard with number-only problem selection', () => {
     const source = read('../features/contest/ui/TrainingFormModal.tsx')
     expect(source).toContain("['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']")
     expect(source).toContain('比赛赛制')
     expect(source).toContain('Rating 范围')
-    expect(source).toContain('选择比赛题目')
-    expect(source).toContain('按 OJ 题号快速添加')
+    expect(source).toContain('QuickProblemInput')
+    expect(source).not.toContain('选择比赛题目')
+    expect(source).not.toContain('按 OJ 题号快速添加')
+    expect(source).not.toContain('搜索题号或标题')
     expect(source).not.toContain('添加题目到训练中')
     expect(source).not.toContain('placeholder="训练标题"')
   })

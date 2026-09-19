@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -9,7 +10,7 @@ import type { Assignment, Stage } from "../model/trainingDesign";
 import {
   moveItem,
   normalizeProblemOrder,
-  stageModes,
+  stageKinds,
   unlockLabel,
 } from "../model/trainingDesign";
 import { AssignmentPolicyEditor, UnlockEditor } from "./TrainingProblemPolicyEditors";
@@ -26,7 +27,8 @@ type Props = {
     updater: (problem: Assignment) => Assignment,
   ) => void;
   onMoveProblemToStage: (problem: Assignment, targetStageKey: string) => void;
-  onUpdateToLatest: (problem: Assignment) => Promise<void>;
+  onUpdateToLatest: (problem: Assignment, groupClientKey?: string) => Promise<void>;
+  readOnly?: boolean;
 };
 
 export function TrainingProblemChain({
@@ -38,7 +40,23 @@ export function TrainingProblemChain({
   onUpdateProblem,
   onMoveProblemToStage,
   onUpdateToLatest,
+  readOnly = false,
 }: Props) {
+  const [activeGroupKey, setActiveGroupKey] = useState("");
+  useEffect(() => {
+    if (!activeStage || activeStage.audienceMode !== "GROUPED") return setActiveGroupKey("");
+    if (!activeStage.Groups.some(group => group.clientKey === activeGroupKey)) setActiveGroupKey(activeStage.Groups[0]?.clientKey || "");
+  }, [activeGroupKey, activeStage]);
+  const activeGroup = activeStage?.Groups.find(group => group.clientKey === activeGroupKey) || activeStage?.Groups[0];
+  const displayedProblems = activeStage?.audienceMode === "GROUPED" ? activeGroup?.Problems || [] : activeStage?.Problems || [];
+  const updateDisplayedProblems = (stage: Stage, updater: (items: Assignment[]) => Assignment[]): Stage => stage.audienceMode === "GROUPED"
+    ? { ...stage, Groups: stage.Groups.map(group => group.clientKey === activeGroup?.clientKey ? { ...group, Problems: updater(group.Problems) } : group) }
+    : { ...stage, Problems: updater(stage.Problems) };
+  const updateDisplayedProblem = (clientKey: string, updater: (problem: Assignment) => Assignment) => {
+    if (!activeStage) return;
+    if (activeStage.audienceMode !== "GROUPED") return onUpdateProblem(clientKey, updater);
+    onUpdateStage(activeStage.clientKey, stage => updateDisplayedProblems(stage, items => items.map(problem => problem.clientKey === clientKey ? updater(problem) : problem)));
+  };
   return (
     <section className={styles.designColumn} aria-label="当前阶段题目链">
       <header>
@@ -49,7 +67,8 @@ export function TrainingProblemChain({
       </header>
       <div className={styles.designColumnBody}>
         {activeStage ? (
-          <>
+          <fieldset disabled={readOnly} aria-label={readOnly ? "已开始阶段，只读" : "阶段定义"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {readOnly && <p className={styles.muted}>该 Stage 已开始，定义和题目计划永久只读；需要再次训练时请使用左侧“复制阶段”创建新的未来 Stage。</p>}
             <div className={styles.stageSettings}>
               <label className={styles.field}>
                 阶段名称
@@ -64,21 +83,17 @@ export function TrainingProblemChain({
                 />
               </label>
               <label className={styles.field}>
-                阶段模式
+                这一阶段做什么？
                 <Select
-                  value={activeStage.mode}
+                  value={activeStage.kind}
                   onChange={(event) =>
                     onUpdateStage(activeStage.clientKey, (stage) => ({
                       ...stage,
-                      mode: event.target.value,
-                      problemAccessMode:
-                        event.target.value === "SEQUENTIAL"
-                          ? "SEQUENTIAL"
-                          : stage.problemAccessMode,
+                      kind: event.target.value as Stage["kind"],
                     }))
                   }
                 >
-                  {stageModes.map(([value, label]) => (
+                  {stageKinds.map(([value, label]) => (
                     <option value={value} key={value}>
                       {label}
                     </option>
@@ -100,37 +115,50 @@ export function TrainingProblemChain({
               </label>
               <div className={styles.compactGrid}>
                 <label className={styles.field}>
-                  推进
+                  谁参加？
                   <Select
-                    value={activeStage.advanceMode}
+                    value={activeStage.audienceMode}
                     onChange={(event) =>
                       onUpdateStage(activeStage.clientKey, (stage) => ({
                         ...stage,
-                        advanceMode: event.target.value,
+                        audienceMode: event.target.value as Stage["audienceMode"],
+                        Groups: event.target.value === "GROUPED" && !stage.Groups.length ? [{ clientKey: `group-${Date.now()}`, name: "分组 1", accessPolicy: stage.accessPolicy, submissionMode: stage.submissionMode, participantIds: [], Problems: [] }] : stage.Groups,
                       }))
                     }
                   >
-                    <option value="MANUAL">教练手动</option>
-                    <option value="TIME">按时间</option>
-                    <option value="COMPLETION">按完成度</option>
-                    <option value="HYBRID">混合</option>
+                    <option value="ALL">全班统一</option>
+                    <option value="GROUPED">Stage 内分组</option>
                   </Select>
                 </label>
-                {["TIME", "HYBRID"].includes(activeStage.advanceMode) && (
+                <label className={styles.field}>
+                  题目怎么开放？
+                  <Select value={activeStage.accessPolicy} onChange={(event) => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, accessPolicy: event.target.value as Stage["accessPolicy"] }))}>
+                    <option value="ALL_AT_ONCE">全部开放</option>
+                    <option value="SEQUENTIAL">顺序开放</option>
+                    <option value="TEACHER_CONTROLLED">教师控制</option>
+                  </Select>
+                </label>
+                <label className={styles.field}>
+                  什么时候结束？
+                  <Select value={activeStage.endPolicy} onChange={(event) => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, endPolicy: event.target.value as Stage["endPolicy"] }))}>
+                    <option value="MANUAL">教师手动</option><option value="TIME">到达时间</option><option value="COMPLETION">达到完成度</option><option value="HYBRID">时间和完成度</option>
+                  </Select>
+                </label>
+                {["TIME", "HYBRID"].includes(activeStage.endPolicy) && (
                   <label className={styles.field}>
                     时长（分钟）
                     <Input
                       type="number"
                       min={1}
                       value={
-                        activeStage.durationSeconds
-                          ? Math.round(activeStage.durationSeconds / 60)
+                        activeStage.plannedDurationSeconds
+                          ? Math.round(activeStage.plannedDurationSeconds / 60)
                           : ""
                       }
                       onChange={(event) =>
                         onUpdateStage(activeStage.clientKey, (stage) => ({
                           ...stage,
-                          durationSeconds: event.target.value
+                          plannedDurationSeconds: event.target.value
                             ? Number(event.target.value) * 60
                             : null,
                         }))
@@ -138,7 +166,7 @@ export function TrainingProblemChain({
                     />
                   </label>
                 )}
-                {["COMPLETION", "HYBRID"].includes(activeStage.advanceMode) && (
+                {["COMPLETION", "HYBRID"].includes(activeStage.endPolicy) && (
                   <label className={styles.field}>
                     完成比例（%）
                     <Input
@@ -158,18 +186,25 @@ export function TrainingProblemChain({
                   </label>
                 )}
               </div>
-              {activeStage.mode === "SCORE_PROGRESSIVE" && (
+              {activeStage.audienceMode === "GROUPED" && <div className={styles.assignmentPolicy}>
+                <strong>Stage 分组</strong>
+                <p>每个 Stage 的分组、学员和题目链彼此独立；先选择要编辑的分组。</p>
+                <label className={styles.field}>当前编辑分组<Select value={activeGroup?.clientKey || ""} onChange={event => setActiveGroupKey(event.target.value)}>{activeStage.Groups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></label>
+                {activeStage.Groups.map((group, index) => <div className={styles.actions} key={group.clientKey}><label className={styles.field}>分组 {index + 1}<Input value={group.name} onChange={(event) => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Groups: stage.Groups.map(item => item.clientKey === group.clientKey ? { ...item, name: event.target.value } : item) }))} /></label><Button iconOnly aria-label={`删除${group.name}`} variant="text" disabled={activeStage.Groups.length === 1} onClick={() => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Groups: stage.Groups.filter(item => item.clientKey !== group.clientKey) }))}><Trash2 size={14} /></Button></div>)}
+                <Button size="sm" variant="outline" onClick={() => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Groups: [...stage.Groups, { clientKey: `group-${Date.now()}`, name: `分组 ${stage.Groups.length + 1}`, accessPolicy: stage.accessPolicy, submissionMode: stage.submissionMode, participantIds: [], Problems: [] }] }))}>新增分组</Button>
+              </div>}
+              {activeStage.kind === "TRAINING" && (
                 <label className={styles.field}>
                   默认目标分
                   <Input
                     type="number"
                     min={0}
                     max={100}
-                    value={activeStage.targetScore ?? ""}
+                    value={activeStage.defaultTargetScore ?? ""}
                     onChange={(event) =>
                       onUpdateStage(activeStage.clientKey, (stage) => ({
                         ...stage,
-                        targetScore:
+                        defaultTargetScore:
                           event.target.value === ""
                             ? null
                             : Number(event.target.value),
@@ -179,13 +214,13 @@ export function TrainingProblemChain({
                 </label>
               )}
             </div>
-            {!activeStage.Problems.length ? (
+            {!displayedProblems.length ? (
               <Empty
                 title="当前阶段尚未分配题目"
                 description="从右侧题目池显式加入；Teaching / Review 阶段可留空。"
               />
             ) : (
-              activeStage.Problems.map((problem, index) => (
+              displayedProblems.map((problem, index) => (
                 <div key={problem.clientKey}>
                   {index > 0 && (
                     <div className={styles.unlockConnector}>
@@ -201,9 +236,7 @@ export function TrainingProblemChain({
                       if (draggedProblem != null) {
                         onUpdateStage(activeStage.clientKey, (stage) => ({
                           ...stage,
-                          Problems: normalizeProblemOrder(
-                            moveItem(stage.Problems, draggedProblem, index),
-                          ),
+                          ...updateDisplayedProblems(stage, items => normalizeProblemOrder(moveItem(items, draggedProblem, index))),
                         }));
                       }
                       onDraggedProblemChange(null);
@@ -224,7 +257,7 @@ export function TrainingProblemChain({
                           <Button
                             variant="text"
                             size="sm"
-                            onClick={() => void onUpdateToLatest(problem)}
+                            onClick={() => void onUpdateToLatest(problem, activeStage.audienceMode === "GROUPED" ? activeGroup?.clientKey : undefined)}
                           >
                             更新到最新测试数据
                           </Button>
@@ -237,9 +270,7 @@ export function TrainingProblemChain({
                         onClick={() =>
                           onUpdateStage(activeStage.clientKey, (stage) => ({
                             ...stage,
-                            Problems: normalizeProblemOrder(
-                              moveItem(stage.Problems, index, index - 1),
-                            ),
+                            ...updateDisplayedProblems(stage, items => normalizeProblemOrder(moveItem(items, index, index - 1))),
                           }))
                         }
                       >
@@ -249,13 +280,11 @@ export function TrainingProblemChain({
                         iconOnly
                         aria-label="下移题目"
                         variant="text"
-                        disabled={index === activeStage.Problems.length - 1}
+                        disabled={index === displayedProblems.length - 1}
                         onClick={() =>
                           onUpdateStage(activeStage.clientKey, (stage) => ({
                             ...stage,
-                            Problems: normalizeProblemOrder(
-                              moveItem(stage.Problems, index, index + 1),
-                            ),
+                            ...updateDisplayedProblems(stage, items => normalizeProblemOrder(moveItem(items, index, index + 1))),
                           }))
                         }
                       >
@@ -268,11 +297,11 @@ export function TrainingProblemChain({
                         onClick={() =>
                           onUpdateStage(activeStage.clientKey, (stage) => ({
                             ...stage,
-                            Problems: normalizeProblemOrder(
-                              stage.Problems.filter(
+                            ...updateDisplayedProblems(stage, items => normalizeProblemOrder(
+                              items.filter(
                                 (item) => item.clientKey !== problem.clientKey,
                               ),
-                            ),
+                            )),
                           }))
                         }
                       >
@@ -306,7 +335,7 @@ export function TrainingProblemChain({
                           }
                         }
                         onChange={(value) =>
-                          onUpdateProblem(problem.clientKey, (current) => ({
+                          updateDisplayedProblem(problem.clientKey, (current) => ({
                             ...current,
                             unlockPolicy: value,
                           }))
@@ -317,7 +346,7 @@ export function TrainingProblemChain({
                       assignment={problem}
                       stage={activeStage}
                       onChange={(value) =>
-                        onUpdateProblem(problem.clientKey, (current) => ({
+                        updateDisplayedProblem(problem.clientKey, (current) => ({
                           ...current,
                           ...value,
                         }))
@@ -337,7 +366,7 @@ export function TrainingProblemChain({
                             }
                             checked={problem.allowedSubtaskIds.includes(subtask.id)}
                             onChange={(event) =>
-                              onUpdateProblem(problem.clientKey, (current) => ({
+                              updateDisplayedProblem(problem.clientKey, (current) => ({
                                 ...current,
                                 allowedSubtaskIds: event.target.checked
                                   ? [...current.allowedSubtaskIds, subtask.id]
@@ -354,7 +383,7 @@ export function TrainingProblemChain({
                 </div>
               ))
             )}
-          </>
+          </fieldset>
         ) : (
           <Empty title="请先选择阶段" />
         )}

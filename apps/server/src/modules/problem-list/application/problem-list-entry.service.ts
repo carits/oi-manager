@@ -76,38 +76,6 @@ export async function addProblemListEntry(user: AuthUser, sectionId: string, bod
   return { entry, found: true, created: false }
 }
 
-export async function resolveProblemListEntries(user: AuthUser, listId: string, items: unknown) {
-  await requireEditable(user, listId, '无权限操作')
-  if (!Array.isArray(items) || items.length === 0 || items.some(item => !item || typeof item !== 'object')) fail(400, '参数错误')
-  const sections = await prisma.problemListSection.findMany({ where: { problemListId: listId }, select: { id: true } })
-  const existingEntries = await prisma.problemListEntry.findMany({
-    where: { sectionId: { in: sections.map(section => section.id) } }, select: { problemId: true },
-  })
-  const existingIds = new Set(existingEntries.map(entry => entry.problemId))
-  const resolved = []
-  for (const raw of items as Array<Record<string, unknown>>) {
-    const ojName = typeof raw.ojName === 'string' ? raw.ojName : ''
-    const problemCode = typeof raw.problemCode === 'string' ? raw.problemCode : ''
-    let matched: { id: string; title: string } | null = null
-    if (ojName === 'carits') {
-      const byId = await findAccessibleProblem(user, problemCode, 'use').catch(() => null)
-      const problem = byId || await findUsableProblemByExternalId(user, 'carits', problemCode)
-      if (problem) matched = { id: problem.id, title: problem.title }
-    } else {
-      const problem = await findUsableProblemByExternalId(user, ojName, problemCode)
-      if (problem) matched = { id: problem.id, title: problem.title }
-    }
-    resolved.push(matched ? {
-      problemId: matched.id, title: matched.title, ojName, problemCode,
-      found: true, created: false, duplicate: existingIds.has(matched.id),
-    } : {
-      problemId: '', title: '题库中未找到', ojName, problemCode,
-      found: false, created: false, duplicate: false,
-    })
-  }
-  return { resolved }
-}
-
 export async function updateProblemListEntry(user: AuthUser, entryId: string, body: any) {
   const listId = await getEntryProblemListId(entryId)
   if (!listId) fail(404, '条目不存在')

@@ -6,13 +6,15 @@ const read = (path: string) => fs.readFileSync(new URL(path, import.meta.url), '
 describe('human UX productization contract', () => {
   it('uses a simple training flow and keeps coach controls optional', () => {
     const source = read('../features/training-session/ui/TrainingSessionListPage.tsx')
-    expect(source).toContain('普通训练（推荐）')
-    expect(source).toContain('教练带练模式')
+    expect(source).toContain('快速创建（一个 Stage）')
+    expect(source).toContain('使用 Stage 模板')
     expect(source).toContain('选择题目')
     expect(source).toContain('requiredProblemCount')
     expect(source).toContain('trainingStatusLabel(item.status)')
     expect(source).toContain('trainingSessionTypeLabel(item.sessionType)')
     expect(source).not.toContain('>{item.status}</StatusBadge>')
+    expect(source).not.toContain('普通训练（推荐）')
+    expect(source).not.toContain('教练带练模式')
   })
 
   it('separates student training language and actions from the manager view', () => {
@@ -31,13 +33,33 @@ describe('human UX productization contract', () => {
 
   it('describes ordinary training with tasks and gives school managers a team filter', () => {
     const source = read('../features/training-session/ui/TrainingSessionListPage.tsx')
-    expect(source).toContain("item.productMode !== 'simple'")
-    expect(source).toContain('`${item.problemCount || 0} 道题')
+    expect(source).toContain('`${item._count.Stages} 个 Stage')
+    expect(source).toContain('${item.problemCount || 0} 道题')
     expect(source).toContain('全部训练范围')
     expect(source).toContain('校级训练')
-    expect(source).toContain('选择题目、学生和截止时间即可发布。')
+    expect(source).toContain('快速创建会生成一个全班 Stage。')
     expect(source).not.toContain('系统自动固定题目版本并生成标准结构')
+    expect(source).not.toContain('productMode')
     expect(source).not.toContain("managerView = canCreate")
+  })
+
+  it('closes the Stage template and runtime policy product loop', () => {
+    const designer = read('../features/training-session/ui/TrainingSessionDesigner.tsx')
+    const workspace = read('../features/training-session/ui/TrainingSessionWorkspace.tsx')
+    const policies = read('../features/training-session/ui/TrainingProblemPolicyEditors.tsx')
+    expect(designer).toContain('保存为模板')
+    expect(designer).toContain('模板只保存 Stage、分组和训练规则骨架')
+    expect(policies).toContain('SWITCH_REQUIRED')
+    expect(policies).toContain('noImprovementSeconds')
+    expect(workspace).toContain('单题时间已到')
+    expect(workspace).toContain('entry.requirement === \'CURRENT_REQUIREMENT\'')
+    expect(workspace).toContain('penaltyMinutes')
+    expect(workspace).toContain('完成并进入下一 Stage')
+    expect(workspace).toContain('提前结束当前 Stage')
+    expect(workspace).toContain('复制当前 Stage 为未来 Stage')
+    expect(workspace).toContain('调整分组')
+    expect(workspace).not.toContain('上一阶段')
+    expect(designer).toContain('copyStageAsDraft')
   })
 
   it('keeps the sidebar account footer account-only and uses human workspace roles', () => {
@@ -45,7 +67,8 @@ describe('human UX productization contract', () => {
     const switcher = read('../features/workspace/ui/WorkspaceSwitcher.tsx')
     const routing = read('../features/workspace/model/workspaceRouting.ts')
     expect(shell).toContain("isPersonal ? '个人账号' : `@${user.username}`")
-    expect(shell).toContain('sidebarOpen ? <PanelLeftClose')
+    expect(shell).toContain('id="app-sidebar-close"')
+    expect(shell).toContain('<PanelLeftClose')
     expect(switcher).toContain('workspaceRoleLabel')
     expect(routing).toContain("label === '本校学生'")
     expect(routing).toContain("return '学生'")

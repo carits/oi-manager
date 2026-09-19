@@ -3,7 +3,7 @@
 import { ArrowDown, ArrowUp, Copy, GripVertical, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import type { Stage } from "../model/trainingDesign";
-import { stageModes } from "../model/trainingDesign";
+import { stageKinds } from "../model/trainingDesign";
 import styles from "./TrainingEngine.module.css";
 
 type Props = {
@@ -49,12 +49,17 @@ export function TrainingStageTimeline({
       </header>
       <div className={styles.designColumnBody}>
         {stages.map((stage, index) => (
+          (() => {
+          const editable = !stage.lifecycle || stage.lifecycle === "PENDING";
+          const previousEditable = index > 0 && (!stages[index - 1].lifecycle || stages[index - 1].lifecycle === "PENDING");
+          const nextEditable = index < stages.length - 1 && (!stages[index + 1].lifecycle || stages[index + 1].lifecycle === "PENDING");
+          return (
           <article
             key={stage.clientKey}
-            draggable
-            onDragStart={() => onDragStart(index)}
+            draggable={editable}
+            onDragStart={() => editable && onDragStart(index)}
             onDragOver={(event) => event.preventDefault()}
-            onDrop={() => draggedIndex != null && onDrop(index)}
+            onDrop={() => editable && draggedIndex != null && onDrop(index)}
             className={`${styles.stageCard} ${activeStageKey === stage.clientKey ? styles.activeDesignCard : ""}`}
             onClick={() => onSelect(stage.clientKey)}
           >
@@ -65,19 +70,19 @@ export function TrainingStageTimeline({
               </strong>
             </div>
             <small>
-              {stageModes.find((item) => item[0] === stage.mode)?.[1] ||
-                stage.mode}{" "}
-              · {stage.Problems.length} 题
-              {stage.durationSeconds
-                ? ` · ${Math.round(stage.durationSeconds / 60)} 分钟`
+              {stageKinds.find((item) => item[0] === stage.kind)?.[1] || stage.kind}{" "}
+              · {stage.audienceMode === "GROUPED" ? `${stage.Groups.length} 组` : `${stage.Problems.length} 题`}
+              {stage.plannedDurationSeconds
+                ? ` · ${Math.round(stage.plannedDurationSeconds / 60)} 分钟`
                 : ""}
+              {!editable ? ` · ${stage.lifecycle}（只读）` : ""}
             </small>
             <div className={styles.actions}>
               <Button
                 iconOnly
                 aria-label="上移阶段"
                 variant="text"
-                disabled={index === 0}
+                disabled={!editable || !previousEditable}
                 onClick={(event) => {
                   event.stopPropagation();
                   onMove(index, index - 1);
@@ -89,7 +94,7 @@ export function TrainingStageTimeline({
                 iconOnly
                 aria-label="下移阶段"
                 variant="text"
-                disabled={index === stages.length - 1}
+                disabled={!editable || !nextEditable}
                 onClick={(event) => {
                   event.stopPropagation();
                   onMove(index, index + 1);
@@ -112,6 +117,7 @@ export function TrainingStageTimeline({
                 iconOnly
                 aria-label="删除阶段"
                 variant="text"
+                disabled={!editable}
                 onClick={(event) => {
                   event.stopPropagation();
                   onRemove(stage);
@@ -121,6 +127,8 @@ export function TrainingStageTimeline({
               </Button>
             </div>
           </article>
+          );
+          })()
         ))}
       </div>
     </section>

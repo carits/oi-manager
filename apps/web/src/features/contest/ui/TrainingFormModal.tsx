@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import collisionStyles from './TrainingFormModal.collision.module.css'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './TrainingFormModal.unified.module.css'
@@ -8,10 +8,10 @@ import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Tabs } from '@/components/ui/Tabs'
-import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
 import { useAuth } from '@/features/auth'
+import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
 
 function toLocalDatetimeString(date: Date): string {
   const y = date.getFullYear()
@@ -27,14 +27,6 @@ interface ResolvedProblem {
   problemId: string
   title: string
   created: boolean
-}
-
-interface PickerProblem {
-  id: string
-  platform: string
-  problemId: string
-  title: string
-  difficulty?: string | null
 }
 
 interface ContentOption {
@@ -100,7 +92,6 @@ interface ExistingTrainingProblem {
 }
 
 type IdResponse = { id: string | number }
-type ResolveProblemsResponse = { resolved: ResolvedProblem[] }
 
 interface TrainingFormModalProps {
   isOpen: boolean
@@ -137,12 +128,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [ratingLocked, setRatingLocked] = useState(false)
   const [allowedRatingScopes, setAllowedRatingScopes] = useState<Array<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>>(['NONE'])
   const [wizardStep, setWizardStep] = useState(0)
-  const [problemPickerOpen, setProblemPickerOpen] = useState(false)
-  const [problemSource, setProblemSource] = useState<'school' | 'carits' | 'external'>(organizationId ? 'school' : 'carits')
-  const [problemQuery, setProblemQuery] = useState('')
-  const [problemPool, setProblemPool] = useState<PickerProblem[]>([])
-  const [problemPoolLoading, setProblemPoolLoading] = useState(false)
-  const [problemPoolError, setProblemPoolError] = useState('')
   const [recoveryTrainingId, setRecoveryTrainingId] = useState<string | null>(null)
   const [recoveryMessage, setRecoveryMessage] = useState('')
   const [originalStartTime, setOriginalStartTime] = useState<Date | null>(null)
@@ -152,7 +137,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [problemRows, setProblemRows] = useState<ProblemRow[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
-  const resolveTimerRef = useRef<Record<string, NodeJS.Timeout>>({})
 
   // Reset / load data when modal opens
   useEffect(() => {
@@ -160,9 +144,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     setWizardStep(0)
     setRecoveryTrainingId(null)
     setRecoveryMessage('')
-    setProblemPickerOpen(false)
-    setProblemQuery('')
-    setProblemSource(organizationId ? 'school' : 'carits')
 
     if (isEdit && trainingId) {
       // 编辑模式：加载已有数据
@@ -278,29 +259,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   }, [isOpen, trainingId])
 
   useEffect(() => {
-    if (!isOpen || !problemPickerOpen || mode !== 'contest') return
-    const timer = window.setTimeout(async () => {
-      setProblemPoolLoading(true)
-      setProblemPoolError('')
-      const params = new URLSearchParams({ page: '1', pageSize: '30' })
-      if (problemQuery.trim()) params.set('keyword', problemQuery.trim())
-      if (problemSource === 'school') params.set('library', 'school')
-      else {
-        params.set('library', 'platform')
-        params.set('sourceGroup', problemSource)
-      }
-      const result = await apiClient.get<{ data: PickerProblem[] }>(`/api/problems?${params}`)
-      if (result.success) setProblemPool(result.data?.data || [])
-      else {
-        setProblemPool([])
-        setProblemPoolError(result.message || '题目列表加载失败')
-      }
-      setProblemPoolLoading(false)
-    }, 250)
-    return () => window.clearTimeout(timer)
-  }, [isOpen, mode, problemPickerOpen, problemQuery, problemSource])
-
-  useEffect(() => {
     if (!isOpen || isEdit || mode !== 'contest') return
     if (teamId && format === 'icpc') setAllowedRatingScopes(['NONE'])
     else if (organizationId) setAllowedRatingScopes(['NONE', 'ORGANIZATION'])
@@ -313,124 +271,32 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     if (!allowedRatingScopes.includes(ratingScope)) setRatingScope('NONE')
   }, [allowedRatingScopes, ratingScope])
 
-  // Clean up timers on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(resolveTimerRef.current).forEach(clearTimeout)
-    }
-  }, [])
-
-  const getLastOjPlatform = () => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('lastOjPlatform') : null
-    if (saved) return saved
-    return 'carits'
-  }
-
-  const addProblemRow = () => {
-    const row: ProblemRow = {
-      id: `temp-${++tempIdCounter}`,
-      ojName: getLastOjPlatform(),
-      problemCode: '',
-      alias: '',
-      points: 100,
-      resolving: false,
-      resolved: null,
-      statementOptions: [],
-      solutionOptions: [],
-      contentOptionsLoading: false,
-    }
-    setProblemRows(prev => [...prev, row])
-  }
-
   const updateRow = (rowId: string, updates: Partial<ProblemRow>) => {
     setProblemRows(prev => prev.map(r => r.id === rowId ? { ...r, ...updates } : r))
-    if (updates.ojName) localStorage.setItem('lastOjPlatform', updates.ojName)
   }
 
-  const addPickedProblem = async (problem: PickerProblem) => {
-    if (problemRows.some(row => row.resolved?.problemId === problem.id)) return
-    const id = `picked-${++tempIdCounter}`
-    setProblemRows(current => [...current, {
-      id,
-      ojName: problem.platform,
-      problemCode: problem.problemId,
-      alias: '',
-      points: 100,
-      resolving: false,
-      resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
-      contentOptionsLoading: true,
-      statementOptions: [],
-      solutionOptions: [],
-    }])
-    const options = await apiClient.get<{ statement: ContentOption[]; solution: ContentOption[] }>(`/api/problems/${problem.id}/content-options`)
-    if (!options.success) {
-      updateRow(id, { contentOptionsLoading: false })
-      return
+  const addSelectedProblems = async (problems: SelectedCanonicalProblem[]) => {
+    for (const problem of problems) {
+      if (problemRows.some(row => row.resolved?.problemId === problem.id)) continue
+      const id = `selected-${++tempIdCounter}`
+      setProblemRows(current => [...current, {
+        id, ojName: problem.platform, problemCode: problem.problemCode, alias: '', points: 100,
+        resolving: false, resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
+        contentOptionsLoading: true, statementOptions: [], solutionOptions: [],
+      }])
+      const options = await apiClient.get<{ statement: ContentOption[]; solution: ContentOption[] }>(`/api/problems/${problem.id}/content-options`)
+      updateRow(id, {
+        contentOptionsLoading: false,
+        statementOptions: options.success ? options.data?.statement || [] : [],
+        solutionOptions: options.success ? options.data?.solution || [] : [],
+        statementOptionKey: options.success ? options.data?.statement?.[0]?.key : undefined,
+        solutionOptionKey: options.success ? options.data?.solution?.find(option => option.key !== 'none')?.key || 'none' : 'none',
+      })
     }
-    updateRow(id, {
-      contentOptionsLoading: false,
-      statementOptions: options.data?.statement || [],
-      solutionOptions: options.data?.solution || [],
-      statementOptionKey: options.data?.statement?.[0]?.key,
-      solutionOptionKey: options.data?.solution?.find(option => option.key !== 'none')?.key || 'none',
-    })
   }
 
   const removeRow = (rowId: string) => {
-    if (resolveTimerRef.current[rowId]) {
-      clearTimeout(resolveTimerRef.current[rowId])
-      delete resolveTimerRef.current[rowId]
-    }
     setProblemRows(prev => prev.filter(r => r.id !== rowId))
-  }
-
-  const handleResolve = (row: ProblemRow) => {
-    if (resolveTimerRef.current[row.id]) clearTimeout(resolveTimerRef.current[row.id])
-    if (!row.problemCode.trim()) {
-      updateRow(row.id, { resolved: null, resolving: false })
-      return
-    }
-    updateRow(row.id, {
-      resolving: true,
-      contentOptionsLoading: true,
-      statementOptions: [],
-      solutionOptions: [],
-      statementOptionKey: undefined,
-      solutionOptionKey: undefined,
-    })
-    resolveTimerRef.current[row.id] = setTimeout(async () => {
-      try {
-        const res = await apiClient.post<ResolveProblemsResponse>(`/api/resolve-problems`, {
-          items: [{ ojName: row.ojName, problemCode: row.problemCode.trim() }]
-        })
-        if (res.success && res.data) {
-          const resolved = res.data.resolved
-          if (resolved && resolved.length > 0) {
-            const found = resolved[0] as ResolvedProblem
-            if (!found.found) {
-              updateRow(row.id, { resolved: found, resolving: false, contentOptionsLoading: false })
-              return
-            }
-            const optionsRes = await apiClient.get<{
-              statement: ContentOption[]
-              solution: ContentOption[]
-            }>(`/api/problems/${found.problemId}/content-options`)
-            const options = optionsRes.success ? optionsRes.data : null
-            updateRow(row.id, {
-              resolved: found,
-              resolving: false,
-              contentOptionsLoading: false,
-              statementOptions: options?.statement || [],
-              solutionOptions: options?.solution || [],
-              statementOptionKey: options?.statement[0]?.key,
-              solutionOptionKey: options?.solution.find(option => option.key !== 'none')?.key || 'none',
-            })
-          }
-        }
-      } catch {
-        updateRow(row.id, { resolving: false, contentOptionsLoading: false })
-      }
-    }, 500)
   }
 
   const moveUp = (idx: number) => {
@@ -812,7 +678,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
             {/* Problems */}
             {(!contestWizard || wizardStep === 2) && <div className={unifiedStyles.u10}>
-              <div className={unifiedStyles.sectionHeading}><h3 className={unifiedStyles.u11}>{mode === 'contest' ? '比赛题目' : '题目列表'}</h3><div className={unifiedStyles.headingActions}>{contestWizard && <Button onClick={() => setProblemPickerOpen(true)}>选择题目</Button>}<Button variant="secondary" onClick={addProblemRow}>{contestWizard ? '按 OJ 题号快速添加' : '添加一道题目'}</Button></div></div>
+              <div className={unifiedStyles.sectionHeading}><h3 className={unifiedStyles.u11}>{mode === 'contest' ? '比赛题目' : '题目列表'}</h3></div>
+              <QuickProblemInput existingProblemIds={problemRows.flatMap(row => row.resolved?.problemId ? [row.resolved.problemId] : [])} onResolved={addSelectedProblems} />
 
               {problemRows.length > 0 && (
                 <><div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved?.title || row.problemCode || '等待识别题目'}</span></div>)}</div><div className={unifiedStyles.u12}>
@@ -847,27 +714,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                             >↓</Button>
                           </TableCell>
                           <TableCell className={unifiedStyles.u24}>{idx + 1}</TableCell>
+                          <TableCell className={unifiedStyles.u25}>{row.ojName}</TableCell>
                           <TableCell className={unifiedStyles.u25}>
-                            <Select aria-label="选择" value={row.ojName}
-                              onChange={e => {
-                                updateRow(row.id, { ojName: e.target.value, resolved: row.existing ? row.resolved : null })
-                                if (!row.existing) handleResolve({ ...row, ojName: e.target.value, resolved: null })
-                              }}
-                              className={unifiedStyles.u26}
-                            >
-                              {OJ_PLATFORMS_NO_ALL.map(oj => <option key={oj.value} value={oj.value}>{oj.label}</option>)}
-                            </Select>
-                          </TableCell>
-                          <TableCell className={unifiedStyles.u25}>
-                            <Input type="text" value={row.problemCode}
-                              onChange={e => {
-                                updateRow(row.id, { problemCode: e.target.value, resolved: row.existing ? row.resolved : null })
-                                if (!row.existing) handleResolve({ ...row, problemCode: e.target.value })
-                              }}
-                              placeholder="输入题号"
-                              disabled={row.existing}
-                              className={unifiedStyles.problemIdInput}
-                            />
+                            {row.problemCode}
                           </TableCell>
                           <TableCell className={unifiedStyles.u27}>
                             {row.existing ? (
@@ -910,7 +759,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
               {problemRows.length === 0 && (
                 <div className={unifiedStyles.u39}>
-                  {contestWizard ? '还没有选择比赛题目，请从题库选择，或按 OJ 题号快速添加。' : '还没有添加题目。'}
+                  还没有添加题目，请选择平台并输入题号。
                 </div>
               )}
             </div>}
@@ -919,25 +768,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         )}
       </div>
     </FormDialog>
-    <DetailDialog isOpen={problemPickerOpen} onClose={() => setProblemPickerOpen(false)} title="选择比赛题目" size="lg">
-      <div className={unifiedStyles.picker}>
-        <Tabs
-          label="题库来源"
-          value={problemSource}
-          onChange={value => setProblemSource(value)}
-          items={[
-            ...(organizationId ? [{ value: 'school' as const, label: '校内题库' }] : []),
-            { value: 'carits' as const, label: 'Carits 平台题库' },
-            { value: 'external' as const, label: '其他题库' },
-          ]}
-        />
-        <Input aria-label="搜索题目" value={problemQuery} onChange={event => setProblemQuery(event.target.value)} placeholder="搜索题号或标题" />
-        {problemPoolLoading ? <p>正在加载题目…</p> : problemPoolError ? <p role="alert" className={unifiedStyles.pickerError}>{problemPoolError}</p> : problemPool.length === 0 ? <p>当前范围没有找到题目。</p> : <div className={unifiedStyles.pickerList}>{problemPool.map(problem => {
-          const selected = problemRows.some(row => row.resolved?.problemId === problem.id)
-          return <div key={problem.id} className={unifiedStyles.pickerItem}><div><strong>{problem.problemId} · {problem.title}</strong><small>{problem.platform}{problem.difficulty ? ` · ${problem.difficulty}` : ''}</small></div><Button size="sm" variant={selected ? 'secondary' : 'primary'} disabled={selected} onClick={() => void addPickedProblem(problem)}>{selected ? '已选择' : '加入比赛'}</Button></div>
-        })}</div>}
-      </div>
-    </DetailDialog>
     </>
   )
 }

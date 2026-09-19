@@ -41,6 +41,7 @@ import { notificationRouter } from './modules/notification/notification.routes'
 import { organizationCreationRouter } from './modules/organization-creation/organization-creation.routes'
 import { organizationJoinRouter } from './modules/organization-join/organization-join.routes'
 import { problemsRouter } from './modules/problem/problem.routes'
+import { problemSelectionRouter } from './modules/problem-selection/problem-selection.routes'
 import { platformBindingRouter } from './modules/platform-binding/platform-binding.routes'
 import { judgeProgramTemplateRouter } from './modules/problem/problem.judge-program.routes'
 import { rankingRouter } from './modules/ranking/ranking.routes'
@@ -105,6 +106,7 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api/stats', authenticate, statsRouter)
   app.use('/api/teachers', authenticate, teacherRouter)
   app.use('/api/problems', problemsRouter)
+  app.use('/api', problemSelectionRouter)
   app.use('/api', judgeProgramTemplateRouter)
   app.use('/api/oj-fetcher', authenticate, ojFetcherRouter)
   app.use('/api/files', filesRouter)

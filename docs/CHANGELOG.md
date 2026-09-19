@@ -1,9 +1,29 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-18
+last_verified: 2026-09-19
 source_of_truth: Git history
 ---
+
+## 2026-09-19 — Training Engine Stage 驱动统一模型
+
+- 统一训练领域：`TrainingSession` 表示一堂课，Stage 表示时间轴；普通刷题只是一 Stage 快速模板，不再维护“普通训练 / 教练带练”双模式。
+- Stage 拆分教学用途、受众、题目开放、时间、完成、提示、结束和提交规则；分组下沉到 Stage，题目通过稳定 StageProblem 与 ProblemPlan 在组间共享 Progress。
+- Stage 开始时生成不可变 RuntimeSnapshot；新增结构化转换、即时/下一 Stage 换组和追加延时，删除 BACK_STAGE，新 Scheduler 与人工操作使用相同锁和 CAS 语义。
+- 运行工作台补齐提前结束原因、跳过待开始 Stage、下一 Stage 预换组、自定义延时及换组报告；暂停状态推进不会错误累计新 Stage 运行时间。
+- 新增只读的可解释分组建议：使用前序完成度、累计分数、尝试次数和有效训练时间稳定排序并蛇形均衡，必须由教师预览确认后才写入设计草稿。
+- OI 30→60→100 作为题目 scoreGoals，并把提交时目标层级快照写入 Submission/JudgeRun。设计器继续只接受“平台 + 题号”。
+- 单题训练时限统一为 `NONE / SOFT / HARD / SWITCH_REQUIRED`，卡题阈值改为可配置 `stuckPolicy`；策略实际参与权限、心跳和工作台提示，不再只保存配置或使用写死阈值。
+- Coach Dashboard 按当前 Stage/分组的 Plan 要求集计算分母，Report 左连接未开始题并区分当前要求/历史进度；ACM 榜单改为解题数、首 AC 时间和 AC 前错误提交罚时。
+- 数据库模板链路完成：设计器可保存个人/学校/团队 Stage 骨架，创建页可复用并停用；模板不复制题目、学员或运行事实。模板、设计题目和发布接口进入共享 Runtime Contract/Training Feature API。
+- Contracts/Server/Web 类型检查、Server/Web 生产构建、Web 43 文件/191 项测试和文档/架构门禁通过；Training UI/Model 直连传输已清零，全站 Feature UI/Model 直连由 218 降至 179。补充发布→启动→快照→延时→推进→结束及下一 Stage 预换组的 Server 集成用例。按本轮要求未搭建 PostgreSQL，因此这些数据库集成用例、迁移集成测试和隔离 Playwright 未执行；当前未发布。
+
+## 2026-09-19 — AppShell 双形态响应式导航
+
+- 删除 `768–1199px` 的 72px 纯图标 Rail；`>=1100px` 统一使用 232px 完整侧栏，`<1100px` 统一使用完整抽屉。桌面侧栏收起后完全不占位，页面与 Header 恢复全宽。
+- 桌面展开偏好与窄屏抽屉状态分离；偏好键统一使用 `accountRole` 并自动承接旧组织角色键。窄屏抽屉新增遮罩、背景滚动锁定、焦点限制、Escape/遮罩/链接关闭和关闭后焦点恢复。
+- Logo 不再裁剪，任意状态仅保留一个可见品牌入口；完整侧栏保留文字、分组和账号信息，导航滚动条改为 hover/focus 时显示的细滚动条。
+- 新增静态 Rail 回归门禁和 1100/1099/1024/800/390 响应式 Playwright 用例。Web 42/42 个测试文件、187/187 项、UI 状态/组件门禁、生产构建和文档/架构门禁通过；隔离 E2E 数据准备因本机 PostgreSQL `127.0.0.1:5432` 未启动而阻断，未执行发布。
 
 ## 2026-09-18 — 组织工作区 SSR 身份上下文修复
 

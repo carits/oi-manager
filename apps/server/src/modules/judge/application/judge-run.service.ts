@@ -91,6 +91,8 @@ export async function createQueuedSubmissionWithRun(
         inputFilename: submission.inputFilename,
         outputFilename: submission.outputFilename,
         ioAdapterVersion: submission.ioAdapterVersion,
+        trainingScoreGoalIndex: submission.trainingScoreGoalIndex,
+        trainingScoreGoalSnapshot: submission.trainingScoreGoalSnapshot ?? undefined,
         requestedBy: options.requestedBy ?? submission.userId,
       },
     })
