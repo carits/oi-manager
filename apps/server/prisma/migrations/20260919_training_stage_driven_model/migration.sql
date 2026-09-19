@@ -1,5 +1,7 @@
 -- Training Engine stage-driven cutover. This migration is intentionally a
 -- single-writer cutover: active/scheduled classroom state must be drained first.
+BEGIN;
+
 DO $$
 BEGIN
   IF EXISTS (
@@ -284,3 +286,5 @@ ALTER TABLE "TrainingSession" DROP COLUMN "defaultProblemAccessMode";
 DROP TYPE "TrainingEngineStageMode";
 DROP TYPE "TrainingEngineAdvanceMode";
 DROP TYPE "TrainingEngineProblemAccessMode";
+
+COMMIT;
