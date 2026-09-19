@@ -219,7 +219,6 @@ async function canReadSolution(db: Db, user: JwtPayload, solution: any) {
       problemInternalId: solution.Solution.problemId,
       OR: [
         { CurrentJudgeRun: { is: { status: 'FINALIZED', result: 'accepted', score: { gte: 100 } } } },
-        { CurrentJudgeRun: { is: null }, result: 'accepted', score: { gte: 100 } },
       ],
     },
     select: { id: true },

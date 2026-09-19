@@ -159,7 +159,7 @@ describe('Judge lifecycle ownership and retries', () => {
       where: { id: fixture.submission.id },
       include: { CurrentJudgeRun: { include: { CurrentAttempt: true, Attempts: { orderBy: { attemptNumber: 'asc' } } } } },
     })
-    expect(afterRetry.result).toBe('queuing')
+    expect(afterRetry.CurrentJudgeRun?.status).toBe('RUNNING')
     expect(afterRetry.CurrentJudgeRun?.Attempts.map(item => item.state)).toEqual(['INFRA_ERROR', 'QUEUED'])
     expect(afterRetry.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ attemptNumber: 2, state: 'QUEUED' })
 
@@ -197,7 +197,7 @@ describe('Judge lifecycle ownership and retries', () => {
       where: { id: fixture.submission.id },
       include: { CurrentJudgeRun: { include: { CurrentAttempt: true } }, JudgeRuns: { orderBy: { runNumber: 'asc' } } },
     })
-    expect(stored.result).toBe('queuing')
+    expect(stored.CurrentJudgeRun?.status).toBe('QUEUED')
     expect(stored.JudgeRuns.map(item => item.status)).toEqual(['FINALIZED', 'QUEUED'])
     expect(stored.CurrentJudgeRun).toMatchObject({ runNumber: 2, runType: 'REJUDGE', rejudgeBatchId: queued.batch.id })
     expect(stored.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ attemptNumber: 1, state: 'QUEUED' })

@@ -296,8 +296,19 @@ async function buildPinnedInput(problemId: string, revisionId: string, corpusRev
     prisma.problemFeatureDefinition.findMany({ where: { problemId }, orderBy: [{ orderIndex: 'asc' }, { key: 'asc' }] }),
     prisma.problemJudgeProgram.findMany({ where: { problemId }, select: { kind: true, currentVersionId: true, status: true } }),
     prisma.testcaseCandidate.findMany({ where: { problemId, OR: [{ corpusRevisionId: corpus.id }, { promotedRevisionId: revisionId }, { promotedTestcaseId: { not: null } }] }, select: { promotedTestcaseId: true, featureFingerprint: true, semanticFingerprint: true, selectionOutcome: true } }),
-    prisma.submission.count({ where: { problemInternalId: problemId, testSetRevisionId: revisionId, result: { notIn: ['queuing', 'judging', 'compiling', 'system_error'] } } }),
-    prisma.submission.findMany({ where: { problemInternalId: problemId, testSetRevisionId: revisionId, result: { notIn: ['queuing', 'judging', 'compiling', 'system_error'] } }, orderBy: { createdAt: 'desc' }, take: 1000, select: { code: true, language: true, inputFilename: true, outputFilename: true, result: true, score: true } }),
+    prisma.judgeRun.count({ where: { status: 'FINALIZED', testSetRevisionId: revisionId, result: { notIn: ['system_error'] }, Submission: { problemInternalId: problemId } } }),
+    prisma.submission.findMany({
+      where: {
+        problemInternalId: problemId,
+        CurrentJudgeRun: { is: { status: 'FINALIZED', testSetRevisionId: revisionId, result: { notIn: ['system_error'] } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 1000,
+      select: {
+        code: true, language: true, inputFilename: true, outputFilename: true,
+        CurrentJudgeRun: { select: { result: true, score: true } },
+      },
+    }),
     prisma.problemHackAttempt.count({ where: { problemId, canonicalStatus: 'promoted', finishedAt: { lte: new Date() } } }),
     prisma.testSetQualityIncident.findMany({
       where: { problemId, revisionId, severity: 'CRITICAL', status: 'CONFIRMED' },
@@ -308,7 +319,7 @@ async function buildPinnedInput(problemId: string, revisionId: string, corpusRev
       where: { problemId, status: 'active' },
       orderBy: [{ key: 'asc' }, { id: 'asc' }],
       include: { Submission: { select: {
-        id: true, testSetRevisionId: true, result: true, score: true, subtasks: true,
+        id: true,
         CurrentJudgeRun: { select: { status: true, testSetRevisionId: true, result: true, score: true, subtasks: true } },
       } } },
     }),
@@ -369,7 +380,10 @@ async function buildPinnedInput(problemId: string, revisionId: string, corpusRev
     featureEvidence: [...new Map(featureEvidence.map(item => [item.testcaseId, item])).values()].sort((a, b) => a.testcaseId.localeCompare(b.testcaseId)),
     submissions: {
       count: submissionCount,
-      outcomes: submissions.map(item => ({ fingerprint: stableHash({ language: item.language, code: item.code.replace(/\r\n/g, '\n').trim(), input: item.inputFilename || 'stdin', output: item.outputFilename || 'stdout' }), outcome: `${item.result}:${item.score ?? ''}` })),
+      outcomes: submissions.map(item => ({
+        fingerprint: stableHash({ language: item.language, code: item.code.replace(/\r\n/g, '\n').trim(), input: item.inputFilename || 'stdin', output: item.outputFilename || 'stdout' }),
+        outcome: `${item.CurrentJudgeRun?.result || 'system_error'}:${item.CurrentJudgeRun?.score ?? ''}`,
+      })),
     },
     hacks: { count: validHackCount },
     criticalIncidents: criticalIncidents.map(incident => ({
@@ -394,10 +408,10 @@ async function buildPinnedInput(problemId: string, revisionId: string, corpusRev
         definitionRevision: profile.revision,
         source: {
           submissionId: profile.Submission.id,
-          evaluatedRevisionId: run?.testSetRevisionId || profile.Submission.testSetRevisionId,
-          result: run?.result || profile.Submission.result,
-          score: run?.score ?? profile.Submission.score,
-          subtasks: observedSubtaskScores(run?.subtasks || profile.Submission.subtasks),
+          evaluatedRevisionId: run?.testSetRevisionId || null,
+          result: run?.result || 'system_error',
+          score: run?.score ?? null,
+          subtasks: observedSubtaskScores(run?.subtasks || null),
         },
       }
     }),
@@ -669,7 +683,7 @@ async function parseSolutionProfileDefinition(user: JwtPayload, problemId: strin
         id: submissionId, problemInternalId: problemId, submitMethod: 'local',
         ...(!isPlatformManager(user.accountRole) ? { userId: user.userId } : {}),
       },
-      select: { id: true, testSetRevisionId: true, result: true, CurrentJudgeRun: { select: { status: true, testSetRevisionId: true, result: true } } },
+      select: { id: true, CurrentJudgeRun: { select: { status: true, testSetRevisionId: true, result: true } } },
     }),
     problem?.latestTestSetRevisionId
       ? prisma.problemTestSetRevisionSubtask.findMany({ where: { revisionId: problem.latestTestSetRevisionId }, select: { subtaskId: true, score: true } })
@@ -679,8 +693,7 @@ async function parseSolutionProfileDefinition(user: JwtPayload, problemId: strin
   const unstableResults = new Set(['queuing', 'judging', 'compiling', 'system_error'])
   const run = submission.CurrentJudgeRun
   const currentRunFinalized = run?.status === 'FINALIZED' && Boolean(run.testSetRevisionId) && Boolean(run.result) && !unstableResults.has(String(run.result).toLowerCase())
-  const legacyFinalized = !run && Boolean(submission.testSetRevisionId) && Boolean(submission.result) && !unstableResults.has(String(submission.result).toLowerCase())
-  const evaluatedRevisionId = currentRunFinalized ? run!.testSetRevisionId : legacyFinalized ? submission.testSetRevisionId : null
+  const evaluatedRevisionId = currentRunFinalized ? run!.testSetRevisionId : null
   if (!evaluatedRevisionId) fail(422, 'SOLUTION_PROFILE_SUBMISSION_NOT_FINALIZED', 'Reference Solution 尚未形成固定 Revision 的终态评测')
   const validSubtaskIds = new Set(revisionSubtasks.map(item => item.subtaskId))
   if (parsedSubtasks.some(item => !validSubtaskIds.has(item.subtaskId))) fail(422, 'SOLUTION_PROFILE_SUBTASK_INVALID', '预期分包含当前正式 Revision 不存在的 Subtask')
@@ -715,16 +728,16 @@ function solutionProfileDto(profile: any) {
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
     observed: profile.Submission ? {
-      revisionId: run?.testSetRevisionId || profile.Submission.testSetRevisionId,
-      result: run?.result || profile.Submission.result,
-      score: run?.score ?? profile.Submission.score,
-      subtasks: observedSubtaskScores(run?.subtasks || profile.Submission.subtasks),
+      revisionId: run?.testSetRevisionId || null,
+      result: run?.result || 'system_error',
+      score: run?.score ?? null,
+      subtasks: observedSubtaskScores(run?.subtasks || null),
     } : null,
   }
 }
 
 const solutionProfileSubmission = { select: {
-  id: true, testSetRevisionId: true, result: true, score: true, subtasks: true,
+  id: true,
   CurrentJudgeRun: { select: { status: true, testSetRevisionId: true, result: true, score: true, subtasks: true } },
 } } as const
 
@@ -1282,10 +1295,10 @@ async function staleness(snapshot: any) {
       id: profile.id,
       source: {
         submissionId: profile.Submission.id,
-        evaluatedRevisionId: run?.testSetRevisionId || profile.Submission.testSetRevisionId,
-        result: run?.result || profile.Submission.result,
-        score: run?.score ?? profile.Submission.score,
-        subtasks: observedSubtaskScores(run?.subtasks || profile.Submission.subtasks),
+        evaluatedRevisionId: run?.testSetRevisionId || null,
+        result: run?.result || 'system_error',
+        score: run?.score ?? null,
+        subtasks: observedSubtaskScores(run?.subtasks || null),
       },
     }
   }))
@@ -1323,7 +1336,11 @@ async function problemAssessmentStaleness(problemId: string, assessment: any) {
     prisma.problemSolution.findFirst({ where: { problemId, status: 'PUBLISHED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
     prisma.problemJudgeProgram.findFirst({ where: { problemId }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
     prisma.testSetQualitySnapshot.findFirst({ where: { problemId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
-    prisma.submission.findFirst({ where: { problemInternalId: problemId, submitMethod: 'local', result: { notIn: ['queuing', 'judging', 'compiling', 'system_error'] } }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    prisma.submission.findFirst({
+      where: { problemInternalId: problemId, submitMethod: 'local', CurrentJudgeRun: { is: { status: 'FINALIZED', result: { notIn: ['system_error'] } } } },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    }),
   ])
   const evaluatedAt = new Date(assessment.evaluatedAt).getTime()
   const reasons: string[] = []
@@ -1458,8 +1475,8 @@ export async function runAutomatedProblemQualityAssessment(user: JwtPayload, pro
     prisma.problemSolution.findMany({ where: { problemId, status: 'PUBLISHED' }, include: { CurrentVersion: true }, orderBy: { updatedAt: 'desc' } }),
     prisma.problemJudgeProgram.findMany({ where: { problemId, status: 'active' }, select: { kind: true, currentVersionId: true } }),
     problem.latestTestSetRevisionId ? prisma.testSetQualitySnapshot.findFirst({ where: { revisionId: problem.latestTestSetRevisionId }, orderBy: { createdAt: 'desc' } }) : null,
-    prisma.submission.count({ where: { problemInternalId: problemId, submitMethod: 'local', result: { notIn: ['queuing', 'judging', 'compiling', 'system_error'] } } }),
-    prisma.submission.groupBy({ by: ['result'], where: { problemInternalId: problemId, submitMethod: 'local', result: { notIn: ['queuing', 'judging', 'compiling', 'system_error'] } }, _count: { _all: true } }),
+    prisma.judgeRun.count({ where: { status: 'FINALIZED', result: { notIn: ['system_error'] }, Submission: { problemInternalId: problemId, submitMethod: 'local' } } }),
+    prisma.judgeRun.groupBy({ by: ['result'], where: { status: 'FINALIZED', result: { notIn: ['system_error'] }, Submission: { problemInternalId: problemId, submitMethod: 'local' } }, _count: { _all: true } }),
     problem.latestTestSetRevisionId ? prisma.problemTestSetRevision.findUnique({ where: { id: problem.latestTestSetRevisionId }, include: { Subtasks: { include: { Groups: { include: { Cases: true } } } } } }) : null,
   ])
   const versionIds = programs.map(item => item.currentVersionId).filter((id): id is string => Boolean(id))

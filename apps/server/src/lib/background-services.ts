@@ -1,5 +1,4 @@
 import { startCronTasks } from './cron-tasks'
-import { startSubmissionPoller, stopSubmissionPoller } from './submission-poller'
 import { startAutoVerifyScheduler } from '../modules/oj-account/application/oj-account.service'
 import logger from './logger'
 import {
@@ -272,14 +271,12 @@ export function startSchedulerServices(): BackgroundServicesHandle {
 }
 
 export function startExecutorServices(): BackgroundServicesHandle {
-  startSubmissionPoller(5000)
   logger.info('executor_services_started', { action: 'background_executor' })
   let stopped = false
   return {
     async stop() {
       if (stopped) return
       stopped = true
-      stopSubmissionPoller()
       logger.info('executor_services_stopped', { action: 'background_executor' })
     },
   }

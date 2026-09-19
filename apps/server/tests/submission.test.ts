@@ -124,10 +124,6 @@ describe('提交记录学校数据隔离', () => {
         code: 'int main() { return 0; }',
         codeLength: 24,
         submitMethod: 'standard',
-        result: 'accepted',
-        score: 100,
-        timeUsed: 100,
-        memoryUsed: 1024,
         submitScope: 'problem',
         isGlobalVisible: true
       }
@@ -143,10 +139,6 @@ describe('提交记录学校数据隔离', () => {
         code: 'int main() { return 1; }',
         codeLength: 24,
         submitMethod: 'standard',
-        result: 'wrong_answer',
-        score: 0,
-        timeUsed: 50,
-        memoryUsed: 512,
         submitScope: 'problem',
         isGlobalVisible: true
       }
@@ -162,8 +154,6 @@ describe('提交记录学校数据隔离', () => {
         code: 'int main() { return 2; }',
         codeLength: 24,
         submitMethod: 'standard',
-        result: 'wrong_answer',
-        score: 0,
         submitScope: 'problem',
         isGlobalVisible: true,
       },
@@ -314,10 +304,6 @@ describe('提交详情权限', () => {
         code: '#include <iostream>\nint main() { std::cout << "Hello"; return 0; }',
         codeLength: 65,
         submitMethod: 'standard',
-        result: 'accepted',
-        score: 100,
-        timeUsed: 100,
-        memoryUsed: 1024,
         submitScope: 'problem',
         isGlobalVisible: true
       }
@@ -363,15 +349,7 @@ describe('提交详情权限', () => {
     })
     await prisma.submission.update({
       where: { id: submissionA.id },
-      data: {
-        currentJudgeRunId: runId,
-        result: 'wa',
-        score: 0,
-        cases: JSON.stringify([{ result: 'wa' }]),
-        timeUsed: 1,
-        memoryUsed: 1,
-        metricSource: 'corrupted-compatibility-projection',
-      },
+      data: { currentJudgeRunId: runId },
     })
 
     const accepted = await organizationRequest(studentAToken, schoolA.school.organizationId!)
@@ -448,8 +426,6 @@ describe('个人工作区提交详情权限', () => {
         code: 'int main() { return 0; }',
         codeLength: 24,
         submitMethod: 'local',
-        result: 'accepted',
-        score: 100,
         submitScope: 'problem',
         isGlobalVisible: true,
       } })
@@ -578,16 +554,11 @@ describe('训练提交隔离', () => {
         code: 'int main() { return 0; }',
         codeLength: 24,
         submitMethod: 'standard',
-        result: 'accepted',
-        score: 100,
-        timeUsed: 100,
-        memoryUsed: 1024,
         submitScope: 'training',
         submitSource: 'training',
         sourceId: `training-${training.id}`,
         trainingId: training.id,
         trainingProblemId: trainingProblem.id,
-        cases: JSON.stringify([{ result: 'accepted', time: 100, memory: 1024 }]),
         isGlobalVisible: false
       }
     })
@@ -609,10 +580,6 @@ describe('训练提交隔离', () => {
         code: 'int main() { return 1; }',
         codeLength: 24,
         submitMethod: 'standard',
-        result: 'wrong_answer',
-        score: 0,
-        timeUsed: 50,
-        memoryUsed: 512,
         submitScope: 'problem',
         isGlobalVisible: true
       }
@@ -695,14 +662,10 @@ describe('训练提交隔离', () => {
         code: 'int main() { while (true) {} }',
         codeLength: 31,
         submitMethod: 'standard',
-        result: 'ole',
-        score: 0,
-        errorMessage: 'output limit exceeded',
         submitScope: 'training',
         submitSource: 'training',
         trainingId: training.id,
         trainingProblemId: trainingProblem.id,
-        cases: null,
         isGlobalVisible: false,
       },
     })
@@ -755,17 +718,7 @@ describe('训练提交隔离', () => {
     })
     await prisma.submission.update({
       where: { id: trainingSubmission.id },
-      data: {
-        problemId: relation.Problem.problemId,
-        result: 'wa',
-        score: 0,
-        cases: JSON.stringify([{ result: 'wa', time: 1, memory: 1 }]),
-        subtasks: JSON.stringify([{ id: 1, score: 0 }]),
-        timeUsed: 1,
-        wallTimeUsed: 1,
-        memoryUsed: 1,
-        metricSource: 'corrupted-compatibility-projection',
-      },
+      data: { problemId: relation.Problem.problemId },
     })
 
     const acceptedList = await organizationRequest(ownerToken, schoolData.school.organizationId!)

@@ -227,7 +227,6 @@ async function assertSubmissionEligibility(user: JwtPayload, contribution: { pro
     userId: user.userId, problemInternalId: contribution.problemId, testSetRevisionId: contribution.targetTestSetRevisionId,
     OR: [
       { CurrentJudgeRun: { is: { status: 'FINALIZED', result: 'accepted', score: { gte: 100 } } } },
-      { CurrentJudgeRun: { is: null }, result: 'accepted', score: { gte: 100 } },
     ],
   }, select: { id: true } })
   if (!solved) fail(403, 'SOLUTION_AUTHOR_NOT_QUALIFIED', '完整题解投稿者需要先在指定测试版本上 AC，或由教师/题目管理员投稿')
@@ -297,8 +296,7 @@ async function queueVerification(revisionId: string) {
       problemId: revision.Contribution.Problem.problemId,
       problemInternalId: revision.Contribution.problemId,
       language: revision.language!, code: revision.referenceCode!,
-      codeLength: Buffer.byteLength(revision.referenceCode!, 'utf8'), result: 'queuing',
-      submitMethod: 'local', submitScope: 'solution_verification', isGlobalVisible: false,
+      codeLength: Buffer.byteLength(revision.referenceCode!, 'utf8'),       submitMethod: 'local', submitScope: 'solution_verification', isGlobalVisible: false,
       sourceId: revision.id, submitSource: 'solution_contribution',
       testSetRevisionId: revision.targetTestSetRevisionId,
       judgeConfigHash: revision.TargetTestSetRevision.judgeConfigHash,
@@ -882,7 +880,6 @@ async function canReadSolution(user: JwtPayload, solution: { visibilityPolicy: S
     userId: user.userId, problemInternalId: solution.problemId,
     OR: [
       { CurrentJudgeRun: { is: { status: 'FINALIZED', result: 'accepted', score: { gte: 100 } } } },
-      { CurrentJudgeRun: { is: null }, result: 'accepted', score: { gte: 100 } },
     ],
   }, select: { id: true } }))
 }

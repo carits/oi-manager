@@ -99,7 +99,7 @@ export async function getMyPersonalOverview(actor: DashboardActor) {
     prisma.submission.findMany({
       where: { userId: actor.userId, workspaceScope: 'personal' },
       select: {
-        id: true, oj: true, problemId: true, result: true, score: true, createdAt: true,
+        id: true, oj: true, problemId: true, createdAt: true,
         CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
       },
       orderBy: { createdAt: 'desc' },

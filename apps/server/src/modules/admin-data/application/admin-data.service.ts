@@ -57,11 +57,11 @@ export async function getSubmissionMaintenanceStats() {
         WHEN run.status = 'RUNNING' THEN 'judging'
         WHEN run.status = 'CANCELLED' THEN COALESCE(run.result, 'judge_failed')
         WHEN run.status = 'FINALIZED' THEN COALESCE(run.result, 'unknown_error')
-        ELSE submission.result
+        ELSE 'system_error'
       END AS result,
       COUNT(*)::integer AS count
     FROM "Submission" submission
-    LEFT JOIN "JudgeRun" run ON run.id = submission."currentJudgeRunId"
+    JOIN "JudgeRun" run ON run.id = submission."currentJudgeRunId"
     GROUP BY 1
     ORDER BY 2 DESC
     LIMIT 20
@@ -90,10 +90,14 @@ export async function fixCaritsRemoteIds() {
 export async function fixHduMemory(defaultKB: unknown) {
   const memoryUsed = Number(defaultKB ?? 1280)
   if (!Number.isFinite(memoryUsed) || memoryUsed < 0) throw new AdminDataError(400, 'defaultKB 必须是非负数')
-  const submissions = await prisma.submission.findMany({ where: { oj: 'hdu', memoryUsed: null, result: { not: 'queuing' } }, select: { id: true } })
-  if (!submissions.length) return { updated: 0, message: '无需修复' }
-  const result = await prisma.submission.updateMany({ where: { id: { in: submissions.map(item => item.id) } }, data: { memoryUsed } })
-  return { updated: result.count, message: `已修复 ${result.count} 条记录` }
+  const runs = await prisma.judgeRun.findMany({
+    where: { status: 'FINALIZED', memoryUsed: null, Submission: { oj: 'hdu' } },
+    select: { id: true },
+  })
+  if (!runs.length) return { updated: 0, message: '\u65e0\u9700\u4fee\u590d' }
+  const result = await prisma.judgeRun.updateMany({ where: { id: { in: runs.map(item => item.id) } }, data: { memoryUsed } })
+  return { updated: result.count, message: '\u5df2\u4fee\u590d ' + result.count + ' \u6761\u8bb0\u5f55' }
+
 }
 
 export async function cleanTrainingSubmissions(trainingId: unknown) {

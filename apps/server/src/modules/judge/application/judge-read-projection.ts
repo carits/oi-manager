@@ -28,19 +28,21 @@ type CurrentJudgeRunProjection = {
   metricSource: string | null
 }
 
-type SubmissionCompatibilityProjection = {
-  problemInternalId?: string | null
-  result: string
-  score?: number | null
-  cases?: string | null
-  subtasks?: string | null
-  errorMessage?: string | null
-  timeUsed?: number | null
-  wallTimeUsed?: number | null
-  memoryUsed?: number | null
-  timeoutReason?: string | null
-  metricSource?: string | null
+type SubmissionJudgeProjectionInput = {
   CurrentJudgeRun?: CurrentJudgeRunProjection | null
+}
+
+type SubmissionJudgeProjection = {
+  result: string
+  score: number | null
+  cases: string | null
+  subtasks: string | null
+  errorMessage: string | null
+  timeUsed: number | null
+  wallTimeUsed: number | null
+  memoryUsed: number | null
+  timeoutReason: string | null
+  metricSource: string | null
 }
 
 function runDisplayResult(run: CurrentJudgeRunProjection): string {
@@ -56,7 +58,9 @@ function runDisplayResult(run: CurrentJudgeRunProjection): string {
  * Supported submissions read exclusively from their current JudgeRun. A row
  * without a run fails closed instead of trusting mutable compatibility data.
  */
-export function projectSubmissionJudgeResult<T extends SubmissionCompatibilityProjection>(submission: T): T {
+export function projectSubmissionJudgeResult<T extends object>(
+  submission: T & SubmissionJudgeProjectionInput,
+): T & SubmissionJudgeProjection {
   const run = submission.CurrentJudgeRun
   if (!run) {
     return {
@@ -65,6 +69,11 @@ export function projectSubmissionJudgeResult<T extends SubmissionCompatibilityPr
       score: null,
       cases: null,
       subtasks: null,
+      timeUsed: null,
+      wallTimeUsed: null,
+      memoryUsed: null,
+      timeoutReason: null,
+      metricSource: null,
       errorMessage: '本地评测记录缺少 JudgeRun，请联系管理员',
     }
   }

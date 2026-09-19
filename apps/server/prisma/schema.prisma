@@ -3217,27 +3217,15 @@ model Submission {
   language                  String
   code                      String
   codeLength                Int
-  result                    String                       @default("queuing")
-  timeUsed                  Int?
-  wallTimeUsed              Int?
-  memoryUsed                Int?
-  timeoutReason             String?
-  metricSource              String?
   submitMethod              String
   ojAccountId               String?
   ojRemoteId                String?
-  errorMessage              String?
   createdAt                 DateTime                     @default(now())
   updatedAt                 DateTime                     @default(now())
   problemInternalId         String?
-  cases                     String?
-  score                     Int?
-  subtasks                  String?
   isGlobalVisible           Boolean                      @default(true)
   sourceId                  String?
   submitSource              String?
-  judgeId                   String?
-  judgeStarted              DateTime?
   submitScope               String                       @default("problem")
   workspaceScope            String                       @default("campus")
   organizationId            String?
@@ -3284,13 +3272,10 @@ model Submission {
   @@index([canonicalContestId])
   @@index([canonicalContestProblemId])
   @@index([createdAt])
-  @@index([createdAt, result])
   @@index([isGlobalVisible])
   @@index([language])
   @@index([oj])
   @@index([problemId])
-  @@index([result])
-  @@index([result, judgeId])
   @@index([sourceId])
   @@index([submitScope, contestId])
   @@index([submitScope])

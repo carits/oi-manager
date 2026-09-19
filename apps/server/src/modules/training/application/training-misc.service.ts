@@ -87,7 +87,7 @@ export async function getTrainingOverview(id: number, userId: string) {
           userId,
         },
         select: {
-          trainingProblemId: true, oj: true, problemId: true, score: true, result: true,
+          trainingProblemId: true, oj: true, problemId: true,
           CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
         },
         orderBy: { createdAt: 'asc' },

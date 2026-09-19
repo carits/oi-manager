@@ -75,7 +75,26 @@ export async function createQueuedSubmissionWithRun(
   options: CreateQueuedSubmissionOptions = {},
 ) {
   return prisma.$transaction(async tx => {
-    const submission = await tx.submission.create({ data })
+    // Submission is immutable request metadata. Ignore removed execution mirrors
+    // defensively so stale callers cannot reintroduce Judge state on Submission.
+    const {
+      result: _result,
+      timeUsed: _timeUsed,
+      wallTimeUsed: _wallTimeUsed,
+      memoryUsed: _memoryUsed,
+      timeoutReason: _timeoutReason,
+      metricSource: _metricSource,
+      errorMessage: _errorMessage,
+      cases: _cases,
+      score: _score,
+      subtasks: _subtasks,
+      judgeId: _judgeId,
+      judgeStarted: _judgeStarted,
+      ...submissionData
+    } = data as Prisma.SubmissionUncheckedCreateInput & Record<string, unknown>
+    const submission = await tx.submission.create({
+      data: submissionData as Prisma.SubmissionUncheckedCreateInput,
+    })
     const runId = crypto.randomUUID()
     const attemptId = crypto.randomUUID()
     await tx.judgeRun.create({

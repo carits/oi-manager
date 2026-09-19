@@ -375,12 +375,16 @@ async function currentSubmissionRows(tx: Prisma.TransactionClient, training: any
   const rows = await tx.submission.findMany({
     where: { trainingId: training.id, submitScope: 'contest', createdAt: { lte: training.endTime } },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, userId: true, trainingProblemId: true, result: true, score: true, createdAt: true, submissionPhase: true, CurrentJudgeRun: { select: { status: true, result: true, score: true } } },
+    select: { id: true, userId: true, trainingProblemId: true, createdAt: true, submissionPhase: true, CurrentJudgeRun: { select: { status: true, result: true, score: true } } },
   })
   return rows.map(row => ({
     id: row.id, userId: row.userId, trainingProblemId: row.trainingProblemId, createdAt: row.createdAt, submissionPhase: row.submissionPhase,
-    result: row.CurrentJudgeRun?.status === 'FINALIZED' ? row.CurrentJudgeRun.result || row.result : row.CurrentJudgeRun?.status === 'CANCELLED' ? row.CurrentJudgeRun.result || 'judge_failed' : row.CurrentJudgeRun ? 'judging' : row.result,
-    score: row.CurrentJudgeRun?.status === 'FINALIZED' ? row.CurrentJudgeRun.score : row.score,
+    result: row.CurrentJudgeRun?.status === 'FINALIZED'
+      ? row.CurrentJudgeRun.result || 'unknown_error'
+      : row.CurrentJudgeRun?.status === 'CANCELLED'
+        ? row.CurrentJudgeRun.result || 'judge_failed'
+        : 'judging',
+    score: row.CurrentJudgeRun?.status === 'FINALIZED' ? row.CurrentJudgeRun.score : null,
   }))
 }
 

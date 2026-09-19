@@ -132,11 +132,11 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
             WHEN run.status = 'RUNNING' THEN 'judging'
             WHEN run.status = 'CANCELLED' THEN COALESCE(run.result, 'judge_failed')
             WHEN run.status = 'FINALIZED' THEN COALESCE(run.result, 'unknown_error')
-            ELSE s.result
+            ELSE 'system_error'
           END AS result,
-          CASE WHEN s."currentJudgeRunId" IS NOT NULL THEN run.score ELSE s.score END AS score
+          run.score AS score
         FROM "Submission" s
-        LEFT JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
+        JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
         WHERE s."submitScope" = ${submitScope}
           AND s."trainingId" = ${training.id}
       ), selected AS (
@@ -169,11 +169,11 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
           WHEN run.status = 'RUNNING' THEN 'judging'
           WHEN run.status = 'CANCELLED' THEN COALESCE(run.result, 'judge_failed')
           WHEN run.status = 'FINALIZED' THEN COALESCE(run.result, 'unknown_error')
-          ELSE s.result
+          ELSE 'system_error'
         END AS result,
-        CASE WHEN s."currentJudgeRunId" IS NOT NULL THEN run.score ELSE s.score END AS score
+        run.score AS score
       FROM "Submission" s
-      LEFT JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
+      JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
       WHERE s."submitScope" = ${submitScope}
         AND s."trainingId" = ${training.id}
     )
@@ -256,7 +256,7 @@ async function buildIcpcRanking(training: any, excludedIds: string[]) {
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: {
-      id: true, userId: true, problemId: true, score: true, result: true, createdAt: true,
+      id: true, userId: true, problemId: true, createdAt: true,
       CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
     },
   })

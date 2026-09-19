@@ -345,7 +345,7 @@ export async function syncContestEndAC(contestId: number): Promise<void> {
       where: {
         canonicalContestId: contest.id,
         submitScope: 'contest',
-        result: { in: ['Accepted', 'AC'] },
+        CurrentJudgeRun: { is: { status: 'FINALIZED', result: { in: ['accepted', 'Accepted', 'AC', 'ac'] } } },
       },
       select: {
         userId: true,

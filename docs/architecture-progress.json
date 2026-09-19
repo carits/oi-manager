@@ -47,21 +47,8 @@
     "evidence": "docs/operations/remote-archive-retirement-evidence.json"
   },
   "judgeCompatibility": {
-    "remainingColumns": 12,
-    "columns": [
-      "result",
-      "timeUsed",
-      "wallTimeUsed",
-      "memoryUsed",
-      "timeoutReason",
-      "metricSource",
-      "errorMessage",
-      "cases",
-      "score",
-      "subtasks",
-      "judgeId",
-      "judgeStarted"
-    ]
+    "remainingColumns": 0,
+    "columns": []
   },
   "pitr": {
     "walArchive": false,
@@ -165,5 +152,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-19T13:01:57.028Z"
+  "updatedAt": "2026-09-19T16:35:02.850Z"
 }
