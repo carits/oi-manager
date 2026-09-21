@@ -70,7 +70,7 @@ const ACCESS_POLICIES = new Set(['ALL_AT_ONCE', 'SEQUENTIAL', 'TEACHER_CONTROLLE
 const SUBMISSION_MODES = new Set(['ENABLED', 'DISABLED'])
 const RANKING_MODES = new Set(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING'])
 const PEER_VISIBILITY = new Set(['NONE', 'PROGRESS', 'SCORE', 'FULL'])
-const JOIN_MODES = new Set(['CURRENT_STAGE', 'FROM_BEGINNING', 'TEACHER_ASSIGN'])
+const JOIN_MODES = new Set(['CURRENT_STAGE', 'TEACHER_ASSIGN'])
 const HINT_OPEN_MODES = new Set(['MANUAL', 'TIME', 'ATTEMPT', 'SCORE'])
 const PROBLEM_TIME_MODES = new Set(['NONE', 'SOFT', 'HARD', 'SWITCH_REQUIRED'])
 
@@ -862,6 +862,9 @@ async function restoreFocusParticipants(
 }
 
 function conditionSatisfied(condition: any, progress: any) {
+  // Teacher SKIP is an explicit bypass of the prerequisite, regardless of
+  // whether the original gate was AC / SCORE / TIME / ATTEMPTS.
+  if (progress?.status === 'SKIPPED') return true
   if (condition?.type === 'TEACHER') return false
   if (condition?.type === 'AC') return Boolean(progress?.acAt) || String(progress?.bestVerdict || '').toLowerCase() === 'accepted'
   if (condition?.type === 'SCORE') return Number(progress?.bestScore || 0) >= Number(condition.value || 0)
@@ -904,7 +907,10 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
   if (focus && focus.type !== 'SOFT_FOCUS' && focus.stageProblemId !== stageProblemId && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FOCUS_LOCK' }
   if (overlays.some(item => item.type === 'DISABLE_SUBMISSION') && !submissionOverride) return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'SUBMISSION_DISABLED' }
   if (overlays.some(item => item.type === 'LOCK_PROBLEM' && item.stageProblemId === stageProblemId) && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_LOCKED' }
-  if (stageProblem.stageId !== stage.id && !unlocked && focus?.stageProblemId !== stageProblemId) return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'HISTORICAL_STAGE' }
+  if (stageProblem.stageId !== stage.id && !unlocked && focus?.stageProblemId !== stageProblemId) {
+    if (stageProblem.stage.orderIndex > stage.orderIndex) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FUTURE_STAGE' }
+    return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'HISTORICAL_STAGE' }
+  }
   const assignment = stage.ParticipantAssignments.find(item => item.participantId === participant.id)
   const plan = stageProblem.Plans.find(item => item.groupId === (stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
@@ -948,7 +954,7 @@ export async function joinTrainingSession(userId: string, sessionId: string) {
   const existing = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
   if (existing?.status === 'active') return existing
   if (session.joinMode === 'TEACHER_ASSIGN' || parseJsonObject(session.settings).rosterExplicit === true) throw new TrainingEngineError(409, 'TRAINING_JOIN_REQUIRES_ASSIGNMENT', '该训练需要教练将你加入名单并分配阶段')
-  const stageId = session.joinMode === 'FROM_BEGINNING' ? session.Stages[0]?.id : session.currentStageId || session.Stages[0]?.id
+  const stageId = session.currentStageId || session.Stages[0]?.id
   return prisma.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId } }, update: { status: 'active', currentStageId: stageId }, create: { sessionId, userId, currentStageId: stageId } })
 }
 
@@ -1274,7 +1280,7 @@ export async function replaceTrainingRoster(userId: string, sessionId: string, b
     for (const item of participants) {
       const participantUserId = String(item.userId || '')
       if (!requested.has(participantUserId)) continue
-      await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active' }, create: { sessionId, userId: participantUserId, currentStageId: session.currentStageId || session.Stages[0]?.id || null } })
+      await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active', currentStageId: session.currentStageId || session.Stages[0]?.id || null, currentProblemId: null, returnStageId: null, returnProblemId: null }, create: { sessionId, userId: participantUserId, currentStageId: session.currentStageId || session.Stages[0]?.id || null } })
     }
     await appendEvent(tx, sessionId, 'training.roster.updated', 'ALL', null, { participantCount: userIds.length })
   })
@@ -1339,7 +1345,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
     } else if (type === 'FOCUS_PROBLEM') {
       if (current.status !== 'RUNNING') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有进行中的训练可以聚焦题目')
       const stageProblemId = String(payload.stageProblemId || '')
-      if (!session.Stages.some(stage => stage.Problems.some(problem => problem.id === stageProblemId))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_FOUND', '聚焦题目不属于当前训练')
+      if (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === stageProblemId)) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能聚焦当前 Stage 的题目')
       await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: { in: ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'] }, ...sameOverlayTarget(targetType, targetId) }, data: { status: 'ended', endedAt: new Date() } })
       await tx.trainingSessionOverlay.create({ data: { sessionId, type: ['SOFT_FOCUS', 'EXAM_FOCUS'].includes(String(payload.mode)) ? String(payload.mode) : 'LOCKED_FOCUS', targetType, targetId, stageProblemId, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
       const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' } })
@@ -1356,19 +1362,21 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
     } else if (type === 'DISABLE_SUBMISSION' || type === 'LOCK_PROBLEM' || type === 'SHOW_MESSAGE') {
       if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能应用实时规则')
       if (type === 'LOCK_PROBLEM' && !payload.stageProblemId) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_REQUIRED', '锁题命令必须指定训练题目')
+      if (type === 'LOCK_PROBLEM' && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能锁定当前 Stage 的题目')
       if (type === 'SHOW_MESSAGE') {
         payload.message = boundedText(payload.message, 2000, '教练消息', 1)
         payload.messageType = ['INFO', 'WARNING', 'INSTRUCTION', 'COUNTDOWN'].includes(String(payload.messageType || '').toUpperCase()) ? String(payload.messageType).toUpperCase() : 'INFO'
       }
       await tx.trainingSessionOverlay.create({ data: { sessionId, type: type === 'SHOW_MESSAGE' ? 'MESSAGE' : type, targetType, targetId, stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
     } else if (type === 'ENABLE_SUBMISSION' || type === 'UNLOCK_PROBLEM' || type === 'CLEAR_MESSAGE') {
+      if (type === 'UNLOCK_PROBLEM' && payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能解锁当前 Stage 的题目')
       const endingType = type === 'ENABLE_SUBMISSION' ? 'DISABLE_SUBMISSION' : type === 'UNLOCK_PROBLEM' ? 'LOCK_PROBLEM' : 'MESSAGE'
       await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: endingType, ...sameOverlayTarget(targetType, targetId), ...(payload.stageProblemId ? { stageProblemId: String(payload.stageProblemId) } : {}) }, data: { status: 'ended', endedAt: new Date() } })
     } else if (type === 'UNLOCK_FOR_USER' || type === 'SKIP_FOR_USER') {
       if (targetType !== 'USER' || !targetId) throw new TrainingEngineError(422, 'TRAINING_COMMAND_TARGET_REQUIRED', '个人干预必须指定用户')
       const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } } })
       if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
-      if (payload.stageProblemId && !session.Stages.some(stage => stage.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_FOUND', '训练题目不存在')
+      if (payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '个人干预只能作用于当前 Stage 的题目')
       await tx.trainingSessionUserOverride.create({ data: { sessionId, userId: targetId, type: type === 'SKIP_FOR_USER' ? 'SKIP_PROBLEM' : 'UNLOCK_PROBLEM', stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
       if (type === 'SKIP_FOR_USER' && payload.stageProblemId) await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: String(payload.stageProblemId) } }, update: { status: 'SKIPPED', lastProgressAt: new Date() }, create: { participantId: participant.id, stageProblemId: String(payload.stageProblemId), status: 'SKIPPED', lastProgressAt: new Date() } })
     } else if (type === 'OPEN_HINT' || type === 'CLOSE_HINT') {
@@ -1721,55 +1729,6 @@ export async function listTrainingEvents(userId: string, sessionId: string, afte
   return events.filter(event => !participant || targetApplies(event.targetType, event.targetId, participant, session))
 }
 
-async function advanceFromBeginningParticipant(
-  tx: Prisma.TransactionClient,
-  sessionId: string,
-  participantId: string,
-  userId: string,
-  completedStageId: string,
-) {
-  const session = await tx.trainingSession.findUnique({
-    where: { id: sessionId },
-    select: {
-      joinMode: true,
-      currentStageId: true,
-      Stages: {
-        orderBy: { orderIndex: 'asc' },
-        select: { id: true, orderIndex: true, Problems: { select: { id: true } } },
-      },
-    },
-  })
-  if (!session || session.joinMode !== 'FROM_BEGINNING') return
-  const participant = await tx.trainingSessionParticipant.findUnique({
-    where: { id: participantId },
-    select: { currentStageId: true },
-  })
-  if (participant?.currentStageId !== completedStageId) return
-  const currentIndex = session.Stages.findIndex(stage => stage.id === completedStageId)
-  const globalIndex = session.Stages.findIndex(stage => stage.id === session.currentStageId)
-  const next = session.Stages[currentIndex + 1]
-  if (currentIndex < 0 || !next || globalIndex < currentIndex + 1) return
-  const current = session.Stages[currentIndex]
-  if (!current.Problems.length) return
-  const completed = await tx.trainingSessionProblemProgress.count({
-    where: {
-      participantId,
-      stageProblemId: { in: current.Problems.map(problem => problem.id) },
-      status: { in: ['COMPLETED', 'SKIPPED'] },
-    },
-  })
-  if (completed !== current.Problems.length) return
-  await tx.trainingSessionParticipant.update({
-    where: { id: participantId },
-    data: { currentStageId: next.id, currentProblemId: null },
-  })
-  await appendEvent(tx, sessionId, 'training.participant.stage.advanced', 'USER', userId, {
-    fromStageId: current.id,
-    toStageId: next.id,
-    joinMode: 'FROM_BEGINNING',
-  })
-}
-
 export async function syncTrainingEngineSubmission(submission: { id: number; userId: string; trainingSessionId: string | null; trainingStageProblemId: string | null; result: string | null; score: number | null; trainingScoreGoalSnapshot?: unknown }) {
   if (!submission.trainingSessionId || !submission.trainingStageProblemId) return
   const [participant, stageProblem] = await Promise.all([
@@ -1793,6 +1752,5 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: completed ? 'COMPLETED' : 'WORKING', stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
     await tx.trainingSessionScoreEvent.create({ data: { sessionId: submission.trainingSessionId!, participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, submissionId: submission.id, score: submission.score, verdict: submission.result } })
     await appendEvent(tx, submission.trainingSessionId!, 'training.progress.updated', 'USER', submission.userId, { stageProblemId: submission.trainingStageProblemId, score: submission.score, verdict: submission.result })
-    if (completed) await advanceFromBeginningParticipant(tx, submission.trainingSessionId!, participant.id, submission.userId, stageProblem.stageId)
   })
 }
