@@ -904,7 +904,10 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
   if (focus && focus.type !== 'SOFT_FOCUS' && focus.stageProblemId !== stageProblemId && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FOCUS_LOCK' }
   if (overlays.some(item => item.type === 'DISABLE_SUBMISSION') && !submissionOverride) return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'SUBMISSION_DISABLED' }
   if (overlays.some(item => item.type === 'LOCK_PROBLEM' && item.stageProblemId === stageProblemId) && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_LOCKED' }
-  if (stageProblem.stageId !== stage.id && !unlocked && focus?.stageProblemId !== stageProblemId) return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'HISTORICAL_STAGE' }
+  if (stageProblem.stageId !== stage.id && !unlocked && focus?.stageProblemId !== stageProblemId) {
+    if (stageProblem.stage.orderIndex > stage.orderIndex) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FUTURE_STAGE' }
+    return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'HISTORICAL_STAGE' }
+  }
   const assignment = stage.ParticipantAssignments.find(item => item.participantId === participant.id)
   const plan = stageProblem.Plans.find(item => item.groupId === (stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
@@ -1250,9 +1253,20 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
       lastDecision: last ? { decision: last.decision, reason: last.reason, createdAt: last.createdAt } : null,
     }]
   }))
-  const permissions = Object.fromEntries((await Promise.all(session.Stages.flatMap(stage => stage.Problems).map(async item => [item.id, await resolveTrainingPermission(userId, sessionId, item.id)] as const))))
+  const rawPermissions = Object.fromEntries((await Promise.all(session.Stages.flatMap(stage => stage.Problems).map(async item => [item.id, await resolveTrainingPermission(userId, sessionId, item.id)] as const))))
+  const permissions = Object.fromEntries(Object.entries(rawPermissions).map(([id, permission]) => [id, { ...permission, canSeeMetadata: manager || permission.canView }]))
   const visibleOverlays = manager || !participant ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
-  return { session: { ...session, Overlays: visibleOverlays }, manager, participant, progress, permissions, strategy }
+  const visibleStages = manager ? session.Stages : session.Stages.map(stage => ({
+    ...stage,
+    Problems: stage.Problems.map(problem => permissions[problem.id]?.canSeeMetadata ? problem : {
+      ...problem,
+      problemId: '',
+      alias: null,
+      Problem: { ...problem.Problem, problemId: '', title: '未开放题目', platform: '' },
+      TestSetRevision: { ...problem.TestSetRevision, revisionNumber: 0, mode: 'hidden' },
+    }),
+  }))
+  return { session: { ...session, Stages: visibleStages, Overlays: visibleOverlays }, manager, participant, progress, permissions, strategy }
 }
 
 export async function replaceTrainingRoster(userId: string, sessionId: string, body: any) {
