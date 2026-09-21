@@ -97,7 +97,7 @@ const TrainingRuntimeProblemSchema = z.object({
 const TrainingRuntimeStageSchema = z.object({
   id: z.string(), name: z.string(), description: z.string().nullable().optional(), kind: TrainingStageKindSchema,
   audienceMode: TrainingStageAudienceModeSchema, lifecycle: TrainingStageLifecycleSchema,
-  plannedDurationSeconds: z.number().int().nullable().optional(), activeElapsedSeconds: z.number().int(),
+  plannedDurationSeconds: z.number().int().nullable().optional(), runningSince: DateTimeWireSchema.nullable().optional(), activeElapsedSeconds: z.number().int(),
   effectiveDurationSeconds: z.number().int().nullable().optional(),
   minDurationSeconds: z.number().int().nullable().optional(), endPolicy: TrainingStageEndPolicySchema,
   accessPolicy: TrainingStageAccessPolicySchema, submissionMode: z.string(), defaultTargetScore: z.number().int().nullable().optional(),
@@ -111,7 +111,7 @@ export const TrainingWorkspaceSchema = z.object({
     rankingMode: z.string(), peerVisibility: z.string(), joinMode: z.string(), teamId: z.string().nullable().optional(),
     Stages: z.array(TrainingRuntimeStageSchema), Overlays: z.array(z.object({ id: z.string(), type: z.string(), targetType: z.string().nullable().optional(), targetId: z.string().nullable().optional(), payload: JsonObjectSchema.nullable().optional() }).passthrough()),
   }).passthrough(),
-  manager: z.boolean(), participant: z.object({ id: z.string(), currentProblemId: z.string().nullable().optional(), currentStageId: z.string().nullable().optional(), currentGroupId: z.string().nullable().optional() }).passthrough().nullable().optional(),
+  manager: z.boolean(), participant: z.object({ id: z.string(), currentProblemId: z.string().nullable().optional(), currentStageId: z.string().nullable().optional(), currentGroupId: z.string().nullable().optional(), requiredCount: z.number().int().optional(), completedCount: z.number().int().optional() }).passthrough().nullable().optional(),
   progress: z.array(z.object({ stageProblemId: z.string(), status: z.string(), bestScore: z.number().nullable().optional(), attemptCount: z.number().int(), activeSeconds: z.number().int().optional(), continuousActiveSeconds: z.number().int().optional() }).passthrough()),
   permissions: z.record(z.string(), z.object({ canSeeMetadata: z.boolean().optional(), canView: z.boolean(), canSubmit: z.boolean(), canEdit: z.boolean(), reason: z.string() }).passthrough()),
   strategy: z.record(z.string(), z.object({ timePolicy: JsonObjectSchema, timeLimitReached: z.boolean(), decisionDue: z.boolean(), switchRecommended: z.boolean() }).passthrough()),
