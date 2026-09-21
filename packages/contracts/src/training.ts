@@ -153,7 +153,7 @@ const TrainingSessionCreateStageInputSchema = TrainingStructureStageInputSchema.
 export const TrainingSessionCreateInputSchema = z.object({
   title: z.string().trim().min(1).max(200), description: z.string().max(5000).optional(), templateKey: z.string().optional(), sessionType: z.enum(['OI', 'ACM', 'GENERAL']).optional(),
   organizationId: z.string().optional(), teamId: z.string().optional(), participantUserIds: z.array(z.string()).max(5000).optional(), scheduledStartAt: DateTimeWireSchema.nullable().optional(),
-  rankingMode: z.enum(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING']).optional(), peerVisibility: z.enum(['NONE', 'PROGRESS', 'SCORE', 'FULL']).optional(), joinMode: z.enum(['CURRENT_STAGE', 'FROM_BEGINNING', 'TEACHER_ASSIGN']).optional(),
+  rankingMode: z.enum(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING']).optional(), peerVisibility: z.enum(['NONE', 'PROGRESS', 'SCORE', 'FULL']).optional(), joinMode: z.enum(['CURRENT_STAGE', 'TEACHER_ASSIGN']).optional(),
   allowHints: z.boolean().optional(), allowSolution: z.boolean().optional(), allowDiscussion: z.boolean().optional(),
   defaultAccessPolicy: TrainingStageAccessPolicySchema.optional(), defaultSubmissionMode: z.enum(['ENABLED', 'DISABLED']).optional(),
   settings: JsonObjectSchema.optional(), stages: z.array(TrainingSessionCreateStageInputSchema).min(1).max(100).optional(),
