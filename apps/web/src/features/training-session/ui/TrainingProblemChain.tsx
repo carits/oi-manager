@@ -8,8 +8,10 @@ import { Empty } from "@/components/ui/Empty";
 import { Checkbox, Input, Select, Textarea } from "@/components/ui/FormControls";
 import type { Assignment, Stage } from "../model/trainingDesign";
 import {
+  closeSubtaskSelection,
   moveItem,
   normalizeProblemOrder,
+  removeSubtaskWithDependents,
   stageKinds,
   unlockLabel,
 } from "../model/trainingDesign";
@@ -369,10 +371,8 @@ export function TrainingProblemChain({
                               updateDisplayedProblem(problem.clientKey, (current) => ({
                                 ...current,
                                 allowedSubtaskIds: event.target.checked
-                                  ? [...current.allowedSubtaskIds, subtask.id]
-                                  : current.allowedSubtaskIds.filter(
-                                      (id) => id !== subtask.id,
-                                    ),
+                                  ? closeSubtaskSelection(current.subtasks, [...current.allowedSubtaskIds, subtask.id])
+                                  : removeSubtaskWithDependents(current.subtasks, current.allowedSubtaskIds, subtask.id),
                               }))
                             }
                           />
