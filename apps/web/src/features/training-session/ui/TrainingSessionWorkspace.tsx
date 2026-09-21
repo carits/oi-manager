@@ -33,6 +33,7 @@ import {
   transitionTrainingStage,
 } from '../api/trainingSessionApi'
 import { testDataVersion, trainingStatusLabel } from '@/lib/humanPresentation'
+import { saveBlobDownload } from '@/lib/download'
 
 const stageModeLabel: Record<string, string> = {
   TRAINING: '训练',
@@ -163,11 +164,16 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
 
   const command = async (type: string, payload: Record<string, unknown> = {}, targetType = commandTargetType, targetId = commandTargetId) => {
     if (!data || commandInFlight.current) return false
+    const resolvedTargetId = targetType === 'ALL' ? null : targetType === 'TEAM' ? data.session.teamId || null : targetId || null
+    if (targetType !== 'ALL' && !resolvedTargetId) {
+      toast.error(targetType === 'TEAM' ? '当前训练没有可用的团队上下文' : '请选择教练控制对象')
+      return false
+    }
     commandInFlight.current = true
     setCommandBusy(true)
     try {
       await saveDraftRef.current(true)
-      const response = await executeTrainingCommand(sessionId, { type: type as 'PAUSE_SESSION', expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, targetType: targetType as 'ALL', targetId: targetType === 'ALL' ? null : targetId, payload })
+      const response = await executeTrainingCommand(sessionId, { type: type as 'PAUSE_SESSION', expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, targetType: targetType as 'ALL', targetId: resolvedTargetId, payload })
       if (!response.ok) { toast.error(response.error.message || '训练指令失败'); return false }
       if (typeof response.data?.statusRevision === 'number') statusRevisionRef.current = response.data.statusRevision
       await load(); await loadHints(selectedId)
@@ -218,6 +224,32 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setHintOpen(false); setHintTitle(''); setHintContent(''); setHintMode('MANUAL'); setHintTrigger(''); await loadHints(selectedId)
   }
   const showReport = async () => { const response = await getTrainingReport(sessionId).catch(() => null); if (!response) return toast.error('训练报告加载失败'); setReport(response as TrainingReport); setReportOpen(true) }
+  const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`
+  const exportReportCsv = () => {
+    if (!report) return
+    const rows = [
+      ['学员', '题号', '题目', '要求类型', '状态', '最高分', '提交次数', '提示次数', '学员有效训练秒数'],
+      ...report.participants.flatMap(participant => participant.problems.map(entry => [
+        participant.user.username,
+        entry.problemId,
+        entry.title,
+        entry.requirement === 'CURRENT_REQUIREMENT' ? '当前要求' : '本阶段历史',
+        progressLabel[entry.status] || entry.status,
+        entry.bestScore ?? 0,
+        entry.attemptCount,
+        entry.hintCount,
+        participant.activeSeconds,
+      ])),
+    ]
+    const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n')
+    const safeTitle = data.session.title.replace(/[\\/:*?"<>|]/g, '_')
+    saveBlobDownload(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${safeTitle}-训练报告.csv`)
+  }
+  const exportReportJson = () => {
+    if (!report) return
+    const safeTitle = data.session.title.replace(/[\\/:*?"<>|]/g, '_')
+    saveBlobDownload(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' }), `${safeTitle}-训练报告.json`)
+  }
   const submitGroupChange = async () => {
     const stageId = data?.session.currentStageId
     if (!data || !stageId || !groupChangeParticipant || !groupChangeTarget || !groupChangeReason.trim()) return
@@ -246,7 +278,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const reportStageName = (stageId: string) => data.session.Stages.find(stage => stage.id === stageId)?.name || stageId
   const reportGroupName = (groupId?: string) => data.session.Stages.flatMap(stage => stage.Groups).find(group => group.id === groupId)?.name || (groupId ? groupId : '未分组')
   const reportParticipantName = (participantId: string) => dashboard?.participants.find(item => item.id === participantId)?.user.username || participantId
-  const targetedCommandDisabled = commandBusy || (commandTargetType !== 'ALL' && !commandTargetId)
+  const targetedCommandDisabled = commandBusy || ((commandTargetType === 'GROUP' || commandTargetType === 'USER') && !commandTargetId) || (commandTargetType === 'TEAM' && !data.session.teamId)
   const runningExtraSeconds = currentStage?.runningSince && status === 'RUNNING'
     ? Math.max(0, Math.floor((clockNow - new Date(currentStage.runningSince).getTime()) / 1000))
     : 0
@@ -317,6 +349,6 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     <FormDialog isOpen={messageOpen} onClose={() => setMessageOpen(false)} title="发送教练消息" description={`发送给：${commandTargetType === 'ALL' ? '全体学员' : commandTargetType === 'GROUP' ? '指定分组' : commandTargetType === 'USER' ? '指定学员' : '当前团队'}`} onSubmit={() => void command('SHOW_MESSAGE', { message, messageType }).then(success => { if (success) { setMessageOpen(false); setMessage('') } })} submitText="发送消息" dirty={Boolean(message)}><div className={styles.stack}><label className={styles.field}>消息类型<Select value={messageType} onChange={event => setMessageType(event.target.value)}><option value="INFO">信息</option><option value="WARNING">提醒</option><option value="INSTRUCTION">教学指令</option><option value="COUNTDOWN">倒计时</option></Select></label><label className={styles.field}>消息内容<Textarea rows={6} maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={hintOpen} onClose={() => setHintOpen(false)} title="新增分级提示" onSubmit={() => void createHint()} submitText="创建提示" dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>{hintMode === 'TIME' ? '触发秒数' : hintMode === 'ATTEMPT' ? '触发提交次数' : '触发分数'}<Input type="number" min={hintMode === 'TIME' ? 60 : hintMode === 'SCORE' ? 0 : 1} max={hintMode === 'TIME' ? 86400 : 100} value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>
     <DetailDialog isOpen={Boolean(openedHint)} onClose={() => setOpenedHint(undefined)} title={`${openedHint?.level || ''} 级提示 · ${openedHint?.title || '提示'}`} size="md"><p>{openedHint?.content}</p></DetailDialog>
-    <DetailDialog isOpen={reportOpen} onClose={() => setReportOpen(false)} title="训练过程报告" description="按 Stage 时间轴还原当时要求、实际用时、分组变化和课堂干预。" size="xl"><div className={styles.stack}>{report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.name} · {stage.lifecycle}</h3><p>计划 {Math.floor((stage.plannedDurationSeconds || 0) / 60)} 分钟 · 延长 {Math.floor(stage.extensionSeconds / 60)} 分钟 · 实际 {Math.floor(stage.activeElapsedSeconds / 60)} 分钟</p>{stage.endReason && <p>{stage.endReason}</p>}{stage.snapshotHash && <small>配置快照 {stage.snapshotHash.slice(0, 12)}</small>}</article>)}{Boolean(report?.groupChanges.length) && <Section title="换组时间线" description="记录提出时间、实际生效时间、原组、目标组和原因。"><div className={styles.timeline}>{report?.groupChanges.map((change, index) => <div className={styles.timelineItem} key={`${change.participantId}-${change.requestedAt || index}`}><strong>{reportParticipantName(change.participantId)} · {reportStageName(change.stageId)}</strong><br /><span>{reportGroupName(change.fromGroupId)} → {reportGroupName(change.toGroupId)} · {change.effectiveMode === 'NEXT_STAGE' ? '下一 Stage 生效' : '立即生效'} · {change.reason}</span><br /><small>提出：{change.requestedAt ? new Date(change.requestedAt).toLocaleString() : '未知'}{change.effectiveAt ? ` · 生效：${new Date(change.effectiveAt).toLocaleString()}` : ' · 尚未生效'}</small></div>)}</div></Section>}<div className={styles.grid}>{report?.participants.map(item => <article className={styles.card} key={item.user.id}><h3>{item.user.username}</h3><p>有效训练 {Math.floor(item.activeSeconds / 60)} 分钟</p>{item.problems.map((entry) => <div className={styles.timelineItem} key={entry.problemId}><strong>{entry.problemId} · {entry.title}</strong><br /><span>{entry.requirement === 'CURRENT_REQUIREMENT' ? '当前要求' : '本阶段历史'} · {entry.bestScore ?? 0} 分 · {entry.attemptCount} 次提交 · {entry.hintCount} 次提示 · {progressLabel[entry.status] || entry.status}</span></div>)}</article>)}</div></div></DetailDialog>
+    <DetailDialog isOpen={reportOpen} onClose={() => setReportOpen(false)} title="训练过程报告" description="按 Stage 时间轴还原当时要求、实际用时、分组变化和课堂干预。" size="xl"><div className={styles.stack}>{report && <div className={styles.actions}><Button variant="secondary" onClick={exportReportCsv}>导出学员明细 CSV</Button><Button variant="ghost" onClick={exportReportJson}>导出完整 JSON</Button></div>}{report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.name} · {stage.lifecycle}</h3><p>计划 {Math.floor((stage.plannedDurationSeconds || 0) / 60)} 分钟 · 延长 {Math.floor(stage.extensionSeconds / 60)} 分钟 · 实际 {Math.floor(stage.activeElapsedSeconds / 60)} 分钟</p>{stage.endReason && <p>{stage.endReason}</p>}{stage.snapshotHash && <small>配置快照 {stage.snapshotHash.slice(0, 12)}</small>}</article>)}{Boolean(report?.groupChanges.length) && <Section title="换组时间线" description="记录提出时间、实际生效时间、原组、目标组和原因。"><div className={styles.timeline}>{report?.groupChanges.map((change, index) => <div className={styles.timelineItem} key={`${change.participantId}-${change.requestedAt || index}`}><strong>{reportParticipantName(change.participantId)} · {reportStageName(change.stageId)}</strong><br /><span>{reportGroupName(change.fromGroupId)} → {reportGroupName(change.toGroupId)} · {change.effectiveMode === 'NEXT_STAGE' ? '下一 Stage 生效' : '立即生效'} · {change.reason}</span><br /><small>提出：{change.requestedAt ? new Date(change.requestedAt).toLocaleString() : '未知'}{change.effectiveAt ? ` · 生效：${new Date(change.effectiveAt).toLocaleString()}` : ' · 尚未生效'}</small></div>)}</div></Section>}<div className={styles.grid}>{report?.participants.map(item => <article className={styles.card} key={item.user.id}><h3>{item.user.username}</h3><p>有效训练 {Math.floor(item.activeSeconds / 60)} 分钟</p>{item.problems.map((entry) => <div className={styles.timelineItem} key={entry.problemId}><strong>{entry.problemId} · {entry.title}</strong><br /><span>{entry.requirement === 'CURRENT_REQUIREMENT' ? '当前要求' : '本阶段历史'} · {entry.bestScore ?? 0} 分 · {entry.attemptCount} 次提交 · {entry.hintCount} 次提示 · {progressLabel[entry.status] || entry.status}</span></div>)}</article>)}</div></div></DetailDialog>
   </div></PageFrame>
 }
