@@ -67,6 +67,19 @@ describe('Stage-driven Training Engine', () => {
     return response.body.data
   }
 
+  async function createTwoStageSession(title = '双阶段训练') {
+    const response = await createAuthenticatedRequest(app, generateTokenFromUser(coach.user)).post('/api/training-sessions').send({
+      title, teamId: team.id, participantUserIds: [student.user.id],
+      settings: { participantTarget: 'custom_students' },
+      stages: [
+        { name: '阶段一', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }] },
+        { name: '阶段二', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }] },
+      ],
+    })
+    expect(response.status).toBe(201)
+    return response.body.data
+  }
+
   it('creates Stage plans, pins the revision and reports missing progress as NOT_STARTED', async () => {
     const created = await createSession()
     const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: {
@@ -98,6 +111,123 @@ describe('Stage-driven Training Engine', () => {
     await prisma.trainingSessionParticipant.update({ where: { id: participant.id }, data: { currentStageId: stage.id, currentProblemId: stageProblem.id } })
     await prisma.trainingSessionProblemProgress.create({ data: { participantId: participant.id, stageProblemId: stageProblem.id, status: 'WORKING', activeSeconds: 60, continuousActiveSeconds: 60 } })
     expect(await resolveTrainingPermission(student.user.id, session.id, stageProblem.id)).toMatchObject({ canSubmit: false, reason: 'PROBLEM_TIME_LIMIT_REACHED' })
+  })
+
+  it('rejects the retired FROM_BEGINNING join mode at the create contract boundary', async () => {
+    const response = await createAuthenticatedRequest(app, generateTokenFromUser(coach.user)).post('/api/training-sessions').send({
+      title: '非法迟到加入模式', teamId: team.id, participantUserIds: [student.user.id],
+      settings: { participantTarget: 'custom_students' },
+      joinMode: 'FROM_BEGINNING',
+      stages: [{ name: '训练', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }] }],
+    })
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect(response.status).toBeLessThan(500)
+    expect(await prisma.trainingSession.count({ where: { title: '非法迟到加入模式' } })).toBe(0)
+  })
+
+  it('serves immutable statement snapshots and redacts future Stage metadata for students', async () => {
+    await prisma.problemStatement.create({ data: {
+      id: crypto.randomUUID(), problemId: problem.id, type: 'statement', format: 'markdown',
+      language: 'zh-CN', content: '最初题面内容', isVisible: true,
+    } })
+    const created = await createTwoStageSession('题面快照与未来题脱敏')
+    const token = generateTokenFromUser(coach.user)
+    const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: { Stages: { orderBy: { orderIndex: 'asc' }, include: { Problems: true } } } })
+    const [currentStage, futureStage] = session.Stages
+
+    await prisma.problem.update({ where: { id: problem.id }, data: { title: '后来修改的题名' } })
+    await prisma.problemStatement.updateMany({ where: { problemId: problem.id }, data: { content: '后来修改的题面' } })
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: currentStage.id })).status).toBe(200)
+
+    const workspace = await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/training-sessions/${created.id}`)
+    expect(workspace.status).toBe(200)
+    const stages = workspace.body.data.session.Stages
+    expect(stages[0].Problems[0].Problem.title).toBe('训练引擎题目')
+    expect(stages[0].Problems[0].Statements).toEqual(expect.arrayContaining([expect.objectContaining({ content: '最初题面内容' })]))
+    expect(stages[1].Problems[0].Problem).toMatchObject({ title: '未开放题目', platform: '', problemId: '' })
+    expect(stages[1].Problems[0].Statements).toEqual([])
+    expect(workspace.body.data.permissions[futureStage.Problems[0].id]).toMatchObject({ canView: false, canSeeMetadata: false, reason: 'FUTURE_STAGE' })
+  })
+
+  it('rejects runtime focus commands that target a non-current Stage', async () => {
+    const created = await createTwoStageSession('跨阶段指令拒绝')
+    const token = generateTokenFromUser(coach.user)
+    const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: { Stages: { orderBy: { orderIndex: 'asc' }, include: { Problems: true } } } })
+    const [currentStage, futureStage] = session.Stages
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: currentStage.id })).status).toBe(200)
+
+    const response = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/commands`).send({
+      expectedRevision: 2,
+      type: 'FOCUS_PROBLEM',
+      targetType: 'ALL',
+      payload: { stageProblemId: futureStage.Problems[0].id, mode: 'LOCKED_FOCUS' },
+    })
+    expect(response.status).toBe(422)
+    expect(await prisma.trainingSessionOverlay.count({ where: { sessionId: created.id, stageProblemId: futureStage.Problems[0].id } })).toBe(0)
+  })
+
+  it('isolates drafts when the same Problem appears in different Stages', async () => {
+    const created = await createTwoStageSession('跨阶段草稿隔离')
+    const coachToken = generateTokenFromUser(coach.user)
+    const studentToken = generateTokenFromUser(student.user)
+    const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: { Stages: { orderBy: { orderIndex: 'asc' }, include: { Problems: true } } } })
+    const [firstStage, secondStage] = session.Stages
+    const firstProblem = firstStage.Problems[0]
+    const secondProblem = secondStage.Problems[0]
+
+    expect((await createAuthenticatedRequest(app, coachToken).post(`/api/training-sessions/${created.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, coachToken).post(`/api/training-sessions/${created.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: firstStage.id })).status).toBe(200)
+
+    const firstSave = await createAuthenticatedRequest(app, studentToken).put(`/api/training-sessions/${created.id}/drafts/${firstProblem.id}`).send({ language: 'cpp17', code: '// stage one' })
+    expect(firstSave.status).toBe(200)
+
+    expect((await createAuthenticatedRequest(app, coachToken).post(`/api/training-sessions/${created.id}/stage-transitions`).send({ expectedRevision: 2, action: 'advance', stageId: firstStage.id, outcome: 'completed' })).status).toBe(200)
+    const secondSave = await createAuthenticatedRequest(app, studentToken).put(`/api/training-sessions/${created.id}/drafts/${secondProblem.id}`).send({ language: 'cpp17', code: '// stage two' })
+    expect(secondSave.status).toBe(200)
+
+    const drafts = await prisma.trainingSessionProblemDraft.findMany({ where: { sessionId: created.id, userId: student.user.id }, orderBy: { createdAt: 'asc' } })
+    expect(drafts).toHaveLength(2)
+    expect(new Set(drafts.map(item => item.stageProblemId))).toEqual(new Set([firstProblem.id, secondProblem.id]))
+    expect(new Set(drafts.map(item => item.code))).toEqual(new Set(['// stage one', '// stage two']))
+  })
+
+  it('freezes hint definitions after the owning Stage starts', async () => {
+    const created = await createSession()
+    const token = generateTokenFromUser(coach.user)
+    const stage = await prisma.trainingSessionStage.findFirstOrThrow({ where: { sessionId: created.id }, include: { Problems: true } })
+    const stageProblem = stage.Problems[0]
+
+    const createdHint = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/hints`).send({
+      stageProblemId: stageProblem.id, level: 1, title: '一级提示', content: '先观察输入输出关系', openMode: 'MANUAL',
+    })
+    expect(createdHint.status).toBe(201)
+    const hintId = createdHint.body.data.id as string
+
+    const updatedHint = await createAuthenticatedRequest(app, token).patch(`/api/training-sessions/${created.id}/hints/${hintId}`).send({
+      level: 1, title: '一级提示（修订）', content: '先观察样例中的输入输出关系', openMode: 'MANUAL',
+    })
+    expect(updatedHint.status).toBe(200)
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: stage.id })).status).toBe(200)
+
+    const createAfterStart = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/hints`).send({
+      stageProblemId: stageProblem.id, level: 2, content: '运行后不应允许新增', openMode: 'MANUAL',
+    })
+    expect(createAfterStart.status).toBe(409)
+
+    const updateAfterStart = await createAuthenticatedRequest(app, token).patch(`/api/training-sessions/${created.id}/hints/${hintId}`).send({
+      level: 1, title: '不应成功', content: '运行后不应允许修改', openMode: 'MANUAL',
+    })
+    expect(updateAfterStart.status).toBe(409)
+
+    const deleteAfterStart = await createAuthenticatedRequest(app, token).delete(`/api/training-sessions/${created.id}/hints/${hintId}`)
+    expect(deleteAfterStart.status).toBe(409)
+    expect(await prisma.trainingSessionHint.findUnique({ where: { id: hintId }, select: { title: true } })).toEqual({ title: '一级提示（修订）' })
   })
 
   it('saves a design as a scoped skeleton template and can create another Session from it', async () => {
