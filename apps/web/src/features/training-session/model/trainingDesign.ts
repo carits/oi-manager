@@ -121,6 +121,38 @@ export const normalizeProblemOrder = (items: Assignment[]): Assignment[] =>
     ? item
     : { ...item, unlockPolicy: { mode: 'ANY', conditions: [{ type: 'AC' }] } })
 
+export const closeSubtaskSelection = (subtasks: Subtask[], selectedIds: number[]) => {
+  const byId = new Map(subtasks.map(item => [item.id, item]))
+  const selected = new Set(selectedIds)
+  const addDependencies = (id: number, visiting = new Set<number>()) => {
+    if (visiting.has(id)) return
+    const nextVisiting = new Set(visiting); nextVisiting.add(id)
+    for (const dependencyId of byId.get(id)?.dependencies || []) {
+      selected.add(dependencyId)
+      addDependencies(dependencyId, nextVisiting)
+    }
+  }
+  for (const id of [...selected]) addDependencies(id)
+  return [...selected].sort((a, b) => a - b)
+}
+
+export const removeSubtaskWithDependents = (subtasks: Subtask[], selectedIds: number[], removedId: number) => {
+  const selected = new Set(selectedIds)
+  selected.delete(removedId)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const subtask of subtasks) {
+      if (!selected.has(subtask.id)) continue
+      if ((subtask.dependencies || []).some(dependencyId => !selected.has(dependencyId))) {
+        selected.delete(subtask.id)
+        changed = true
+      }
+    }
+  }
+  return [...selected].sort((a, b) => a - b)
+}
+
 export const newTrainingDesignKey = () =>
   globalThis.crypto?.randomUUID?.() || `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
