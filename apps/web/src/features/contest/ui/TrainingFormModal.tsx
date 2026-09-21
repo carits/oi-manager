@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import collisionStyles from './TrainingFormModal.collision.module.css'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './TrainingFormModal.unified.module.css'
@@ -8,10 +8,12 @@ import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { FormDialog } from '@/components/ui/Dialogs'
+import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { Tabs } from '@/components/ui/Tabs'
 import { useAuth } from '@/features/auth'
 import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
+import { mapWithConcurrency } from '@/lib/concurrency'
 
 function toLocalDatetimeString(date: Date): string {
   const y = date.getFullYear()
@@ -106,6 +108,34 @@ interface TrainingFormModalProps {
 
 let tempIdCounter = 0
 
+function draftSnapshot(input: {
+  title: string
+  description: string
+  format: string
+  startTime: string
+  endTime: string
+  problemIdVisible: boolean
+  solutionVisible: boolean
+  includeAdminInRanking: boolean
+  ratingScope: string
+  ratingWeight: string
+  organizationRatingMinimum: string
+  globalRatingMinimum: string
+  problemRows: ProblemRow[]
+}) {
+  return JSON.stringify({
+    ...input,
+    problemRows: input.problemRows.map(row => ({
+      trainingProblemId: row.trainingProblemId || null,
+      problemId: row.resolved?.problemId || null,
+      alias: row.alias,
+      points: row.points,
+      statementOptionKey: row.statementOptionKey || null,
+      solutionOptionKey: row.solutionOptionKey || null,
+    })),
+  })
+}
+
 export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizationId, trainingId, onSaved, mode = 'training' }: TrainingFormModalProps) {
   const toast = useToast()
   const { user } = useAuth()
@@ -137,6 +167,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [problemRows, setProblemRows] = useState<ProblemRow[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
+  const [initialDraftSnapshot, setInitialDraftSnapshot] = useState<string | null>(null)
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false)
 
   // Reset / load data when modal opens
   useEffect(() => {
@@ -144,6 +177,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     setWizardStep(0)
     setRecoveryTrainingId(null)
     setRecoveryMessage('')
+    setDraftReady(false)
+    setInitialDraftSnapshot(null)
 
     if (isEdit && trainingId) {
       // 编辑模式：加载已有数据
@@ -217,6 +252,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           toast.error('加载失败')
         } finally {
           setLoading(false)
+          setDraftReady(true)
         }
       }
       loadTraining()
@@ -255,6 +291,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       const end = new Date(date)
       end.setHours(end.getHours() + 3)
       setEndTime(toLocalDatetimeString(end))
+      setDraftReady(true)
     }
   }, [isOpen, trainingId])
 
@@ -276,16 +313,32 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   }
 
   const addSelectedProblems = async (problems: SelectedCanonicalProblem[]) => {
-    for (const problem of problems) {
-      if (problemRows.some(row => row.resolved?.problemId === problem.id)) continue
-      const id = `selected-${++tempIdCounter}`
-      setProblemRows(current => [...current, {
-        id, ojName: problem.platform, problemCode: problem.problemCode, alias: '', points: 100,
-        resolving: false, resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
-        contentOptionsLoading: true, statementOptions: [], solutionOptions: [],
-      }])
+    const existingIds = new Set(problemRows.flatMap(row => row.resolved?.problemId ? [row.resolved.problemId] : []))
+    const additions = problems.filter(problem => !existingIds.has(problem.id)).map(problem => ({
+      problem,
+      rowId: `selected-${++tempIdCounter}`,
+    }))
+    if (!additions.length) return
+
+    setProblemRows(current => [...current, ...additions.map(({ problem, rowId }) => ({
+      id: rowId,
+      ojName: problem.platform,
+      problemCode: problem.problemCode,
+      alias: '',
+      points: 100,
+      resolving: false,
+      resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
+      contentOptionsLoading: true,
+      statementOptions: [],
+      solutionOptions: [],
+    }))])
+
+    const results = await mapWithConcurrency(additions, 4, async ({ problem, rowId }) => {
       const options = await apiClient.get<{ statement: ContentOption[]; solution: ContentOption[] }>(`/api/problems/${problem.id}/content-options`)
-      updateRow(id, {
+      return { rowId, options }
+    })
+    for (const { rowId, options } of results) {
+      updateRow(rowId, {
         contentOptionsLoading: false,
         statementOptions: options.success ? options.data?.statement || [] : [],
         solutionOptions: options.success ? options.data?.solution || [] : [],
@@ -315,6 +368,43 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     rows[idx] = rows[idx + 1]
     rows[idx + 1] = temp
     setProblemRows(rows)
+  }
+
+  const currentDraftSnapshot = useMemo(() => draftSnapshot({
+    title,
+    description,
+    format,
+    startTime,
+    endTime,
+    problemIdVisible,
+    solutionVisible,
+    includeAdminInRanking,
+    ratingScope,
+    ratingWeight,
+    organizationRatingMinimum,
+    globalRatingMinimum,
+    problemRows,
+  }), [
+    title, description, format, startTime, endTime, problemIdVisible, solutionVisible,
+    includeAdminInRanking, ratingScope, ratingWeight, organizationRatingMinimum,
+    globalRatingMinimum, problemRows,
+  ])
+
+  useEffect(() => {
+    if (isOpen && draftReady && initialDraftSnapshot === null) setInitialDraftSnapshot(currentDraftSnapshot)
+  }, [currentDraftSnapshot, draftReady, initialDraftSnapshot, isOpen])
+
+  const draftDirty = Boolean(isOpen && draftReady && initialDraftSnapshot !== null && currentDraftSnapshot !== initialDraftSnapshot)
+  useUnsavedChanges(`training-form:${trainingId || mode}`, draftDirty)
+
+  const requestClose = () => {
+    if (saving || loading) return
+    if (draftDirty) setConfirmCloseOpen(true)
+    else onClose()
+  }
+
+  const requireSuccess = (response: { success: boolean; message?: string }, fallback: string) => {
+    if (!response.success) throw new Error(response.message || fallback)
   }
 
   const handleSave = async () => {
@@ -404,17 +494,19 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         if (originalProblemsRes.success && originalProblemsRes.data) {
           for (const orig of originalProblemsRes.data) {
             if (!existingIds.includes(orig.id)) {
-              await apiClient.delete(`/api/trainings/${trainingId}/problems/${orig.id}`)
+              const deleteRes = await apiClient.delete(`/api/trainings/${trainingId}/problems/${orig.id}`)
+              requireSuccess(deleteRes, `删除题目 ${orig.problemTitle || orig.problemId} 失败`)
             }
           }
         }
 
         // 3. Update existing problems (alias, points and immutable content snapshots)
         for (const row of problemRows.filter(r => r.existing)) {
-          await apiClient.put(`/api/trainings/${trainingId}/problems/${row.trainingProblemId}`, {
+          const updateProblemRes = await apiClient.put(`/api/trainings/${trainingId}/problems/${row.trainingProblemId}`, {
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
           })
+          requireSuccess(updateProblemRes, `更新题目 ${row.resolved?.title || row.problemCode} 失败`)
           const selectionChanged =
             row.statementOptionKey !== row.originalStatementOptionKey ||
             row.solutionOptionKey !== row.originalSolutionOptionKey
@@ -441,9 +533,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             statementOptionKey: row.statementOptionKey,
             solutionOptionKey: row.solutionOptionKey || 'none',
           })
-          if (createRes.success && createRes.data) {
-            newTrainingProblemIds.push(String(createRes.data.id))
-          }
+          if (!createRes.success || !createRes.data) throw new Error(createRes.message || `添加题目 ${row.resolved?.title || row.problemCode} 失败`)
+          newTrainingProblemIds.push(String(createRes.data.id))
         }
 
         // 5. Reorder
@@ -451,7 +542,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         const allIdsInOrder = [...existingIdsInOrder, ...newTrainingProblemIds]
         const orders = allIdsInOrder.map((id, i) => ({ id, orderIndex: i }))
         if (orders.length > 0) {
-          await apiClient.put(`/api/trainings/${trainingId}/problems/reorder`, { orders })
+          const reorderRes = await apiClient.put(`/api/trainings/${trainingId}/problems/reorder`, { orders })
+          requireSuccess(reorderRes, '保存题目顺序失败')
         }
 
         toast.success(`${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}更新成功`)
@@ -491,14 +583,19 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         }
 
         const resolvedRows = problemRows.filter(r => r.resolved?.found)
-        for (const row of resolvedRows) {
-          await apiClient.post(`/api/trainings/${newTrainingId}/problems`, {
+        const createProblemResults = await mapWithConcurrency(resolvedRows, 4, async row => {
+          const response = await apiClient.post(`/api/trainings/${newTrainingId}/problems`, {
             problemId: row.resolved!.problemId,
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
             statementOptionKey: row.statementOptionKey,
             solutionOptionKey: row.solutionOptionKey || 'none',
           })
+          return { row, response }
+        })
+        const failedProblem = createProblemResults.find(result => !result.response.success)
+        if (failedProblem) {
+          throw new Error(failedProblem.response.message || `添加题目 ${failedProblem.row.resolved?.title || failedProblem.row.problemCode} 失败`)
         }
 
         // 创建后也 reorder（确保顺序正确）
@@ -509,7 +606,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             const createdProblems = problemsRes.data
             const orders = createdProblems.map((p, i) => ({ id: p.id, orderIndex: i }))
             if (orders.length > 0) {
-              await apiClient.put(`/api/trainings/${newTrainingId}/problems/reorder`, { orders })
+              const reorderRes = await apiClient.put(`/api/trainings/${newTrainingId}/problems/reorder`, { orders })
+              requireSuccess(reorderRes, '比赛已创建，但题目顺序保存失败')
             }
           }
         }
@@ -517,6 +615,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         toast.success(mode === 'contest' ? '比赛创建成功' : schoolId ? '作业创建成功' : '训练创建成功')
       }
 
+      setInitialDraftSnapshot(currentDraftSnapshot)
       onClose()
       onSaved?.()
     } catch (error) {
@@ -564,12 +663,12 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     <>
     <FormDialog
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={isEdit ? `编辑${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}` : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`}
       size="xl"
       footer={
         <div className={unifiedStyles.u1}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="secondary" onClick={requestClose}>取消</Button>
           {contestWizard && wizardStep > 0 && <Button variant="secondary" onClick={() => setWizardStep(step => step - 1)} disabled={saving || loading}>上一步</Button>}
           {contestWizard && wizardStep < wizardSteps.length - 1 ? <Button onClick={() => setWizardStep(step => step + 1)} disabled={saving || loading || !canAdvance}>下一步</Button> : <Button onClick={handleSave} disabled={saving || loading || Boolean(recoveryTrainingId) || (contestWizard && contestValidationIssues.length > 0)}>
             {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`)}
@@ -768,6 +867,20 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         )}
       </div>
     </FormDialog>
+    <ConfirmDialog
+      isOpen={confirmCloseOpen}
+      onClose={() => setConfirmCloseOpen(false)}
+      onConfirm={() => {
+        setConfirmCloseOpen(false)
+        setInitialDraftSnapshot(currentDraftSnapshot)
+        onClose()
+      }}
+      title="放弃未保存的修改？"
+      message="关闭后，本次比赛、训练或作业配置中的未保存修改将丢失。"
+      cancelText="继续编辑"
+      confirmText="放弃修改"
+      danger
+    />
     </>
   )
 }
