@@ -79,11 +79,11 @@ export const executeTrainingCommand = (sessionId: string, body: EndpointBody<typ
 export const sendTrainingHeartbeat = (sessionId: string, body: EndpointBody<typeof TrainingContracts.heartbeat>) =>
   apiClient.mutateContract(TrainingContracts.heartbeat, `${sessionPath(sessionId)}/heartbeat`, body)
 
-export const getTrainingDraft = (sessionId: string, problemId: string) =>
-  apiClient.queryContract(TrainingContracts.getDraft, `${sessionPath(sessionId)}/drafts/${encodeURIComponent(problemId)}`)
+export const getTrainingDraft = (sessionId: string, stageProblemId: string) =>
+  apiClient.queryContract(TrainingContracts.getDraft, `${sessionPath(sessionId)}/drafts/${encodeURIComponent(stageProblemId)}`)
 
-export const saveTrainingDraft = (sessionId: string, problemId: string, body: EndpointBody<typeof TrainingContracts.saveDraft>, options: { keepalive?: boolean } = {}) =>
-  apiClient.mutateContract(TrainingContracts.saveDraft, `${sessionPath(sessionId)}/drafts/${encodeURIComponent(problemId)}`, body, options)
+export const saveTrainingDraft = (sessionId: string, stageProblemId: string, body: EndpointBody<typeof TrainingContracts.saveDraft>, options: { keepalive?: boolean } = {}) =>
+  apiClient.mutateContract(TrainingContracts.saveDraft, `${sessionPath(sessionId)}/drafts/${encodeURIComponent(stageProblemId)}`, body, options)
 
 export const submitTrainingSolution = (sessionId: string, body: EndpointBody<typeof TrainingContracts.submit>) =>
   apiClient.mutateContract(TrainingContracts.submit, `${sessionPath(sessionId)}/submit`, body)
