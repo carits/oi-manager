@@ -12,6 +12,7 @@ import { currentWorkspacePrefix, isPersonalPath } from '@/lib/workspacePath'
 import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import apiClient from '@/lib/apiClient'
+import { mapWithConcurrency } from '@/lib/concurrency'
 import { useToast } from '@/components/ui/Toast'
 import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
 import { getAssetUrl } from '@/lib/assets'
@@ -167,6 +168,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
   const [detail, setDetail] = useState<ListDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<{ title: string; description: string } | null>(null)
   const toast = useToast()
   const [showSharePanel, setShowSharePanel] = useState(false)
 
@@ -196,30 +198,39 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
   const isAdmin = detail?._permission === 'admin'
   const isStudentView = user?.organizationRole === 'student' && !isPersonalPath(pathname)
 
-  useEffect(() => { fetchDetail() }, [listId])
-
-  const fetchDetail = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await apiClient.get<ProblemListWire>(`/api/problem-lists/${listId}`)
-      if (res.success && res.data) {
-        const data = res.data
-        const sections = data.Sections || data.sections || data.ProblemListSection || []
-        setDetail({
-          ...(data as ListDetail),
-          Sections: sections.map(s => ({
-            ...s,
-            Entries: s.Entries || ('ProblemListEntry' in s ? s.ProblemListEntry : undefined) || [],
-          } as SectionInfo)),
-          Shares: data.Shares || data.shares || data.ProblemListShare || [],
-        })
-      }
-    } catch (e) {
-      console.error('Failed', e)
-    } finally {
-      setLoading(false)
+  const fetchDetail = useCallback(async (background = false) => {
+    if (!background) setLoading(true)
+    setLoadError(null)
+    const res = await apiClient.get<ProblemListWire>(`/api/problem-lists/${listId}`)
+    if (res.success && res.data) {
+      const data = res.data
+      const sections = data.Sections || data.sections || data.ProblemListSection || []
+      setDetail({
+        ...(data as ListDetail),
+        Sections: sections.map(section => ({
+          ...section,
+          Entries: section.Entries || ('ProblemListEntry' in section ? section.ProblemListEntry : undefined) || [],
+        } as SectionInfo)),
+        Shares: data.Shares || data.shares || data.ProblemListShare || [],
+      })
+    } else {
+      const error = res.status === 404
+        ? { title: '题单不存在', description: '题单可能已被删除，或链接已经失效。' }
+        : res.status === 403
+          ? { title: '当前账号无权查看此题单', description: '请切换到具有访问权限的账号或工作区。' }
+          : res.errorKind === 'timeout'
+            ? { title: '题单加载超时', description: '服务器响应时间过长，请稍后重试。' }
+            : res.errorKind === 'network'
+              ? { title: '暂时无法连接服务器', description: '请检查网络连接后重新加载。' }
+              : { title: '题单暂时无法加载', description: res.requestId ? `服务器发生错误。请求编号：${res.requestId}` : (res.message || '请稍后重试。') }
+      setLoadError(error)
+      if (!background) setDetail(null)
+      else toast.error(error.title)
     }
-  }, [listId])
+    if (!background) setLoading(false)
+  }, [listId, toast])
+
+  useEffect(() => { void fetchDetail(false) }, [fetchDetail])
 
   // ---------- 新行操作 ----------
 
@@ -245,45 +256,47 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
     setNewRows(prev => prev.filter(r => r.id !== rowId))
   }
 
-  /** 批量保存某章节所有已解析的新行 */
+  /** 批量保存某章节所有已解析的新行，限制并发避免大题单串行等待或瞬时打爆 API。 */
   const saveAllSectionRows = async (sectionId: string) => {
-    const rowsToSave = newRows.filter(r => r.sectionId === sectionId && r.resolved?.found && !r.saving)
+    const rowsToSave = newRows.filter(row => row.sectionId === sectionId && row.resolved?.found && !row.saving)
     if (rowsToSave.length === 0) return
 
-    // 标记所有行为 saving
-    for (const row of rowsToSave) {
-      updateNewRow(row.id, { saving: true })
-    }
+    const savingIds = new Set(rowsToSave.map(row => row.id))
+    setNewRows(current => current.map(row => savingIds.has(row.id) ? { ...row, saving: true } : row))
 
-    let saved = 0
-    for (const row of rowsToSave) {
-      try {
-        const body: { ojName: string; problemCode: string; alias: string | null; notes: string | null; problemId?: string } = {
-          ojName: row.ojName, problemCode: row.problemCode.trim(),
-          alias: row.alias.trim() || null, notes: row.notes.trim() || null,
-        }
-        if (row.resolved!.problemId) body.problemId = row.resolved!.problemId
-        const res = await apiClient.post(`/api/problem-lists/sections/${row.sectionId}/entries/single`, body)
-        if (res.success || res.status === 409) {
-          removeNewRow(row.id)
-          saved++
-        } else {
-          updateNewRow(row.id, { saving: false })
-        }
-      } catch {
-        updateNewRow(row.id, { saving: false })
+    const results = await mapWithConcurrency(rowsToSave, 4, async row => {
+      const body: { ojName: string; problemCode: string; alias: string | null; notes: string | null; problemId?: string } = {
+        ojName: row.ojName,
+        problemCode: row.problemCode.trim(),
+        alias: row.alias.trim() || null,
+        notes: row.notes.trim() || null,
       }
-    }
+      if (row.resolved!.problemId) body.problemId = row.resolved!.problemId
+      const response = await apiClient.post(`/api/problem-lists/sections/${row.sectionId}/entries/single`, body)
+      return { id: row.id, ok: response.success || response.status === 409, message: response.message }
+    })
 
-    if (saved > 0) fetchDetail()
+    const succeeded = new Set(results.filter(result => result.ok).map(result => result.id))
+    setNewRows(current => current
+      .filter(row => !succeeded.has(row.id))
+      .map(row => savingIds.has(row.id) ? { ...row, saving: false } : row))
+
+    const failed = results.length - succeeded.size
+    if (succeeded.size > 0) {
+      toast.success(failed ? `已保存 ${succeeded.size} 题，${failed} 题保存失败` : `已保存 ${succeeded.size} 题`)
+      void fetchDetail(true)
+    }
+    if (failed > 0) toast.error(`有 ${failed} 道题保存失败，已保留在编辑区，可直接重试`)
   }
 
   // ---------- 已有条目操作 ----------
 
   const handleDeleteEntry = async (entryId: string) => {
-    await apiClient.delete(`/api/problem-lists/entries/${entryId}`)
+    const response = await apiClient.delete(`/api/problem-lists/entries/${entryId}`)
+    if (!response.success) return toast.error(response.message || '删除题目失败')
     setDeleteEntryConfirm(null)
-    fetchDetail()
+    toast.success('题目已移除')
+    void fetchDetail(true)
   }
 
   const handleUpdateEntry = async (entryId: string, data: { alias?: string | null; notes?: string | null }) => {
@@ -296,34 +309,47 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
       fetchDetail()
       return
     }
+    if (!res.success) {
+      toast.error(res.message || '保存备注失败')
+      return
+    }
     setEditingEntry(null)
-    fetchDetail()
+    void fetchDetail(true)
   }
 
   const handleMoveEntry = async (sectionId: string, entryId: string, direction: 'up' | 'down') => {
     if (!detail) return
-    const section = detail.Sections.find(s => s.id === sectionId)
+    const previous = detail
+    const section = detail.Sections.find(item => item.id === sectionId)
     if (!section) return
-    const entries = section.Entries
-    const idx = entries.findIndex(e => e.id === entryId)
-    if (idx < 0) return
-    if (direction === 'up' && idx === 0) return
-    if (direction === 'down' && idx === entries.length - 1) return
-    const newOrder = [...entries]
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    ;[newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]]
-    await apiClient.put(`/api/problem-lists/sections/${sectionId}/entries/reorder`, { entryIds: newOrder.map(e => e.id) })
-    fetchDetail()
+    const index = section.Entries.findIndex(entry => entry.id === entryId)
+    if (index < 0 || (direction === 'up' && index === 0) || (direction === 'down' && index === section.Entries.length - 1)) return
+
+    const reordered = [...section.Entries]
+    const swapIndex = direction === 'up' ? index - 1 : index + 1
+    ;[reordered[index], reordered[swapIndex]] = [reordered[swapIndex], reordered[index]]
+    setDetail({
+      ...detail,
+      Sections: detail.Sections.map(item => item.id === sectionId ? { ...item, Entries: reordered } : item),
+    })
+
+    const response = await apiClient.put(`/api/problem-lists/sections/${sectionId}/entries/reorder`, { entryIds: reordered.map(entry => entry.id) })
+    if (!response.success) {
+      setDetail(previous)
+      toast.error(response.message || '调整顺序失败，已恢复原顺序')
+    }
   }
 
   // ---------- 章节操作 ----------
 
   const handleAddSection = async () => {
     if (!newSectionTitle.trim()) return
-    await apiClient.post(`/api/problem-lists/${listId}/sections`, { title: newSectionTitle.trim() })
+    const response = await apiClient.post(`/api/problem-lists/${listId}/sections`, { title: newSectionTitle.trim() })
+    if (!response.success) return toast.error(response.message || '添加章节失败')
     setNewSectionTitle('')
     setShowNewSection(false)
-    fetchDetail()
+    toast.success('章节已添加')
+    void fetchDetail(true)
   }
 
   const handleRenameSection = async (sectionId: string) => {
@@ -337,14 +363,20 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
       fetchDetail()
       return
     }
+    if (!res.success) {
+      toast.error(res.message || '重命名章节失败')
+      return
+    }
     setEditingSection(null)
-    fetchDetail()
+    void fetchDetail(true)
   }
 
   const handleDeleteSection = async (sectionId: string) => {
-    await apiClient.delete(`/api/problem-lists/sections/${sectionId}`)
+    const response = await apiClient.delete(`/api/problem-lists/sections/${sectionId}`)
+    if (!response.success) return toast.error(response.message || '删除章节失败')
     setDeleteSectionConfirm(null)
-    fetchDetail()
+    toast.success('章节已删除')
+    void fetchDetail(true)
   }
 
   // ---------- 标题编辑 ----------
@@ -360,8 +392,12 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
       fetchDetail()
       return
     }
+    if (!res.success) {
+      toast.error(res.message || '保存标题失败')
+      return
+    }
     setEditingTitle(false)
-    fetchDetail()
+    void fetchDetail(true)
   }
 
   const totalEntries = detail?.Sections.reduce((sum, s) => sum + s.Entries.length, 0) || 0
@@ -391,7 +427,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
   // ==================== 渲染 ====================
 
   if (loading) return <PageFrame width="workbench"><PageHeader title="题单详情" breadcrumbs={[{ label: '题单', href: `${pathPrefix}/problem-lists` }, { label: '详情' }]} /><SkeletonRegion rows={7} label="题单详情正在准备" /></PageFrame>
-  if (!detail) return <PageFrame><PageHeader title="题单详情" breadcrumbs={[{ label: '题单', href: `${pathPrefix}/problem-lists` }, { label: '详情' }]} /><Empty title="题单不存在或无权访问" description="题单可能已删除，或当前账号没有查看权限。" /></PageFrame>
+  if (!detail) return <PageFrame><PageHeader title="题单详情" breadcrumbs={[{ label: '题单', href: `${pathPrefix}/problem-lists` }, { label: '详情' }]} /><Empty title={loadError?.title || '题单暂时无法加载'} description={loadError?.description || '请稍后重试。'} action={<Button onClick={() => void fetchDetail(false)}>重新加载</Button>} /></PageFrame>
 
   return (
     <>
