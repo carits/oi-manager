@@ -91,6 +91,12 @@ export const submitTrainingSolution = (sessionId: string, body: EndpointBody<typ
 export const createTrainingHint = (sessionId: string, body: EndpointBody<typeof TrainingContracts.createHint>) =>
   apiClient.mutateContract(TrainingContracts.createHint, `${sessionPath(sessionId)}/hints`, body)
 
+export const updateTrainingHint = (sessionId: string, hintId: string, body: EndpointBody<typeof TrainingContracts.updateHint>) =>
+  apiClient.mutateContract(TrainingContracts.updateHint, `${sessionPath(sessionId)}/hints/${encodeURIComponent(hintId)}`, body)
+
+export const deleteTrainingHint = (sessionId: string, hintId: string) =>
+  apiClient.mutateContract(TrainingContracts.deleteHint, `${sessionPath(sessionId)}/hints/${encodeURIComponent(hintId)}`)
+
 export const listTrainingHints = (sessionId: string, stageProblemId: string) =>
   apiClient.queryContract(TrainingContracts.listHints, `${sessionPath(sessionId)}/problems/${encodeURIComponent(stageProblemId)}/hints`)
 
