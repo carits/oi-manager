@@ -8,7 +8,7 @@ import { FormDialog } from '@/components/ui/Dialogs'
 import { Empty } from '@/components/ui/Empty'
 import { StatusBadge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
-import { createTrainingHint, getTrainingGroupSuggestions, getTrainingRoster, listTrainingHints, saveTrainingRoster } from '../api/trainingSessionApi'
+import { createTrainingHint, deleteTrainingHint, getTrainingGroupSuggestions, getTrainingRoster, listTrainingHints, saveTrainingRoster, updateTrainingHint } from '../api/trainingSessionApi'
 import type { Assignment, Stage } from '../model/trainingDesign'
 import styles from './TrainingEngine.module.css'
 
@@ -19,8 +19,8 @@ type GroupSuggestion = { participantId: string; user: { id: string; username: st
 export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChange, onChanged }: { sessionId: string; mode: 'roster' | 'hints'; stages: Stage[]; onStagesChange?: (updater: (current: Stage[]) => Stage[]) => void; onChanged: () => Promise<void> }) {
   const toast = useToast()
   const [roster, setRoster] = useState<Roster>(), [loading, setLoading] = useState(false), [saving, setSaving] = useState(false)
-  const assignments = useMemo(() => stages.flatMap(stage => [...stage.Problems, ...(stage.Groups || []).flatMap(group => group.Problems)].filter(problem => problem.assignmentId).map(problem => ({ ...problem, stageName: stage.name }))), [stages])
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState(''), [hints, setHints] = useState<Hint[]>([]), [hintOpen, setHintOpen] = useState(false)
+  const assignments = useMemo(() => stages.flatMap(stage => [...stage.Problems, ...(stage.Groups || []).flatMap(group => group.Problems)].filter(problem => problem.assignmentId).map(problem => ({ ...problem, stageName: stage.name, stageLifecycle: stage.lifecycle || 'PENDING' }))), [stages])
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState(''), [hints, setHints] = useState<Hint[]>([]), [hintOpen, setHintOpen] = useState(false), [editingHint, setEditingHint] = useState<Hint>(), [deleteHintTarget, setDeleteHintTarget] = useState<Hint>()
   const [hintTitle, setHintTitle] = useState(''), [hintContent, setHintContent] = useState(''), [hintLevel, setHintLevel] = useState(1), [hintMode, setHintMode] = useState('MANUAL'), [hintTrigger, setHintTrigger] = useState('')
   const [rawSuggestions, setSuggestions] = useState<{ stageId: string; items: GroupSuggestion[] }>(), [suggestionLoading, setSuggestionLoading] = useState(false)
   const suggestions = rawSuggestions || { stageId: '', items: [] as GroupSuggestion[] }
@@ -56,14 +56,32 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     if (!response.ok) return toast.error(response.error.message || '学员名单保存失败')
     toast.success('基础学员名单已保存'); await loadRoster(); await onChanged()
   }
-  const createHint = async () => {
+  const resetHintForm = () => { setHintOpen(false); setEditingHint(undefined); setHintTitle(''); setHintContent(''); setHintLevel(1); setHintMode('MANUAL'); setHintTrigger('') }
+  const openHintEditor = (hint?: Hint) => {
+    setEditingHint(hint)
+    setHintLevel(hint?.level || 1); setHintTitle(hint?.title || ''); setHintContent(hint?.content || ''); setHintMode(hint?.openMode || 'MANUAL')
+    setHintTrigger(String(hint?.openMode === 'TIME' ? hint.triggerSeconds || '' : hint?.openMode === 'ATTEMPT' ? hint.triggerAttempts || '' : hint?.openMode === 'SCORE' ? hint.triggerScore || '' : ''))
+    setHintOpen(true)
+  }
+  const saveHint = async () => {
     if (!selectedAssignmentId || !hintContent.trim()) return
     const trigger = Number(hintTrigger) || undefined
+    const body = { level: hintLevel, title: hintTitle || undefined, content: hintContent, openMode: hintMode as 'MANUAL' | 'TIME' | 'ATTEMPT' | 'SCORE', triggerSeconds: hintMode === 'TIME' ? trigger : undefined, triggerAttempts: hintMode === 'ATTEMPT' ? trigger : undefined, triggerScore: hintMode === 'SCORE' ? trigger : undefined }
     setSaving(true)
-    const response = await createTrainingHint(sessionId, { stageProblemId: selectedAssignmentId, level: hintLevel, title: hintTitle || undefined, content: hintContent, openMode: hintMode as 'MANUAL' | 'TIME' | 'ATTEMPT' | 'SCORE', triggerSeconds: hintMode === 'TIME' ? trigger : undefined, triggerAttempts: hintMode === 'ATTEMPT' ? trigger : undefined, triggerScore: hintMode === 'SCORE' ? trigger : undefined })
+    const response = editingHint
+      ? await updateTrainingHint(sessionId, editingHint.id, body)
+      : await createTrainingHint(sessionId, { stageProblemId: selectedAssignmentId, ...body })
     setSaving(false)
-    if (!response.ok) return toast.error(response.error.message || '提示创建失败')
-    setHintOpen(false); setHintTitle(''); setHintContent(''); setHintMode('MANUAL'); setHintTrigger(''); toast.success('分级提示已创建'); await loadHints(selectedAssignmentId)
+    if (!response.ok) return toast.error(response.error.message || (editingHint ? '提示修改失败' : '提示创建失败'))
+    resetHintForm(); toast.success(editingHint ? '提示已更新' : '分级提示已创建'); await loadHints(selectedAssignmentId)
+  }
+  const confirmDeleteHint = async () => {
+    if (!deleteHintTarget) return
+    setSaving(true)
+    const response = await deleteTrainingHint(sessionId, deleteHintTarget.id)
+    setSaving(false)
+    if (!response.ok) return toast.error(response.error.message || '提示删除失败')
+    setDeleteHintTarget(undefined); toast.success('提示已删除'); await loadHints(selectedAssignmentId)
   }
   const previewSuggestions = async (stageId: string) => {
     setSuggestionLoading(true)
@@ -87,8 +105,11 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     {loading && !roster ? <p className={styles.muted}>正在加载学员…</p> : !roster ? <Empty title="暂无可配置名单" /> : <div className={styles.rosterList}>{roster.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div>}
   </Section>{stages.filter(stage => stage.audienceMode === 'GROUPED').map(stage => { const frozen = Boolean(stage.lifecycle && stage.lifecycle !== 'PENDING'); const stageSuggestions = suggestions?.stageId === stage.id ? suggestions.items : []; return <Section key={stage.clientKey} title={`${stage.name} · Stage 分组`} description={frozen ? '该 Stage 已开始，分组定义只读；现场换组请前往运行工作台。' : '每名学员在这个 Stage 只能属于一个组；系统只生成可解释建议，必须由教师确认。'} actions={!frozen && stage.id ? <Button variant="secondary" loading={suggestionLoading} onClick={() => void previewSuggestions(stage.id!)}>生成分组建议</Button> : undefined}><div className={styles.stack}>{Boolean(stageSuggestions.length) && <div className={styles.card}><strong>建议预览（尚未应用）</strong>{stageSuggestions.map(item => <p key={item.participantId}><b>{item.user.username}</b> → {item.groupName}<small className={styles.muted}>{item.reason}</small></p>)}<div className={styles.actions}><Button onClick={applySuggestions}>确认应用建议</Button><Button variant="ghost" onClick={() => setSuggestions(undefined)}>取消</Button></div></div>}<div className={styles.grid}>{stage.Groups.map(group => <article className={styles.card} key={group.clientKey}><strong>{group.name}</strong><p className={styles.muted}>{group.Problems.length} 道题 · {group.participantIds.length} 名学员</p><div className={styles.rosterList}>{roster?.candidates.filter(candidate => candidate.selected).map(candidate => <Checkbox key={candidate.userId} label={candidate.displayName} description={candidate.username} checked={group.participantIds.includes(candidate.userId)} disabled={frozen} onChange={event => onStagesChange?.(current => current.map(item => item.clientKey !== stage.clientKey ? item : { ...item, Groups: item.Groups.map(currentGroup => ({ ...currentGroup, participantIds: currentGroup.clientKey === group.clientKey && event.target.checked ? [...new Set([...currentGroup.participantIds, candidate.userId])] : currentGroup.participantIds.filter(id => id !== candidate.userId) })) }))} />)}</div></article>)}</div></div></Section> })}</div>
 
-  return <Section title="提示配置" description="提示必须绑定已保存的题目分配；新增或移动题目后请先保存编排。" actions={<Button onClick={() => setHintOpen(true)} disabled={!selectedAssignmentId}>新增提示</Button>}>
-    {!assignments.length ? <Empty title="暂无可配置题目" description="请在“阶段与顺序”中分配题目并先保存。" /> : <div className={styles.stack}><label className={styles.field}>题目分配<Select value={selectedAssignmentId} onChange={event => { setSelectedAssignmentId(event.target.value); void loadHints(event.target.value) }}>{assignments.map(item => <option value={item.assignmentId} key={item.assignmentId}>{item.stageName} · {item.Problem.problemId} {item.Problem.title}</option>)}</Select></label>{loading ? <p className={styles.muted}>正在加载提示…</p> : hints.length ? <div className={styles.hintGrid}>{hints.map(hint => <article className={styles.card} key={hint.id}><div className={styles.actions}><StatusBadge variant="neutral">{hint.level} 级</StatusBadge><StatusBadge variant="info">{hint.openMode || 'MANUAL'}</StatusBadge></div><strong>{hint.title || '未命名提示'}</strong><p>{hint.content}</p></article>)}</div> : <Empty title="该题暂无提示" />}</div>}
-    <FormDialog isOpen={hintOpen} onClose={() => setHintOpen(false)} onSubmit={() => void createHint()} title="新增分级提示" submitText="创建提示" loading={saving} dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>触发值<Input type="number" value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>
+  const selectedAssignment = assignments.find(item => item.assignmentId === selectedAssignmentId)
+  const hintsFrozen = Boolean(selectedAssignment && selectedAssignment.stageLifecycle !== 'PENDING')
+  return <Section title="提示配置" description={hintsFrozen ? '该 Stage 已开始，提示定义已冻结；运行时可在工作台开放或关闭已有提示。' : '提示绑定已保存的题目分配；Stage 开始后定义自动冻结。'} actions={<Button onClick={() => openHintEditor()} disabled={!selectedAssignmentId || hintsFrozen}>新增提示</Button>}>
+    {!assignments.length ? <Empty title="暂无可配置题目" description="请在“阶段与顺序”中分配题目并先保存。" /> : <div className={styles.stack}><label className={styles.field}>题目分配<Select value={selectedAssignmentId} onChange={event => { setSelectedAssignmentId(event.target.value); void loadHints(event.target.value) }}>{assignments.map(item => <option value={item.assignmentId} key={item.assignmentId}>{item.stageName} · {item.Problem.problemId} {item.Problem.title}</option>)}</Select></label>{loading ? <p className={styles.muted}>正在加载提示…</p> : hints.length ? <div className={styles.hintGrid}>{hints.map(hint => <article className={styles.card} key={hint.id}><div className={styles.actions}><StatusBadge variant="neutral">{hint.level} 级</StatusBadge><StatusBadge variant="info">{hint.openMode || 'MANUAL'}</StatusBadge>{!hintsFrozen && <><Button size="sm" variant="ghost" onClick={() => openHintEditor(hint)}>编辑</Button><Button size="sm" variant="ghost" onClick={() => setDeleteHintTarget(hint)}>删除</Button></>}</div><strong>{hint.title || '未命名提示'}</strong><p>{hint.content}</p></article>)}</div> : <Empty title="该题暂无提示" />}</div>}
+    <FormDialog isOpen={hintOpen} onClose={resetHintForm} onSubmit={() => void saveHint()} title={editingHint ? '编辑分级提示' : '新增分级提示'} submitText={editingHint ? '保存修改' : '创建提示'} loading={saving} dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>触发值<Input type="number" value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>
+    <FormDialog isOpen={Boolean(deleteHintTarget)} onClose={() => setDeleteHintTarget(undefined)} onSubmit={() => void confirmDeleteHint()} title="删除提示" description={`确认删除 ${deleteHintTarget?.level || ''} 级提示？删除后无法恢复。`} submitText="确认删除" loading={saving}><p className={styles.muted}>{deleteHintTarget?.title || '未命名提示'}</p></FormDialog>
   </Section>
 }
