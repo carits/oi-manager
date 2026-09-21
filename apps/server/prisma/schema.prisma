@@ -3871,7 +3871,6 @@ enum TrainingEnginePeerVisibility {
 
 enum TrainingEngineJoinMode {
   CURRENT_STAGE
-  FROM_BEGINNING
   TEACHER_ASSIGN
 }
 
@@ -3979,6 +3978,8 @@ model TrainingSessionStageProblem {
   testSetRevisionId       String
   alias                   String?
   orderIndex              Int
+  titleSnapshot           String
+  statementsSnapshot      Json?
   unlockPolicy            Json?
   targetScore             Int?
   timePolicy              Json?
@@ -3994,6 +3995,7 @@ model TrainingSessionStageProblem {
   Problem                 Problem                           @relation(fields: [problemId], references: [id], onDelete: Restrict)
   TestSetRevision         ProblemTestSetRevision            @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
   Progress                TrainingSessionProblemProgress[]
+  Drafts                  TrainingSessionProblemDraft[]
   Hints                   TrainingSessionHint[]
   ScoreEvents             TrainingSessionScoreEvent[]
   StrategyDecisions       TrainingSessionStrategyDecision[]
@@ -4226,21 +4228,23 @@ model TrainingSessionUserOverride {
 }
 
 model TrainingSessionProblemDraft {
-  id             String          @id @default(uuid())
+  id             String                      @id @default(uuid())
   sessionId      String
   userId         String
-  problemId      String
+  stageProblemId String
   language       String
-  code           String          @db.Text
+  code           String                      @db.Text
   inputFilename  String?
   outputFilename String?
-  revision       Int             @default(1)
-  editorFocused  Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  Session        TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  revision       Int                         @default(1)
+  editorFocused  Boolean                     @default(false)
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  Session        TrainingSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  StageProblem   TrainingSessionStageProblem @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
 
-  @@unique([sessionId, userId, problemId])
+  @@unique([sessionId, userId, stageProblemId])
+  @@index([stageProblemId])
   @@index([userId, updatedAt])
 }
 
