@@ -30,6 +30,7 @@ import { TrainingContentSnapshotEditorModal, type EditableActivitySnapshot } fro
 import { TrainingRatingPanel } from '@/features/contest-rating'
 import { Bell, BookOpenCheck, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -77,6 +78,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
+  const toast = useToast()
   const trainingId = trainingIdOverride || (params.tid || params.cid || params.id) as string
   const isTeamScopedPath = pathname.includes('/teams/') || pathname.includes('/team/')
   const teamId = teamIdOverride || (isTeamScopedPath ? (params.id as string) : undefined)
@@ -664,10 +666,10 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
                     const homeworkHref = resourceHref('homework', navigationContext, (res.data as { id: number }).id)
                     if (homeworkHref) router.push(homeworkHref)
                   } else {
-                    alert(res.message || '创建失败')
+                    toast.error(res.message || '创建失败')
                   }
                 } catch (err: unknown) {
-                  alert((err as Error).message || '创建失败')
+                  toast.error((err as Error).message || '创建失败')
                 } finally {
                   setMakeupLoading(false)
                 }
