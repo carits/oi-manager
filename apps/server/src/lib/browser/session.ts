@@ -26,7 +26,7 @@ export class SessionManager {
   /** 确保存储目录存在 */
   private ensureDir(): void {
     if (!fs.existsSync(this.sessionsDir)) {
-      fs.mkdirSync(this.sessionsDir, { recursive: true })
+      fs.mkdirSync(this.sessionsDir, { recursive: true, mode: 0o700 })
     }
   }
 
@@ -49,7 +49,8 @@ export class SessionManager {
       savedAt: new Date().toISOString(),
     }
 
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), { encoding: 'utf-8', mode: 0o600 })
+    fs.chmodSync(filePath, 0o600)
     logger.info('session_cookies_saved', {
       action: 'session_save',
       metadata: { sessionId, cookieCount: cookies.length }
