@@ -3,12 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/features/auth'
-import { listWorkspaces } from '@/features/workspace'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Empty } from '@/components/ui/Empty'
-import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import StudentsManagementContent from '@/components/management/StudentsManagementContent'
 import TeachersManagementContent from '@/components/management/TeachersManagementContent'
 import { WalletPage } from '@/features/account-wallet'
@@ -28,23 +26,13 @@ export default function CampusManagementPage() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const params = useParams<{ organizationId?: string }>()
-  const [organizationId, setOrganizationId] = useState(params.organizationId || '')
-  const [loadingWorkspace, setLoadingWorkspace] = useState(!params.organizationId)
+  const organizationId = params.organizationId || ''
   const role = user?.organizationRole
   const isPrincipal = role === 'school_principal'
   const requestedTab = searchParams.get('tab')
   const resolvedTab: Tab = requestedTab === 'teachers' && isPrincipal ? 'teachers' : requestedTab === 'settings' && isPrincipal ? 'settings' : requestedTab === 'applications' || requestedTab === 'invitations' || requestedTab === 'wallet' ? requestedTab : 'students'
   const [activeTab, setActiveTab] = useState<Tab>(resolvedTab)
   const [pending, setPending] = useState({ applications: 0, invitations: 0 })
-
-  useEffect(() => {
-    if (params.organizationId) return
-    void listWorkspaces().then(result => {
-      const workspace = result.workspaces.find(item => item.type === 'organization')
-      setOrganizationId(workspace?.organizationId || '')
-      setLoadingWorkspace(false)
-    }).catch(() => setLoadingWorkspace(false))
-  }, [params.organizationId])
 
   const items = useMemo(() => [
     { value: 'students', label: '学生' },
@@ -74,7 +62,7 @@ export default function CampusManagementPage() {
   }
 
   if (role === 'student') return <Empty title="无权访问管理" description="学生不能访问学校管理内容。" />
-  if (loadingWorkspace) return <PageLoadingFrame title="管理" />
+  if (!organizationId) return <Empty title="缺少学校上下文" description="请从学校工作区进入管理页面。" />
 
   return (
     <PageFrame>
