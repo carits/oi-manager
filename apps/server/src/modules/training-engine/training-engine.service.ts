@@ -1274,7 +1274,7 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
     requiredCount: requiredCurrent.size,
     completedCount: completedCurrent,
   } : participant
-  const snapshotProblem = (problem: typeof session.Stages[number]['Problems'][number]) => ({
+  const snapshotProblem = (problem: any) => ({
     ...problem,
     Problem: { ...problem.Problem, title: problem.titleSnapshot },
     Statements: Array.isArray(problem.statementsSnapshot) ? problem.statementsSnapshot : [],
