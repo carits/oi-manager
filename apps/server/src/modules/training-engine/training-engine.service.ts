@@ -126,6 +126,25 @@ function parseJsonObject(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 }
 
+function expandSubtaskDependencyClosure(config: any, selected: number[]) {
+  const subtasks = Array.isArray(config?.subtasks) ? config.subtasks : []
+  const byId = new Map<number, any>(subtasks.map((subtask: any) => [Number(subtask.id), subtask]))
+  const expanded = new Set<number>()
+  const visiting = new Set<number>()
+  const visit = (id: number) => {
+    if (expanded.has(id)) return
+    if (visiting.has(id)) throw new TrainingEngineError(422, 'INVALID_TRAINING_SUBTASK_GRAPH', `Subtask 依赖存在循环：S${id}`)
+    const subtask = byId.get(id)
+    if (!subtask) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', `训练投影包含不存在的 Subtask：S${id}`)
+    visiting.add(id)
+    for (const dependency of Array.isArray(subtask.if) ? subtask.if : []) visit(Number(dependency))
+    visiting.delete(id)
+    expanded.add(id)
+  }
+  for (const id of selected) visit(id)
+  return subtasks.map((subtask: any) => Number(subtask.id)).filter((id: number) => expanded.has(id))
+}
+
 function normalizeProblemTimePolicy(value: unknown) {
   if (value === undefined || value === null) return undefined
   const policy = parseJsonObject(value)
@@ -382,22 +401,24 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
       if (!problem?.LatestTestSetRevision) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_REVISION_REQUIRED', `${label}的第 ${problemIndex + 1} 道题没有正式 TestSet Revision`)
       const revision = item.testSetRevisionId ? revisionsById.get(item.testSetRevisionId) : problem.LatestTestSetRevision
       if (!revision || revision.problemId !== problem.id) throw new TrainingEngineError(422, 'TRAINING_REVISION_PROBLEM_MISMATCH', `${label}的第 ${problemIndex + 1} 道题使用了不属于该题的 TestSet Revision`)
-      const allowedSubtaskIds = Array.isArray(item.allowedSubtaskIds) ? [...new Set(item.allowedSubtaskIds.map(Number))] : []
+      let allowedSubtaskIds = Array.isArray(item.allowedSubtaskIds) ? [...new Set(item.allowedSubtaskIds.map(Number))] : []
       if (allowedSubtaskIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', 'Subtask ID 必须是正整数')
       if (allowedSubtaskIds.length && revision.mode !== 'oi') throw new TrainingEngineError(422, 'SUBTASK_PROJECTION_UNSUPPORTED', '仅 OI Revision 支持按 Subtask 训练')
       const rawScoreGoals = Array.isArray(item.scoreGoals) && item.scoreGoals.length ? item.scoreGoals : Array.isArray(rules.defaultScoreGoals) ? rules.defaultScoreGoals : []
-      const scoreGoals = rawScoreGoals.map((goal: any, goalIndex: number) => ({
+      let scoreGoals = rawScoreGoals.map((goal: any, goalIndex: number) => ({
         score: boundedInteger(goal?.score, 1, 100, `${label}第 ${problemIndex + 1} 道题的第 ${goalIndex + 1} 个分数目标`, false)!,
         allowedSubtaskIds: Array.isArray(goal?.allowedSubtaskIds) ? [...new Set(goal.allowedSubtaskIds.map(Number))] : [],
       }))
       if (scoreGoals.some((goal: any, index: number) => index > 0 && goal.score <= scoreGoals[index - 1].score)) throw new TrainingEngineError(422, 'INVALID_TRAINING_SCORE_GOALS', '分数目标必须严格递增')
       if (scoreGoals.some((goal: any) => goal.allowedSubtaskIds.some((id: number) => !Number.isSafeInteger(id) || id <= 0))) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', '分数目标中的 Subtask ID 必须是正整数')
       let projection: string | null = null
-      const allProjectedSubtasks = [...new Set([...allowedSubtaskIds, ...scoreGoals.flatMap((goal: any) => goal.allowedSubtaskIds)])]
-      if (allProjectedSubtasks.length) {
+      const requestedProjectedSubtasks = [...new Set([...allowedSubtaskIds, ...scoreGoals.flatMap((goal: any) => goal.allowedSubtaskIds)])]
+      if (requestedProjectedSubtasks.length) {
         const config = yaml.load(revision.judgeConfig) as any
         const available = new Set((config?.subtasks || []).map((subtask: any) => Number(subtask.id)))
-        if (allProjectedSubtasks.some(id => !available.has(id))) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', `训练投影包含不存在的 Subtask：${allProjectedSubtasks.filter(id => !available.has(id)).join(', ')}`)
+        if (requestedProjectedSubtasks.some(id => !available.has(id))) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', `训练投影包含不存在的 Subtask：${requestedProjectedSubtasks.filter(id => !available.has(id)).join(', ')}`)
+        allowedSubtaskIds = expandSubtaskDependencyClosure(config, allowedSubtaskIds)
+        scoreGoals = scoreGoals.map((goal: any) => ({ ...goal, allowedSubtaskIds: expandSubtaskDependencyClosure(config, goal.allowedSubtaskIds) }))
         if (allowedSubtaskIds.length) projection = yaml.dump({ ...config, subtasks: (config.subtasks || []).filter((subtask: any) => allowedSubtaskIds.includes(Number(subtask.id))) }, { noRefs: true, lineWidth: 120 })
       }
       return { item: {
