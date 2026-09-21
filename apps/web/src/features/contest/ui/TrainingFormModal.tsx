@@ -525,24 +525,27 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           }
         }
 
-        // 4. Add new problems
-        const newRows = problemRows.filter(r => !r.existing && r.resolved?.found)
-        const newTrainingProblemIds: string[] = []
-        for (const row of newRows) {
-          const createRes = await apiClient.post<IdResponse>(`/api/trainings/${trainingId}/problems`, {
+        // 4. Add new problems with bounded concurrency, then preserve the exact UI order.
+        const newRows = problemRows.filter(row => !row.existing && row.resolved?.found)
+        const createdRows = await mapWithConcurrency(newRows, 4, async row => {
+          const response = await apiClient.post<IdResponse>(`/api/trainings/${trainingId}/problems`, {
             problemId: row.resolved!.problemId,
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
             statementOptionKey: row.statementOptionKey,
             solutionOptionKey: row.solutionOptionKey || 'none',
           })
-          if (!createRes.success || !createRes.data) throw new Error(createRes.message || `添加题目 ${row.resolved?.title || row.problemCode} 失败`)
-          newTrainingProblemIds.push(String(createRes.data.id))
-        }
+          if (!response.success || !response.data) throw new Error(response.message || `添加题目 ${row.resolved?.title || row.problemCode} 失败`)
+          return { rowId: row.id, trainingProblemId: String(response.data.id) }
+        })
+        const createdIdByRow = new Map(createdRows.map(item => [item.rowId, item.trainingProblemId]))
 
-        // 5. Reorder
-        const existingIdsInOrder = problemRows.filter(r => r.existing).map(r => r.trainingProblemId!)
-        const allIdsInOrder = [...existingIdsInOrder, ...newTrainingProblemIds]
+        // 5. Reorder using the current mixed existing/new row order.
+        const allIdsInOrder = problemRows.flatMap(row => {
+          if (row.existing && row.trainingProblemId) return [row.trainingProblemId]
+          const createdId = createdIdByRow.get(row.id)
+          return createdId ? [createdId] : []
+        })
         const orders = allIdsInOrder.map((id, i) => ({ id, orderIndex: i }))
         if (orders.length > 0) {
           const reorderRes = await apiClient.put(`/api/trainings/${trainingId}/problems/reorder`, { orders })
@@ -585,35 +588,25 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           if (!ratingRes.success) throw new Error(ratingRes.message || '比赛已创建，但 Rating 配置保存失败，请立即进入编辑页面确认')
         }
 
-        const resolvedRows = problemRows.filter(r => r.resolved?.found)
+        const resolvedRows = problemRows.filter(row => row.resolved?.found)
         const createProblemResults = await mapWithConcurrency(resolvedRows, 4, async row => {
-          const response = await apiClient.post(`/api/trainings/${newTrainingId}/problems`, {
+          const response = await apiClient.post<IdResponse>(`/api/trainings/${newTrainingId}/problems`, {
             problemId: row.resolved!.problemId,
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
             statementOptionKey: row.statementOptionKey,
             solutionOptionKey: row.solutionOptionKey || 'none',
           })
-          return { row, response }
+          if (!response.success || !response.data) {
+            throw new Error(response.message || `添加题目 ${row.resolved?.title || row.problemCode} 失败`)
+          }
+          return { rowId: row.id, trainingProblemId: String(response.data.id) }
         })
-        const failedProblem = createProblemResults.find(result => !result.response.success)
-        if (failedProblem) {
-          throw new Error(failedProblem.response.message || `添加题目 ${failedProblem.row.resolved?.title || failedProblem.row.problemCode} 失败`)
-        }
 
-        // 创建后也 reorder（确保顺序正确）
-        if (resolvedRows.length > 0) {
-          // 获取刚创建的题目以拿到 ID
-          const problemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/trainings/${newTrainingId}/problems`)
-          if (!problemsRes.success || !problemsRes.data) {
-            throw new Error(problemsRes.message || '比赛已创建，但无法读取题目顺序')
-          }
-          const createdProblems = problemsRes.data
-          const orders = createdProblems.map((p, i) => ({ id: p.id, orderIndex: i }))
-          if (orders.length > 0) {
-            const reorderRes = await apiClient.put(`/api/trainings/${newTrainingId}/problems/reorder`, { orders })
-            requireSuccess(reorderRes, '比赛已创建，但题目顺序保存失败')
-          }
+        if (createProblemResults.length > 0) {
+          const orders = createProblemResults.map((item, index) => ({ id: item.trainingProblemId, orderIndex: index }))
+          const reorderRes = await apiClient.put(`/api/trainings/${newTrainingId}/problems/reorder`, { orders })
+          requireSuccess(reorderRes, '比赛已创建，但题目顺序保存失败')
         }
 
         toast.success(mode === 'contest' ? '比赛创建成功' : schoolId ? '作业创建成功' : '训练创建成功')
