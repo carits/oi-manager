@@ -3871,7 +3871,6 @@ enum TrainingEnginePeerVisibility {
 
 enum TrainingEngineJoinMode {
   CURRENT_STAGE
-  FROM_BEGINNING
   TEACHER_ASSIGN
 }
 
