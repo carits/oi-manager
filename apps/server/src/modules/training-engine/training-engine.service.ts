@@ -904,40 +904,71 @@ function requiredSessionProblemIds(session: SessionShape, participantId: string)
   return new Set(session.Stages.flatMap(stage => [...requiredStageProblemIds(stage, participantId)]))
 }
 
-export async function resolveTrainingPermission(userId: string, sessionId: string, stageProblemId?: string | null) {
-  const session = await loadSession(sessionId)
-  if (!session) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SESSION_NOT_FOUND' }
-  if (await canManageSession(userId, session)) return { canView: true, canSubmit: session.status === 'RUNNING', canEdit: true, canOpenHint: true, reason: 'ADMIN_OVERRIDE' }
-  const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
+type TrainingPermissionResult = {
+  canView: boolean
+  canSubmit: boolean
+  canEdit: boolean
+  canOpenHint: boolean
+  reason: string
+}
+
+function resolveTrainingPermissionLoaded(
+  session: SessionShape,
+  manager: boolean,
+  participant: any,
+  stageProblemId: string | null | undefined,
+  overrides: any[],
+  progressByProblem: Map<string, any>,
+): TrainingPermissionResult {
+  if (manager) return { canView: true, canSubmit: session.status === 'RUNNING', canEdit: true, canOpenHint: true, reason: 'ADMIN_OVERRIDE' }
   if (!participant || participant.status !== 'active') return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'NOT_PARTICIPANT' }
-  if (session.status === 'DRAFT' || session.status === 'SCHEDULED') return { canView: session.status === 'SCHEDULED', canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SESSION_NOT_RUNNING' }
-  if (session.status === 'ENDED' || session.status === 'ARCHIVED') return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'SESSION_ENDED' }
-  if (session.status === 'PAUSED') return { canView: true, canSubmit: false, canEdit: session.pauseMode !== 'HARD', canOpenHint: false, reason: session.pauseMode === 'HARD' ? 'HARD_PAUSE' : 'SOFT_PAUSE' }
-  if (!stageProblemId) return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'PROBLEM_REQUIRED' }
-  const stage = session.Stages.find(item => item.id === participant.currentStageId || item.id === session.currentStageId)
-  const stageProblem = session.Stages.flatMap(item => item.Problems.map(problem => ({ ...problem, stage: item }))).find(item => item.id === stageProblemId)
-  if (!stage || !stageProblem) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_IN_SESSION' }
-  const overrides = await prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } })
+  if (!stageProblemId) {
+    if (session.status === 'DRAFT') return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SESSION_NOT_RUNNING' }
+    if (session.status === 'SCHEDULED') return { canView: true, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_REQUIRED' }
+    if (session.status === 'ENDED' || session.status === 'ARCHIVED') return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'SESSION_ENDED' }
+    if (session.status === 'PAUSED') return { canView: true, canSubmit: false, canEdit: session.pauseMode !== 'HARD', canOpenHint: false, reason: session.pauseMode === 'HARD' ? 'HARD_PAUSE' : 'SOFT_PAUSE' }
+    return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'PROBLEM_REQUIRED' }
+  }
+
+  const activeStageId = session.currentStageId || participant.currentStageId || session.Stages[0]?.id || null
+  const stage = activeStageId ? session.Stages.find(item => item.id === activeStageId) : null
+  const problemStage = session.Stages.find(item => item.Problems.some(problem => problem.id === stageProblemId))
+  const stageProblem = problemStage?.Problems.find(problem => problem.id === stageProblemId)
+  if (!stage || !problemStage || !stageProblem) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_IN_SESSION' }
+
+  if (session.status === 'ENDED' || session.status === 'ARCHIVED') {
+    return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'SESSION_ENDED' }
+  }
+  if (session.status === 'DRAFT') return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SESSION_NOT_RUNNING' }
+
   const unlocked = overrides.some(item => item.type === 'UNLOCK_PROBLEM' && (!item.stageProblemId || item.stageProblemId === stageProblemId))
   const submissionOverride = overrides.some(item => item.type === 'ENABLE_SUBMISSION')
   const overlays = session.Overlays.filter(item => targetApplies(item.targetType, item.targetId, participant, session))
   const focus = [...overlays].reverse().find(item => ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'].includes(item.type))
-  if (focus && focus.type !== 'SOFT_FOCUS' && focus.stageProblemId !== stageProblemId && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FOCUS_LOCK' }
-  if (overlays.some(item => item.type === 'DISABLE_SUBMISSION') && !submissionOverride) return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'SUBMISSION_DISABLED' }
-  if (overlays.some(item => item.type === 'LOCK_PROBLEM' && item.stageProblemId === stageProblemId) && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_LOCKED' }
-  if (stageProblem.stageId !== stage.id && !unlocked && focus?.stageProblemId !== stageProblemId) {
-    if (stageProblem.stage.orderIndex > stage.orderIndex) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FUTURE_STAGE' }
+
+  if (focus && focus.type !== 'SOFT_FOCUS' && focus.stageProblemId !== stageProblemId && !unlocked) {
+    return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FOCUS_LOCK' }
+  }
+  if (overlays.some(item => item.type === 'LOCK_PROBLEM' && item.stageProblemId === stageProblemId) && !unlocked) {
+    return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_LOCKED' }
+  }
+
+  if (problemStage.id !== stage.id && !unlocked && focus?.stageProblemId !== stageProblemId) {
+    if (problemStage.orderIndex > stage.orderIndex) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FUTURE_STAGE' }
     return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'HISTORICAL_STAGE' }
   }
+
   const assignment = stage.ParticipantAssignments.find(item => item.participantId === participant.id)
   const plan = stageProblem.Plans.find(item => item.groupId === (stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
   const group = assignment?.groupId ? stage.Groups.find(item => item.id === assignment.groupId) : null
   const accessPolicy = group?.accessPolicy || stage.accessPolicy
+
   if (accessPolicy === 'TEACHER_CONTROLLED' && !unlocked) {
     const focusedStageProblemId = focus?.stageProblemId || participant.currentProblemId || stage.Problems[0]?.id
     if (focusedStageProblemId !== stageProblemId) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FOCUS_REQUIRED' }
   }
+
   if (accessPolicy === 'SEQUENTIAL' && !unlocked) {
     const ordered = stage.Problems.flatMap(problem => problem.Plans.map(item => ({ ...item, problem })))
       .filter(item => item.groupId === (stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
@@ -945,23 +976,48 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
     const index = ordered.findIndex(item => item.stageProblemId === stageProblemId)
     if (index > 0) {
       const previous = ordered[index - 1]
-      const progress = await prisma.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: previous.stageProblemId } } })
+      const previousProgress = progressByProblem.get(previous.stageProblemId)
       const policy = parseJsonObject(plan?.unlockPolicy || parseJsonObject(group?.rules || stage.rules).defaultUnlock || { mode: 'ANY', conditions: [{ type: 'AC' }] })
       const conditions = Array.isArray(policy.conditions) ? policy.conditions : [{ type: 'AC' }]
-      const passed = String(policy.mode || 'ANY') === 'ALL' ? conditions.every(item => conditionSatisfied(item, progress)) : conditions.some(item => conditionSatisfied(item, progress))
+      const passed = String(policy.mode || 'ANY') === 'ALL'
+        ? conditions.every(item => conditionSatisfied(item, previousProgress))
+        : conditions.some(item => conditionSatisfied(item, previousProgress))
       if (!passed) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SEQUENTIAL_LOCK' }
     }
   }
+
+  if (session.status === 'SCHEDULED') return { canView: true, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SESSION_NOT_RUNNING' }
+  if (session.status === 'PAUSED') return { canView: true, canSubmit: false, canEdit: session.pauseMode !== 'HARD', canOpenHint: false, reason: session.pauseMode === 'HARD' ? 'HARD_PAUSE' : 'SOFT_PAUSE' }
+
+  if (overlays.some(item => item.type === 'DISABLE_SUBMISSION') && !submissionOverride) {
+    return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'SUBMISSION_DISABLED' }
+  }
+
   const timePolicy = parseJsonObject(plan?.timePolicy || parseJsonObject(group?.rules).timePolicy || parseJsonObject(stage.rules).timePolicy)
   if (timePolicy.mode && timePolicy.mode !== 'NONE' && timePolicy.limitSeconds && !unlocked) {
-    const progress = await prisma.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })
-    if (progress && !progress.acAt && progress.continuousActiveSeconds >= Number(timePolicy.limitSeconds)) {
+    const currentProgress = progressByProblem.get(stageProblemId)
+    if (currentProgress && !currentProgress.acAt && currentProgress.continuousActiveSeconds >= Number(timePolicy.limitSeconds)) {
       if (timePolicy.mode === 'HARD') return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS', reason: 'PROBLEM_TIME_LIMIT_REACHED' }
       if (timePolicy.mode === 'SWITCH_REQUIRED') return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS', reason: 'FORCED_SWITCH_REQUIRED' }
     }
   }
+
   const canSubmit = ((group?.submissionMode || stage.submissionMode) === 'ENABLED' && session.defaultSubmissionMode === 'ENABLED') || submissionOverride
   return { canView: true, canSubmit, canEdit: true, canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS', reason: canSubmit ? 'ALLOWED' : 'SUBMISSION_DISABLED' }
+}
+
+export async function resolveTrainingPermission(userId: string, sessionId: string, stageProblemId?: string | null) {
+  const session = await loadSession(sessionId)
+  if (!session) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SESSION_NOT_FOUND' }
+  const manager = await canManageSession(userId, session)
+  if (manager) return resolveTrainingPermissionLoaded(session, true, null, stageProblemId, [], new Map())
+  const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
+  if (!participant) return resolveTrainingPermissionLoaded(session, false, null, stageProblemId, [], new Map())
+  const [overrides, progress] = await Promise.all([
+    prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } }),
+    prisma.trainingSessionProblemProgress.findMany({ where: { participantId: participant.id } }),
+  ])
+  return resolveTrainingPermissionLoaded(session, false, participant, stageProblemId, overrides, new Map(progress.map(item => [item.stageProblemId, item])))
 }
 
 export async function joinTrainingSession(userId: string, sessionId: string) {
@@ -1274,10 +1330,13 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
       lastDecision: last ? { decision: last.decision, reason: last.reason, createdAt: last.createdAt } : null,
     }]
   }))
-  const permissions = Object.fromEntries((await Promise.all(session.Stages.flatMap(stage => stage.Problems).map(async item => {
-    const permission = await resolveTrainingPermission(userId, sessionId, item.id)
+  const overrides = participant && !manager
+    ? await prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } })
+    : []
+  const permissions = Object.fromEntries(session.Stages.flatMap(stage => stage.Problems).map(item => {
+    const permission = resolveTrainingPermissionLoaded(session, manager, participant, item.id, overrides, progressByProblem)
     return [item.id, { ...permission, canSeeMetadata: manager || permission.canView }] as const
-  }))))
+  }))
   const visibleOverlays = manager || !participant ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
   const currentStage = participant ? session.Stages.find(stage => stage.id === session.currentStageId) : null
   const currentAssignment = participant && currentStage ? currentStage.ParticipantAssignments.find(item => item.participantId === participant.id) : null
