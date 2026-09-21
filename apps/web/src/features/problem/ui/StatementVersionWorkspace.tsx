@@ -8,7 +8,8 @@ import { useSearchParams } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
-import { FormDialog } from '@/components/ui/Dialogs'
+import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
+import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 import { useToast } from '@/components/ui/Toast'
 
 interface Version {
@@ -50,7 +51,13 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [pendingVersion, setPendingVersion] = useState<Version | null>(null)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const pdfInputRef = useRef<HTMLInputElement>(null)
+  const draftDirty = Boolean(editing && selected?.isMine && draft !== (selected.content || ''))
+  useUnsavedChanges(`statement-version:${problemId}`, draftDirty)
 
   const load = useCallback(async (all = showAll) => {
     setLoading(true)
@@ -75,7 +82,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
 
   useEffect(() => { void load() }, [problemId, showAll]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const choose = async (item: Version) => {
+  const chooseNow = async (item: Version) => {
     let detail = item
     if (!item.isOfficial && item.content === undefined) {
       const response = await apiClient.get<Version>(`/api/problems/${problemId}/statement-versions/${item.id}`)
@@ -87,6 +94,14 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
     const url = new URL(window.location.href)
     url.searchParams.set('statementVersion', item.id)
     window.history.replaceState({}, '', url)
+  }
+
+  const choose = async (item: Version) => {
+    if (draftDirty && item.id !== selected?.id) {
+      setPendingVersion(item)
+      return
+    }
+    await chooseNow(item)
   }
 
   const openCreate = (base?: Version | null) => {
@@ -110,7 +125,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
       setCreateOpen(false)
       setShowAll(true)
       await load(true)
-      await choose(response.data)
+      await chooseNow(response.data)
       if (response.data.format === 'markdown') { setDraft(response.data.content || ''); setEditing(true) }
       toast.success('题面版本已创建')
     } else toast.error(response.message || '创建失败')
@@ -134,10 +149,30 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
   }
 
   const remove = async () => {
-    if (!selected?.isMine || !window.confirm(`确定删除题面「${selected.name}」吗？活动快照不会受影响。`)) return
+    if (!selected?.isMine) return
+    setSaving(true)
     const response = await apiClient.delete(`/api/problems/${problemId}/statement-versions/${selected.id}`)
-    if (response.success) { toast.success('题面已删除'); setSelected(null); await load(showAll) }
-    else toast.error(response.message || '删除失败')
+    if (response.success) {
+      toast.success('题面已删除')
+      setDeleteOpen(false)
+      setEditing(false)
+      setSelected(null)
+      await load(showAll)
+    } else toast.error(response.message || '删除失败')
+    setSaving(false)
+  }
+
+  const renameSelected = async () => {
+    if (!selected?.isMine || !renameDraft.trim()) return
+    setSaving(true)
+    const response = await apiClient.patch<Version>(`/api/problems/${problemId}/statement-versions/${selected.id}`, { name: renameDraft.trim() })
+    if (response.success && response.data) {
+      setSelected(response.data)
+      setRenameOpen(false)
+      toast.success('题面名称已更新')
+      await load(showAll)
+    } else toast.error(response.message || '重命名失败')
+    setSaving(false)
   }
 
   const uploadPdf = async (file: File | undefined) => {
@@ -191,9 +226,9 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
             {selected.format === 'markdown' && <Button variant="ghost" onClick={() => { setDraft(selected.content || ''); setEditing(true) }}>编辑</Button>}
             <Input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" hidden onChange={event => void uploadPdf(event.target.files?.[0])} />
             <Button variant="ghost" onClick={() => pdfInputRef.current?.click()} disabled={saving}>{selected.format === 'pdf' ? '替换 PDF' : '改用 PDF'}</Button>
-            <Button variant="ghost" onClick={() => { const next = window.prompt('新的题面名称', selected.name); if (next) void patchSelected({ name: next }) }}>重命名</Button>
+            <Button variant="ghost" onClick={() => { setRenameDraft(selected.name); setRenameOpen(true) }}>重命名</Button>
             <Button variant="ghost" onClick={() => patchSelected({ visibility: selected.visibility === 'public' ? 'private' : 'public' })}>{selected.visibility === 'public' ? '设为私有' : '设为公开'}</Button>
-            <Button variant="ghost" onClick={remove} className={unifiedStyles.u15}>删除</Button>
+            <Button variant="ghost" onClick={() => setDeleteOpen(true)} className={unifiedStyles.u15}>删除</Button>
           </div>}
           {editing ? <div><MarkdownEditor value={draft} onChange={setDraft} minHeight="480px" showPreview /><div className={unifiedStyles.u16}><Button variant="ghost" onClick={() => setEditing(false)}>取消</Button><Button variant="ghost" onClick={saveContent} disabled={saving}>{saving ? '保存中…' : '保存'}</Button></div></div>
             : selected.format === 'pdf' && selected.fileUrl ? <iframe src={selected.fileUrl} className={unifiedStyles.u17} />
@@ -209,6 +244,43 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
           <label>可见性<Select value={visibility} onChange={event => setVisibility(event.target.value as 'private' | 'public')} className={unifiedStyles.u21}><option value="private">私有</option><option value="public">公开</option></Select></label>
         </div>
       </FormDialog>
+      <FormDialog
+        isOpen={renameOpen}
+        onClose={() => setRenameOpen(false)}
+        onSubmit={() => void renameSelected()}
+        title="重命名题面"
+        submitText="保存名称"
+        loading={saving}
+        submitDisabled={!renameDraft.trim()}
+        dirty={Boolean(selected && renameDraft.trim() !== selected.name)}
+      >
+        <label>题面名称<Input value={renameDraft} onChange={event => setRenameDraft(event.target.value)} maxLength={80} /></label>
+      </FormDialog>
+      <ConfirmDialog
+        isOpen={Boolean(pendingVersion)}
+        onClose={() => setPendingVersion(null)}
+        onConfirm={() => {
+          const target = pendingVersion
+          setPendingVersion(null)
+          setEditing(false)
+          if (target) void chooseNow(target)
+        }}
+        title="放弃未保存的题面修改？"
+        message="当前 Markdown 题面还有未保存内容。切换版本后，这些修改将丢失。"
+        cancelText="继续编辑"
+        confirmText="放弃修改并切换"
+        danger
+      />
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => void remove()}
+        title="删除题面版本？"
+        message={selected ? `确定删除题面「${selected.name}」吗？活动中已经固定的历史快照不会受影响。` : '确定删除这个题面版本吗？'}
+        confirmText="删除"
+        danger
+        loading={saving}
+      />
     </div>
   )
 }
