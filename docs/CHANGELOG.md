@@ -5,6 +5,19 @@ last_verified: 2026-09-20
 source_of_truth: Git history
 ---
 
+## 2026-09-22 — Full-project usability hardening 收口
+
+- Training Workspace 权限求值改为批量内存求值：一次加载 Participant、Override 与 Progress，避免每个 StageProblem 重复加载 Session/Progress 的 N+1。
+- 修复训练在 `SCHEDULED` 与 `PAUSED` 状态下因权限早退导致未来 Stage、顺序锁定或教师控制题目元数据可能提前可见的问题；未开放题继续在 API 边界脱敏。
+- 修复教练 Runtime Command 的 TEAM 目标死功能：客户端直接使用当前 Session 的 `teamId`，服务端继续规范化并校验目标。
+- 训练过程报告新增学员明细 CSV 与完整 JSON 导出，便于课堂结束后分析与留档。
+- `TrainingDetailPage` 的补作业创建失败反馈改用站内 Toast，去掉原生 `alert()`。
+- 对 72 个 Server route 文件完成静态 `:param` 与 `req.params` 一致性扫描；除已修复的 Training design-problem 参数错配外未发现同类问题。
+- 删除 17 个已经废弃、一次性、依赖旧 School/Teacher/Student/Admin 模型或直接写业务数据库的维护/造数/迁移脚本；保留带阻塞条件、快照/dry-run/事务对账的当前受控迁移工具、E2E seed/reset 和只读审计/运维工具。
+- 修正文档治理：`CLAUDE.md` 不再把不存在的 `migrate-organization-*.ts` 当成当前迁移入口；旧组织迁移说明改为历史归档，当前事实源指向 Prisma migration 与 Schema。
+- 新增 Training Server 回归用例，锁定暂停/预发布未来题脱敏与 TEAM 目标规范化语义。
+- 本批**没有实际执行测试、数据库迁移、迁移演练或部署**；这些验证项按本轮约束保留为显式未完成事项，不计入“已验证”。
+
 ## 2026-09-20 — Contest 与 Judge 双模型兼容退役
 
 - Contest 获得独立 publicId，直接拥有题目、参赛者、生命周期和 Rating 事实；删除 runtimeTrainingId、runtimeTrainingProblemId、投影写入服务和自动补聚合维护服务。
