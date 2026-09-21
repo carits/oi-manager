@@ -125,8 +125,12 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     try {
       const data = await apiClient.query<{ users: Array<{ id: string; username: string; displayName?: string }> }>('/api/trainings/' + trainingId + '/submission-users')
       setRejudgeUsers(data.users)
-    } catch { setRejudgeUsers([]) } finally { setRejudgeUsersLoading(false) }
-  }, [trainingId])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '重判用户列表加载失败')
+    } finally {
+      setRejudgeUsersLoading(false)
+    }
+  }, [toast, trainingId])
 
   useEffect(() => {
     const nextTab = searchParams.get('tab') as TabType | null
