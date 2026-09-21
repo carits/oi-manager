@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "defaults": {
+    "maxFiles": 8,
+    "maxTests": 3,
+    "maxDiffLines": 1200,
+    "mainRef": "origin/main"
+  },
+  "modules": {
+    "training-engine": {
+      "paths": [
+        "apps/server/src/modules/training-engine/**",
+        "apps/server/tests/training-engine.test.ts",
+        "apps/web/src/features/training-session/**",
+        "apps/web/src/app/**/training-sessions/**",
+        "packages/contracts/src/training.ts",
+        "e2e/tests/training-engine-flow.spec.ts",
+        "apps/server/prisma/migrations/**training_stage**",
+        "apps/server/prisma/schema.prisma"
+      ],
+      "stableSpecs": [
+        "docs/architecture/modules/TRAININGS.md",
+        "docs/architecture/ARCHITECTURE_RULES.md"
+      ],
+      "escalationSpecs": {
+        "schema": [
+          "docs/architecture/DATA_MODEL.md"
+        ],
+        "auth": [
+          "docs/architecture/AUTHORIZATION.md"
+        ],
+        "judge": [
+          "docs/architecture/JUDGE_AND_SUBMISSIONS.md",
+          "docs/architecture/JUDGE_DOMAIN.md"
+        ]
+      }
+    },
+    "contest": {
+      "paths": [
+        "apps/server/src/modules/contest/**",
+        "apps/server/tests/**contest**",
+        "apps/web/src/features/contest/**",
+        "apps/web/src/app/**/contests/**",
+        "packages/contracts/src/**contest**",
+        "apps/server/prisma/migrations/**contest**",
+        "apps/server/prisma/schema.prisma"
+      ],
+      "stableSpecs": [
+        "docs/architecture/ARCHITECTURE_RULES.md"
+      ],
+      "escalationSpecs": {
+        "schema": [
+          "docs/architecture/DATA_MODEL.md"
+        ],
+        "judge": [
+          "docs/architecture/JUDGE_AND_SUBMISSIONS.md",
+          "docs/architecture/JUDGE_DOMAIN.md"
+        ],
+        "rating": [
+          "docs/architecture/RATING_DOMAIN.md"
+        ]
+      }
+    },
+    "organization": {
+      "paths": [
+        "apps/server/src/modules/organization/**",
+        "apps/server/src/modules/organization-join/**",
+        "apps/server/src/modules/organization-creation/**",
+        "apps/server/src/routes/organization-members.ts",
+        "apps/server/src/routes/platform-organizations.ts",
+        "apps/server/tests/**organization**",
+        "apps/web/src/features/organization-account/**",
+        "apps/web/src/features/platform-organization/**",
+        "apps/web/src/app/org/**",
+        "packages/contracts/src/organization.ts",
+        "apps/server/prisma/migrations/**organization**",
+        "apps/server/prisma/schema.prisma"
+      ],
+      "stableSpecs": [
+        "docs/architecture/modules/ORGANIZATION.md",
+        "docs/architecture/ORGANIZATION_JOIN.md",
+        "docs/architecture/AUTHORIZATION.md",
+        "docs/architecture/ARCHITECTURE_RULES.md"
+      ]
+    },
+    "judge": {
+      "paths": [
+        "apps/judge/**",
+        "apps/server/src/modules/judge/**",
+        "apps/server/src/ws/judge**",
+        "apps/server/src/lib/judge-mode.ts",
+        "apps/server/tests/**judge**",
+        "packages/contracts/src/submission.ts",
+        "apps/server/prisma/migrations/**judge**",
+        "apps/server/prisma/schema.prisma"
+      ],
+      "stableSpecs": [
+        "docs/architecture/JUDGE_DOMAIN.md",
+        "docs/architecture/JUDGE_AND_SUBMISSIONS.md",
+        "docs/architecture/JUDGE_PROGRAM_PROTOCOLS.md",
+        "docs/architecture/ARCHITECTURE_RULES.md"
+      ]
+    },
+    "routing": {
+      "paths": [
+        "apps/web/src/app/**",
+        "apps/web/src/components/**",
+        "apps/web/src/features/**",
+        "scripts/audit-web-navigation.mjs",
+        "docs/development/UX_ROUTE_MATRIX.md"
+      ],
+      "stableSpecs": [
+        "docs/development/FRONTEND.md",
+        "docs/development/UX_ROUTE_MATRIX.md",
+        "docs/architecture/ARCHITECTURE_RULES.md"
+      ]
+    }
+  }
+}
