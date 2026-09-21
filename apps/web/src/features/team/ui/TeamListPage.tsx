@@ -69,8 +69,8 @@ export function TeamListPage({
   const [createDescription, setCreateDescription] = useState('')
   const [createIsPublic, setCreateIsPublic] = useState(true)
   const [createTeamId, setCreateTeamId] = useState('')
-  const studentView = basePath.startsWith('/personal')
   const personalMode = basePath.startsWith('/personal')
+  const studentView = !personalMode && user?.organizationRole === 'student'
   const trimmedCreateTeamId = createTeamId.trim()
   const createTeamIdInvalid = trimmedCreateTeamId.length > 0 && !/^[a-zA-Z0-9_]+$/.test(trimmedCreateTeamId)
   const canCreateTeam = Boolean(createName.trim() && trimmedCreateTeamId && !createTeamIdInvalid)
