@@ -55,6 +55,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameDraft, setRenameDraft] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [pendingDraftAction, setPendingDraftAction] = useState<'stop-edit' | 'create' | null>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
   const draftDirty = Boolean(editing && selected?.isMine && draft !== (selected.content || ''))
   useUnsavedChanges(`statement-version:${problemId}`, draftDirty)
@@ -111,6 +112,22 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
     setVisibility('private')
     setCreateMode(base ? 'current' : 'blank')
     setCreateOpen(true)
+  }
+
+  const requestOpenCreate = () => {
+    if (draftDirty) {
+      setPendingDraftAction('create')
+      return
+    }
+    openCreate(selected)
+  }
+
+  const requestStopEditing = () => {
+    if (draftDirty) {
+      setPendingDraftAction('stop-edit')
+      return
+    }
+    setEditing(false)
   }
 
   const create = async () => {
@@ -212,7 +229,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
     <div className={unifiedStyles.u4}>
       <aside className={unifiedStyles.u5}>
         <div className={unifiedStyles.u6}>
-          <strong>题面版本</strong><Button variant="ghost" onClick={() => openCreate(selected)} className={unifiedStyles.u7}>+ 创建</Button>
+          <strong>题面版本</strong><Button variant="ghost" onClick={requestOpenCreate} className={unifiedStyles.u7}>+ 创建</Button>
         </div>
         {groups.map(group => <section key={group.title} className={unifiedStyles.u8}>
           <div className={unifiedStyles.u9}>{group.title}</div>
@@ -230,12 +247,22 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
             <Button variant="ghost" onClick={() => patchSelected({ visibility: selected.visibility === 'public' ? 'private' : 'public' })}>{selected.visibility === 'public' ? '设为私有' : '设为公开'}</Button>
             <Button variant="ghost" onClick={() => setDeleteOpen(true)} className={unifiedStyles.u15}>删除</Button>
           </div>}
-          {editing ? <div><MarkdownEditor value={draft} onChange={setDraft} minHeight="480px" showPreview /><div className={unifiedStyles.u16}><Button variant="ghost" onClick={() => setEditing(false)}>取消</Button><Button variant="ghost" onClick={saveContent} disabled={saving}>{saving ? '保存中…' : '保存'}</Button></div></div>
+          {editing ? <div><MarkdownEditor value={draft} onChange={setDraft} minHeight="480px" showPreview /><div className={unifiedStyles.u16}><Button variant="ghost" onClick={requestStopEditing}>取消</Button><Button variant="ghost" onClick={saveContent} disabled={saving}>{saving ? '保存中…' : '保存'}</Button></div></div>
             : selected.format === 'pdf' && selected.fileUrl ? <iframe src={selected.fileUrl} className={unifiedStyles.u17} />
             : <MarkdownRenderer content={selected.content || '暂无题面内容'} />}
         </>}
       </main>
-      <FormDialog isOpen={createOpen} onClose={() => setCreateOpen(false)} title="创建题面版本" size="md" footer={<div className={unifiedStyles.u18}><Button variant="ghost" onClick={() => setCreateOpen(false)}>取消</Button><Button variant="ghost" onClick={create} disabled={saving || !name.trim()}>{saving ? '创建中…' : '创建并编辑'}</Button></div>}>
+      <FormDialog
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={() => void create()}
+        title="创建题面版本"
+        size="md"
+        submitText="创建并编辑"
+        loading={saving}
+        submitDisabled={!name.trim()}
+        dirty={Boolean(name.trim() || createMode !== (selected ? 'current' : 'blank') || language !== (selected?.language || 'zh') || visibility !== 'private')}
+      >
         <div className={unifiedStyles.u19}>
           <div className={unifiedStyles.u20}>基于：{createMode === 'current' && selected ? `${selected.authorUsername || 'System'} / ${selected.name}` : '空白题面'}</div>
           <label>创建方式<Select value={createMode} onChange={event => setCreateMode(event.target.value as 'current' | 'blank')} className={unifiedStyles.u21}><option value="current">基于当前题面创建</option><option value="blank">创建空白题面</option></Select></label>
@@ -256,6 +283,21 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
       >
         <label>题面名称<Input value={renameDraft} onChange={event => setRenameDraft(event.target.value)} maxLength={80} /></label>
       </FormDialog>
+      <ConfirmDialog
+        isOpen={Boolean(pendingDraftAction)}
+        onClose={() => setPendingDraftAction(null)}
+        onConfirm={() => {
+          const action = pendingDraftAction
+          setPendingDraftAction(null)
+          setEditing(false)
+          if (action === 'create') openCreate(selected)
+        }}
+        title="放弃未保存的题面修改？"
+        message="当前 Markdown 题面还有未保存内容。继续操作后，这些修改将丢失。"
+        cancelText="继续编辑"
+        confirmText="放弃修改"
+        danger
+      />
       <ConfirmDialog
         isOpen={Boolean(pendingVersion)}
         onClose={() => setPendingVersion(null)}
