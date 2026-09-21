@@ -41,9 +41,9 @@ const stageModeLabel: Record<string, string> = {
   REVIEW: '复盘',
 }
 const progressLabel: Record<string, string> = {
-  NOT_STARTED: '未开始', IN_PROGRESS: '进行中', COMPLETED: '已完成', SKIPPED: '已跳过', LOCKED: '尚未开放',
+  NOT_STARTED: '未开始', WORKING: '进行中', STUCK: '可能卡题', COMPLETED: '已完成', SKIPPED: '已跳过', PAUSED: '已暂停', FOCUS_OVERRIDE: '教师聚焦', LOCKED: '尚未开放',
 }
-const visibilityLabel: Record<string, string> = { NONE: '仅自己', SUMMARY: '完成概况', RANKING: '训练排名', FULL: '详细进度' }
+const visibilityLabel: Record<string, string> = { NONE: '仅自己', PROGRESS: '完成进度', SCORE: '得分与进度', FULL: '详细进度' }
 const rankingLabel: Record<string, string> = { OFF: '不排名', PROGRESS_ONLY: '按完成进度', SCORE: '按得分', ACM_RANKING: '按通过题数和罚时' }
 import styles from './TrainingEngine.module.css'
 
@@ -199,12 +199,9 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     if (savedRevision === false) { setSubmitting(false); return }
     const response = await submitTrainingSolution(sessionId, { stageProblemId: selectedId, code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename })
     if (!response.ok) { setSubmitting(false); return toast.error(response.error.message || '提交失败') }
-    const cleared = await saveTrainingDraft(sessionId, problem.problemId, { code: '', language, inputFilename: null, outputFilename: null, expectedRevision: savedRevision, editorFocused: false })
-    if (cleared.ok) setDraftRevision(cleared.data?.revision)
-    else toast.warning('提交已成功，但云端草稿未能清空；请刷新后确认')
-    clearSubmissionDraft(editorDraftKey, language)
-    setCode('')
-    setSubmissionIo({ inputFilename: null, outputFilename: null })
+    const persisted = await saveTrainingDraft(sessionId, problem.problemId, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: savedRevision, editorFocused: false })
+    if (persisted.ok) setDraftRevision(persisted.data?.revision)
+    else toast.warning('提交已成功，但最新代码草稿未能同步到云端；本地编辑器内容仍会保留')
     setSubmitting(false)
     toast.success(`提交 #${response.data?.id} 已进入评测队列`)
   }
