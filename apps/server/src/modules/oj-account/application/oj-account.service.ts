@@ -81,13 +81,19 @@ export async function updateOjAccount(id: string, input: any) {
   const account = await prisma.ojAccount.findUnique({ where: { id } })
   if (!account) throw new OjAccountServiceError(404, '账号不存在')
   const data: Record<string, any> = {}
-  if (input.cookie !== undefined) data.cookieRaw = data.cookie = input.cookie
+  if (input.cookie !== undefined) {
+    data.cookieRaw = data.cookie = input.cookie
+    data.status = 'unverified'
+    data.lastVerifiedAt = null
+    data.lastErrorMessage = null
+  }
   if (input.password !== undefined) {
     const encrypted = encrypt(String(input.password))
     data.password = encrypted.encrypted
     data.passwordIV = encrypted.iv
     if (!account.loginMethod || account.loginMethod === 'cookie') data.loginMethod = 'password'
     data.status = 'unverified'
+    data.lastVerifiedAt = null
     data.lastErrorMessage = null
   }
   for (const field of CONFIG_FIELDS) if (input[field] !== undefined) data[field] = input[field]
@@ -101,23 +107,30 @@ export async function deleteOjAccount(id: string) {
   logger.info('oj_account_deleted', { action: 'oj_accounts', metadata: { platform: account.platform, username: account.username } })
 }
 
-interface VerifyResult { valid: boolean; message: string }
+interface VerifyResult {
+  status: 'valid' | 'invalid' | 'unsupported'
+  message: string
+}
 
 async function verifyHdu(username: string, cookie: string): Promise<VerifyResult> {
   const response = await fetch(`https://acm.hdu.edu.cn/userstatus.php?user=${encodeURIComponent(username)}`, {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', Cookie: cookie },
     signal: AbortSignal.timeout(15_000),
   })
-  if (!response.ok) return { valid: false, message: `HTTP ${response.status}` }
+  if (!response.ok) return { status: 'invalid', message: `HTTP ${response.status}` }
   const html = new TextDecoder('gb2312').decode(await response.arrayBuffer())
-  return html.includes('Sign Out') ? { valid: true, message: 'Cookie 有效' } : { valid: false, message: 'Cookie 已失效（未检测到登录态）' }
+  return html.includes('Sign Out')
+    ? { status: 'valid', message: 'Cookie 有效' }
+    : { status: 'invalid', message: 'Cookie 已失效（未检测到登录态）' }
 }
 
 async function verifyAccount(platform: string, username: string, cookie: string): Promise<VerifyResult> {
   try {
-    return platform === 'hdu' ? await verifyHdu(username, cookie) : { valid: true, message: '暂不支持自动验证，标记为有效' }
+    return platform === 'hdu'
+      ? await verifyHdu(username, cookie)
+      : { status: 'unsupported', message: `平台 ${platform} 暂不支持自动验证` }
   } catch (error: any) {
-    return { valid: false, message: `验证异常: ${error.message}` }
+    return { status: 'invalid', message: `验证异常: ${error.message}` }
   }
 }
 
@@ -156,9 +169,19 @@ export async function verifyOjAccount(id: string) {
     return { status: 'error', message: '无 Cookie' }
   }
   const result = await verifyAccount(account.platform, account.username, cookie)
-  const status = result.valid ? 'active' : 'expired'
   const lastVerifiedAt = new Date()
-  await prisma.ojAccount.update({ where: { id }, data: { status, lastVerifiedAt, lastErrorMessage: result.valid ? null : result.message } })
+  if (result.status === 'unsupported') {
+    await prisma.ojAccount.update({
+      where: { id },
+      data: { status: 'unverified', lastVerifiedAt, lastErrorMessage: result.message },
+    })
+    return { status: 'unverified', message: result.message, lastVerifiedAt: lastVerifiedAt.toISOString() }
+  }
+  const status = result.status === 'valid' ? 'active' : 'expired'
+  await prisma.ojAccount.update({
+    where: { id },
+    data: { status, lastVerifiedAt, lastErrorMessage: result.status === 'valid' ? null : result.message },
+  })
   return { status, message: result.message, lastVerifiedAt: lastVerifiedAt.toISOString() }
 }
 
@@ -189,15 +212,24 @@ export async function batchVerifyOjAccounts() {
     }
     const result = await verifyAccount(account.platform, account.username, cookie)
     await prisma.ojAccount.update({ where: { id: account.id }, data: {
-      status: result.valid ? 'active' : 'expired', lastVerifiedAt: new Date(), lastErrorMessage: result.valid ? null : result.message,
+      status: result.status === 'valid' ? 'active' : result.status === 'invalid' ? 'expired' : 'unverified',
+      lastVerifiedAt: new Date(),
+      lastErrorMessage: result.status === 'valid' ? null : result.message,
     } })
-    results.push({ id: account.id, platform: account.platform, username: account.username, valid: result.valid, message: result.message })
+    results.push({
+      id: account.id,
+      platform: account.platform,
+      username: account.username,
+      valid: result.status === 'valid',
+      message: result.message,
+    })
   }
   return results
 }
 
 let autoVerifyStartTimer: NodeJS.Timeout | null = null
 let autoVerifyInterval: NodeJS.Timeout | null = null
+let autoVerifyInFlight: Promise<void> | null = null
 
 async function autoVerifyTick() {
   try {
@@ -213,7 +245,18 @@ async function autoVerifyTick() {
       if (!cookie) continue
       logger.info('oj_auto_verify_start', { action: 'oj_auto_verify', metadata: { platform: account.platform, username: account.username } })
       const result = await verifyAccount(account.platform, account.username, cookie)
-      if (result.valid) {
+      if (result.status === 'unsupported') {
+        await prisma.ojAccount.update({
+          where: { id: account.id },
+          data: { status: 'unverified', lastVerifiedAt: new Date(), lastErrorMessage: result.message },
+        })
+        logger.info('oj_auto_verify_unsupported', {
+          action: 'oj_auto_verify',
+          metadata: { platform: account.platform, username: account.username, message: result.message },
+        })
+        continue
+      }
+      if (result.status === 'valid') {
         await prisma.ojAccount.update({ where: { id: account.id }, data: { lastVerifiedAt: new Date(), lastErrorMessage: null } })
         logger.info('oj_auto_verify_ok', { action: 'oj_auto_verify', metadata: { platform: account.platform, username: account.username, message: result.message } })
         continue
@@ -234,6 +277,14 @@ async function autoVerifyTick() {
   }
 }
 
+function runAutoVerifyTick() {
+  if (autoVerifyInFlight) return autoVerifyInFlight
+  autoVerifyInFlight = autoVerifyTick().finally(() => {
+    autoVerifyInFlight = null
+  })
+  return autoVerifyInFlight
+}
+
 export function startAutoVerifyScheduler() {
   if (autoVerifyStartTimer || autoVerifyInterval) {
     logger.warn('oj_auto_verify_scheduler_already_running', { action: 'oj_auto_verify' })
@@ -241,17 +292,18 @@ export function startAutoVerifyScheduler() {
   }
   autoVerifyStartTimer = setTimeout(() => {
     autoVerifyStartTimer = null
-    void autoVerifyTick()
-    autoVerifyInterval = setInterval(() => void autoVerifyTick(), 5 * 60_000)
+    void runAutoVerifyTick()
+    autoVerifyInterval = setInterval(() => void runAutoVerifyTick(), 5 * 60_000)
   }, 30_000)
   logger.info('oj_auto_verify_scheduler_started', { action: 'oj_auto_verify', metadata: { intervalMinutes: 5 } })
   return stopAutoVerifyScheduler
 }
 
-export function stopAutoVerifyScheduler() {
+export async function stopAutoVerifyScheduler() {
   if (autoVerifyStartTimer) clearTimeout(autoVerifyStartTimer)
   if (autoVerifyInterval) clearInterval(autoVerifyInterval)
   autoVerifyStartTimer = null
   autoVerifyInterval = null
+  await autoVerifyInFlight
   logger.info('oj_auto_verify_scheduler_stopped', { action: 'oj_auto_verify' })
 }

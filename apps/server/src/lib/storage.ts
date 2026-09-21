@@ -81,33 +81,36 @@ export class LocalStorageProvider implements StorageProvider {
     // 生成安全文件名
     const fileName = this.generateSafeFileName(originalName)
 
-    // 写入文件
+    // 写入文件；如果数据库记录创建失败，必须回滚磁盘文件。
     const filePath = path.join(targetDir, fileName)
     fs.writeFileSync(filePath, buffer)
 
-    // 计算 MD5
     const md5Hash = this.calculateMd5(buffer)
-
-    // 创建数据库记录
-    const file = await prisma.file.create({
-      data: {
-        id: crypto.randomUUID(),
-        storageType: 'local',
-        disk: 'default',
-        relativePath,
-        fileName,
-        originalName,
-        mimeType,
-        fileSize: buffer.length,
-        md5Hash,
-        accessLevel: isPublic ? 'public' : 'private',
-        isPublic,
-        ownerType,
-        ownerId,
-        category,
-        status: 'active'
-      }
-    })
+    let file
+    try {
+      file = await prisma.file.create({
+        data: {
+          id: crypto.randomUUID(),
+          storageType: 'local',
+          disk: 'default',
+          relativePath,
+          fileName,
+          originalName,
+          mimeType,
+          fileSize: buffer.length,
+          md5Hash,
+          accessLevel: isPublic ? 'public' : 'private',
+          isPublic,
+          ownerType,
+          ownerId,
+          category,
+          status: 'active'
+        }
+      })
+    } catch (error) {
+      try { fs.rmSync(filePath, { force: true }) } catch { /* best effort */ }
+      throw error
+    }
 
     // 生成访问 URL
     const fileUrl = this.getUrl(file)
@@ -265,16 +268,15 @@ class FileService {
   ): Promise<UploadResult> {
     const buffer = fs.readFileSync(file.path)
 
-    const result = await this.upload(buffer, {
-      ...options,
-      originalName: file.originalname,
-      mimeType: file.mimetype
-    })
-
-    // 删除临时文件
-    fs.unlinkSync(file.path)
-
-    return result
+    try {
+      return await this.upload(buffer, {
+        ...options,
+        originalName: file.originalname,
+        mimeType: file.mimetype
+      })
+    } finally {
+      try { fs.rmSync(file.path, { force: true }) } catch { /* best effort */ }
+    }
   }
 
   /**
