@@ -449,6 +449,83 @@ describe('Team Operations', () => {
     })
   })
 
+  describe('Multi-organization team isolation', () => {
+    it('keeps mine and invitations inside the active organization context', async () => {
+      const { school: schoolA } = await createTestSchoolWithPrincipal()
+      const { school: schoolB } = await createTestSchoolWithPrincipal()
+      const teacher = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.organizationId! } })
+      const ownerA = await createTestUser({ organization: { role: 'teacher', organizationId: schoolA.organizationId! } })
+      const ownerB = await createTestUser({ organization: { role: 'teacher', organizationId: schoolB.organizationId! } })
+
+      const membershipBId = crypto.randomUUID()
+      await prisma.organizationMembership.create({
+        data: {
+          id: membershipBId,
+          organizationId: schoolB.organizationId!,
+          userId: teacher.user.id,
+          memberRole: 'teacher',
+          relationType: 'employee',
+          status: 'active',
+          joinedAt: new Date(),
+          RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+        },
+      })
+      await prisma.organizationTeacherProfile.create({
+        data: { id: crypto.randomUUID(), membershipId: membershipBId, name: '跨校教师', status: 'active' },
+      })
+
+      const teamA = await createTestTeam({ organizationId: schoolA.organizationId!, ownerId: ownerA.user.id, ownerType: 'teacher', name: '学校A团队' })
+      const teamB = await createTestTeam({ organizationId: schoolB.organizationId!, ownerId: ownerB.user.id, ownerType: 'teacher', name: '学校B团队' })
+
+      await prisma.teamMember.createMany({
+        data: [
+          { id: crypto.randomUUID(), teamId: teamA.id, userId: teacher.user.id, userType: 'teacher', role: 'member', status: 'active', joinedAt: new Date() },
+          { id: crypto.randomUUID(), teamId: teamB.id, userId: teacher.user.id, userType: 'teacher', role: 'member', status: 'active', joinedAt: new Date() },
+        ],
+      })
+      const invitationB = await prisma.teamMember.create({
+        data: {
+          id: crypto.randomUUID(),
+          teamId: teamB.id,
+          userId: teacher.user.id,
+          userType: 'teacher',
+          role: 'admin',
+          status: 'pending',
+          invitedBy: ownerB.user.id,
+          joinedAt: new Date(),
+        },
+      })
+
+      const token = generateTestToken({ userId: teacher.user.id, username: teacher.user.username, accountRole: 'user' })
+
+      const mineA = await request(app)
+        .get('/api/teams/mine')
+        .set('Cookie', `oi_session=${token}`)
+        .set('x-oi-organization-id', schoolA.organizationId!)
+
+      expect(mineA.status).toBe(200)
+      const mineIds = mineA.body.data.joined.map((team: any) => team.id)
+      expect(mineIds).toContain(teamA.id)
+      expect(mineIds).not.toContain(teamB.id)
+
+      const invitationsA = await request(app)
+        .get('/api/teams/invitations')
+        .set('Cookie', `oi_session=${token}`)
+        .set('x-oi-organization-id', schoolA.organizationId!)
+
+      expect(invitationsA.status).toBe(200)
+      expect(invitationsA.body.data.map((item: any) => item.id)).not.toContain(invitationB.id)
+
+      const invitationsB = await request(app)
+        .get('/api/teams/invitations')
+        .set('Cookie', `oi_session=${token}`)
+        .set('x-oi-organization-id', schoolB.organizationId!)
+
+      expect(invitationsB.status).toBe(200)
+      expect(invitationsB.body.data.map((item: any) => item.id)).toContain(invitationB.id)
+    })
+  })
+
   describe('Campus and personal scope isolation', () => {
     it('creates personal teams and keeps both team scopes isolated', async () => {
       const { school: schoolA } = await createTestSchoolWithPrincipal()
