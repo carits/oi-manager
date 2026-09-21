@@ -29,7 +29,7 @@ teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req,
   const userType = getMembershipType(user)
   const scope = teamService.getScopeForUser(user)
 
-  const invitations = await teamRepository.findUserPendingInvites(userId, userType as MemberType, scope)
+  const invitations = await teamRepository.findUserPendingInvites(userId, userType as MemberType, scope, scope === 'campus' ? user.organizationId : undefined)
 
   const formattedInvitations = await Promise.all(
     invitations.map(async (invite) => {
@@ -69,7 +69,7 @@ teamInvitationsRouter.get('/my-admin-teams', authenticate, asyncHandler(async (r
   const userType = getMembershipType(user)
   const scope = teamService.getScopeForUser(user)
 
-  const memberRecords = await teamRepository.findUserAdminTeams(userId, userType as MemberType, scope)
+  const memberRecords = await teamRepository.findUserAdminTeams(userId, userType as MemberType, scope, scope === 'campus' ? user.organizationId : undefined)
 
   const teams = await Promise.all(
     memberRecords.map(async (record) => {
@@ -96,7 +96,7 @@ teamInvitationsRouter.get('/my-member-teams', authenticate, asyncHandler(async (
     return res.json({ success: true, data: [] })
   }
 
-  const memberRecords = await teamRepository.findUserMemberTeams(user.userId, 'teacher', 'campus')
+  const memberRecords = await teamRepository.findUserMemberTeams(user.userId, 'teacher', 'campus', user.organizationId)
 
   const teams = await Promise.all(
     memberRecords.map(async (record) => {
@@ -122,10 +122,10 @@ teamInvitationsRouter.get('/admin-invitations', authenticate, asyncHandler(async
   const userId = user.userId
   const userType = getMembershipType(user)
   const scope = teamService.getScopeForUser(user)
-  const organizationId = typeof req.query.organizationId === 'string' && req.query.organizationId ? req.query.organizationId : undefined
-  if (organizationId) {
-    const hasMembership = await teamRepository.hasActiveOrganizationMembership(userId, organizationId)
-    if (!hasMembership) return res.status(403).json({ success: false, message: '无权查看该学校的团队邀请' })
+  const requestedOrganizationId = typeof req.query.organizationId === 'string' && req.query.organizationId ? req.query.organizationId : undefined
+  const organizationId = scope === 'campus' ? user.organizationId : undefined
+  if (requestedOrganizationId && requestedOrganizationId !== organizationId) {
+    return res.status(403).json({ success: false, message: '无权查看其他学校的团队邀请' })
   }
 
   const invitations = await teamRepository.findUserAdminInvites(userId, userType as MemberType, scope, organizationId)
@@ -210,7 +210,7 @@ teamInvitationsRouter.get('/member-invitations', authenticate, asyncHandler(asyn
     return res.json({ success: true, data: [] })
   }
 
-  const invitations = await teamRepository.findUserMemberInvites(user.userId, 'teacher', 'campus')
+  const invitations = await teamRepository.findUserMemberInvites(user.userId, 'teacher', 'campus', user.organizationId)
 
   const invitationsWithOwner = await Promise.all(
     invitations.map(async (invite) => {
