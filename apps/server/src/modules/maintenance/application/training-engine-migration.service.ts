@@ -74,7 +74,7 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
         scheduledStartAt: row.startTime, startedAt: status === 'RUNNING' || status === 'ENDED' ? row.startTime : null,
         runningSince: status === 'RUNNING' ? new Date() : null,
         endedAt: status === 'ENDED' ? row.endTime : null, activeElapsedSeconds: status === 'ENDED' ? Math.max(0, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000)) : 0, rankingMode: row.format === 'acm' ? 'ACM_RANKING' : 'SCORE',
-        peerVisibility: 'PROGRESS', joinMode: 'FROM_BEGINNING', settings: { migratedFromLegacyTrainingId: row.id },
+        peerVisibility: 'PROGRESS', joinMode: 'CURRENT_STAGE', settings: { migratedFromLegacyTrainingId: row.id },
       } })
       const stage = await tx.trainingSessionStage.create({ data: {
         sessionId: session.id, name: '完整训练', orderIndex: 0, kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'TIME',
