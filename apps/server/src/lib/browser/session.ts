@@ -28,6 +28,7 @@ export class SessionManager {
     if (!fs.existsSync(this.sessionsDir)) {
       fs.mkdirSync(this.sessionsDir, { recursive: true, mode: 0o700 })
     }
+    fs.chmodSync(this.sessionsDir, 0o700)
   }
 
   /** 获取会话文件路径 */
