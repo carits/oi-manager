@@ -1263,7 +1263,15 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const visibleOverlays = manager || !participant ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
   const currentStage = participant ? session.Stages.find(stage => stage.id === session.currentStageId) : null
   const currentAssignment = participant && currentStage ? currentStage.ParticipantAssignments.find(item => item.participantId === participant.id) : null
-  const participantView = participant ? { ...participant, currentStageId: session.currentStageId, currentGroupId: currentAssignment?.groupId || null } : participant
+  const requiredCurrent = participant && currentStage ? requiredStageProblemIds(currentStage, participant.id) : new Set<string>()
+  const completedCurrent = participant ? progress.filter(item => requiredCurrent.has(item.stageProblemId) && ['COMPLETED', 'SKIPPED'].includes(item.status)).length : 0
+  const participantView = participant ? {
+    ...participant,
+    currentStageId: session.currentStageId,
+    currentGroupId: currentAssignment?.groupId || null,
+    requiredCount: requiredCurrent.size,
+    completedCount: completedCurrent,
+  } : participant
   const sessionView = manager ? session : {
     ...session,
     Stages: session.Stages.map(stage => ({
