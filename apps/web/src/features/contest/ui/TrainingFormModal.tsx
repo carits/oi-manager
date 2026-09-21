@@ -491,7 +491,10 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         // 2. Remove deleted existing problems
         const existingIds = problemRows.filter(r => r.existing).map(r => r.trainingProblemId)
         const originalProblemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/trainings/${trainingId}/problems`)
-        if (originalProblemsRes.success && originalProblemsRes.data) {
+        if (!originalProblemsRes.success || !originalProblemsRes.data) {
+          throw new Error(originalProblemsRes.message || '读取当前题目列表失败，未继续保存')
+        }
+        {
           for (const orig of originalProblemsRes.data) {
             if (!existingIds.includes(orig.id)) {
               const deleteRes = await apiClient.delete(`/api/trainings/${trainingId}/problems/${orig.id}`)
@@ -602,13 +605,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         if (resolvedRows.length > 0) {
           // 获取刚创建的题目以拿到 ID
           const problemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/trainings/${newTrainingId}/problems`)
-          if (problemsRes.success && problemsRes.data) {
-            const createdProblems = problemsRes.data
-            const orders = createdProblems.map((p, i) => ({ id: p.id, orderIndex: i }))
-            if (orders.length > 0) {
-              const reorderRes = await apiClient.put(`/api/trainings/${newTrainingId}/problems/reorder`, { orders })
-              requireSuccess(reorderRes, '比赛已创建，但题目顺序保存失败')
-            }
+          if (!problemsRes.success || !problemsRes.data) {
+            throw new Error(problemsRes.message || '比赛已创建，但无法读取题目顺序')
+          }
+          const createdProblems = problemsRes.data
+          const orders = createdProblems.map((p, i) => ({ id: p.id, orderIndex: i }))
+          if (orders.length > 0) {
+            const reorderRes = await apiClient.put(`/api/trainings/${newTrainingId}/problems/reorder`, { orders })
+            requireSuccess(reorderRes, '比赛已创建，但题目顺序保存失败')
           }
         }
 
