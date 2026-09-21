@@ -354,8 +354,8 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
   if (allProblemIds.length > 100) throw new TrainingEngineError(422, 'INVALID_TRAINING_STRUCTURE', '一场训练最多引用 100 道不同题目')
   const requestedRevisionIds = [...new Set(stages.flatMap(stage => stageProblemInputs(stage).map(item => item.testSetRevisionId).filter((id): id is string => Boolean(id))))]
   const [problems, requestedRevisions] = await Promise.all([
-    allProblemIds.length ? prisma.problem.findMany({ where: { id: { in: allProblemIds }, latestTestSetRevisionId: { not: null }, status: { not: 'archived' }, ...(access && !access.canSeeAll ? { OR: [{ ownerId: access.userId }, { libraryScope: 'platform', status: 'published' }, ...(access.organizationId ? [{ libraryScope: 'school', organizationId: access.organizationId, status: 'published' }] : [])] } : {}) }, include: { LatestTestSetRevision: true, ProblemStatement: { where: { isVisible: true }, orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }] } } }) : [],
-    requestedRevisionIds.length ? prisma.problemTestSetRevision.findMany({ where: { id: { in: requestedRevisionIds } } }) : [],
+    allProblemIds.length ? prisma.problem.findMany({ where: { id: { in: allProblemIds }, latestTestSetRevisionId: { not: null }, status: { not: 'archived' }, ...(access && !access.canSeeAll ? { OR: [{ ownerId: access.userId }, { libraryScope: 'platform', status: 'published' }, ...(access.organizationId ? [{ libraryScope: 'school', organizationId: access.organizationId, status: 'published' }] : [])] } : {}) }, include: { LatestTestSetRevision: { include: { Subtasks: { select: { subtaskId: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } } } }, ProblemStatement: { where: { isVisible: true }, orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }] } } }) : [],
+    requestedRevisionIds.length ? prisma.problemTestSetRevision.findMany({ where: { id: { in: requestedRevisionIds } }, include: { Subtasks: { select: { subtaskId: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } } } }) : [],
   ])
   const byId = new Map(problems.map(item => [item.id, item]))
   const revisionsById = new Map(requestedRevisions.map(item => [item.id, item]))
@@ -382,13 +382,29 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
       if (!problem?.LatestTestSetRevision) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_REVISION_REQUIRED', `${label}的第 ${problemIndex + 1} 道题没有正式 TestSet Revision`)
       const revision = item.testSetRevisionId ? revisionsById.get(item.testSetRevisionId) : problem.LatestTestSetRevision
       if (!revision || revision.problemId !== problem.id) throw new TrainingEngineError(422, 'TRAINING_REVISION_PROBLEM_MISMATCH', `${label}的第 ${problemIndex + 1} 道题使用了不属于该题的 TestSet Revision`)
-      const allowedSubtaskIds = Array.isArray(item.allowedSubtaskIds) ? [...new Set(item.allowedSubtaskIds.map(Number))] : []
-      if (allowedSubtaskIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', 'Subtask ID 必须是正整数')
-      if (allowedSubtaskIds.length && revision.mode !== 'oi') throw new TrainingEngineError(422, 'SUBTASK_PROJECTION_UNSUPPORTED', '仅 OI Revision 支持按 Subtask 训练')
+      const requestedAllowedSubtaskIds = Array.isArray(item.allowedSubtaskIds) ? [...new Set(item.allowedSubtaskIds.map(Number))] : []
+      if (requestedAllowedSubtaskIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', 'Subtask ID 必须是正整数')
+      if (requestedAllowedSubtaskIds.length && revision.mode !== 'oi') throw new TrainingEngineError(422, 'SUBTASK_PROJECTION_UNSUPPORTED', '仅 OI Revision 支持按 Subtask 训练')
+      const revisionSubtasks = Array.isArray((revision as any).Subtasks) ? (revision as any).Subtasks as Array<{ subtaskId: number; Dependencies: Array<{ DependsOn: { subtaskId: number } }> }> : []
+      const dependencyMap = new Map(revisionSubtasks.map(subtask => [subtask.subtaskId, subtask.Dependencies.map(dependency => dependency.DependsOn.subtaskId)]))
+      const closeSubtasks = (ids: number[]) => {
+        const closed = new Set(ids)
+        const visit = (id: number, stack = new Set<number>()) => {
+          if (stack.has(id)) throw new TrainingEngineError(422, 'TRAINING_SUBTASK_DEPENDENCY_CYCLE', `Subtask ${id} 存在循环依赖`)
+          const nextStack = new Set(stack); nextStack.add(id)
+          for (const dependencyId of dependencyMap.get(id) || []) {
+            closed.add(dependencyId)
+            visit(dependencyId, nextStack)
+          }
+        }
+        for (const id of [...closed]) visit(id)
+        return [...closed].sort((a, b) => a - b)
+      }
+      const allowedSubtaskIds = closeSubtasks(requestedAllowedSubtaskIds)
       const rawScoreGoals = Array.isArray(item.scoreGoals) && item.scoreGoals.length ? item.scoreGoals : Array.isArray(rules.defaultScoreGoals) ? rules.defaultScoreGoals : []
       const scoreGoals = rawScoreGoals.map((goal: any, goalIndex: number) => ({
         score: boundedInteger(goal?.score, 1, 100, `${label}第 ${problemIndex + 1} 道题的第 ${goalIndex + 1} 个分数目标`, false)!,
-        allowedSubtaskIds: Array.isArray(goal?.allowedSubtaskIds) ? [...new Set(goal.allowedSubtaskIds.map(Number))] : [],
+        allowedSubtaskIds: closeSubtasks(Array.isArray(goal?.allowedSubtaskIds) ? [...new Set<number>(goal.allowedSubtaskIds.map(Number))] : []),
       }))
       if (scoreGoals.some((goal: any, index: number) => index > 0 && goal.score <= scoreGoals[index - 1].score)) throw new TrainingEngineError(422, 'INVALID_TRAINING_SCORE_GOALS', '分数目标必须严格递增')
       if (scoreGoals.some((goal: any) => goal.allowedSubtaskIds.some((id: number) => !Number.isSafeInteger(id) || id <= 0))) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', '分数目标中的 Subtask ID 必须是正整数')
