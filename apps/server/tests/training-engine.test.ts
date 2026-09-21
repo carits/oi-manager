@@ -163,6 +163,46 @@ describe('Stage-driven Training Engine', () => {
     expect(workspace.body.data.permissions[futureStage.Problems[0].id]).toMatchObject({ canView: false, canSeeMetadata: false, reason: 'FUTURE_STAGE' })
   })
 
+  it('keeps future Stage metadata redacted while scheduled and paused', async () => {
+    const created = await createTwoStageSession('计划与暂停状态脱敏')
+    const coachToken = generateTokenFromUser(coach.user)
+    const studentToken = generateTokenFromUser(student.user)
+    const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: { Stages: { orderBy: { orderIndex: 'asc' }, include: { Problems: true } } } })
+    const [currentStage, futureStage] = session.Stages
+
+    expect((await createAuthenticatedRequest(app, coachToken).post(`/api/training-sessions/${created.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    const scheduled = await createAuthenticatedRequest(app, studentToken).get(`/api/training-sessions/${created.id}`)
+    expect(scheduled.status).toBe(200)
+    expect(scheduled.body.data.session.Stages[1].Problems[0].Problem).toMatchObject({ title: '未开放题目', platform: '', problemId: '' })
+    expect(scheduled.body.data.permissions[futureStage.Problems[0].id]).toMatchObject({ canSeeMetadata: false })
+
+    expect((await createAuthenticatedRequest(app, coachToken).post(`/api/training-sessions/${created.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: currentStage.id })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, coachToken).post(`/api/training-sessions/${created.id}/commands`).send({ expectedRevision: 2, type: 'PAUSE_SESSION', targetType: 'ALL', payload: { mode: 'SOFT' } })).status).toBe(200)
+
+    const paused = await createAuthenticatedRequest(app, studentToken).get(`/api/training-sessions/${created.id}`)
+    expect(paused.status).toBe(200)
+    expect(paused.body.data.session.Stages[1].Problems[0].Problem).toMatchObject({ title: '未开放题目', platform: '', problemId: '' })
+    expect(paused.body.data.permissions[futureStage.Problems[0].id]).toMatchObject({ canSeeMetadata: false, reason: 'FUTURE_STAGE' })
+  })
+
+  it('normalizes TEAM commands to the current session team', async () => {
+    const created = await createSession()
+    const token = generateTokenFromUser(coach.user)
+    const stage = await prisma.trainingSessionStage.findFirstOrThrow({ where: { sessionId: created.id } })
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: stage.id })).status).toBe(200)
+
+    const response = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/commands`).send({
+      expectedRevision: 2,
+      type: 'SHOW_MESSAGE',
+      targetType: 'TEAM',
+      targetId: team.id,
+      payload: { message: '团队提示', messageType: 'INFO' },
+    })
+    expect(response.status).toBe(200)
+    expect(await prisma.trainingSessionOverlay.findFirst({ where: { sessionId: created.id, type: 'MESSAGE' }, select: { targetType: true, targetId: true } })).toEqual({ targetType: 'TEAM', targetId: team.id })
+  })
+
   it('rejects runtime focus commands that target a non-current Stage', async () => {
     const created = await createTwoStageSession('跨阶段指令拒绝')
     const token = generateTokenFromUser(coach.user)
