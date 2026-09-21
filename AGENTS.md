@@ -48,6 +48,23 @@ or personal notes.
 
 The detailed workflow and record ownership are defined in docs/development/WORKFLOW.md.
 
+## AI context budget and incremental review
+
+For Codex/AI work, minimize repeated context reconstruction without sacrificing correctness.
+
+Default workflow:
+
+1. Read this file first.
+2. Generate an incremental context pack with `pnpm ai:context -- --module <module> --base <last-reviewed-sha> --head HEAD`.
+3. Read only the stable specs, changed files, tests, and verified Gap items listed by that pack.
+4. Expand to adjacent modules only when a concrete dependency, schema/contract/auth change, or call chain requires it.
+5. For "latest progress" reviews, compare from the last reviewed commit instead of rescanning the whole repository.
+6. When a durable verified gap is added or closed, update `docs/ai-context/GAPS.md`.
+7. Do not treat historical chat context as current code truth.
+
+The detailed protocol is `docs/development/AI_CONTEXT_PROTOCOL.md`; module path/spec ownership is in
+`docs/ai-context/modules.json`.
+
 ## Architecture migration burn-down
 
 docs/architecture-progress.json is the machine-readable source of truth for current migration
