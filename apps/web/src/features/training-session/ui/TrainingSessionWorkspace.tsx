@@ -18,7 +18,6 @@ import {
   getTrainingCoachDashboard,
   getTrainingDraft,
   getTrainingPeerProgress,
-  getTrainingProblemDetail,
   getTrainingReport,
   getTrainingRoster,
   getTrainingWorkspace,
@@ -47,7 +46,7 @@ const visibilityLabel: Record<string, string> = { NONE: '仅自己', PROGRESS: '
 const rankingLabel: Record<string, string> = { OFF: '不排名', PROGRESS_ONLY: '按完成进度', SCORE: '按得分', ACM_RANKING: '按通过题数和罚时' }
 import styles from './TrainingEngine.module.css'
 
-type StageProblem = { id: string; problemId: string; alias?: string; targetScore?: number; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>; timePolicy?: { mode: string; limitSeconds?: number }; stuckPolicy?: { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Problem: { problemId: string; title: string; platform: string }; TestSetRevision: { revisionNumber: number; mode: string } }
+type StageProblem = { id: string; problemId: string; alias?: string; targetScore?: number; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>; timePolicy?: { mode: string; limitSeconds?: number }; stuckPolicy?: { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Statements?: Array<{ type?: string; format: string; language?: string | null; content?: string | null; fileUrl?: string | null }>; Problem: { problemId: string; title: string; platform: string }; TestSetRevision: { revisionNumber: number; mode: string } }
 type StageGroup = { id: string; name: string; participantIds?: string[] }
 type Stage = { id: string; name: string; description?: string; kind: string; audienceMode: string; lifecycle: string; plannedDurationSeconds?: number; runningSince?: string; activeElapsedSeconds: number; effectiveDurationSeconds?: number; minDurationSeconds?: number; endPolicy: string; accessPolicy: string; submissionMode: string; defaultTargetScore?: number; completionThreshold?: number; endedAt?: string; endReason?: string; Groups: StageGroup[]; Problems: StageProblem[] }
 type StrategyState = { intervalSeconds?: number; timePolicy: { mode?: string; limitSeconds?: number }; timeLimitReached: boolean; decisionDue: boolean; switchRecommended: boolean; lastDecision?: { decision: string; createdAt: string } | null }
@@ -57,7 +56,6 @@ type Roster = { revision: number; candidates: Array<{ userId: string; username: 
 type Hint = { id: string; level: number; title?: string; content?: string; opened: boolean; globallyOpenedAt?: string }
 type PeerProgress = { rankingMode: string; peerVisibility: string; entries: Array<{ rank?: number; user: { id: string; username: string }; completed: number; total: number; score?: number; attempts?: number; penaltyMinutes?: number; activeSeconds?: number }> }
 type TrainingDraft = { code?: string; language?: string; revision?: number; inputFilename?: string | null; outputFilename?: string | null }
-type TrainingProblemDetail = { statements?: Array<{ format: string; content?: string | null }> }
 type TrainingSubmitResult = { id: number }
 
 const formatDuration = (seconds?: number | null) => {
@@ -70,7 +68,7 @@ const formatDuration = (seconds?: number | null) => {
 
 export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const toast = useToast(), router = useRouter(), pathname = usePathname()
-  const [data, setData] = useState<Workspace>(), [dashboard, setDashboard] = useState<Dashboard>(), [peerProgress, setPeerProgress] = useState<PeerProgress>(), [problemDetail, setProblemDetail] = useState<TrainingProblemDetail>()
+  const [data, setData] = useState<Workspace>(), [dashboard, setDashboard] = useState<Dashboard>(), [peerProgress, setPeerProgress] = useState<PeerProgress>()
   const [selectedId, setSelectedId] = useState<string>(), [code, setCode] = useState(''), [language, setLanguage] = useState('cpp17'), [draftRevision, setDraftRevision] = useState<number>()
   const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [commandBusy, setCommandBusy] = useState(false), [rosterSaving, setRosterSaving] = useState(false)
@@ -111,7 +109,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   useEffect(() => { void load() }, [load])
 
   const problem = useMemo(() => data?.session.Stages.flatMap(stage => stage.Problems).find(item => item.id === selectedId), [data, selectedId])
-  const draftKey = problem ? `training-draft:${sessionId}:${problem.problemId}` : ''
+  const draftKey = problem ? `training-draft:${sessionId}:${problem.id}` : ''
   const editorDraftKey = problem ? `training-engine:${sessionId}:${problem.id}` : ''
   const loadHints = useCallback(async (id?: string) => {
     if (!id) return setHints([])
@@ -120,22 +118,18 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }, [sessionId])
   useEffect(() => {
     if (!problem) return
-    void Promise.all([
-      getTrainingDraft(sessionId, problem.problemId).catch(() => null),
-      getTrainingProblemDetail<TrainingProblemDetail>(problem.problemId),
-    ]).then(([draft, detail]) => {
+    void getTrainingDraft(sessionId, problem.id).catch(() => null).then((draft) => {
       const local = typeof window !== 'undefined' ? window.localStorage.getItem(draftKey) : null
       setCode(draft?.code || local || ''); setLanguage(draft?.language || 'cpp17'); setDraftRevision(draft?.revision)
       setSubmissionIo({ inputFilename: draft?.inputFilename || null, outputFilename: draft?.outputFilename || null })
       if (local) window.localStorage.removeItem(draftKey)
-      setProblemDetail(detail.success ? detail.data : undefined)
     })
     void loadHints(problem.id)
   }, [draftKey, loadHints, problem?.id, problem?.problemId, sessionId])
   const saveDraft = useCallback(async (quiet = false) => {
     if (!problem) return false
     setSaving(true)
-    const response = await saveTrainingDraft(sessionId, problem.problemId, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevision, editorFocused: document.hasFocus() })
+    const response = await saveTrainingDraft(sessionId, problem.id, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevision, editorFocused: document.hasFocus() })
     setSaving(false)
     if (!response.ok) { if (!quiet) toast.error(response.error.message || '草稿保存失败'); return false }
     setDraftRevision(response.data?.revision)
@@ -155,7 +149,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     if (!problem || !draftKey) return
     const persistOnExit = () => {
-      void saveTrainingDraft(sessionId, problem.problemId, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevision, editorFocused: false }, { keepalive: true })
+      void saveTrainingDraft(sessionId, problem.id, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevision, editorFocused: false }, { keepalive: true })
     }
     window.addEventListener('pagehide', persistOnExit)
     return () => window.removeEventListener('pagehide', persistOnExit)
@@ -307,7 +301,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     <div className={styles.workspace}>
       <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}><div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === data.session.currentStageId ? 'success' : 'neutral'}>{stageModeLabel[stage.kind] || stage.kind} · {stage.lifecycle}</StatusBadge>}</div>{stage.endedAt && <small>实际 {Math.floor(stage.activeElapsedSeconds / 60)} 分钟{stage.endReason ? ` · ${stage.endReason}` : ''}</small>}{data.manager && stage.lifecycle === 'PENDING' && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此 Stage</Button>}{stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === data.session.currentStageId ? '当前要求' : '本阶段历史'} · {access?.canView ? `${progressLabel[progress?.status || 'NOT_STARTED'] || progress?.status || '未开始'}${progress?.bestScore != null ? ` · ${progress.bestScore} 分` : ''}` : '尚未开放'}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>})}</section>)}</aside>
       <main className={styles.stack}>{problem ? <>
-        <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · ${testDataVersion(problem.TestSetRevision.revisionNumber)}` : '使用训练发布时固定的数据评测'}>{problemDetail?.statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problemDetail.statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>题面尚未就绪，或当前题面不可见。</p>}</Section>
+        <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · ${testDataVersion(problem.TestSetRevision.revisionNumber)}` : '使用训练发布时固定的数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>
         <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。"><div className={styles.stack}><label className={styles.field}>语言<Select value={language} disabled={!data.permissions[problem.id]?.canEdit} onChange={event => { if (!code || window.confirm('切换后会保存当前语言草稿，并加载目标语言自己的草稿。是否切换？')) setLanguage(event.target.value) }}><option value="cpp17">C++17</option><option value="python3">Python3</option><option value="c">C</option></Select></label><label className={styles.field}>代码草稿<SubmissionCodeEditor value={code} onChange={setCode} language={language} draftKey={editorDraftKey} readOnly={!data.permissions[problem.id]?.canEdit} minHeight={420} /></label><SubmissionIoFields value={submissionIo} onChange={setSubmissionIo} disabled={!data.permissions[problem.id]?.canEdit} /><div className={styles.actions}><Button variant="secondary" loading={saving} disabled={!data.permissions[problem.id]?.canEdit} onClick={() => void saveDraft()}>保存草稿</Button><Button loading={submitting} disabled={!data.permissions[problem.id]?.canSubmit || !code.trim()} onClick={() => void submit()}>提交评测</Button></div>{!data.permissions[problem.id]?.canSubmit && <p className={styles.muted}>当前不可提交：{data.permissions[problem.id]?.reason}</p>}</div></Section>
         {status === 'RUNNING' && activeStrategy?.timeLimitReached && activeStrategy.timePolicy.mode === 'HARD' && <Section title="单题时间已到" description="该题已禁止继续提交，请按教师设定进入其他题目。"><p className={styles.muted}>本题的硬性用时上限已经触发，已有提交和进度仍会保留。</p></Section>}
         {data.session.sessionType === 'ACM' && status === 'RUNNING' && activeStrategy && (activeStrategy.decisionDue || activeStrategy.switchRecommended) && <Section title="策略检查" description={activeStrategy.switchRecommended ? activeStrategy.timePolicy.mode === 'SWITCH_REQUIRED' ? '已达到单题时间上限，请切换到其他题后再回来。' : '当前题已持续较久，建议重新评估是否切题。' : '到了本轮策略复盘时间，请记录你的决定。'}><div className={styles.actions}><Button variant="secondary" onClick={() => void recordStrategy('CONTINUE')}>继续当前题</Button><Button onClick={() => void recordStrategy('SWITCH')}>决定切题</Button></div></Section>}
