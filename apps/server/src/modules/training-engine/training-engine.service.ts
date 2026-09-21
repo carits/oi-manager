@@ -1543,8 +1543,9 @@ export async function submitTrainingSolution(userId: string, sessionId: string, 
 export async function createTrainingHint(userId: string, sessionId: string, body: any) {
   await assertManage(userId, sessionId)
   const stageProblemId = String(body?.stageProblemId || '')
-  const belongs = await prisma.trainingSessionStageProblem.findFirst({ where: { id: stageProblemId, Stage: { sessionId } } })
+  const belongs = await prisma.trainingSessionStageProblem.findFirst({ where: { id: stageProblemId, Stage: { sessionId } }, include: { Stage: { select: { lifecycle: true } } } })
   if (!belongs) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_FOUND', '训练题目不存在')
+  if (belongs.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', 'Stage 开始后提示定义不可新增或修改，请使用运行时开放已有提示')
   const level = boundedInteger(body?.level, 1, 20, '提示级别', false)!
   const openMode = enumValue(body?.openMode, HINT_OPEN_MODES, 'MANUAL', '提示开放方式')
   const triggerSeconds = boundedInteger(body?.triggerSeconds, 60, 86400, '触发时间')
@@ -1553,6 +1554,31 @@ export async function createTrainingHint(userId: string, sessionId: string, body
   if ((openMode === 'TIME' && triggerSeconds === null) || (openMode === 'ATTEMPT' && triggerAttempts === null) || (openMode === 'SCORE' && triggerScore === null)) throw new TrainingEngineError(422, 'TRAINING_HINT_TRIGGER_REQUIRED', '自动开放提示必须设置对应触发条件')
   if (await prisma.trainingSessionHint.findUnique({ where: { stageProblemId_level: { stageProblemId, level } }, select: { id: true } })) throw new TrainingEngineError(409, 'TRAINING_HINT_LEVEL_EXISTS', '当前题目已存在相同级别的提示')
   return prisma.trainingSessionHint.create({ data: { sessionId, stageProblemId, level, title: body?.title ? boundedText(body.title, 100, '提示标题') : null, content: boundedText(body?.content, 5000, '提示内容', 1), openMode: openMode as any, triggerSeconds, triggerAttempts, triggerScore, createdBy: userId } })
+}
+
+export async function updateTrainingHint(userId: string, sessionId: string, hintId: string, body: any) {
+  await assertManage(userId, sessionId)
+  const hint = await prisma.trainingSessionHint.findFirst({ where: { id: hintId, sessionId }, include: { StageProblem: { include: { Stage: { select: { lifecycle: true } } } } } })
+  if (!hint) throw new TrainingEngineError(404, 'TRAINING_HINT_NOT_FOUND', '提示不存在')
+  if (hint.StageProblem.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', 'Stage 开始后提示定义不可修改')
+  const level = boundedInteger(body?.level, 1, 20, '提示级别', false)!
+  const openMode = enumValue(body?.openMode, HINT_OPEN_MODES, 'MANUAL', '提示开放方式')
+  const triggerSeconds = boundedInteger(body?.triggerSeconds, 60, 86400, '触发时间')
+  const triggerAttempts = boundedInteger(body?.triggerAttempts, 1, 100, '触发提交数')
+  const triggerScore = boundedInteger(body?.triggerScore, 0, 100, '触发分数')
+  if ((openMode === 'TIME' && triggerSeconds === null) || (openMode === 'ATTEMPT' && triggerAttempts === null) || (openMode === 'SCORE' && triggerScore === null)) throw new TrainingEngineError(422, 'TRAINING_HINT_TRIGGER_REQUIRED', '自动开放提示必须设置对应触发条件')
+  const duplicate = await prisma.trainingSessionHint.findFirst({ where: { stageProblemId: hint.stageProblemId, level, id: { not: hintId } }, select: { id: true } })
+  if (duplicate) throw new TrainingEngineError(409, 'TRAINING_HINT_LEVEL_EXISTS', '当前题目已存在相同级别的提示')
+  return prisma.trainingSessionHint.update({ where: { id: hintId }, data: { level, title: body?.title ? boundedText(body.title, 100, '提示标题') : null, content: boundedText(body?.content, 5000, '提示内容', 1), openMode: openMode as any, triggerSeconds, triggerAttempts, triggerScore } })
+}
+
+export async function deleteTrainingHint(userId: string, sessionId: string, hintId: string) {
+  await assertManage(userId, sessionId)
+  const hint = await prisma.trainingSessionHint.findFirst({ where: { id: hintId, sessionId }, include: { StageProblem: { include: { Stage: { select: { lifecycle: true } } } } } })
+  if (!hint) throw new TrainingEngineError(404, 'TRAINING_HINT_NOT_FOUND', '提示不存在')
+  if (hint.StageProblem.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', 'Stage 开始后提示定义不可删除')
+  await prisma.trainingSessionHint.delete({ where: { id: hintId } })
+  return { deleted: true as const }
 }
 
 export async function listAvailableHints(userId: string, sessionId: string, stageProblemId: string) {
