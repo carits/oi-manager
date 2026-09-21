@@ -9,6 +9,7 @@ import {
   archiveTrainingSession,
   createTrainingSessionTemplate,
   createTrainingHint,
+  deleteTrainingHint,
   createTrainingSession,
   deleteTrainingSessionTemplate,
   changeTrainingStageGroup,
@@ -38,6 +39,7 @@ import {
   replaceTrainingRoster,
   saveTrainingDraft,
   submitTrainingSolution,
+  updateTrainingHint,
   validateTrainingStructure,
 } from './training-engine.service'
 
@@ -164,6 +166,14 @@ trainingEngineRouter.post('/training-sessions/:id/submit', authenticate, asyncHa
 
 trainingEngineRouter.post('/training-sessions/:id/hints', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try { sendContractData(res, TrainingContracts.createHint, await createTrainingHint(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.createHint, req.body)), 201) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.patch('/training-sessions/:id/hints/:hintId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.updateHint, await updateTrainingHint(req.user!.userId, req.params.id, req.params.hintId, parseContractBody(TrainingContracts.updateHint, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.delete('/training-sessions/:id/hints/:hintId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.deleteHint, await deleteTrainingHint(req.user!.userId, req.params.id, req.params.hintId)) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/problems/:stageProblemId/hints', authenticate, asyncHandler(async (req: AuthRequest, res) => {
