@@ -42,14 +42,12 @@ Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新�
 2. 在 API 中实现权限校验和业务逻辑
 3. 脚本通过 HTTP 调用 API 执行操作
 
-**现有违规脚本**（位于 `apps/server/scripts/`，已标记为废弃，仅供参考）：
-- `fix-*.ts` — 数据修复脚本
-- `migrate-*.ts`（组织模型迁移除外，见下）— 历史数据迁移脚本
-- `generate-icpc-test-data.ts` / `clean-icpc-test-data.ts` — 测试数据生成/清理
+**仓库清理要求：**
+- 已废弃、一次性、可直接改业务数据的 `fix-*` / `clean-*` / 旧模型造数脚本不得继续留作可执行入口。
+- E2E seed/reset、明确的本地测试数据生成器只能连接隔离测试库，不得指向生产数据库。
+- 历史迁移说明可以保留为文档，但不得引用已经不存在的可执行脚本。
 
-**唯一受认可的例外**：组织模型迁移受控任务（`apps/server/scripts/migrate-organization-model.ts`、
-`migrate-organization-history.ts`）。它们以 `check`（只读审计）/`apply`（幂等写入）两步运行，
-走 Prisma 业务 API、不用原生 SQL 改业务数据，是文档钦定的迁移机制，详见 `docs/组织模型迁移.md`。
+**受控数据迁移例外**仅限仓库明确登记、可审计且为当前模型服务的迁移任务。当前可执行入口以 `apps/server/package.json` 为准；此类脚本必须具备适用范围说明、阻塞条件/对账，涉及文件或业务数据时优先提供 dry-run、快照或可恢复证据。普通业务批量修改仍必须走 API，不得借“迁移”名义绕过权限和审计。
 
 ---
 
