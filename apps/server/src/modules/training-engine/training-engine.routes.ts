@@ -84,7 +84,7 @@ trainingEngineRouter.get('/training-sessions/:id/design', authenticate, asyncHan
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/design-problems/:problemId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.getDesignProblem, await getTrainingDesignProblem(req.user!.userId, req.params.id, req.params.stageProblemId)) } catch (error) { return sendError(error, res) }
+  try { sendContractData(res, TrainingContracts.getDesignProblem, await getTrainingDesignProblem(req.user!.userId, req.params.id, req.params.problemId)) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/structure/validate', authenticate, asyncHandler(async (req: AuthRequest, res) => {
