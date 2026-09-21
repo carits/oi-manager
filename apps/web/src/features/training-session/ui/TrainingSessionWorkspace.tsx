@@ -11,7 +11,7 @@ import { StatusBadge } from '@/components/ui/Badge'
 import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
-import { SubmissionCodeEditor, clearSubmissionDraft, SubmissionIoFields, type SubmissionIoValue } from '@/features/submission'
+import { SubmissionCodeEditor, SubmissionIoFields, type SubmissionIoValue } from '@/features/submission'
 import {
   changeTrainingStageGroup,
   extendTrainingStageTime,
