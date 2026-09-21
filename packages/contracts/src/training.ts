@@ -169,6 +169,8 @@ export const TrainingSubmitInputSchema = z.object({ stageProblemId: z.string(), 
 export const TrainingSubmitResultSchema = z.object({ id: z.number().int() }).passthrough()
 export const TrainingHintSchema = z.object({ id: z.string(), level: z.number().int(), title: z.string().nullable().optional(), content: z.string().nullable().optional(), openMode: z.string().optional(), triggerSeconds: z.number().int().nullable().optional(), triggerAttempts: z.number().int().nullable().optional(), triggerScore: z.number().int().nullable().optional(), opened: z.boolean().optional(), globallyOpenedAt: DateTimeWireSchema.nullable().optional() }).passthrough()
 export const TrainingHintCreateInputSchema = z.object({ stageProblemId: z.string(), level: z.number().int().min(1).max(20), title: z.string().max(100).optional(), content: z.string().min(1).max(5000), openMode: z.enum(['MANUAL', 'TIME', 'ATTEMPT', 'SCORE']), triggerSeconds: z.number().int().min(60).max(86400).optional(), triggerAttempts: z.number().int().min(1).max(100).optional(), triggerScore: z.number().int().min(0).max(100).optional() })
+export const TrainingHintUpdateInputSchema = TrainingHintCreateInputSchema.omit({ stageProblemId: true })
+export const TrainingHintDeleteResultSchema = z.object({ deleted: z.literal(true) })
 export const TrainingStrategyDecisionInputSchema = z.object({ stageProblemId: z.string().optional(), decision: z.string().min(1).max(100), reason: z.string().max(2000).optional() })
 export const TrainingPeerProgressSchema = z.object({ rankingMode: z.string(), peerVisibility: z.string(), entries: z.array(z.object({ rank: z.number().int().optional(), user: TrainingUserSummarySchema, completed: z.number().int(), total: z.number().int(), score: z.number().optional(), attempts: z.number().int().optional(), penaltyMinutes: z.number().int().optional(), activeSeconds: z.number().int().optional() }).passthrough()) })
 export const TrainingGroupSuggestionSchema = z.object({ stageId: z.string(), suggestions: z.array(z.object({ participantId: z.string(), user: TrainingUserSummarySchema, groupId: z.string(), groupName: z.string(), reason: z.string() })) })
@@ -201,6 +203,8 @@ export const TrainingContracts = {
   saveDraft: defineApiEndpoint({ key: 'training.draft.save', method: 'PUT', scope: 'organization', body: TrainingDraftInputSchema, data: TrainingDraftSchema }),
   submit: defineApiEndpoint({ key: 'training.submit', method: 'POST', scope: 'organization', body: TrainingSubmitInputSchema, data: TrainingSubmitResultSchema }),
   createHint: defineApiEndpoint({ key: 'training.hint.create', method: 'POST', scope: 'organization', body: TrainingHintCreateInputSchema, data: TrainingHintSchema }),
+  updateHint: defineApiEndpoint({ key: 'training.hint.update', method: 'PATCH', scope: 'organization', body: TrainingHintUpdateInputSchema, data: TrainingHintSchema }),
+  deleteHint: defineApiEndpoint({ key: 'training.hint.delete', method: 'DELETE', scope: 'organization', data: TrainingHintDeleteResultSchema }),
   listHints: defineApiEndpoint({ key: 'training.hint.list', method: 'GET', scope: 'organization', data: z.array(TrainingHintSchema) }),
   openHint: defineApiEndpoint({ key: 'training.hint.open', method: 'POST', scope: 'organization', body: z.object({}).default({}), data: TrainingHintSchema }),
   recordStrategy: defineApiEndpoint({ key: 'training.strategy.record', method: 'POST', scope: 'organization', body: TrainingStrategyDecisionInputSchema, data: z.object({ id: z.string() }).passthrough() }),
