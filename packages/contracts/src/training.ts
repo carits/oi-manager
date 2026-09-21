@@ -90,7 +90,7 @@ const TrainingUserSummarySchema = z.object({ id: z.string(), username: z.string(
 const TrainingRuntimeProblemSchema = z.object({
   id: z.string(), problemId: z.string(), alias: z.string().nullable().optional(), targetScore: z.number().int().nullable().optional(),
   timePolicy: TrainingProblemTimePolicySchema.nullable().optional(), stuckPolicy: TrainingStuckPolicySchema.nullable().optional(), allowedSubtaskIds: z.array(z.number().int()).nullable().optional(),
-  strategyIntervalSeconds: z.number().int().nullable().optional(), unlockPolicy: TrainingUnlockPolicySchema.nullable().optional(),
+  strategyIntervalSeconds: z.number().int().nullable().optional(), scoreGoals: z.array(TrainingScoreGoalSchema).optional(), unlockPolicy: TrainingUnlockPolicySchema.nullable().optional(),
   Problem: z.object({ problemId: z.string(), title: z.string(), platform: z.string() }).passthrough(),
   TestSetRevision: z.object({ revisionNumber: z.number().int(), mode: z.string() }).passthrough(),
 }).passthrough()
@@ -111,9 +111,9 @@ export const TrainingWorkspaceSchema = z.object({
     rankingMode: z.string(), peerVisibility: z.string(), joinMode: z.string(), teamId: z.string().nullable().optional(),
     Stages: z.array(TrainingRuntimeStageSchema), Overlays: z.array(z.object({ id: z.string(), type: z.string(), targetType: z.string().nullable().optional(), targetId: z.string().nullable().optional(), payload: JsonObjectSchema.nullable().optional() }).passthrough()),
   }).passthrough(),
-  manager: z.boolean(), participant: z.object({ id: z.string(), currentProblemId: z.string().nullable().optional() }).passthrough().nullable().optional(),
+  manager: z.boolean(), participant: z.object({ id: z.string(), currentProblemId: z.string().nullable().optional(), currentStageId: z.string().nullable().optional(), currentGroupId: z.string().nullable().optional() }).passthrough().nullable().optional(),
   progress: z.array(z.object({ stageProblemId: z.string(), status: z.string(), bestScore: z.number().nullable().optional(), attemptCount: z.number().int(), activeSeconds: z.number().int().optional(), continuousActiveSeconds: z.number().int().optional() }).passthrough()),
-  permissions: z.record(z.string(), z.object({ canView: z.boolean(), canSubmit: z.boolean(), canEdit: z.boolean(), reason: z.string() }).passthrough()),
+  permissions: z.record(z.string(), z.object({ canSeeMetadata: z.boolean().optional(), canView: z.boolean(), canSubmit: z.boolean(), canEdit: z.boolean(), reason: z.string() }).passthrough()),
   strategy: z.record(z.string(), z.object({ timePolicy: JsonObjectSchema, timeLimitReached: z.boolean(), decisionDue: z.boolean(), switchRecommended: z.boolean() }).passthrough()),
 })
 export const TrainingRosterSchema = z.object({
@@ -153,7 +153,7 @@ const TrainingSessionCreateStageInputSchema = TrainingStructureStageInputSchema.
 export const TrainingSessionCreateInputSchema = z.object({
   title: z.string().trim().min(1).max(200), description: z.string().max(5000).optional(), templateKey: z.string().optional(), sessionType: z.enum(['OI', 'ACM', 'GENERAL']).optional(),
   organizationId: z.string().optional(), teamId: z.string().optional(), participantUserIds: z.array(z.string()).max(5000).optional(), scheduledStartAt: DateTimeWireSchema.nullable().optional(),
-  rankingMode: z.enum(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING']).optional(), peerVisibility: z.enum(['NONE', 'PROGRESS', 'SCORE', 'FULL']).optional(), joinMode: z.enum(['CURRENT_STAGE', 'FROM_BEGINNING', 'TEACHER_ASSIGN']).optional(),
+  rankingMode: z.enum(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING']).optional(), peerVisibility: z.enum(['NONE', 'PROGRESS', 'SCORE', 'FULL']).optional(), joinMode: z.enum(['CURRENT_STAGE', 'TEACHER_ASSIGN']).optional(),
   allowHints: z.boolean().optional(), allowSolution: z.boolean().optional(), allowDiscussion: z.boolean().optional(),
   defaultAccessPolicy: TrainingStageAccessPolicySchema.optional(), defaultSubmissionMode: z.enum(['ENABLED', 'DISABLED']).optional(),
   settings: JsonObjectSchema.optional(), stages: z.array(TrainingSessionCreateStageInputSchema).min(1).max(100).optional(),
