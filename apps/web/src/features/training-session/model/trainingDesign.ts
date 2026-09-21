@@ -50,7 +50,7 @@ export type Stage = {
   description?: string | null
   kind: 'TRAINING' | 'TEACHING' | 'REVIEW'
   audienceMode: 'ALL' | 'GROUPED'
-  lifecycle?: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'ENDED_EARLY' | 'SKIPPED'
+  lifecycle?: 'PENDING' | 'RUNNING' | 'ENDED' | 'SKIPPED'
   endPolicy: 'MANUAL' | 'TIME' | 'COMPLETION' | 'HYBRID'
   accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
   submissionMode: 'ENABLED' | 'DISABLED'

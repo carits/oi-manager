@@ -62,6 +62,28 @@ const COMMANDS = new Set([
 const SESSION_WIDE_COMMANDS = new Set([
   'PAUSE_SESSION', 'RESUME_SESSION',
 ])
+
+const COMMAND_ALLOWED_SESSION_STATUS: Record<string, ReadonlySet<string>> = {
+  PAUSE_SESSION: new Set(['RUNNING']),
+  RESUME_SESSION: new Set(['PAUSED']),
+  FOCUS_PROBLEM: new Set(['RUNNING']),
+  END_FOCUS: new Set(['RUNNING', 'PAUSED']),
+  LOCK_PROBLEM: new Set(['RUNNING', 'PAUSED']),
+  UNLOCK_PROBLEM: new Set(['RUNNING', 'PAUSED']),
+  ENABLE_SUBMISSION: new Set(['RUNNING', 'PAUSED']),
+  DISABLE_SUBMISSION: new Set(['RUNNING', 'PAUSED']),
+  OPEN_HINT: new Set(['RUNNING', 'PAUSED']),
+  CLOSE_HINT: new Set(['RUNNING', 'PAUSED']),
+  UNLOCK_FOR_USER: new Set(['RUNNING', 'PAUSED']),
+  SKIP_FOR_USER: new Set(['RUNNING', 'PAUSED']),
+  SHOW_MESSAGE: new Set(['RUNNING', 'PAUSED']),
+  CLEAR_MESSAGE: new Set(['RUNNING', 'PAUSED']),
+}
+
+function assertTrainingCommandAllowed(type: string, status: string) {
+  const allowed = COMMAND_ALLOWED_SESSION_STATUS[type]
+  if (!allowed?.has(status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', `训练状态 ${status} 不允许执行 ${type}`)
+}
 const SESSION_TYPES = new Set(['OI', 'ACM', 'GENERAL'])
 const STAGE_KINDS = new Set(['TRAINING', 'TEACHING', 'REVIEW'])
 const AUDIENCE_MODES = new Set(['ALL', 'GROUPED'])
@@ -900,8 +922,54 @@ function requiredStageProblemIds(stage: SessionShape['Stages'][number], particip
     .map(problem => problem.id))
 }
 
+type TrainingRequirementState = 'REQUIRED' | 'SATISFIED' | 'BYPASSED' | 'RETIRED'
+
+type RequirementProgress = {
+  stageProblemId: string
+  status: string
+}
+
+function resolveParticipantStageRequirements(
+  stage: SessionShape['Stages'][number],
+  participantId: string,
+  progressRows: RequirementProgress[] = [],
+) {
+  const requiredIds = requiredStageProblemIds(stage, participantId)
+  const stageProblemIds = new Set(stage.Problems.map(problem => problem.id))
+  const progressById = new Map(
+    progressRows
+      .filter(progress => stageProblemIds.has(progress.stageProblemId))
+      .map(progress => [progress.stageProblemId, progress] as const),
+  )
+  const visibleIds = new Set([...requiredIds, ...progressById.keys()])
+  return [...visibleIds].map(stageProblemId => {
+    const progress = progressById.get(stageProblemId)
+    let state: TrainingRequirementState
+    if (!requiredIds.has(stageProblemId)) state = 'RETIRED'
+    else if (progress?.status === 'SKIPPED') state = 'BYPASSED'
+    else if (progress?.status === 'COMPLETED') state = 'SATISFIED'
+    else state = 'REQUIRED'
+    return { stageProblemId, state, progress }
+  })
+}
+
+function resolveParticipantSessionRequirements(
+  session: SessionShape,
+  participantId: string,
+  progressRows: RequirementProgress[] = [],
+) {
+  return session.Stages.flatMap(stage =>
+    resolveParticipantStageRequirements(stage, participantId, progressRows)
+      .map(requirement => ({ ...requirement, stageId: stage.id })),
+  )
+}
+
 function requiredSessionProblemIds(session: SessionShape, participantId: string) {
-  return new Set(session.Stages.flatMap(stage => [...requiredStageProblemIds(stage, participantId)]))
+  return new Set(
+    resolveParticipantSessionRequirements(session, participantId)
+      .filter(requirement => requirement.state !== 'RETIRED')
+      .map(requirement => requirement.stageProblemId),
+  )
 }
 
 type TrainingPermissionResult = {
@@ -930,7 +998,7 @@ function resolveTrainingPermissionLoaded(
     return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'PROBLEM_REQUIRED' }
   }
 
-  const activeStageId = session.currentStageId || participant.currentStageId || session.Stages[0]?.id || null
+  const activeStageId = session.currentStageId
   const stage = activeStageId ? session.Stages.find(item => item.id === activeStageId) : null
   const problemStage = session.Stages.find(item => item.Problems.some(problem => problem.id === stageProblemId))
   const stageProblem = problemStage?.Problems.find(problem => problem.id === stageProblemId)
@@ -1112,7 +1180,7 @@ async function startStage(tx: Prisma.TransactionClient, sessionId: string, stage
   if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '目标 Stage 不是待开始状态')
   await tx.trainingSessionStageGroupChange.updateMany({ where: { sessionId, targetStageId: stageId, effectiveMode: 'NEXT_STAGE', effectiveAt: null }, data: { effectiveAt: at } })
   if (!stage.RuntimeSnapshot) await createStageSnapshot(tx, stage.id)
-  await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'RUNNING', startedAt: at, runningSince: running ? at : null, endedAt: null, endedBy: null, endReason: null } })
+  await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'RUNNING', startedAt: at, runningSince: running ? at : null, endedAt: null, endedBy: null, endReason: null, endNote: null } })
   await tx.trainingSession.update({ where: { id: sessionId }, data: { currentStageId: stage.id } })
   await tx.trainingSessionParticipant.updateMany({ where: { sessionId, status: 'active' }, data: { currentStageId: stage.id, currentProblemId: null } })
   return stage
@@ -1130,6 +1198,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   action: StageTransitionAction
   stageId: string
   outcome?: 'completed' | 'ended_early'
+  endReason?: 'TIME_REACHED' | 'COMPLETION_REACHED' | 'HYBRID_REACHED' | 'TEACHER_ENDED' | 'TEACHER_ENDED_EARLY' | 'SESSION_ENDED' | 'SYSTEM_ENDED'
   nextStageId?: string | null
   reason?: string | null
   expectedRevision?: number
@@ -1156,7 +1225,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   if (input.action === 'skip_pending') {
     const stage = current.Stages.find(item => item.id === input.stageId)
     if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '只能跳过尚未开始的 Stage')
-    await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endReason: input.reason } })
+    await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endNote: input.reason } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, input.sessionId, 'training.stage.skipped', 'ALL', null, { stageId: stage.id, reason: input.reason, ...eventMeta })
     return 'skipped' as const
@@ -1170,20 +1239,29 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     ? current.Stages.find(stage => stage.id === input.nextStageId)
     : current.Stages.find(stage => stage.orderIndex > running.orderIndex && stage.lifecycle === 'PENDING')
   const shouldEnd = input.action === 'end_session' || (!next && input.endWhenNoNext)
+  const endReason = input.endReason || (
+    input.action === 'end_session'
+      ? 'SESSION_ENDED'
+      : outcome === 'ended_early'
+        ? 'TEACHER_ENDED_EARLY'
+        : input.automatic
+          ? 'SYSTEM_ENDED'
+          : 'TEACHER_ENDED'
+  )
 
-  await tx.trainingSessionStage.update({ where: { id: running.id }, data: { lifecycle: outcome === 'ended_early' ? 'ENDED_EARLY' : 'COMPLETED', activeElapsedSeconds: { increment }, runningSince: null, endedAt: at, endedBy: input.actorUserId, endReason: input.reason } })
+  await tx.trainingSessionStage.update({ where: { id: running.id }, data: { lifecycle: 'ENDED', activeElapsedSeconds: { increment }, runningSince: null, endedAt: at, endedBy: input.actorUserId, endReason, endNote: input.reason } })
   if (shouldEnd) {
-    await tx.trainingSessionStage.updateMany({ where: { sessionId: input.sessionId, lifecycle: 'PENDING' }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endReason: input.reason || '整场训练已结束' } })
+    await tx.trainingSessionStage.updateMany({ where: { sessionId: input.sessionId, lifecycle: 'PENDING' }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endNote: input.reason || '整场训练已结束' } })
     await tx.trainingSessionOverlay.updateMany({ where: { sessionId: input.sessionId, status: 'active' }, data: { status: 'ended', endedAt: at } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: 'ENDED', endedAt: at, runningSince: null, pausedAt: null, pauseMode: null, activeElapsedSeconds: { increment: increment }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-    await appendEvent(tx, input.sessionId, 'training.session.ended', 'ALL', null, { stageId: running.id, outcome, reason: input.reason, ...eventMeta })
+    await appendEvent(tx, input.sessionId, 'training.session.ended', 'ALL', null, { stageId: running.id, outcome, endReason, reason: input.reason, ...eventMeta })
     return 'ended' as const
   }
 
   if (!next || next.lifecycle !== 'PENDING' || next.orderIndex <= running.orderIndex) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_INVALID', '只能进入当前 Stage 之后的待开始 Stage')
   await startStage(tx, input.sessionId, next.id, at, current.status === 'RUNNING')
   await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: current.status === 'PAUSED' ? 'PAUSED' : 'RUNNING', runningSince: current.status === 'RUNNING' ? at : null, activeElapsedSeconds: { increment }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-  await appendEvent(tx, input.sessionId, 'training.stage.advanced', 'ALL', null, { fromStageId: running.id, toStageId: next.id, outcome, reason: input.reason, ...eventMeta })
+  await appendEvent(tx, input.sessionId, 'training.stage.advanced', 'ALL', null, { fromStageId: running.id, toStageId: next.id, outcome, endReason, reason: input.reason, ...eventMeta })
   return 'advanced' as const
 }
 
@@ -1199,7 +1277,7 @@ export async function executeStageTransition(userId: string, sessionId: string, 
   if ((action === 'skip_pending' || outcome === 'ended_early') && !reason) throw new TrainingEngineError(422, 'TRAINING_STAGE_REASON_REQUIRED', '提前结束或跳过 Stage 必须填写原因')
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
-    await applyStageTransition(tx, { sessionId, actorUserId: userId, action: action as StageTransitionAction, stageId: String(body?.stageId || ''), outcome: outcome as 'completed' | 'ended_early', nextStageId: body?.nextStageId ? String(body.nextStageId) : null, reason, expectedRevision })
+    await applyStageTransition(tx, { sessionId, actorUserId: userId, action: action as StageTransitionAction, stageId: String(body?.stageId || ''), outcome: outcome as 'completed' | 'ended_early', endReason: action === 'end_session' ? 'SESSION_ENDED' : outcome === 'ended_early' ? 'TEACHER_ENDED_EARLY' : 'TEACHER_ENDED', nextStageId: body?.nextStageId ? String(body.nextStageId) : null, reason, expectedRevision })
   })
   return getTrainingWorkspace(userId, sessionId)
 }
@@ -1340,14 +1418,16 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const visibleOverlays = manager || !participant ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
   const currentStage = participant ? session.Stages.find(stage => stage.id === session.currentStageId) : null
   const currentAssignment = participant && currentStage ? currentStage.ParticipantAssignments.find(item => item.participantId === participant.id) : null
-  const requiredCurrent = participant && currentStage ? requiredStageProblemIds(currentStage, participant.id) : new Set<string>()
-  const completedCurrent = participant ? progress.filter(item => requiredCurrent.has(item.stageProblemId) && ['COMPLETED', 'SKIPPED'].includes(item.status)).length : 0
+  const currentRequirements = participant && currentStage ? resolveParticipantStageRequirements(currentStage, participant.id, progress) : []
+  const activeCurrentRequirements = currentRequirements.filter(requirement => requirement.state !== 'RETIRED')
+  const completedCurrent = activeCurrentRequirements.filter(requirement => ['SATISFIED', 'BYPASSED'].includes(requirement.state)).length
   const participantView = participant ? {
     ...participant,
     currentStageId: session.currentStageId,
     currentGroupId: currentAssignment?.groupId || null,
-    requiredCount: requiredCurrent.size,
+    requiredCount: activeCurrentRequirements.length,
     completedCount: completedCurrent,
+    requirements: currentRequirements.map(requirement => ({ stageProblemId: requirement.stageProblemId, state: requirement.state })),
   } : participant
   const snapshotProblem = (problem: any) => ({
     ...problem,
@@ -1434,6 +1514,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
     const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId } })
     if (current.statusRevision !== expectedRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+    assertTrainingCommandAllowed(type, current.status)
     targetId = await normalizeCommandTarget(tx, session, targetType, targetId)
     let nextStatus: TrainingEngineSessionStatus | undefined
     const update: Prisma.TrainingSessionUpdateInput = { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } }
@@ -1716,7 +1797,7 @@ export async function processDueTrainingSessions(now = new Date()) {
           const current = await tx.trainingSession.findUnique({ where: { id: session.id } })
           if (!current || current.status !== 'RUNNING') return
           if (!current.currentStageId) return
-          await applyStageTransition(tx, { sessionId: session.id, actorUserId: null, action: 'end_session', stageId: current.currentStageId, outcome: 'ended_early', reason: '到达训练截止时间', automatic: true, metadata: { reasonCode: 'due_at' } })
+          await applyStageTransition(tx, { sessionId: session.id, actorUserId: null, action: 'end_session', stageId: current.currentStageId, outcome: 'ended_early', endReason: 'TIME_REACHED', reason: '到达训练截止时间', automatic: true, metadata: { reasonCode: 'due_at' } })
           ended++
         })
       } catch { /* another worker or coach ended the session */ }
@@ -1730,12 +1811,12 @@ export async function processDueTrainingSessions(now = new Date()) {
     const effectiveDuration = (stage.plannedDurationSeconds || 0) + extensionSeconds
     const timeReady = Boolean(effectiveDuration && elapsed >= effectiveDuration)
     const completed = session.Participants.filter(participant => {
-      const stageProblemIds = requiredStageProblemIds(stage as any, participant.id)
-      if (!stageProblemIds.size) return false
-      const relevant = participant.Progress.filter(progress => stageProblemIds.has(progress.stageProblemId))
-      const completedCount = relevant.filter(progress => ['COMPLETED', 'SKIPPED'].includes(progress.status)).length
-      const requiredCount = Number(parseJsonObject(stage.rules).requiredProblemCount || stageProblemIds.size)
-      return completedCount >= Math.min(requiredCount, stageProblemIds.size)
+      const requirements = resolveParticipantStageRequirements(stage as any, participant.id, participant.Progress)
+        .filter(requirement => requirement.state !== 'RETIRED')
+      if (!requirements.length) return false
+      const satisfiedCount = requirements.filter(requirement => ['SATISFIED', 'BYPASSED'].includes(requirement.state)).length
+      const requiredCount = Number(parseJsonObject(stage.rules).requiredProblemCount || requirements.length)
+      return satisfiedCount >= Math.min(requiredCount, requirements.length)
     }).length
     const completionRate = session.Participants.length ? Math.floor(completed * 100 / session.Participants.length) : 0
     const completionReady = Boolean(stage.completionThreshold && completionRate >= stage.completionThreshold && elapsed >= (stage.minDurationSeconds || 0))
@@ -1747,7 +1828,8 @@ export async function processDueTrainingSessions(now = new Date()) {
         const current = await tx.trainingSession.findUnique({ where: { id: session.id } })
         if (!current || current.status !== 'RUNNING' || current.currentStageId !== stage.id) return
         const next = session.Stages.slice(index + 1).find(item => item.lifecycle === 'PENDING')
-        const result = await applyStageTransition(tx, { sessionId: session.id, actorUserId: null, action: 'advance', stageId: stage.id, outcome: 'completed', nextStageId: next?.id, reason: '自动达到阶段结束条件', automatic: true, endWhenNoNext: true, metadata: { completionRate } })
+        const automaticEndReason = stage.endPolicy === 'TIME' ? 'TIME_REACHED' : stage.endPolicy === 'COMPLETION' ? 'COMPLETION_REACHED' : 'HYBRID_REACHED'
+        const result = await applyStageTransition(tx, { sessionId: session.id, actorUserId: null, action: 'advance', stageId: stage.id, outcome: 'completed', endReason: automaticEndReason, nextStageId: next?.id, reason: '自动达到阶段结束条件', automatic: true, endWhenNoNext: true, metadata: { completionRate } })
         if (result === 'advanced') advanced++
         if (result === 'ended') ended++
       })
@@ -1774,11 +1856,28 @@ export async function getCoachDashboard(userId: string, sessionId: string) {
   const now = Date.now()
   const currentStage = session.Stages.find(stage => stage.id === session.currentStageId)
   const participantRows = participants.map(item => {
-    const requiredIds = currentStage ? requiredStageProblemIds(currentStage, item.id) : new Set<string>()
-    const completedCount = item.Progress.filter(progress => requiredIds.has(progress.stageProblemId) && ['COMPLETED', 'SKIPPED'].includes(progress.status)).length
-    const requiredCount = currentStage ? Math.min(Number(parseJsonObject(currentStage.rules).requiredProblemCount || requiredIds.size), requiredIds.size) : 0
-    const currentProgress = item.Progress.filter(progress => requiredIds.has(progress.stageProblemId))
-    return { id: item.id, user: item.User, currentStageId: item.currentStageId, currentProblemId: item.currentProblemId, currentGroupId: item.StageAssignments[0]?.groupId || null, activeSeconds: item.activeSeconds, online: Boolean(item.lastHeartbeatAt && now - item.lastHeartbeatAt.getTime() < 90_000), requiredCount, completedCount, completed: requiredCount > 0 && completedCount >= requiredCount, working: currentProgress.some(progress => progress.status === 'WORKING'), stuck: currentProgress.some(progress => progress.status === 'STUCK'), progress: item.Progress.map(progress => ({ ...progress, code: undefined })) }
+    const requirements = currentStage ? resolveParticipantStageRequirements(currentStage, item.id, item.Progress) : []
+    const activeRequirements = requirements.filter(requirement => requirement.state !== 'RETIRED')
+    const satisfiedCount = activeRequirements.filter(requirement => ['SATISFIED', 'BYPASSED'].includes(requirement.state)).length
+    const requiredCount = currentStage ? Math.min(Number(parseJsonObject(currentStage.rules).requiredProblemCount || activeRequirements.length), activeRequirements.length) : 0
+    const currentProblemIds = new Set(activeRequirements.map(requirement => requirement.stageProblemId))
+    const currentProgress = item.Progress.filter(progress => currentProblemIds.has(progress.stageProblemId))
+    return {
+      id: item.id,
+      user: item.User,
+      currentStageId: session.currentStageId,
+      currentProblemId: item.currentProblemId,
+      currentGroupId: item.StageAssignments[0]?.groupId || null,
+      activeSeconds: item.activeSeconds,
+      online: Boolean(item.lastHeartbeatAt && now - item.lastHeartbeatAt.getTime() < 90_000),
+      requiredCount,
+      completedCount: satisfiedCount,
+      completed: requiredCount > 0 && satisfiedCount >= requiredCount,
+      working: currentProgress.some(progress => progress.status === 'WORKING'),
+      stuck: currentProgress.some(progress => progress.status === 'STUCK'),
+      requirements: requirements.map(requirement => ({ stageProblemId: requirement.stageProblemId, state: requirement.state })),
+      progress: item.Progress.map(progress => ({ ...progress, code: undefined })),
+    }
   })
   return { session: { id: session.id, title: session.title, status: session.status, currentStageId: session.currentStageId }, participants: participantRows, summary: { total: participants.length, working: participantRows.filter(item => item.working).length, stuck: participantRows.filter(item => item.stuck).length, completed: participantRows.filter(item => item.completed).length } }
 }
@@ -1804,8 +1903,10 @@ export async function getTrainingPeerProgress(userId: string, sessionId: string)
     ? (session.rankingMode === 'OFF' ? 'OFF' : 'PROGRESS_ONLY')
     : visibility === 'SCORE' && session.rankingMode === 'ACM_RANKING' ? 'SCORE' : session.rankingMode
   const rows = participants.map(participant => {
-    const requiredIds = requiredSessionProblemIds(session, participant.id)
-    const completed = participant.Progress.filter(progress => requiredIds.has(progress.stageProblemId) && progress.status === 'COMPLETED').length
+    const requirements = resolveParticipantSessionRequirements(session, participant.id, participant.Progress)
+    const activeRequirements = requirements.filter(requirement => requirement.state !== 'RETIRED')
+    const requiredIds = new Set(activeRequirements.map(requirement => requirement.stageProblemId))
+    const completed = activeRequirements.filter(requirement => ['SATISFIED', 'BYPASSED'].includes(requirement.state)).length
     const score = participant.Progress.reduce((sum, progress) => sum + (progress.bestScore || 0), 0)
     const attempts = participant.Progress.reduce((sum, progress) => sum + progress.attemptCount, 0)
     const userSubmissions = submissions.filter(item => item.userId === participant.userId && item.trainingStageProblemId && requiredIds.has(item.trainingStageProblemId))
@@ -1845,18 +1946,20 @@ export async function getTrainingReport(userId: string, sessionId: string) {
   const manager = await canManageSession(userId, session)
   const where = manager ? { sessionId } : { sessionId, userId }
   const participants = await prisma.trainingSessionParticipant.findMany({ where, include: { User: { select: { id: true, username: true } }, Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } }, ScoreEvents: { orderBy: { createdAt: 'asc' } } } })
-  const timeline = session.Stages.map(stage => ({ id: stage.id, name: stage.name, kind: stage.kind, lifecycle: stage.lifecycle, plannedDurationSeconds: stage.plannedDurationSeconds, extensionSeconds: stage.TimeAdjustments.reduce((sum, item) => sum + item.seconds, 0), activeElapsedSeconds: stage.activeElapsedSeconds + (stage.lifecycle === 'RUNNING' ? activeStageIncrement(stage, new Date()) : 0), endedAt: stage.endedAt, endReason: stage.endReason, snapshotHash: stage.RuntimeSnapshot?.projectionHash || null }))
+  const timeline = session.Stages.map(stage => ({ id: stage.id, name: stage.name, kind: stage.kind, lifecycle: stage.lifecycle, plannedDurationSeconds: stage.plannedDurationSeconds, extensionSeconds: stage.TimeAdjustments.reduce((sum, item) => sum + item.seconds, 0), activeElapsedSeconds: stage.activeElapsedSeconds + (stage.lifecycle === 'RUNNING' ? activeStageIncrement(stage, new Date()) : 0), endedAt: stage.endedAt, endReason: stage.endReason, endNote: stage.endNote, snapshotHash: stage.RuntimeSnapshot?.projectionHash || null }))
   const groupChanges = await prisma.trainingSessionStageGroupChange.findMany({ where: { sessionId }, orderBy: { requestedAt: 'asc' }, select: { stageId: true, participantId: true, fromGroupId: true, toGroupId: true, effectiveMode: true, reason: true, effectiveAt: true, requestedAt: true } })
   const stageProblemById = new Map(session.Stages.flatMap(stage => stage.Problems.map(problem => [problem.id, problem] as const)))
   return { timeline, groupChanges, participants: participants.map(item => {
-    const requiredIds = requiredSessionProblemIds(session, item.id)
+    const requirements = resolveParticipantSessionRequirements(session, item.id, item.Progress)
+    const requirementByProblemId = new Map(requirements.map(requirement => [requirement.stageProblemId, requirement]))
     const progressById = new Map(item.Progress.map(progress => [progress.stageProblemId, progress]))
-    const visibleIds = new Set([...requiredIds, ...progressById.keys()])
+    const visibleIds = new Set([...requirementByProblemId.keys(), ...progressById.keys()])
     return { user: item.User, activeSeconds: item.activeSeconds, problems: [...visibleIds].flatMap(stageProblemId => {
       const stageProblem = stageProblemById.get(stageProblemId)
       if (!stageProblem) return []
       const progress = progressById.get(stageProblemId)
-      return [{ title: stageProblem.Problem.title, problemId: stageProblem.Problem.problemId, status: progress?.status || 'NOT_STARTED', requirement: requiredIds.has(stageProblemId) ? 'CURRENT_REQUIREMENT' : 'HISTORICAL', activeSeconds: progress?.activeSeconds || 0, attemptCount: progress?.attemptCount || 0, bestScore: progress?.bestScore ?? null, bestVerdict: progress?.bestVerdict ?? null, hintCount: progress?.hintCount || 0, highestHintLevel: progress?.highestHintLevel || 0, stuckDetectedAt: progress?.stuckDetectedAt || null, scoreProgression: item.ScoreEvents.filter(event => event.stageProblemId === stageProblemId).map(event => ({ score: event.score, verdict: event.verdict, at: event.createdAt })) }]
+      const requirementState = requirementByProblemId.get(stageProblemId)?.state || 'RETIRED'
+      return [{ title: stageProblem.Problem.title, problemId: stageProblem.Problem.problemId, status: progress?.status || 'NOT_STARTED', requirementState, activeSeconds: progress?.activeSeconds || 0, attemptCount: progress?.attemptCount || 0, bestScore: progress?.bestScore ?? null, bestVerdict: progress?.bestVerdict ?? null, hintCount: progress?.hintCount || 0, highestHintLevel: progress?.highestHintLevel || 0, stuckDetectedAt: progress?.stuckDetectedAt || null, scoreProgression: item.ScoreEvents.filter(event => event.stageProblemId === stageProblemId).map(event => ({ score: event.score, verdict: event.verdict, at: event.createdAt })) }]
     }) }
   }) }
 }
@@ -1888,7 +1991,8 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     const snapshottedGoal = parseJsonObject(submission.trainingScoreGoalSnapshot)
     const targetScore = Number.isInteger(snapshottedGoal.score) ? Number(snapshottedGoal.score) : plan?.targetScore ?? stageProblem.targetScore ?? stageProblem.Stage.defaultTargetScore ?? 100
     const completed = accepted || bestScore >= targetScore
-    await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: completed ? 'COMPLETED' : 'WORKING', stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
+    const nextStatus = completed ? 'COMPLETED' : existing?.status === 'STUCK' && !improved ? 'STUCK' : 'WORKING'
+    await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: nextStatus, stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
     await tx.trainingSessionScoreEvent.create({ data: { sessionId: submission.trainingSessionId!, participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, submissionId: submission.id, score: submission.score, verdict: submission.result } })
     await appendEvent(tx, submission.trainingSessionId!, 'training.progress.updated', 'USER', submission.userId, { stageProblemId: submission.trainingStageProblemId, score: submission.score, verdict: submission.result })
   })

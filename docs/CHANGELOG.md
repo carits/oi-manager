@@ -1,9 +1,18 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-20
+last_verified: 2026-09-22
 source_of_truth: Git history
 ---
+
+## 2026-09-22 — Training Engine Stage 语义最终收口
+
+- Stage 持久生命周期统一为 `PENDING / RUNNING / ENDED / SKIPPED`；原 `COMPLETED / ENDED_EARLY` 迁为 `ENDED`，结构化 `endReason` 与教师文字 `endNote` 分离，历史数据迁移保留原含义。
+- `TrainingSession.currentStageId` 成为唯一 Stage 真相；Participant 的 currentStage 只保留兼容镜像。ENDED/ARCHIVED 后 Runtime Command 统一 fail-closed，Focus 退出 ProblemProgress 持久状态。
+- 新增统一 Requirement resolver，以 `REQUIRED / SATISFIED / BYPASSED / RETIRED` 同时驱动 Workspace、Coach Dashboard、Scheduler Completion、Peer Progress 与 Report；教师 SKIP 明确作为顺序训练 prerequisite bypass。
+- 修复普通未提升 WA 错误解除 STUCK；立即换组保留旧 Progress 并把退出新组要求的题标记为 RETIRED。
+- 保留 usability hardening 已完成的权限批量求值、题面脱敏、Hint Definition 冻结、TEAM 命令目标和报告导出；同步补充生命周期、Skip、STUCK、换组 Requirement 与终态命令回归测试。
+- 本变更尚未部署；数据库迁移演练、Server 集成测试与 UI E2E 仍以 PR 验证结果为发布前置条件。
 
 ## 2026-09-22 — Full-project usability hardening 收口
 

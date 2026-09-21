@@ -34,14 +34,14 @@ Definition 是 Stage 开始前的教学设计：用途、受众、题目、开�
 
 Runtime Intervention 是课堂现场干预：暂停/恢复、Focus、消息、Hint、个人解锁/跳题、临时禁交、延时和换组。它不得替换题目、修改规则或切换 Stage 类型。延时追加 `StageTimeAdjustment`，不覆盖原计划时间。
 
-Stage 生命周期为：
+Stage 生命周期统一为：
 
 ```text
-PENDING → RUNNING → COMPLETED | ENDED_EARLY
+PENDING → RUNNING → ENDED
 PENDING → SKIPPED
 ```
 
-没有回滚。已结束 Stage 需要再次训练时必须复制为新的未来 Stage。人工转换和 Scheduler 共用训练 advisory lock、`statusRevision` CAS 和同一事务语义。
+`ENDED` 的原因由结构化 `endReason` 表达：`TIME_REACHED / COMPLETION_REACHED / HYBRID_REACHED / TEACHER_ENDED / TEACHER_ENDED_EARLY / SESSION_ENDED / SYSTEM_ENDED`；教师填写的文字说明单独保存在 `endNote`。没有回滚，也不再把“提前结束/正常完成”编码成两种终态。已结束 Stage 需要再次训练时必须复制为新的未来 Stage。人工转换和 Scheduler 共用训练 advisory lock、`statusRevision` CAS 和同一事务语义。
 
 ## Stage 规则组合
 
@@ -66,7 +66,8 @@ PENDING → SKIPPED
 
 `StageProblem` 是题目与固定 Revision 的稳定身份；创建/保存 Definition 时同时固定题名和题面快照，历史训练不再跟随题库当前题面漂移。同一 Stage 的多个组通过 `ProblemPlan` 复用它。草稿也以 `Session + User + StageProblem` 为身份，因此同一道 Problem 出现在不同 Stage 时不会互相覆盖。换组不会删除提交、草稿或 Progress。当前要求来自当前 Stage/组的 Plan，历史成绩来自稳定 Progress：
 
-- 换组后不属于新组的题进入“本阶段历史”，不计当前组完成度。
+- Requirement 统一为 `REQUIRED / SATISFIED / BYPASSED / RETIRED`：换组后不属于新组的旧题为 `RETIRED`，教师 Skip 为 `BYPASSED`，历史 Progress 永不删除。
+- Dashboard、Scheduler Completion、Peer Progress 与 Report 必须读取同一个 Requirement resolver，不能分别从 Progress 数量推导完成度。
 - 两组共有题继续使用已有 Progress。
 - `immediate` 立即刷新当前要求；`next_stage` 只预写目标 Stage 分组。
 - 每次换组保存原组、目标组、操作者、原因、生效方式，并通过 SSE 通知。
@@ -113,7 +114,7 @@ JSON API 全部通过 `packages/contracts` 和 Training Feature API。核心结�
 
 ## 权限与可靠性
 
-权限按“管理员/个人 override → Overlay → 当前 Stage/组 Plan → Session 默认规则”解析。学生只有在权限求值确认题目可见后才获得题号、平台、题名和题面快照；未来 Stage、锁题、顺序未解锁和教师控制未开放题目在 API 边界即脱敏，即使 Session 处于 `SCHEDULED` 或 `PAUSED` 也不能绕过。Workspace 一次加载 Participant、Override 与 Progress 后批量完成全部 StageProblem 权限求值，避免按题重新加载 Session/Progress 的 N+1。硬暂停禁止编辑与提交，软暂停允许编辑但不提交；暂停时间不计入 Session 或 Stage 有效时间。
+权限按“管理员/个人 override → Overlay → 当前 Stage/组 Plan → Session 默认规则”解析。学生只有在权限求值确认题目可见后才获得题号、平台、题名和题面快照；未来 Stage、锁题、顺序未解锁和教师控制未开放题目在 API 边界即脱敏，即使 Session 处于 `SCHEDULED` 或 `PAUSED` 也不能绕过。Workspace 一次加载 Participant、Override 与 Progress 后批量完成全部 StageProblem 权限求值，避免按题重新加载 Session/Progress 的 N+1。学生的 Stage 真相只读取 `TrainingSession.currentStageId`；`Participant.currentStageId` 仅作为兼容镜像。硬暂停禁止编辑与提交，软暂停允许编辑但不提交；暂停时间不计入 Session 或 Stage 有效时间。ENDED/ARCHIVED 后所有 Runtime Command fail-closed。
 
 评测完成后幂等更新 Progress 与 ScoreEvent。Scheduler 是单例 Worker，只对 RUNNING Stage 评估 TIME/COMPLETION/HYBRID；与人工转换竞争时只有一个 CAS 成功。固定 Revision、运行快照、目标分层快照和追加事件共同保证历史可重放。
 

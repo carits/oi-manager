@@ -6,7 +6,8 @@ const JsonObjectSchema = z.record(z.string(), z.unknown())
 const TrainingIssueSchema = FieldIssueSchema.extend({ severity: z.enum(['error', 'warning']) })
 export const TrainingStageKindSchema = z.enum(['TRAINING', 'TEACHING', 'REVIEW'])
 export const TrainingStageAudienceModeSchema = z.enum(['ALL', 'GROUPED'])
-export const TrainingStageLifecycleSchema = z.enum(['PENDING', 'RUNNING', 'COMPLETED', 'ENDED_EARLY', 'SKIPPED'])
+export const TrainingStageLifecycleSchema = z.enum(['PENDING', 'RUNNING', 'ENDED', 'SKIPPED'])
+export const TrainingStageEndReasonSchema = z.enum(['TIME_REACHED', 'COMPLETION_REACHED', 'HYBRID_REACHED', 'TEACHER_ENDED', 'TEACHER_ENDED_EARLY', 'SESSION_ENDED', 'SYSTEM_ENDED'])
 export const TrainingStageEndPolicySchema = z.enum(['MANUAL', 'TIME', 'COMPLETION', 'HYBRID'])
 export const TrainingStageAccessPolicySchema = z.enum(['ALL_AT_ONCE', 'SEQUENTIAL', 'TEACHER_CONTROLLED'])
 export const TrainingUnlockConditionSchema = z.object({ type: z.enum(['AC', 'SCORE', 'TIME', 'ATTEMPTS', 'TEACHER']), value: z.number().int().optional() })
@@ -50,7 +51,7 @@ export const TrainingDesignProblemSchema = TrainingStructureProblemInputSchema.p
 export const TrainingDesignGroupSchema = TrainingStructureGroupInputSchema.omit({ problems: true }).extend({ Problems: z.array(TrainingDesignProblemSchema) })
 export const TrainingDesignStageSchema = TrainingStructureStageInputSchema.omit({ problems: true, groups: true }).extend({
   id: z.string(), definitionRevision: z.number().int().optional(), runningSince: DateTimeWireSchema.nullable().optional(), activeElapsedSeconds: z.number().int().optional(),
-  endedAt: DateTimeWireSchema.nullable().optional(), endReason: z.string().nullable().optional(), effectiveDurationSeconds: z.number().int().nullable().optional(),
+  endedAt: DateTimeWireSchema.nullable().optional(), endReason: TrainingStageEndReasonSchema.nullable().optional(), endNote: z.string().nullable().optional(), effectiveDurationSeconds: z.number().int().nullable().optional(),
   Problems: z.array(TrainingDesignProblemSchema), Groups: z.array(TrainingDesignGroupSchema),
 })
 export const TrainingDesignSchema = z.object({
@@ -101,7 +102,7 @@ const TrainingRuntimeStageSchema = z.object({
   effectiveDurationSeconds: z.number().int().nullable().optional(),
   minDurationSeconds: z.number().int().nullable().optional(), endPolicy: TrainingStageEndPolicySchema,
   accessPolicy: TrainingStageAccessPolicySchema, submissionMode: z.string(), defaultTargetScore: z.number().int().nullable().optional(),
-  completionThreshold: z.number().int().nullable().optional(), endedAt: DateTimeWireSchema.nullable().optional(), endReason: z.string().nullable().optional(),
+  completionThreshold: z.number().int().nullable().optional(), endedAt: DateTimeWireSchema.nullable().optional(), endReason: TrainingStageEndReasonSchema.nullable().optional(), endNote: z.string().nullable().optional(),
   Groups: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()), Problems: z.array(TrainingRuntimeProblemSchema),
 }).passthrough()
 export const TrainingWorkspaceSchema = z.object({
@@ -122,13 +123,26 @@ export const TrainingRosterSchema = z.object({
 })
 export const TrainingCoachDashboardSchema = z.object({
   session: z.object({ id: z.string(), title: z.string(), status: z.string(), currentStageId: z.string().nullable().optional() }),
-  participants: z.array(z.object({ id: z.string(), user: TrainingUserSummarySchema, currentStageId: z.string().nullable().optional(), currentProblemId: z.string().nullable().optional(), currentGroupId: z.string().nullable().optional(), activeSeconds: z.number().int(), online: z.boolean(), requiredCount: z.number().int(), completedCount: z.number().int(), completed: z.boolean(), progress: z.array(z.object({ status: z.string() }).passthrough()) }).passthrough()),
+  participants: z.array(z.object({
+    id: z.string(),
+    user: TrainingUserSummarySchema,
+    currentStageId: z.string().nullable().optional(),
+    currentProblemId: z.string().nullable().optional(),
+    currentGroupId: z.string().nullable().optional(),
+    activeSeconds: z.number().int(),
+    online: z.boolean(),
+    requiredCount: z.number().int(),
+    completedCount: z.number().int(),
+    completed: z.boolean(),
+    requirements: z.array(z.object({ stageProblemId: z.string(), state: z.enum(['REQUIRED', 'SATISFIED', 'BYPASSED', 'RETIRED']) })).optional(),
+    progress: z.array(z.object({ status: z.string() }).passthrough()),
+  }).passthrough()),
   summary: z.object({ total: z.number().int(), working: z.number().int(), stuck: z.number().int(), completed: z.number().int() }),
 })
 export const TrainingReportSchema = z.object({
-  timeline: z.array(z.object({ id: z.string(), name: z.string(), kind: TrainingStageKindSchema, lifecycle: TrainingStageLifecycleSchema, plannedDurationSeconds: z.number().int().nullable().optional(), extensionSeconds: z.number().int(), activeElapsedSeconds: z.number().int(), endedAt: DateTimeWireSchema.nullable().optional(), endReason: z.string().nullable().optional(), snapshotHash: z.string().nullable().optional() })),
+  timeline: z.array(z.object({ id: z.string(), name: z.string(), kind: TrainingStageKindSchema, lifecycle: TrainingStageLifecycleSchema, plannedDurationSeconds: z.number().int().nullable().optional(), extensionSeconds: z.number().int(), activeElapsedSeconds: z.number().int(), endedAt: DateTimeWireSchema.nullable().optional(), endReason: TrainingStageEndReasonSchema.nullable().optional(), endNote: z.string().nullable().optional(), snapshotHash: z.string().nullable().optional() })),
   groupChanges: z.array(z.object({ stageId: z.string(), participantId: z.string(), fromGroupId: z.string().nullable().optional(), toGroupId: z.string(), effectiveMode: z.string(), reason: z.string(), effectiveAt: DateTimeWireSchema.nullable().optional(), requestedAt: DateTimeWireSchema })),
-  participants: z.array(z.object({ user: TrainingUserSummarySchema, activeSeconds: z.number().int(), problems: z.array(z.object({ problemId: z.string(), title: z.string(), status: z.string(), requirement: z.enum(['CURRENT_REQUIREMENT', 'HISTORICAL']), activeSeconds: z.number().int(), attemptCount: z.number().int(), bestScore: z.number().nullable().optional(), bestVerdict: z.string().nullable().optional(), hintCount: z.number().int() }).passthrough()) })),
+  participants: z.array(z.object({ user: TrainingUserSummarySchema, activeSeconds: z.number().int(), problems: z.array(z.object({ problemId: z.string(), title: z.string(), status: z.string(), requirementState: z.enum(['REQUIRED', 'SATISFIED', 'BYPASSED', 'RETIRED']), activeSeconds: z.number().int(), attemptCount: z.number().int(), bestScore: z.number().nullable().optional(), bestVerdict: z.string().nullable().optional(), hintCount: z.number().int() }).passthrough()) })),
 })
 
 export const TrainingSessionSummarySchema = z.object({
