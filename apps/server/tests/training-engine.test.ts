@@ -113,6 +113,18 @@ describe('Stage-driven Training Engine', () => {
     expect(await resolveTrainingPermission(student.user.id, session.id, stageProblem.id)).toMatchObject({ canSubmit: false, reason: 'PROBLEM_TIME_LIMIT_REACHED' })
   })
 
+  it('loads design problem metadata through the declared :problemId route parameter', async () => {
+    const created = await createSession()
+    const response = await createAuthenticatedRequest(app, generateTokenFromUser(coach.user))
+      .get(`/api/training-sessions/${created.id}/design-problems/${problem.id}`)
+    expect(response.status).toBe(200)
+    expect(response.body.data).toMatchObject({
+      id: problem.id,
+      problemId: problem.problemId,
+      title: '训练引擎题目',
+    })
+  })
+
   it('rejects the retired FROM_BEGINNING join mode at the create contract boundary', async () => {
     const response = await createAuthenticatedRequest(app, generateTokenFromUser(coach.user)).post('/api/training-sessions').send({
       title: '非法迟到加入模式', teamId: team.id, participantUserIds: [student.user.id],
