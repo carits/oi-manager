@@ -113,7 +113,7 @@ export const TrainingWorkspaceSchema = z.object({
   }).passthrough(),
   manager: z.boolean(), participant: z.object({ id: z.string(), currentProblemId: z.string().nullable().optional() }).passthrough().nullable().optional(),
   progress: z.array(z.object({ stageProblemId: z.string(), status: z.string(), bestScore: z.number().nullable().optional(), attemptCount: z.number().int(), activeSeconds: z.number().int().optional(), continuousActiveSeconds: z.number().int().optional() }).passthrough()),
-  permissions: z.record(z.string(), z.object({ canView: z.boolean(), canSubmit: z.boolean(), canEdit: z.boolean(), reason: z.string() }).passthrough()),
+  permissions: z.record(z.string(), z.object({ canSeeMetadata: z.boolean(), canView: z.boolean(), canSubmit: z.boolean(), canEdit: z.boolean(), reason: z.string() }).passthrough()),
   strategy: z.record(z.string(), z.object({ timePolicy: JsonObjectSchema, timeLimitReached: z.boolean(), decisionDue: z.boolean(), switchRecommended: z.boolean() }).passthrough()),
 })
 export const TrainingRosterSchema = z.object({
