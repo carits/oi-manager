@@ -476,6 +476,7 @@ describe('Team Operations', () => {
 
       const teamA = await createTestTeam({ organizationId: schoolA.organizationId!, ownerId: ownerA.user.id, ownerType: 'teacher', name: '学校A团队' })
       const teamB = await createTestTeam({ organizationId: schoolB.organizationId!, ownerId: ownerB.user.id, ownerType: 'teacher', name: '学校B团队' })
+      const inviteTeamB = await createTestTeam({ organizationId: schoolB.organizationId!, ownerId: ownerB.user.id, ownerType: 'teacher', name: '学校B邀请团队' })
 
       await prisma.teamMember.createMany({
         data: [
@@ -486,7 +487,7 @@ describe('Team Operations', () => {
       const invitationB = await prisma.teamMember.create({
         data: {
           id: crypto.randomUUID(),
-          teamId: teamB.id,
+          teamId: inviteTeamB.id,
           userId: teacher.user.id,
           userType: 'teacher',
           role: 'admin',
