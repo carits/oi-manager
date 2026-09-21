@@ -1256,9 +1256,26 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
       lastDecision: last ? { decision: last.decision, reason: last.reason, createdAt: last.createdAt } : null,
     }]
   }))
-  const permissions = Object.fromEntries((await Promise.all(session.Stages.flatMap(stage => stage.Problems).map(async item => [item.id, await resolveTrainingPermission(userId, sessionId, item.id)] as const))))
+  const permissions = Object.fromEntries((await Promise.all(session.Stages.flatMap(stage => stage.Problems).map(async item => {
+    const permission = await resolveTrainingPermission(userId, sessionId, item.id)
+    return [item.id, { ...permission, canSeeMetadata: manager || permission.canView }] as const
+  }))))
   const visibleOverlays = manager || !participant ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
-  return { session: { ...session, Overlays: visibleOverlays }, manager, participant, progress, permissions, strategy }
+  const currentStage = participant ? session.Stages.find(stage => stage.id === session.currentStageId) : null
+  const currentAssignment = participant && currentStage ? currentStage.ParticipantAssignments.find(item => item.participantId === participant.id) : null
+  const participantView = participant ? { ...participant, currentStageId: session.currentStageId, currentGroupId: currentAssignment?.groupId || null } : participant
+  const sessionView = manager ? session : {
+    ...session,
+    Stages: session.Stages.map(stage => ({
+      ...stage,
+      Problems: stage.Problems.map(problem => permissions[problem.id]?.canSeeMetadata ? problem : {
+        ...problem,
+        alias: null,
+        Problem: { ...problem.Problem, platform: '', problemId: '', title: '未开放题目', difficulty: null },
+      }),
+    })),
+  }
+  return { session: { ...sessionView, Overlays: visibleOverlays }, manager, participant: participantView, progress, permissions, strategy }
 }
 
 export async function replaceTrainingRoster(userId: string, sessionId: string, body: any) {
