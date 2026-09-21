@@ -70,7 +70,7 @@ const ACCESS_POLICIES = new Set(['ALL_AT_ONCE', 'SEQUENTIAL', 'TEACHER_CONTROLLE
 const SUBMISSION_MODES = new Set(['ENABLED', 'DISABLED'])
 const RANKING_MODES = new Set(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING'])
 const PEER_VISIBILITY = new Set(['NONE', 'PROGRESS', 'SCORE', 'FULL'])
-const JOIN_MODES = new Set(['CURRENT_STAGE', 'FROM_BEGINNING', 'TEACHER_ASSIGN'])
+const JOIN_MODES = new Set(['CURRENT_STAGE', 'TEACHER_ASSIGN'])
 const HINT_OPEN_MODES = new Set(['MANUAL', 'TIME', 'ATTEMPT', 'SCORE'])
 const PROBLEM_TIME_MODES = new Set(['NONE', 'SOFT', 'HARD', 'SWITCH_REQUIRED'])
 
@@ -948,7 +948,7 @@ export async function joinTrainingSession(userId: string, sessionId: string) {
   const existing = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
   if (existing?.status === 'active') return existing
   if (session.joinMode === 'TEACHER_ASSIGN' || parseJsonObject(session.settings).rosterExplicit === true) throw new TrainingEngineError(409, 'TRAINING_JOIN_REQUIRES_ASSIGNMENT', '该训练需要教练将你加入名单并分配阶段')
-  const stageId = session.joinMode === 'FROM_BEGINNING' ? session.Stages[0]?.id : session.currentStageId || session.Stages[0]?.id
+  const stageId = session.currentStageId || session.Stages[0]?.id
   return prisma.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId } }, update: { status: 'active', currentStageId: stageId }, create: { sessionId, userId, currentStageId: stageId } })
 }
 
@@ -1721,55 +1721,6 @@ export async function listTrainingEvents(userId: string, sessionId: string, afte
   return events.filter(event => !participant || targetApplies(event.targetType, event.targetId, participant, session))
 }
 
-async function advanceFromBeginningParticipant(
-  tx: Prisma.TransactionClient,
-  sessionId: string,
-  participantId: string,
-  userId: string,
-  completedStageId: string,
-) {
-  const session = await tx.trainingSession.findUnique({
-    where: { id: sessionId },
-    select: {
-      joinMode: true,
-      currentStageId: true,
-      Stages: {
-        orderBy: { orderIndex: 'asc' },
-        select: { id: true, orderIndex: true, Problems: { select: { id: true } } },
-      },
-    },
-  })
-  if (!session || session.joinMode !== 'FROM_BEGINNING') return
-  const participant = await tx.trainingSessionParticipant.findUnique({
-    where: { id: participantId },
-    select: { currentStageId: true },
-  })
-  if (participant?.currentStageId !== completedStageId) return
-  const currentIndex = session.Stages.findIndex(stage => stage.id === completedStageId)
-  const globalIndex = session.Stages.findIndex(stage => stage.id === session.currentStageId)
-  const next = session.Stages[currentIndex + 1]
-  if (currentIndex < 0 || !next || globalIndex < currentIndex + 1) return
-  const current = session.Stages[currentIndex]
-  if (!current.Problems.length) return
-  const completed = await tx.trainingSessionProblemProgress.count({
-    where: {
-      participantId,
-      stageProblemId: { in: current.Problems.map(problem => problem.id) },
-      status: { in: ['COMPLETED', 'SKIPPED'] },
-    },
-  })
-  if (completed !== current.Problems.length) return
-  await tx.trainingSessionParticipant.update({
-    where: { id: participantId },
-    data: { currentStageId: next.id, currentProblemId: null },
-  })
-  await appendEvent(tx, sessionId, 'training.participant.stage.advanced', 'USER', userId, {
-    fromStageId: current.id,
-    toStageId: next.id,
-    joinMode: 'FROM_BEGINNING',
-  })
-}
-
 export async function syncTrainingEngineSubmission(submission: { id: number; userId: string; trainingSessionId: string | null; trainingStageProblemId: string | null; result: string | null; score: number | null; trainingScoreGoalSnapshot?: unknown }) {
   if (!submission.trainingSessionId || !submission.trainingStageProblemId) return
   const [participant, stageProblem] = await Promise.all([
@@ -1793,6 +1744,5 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: completed ? 'COMPLETED' : 'WORKING', stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
     await tx.trainingSessionScoreEvent.create({ data: { sessionId: submission.trainingSessionId!, participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, submissionId: submission.id, score: submission.score, verdict: submission.result } })
     await appendEvent(tx, submission.trainingSessionId!, 'training.progress.updated', 'USER', submission.userId, { stageProblemId: submission.trainingStageProblemId, score: submission.score, verdict: submission.result })
-    if (completed) await advanceFromBeginningParticipant(tx, submission.trainingSessionId!, participant.id, submission.userId, stageProblem.stageId)
   })
 }
