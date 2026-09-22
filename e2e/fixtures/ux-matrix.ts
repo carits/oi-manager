@@ -17,7 +17,7 @@ export interface UxRouteEntry {
 
 function pageType(route: RoutePattern): UxPageType {
   if (route === '/' || route === '/login' || route === '/super_admin') return 'public'
-  if (['/admin', '/platform-admin', '/teacher', '/student'].includes(route)) return 'dashboard'
+  if (['/admin', '/platform-admin'].includes(route)) return 'dashboard'
   if (route.includes('/import')) return 'wizard'
   if (route.endsWith('/profile') || route.endsWith('/security') || route.endsWith('/platform-bindings')) return 'settings'
   if (route.endsWith('/new') || route.endsWith('/edit') || route.endsWith('/note')) return 'form'

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { loadFixtureIds } from '../fixtures/data'
 import { loadRuntimeSecrets } from '../fixtures/runtime'
 
@@ -8,8 +8,8 @@ const { judgeToken } = loadRuntimeSecrets()
 test('accepted problem Hack is persisted without changing historical submissions', async ({ page, request }) => {
   const manager = await loginAs(request, 'platformAdmin')
   const hacker = await loginAs(request, 'personalStudent')
-  const managerHeaders = bearer(manager)
-  const hackerHeaders = bearer(hacker)
+  const managerHeaders = sessionCookie(manager)
+  const hackerHeaders = sessionCookie(hacker)
 
   const beforeList = await request.get(`/api/submissions?problemId=E2E-1000&pageSize=50`, {
     headers: managerHeaders,

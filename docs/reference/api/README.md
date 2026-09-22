@@ -453,7 +453,6 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/platform/organizations/:organizationId/principal` | 见对应路由实现 |
 | `POST` | `/api/problem-lists` | 见对应路由实现 |
 | `POST` | `/api/problem-lists/:id/create-assignment` | 从题单创建固定当前 TestSet Revision 的独立作业草稿 |
-| `POST` | `/api/problem-lists/:id/publish-homework` | 旧 Training 作业发布接口已退役，固定返回 `410 LEGACY_HOMEWORK_API_RETIRED` |
 | `POST` | `/api/problem-lists/:id/sections` | 见对应路由实现 |
 | `POST` | `/api/problem-lists/:id/shares` | 见对应路由实现 |
 | `POST` | `/api/problem-lists/sections/:sectionId/entries/single` | 见对应路由实现 |

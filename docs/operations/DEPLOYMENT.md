@@ -1,8 +1,8 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-09-12
-source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, scripts/promote-api.sh, scripts/promote-preview.sh, economy-loop migration and scheduler services
+last_verified: 2026-09-20
+source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, scripts/promote-api.sh, scripts/promote-preview.sh, offline invariant audits and scheduler services
 ---
 
 # 部署与回滚
@@ -63,7 +63,7 @@ pnpm security:audit
 涉及 Contribution Reward、Carits 账本或 Evaluation Credits Schema 时，必须在 API 提升前额外执行：
 
 1. 验证 `CaritsTransaction.requestFingerprint`、付费钱包/Reservation 表、外键和账本触发器已由新 migration 安全扩展。
-2. 只在候选 slot 开启维护 API，完成 `economy-loop` check/apply，然后立即关闭维护开关。
+2. 在 API 提升前运行服务器离线经济闭环审计，确认孤儿 Evaluation Ledger、不平衡交易、旧预占和系统账户均无阻塞；HTTP 不提供维护迁移入口。
 3. 候选阶段使用 `CONTRIBUTION_REWARD_MODE=observe` 核对拟投递记录；核对通过前不得启用真实发币。
 4. 提升 API 后启用单例奖励 Worker，同时确认 Evaluation Reservation 30 秒对账器在 Scheduler 中正常运行。
 5. 发布验收必须包含：差异幂等请求被 409 拒绝、购买响应丢失重试不重复扣款、
@@ -106,7 +106,7 @@ BASE_URL=http://127.0.0.1:3002 SESSION_TOKEN='<short-lived token>' pnpm judge:wo
 
 ## 回滚
 
-- API 代码失败：Router 原子切回旧 slot，再停止候选实例；兼容扩展迁移通常保留。
+- API 代码失败：Router 原子切回旧 slot，再停止候选实例；已经执行的向前兼容 Schema 扩展通常保留。
 - Web 失败：恢复上一 `.next` 构建并重启 Web unit。
 - 只有数据库 Schema 或数据已经不可向后兼容时才执行数据库恢复；恢复前必须停止所有写入进程并获得明确授权。
 - 回滚后必须重新检查 Router readiness、Judge 注册、Worker 单例、提交队列和公网关键流程。

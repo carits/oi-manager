@@ -347,12 +347,6 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
-  "apps/server/src/routes/milestones.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
   "apps/server/src/routes/oj-accounts.ts": {
     "prisma": 0,
     "transaction": 0,

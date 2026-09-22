@@ -7,6 +7,7 @@ import { expect, test } from '@playwright/test'
 import { PrismaClient } from '@prisma/client'
 import WebSocket from 'ws'
 import { ensureInitialTestSetRevision } from '../../apps/server/src/modules/problem/problem.testset-revision.service'
+import { createQueuedSubmissionWithRun } from '../../apps/server/src/modules/judge/application/judge-run.service'
 
 const prisma = new PrismaClient()
 const resultRoot = path.resolve('test-results/blue-green')
@@ -46,18 +47,37 @@ function setActive(file: string, port: number) {
   fs.renameSync(next, file)
 }
 
-function connectJudge(url: string, judgeId: string) {
+function connectJudge(
+  url: string,
+  judgeId: string,
+  onTask?: (payload: any, ws: WebSocket) => void,
+) {
   return new Promise<WebSocket>((resolve, reject) => {
     const ws = new WebSocket(url)
-    const timeout = setTimeout(() => reject(new Error(`Judge ${judgeId} registration timed out`)), 10_000)
-    ws.on('open', () => ws.send(JSON.stringify({ type: 'auth', payload: { token: 'e2e-blue-green-token-20260827' } })))
+    const timeout = setTimeout(
+      () => reject(new Error(`Judge ${judgeId} registration timed out`)),
+      10_000,
+    )
+    ws.on('open', () => ws.send(JSON.stringify({
+      type: 'auth',
+      payload: { token: 'e2e-blue-green-token-20260827' },
+    })))
     ws.on('message', data => {
       const message = JSON.parse(data.toString())
       if (message.type === 'auth_success') {
-        ws.send(JSON.stringify({ type: 'register', payload: { judgeId, languages: ['cpp17'] } }))
+        ws.send(JSON.stringify({
+          type: 'register',
+          payload: { judgeId, languages: ['cpp17'] },
+        }))
       } else if (message.type === 'registered') {
         clearTimeout(timeout)
+        ws.send(JSON.stringify({
+          type: 'start',
+          payload: { judgeId, concurrency: 8 },
+        }))
         resolve(ws)
+      } else if (message.type === 'judge') {
+        onTask?.(message.payload, ws)
       }
     })
     ws.on('error', reject)
@@ -84,34 +104,71 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
   const problem = await prisma.problem.findUniqueOrThrow({ where: { id: initialProblem.id } })
   expect(problem.latestTestSetRevisionId).toBe(revision.id)
   const batch = `blue-green-${Date.now()}`
-  await prisma.submission.createMany({
-    data: Array.from({ length: 100 }, (_, index) => ({
+  for (const index of Array.from({ length: 100 }, (_, value) => value)) {
+    await createQueuedSubmissionWithRun({
       userId: 'e2e-campus-student', oj: 'carits', problemId: 'E2E-1000', problemInternalId: problem.id,
+      workspaceScope: 'campus', organizationId: 'org_school-default',
       language: 'cpp', code: `int main(){return ${index};}`, codeLength: 22,
-      result: 'judging', submitMethod: 'local', submitScope: 'problem', submitSource: batch,
-      sourceId: `${batch}-${index}`, judgeId: 'dual-finalizer', judgeStarted: new Date(),
-      testSetRevisionId: problem.latestTestSetRevisionId,
-    })),
-  })
+      submitMethod: 'local', submitScope: 'problem', submitSource: batch,
+      sourceId: `${batch}-${index}`, testSetRevisionId: revision.id,
+      judgeConfigHash: revision.judgeConfigHash, judgeConfigSnapshot: revision.judgeConfig,
+      ioAdapterVersion: 0, inputFilename: null, outputFilename: null,
+    })
+  }
   const submissions = await prisma.submission.findMany({ where: { submitSource: batch }, select: { id: true } })
   expect(submissions).toHaveLength(100)
 
-  const [blueJudge, greenJudge] = await Promise.all([
-    connectJudge(`ws://127.0.0.1:${stack.bluePort}/ws/judge`, 'dual-finalizer'),
-    connectJudge(`ws://127.0.0.1:${stack.greenPort}/ws/judge`, 'dual-finalizer'),
-  ])
-  for (const submission of submissions) {
-    const result = JSON.stringify({
-      type: 'result', payload: { submissionId: submission.id, result: 'Accepted', time: 3, wallTime: 4, memory: 1024, score: 100, cases: [] },
-    })
-    blueJudge.send(result)
-    greenJudge.send(result)
+  let firstLifecycle: {
+    judgeRunId: string
+    judgeAttemptId: string
+    fencingToken: string
+    ws: WebSocket
+  } | undefined
+  const sendAccepted = (payload: any, ws: WebSocket) => {
+    firstLifecycle ??= {
+      judgeRunId: payload.judgeRunId,
+      judgeAttemptId: payload.judgeAttemptId,
+      fencingToken: payload.fencingToken,
+      ws,
+    }
+    ws.send(JSON.stringify({
+      type: 'result',
+      payload: {
+        submissionId: Number(payload.submissionId),
+        judgeRunId: payload.judgeRunId,
+        judgeAttemptId: payload.judgeAttemptId,
+        fencingToken: payload.fencingToken,
+        result: 'Accepted',
+        time: 3,
+        wallTime: 4,
+        memory: 1024,
+        score: 100,
+        cases: [],
+      },
+    }))
   }
-  await expect.poll(() => prisma.submission.count({ where: { submitSource: batch, result: 'accepted' } })).toBe(100)
-  expect(await prisma.submission.count({ where: { submitSource: batch, judgeId: { not: null } } })).toBe(0)
-  blueJudge.send(JSON.stringify({ type: 'result', payload: { submissionId: submissions[0].id, result: 'Wrong Answer', score: 0 } }))
+  const [blueJudge, greenJudge] = await Promise.all([
+    connectJudge(`ws://127.0.0.1:${stack.bluePort}/ws/judge`, 'dual-finalizer', sendAccepted),
+    connectJudge(`ws://127.0.0.1:${stack.greenPort}/ws/judge`, 'dual-finalizer', sendAccepted),
+  ])
+  await expect.poll(() => prisma.judgeRun.count({
+    where: { Submission: { submitSource: batch }, result: 'accepted' },
+  })).toBe(100)
+  expect(firstLifecycle).toBeTruthy()
+  firstLifecycle?.ws.send(JSON.stringify({
+    type: 'result',
+    payload: {
+      submissionId: submissions[0].id,
+      judgeRunId: firstLifecycle.judgeRunId,
+      judgeAttemptId: firstLifecycle.judgeAttemptId,
+      fencingToken: firstLifecycle.fencingToken,
+      result: 'Wrong Answer',
+      score: 0,
+    },
+  }))
   await new Promise(resolve => setTimeout(resolve, 300))
-  expect(await prisma.submission.findUniqueOrThrow({ where: { id: submissions[0].id } })).toMatchObject({ result: 'accepted', score: 100 })
+  expect(await prisma.judgeRun.findFirstOrThrow({ where: { submissionId: submissions[0].id } }))
+    .toMatchObject({ result: 'accepted', score: 100 })
   blueJudge.close()
   greenJudge.close()
 
@@ -186,7 +243,7 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
   })
   try {
     await expect.poll(() => fs.readFileSync(replacementLog, 'utf8')).toContain('background_worker_started')
-    expect(await prisma.submission.count({ where: { submitSource: batch, result: 'accepted' } })).toBe(100)
+    expect(await prisma.judgeRun.count({ where: { Submission: { submitSource: batch }, result: 'accepted' } })).toBe(100)
   } finally {
     replacement.kill('SIGTERM')
     await new Promise<void>(resolve => replacement.once('exit', () => resolve()))

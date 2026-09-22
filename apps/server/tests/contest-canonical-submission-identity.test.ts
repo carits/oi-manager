@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx, syncCanonicalContestProblemFixtureTx } from './helpers/contest-fixture'
 import { createQueuedTrainingSubmission } from '../src/modules/training/training.submission.service'
 import { saveTrainingRecord } from '../src/modules/training/application/training-user-content.service'
 import { syncContestProblemStatus } from '../src/lib/submission-sync'
@@ -23,7 +23,7 @@ async function createContestFixture() {
       createdBy: owner.user.id,
     },
   })
-  const contest = await prisma.$transaction(tx => ensureContestAggregateTx(tx, runtime.id))
+  const contest = await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, runtime.id))
   const runtimeProblem = await prisma.trainingProblem.create({
     data: {
       id: crypto.randomUUID(),
@@ -34,7 +34,7 @@ async function createContestFixture() {
       points: 100,
     },
   })
-  const contestProblem = await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, runtimeProblem.id))
+  const contestProblem = await prisma.$transaction(tx => syncCanonicalContestProblemFixtureTx(tx, runtimeProblem.id))
   if (!contest || !contestProblem) throw new Error('Failed to create canonical contest fixture')
   return { owner, participant, problem, runtime, contest, runtimeProblem, contestProblem }
 }

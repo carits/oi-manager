@@ -1,15 +1,15 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { PrismaClient } from '@prisma/client'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 
 const e2eUrl = process.env.E2E_DATABASE_URL!
 const restoredUrl = process.env.RESTORED_DATABASE_URL!
 const prisma = new PrismaClient({ datasources: { db: { url: e2eUrl } } })
 const restored = new PrismaClient({ datasources: { db: { url: restoredUrl } } })
 
-async function submit(request: APIRequestContext, token: string, code: string) {
+async function submit(request: APIRequestContext, cookie: string, code: string) {
   const response = await request.post('/api/submit', {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Cookie: cookie },
     data: {
       problemId: 'E2E-1000',
       oj: 'carits',
@@ -66,11 +66,11 @@ async function waitForProgramVerification(
 
 async function createAndActivateProgram(
   request: APIRequestContext,
-  token: string,
+  cookie: string,
   problemId: string,
   definition: Record<string, unknown>,
 ) {
-  const headers = { Authorization: `Bearer ${token}` }
+  const headers = { Cookie: cookie }
   const create = await request.post(`/api/problems/${problemId}/judge-programs`, {
     headers,
     data: definition,
@@ -150,13 +150,13 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
     loginAs(request, 'principal'),
     loginAs(request, 'campusStudent'),
   ])
-  expect(superAdmin.role).toBe('super_admin')
-  expect(platformAdmin.role).toBe('platform_admin')
-  expect(principal.role).toBe('school_principal')
-  expect(student.role).toBe('student')
+  expect(superAdmin.accountRole).toBe('super_admin')
+  expect(platformAdmin.accountRole).toBe('platform_admin')
+  expect(principal.accountRole).toBe('user')
+  expect(student.accountRole).toBe('user')
 
   for (const session of [superAdmin, platformAdmin]) {
-    const workspaces = await request.get('/api/workspaces', { headers: bearer(session) })
+    const workspaces = await request.get('/api/workspaces', { headers: sessionCookie(session) })
     expect(workspaces.status()).toBe(200)
     const body = await workspaces.json()
     expect(body.success).toBe(true)
@@ -165,7 +165,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
 
   const acceptedId = await submit(
     request,
-    student.token,
+    student.cookie,
     '#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;std::cout<<a+b<<"\\n";}',
   )
   const accepted = await waitForSubmission(acceptedId, 'accepted')
@@ -173,13 +173,13 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
   expect(accepted.testSetRevisionId).toBeTruthy()
   const baseRevisionId = accepted.testSetRevisionId!
 
-  const wrongId = await submit(request, student.token, '#include <iostream>\nint main(){std::cout<<0<<"\\n";}')
+  const wrongId = await submit(request, student.cookie, '#include <iostream>\nint main(){std::cout<<0<<"\\n";}')
   const wrong = await waitForSubmission(wrongId, 'wa')
   expect(wrong.score).toBe(0)
   expect(wrong.testSetRevisionId).toBe(baseRevisionId)
 
   const principalHeaders = {
-    ...bearer(principal),
+    ...sessionCookie(principal),
     'x-oi-organization-id': 'org_school-default',
   }
   const futureStart = new Date(Date.now() + 30 * 60_000).toISOString()
@@ -216,7 +216,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
 
   const standardSource = '#include <iostream>\nint main(){long long a,b;if(std::cin>>a>>b)std::cout<<a+b<<"\\n";}'
   const validatorSource = '#include <iostream>\n#include <string>\nint main(){long long a,b;std::string extra;if(!(std::cin>>a>>b))return 1;return (std::cin>>extra)?1:0;}'
-  const standardProgram = await createAndActivateProgram(request, platformAdmin.token, 'e2e-problem', {
+  const standardProgram = await createAndActivateProgram(request, platformAdmin.cookie, 'e2e-problem', {
     kind: 'standard',
     name: 'Restored-backup STD probe',
     language: 'cpp17',
@@ -224,7 +224,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
     source: standardSource,
     fixtures: [{ name: 'sum', stdin: '1 2\n', expectedStdout: '3\n' }],
   })
-  const validatorProgram = await createAndActivateProgram(request, platformAdmin.token, 'e2e-problem', {
+  const validatorProgram = await createAndActivateProgram(request, platformAdmin.cookie, 'e2e-problem', {
     kind: 'validator',
     name: 'Restored-backup Validator probe',
     language: 'cpp17',
@@ -237,7 +237,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
   })
 
   const configure = await request.put('/api/problems/e2e-problem/hack-config', {
-    headers: bearer(platformAdmin),
+    headers: sessionCookie(platformAdmin),
     timeout: 150_000,
     data: {
       enabled: true,
@@ -250,7 +250,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
   expect(configureBody.data.enabled).toBe(true)
 
   const createHack = await request.post('/api/problems/e2e-problem/hacks', {
-    headers: bearer(student),
+    headers: sessionCookie(student),
     data: {
       inputMode: 'data',
       inputData: '2 2\n',
@@ -313,7 +313,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
 
   const acceptedAfterId = await submit(
     request,
-    student.token,
+    student.cookie,
     '#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;std::cout<<a+b<<"\\n";}',
   )
   const acceptedAfter = await waitForSubmission(acceptedAfterId, 'accepted')
@@ -321,7 +321,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
 
   const hackedAfterId = await submit(
     request,
-    student.token,
+    student.cookie,
     '#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;if(a==2&&b==2)std::cout<<0<<"\\n";else std::cout<<a+b<<"\\n";}',
   )
   const hackedAfter = await waitForSubmission(hackedAfterId, 'wa')

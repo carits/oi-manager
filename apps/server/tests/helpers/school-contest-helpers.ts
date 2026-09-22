@@ -5,10 +5,10 @@
 
 import crypto from 'node:crypto'
 import { prisma } from '../../src/prisma'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx, syncCanonicalContestProblemFixtureTx } from './contest-fixture'
 
 interface CreateTestSchoolContestOptions {
-  schoolId: string
+  organizationId: string
   createdBy: string
   title?: string
   description?: string
@@ -24,11 +24,11 @@ interface CreateTestSchoolContestOptions {
 
 /**
  * 创建测试校级比赛
- * 注意：校级比赛 teamId=null，通过 School.organizationId 归属校园组织
+ * 注意：组织比赛 teamId=null，直接使用规范 organizationId 归属组织
  */
 export async function createTestSchoolContest(options: CreateTestSchoolContestOptions) {
   const {
-    schoolId,
+    organizationId,
     createdBy,
     title = '测试校级比赛',
     description,
@@ -45,15 +45,9 @@ export async function createTestSchoolContest(options: CreateTestSchoolContestOp
   const now = Date.now()
   const defaultStartTime = startTime ?? new Date(now - 3600000) // 1小时前开始
   const defaultEndTime = endTime ?? new Date(now + 3600000) // 1小时后结束
-  const school = await prisma.school.findUniqueOrThrow({
-    where: { id: schoolId },
-    select: { organizationId: true },
-  })
-  if (!school.organizationId) throw new Error(`Test school ${schoolId} has no organization`)
-
   const training = await prisma.training.create({
     data: {
-      organizationId: school.organizationId,
+      organizationId,
       teamId: null, // 校级比赛 teamId 必须为 null
       title,
       description,
@@ -71,7 +65,7 @@ export async function createTestSchoolContest(options: CreateTestSchoolContestOp
   })
 
   if (training.type === 'contest') {
-    await prisma.$transaction(tx => ensureContestAggregateTx(tx, training.id))
+    await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, training.id))
   }
 
   return training
@@ -148,7 +142,7 @@ export async function addProblemToContest(options: {
     select: { type: true },
   })
   if (training.type === 'contest') {
-    await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
+    await prisma.$transaction(tx => syncCanonicalContestProblemFixtureTx(tx, trainingProblem.id))
   }
 
   return trainingProblem
@@ -198,8 +192,8 @@ export async function createTestSubmission(options: {
   ])
   const canonicalProblem = submitScope === 'contest' && trainingProblemId
     ? await prisma.$transaction(async tx => {
-        await ensureContestAggregateTx(tx, trainingId)
-        return syncContestProblemAggregateTx(tx, trainingProblemId)
+        await ensureCanonicalContestFixtureTx(tx, trainingId)
+        return syncCanonicalContestProblemFixtureTx(tx, trainingProblemId)
       })
     : null
   if (submitScope === 'contest' && !canonicalProblem) {

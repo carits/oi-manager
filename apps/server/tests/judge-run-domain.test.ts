@@ -19,7 +19,7 @@ import {
   JUDGE_RUN_TRANSITIONS,
   legacyResultToAttemptState,
 } from '../src/modules/judge/domain/judge-state'
-import { ensureContestAggregateTx } from './helpers/legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx } from './helpers/contest-fixture'
 
 describe('Judge domain state machine', () => {
   it('allows only declared JudgeRun transitions', () => {
@@ -227,7 +227,7 @@ describe('Judge lifecycle ownership and retries', () => {
       scope: 'platform',
       finalizationStatus: 'FINALIZED',
     } })
-    const aggregate = await prisma.$transaction(tx => ensureContestAggregateTx(tx, contest.id))
+    const aggregate = await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, contest.id))
     if (!aggregate) throw new Error('Contest aggregate missing')
     const standingId = crypto.randomUUID()
     await prisma.contestStandingSnapshot.create({ data: {

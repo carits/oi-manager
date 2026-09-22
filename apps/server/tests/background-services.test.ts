@@ -37,6 +37,23 @@ describe('singleton background service orchestration', () => {
     expect(mocks.stopCron).toHaveBeenCalledTimes(1)
   })
 
+  it('waits for the auto verifier to finish during scheduler shutdown', async () => {
+    let release!: () => void
+    const pending = new Promise<void>(resolve => { release = resolve })
+    mocks.stopAutoVerify.mockReturnValueOnce(pending)
+
+    const services = startSchedulerServices()
+    let stopped = false
+    const stopping = services.stop().then(() => { stopped = true })
+
+    await Promise.resolve()
+    expect(stopped).toBe(false)
+
+    release()
+    await stopping
+    expect(stopped).toBe(true)
+  })
+
   it('starts only parallel-safe work in an executor', async () => {
     const services = startExecutorServices()
     expect(mocks.startCron).not.toHaveBeenCalled()

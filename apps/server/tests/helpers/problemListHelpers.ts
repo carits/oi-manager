@@ -1,19 +1,15 @@
 import { prisma } from '../../src/prisma'
-import { CreatedTestUser } from './testUser'
 
 /**
  * 创建测试题单（含默认章节）
  */
 export async function createTestProblemList(options: {
   ownerId: string
-  schoolId?: string | null
+  organizationId?: string | null
   title?: string
   ownerType?: 'teacher' | 'student'
 }) {
-  const { ownerId, schoolId = null, title = '测试题单', ownerType = 'teacher' } = options
-  const school = schoolId
-    ? await prisma.school.findUnique({ where: { id: schoolId }, select: { organizationId: true } })
-    : null
+  const { ownerId, organizationId = null, title = '测试题单', ownerType = 'teacher' } = options
 
   const list = await prisma.problemList.create({
     data: {
@@ -21,8 +17,8 @@ export async function createTestProblemList(options: {
       title,
       ownerId,
       ownerType,
-      scope: school?.organizationId ? 'campus' : 'personal',
-      organizationId: school?.organizationId ?? null,
+      scope: organizationId ? 'campus' : 'personal',
+      organizationId,
       ProblemListSection: {
         create: { id: crypto.randomUUID(), title: '默认章节', sortOrder: 0 }
       }
