@@ -464,11 +464,15 @@ teamImportRouter.post('/start', authenticate, async (req: Request, res: Response
       })
     }
 
-    // 转换 createTeam 为 'yes' 或 'no'
-    let createTeamValue: 'yes' | 'no' = 'yes'
+    // 旧通用 batch 流程只能创建新的内部团队；不创建团队会生成无法 confirm 的悬空批次。
     if (createTeam === false || createTeam === 'no') {
-      createTeamValue = 'no'
+      return res.status(422).json({
+        success: false,
+        code: 'TEAM_IMPORT_TARGET_REQUIRED',
+        message: '该兼容导入流程必须创建内部团队；VJudge/洛谷导入请使用对应的平台专用导入入口',
+      })
     }
+    const createTeamValue: 'yes' = 'yes'
 
     const result = await service.createBatch({
       operatorId: teacherId,
