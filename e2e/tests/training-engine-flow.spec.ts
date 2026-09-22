@@ -87,7 +87,7 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     await coach.getByRole('button', { name: '创建训练' }).click()
     const dialog = coach.getByRole('dialog', { name: '创建训练' })
     await assertAccessibleState(coach)
-    await dialog.getByRole('tab', { name: '使用 Stage 模板' }).click()
+    await dialog.getByRole('tab', { name: '使用阶段模板' }).click()
     await dialog.getByLabel('训练名称').fill('E2E 顺序编排')
     await dialog.getByRole('button', { name: '创建并编排' }).click()
     await expect(coach).toHaveURL(/\/training-sessions\/[^/]+\/design$/)
@@ -169,13 +169,13 @@ test.describe('stage-driven training acceptance', () => {
     await coach.goto(sessionPath(session.id))
     await coach.getByRole('button', { name: '训练报告' }).click()
     await expect(coach.getByRole('dialog', { name: '训练过程报告' })).toBeVisible()
-    await expect(coach.getByText('Session 汇总', { exact: true })).toBeVisible()
+    await expect(coach.getByText('训练汇总', { exact: true })).toBeVisible()
 
     await coachContext.close()
     await studentContext.close()
   })
 
-  test('B: one global current Stage advances through warmup, grouped, teaching and review', async ({ browser }) => {
+  test('B: one global 当前阶段 advances through warmup, grouped, teaching and review', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const session = await createTrainingSession(coachContext.request, 'E2E B 多 Stage', [
       allStage('热身'),
@@ -345,7 +345,7 @@ test.describe('stage-driven training acceptance', () => {
     await studentContext.close()
   })
 
-  test('F: Focus can target only the current Stage and cannot reveal a future Stage', async ({ browser }) => {
+  test('F: Focus can target only the 当前阶段 and cannot reveal a future Stage', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const studentContext = await browser.newContext({ storageState: accounts.campusStudent.storageState })
     const session = await createTrainingSession(coachContext.request, 'E2E F Focus', [
