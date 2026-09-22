@@ -3403,6 +3403,7 @@ model TeamMemberExternalAccount {
 model TeamMemberImportBatch {
   id                   String                 @id
   teamId               String?
+  organizationId       String?
   operatorId           String
   platform             String
   totalCount           Int
@@ -3417,6 +3418,7 @@ model TeamMemberImportBatch {
   TeamMemberImportItem TeamMemberImportItem[]
 
   @@index([operatorId])
+  @@index([organizationId])
   @@index([teamId])
 }
 
