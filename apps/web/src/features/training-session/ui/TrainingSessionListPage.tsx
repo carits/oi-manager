@@ -122,10 +122,17 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
 
       if (listResult.status === 'fulfilled') {
         const list = listResult.value
-        setSessions(list.items as Session[])
-        setStatusCounts(list.statusCounts as Record<ListFilter, number>)
-        setListTotal(list.pagination.total)
-        setListTotalPages(Math.max(1, list.pagination.totalPages))
+        if (Array.isArray(list)) {
+          setSessions(list as Session[])
+          setStatusCounts({ active: 0, upcoming: 0, completed: 0, draft: 0 })
+          setListTotal(list.length)
+          setListTotalPages(1)
+        } else {
+          setSessions(list.items as Session[])
+          setStatusCounts(list.statusCounts as Record<ListFilter, number>)
+          setListTotal(list.pagination.total)
+          setListTotalPages(Math.max(1, list.pagination.totalPages))
+        }
       } else {
         toast.error(listResult.reason instanceof Error ? listResult.reason.message : '训练列表加载失败')
       }
