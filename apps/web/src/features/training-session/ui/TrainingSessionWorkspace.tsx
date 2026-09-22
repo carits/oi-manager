@@ -107,25 +107,32 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [extensionOpen, setExtensionOpen] = useState(false), [extensionMinutes, setExtensionMinutes] = useState(10), [extensionReason, setExtensionReason] = useState('')
   const [report, setReport] = useState<TrainingReport>(), [reportOpen, setReportOpen] = useState(false)
   const cursor = useRef(0), saveDraftRef = useRef<(quiet?: boolean) => Promise<number | false>>(async () => false)
-  const commandInFlight = useRef(false), statusRevisionRef = useRef<number>()
+  const commandInFlight = useRef(false), statusRevisionRef = useRef<number>(), hintLoadVersion = useRef(0)
 
   const load = useCallback(async () => {
-    const response = await getTrainingWorkspace(sessionId).catch(() => null)
-    if (!response) return toast.error('训练加载失败')
-    const workspace = response as Workspace
+    let workspace: Workspace
+    try {
+      workspace = await getTrainingWorkspace(sessionId) as Workspace
+    } catch (error) {
+      return toast.error(error instanceof Error ? error.message : '训练加载失败')
+    }
     statusRevisionRef.current = workspace.session.statusRevision
     setData(workspace)
     setSelectedId(current => {
       const directed = workspace.participant?.currentProblemId
       if (directed && workspace.permissions[directed]?.canView && directed !== current) return directed
-      return current && workspace.permissions[current]?.canView ? current : workspace.session.Stages.flatMap(stage => stage.Problems).find(problem => workspace.permissions[problem.id]?.canView)?.id
+      return current && workspace.permissions[current]?.canView
+        ? current
+        : workspace.session.Stages.flatMap(stage => stage.Problems).find(problem => workspace.permissions[problem.id]?.canView)?.id
     })
-    if (workspace.manager) {
-      const coach = await getTrainingCoachDashboard(sessionId).catch(() => null)
-      if (coach) setDashboard(coach as Dashboard)
-    }
-    const peers = await getTrainingPeerProgress(sessionId).catch(() => null)
-    if (peers) setPeerProgress(peers as PeerProgress)
+    const [coachResult, peerResult] = await Promise.allSettled([
+      workspace.manager ? getTrainingCoachDashboard(sessionId) : Promise.resolve(null),
+      getTrainingPeerProgress(sessionId),
+    ])
+    if (coachResult.status === 'fulfilled' && coachResult.value) setDashboard(coachResult.value as Dashboard)
+    else if (coachResult.status === 'rejected') toast.error(coachResult.reason instanceof Error ? coachResult.reason.message : '教练看板加载失败')
+    if (peerResult.status === 'fulfilled') setPeerProgress(peerResult.value as PeerProgress)
+    else toast.error(peerResult.reason instanceof Error ? peerResult.reason.message : '同伴进度加载失败')
   }, [sessionId, toast])
   useEffect(() => { void load() }, [load])
 
@@ -133,20 +140,41 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const draftKey = problem ? `training-draft:${sessionId}:${problem.id}` : ''
   const editorDraftKey = problem ? `training-engine:${sessionId}:${problem.id}` : ''
   const loadHints = useCallback(async (id?: string) => {
-    if (!id) return setHints([])
-    const response = await listTrainingHints(sessionId, id).catch(() => null)
-    if (response) setHints(response as Hint[])
-  }, [sessionId])
+    const version = ++hintLoadVersion.current
+    if (!id) { setHints([]); return }
+    setHints([])
+    try {
+      const response = await listTrainingHints(sessionId, id)
+      if (version === hintLoadVersion.current) setHints(response as Hint[])
+    } catch (error) {
+      if (version === hintLoadVersion.current) toast.error(error instanceof Error ? error.message : '提示加载失败')
+    }
+  }, [sessionId, toast])
   useEffect(() => {
     if (!problem) return
-    void getTrainingDraft(sessionId, problem.id).catch(() => null).then((draft) => {
+    let cancelled = false
+    void (async () => {
       const local = typeof window !== 'undefined' ? window.localStorage.getItem(draftKey) : null
-      setCode(draft?.code || local || ''); setLanguage(draft?.language || 'cpp17'); setDraftRevision(draft?.revision)
-      setSubmissionIo({ inputFilename: draft?.inputFilename || null, outputFilename: draft?.outputFilename || null })
-      if (local) window.localStorage.removeItem(draftKey)
-    })
+      try {
+        const draft = await getTrainingDraft(sessionId, problem.id) as TrainingDraft | null
+        if (cancelled) return
+        setCode(draft?.code || local || '')
+        setLanguage(draft?.language || 'cpp17')
+        setDraftRevision(draft?.revision)
+        setSubmissionIo({ inputFilename: draft?.inputFilename || null, outputFilename: draft?.outputFilename || null })
+        if (local) window.localStorage.removeItem(draftKey)
+      } catch (error) {
+        if (cancelled) return
+        setCode(local || '')
+        setLanguage('cpp17')
+        setDraftRevision(undefined)
+        setSubmissionIo({ inputFilename: null, outputFilename: null })
+        toast.error(error instanceof Error ? `服务器草稿加载失败：${error.message}` : '服务器草稿加载失败；已仅使用本地草稿')
+      }
+    })()
     void loadHints(problem.id)
-  }, [draftKey, loadHints, problem?.id, problem?.problemId, sessionId])
+    return () => { cancelled = true }
+  }, [draftKey, loadHints, problem?.id, problem?.problemId, sessionId, toast])
   const saveDraft = useCallback(async (quiet = false) => {
     if (!problem) return false
     setSaving(true)
@@ -218,7 +246,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setCommandBusy(true)
     const response = await extendTrainingStageTime(sessionId, stageId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, seconds: Math.round(extensionMinutes * 60), reason: extensionReason.trim() })
     setCommandBusy(false)
-    if (!response.ok) return toast.error(response.error.message || '延长阶段 失败')
+    if (!response.ok) return toast.error(response.error.message || '延长阶段失败')
     setExtensionOpen(false); setExtensionMinutes(10); setExtensionReason('')
     await load()
   }
