@@ -86,6 +86,8 @@
     "judge:projection:check": "pnpm --filter server exec tsx scripts/audit-judge-projection.ts --enforce",
     "contest:aggregate:audit": "pnpm --filter server exec tsx scripts/audit-contest-aggregate.ts",
     "contest:aggregate:check": "pnpm --filter server exec tsx scripts/audit-contest-aggregate.ts --enforce",
+    "training:consistency": "pnpm --filter server training:consistency",
+    "training:benchmark": "pnpm --filter server training:benchmark",
     "judge:templates:check": "pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build && node scripts/check-judge-program-templates.mjs",
     "judge:protocols:smoke": "pnpm --filter @oi-manager/shared build && pnpm --filter @oi-manager/judge smoke:program-protocols",
     "judge:workflow:live": "node scripts/verify-live-judge-program-workflow.mjs",
