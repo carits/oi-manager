@@ -8,6 +8,14 @@ import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { BUILTIN_TRAINING_TEMPLATES, getBuiltinTrainingTemplate } from './training-engine.templates'
 import { TrainingEngineError } from './training-engine.errors'
 import { eligibleTrainingParticipantIds, validateTrainingParticipantTarget } from './application/training-roster.service'
+import {
+  evaluateProblemTimePolicy,
+  normalizeTrainingAccessScope,
+  normalizeTrainingProblemTimePolicy,
+  resolveEffectiveTrainingRule,
+  resolveNextScoreTarget,
+  serializeTrainingProblemTimePolicy,
+} from './domain/training-rule-engine'
 
 export { TrainingEngineError } from './training-engine.errors'
 
@@ -94,7 +102,7 @@ const RANKING_MODES = new Set(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING'])
 const PEER_VISIBILITY = new Set(['NONE', 'PROGRESS', 'SCORE', 'FULL'])
 const JOIN_MODES = new Set(['CURRENT_STAGE', 'TEACHER_ASSIGN'])
 const HINT_OPEN_MODES = new Set(['MANUAL', 'TIME', 'ATTEMPT', 'SCORE'])
-const PROBLEM_TIME_MODES = new Set(['NONE', 'SOFT', 'HARD', 'SWITCH_REQUIRED'])
+const PROBLEM_TIME_MODES = new Set(['NONE', 'SOFT', 'HARD', 'SWITCH_REQUIRED', 'REMIND', 'RECOMMEND_SWITCH', 'LOCK_SUBMISSION', 'FORCE_SWITCH'])
 
 function enumValue(value: unknown, allowed: Set<string>, fallback: string, field: string) {
   const normalized = String(value || fallback).toUpperCase()
@@ -151,9 +159,11 @@ function parseJsonObject(value: unknown): Record<string, any> {
 function normalizeProblemTimePolicy(value: unknown) {
   if (value === undefined || value === null) return undefined
   const policy = parseJsonObject(value)
-  const mode = enumValue(policy.mode, PROBLEM_TIME_MODES, 'NONE', '单题时间策略')
-  if (mode === 'NONE') return { mode: 'NONE' }
-  return { mode, limitSeconds: boundedInteger(policy.limitSeconds, 60, 86400, '单题时间限制', false) }
+  const rawMode = policy.action || policy.mode || 'NONE'
+  enumValue(rawMode, PROBLEM_TIME_MODES, 'NONE', '单题时间策略')
+  if (String(rawMode).toUpperCase() === 'NONE') return { mode: 'NONE' }
+  const limitSeconds = boundedInteger(policy.limitSeconds, 60, 86400, '单题时间限制', false)
+  return serializeTrainingProblemTimePolicy(normalizeTrainingProblemTimePolicy({ ...policy, mode: rawMode, limitSeconds }))
 }
 
 function normalizeStuckPolicy(value: unknown) {
@@ -1022,7 +1032,14 @@ function resolveTrainingPermissionLoaded(
   }
 
   if (problemStage.id !== stage.id && !unlocked && focus?.stageProblemId !== stageProblemId) {
-    if (problemStage.orderIndex > stage.orderIndex) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FUTURE_STAGE' }
+    const accessScope = normalizeTrainingAccessScope(parseJsonObject(stage.rules).accessScope)
+    if (problemStage.orderIndex > stage.orderIndex) {
+      if (accessScope !== 'SESSION_ALL') return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FUTURE_STAGE' }
+      return { canView: true, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SESSION_SCOPE_READONLY' }
+    }
+    if (!['PREVIOUS_AND_CURRENT', 'SESSION_ALL'].includes(accessScope)) {
+      return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'HISTORICAL_STAGE_OUT_OF_SCOPE' }
+    }
     return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'HISTORICAL_STAGE' }
   }
 
@@ -1030,7 +1047,8 @@ function resolveTrainingPermissionLoaded(
   const plan = stageProblem.Plans.find(item => item.groupId === (stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
   const group = assignment?.groupId ? stage.Groups.find(item => item.id === assignment.groupId) : null
-  const accessPolicy = group?.accessPolicy || stage.accessPolicy
+  const effectiveRule = resolveEffectiveTrainingRule({ stage, group, plan })
+  const accessPolicy = effectiveRule.problemAccessPolicy
 
   if (accessPolicy === 'TEACHER_CONTROLLED' && !unlocked) {
     const focusedStageProblemId = focus?.stageProblemId || participant.currentProblemId || stage.Problems[0]?.id
@@ -1061,17 +1079,24 @@ function resolveTrainingPermissionLoaded(
     return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'SUBMISSION_DISABLED' }
   }
 
-  const timePolicy = parseJsonObject(plan?.timePolicy || parseJsonObject(group?.rules).timePolicy || parseJsonObject(stage.rules).timePolicy)
-  if (timePolicy.mode && timePolicy.mode !== 'NONE' && timePolicy.limitSeconds && !unlocked) {
-    const currentProgress = progressByProblem.get(stageProblemId)
-    if (currentProgress && !currentProgress.acAt && currentProgress.continuousActiveSeconds >= Number(timePolicy.limitSeconds)) {
-      if (timePolicy.mode === 'HARD') return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS', reason: 'PROBLEM_TIME_LIMIT_REACHED' }
-      if (timePolicy.mode === 'SWITCH_REQUIRED') return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS', reason: 'FORCED_SWITCH_REQUIRED' }
+  const currentProgress = progressByProblem.get(stageProblemId)
+  const timeState = evaluateProblemTimePolicy(
+    effectiveRule.timePolicy,
+    Number(currentProgress?.continuousActiveSeconds || 0),
+    Boolean(currentProgress?.acAt || currentProgress?.status === 'COMPLETED'),
+  )
+  if (!unlocked && timeState.reached && !timeState.canSubmit) {
+    return {
+      canView: true,
+      canSubmit: false,
+      canEdit: true,
+      canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS',
+      reason: timeState.action === 'FORCE_SWITCH' ? 'FORCED_SWITCH_REQUIRED' : 'PROBLEM_TIME_LIMIT_REACHED',
     }
   }
 
-  const canSubmit = ((group?.submissionMode || stage.submissionMode) === 'ENABLED' && session.defaultSubmissionMode === 'ENABLED') || submissionOverride
-  return { canView: true, canSubmit, canEdit: true, canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS', reason: canSubmit ? 'ALLOWED' : 'SUBMISSION_DISABLED' }
+  const canSubmit = (effectiveRule.submissionPolicy === 'ENABLED' && session.defaultSubmissionMode === 'ENABLED') || submissionOverride
+  return { canView: true, canSubmit, canEdit: true, canOpenHint: session.allowHints && effectiveRule.hintPolicy.enabled && focus?.type !== 'EXAM_FOCUS', reason: canSubmit ? 'ALLOWED' : 'SUBMISSION_DISABLED' }
 }
 
 export async function resolveTrainingPermission(userId: string, sessionId: string, stageProblemId?: string | null) {
@@ -1397,14 +1422,24 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
     const assignment = participant ? stage.ParticipantAssignments.find(candidate => candidate.participantId === participant.id) : null
     const group = assignment?.groupId ? stage.Groups.find(candidate => candidate.id === assignment.groupId) : null
     const plan = item.Plans.find(candidate => candidate.groupId === (stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null)) || item.Plans[0]
-    const timePolicy = parseJsonObject(plan?.timePolicy || parseJsonObject(group?.rules).timePolicy || parseJsonObject(stage.rules).timePolicy)
-    const timeLimitReached = Boolean(timePolicy.limitSeconds && !itemProgress?.acAt && (itemProgress?.continuousActiveSeconds || 0) >= Number(timePolicy.limitSeconds))
+    const effectiveRule = resolveEffectiveTrainingRule({ stage, group, plan })
+    const timeState = evaluateProblemTimePolicy(
+      effectiveRule.timePolicy,
+      Number(itemProgress?.continuousActiveSeconds || 0),
+      Boolean(itemProgress?.acAt || itemProgress?.status === 'COMPLETED'),
+    )
     return [item.id, {
       intervalSeconds: plan?.strategyIntervalSeconds || item.strategyIntervalSeconds,
-      timePolicy,
+      effectiveRule,
+      timePolicy: effectiveRule.timePolicy,
+      timeLimitReached: timeState.reached,
+      timeAction: timeState.action,
+      remind: timeState.remind,
+      switchRecommended: timeState.switchRecommended,
+      switchRequired: timeState.switchRequired,
+      scorePolicy: effectiveRule.scorePolicy,
+      nextScoreTarget: resolveNextScoreTarget(effectiveRule.scorePolicy, itemProgress?.bestScore),
       decisionDue: Boolean((plan?.strategyIntervalSeconds || item.strategyIntervalSeconds) && (itemProgress?.activeSeconds || 0) - (last?.activeSecondsAtDecision || 0) >= Number(plan?.strategyIntervalSeconds || item.strategyIntervalSeconds)),
-      timeLimitReached,
-      switchRecommended: timeLimitReached && ['SOFT', 'SWITCH_REQUIRED'].includes(String(timePolicy.mode)),
       lastDecision: last ? { decision: last.decision, reason: last.reason, createdAt: last.createdAt } : null,
     }]
   }))
@@ -1629,10 +1664,9 @@ export async function recordHeartbeat(userId: string, sessionId: string, body: a
   const assignment = stage?.ParticipantAssignments.find(item => item.participantId === participant.id)
   const group = assignment?.groupId ? stage?.Groups.find(item => item.id === assignment.groupId) : null
   const plan = stageProblem?.Plans.find(item => item.groupId === (stage?.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
-  const stuckPolicy = parseJsonObject(plan?.stuckPolicy || parseJsonObject(group?.rules).stuckPolicy || parseJsonObject(stage?.rules).stuckPolicy)
-  const minActiveSeconds = Number(stuckPolicy.minActiveSeconds || 1800)
-  const minAttempts = Number(stuckPolicy.minAttempts || 3)
-  const noImprovementSeconds = Number(stuckPolicy.noImprovementSeconds || 900)
+  if (!stage || !stageProblem) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_FOUND', '训练题目不存在')
+  const effectiveRule = resolveEffectiveTrainingRule({ stage, group, plan })
+  const { minActiveSeconds, minAttempts, noImprovementSeconds } = effectiveRule.stuckPolicy
   const now = new Date(), previous = participant.lastHeartbeatAt?.getTime() || now.getTime()
   const elapsed = session.status === 'RUNNING' && body?.pageVisible && body?.editorFocused ? Math.min(30, Math.max(0, Math.floor((now.getTime() - previous) / 1000))) : 0
   return prisma.$transaction(async tx => {
@@ -1989,7 +2023,10 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     const assignment = await tx.trainingSessionStageParticipantAssignment.findUnique({ where: { stageId_participantId: { stageId: stageProblem.stageId, participantId: participant.id } } })
     const plan = stageProblem.Plans.find(item => item.groupId === (assignment?.groupId || null))
     const snapshottedGoal = parseJsonObject(submission.trainingScoreGoalSnapshot)
-    const targetScore = Number.isInteger(snapshottedGoal.score) ? Number(snapshottedGoal.score) : plan?.targetScore ?? stageProblem.targetScore ?? stageProblem.Stage.defaultTargetScore ?? 100
+    const effectiveRule = resolveEffectiveTrainingRule({ stage: stageProblem.Stage, group: null, plan })
+    const targetScore = Number.isInteger(snapshottedGoal.score)
+      ? Number(snapshottedGoal.score)
+      : effectiveRule.scorePolicy.completionScore
     const completed = accepted || bestScore >= targetScore
     const nextStatus = completed ? 'COMPLETED' : existing?.status === 'STUCK' && !improved ? 'STUCK' : 'WORKING'
     await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: nextStatus, stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
