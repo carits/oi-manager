@@ -143,7 +143,8 @@ trainingEngineRouter.get('/training-sessions', authenticate, asyncHandler(async 
   try {
     const query = parseContractQuery(TrainingContracts.listSessions, req.query)
     await assertTrainingScopeContext(req, query)
-    sendContractData(res, TrainingContracts.listSessions, await listTrainingSessions(req.user!.userId, query))
+    const activeOrganizationId = isGlobalTrainingAdmin(req.user!) ? undefined : req.user!.organizationId || null
+    sendContractData(res, TrainingContracts.listSessions, await listTrainingSessions(req.user!.userId, query, activeOrganizationId))
   } catch (error) { return sendError(error, res) }
 }))
 
