@@ -1,24 +1,32 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-20
+last_verified: 2026-09-22
 source_of_truth: Git history
 ---
 
-## 2026-09-22 — Full-project usability hardening 收口
+## 2026-09-22 — Full-project usability / organization-context hardening
 
-- Training Workspace 权限求值改为批量内存求值：一次加载 Participant、Override 与 Progress，避免每个 StageProblem 重复加载 Session/Progress 的 N+1。
-- 修复训练在 `SCHEDULED` 与 `PAUSED` 状态下因权限早退导致未来 Stage、顺序锁定或教师控制题目元数据可能提前可见的问题；未开放题继续在 API 边界脱敏。
-- 修复教练 Runtime Command 的 TEAM 目标死功能：客户端直接使用当前 Session 的 `teamId`，服务端继续规范化并校验目标。
-- 训练过程报告新增学员明细 CSV 与完整 JSON 导出，便于课堂结束后分析与留档。
-- `TrainingDetailPage` 的补作业创建失败反馈改用站内 Toast，去掉原生 `alert()`。
-- 对 72 个 Server route 文件完成静态 `:param` 与 `req.params` 一致性扫描；除已修复的 Training design-problem 参数错配外未发现同类问题。
-- 删除 17 个已经废弃、一次性、依赖旧 School/Teacher/Student/Admin 模型或直接写业务数据库的维护/造数/迁移脚本；保留带阻塞条件、快照/dry-run/事务对账的当前受控迁移工具、E2E seed/reset 和只读审计/运维工具。
-- 修正文档治理：`CLAUDE.md` 不再把不存在的 `migrate-organization-*.ts` 当成当前迁移入口；旧组织迁移说明改为历史归档，当前事实源指向 Prisma migration 与 Schema。
-- 新增 Training Server 回归用例，锁定暂停/预发布未来题脱敏与 TEAM 目标规范化语义。
-- 本批**没有实际执行测试、数据库迁移、迁移演练或部署**；这些验证项按本轮约束保留为显式未完成事项，不计入“已验证”。
+- Training Engine usability hardening: removed retired `FROM_BEGINNING`, enforced the global Current Stage model and current-Stage-only runtime interventions, fixed SKIP prerequisite semantics, preserved submitted code, isolated drafts by StageProblem, froze title/statement snapshots and Hint definitions, closed OI Subtask dependencies, batch-evaluated permissions to remove the per-problem N+1, and prevented future/locked metadata leakage even while scheduled or paused.
+- Training UI now exposes current Stage/runtime/group/completion/score-goal state, participant filtering, TEAM command targeting, CSV/JSON report export and explicit failures for list/template/team/dashboard/peer/hint/draft dependencies. Organization dynamic route smoke coverage was expanded to concrete module/detail URLs instead of two generic route patterns.
+- Active organization became the fail-closed boundary for campus Team, Assignment, legacy Training/Contest, Training Engine, Submission detail, ProblemList/share/homework creation, organization Rating/contest Rating, Team Import, team problem lists, dashboard aggregates and organization wallet flows. Multi-organization accounts no longer gain cross-school access merely because they hold another active membership.
+- Canonical identity fixes: solved rankings use `problemInternalId` (fallback `oj:problemId`) and campus `workspaceScope + organizationId`; Problem submission history uses internal Problem/TestSet Revision identity and refuses ambiguous external-ID fallback when platform and school copies collide.
+- File hardening: canonical organization/platform Contest files no longer require a Team; list/upload/delete/metadata/download share the same Contest access semantics and active-organization boundary. Failed database file creation rolls back the physical file and Multer temporary files are cleaned in `finally`.
+- Infrastructure/security fixes from current main were absorbed: cross-origin requests may send `X-OI-Organization-ID`; persisted browser session directories/files are forced to 0700/0600; unsupported OJ verification remains `unverified` instead of being marked active; Auto Verify ticks are serialized and shutdown awaits the in-flight verification.
+- Usability failures no longer masquerade as empty data in key flows: Contest rejudge users, Problem Judge Assets, Chat sticker packs, Training dependencies, Data Market resource pickers and workspace switching now surface explicit feedback while retaining successful partial data where safe.
+- Retired direct-database School/Student/Teacher/Admin repair and one-off legacy migration/seed scripts were removed; stale migration documentation was archived or corrected. Current controlled migration/audit tools remain only where they have explicit scope and guardrails.
+- Added regression definitions for Training invariants, multi-organization isolation, canonical ranking/submission identity, Contest file access, CORS/session permissions and organization route coverage. **Per the explicit hardening-pass constraint, these tests, typechecks/builds, Prisma migrations, migration rehearsals and deployment probes were not executed in this pass and are not recorded as passed.**
 
 ## 2026-09-20 — Contest 与 Judge 双模型兼容退役
+## 2026-09-20 — 内部兼容债务最终收口
+
+- 删除已完成且无运行时引用的 Assignment、Economy Loop、Judge Program、Membership Role、School Name Key、Submission I/O 与 Test Graph 一次性迁移服务；在线维护迁移 API 不再存在。
+- 生产只读审计确认 Assignment 11/11、Judge Program 10/10、Membership Role 20,186/20,186 与 School Name Key 2/2 已完成，Submission I/O 与 Economy Loop 零阻塞。
+- Training Engine 仍有 6 条无法安全自动归属的历史记录，只保留离线审计与显式修复服务；School Directory 的 `legacy` 状态继续作为真实目录治理事实处理。
+- 删除 Milestone 与题单发布作业、训练 Hack 同步的旧路由墓碑，未支持类型统一走当前参数校验，不再永久维护旧错误码。
+- 清理旧 Student/Teacher 测试令牌、学校 ID 测试回退、过期比赛投影测试和共享旧 DTO；组织测试必须显式携带当前 `organizationId`。
+- 新增 `audit-internal-compatibility.mjs` 架构门禁，持续禁止旧登录字段、万能 `role`、Bearer 网页认证、旧 Session Claims、在线迁移路由和退役页面重新进入代码库。
+
 
 - Contest 获得独立 publicId，直接拥有题目、参赛者、生命周期和 Rating 事实；删除 runtimeTrainingId、runtimeTrainingProblemId、投影写入服务和自动补聚合维护服务。
 - ContestUserProblemStatus 删除旧 Training/TrainingProblem 整数身份，只保留带复合外键的 Contest/ContestProblem 身份；ContestRecord 强制每行只归属普通训练或比赛之一。
