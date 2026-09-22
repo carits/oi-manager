@@ -455,45 +455,24 @@ describe('Stage-driven Training Engine', () => {
         expectedRevision: design.statusRevision,
         title: design.session.title,
         description: design.session.description,
-        stages: design.stages.map((stage: any) => ({
-          id: stage.id,
-          clientKey: stage.clientKey,
-          name: stage.id === currentStage.id ? '不应写入的当前阶段新名称' : stage.id === futureStage.id ? '允许修改的未来阶段新名称' : stage.name,
-          description: stage.description,
-          kind: stage.kind,
-          audienceMode: stage.audienceMode,
-          endPolicy: stage.endPolicy,
-          accessPolicy: stage.accessPolicy,
-          accessScope: stage.accessScope || 'CURRENT_STAGE',
-          submissionMode: stage.submissionMode,
-          plannedDurationSeconds: stage.plannedDurationSeconds,
-          defaultTargetScore: stage.defaultTargetScore,
-          completionThreshold: stage.completionThreshold,
-          minDurationSeconds: stage.minDurationSeconds,
-          rules: stage.rules,
-          problems: stage.Problems.map((problem: any) => ({
-            assignmentId: problem.assignmentId,
-            clientKey: problem.clientKey,
-            problemId: problem.problemId,
-            testSetRevisionId: problem.testSetRevisionId,
-            alias: problem.alias,
-            unlockPolicy: problem.unlockPolicy,
-            targetScore: problem.targetScore,
-            scoreGoals: problem.scoreGoals,
-            timePolicy: problem.timePolicy,
-            stuckPolicy: problem.stuckPolicy,
-            allowedSubtaskIds: problem.allowedSubtaskIds,
-            strategyIntervalSeconds: problem.strategyIntervalSeconds,
-          })),
-          groups: stage.Groups.map((group: any) => ({
-            id: group.id,
-            clientKey: group.clientKey,
-            name: group.name,
-            accessPolicy: group.accessPolicy,
-            submissionMode: group.submissionMode,
-            rules: group.rules,
-            participantIds: group.participantIds,
-            problems: group.Problems.map((problem: any) => ({
+        stages: [
+          ...design.stages.map((stage: any) => ({
+            id: stage.id,
+            clientKey: stage.clientKey,
+            name: stage.id === currentStage.id ? '不应写入的当前阶段新名称' : stage.id === futureStage.id ? '允许修改的未来阶段新名称' : stage.name,
+            description: stage.description,
+            kind: stage.kind,
+            audienceMode: stage.audienceMode,
+            endPolicy: stage.endPolicy,
+            accessPolicy: stage.accessPolicy,
+            accessScope: stage.accessScope || 'CURRENT_STAGE',
+            submissionMode: stage.submissionMode,
+            plannedDurationSeconds: stage.plannedDurationSeconds,
+            defaultTargetScore: stage.defaultTargetScore,
+            completionThreshold: stage.completionThreshold,
+            minDurationSeconds: stage.minDurationSeconds,
+            rules: stage.rules,
+            problems: stage.Problems.map((problem: any) => ({
               assignmentId: problem.assignmentId,
               clientKey: problem.clientKey,
               problemId: problem.problemId,
@@ -507,8 +486,45 @@ describe('Stage-driven Training Engine', () => {
               allowedSubtaskIds: problem.allowedSubtaskIds,
               strategyIntervalSeconds: problem.strategyIntervalSeconds,
             })),
+            groups: stage.Groups.map((group: any) => ({
+              id: group.id,
+              clientKey: group.clientKey,
+              name: group.name,
+              accessPolicy: group.accessPolicy,
+              submissionMode: group.submissionMode,
+              rules: group.rules,
+              participantIds: group.participantIds,
+              problems: group.Problems.map((problem: any) => ({
+                assignmentId: problem.assignmentId,
+                clientKey: problem.clientKey,
+                problemId: problem.problemId,
+                testSetRevisionId: problem.testSetRevisionId,
+                alias: problem.alias,
+                unlockPolicy: problem.unlockPolicy,
+                targetScore: problem.targetScore,
+                scoreGoals: problem.scoreGoals,
+                timePolicy: problem.timePolicy,
+                stuckPolicy: problem.stuckPolicy,
+                allowedSubtaskIds: problem.allowedSubtaskIds,
+                strategyIntervalSeconds: problem.strategyIntervalSeconds,
+              })),
+            })),
           })),
-        })),
+          {
+            clientKey: 'runtime-added-review-stage',
+            name: '运行中新增的未来复盘阶段',
+            description: '课堂运行中追加',
+            kind: 'REVIEW',
+            audienceMode: 'ALL',
+            endPolicy: 'MANUAL',
+            accessPolicy: 'ALL_AT_ONCE',
+            accessScope: 'CURRENT_STAGE',
+            submissionMode: 'DISABLED',
+            rules: {},
+            problems: [],
+            groups: [],
+          },
+        ],
       })
     expect(response.status).toBe(200)
 
@@ -517,8 +533,58 @@ describe('Stage-driven Training Engine', () => {
       orderBy: { orderIndex: 'asc' },
       select: { id: true, name: true, lifecycle: true },
     })
+    expect(persisted).toHaveLength(3)
     expect(persisted[0]).toMatchObject({ id: currentStage.id, name: current.name, lifecycle: 'RUNNING' })
     expect(persisted[1]).toMatchObject({ id: futureStage.id, name: '允许修改的未来阶段新名称', lifecycle: 'PENDING' })
+    expect(persisted[2]).toMatchObject({ name: '运行中新增的未来复盘阶段', lifecycle: 'PENDING' })
+    expect((await prisma.trainingSession.findUniqueOrThrow({ where: { id: session.id }, select: { currentStageId: true } })).currentStageId).toBe(currentStage.id)
+  })
+
+  it('limits participant reports to the requesting student while managers see the full roster', async () => {
+    const peer = await createTestUser({ organization: { role: 'student', organizationId: coach.organization!.organizationId } })
+    await prisma.teamMember.create({
+      data: {
+        id: crypto.randomUUID(),
+        teamId: team.id,
+        userId: peer.user.id,
+        userType: 'student',
+        role: 'member',
+        status: 'active',
+        joinedAt: new Date(),
+      },
+    })
+    const token = generateTokenFromUser(coach.user)
+    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({
+      title: '报告隐私边界',
+      teamId: team.id,
+      participantUserIds: [student.user.id, peer.user.id],
+      settings: { participantTarget: 'custom_students' },
+      stages: [{
+        name: '训练',
+        kind: 'TRAINING',
+        audienceMode: 'ALL',
+        endPolicy: 'MANUAL',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'ENABLED',
+        problems: [{ problemId: problem.id }],
+      }],
+    })
+    expect(created.status).toBe(201)
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${created.body.data.id}/publish`)
+      .send({ expectedRevision: 0 })).status).toBe(200)
+
+    const managerReport = await getTrainingReport(coach.user.id, created.body.data.id)
+    expect(managerReport.participants.map(item => item.user.id).sort()).toEqual([student.user.id, peer.user.id].sort())
+    expect(managerReport.sessionSummary.participantCount).toBe(2)
+
+    const studentReport = await getTrainingReport(student.user.id, created.body.data.id)
+    expect(studentReport.participants).toHaveLength(1)
+    expect(studentReport.participants[0].user.id).toBe(student.user.id)
+    expect(studentReport.sessionSummary.participantCount).toBe(1)
+    expect(studentReport.groupSummaries).toEqual([])
+    expect(studentReport.problemSummaries).toEqual([])
+    expect(studentReport.groupChanges.every(change => change.participantId === studentReport.participants[0].id)).toBe(true)
   })
 
   it('creates Stage plans, pins the revision and reports missing progress as NOT_STARTED', async () => {
