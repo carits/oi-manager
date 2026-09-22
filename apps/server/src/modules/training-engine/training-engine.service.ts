@@ -1969,7 +1969,7 @@ export async function recordStrategyDecision(userId: string, sessionId: string, 
 
 export async function getCoachDashboard(userId: string, sessionId: string) {
   const session = await assertManage(userId, sessionId)
-  const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, include: { User: { select: { id: true, username: true, avatar: true } }, StageAssignments: { where: { stageId: session.currentStageId || undefined }, select: { groupId: true } }, Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } } } })
+  const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, include: { User: { select: { id: true, username: true, avatar: true } }, StageAssignments: { where: { stageId: session.currentStageId ?? '__no-current-stage__' }, select: { groupId: true } }, Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } } } })
   const now = Date.now()
   const currentStage = session.Stages.find(stage => stage.id === session.currentStageId)
   const participantRows = participants.map(item => {
