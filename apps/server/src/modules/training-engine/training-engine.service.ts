@@ -11,6 +11,7 @@ import { eligibleTrainingParticipantIds, validateTrainingParticipantTarget } fro
 import { trainingMetrics } from './training-metrics'
 import { assertTrainingDefinitionWritesEnabled } from './training-rollout'
 import { createTrainingCommandDispatcher } from './training-command.service'
+import { TrainingEventTypes } from './training-events'
 import {
   evaluateProblemTimePolicy,
   normalizeTrainingAccessScope,
@@ -857,7 +858,7 @@ export async function publishTrainingSession(userId: string, sessionId: string, 
       const participant = await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active', currentStageId: session.Stages[0].id }, create: { sessionId, userId: participantUserId, currentStageId: session.Stages[0].id } })
       for (const stage of session.Stages) await tx.trainingSessionStageParticipantAssignment.upsert({ where: { stageId_participantId: { stageId: stage.id, participantId: participant.id } }, update: {}, create: { stageId: stage.id, participantId: participant.id, assignedBy: userId, source: 'publish' } })
     }
-    await appendEvent(tx, sessionId, 'training.session.scheduled', 'ALL', null, { scheduledStartAt: session.scheduledStartAt })
+    await appendEvent(tx, sessionId, TrainingEventTypes.SESSION_SCHEDULED, 'ALL', null, { scheduledStartAt: session.scheduledStartAt })
   })
   return loadSession(sessionId)
 }
@@ -1296,7 +1297,8 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     if (input.stageId !== first.id) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_INVALID', '只能从时间轴中的第一个待开始 Stage 启动')
     await startStage(tx, input.sessionId, first.id, at)
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: 'RUNNING', startedAt: current.startedAt || at, runningSince: at, pausedAt: null, pauseMode: null, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-    await appendEvent(tx, input.sessionId, 'training.stage.started', 'ALL', null, { stageId: first.id, ...eventMeta })
+    await appendEvent(tx, input.sessionId, TrainingEventTypes.SESSION_STARTED, 'ALL', null, { stageId: first.id, ...eventMeta })
+    await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_STARTED, 'ALL', null, { stageId: first.id, ...eventMeta })
     trainingMetrics.recordStageTransition()
     trainingMetrics.observeSession(input.sessionId, 'RUNNING')
     return 'started' as const
@@ -1307,7 +1309,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '只能跳过尚未开始的 Stage')
     await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endNote: input.reason } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-    await appendEvent(tx, input.sessionId, 'training.stage.skipped', 'ALL', null, { stageId: stage.id, reason: input.reason, ...eventMeta })
+    await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_SKIPPED, 'ALL', null, { stageId: stage.id, reason: input.reason, ...eventMeta })
     trainingMetrics.recordStageTransition()
     trainingMetrics.observeSession(input.sessionId, current.status)
     return 'skipped' as const
@@ -1332,11 +1334,18 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   )
 
   await tx.trainingSessionStage.update({ where: { id: running.id }, data: { lifecycle: 'ENDED', activeElapsedSeconds: { increment }, runningSince: null, endedAt: at, endedBy: input.actorUserId, endReason, endNote: input.reason } })
+  await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_ENDED, 'ALL', null, {
+    stageId: running.id,
+    outcome,
+    endReason,
+    reason: input.reason,
+    ...eventMeta,
+  })
   if (shouldEnd) {
     await tx.trainingSessionStage.updateMany({ where: { sessionId: input.sessionId, lifecycle: 'PENDING' }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endNote: input.reason || '整场训练已结束' } })
     await tx.trainingSessionOverlay.updateMany({ where: { sessionId: input.sessionId, status: 'active' }, data: { status: 'ended', endedAt: at } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: 'ENDED', endedAt: at, runningSince: null, pausedAt: null, pauseMode: null, activeElapsedSeconds: { increment: increment }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-    await appendEvent(tx, input.sessionId, 'training.session.ended', 'ALL', null, { stageId: running.id, outcome, endReason, reason: input.reason, ...eventMeta })
+    await appendEvent(tx, input.sessionId, TrainingEventTypes.SESSION_ENDED, 'ALL', null, { stageId: running.id, outcome, endReason, reason: input.reason, ...eventMeta })
     trainingMetrics.recordStageTransition()
     trainingMetrics.observeSession(input.sessionId, 'ENDED')
     return 'ended' as const
@@ -1345,7 +1354,8 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   if (!next || next.lifecycle !== 'PENDING' || next.orderIndex <= running.orderIndex) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_INVALID', '只能进入当前 Stage 之后的待开始 Stage')
   await startStage(tx, input.sessionId, next.id, at, current.status === 'RUNNING')
   await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: current.status === 'PAUSED' ? 'PAUSED' : 'RUNNING', runningSince: current.status === 'RUNNING' ? at : null, activeElapsedSeconds: { increment }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-  await appendEvent(tx, input.sessionId, 'training.stage.advanced', 'ALL', null, { fromStageId: running.id, toStageId: next.id, outcome, endReason, reason: input.reason, ...eventMeta })
+  await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_STARTED, 'ALL', null, { stageId: next.id, fromStageId: running.id, ...eventMeta })
+  await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_ADVANCED, 'ALL', null, { fromStageId: running.id, toStageId: next.id, outcome, endReason, reason: input.reason, ...eventMeta })
   trainingMetrics.recordStageTransition()
   trainingMetrics.observeSession(input.sessionId, current.status)
   return 'advanced' as const
@@ -1444,7 +1454,7 @@ export async function changeTrainingStageGroup(userId: string, sessionId: string
     const now = new Date()
     await tx.trainingSessionStageGroupChange.create({ data: { sessionId, stageId, participantId: participant.id, fromGroupId: old?.groupId || null, toGroupId: toGroup.id, effectiveMode: effectiveMode as any, targetStageId: effectiveMode === 'NEXT_STAGE' ? targetStageId : null, reason, changedBy: userId, effectiveAt: effectiveMode === 'IMMEDIATE' ? now : null } })
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-    await appendEvent(tx, sessionId, 'training.stage.group_changed', 'USER', participant.userId, { stageId, targetStageId, fromGroupId: old?.groupId || null, toGroupId: toGroup.id, effectiveMode, clearCurrentProblem })
+    await appendEvent(tx, sessionId, TrainingEventTypes.STAGE_GROUP_CHANGED, 'USER', participant.userId, { stageId, targetStageId, fromGroupId: old?.groupId || null, toGroupId: toGroup.id, effectiveMode, clearCurrentProblem })
   })
   trainingMetrics.recordGroupMove()
   return getTrainingWorkspace(userId, sessionId)
@@ -1464,7 +1474,7 @@ export async function extendTrainingStageTime(userId: string, sessionId: string,
     if (!stage) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '只能延长当前运行 Stage')
     await tx.trainingSessionStageTimeAdjustment.create({ data: { stageId, seconds, reason, createdBy: userId } })
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-    await appendEvent(tx, sessionId, 'training.stage.time_extended', 'ALL', null, { stageId, seconds, reason })
+    await appendEvent(tx, sessionId, TrainingEventTypes.STAGE_TIME_EXTENDED, 'ALL', null, { stageId, seconds, reason })
   })
   return getTrainingWorkspace(userId, sessionId)
 }
@@ -1574,7 +1584,7 @@ export async function replaceTrainingRoster(userId: string, sessionId: string, b
       if (!requested.has(participantUserId)) continue
       await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active', currentStageId: session.currentStageId, currentProblemId: null, returnStageId: null, returnProblemId: null }, create: { sessionId, userId: participantUserId, currentStageId: session.currentStageId } })
     }
-    await appendEvent(tx, sessionId, 'training.roster.updated', 'ALL', null, { participantCount: userIds.length })
+    await appendEvent(tx, sessionId, TrainingEventTypes.ROSTER_UPDATED, 'ALL', null, { participantCount: userIds.length })
   })
   return getTrainingWorkspace(userId, sessionId)
 }
@@ -1715,7 +1725,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
       const progress = await tx.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })
       if (progress?.status === 'STUCK') {
         await tx.trainingSessionProblemProgress.update({ where: { id: progress.id }, data: { status: 'WORKING', stuckDetectedAt: null, continuousActiveSeconds: 0, lastProgressAt: new Date() } })
-        await appendEvent(tx, sessionId, 'training.problem.stuck_cleared', 'USER', targetId, {
+        await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_STUCK_CLEARED, 'USER', targetId, {
           participantId: participant.id,
           stageProblemId,
           reason: 'teacher_clear',
@@ -1758,6 +1768,19 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
     const updated = await tx.trainingSession.update({ where: { id: sessionId }, data: update })
     await tx.trainingSessionCommand.create({ data: { sessionId, seq: updated.commandSeq, type, targetType, targetId, payload: asJson(payload), createdBy: userId } })
     await appendEvent(tx, sessionId, `training.command.${type.toLowerCase()}`, targetType, targetId, { ...payload, status: nextStatus })
+    if (type === 'PAUSE_SESSION') {
+      await appendEvent(tx, sessionId, TrainingEventTypes.SESSION_PAUSED, 'ALL', null, { mode: payload.mode === 'HARD' ? 'HARD' : 'SOFT' })
+    } else if (type === 'RESUME_SESSION') {
+      await appendEvent(tx, sessionId, TrainingEventTypes.SESSION_RESUMED, 'ALL', null, {})
+    } else if (type === 'UNLOCK_FOR_USER') {
+      await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_UNLOCKED, 'USER', targetId, { stageProblemId: payload.stageProblemId, source: 'teacher' })
+    } else if (type === 'SKIP_FOR_USER') {
+      await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_SKIPPED, 'USER', targetId, { stageProblemId: payload.stageProblemId, source: 'teacher' })
+    } else if (type === 'OPEN_HINT') {
+      await appendEvent(tx, sessionId, TrainingEventTypes.HINT_OPENED, targetType, targetId, { hintId: payload.hintId })
+    } else if (type === 'SHOW_MESSAGE') {
+      await appendEvent(tx, sessionId, TrainingEventTypes.MESSAGE_SHOWN, targetType, targetId, { message: payload.message, messageType: payload.messageType })
+    }
   })
   return loadSession(sessionId)
 }
@@ -1820,7 +1843,7 @@ export async function recordHeartbeat(userId: string, sessionId: string, body: a
       })
       if (previousProgress?.status === 'STUCK') {
         await tx.trainingSessionProblemProgress.update({ where: { id: previousProgress.id }, data: { status: 'WORKING', stuckDetectedAt: null, continuousActiveSeconds: 0 } })
-        await appendEvent(tx, sessionId, 'training.problem.stuck_cleared', 'USER', userId, {
+        await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_STUCK_CLEARED, 'USER', userId, {
           participantId: participant.id,
           stageProblemId: participant.currentProblemId,
           reason: 'problem_switch',
@@ -1830,7 +1853,7 @@ export async function recordHeartbeat(userId: string, sessionId: string, body: a
     }
     if (stuck && current.status !== 'STUCK') {
       await tx.trainingSessionProblemProgress.update({ where: { id: current.id }, data: { status: 'STUCK', stuckDetectedAt: now } })
-      await appendEvent(tx, sessionId, 'training.problem.stuck', 'USER', userId, {
+      await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_STUCK, 'USER', userId, {
         participantId: participant.id,
         stageProblemId,
         at: now.toISOString(),
@@ -1962,7 +1985,7 @@ export async function processDueTrainingSessions(now = new Date()) {
         const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId: item.sessionId, status: 'active', OR: [{ returnStageId: { not: null } }, { returnProblemId: { not: null } }] } })
         await restoreFocusParticipants(tx, session, participants)
       }
-      await appendEvent(tx, item.sessionId, 'training.overlay.expired', 'ALL', null, { overlayIds: expired.map(overlay => overlay.id) })
+      await appendEvent(tx, item.sessionId, TrainingEventTypes.OVERLAY_EXPIRED, 'ALL', null, { overlayIds: expired.map(overlay => overlay.id) })
     })
   }
   const scheduled = await prisma.trainingSession.findMany({ where: { status: 'SCHEDULED', scheduledStartAt: { lte: now } }, select: { id: true, statusRevision: true }, take: 50 })
@@ -2271,7 +2294,7 @@ export async function getTrainingReport(userId: string, sessionId: string) {
   })) : []
 
   const stuckEvents = await prisma.trainingSessionEvent.findMany({
-    where: { sessionId, type: { in: ['training.problem.stuck', 'training.problem.stuck_cleared'] } },
+    where: { sessionId, type: { in: [TrainingEventTypes.PROBLEM_STUCK, TrainingEventTypes.PROBLEM_STUCK_CLEARED] } },
     orderBy: { seq: 'asc' },
     select: { seq: true, type: true, targetId: true, payload: true, createdAt: true },
   })
@@ -2281,7 +2304,7 @@ export async function getTrainingReport(userId: string, sessionId: string) {
     if (!manager && participantId && !participantIds.has(participantId)) return []
     return [{
       seq: event.seq,
-      type: event.type === 'training.problem.stuck' ? 'DETECTED' : 'CLEARED',
+      type: event.type === TrainingEventTypes.PROBLEM_STUCK ? 'DETECTED' : 'CLEARED',
       participantId: participantId || null,
       stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null,
       reason: payload.reason ? String(payload.reason) : null,
@@ -2347,13 +2370,13 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: nextStatus, stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
     await tx.trainingSessionScoreEvent.create({ data: { sessionId: submission.trainingSessionId!, participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, submissionId: submission.id, score: submission.score, verdict: submission.result } })
     if (existing?.status === 'STUCK' && (improved || completed)) {
-      await appendEvent(tx, submission.trainingSessionId!, 'training.problem.stuck_cleared', 'USER', submission.userId, {
+      await appendEvent(tx, submission.trainingSessionId!, TrainingEventTypes.PROBLEM_STUCK_CLEARED, 'USER', submission.userId, {
         participantId: participant.id,
         stageProblemId: submission.trainingStageProblemId,
         reason: completed ? 'completed' : 'score_improved',
         at: new Date().toISOString(),
       })
     }
-    await appendEvent(tx, submission.trainingSessionId!, 'training.progress.updated', 'USER', submission.userId, { stageProblemId: submission.trainingStageProblemId, score: submission.score, verdict: submission.result })
+    await appendEvent(tx, submission.trainingSessionId!, TrainingEventTypes.PROGRESS_UPDATED, 'USER', submission.userId, { stageProblemId: submission.trainingStageProblemId, score: submission.score, verdict: submission.result })
   })
 }
