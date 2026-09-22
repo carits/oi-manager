@@ -164,6 +164,50 @@ describe('organization contest contract', () => {
     })
   })
 
+  describe('active organization context isolation for legacy training routes', () => {
+    it('rejects a training from another organization even when the same account is a member there', async () => {
+      const membershipId = crypto.randomUUID()
+      await prisma.organizationMembership.create({
+        data: {
+          id: membershipId,
+          organizationId: schoolB.organizationId!,
+          userId: teacher.user.id,
+          memberRole: 'teacher',
+          relationType: 'employee',
+          status: 'active',
+          joinedAt: new Date(),
+          RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+        },
+      })
+      await prisma.organizationTeacherProfile.create({
+        data: { id: crypto.randomUUID(), membershipId, name: '跨校比赛教师', status: 'active' },
+      })
+
+      const contest = await createTestSchoolContest({
+        schoolId: schoolA.id,
+        createdBy: teacher.user.id,
+        title: '学校A上下文比赛',
+      })
+      const token = tokenFor(teacher)
+
+      const wrongContext = await organizationRequest(
+        'get',
+        `/api/trainings/${contest.id}`,
+        token,
+        schoolB.organizationId!,
+      )
+      expect(wrongContext.status).toBe(404)
+
+      const correctContext = await organizationRequest(
+        'get',
+        `/api/trainings/${contest.id}`,
+        token,
+        schoolA.organizationId!,
+      )
+      expect(correctContext.status).toBe(200)
+    })
+  })
+
   describe('current training access and management helpers', () => {
     it('requires active organization membership for ordinary users', async () => {
       expect(await isOrganizationMember(student.user.id, schoolA.organizationId!)).toBe(true)
