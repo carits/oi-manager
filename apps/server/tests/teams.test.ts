@@ -517,6 +517,20 @@ describe('Team Operations', () => {
       expect(invitationsA.status).toBe(200)
       expect(invitationsA.body.data.map((item: any) => item.id)).not.toContain(invitationB.id)
 
+      const directTeamBFromA = await request(app)
+        .get(`/api/teams/${teamB.id}`)
+        .set('Cookie', `oi_session=${token}`)
+        .set('x-oi-organization-id', schoolA.organizationId!)
+      expect(directTeamBFromA.status).toBe(403)
+
+      const acceptInvitationBFromA = await request(app)
+        .post(`/api/teams/admin-invitations/${invitationB.id}/accept`)
+        .set('Cookie', `oi_session=${token}`)
+        .set('x-oi-organization-id', schoolA.organizationId!)
+        .send({})
+      expect(acceptInvitationBFromA.status).toBe(403)
+      expect((await prisma.teamMember.findUnique({ where: { id: invitationB.id } }))?.status).toBe('pending')
+
       const invitationsB = await request(app)
         .get('/api/teams/invitations')
         .set('Cookie', `oi_session=${token}`)
