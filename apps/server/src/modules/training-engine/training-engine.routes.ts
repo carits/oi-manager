@@ -111,20 +111,16 @@ async function assertTrainingTemplateContext(req: AuthRequest, templateId: strin
   if (isGlobalTrainingAdmin(req.user!)) return
   const template = await prisma.trainingSessionTemplate.findUnique({
     where: { id: templateId },
-    select: {
-      organizationId: true,
-      Team: { select: { scope: true, organizationId: true } },
-    },
+    select: { organizationId: true, teamId: true },
   })
   if (!template) throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
-  if (template.organizationId && template.organizationId !== req.user!.organizationId) {
-    throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
-  }
-  if (template.Team?.scope === 'campus' && template.Team.organizationId !== req.user!.organizationId) {
-    throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
-  }
-  if (template.Team?.scope === 'personal' && req.user!.organizationId) {
-    throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
+  try {
+    await assertTrainingScopeContext(req, template)
+  } catch (error) {
+    if (error instanceof TrainingEngineError && ['TRAINING_SCOPE_CONTEXT_MISMATCH', 'TRAINING_TEAM_NOT_FOUND'].includes(error.code)) {
+      throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
+    }
+    throw error
   }
 }
 
