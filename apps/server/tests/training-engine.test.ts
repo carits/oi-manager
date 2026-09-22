@@ -398,6 +398,34 @@ describe('Stage-driven Training Engine', () => {
     expect(started.body.code || started.body.error?.code).toBe('TRAINING_GROUP_ASSIGNMENT_INCOMPLETE')
   })
 
+  it('keeps dashboard current-stage state empty after publish and before start', async () => {
+    const created = await createSession()
+    const token = generateTokenFromUser(coach.user)
+
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${created.id}/publish`)
+      .send({ expectedRevision: 0 })).status).toBe(200)
+
+    const published = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.id },
+      select: { currentStageId: true, status: true },
+    })
+    expect(published).toEqual({ currentStageId: null, status: 'SCHEDULED' })
+
+    const dashboard = await getCoachDashboard(coach.user.id, created.id)
+    expect(dashboard.session.currentStageId).toBeNull()
+    expect(dashboard.summary).toEqual({ total: 1, working: 0, stuck: 0, completed: 0 })
+    expect(dashboard.participants[0]).toMatchObject({
+      currentStageId: null,
+      currentGroupId: null,
+      requiredCount: 0,
+      completedCount: 0,
+      completed: false,
+      working: false,
+      stuck: false,
+    })
+  })
+
   it('serializes concurrent Stage transitions with advisory lock and revision CAS', async () => {
     const created = await createSession()
     const token = generateTokenFromUser(coach.user)
