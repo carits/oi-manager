@@ -11,6 +11,7 @@ import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks'
 import logger from './logger'
 import { getRuntimeEventSummary, resetRuntimeTelemetry } from './runtimeTelemetry'
 import { chatMetrics } from '../modules/chat/chat-metrics'
+import { trainingMetrics } from '../modules/training-engine/training-metrics'
 
 interface EndpointMetric {
   count: number
@@ -121,6 +122,7 @@ export interface MetricsSnapshot {
   caches: Array<{ name: string; hitCount: number; missCount: number; hitRate: string; size: number }>
   runtimeEvents: ReturnType<typeof getRuntimeEventSummary>
   chat: ReturnType<typeof chatMetrics.snapshot>
+  training: ReturnType<typeof trainingMetrics.snapshot>
 }
 
 export class MetricsCollector {
@@ -339,6 +341,7 @@ export class MetricsCollector {
       caches: this.getCacheSummary(),
       runtimeEvents: getRuntimeEventSummary(),
       chat: chatMetrics.snapshot(),
+      training: trainingMetrics.snapshot(),
     }
   }
 
@@ -396,6 +399,7 @@ export class MetricsCollector {
           totalEndpoints: endpointSummary.length,
           totalExternalCalls: externalSummary.length,
           runtimeEvents: snapshot.runtimeEvents,
+          training: snapshot.training,
           process: snapshot.process,
           snapshotPath,
         }
@@ -443,6 +447,7 @@ export class MetricsCollector {
     this.eventLoopDelay.reset()
     resetRuntimeTelemetry()
     chatMetrics.resetWindow()
+    trainingMetrics.resetWindow()
   }
 }
 
