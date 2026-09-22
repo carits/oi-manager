@@ -3,7 +3,9 @@ import { createOrganizationInvitation, respondToInvitation } from '../../organiz
 import { organizationRoleFromRoleKeys } from '../../authorization/capabilities'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 
-const allModules = ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
+const principalModules = ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'training-sessions', 'problems', 'problem-lists', 'rankings', 'submissions', 'knowledge']
+const teacherModules = ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'training-sessions', 'problems', 'problem-lists', 'rankings', 'submissions', 'knowledge']
+const studentModules = ['overview', 'campus', 'teams', 'homeworks', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions', 'knowledge']
 const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts']
 
 export class WorkspaceError extends Error {
@@ -21,9 +23,9 @@ export interface WorkspaceActor {
 }
 
 function modulesForRole(role: string) {
-  if (role === 'school_principal') return allModules
-  if (role === 'teacher') return allModules.filter(item => item !== 'problems')
-  return ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings']
+  if (role === 'school_principal') return principalModules
+  if (role === 'teacher') return teacherModules
+  return studentModules
 }
 
 function relationLabel(memberRole: string, relationType: string) {
@@ -73,7 +75,7 @@ export async function listWorkspaces(actor: WorkspaceActor): Promise<WorkspaceSu
   })
   const personal = {
     type: 'personal' as const,
-    availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'],
+    availableModules: ['overview', 'teams', 'problems', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions', 'knowledge'],
   }
   return [...organizations, personal]
 }
