@@ -43,7 +43,7 @@ Hardened paths include:
 
 - Team list/detail/member role/invitations/admin invitations/member teams and direct teamId access.
 - Team problem lists and Team Import batches/read/confirm flows.
-- Assignment list/create/direct-id subroutes.
+- Assignment is organization-only: list/create/direct-id subroutes require an active organization workspace, and multi-organization accounts are fixed to the active organization.
 - Training Engine session/list/template scope.
 - Remaining Activity/Contest compatibility and Rating contest routes.
 - Activity Submission detail.
