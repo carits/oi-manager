@@ -2014,7 +2014,10 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
   if (!submission.trainingSessionId || !submission.trainingStageProblemId) return
   const [participant, stageProblem] = await Promise.all([
     prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId: submission.trainingSessionId, userId: submission.userId } } }),
-    prisma.trainingSessionStageProblem.findUnique({ where: { id: submission.trainingStageProblemId }, include: { Stage: { select: { sessionId: true, defaultTargetScore: true } }, Plans: true } }),
+    prisma.trainingSessionStageProblem.findUnique({ where: { id: submission.trainingStageProblemId }, include: {
+      Stage: { select: { sessionId: true, kind: true, audienceMode: true, accessPolicy: true, submissionMode: true, endPolicy: true, defaultTargetScore: true, rules: true } },
+      Plans: { include: { Group: { select: { id: true, accessPolicy: true, submissionMode: true, rules: true } } } },
+    } }),
   ])
   if (!participant || !stageProblem || stageProblem.Stage.sessionId !== submission.trainingSessionId) return
   const accepted = ['accepted', 'ac'].includes(String(submission.result || '').toLowerCase())
@@ -2026,9 +2029,9 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     const bestScore = Math.max(existing?.bestScore || 0, score)
     const improved = bestScore > (existing?.bestScore ?? -1)
     const assignment = await tx.trainingSessionStageParticipantAssignment.findUnique({ where: { stageId_participantId: { stageId: stageProblem.stageId, participantId: participant.id } } })
-    const plan = stageProblem.Plans.find(item => item.groupId === (assignment?.groupId || null))
+    const plan = stageProblem.Plans.find(item => item.groupId === (stageProblem.Stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
     const snapshottedGoal = parseJsonObject(submission.trainingScoreGoalSnapshot)
-    const effectiveRule = resolveEffectiveTrainingRule({ stage: stageProblem.Stage, group: null, plan })
+    const effectiveRule = resolveEffectiveTrainingRule({ stage: stageProblem.Stage, group: plan?.Group || null, plan })
     const targetScore = Number.isInteger(snapshottedGoal.score)
       ? Number(snapshottedGoal.score)
       : effectiveRule.scorePolicy.completionScore
