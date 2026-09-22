@@ -8,6 +8,7 @@ import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { BUILTIN_TRAINING_TEMPLATES, getBuiltinTrainingTemplate } from './training-engine.templates'
 import { TrainingEngineError } from './training-engine.errors'
 import { eligibleTrainingParticipantIds, validateTrainingParticipantTarget } from './application/training-roster.service'
+import { trainingMetrics } from './training-metrics'
 import {
   evaluateProblemTimePolicy,
   normalizeTrainingAccessScope,
@@ -1115,7 +1116,10 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
     prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } }),
     prisma.trainingSessionProblemProgress.findMany({ where: { participantId: participant.id } }),
   ])
-  return resolveTrainingPermissionLoaded(session, false, participant, stageProblemId, overrides, new Map(progress.map(item => [item.stageProblemId, item])))
+  const startedAt = performance.now()
+  const resolved = resolveTrainingPermissionLoaded(session, false, participant, stageProblemId, overrides, new Map(progress.map(item => [item.stageProblemId, item])))
+  trainingMetrics.recordPermissionLatency(performance.now() - startedAt)
+  return resolved
 }
 
 export async function joinTrainingSession(userId: string, sessionId: string) {
@@ -1249,6 +1253,8 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     await startStage(tx, input.sessionId, first.id, at)
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: 'RUNNING', startedAt: current.startedAt || at, runningSince: at, pausedAt: null, pauseMode: null, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, input.sessionId, 'training.stage.started', 'ALL', null, { stageId: first.id, ...eventMeta })
+    trainingMetrics.recordStageTransition()
+    trainingMetrics.observeSession(input.sessionId, 'RUNNING')
     return 'started' as const
   }
 
@@ -1258,6 +1264,8 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endNote: input.reason } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, input.sessionId, 'training.stage.skipped', 'ALL', null, { stageId: stage.id, reason: input.reason, ...eventMeta })
+    trainingMetrics.recordStageTransition()
+    trainingMetrics.observeSession(input.sessionId, current.status)
     return 'skipped' as const
   }
 
@@ -1285,6 +1293,8 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     await tx.trainingSessionOverlay.updateMany({ where: { sessionId: input.sessionId, status: 'active' }, data: { status: 'ended', endedAt: at } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: 'ENDED', endedAt: at, runningSince: null, pausedAt: null, pauseMode: null, activeElapsedSeconds: { increment: increment }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, input.sessionId, 'training.session.ended', 'ALL', null, { stageId: running.id, outcome, endReason, reason: input.reason, ...eventMeta })
+    trainingMetrics.recordStageTransition()
+    trainingMetrics.observeSession(input.sessionId, 'ENDED')
     return 'ended' as const
   }
 
@@ -1292,6 +1302,8 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   await startStage(tx, input.sessionId, next.id, at, current.status === 'RUNNING')
   await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: current.status === 'PAUSED' ? 'PAUSED' : 'RUNNING', runningSince: current.status === 'RUNNING' ? at : null, activeElapsedSeconds: { increment }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
   await appendEvent(tx, input.sessionId, 'training.stage.advanced', 'ALL', null, { fromStageId: running.id, toStageId: next.id, outcome, endReason, reason: input.reason, ...eventMeta })
+  trainingMetrics.recordStageTransition()
+  trainingMetrics.observeSession(input.sessionId, current.status)
   return 'advanced' as const
 }
 
@@ -1451,10 +1463,12 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const overrides = participant && !manager
     ? await prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } })
     : []
+  const permissionStartedAt = performance.now()
   const permissions = Object.fromEntries(session.Stages.flatMap(stage => stage.Problems).map(item => {
     const permission = resolveTrainingPermissionLoaded(session, manager, participant, item.id, overrides, progressByProblem)
     return [item.id, { ...permission, canSeeMetadata: manager || permission.canView }] as const
   }))
+  trainingMetrics.recordPermissionLatency(performance.now() - permissionStartedAt)
   const visibleOverlays = manager || !participant ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
   const currentStage = participant ? session.Stages.find(stage => stage.id === session.currentStageId) : null
   const currentAssignment = participant && currentStage ? currentStage.ParticipantAssignments.find(item => item.participantId === participant.id) : null
