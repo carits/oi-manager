@@ -1404,6 +1404,189 @@ export async function executeStageTransition(userId: string, sessionId: string, 
   return getTrainingWorkspace(userId, sessionId)
 }
 
+
+export async function endTrainingStage(userId: string, sessionId: string, stageId: string, body: any) {
+  const session = await assertManage(userId, sessionId)
+  const expectedRevision = Number(body?.expectedRevision)
+  if (!Number.isInteger(expectedRevision) || expectedRevision !== session.statusRevision) {
+    throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新后重试')
+  }
+  if (session.currentStageId !== stageId || !['RUNNING', 'PAUSED'].includes(session.status)) {
+    throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '只能结束当前运行阶段')
+  }
+  const current = session.Stages.find(stage => stage.id === stageId)
+  if (!current || current.lifecycle !== 'RUNNING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '只能结束当前运行阶段')
+  const next = session.Stages.find(stage => stage.orderIndex > current.orderIndex && stage.lifecycle === 'PENDING')
+  const outcome = body?.outcome === 'ended_early' ? 'ended_early' : 'completed'
+  const action = body?.endSession === true || !next ? 'end_session' : 'advance'
+  return executeStageTransition(userId, sessionId, {
+    expectedRevision,
+    action,
+    stageId,
+    outcome,
+    ...(action === 'advance' && next ? { nextStageId: next.id } : {}),
+    ...(body?.reason ? { reason: String(body.reason) } : {}),
+  })
+}
+
+export async function cloneTrainingStage(userId: string, sessionId: string, stageId: string, body: any) {
+  assertTrainingDefinitionWritesEnabled()
+  await assertManage(userId, sessionId)
+  const expectedRevision = Number(body?.expectedRevision)
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new TrainingEngineError(422, 'INVALID_TRAINING_REVISION', '训练版本无效')
+
+  const cloneId = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
+    const current = await tx.trainingSession.findUnique({ where: { id: sessionId }, select: { status: true, statusRevision: true } })
+    if (!current) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练不存在')
+    if (current.statusRevision !== expectedRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新后重试')
+    if (['ENDED', 'ARCHIVED'].includes(current.status)) throw new TrainingEngineError(409, 'TRAINING_STRUCTURE_FROZEN', '已结束训练不能复制阶段')
+
+    const source = await tx.trainingSessionStage.findFirst({
+      where: { id: stageId, sessionId },
+      include: {
+        Problems: { orderBy: { orderIndex: 'asc' }, include: { Hints: { orderBy: { level: 'asc' } } } },
+        ProblemPlans: { orderBy: [{ groupId: 'asc' }, { orderIndex: 'asc' }] },
+        Groups: { orderBy: { orderIndex: 'asc' } },
+        ParticipantAssignments: true,
+      },
+    })
+    if (!source) throw new TrainingEngineError(404, 'TRAINING_STAGE_NOT_FOUND', '阶段不存在')
+    const stageCount = await tx.trainingSessionStage.count({ where: { sessionId } })
+    if (stageCount >= 30) throw new TrainingEngineError(422, 'TRAINING_STAGE_LIMIT_REACHED', '一场训练最多包含 30 个阶段')
+    const last = await tx.trainingSessionStage.findFirst({ where: { sessionId }, orderBy: { orderIndex: 'desc' }, select: { orderIndex: true } })
+
+    const cloned = await tx.trainingSessionStage.create({
+      data: {
+        sessionId,
+        name: body?.name ? boundedText(body.name, 200, '阶段名称', 1) : `${source.name}（复制）`,
+        description: source.description,
+        orderIndex: (last?.orderIndex ?? -1) + 1,
+        kind: source.kind,
+        audienceMode: source.audienceMode,
+        lifecycle: 'PENDING',
+        endPolicy: source.endPolicy,
+        accessPolicy: source.accessPolicy,
+        submissionMode: source.submissionMode,
+        plannedDurationSeconds: source.plannedDurationSeconds,
+        defaultTargetScore: source.defaultTargetScore,
+        completionThreshold: source.completionThreshold,
+        minDurationSeconds: source.minDurationSeconds,
+        definitionRevision: 0,
+        rules: asJson(source.rules),
+      },
+    })
+
+    const problemIdMap = new Map<string, string>()
+    for (const problem of source.Problems) {
+      const created = await tx.trainingSessionStageProblem.create({
+        data: {
+          stageId: cloned.id,
+          problemId: problem.problemId,
+          testSetRevisionId: problem.testSetRevisionId,
+          alias: problem.alias,
+          orderIndex: problem.orderIndex,
+          titleSnapshot: problem.titleSnapshot,
+          statementsSnapshot: asJson(problem.statementsSnapshot),
+          unlockPolicy: asJson(problem.unlockPolicy),
+          targetScore: problem.targetScore,
+          timePolicy: asJson(problem.timePolicy),
+          stuckPolicy: asJson(problem.stuckPolicy),
+          hintPolicy: asJson(problem.hintPolicy),
+          judgeConfigProjection: problem.judgeConfigProjection,
+          allowedSubtaskIds: asJson(problem.allowedSubtaskIds),
+          strategyIntervalSeconds: problem.strategyIntervalSeconds,
+          scoreGoals: asJson(problem.scoreGoals),
+        },
+      })
+      problemIdMap.set(problem.id, created.id)
+      for (const hint of problem.Hints) {
+        await tx.trainingSessionHint.create({
+          data: {
+            sessionId,
+            stageProblemId: created.id,
+            level: hint.level,
+            title: hint.title,
+            content: hint.content,
+            openMode: hint.openMode,
+            triggerSeconds: hint.triggerSeconds,
+            triggerAttempts: hint.triggerAttempts,
+            triggerScore: hint.triggerScore,
+            globallyOpenedAt: null,
+            createdBy: userId,
+          },
+        })
+      }
+    }
+
+    const groupIdMap = new Map<string, string>()
+    for (const group of source.Groups) {
+      const created = await tx.trainingSessionStageGroup.create({
+        data: {
+          stageId: cloned.id,
+          name: group.name,
+          orderIndex: group.orderIndex,
+          accessPolicy: group.accessPolicy,
+          submissionMode: group.submissionMode,
+          rules: asJson(group.rules),
+        },
+      })
+      groupIdMap.set(group.id, created.id)
+    }
+
+    for (const plan of source.ProblemPlans) {
+      const stageProblemId = problemIdMap.get(plan.stageProblemId)
+      if (!stageProblemId) throw new TrainingEngineError(409, 'TRAINING_STAGE_CLONE_INCONSISTENT', '复制阶段时发现题目计划不完整')
+      const groupId = plan.groupId ? groupIdMap.get(plan.groupId) : null
+      if (plan.groupId && !groupId) throw new TrainingEngineError(409, 'TRAINING_STAGE_CLONE_INCONSISTENT', '复制阶段时发现分组计划不完整')
+      await tx.trainingSessionStageProblemPlan.create({
+        data: {
+          stageId: cloned.id,
+          stageProblemId,
+          groupId: groupId || null,
+          orderIndex: plan.orderIndex,
+          unlockPolicy: asJson(plan.unlockPolicy),
+          targetScore: plan.targetScore,
+          scoreGoals: asJson(plan.scoreGoals),
+          timePolicy: asJson(plan.timePolicy),
+          stuckPolicy: asJson(plan.stuckPolicy),
+          hintPolicy: asJson(plan.hintPolicy),
+          allowedSubtaskIds: asJson(plan.allowedSubtaskIds),
+          judgeConfigProjection: plan.judgeConfigProjection,
+          strategyIntervalSeconds: plan.strategyIntervalSeconds,
+          rules: asJson(plan.rules),
+        },
+      })
+    }
+
+    for (const assignment of source.ParticipantAssignments) {
+      const groupId = assignment.groupId ? groupIdMap.get(assignment.groupId) : null
+      if (assignment.groupId && !groupId) throw new TrainingEngineError(409, 'TRAINING_STAGE_CLONE_INCONSISTENT', '复制阶段时发现学员分组不完整')
+      await tx.trainingSessionStageParticipantAssignment.create({
+        data: {
+          stageId: cloned.id,
+          participantId: assignment.participantId,
+          groupId: groupId || null,
+          assignedBy: userId,
+          source: 'clone',
+        },
+      })
+    }
+
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 } } })
+    await appendEvent(tx, sessionId, TrainingEventTypes.STAGE_CLONED, 'ALL', null, { sourceStageId: source.id, clonedStageId: cloned.id })
+    return cloned.id
+  })
+
+  const design = await getTrainingDesign(userId, sessionId)
+  if (!design.stages.some(stage => stage.id === cloneId)) throw new TrainingEngineError(500, 'TRAINING_STAGE_CLONE_FAILED', '阶段复制后未能读取')
+  return design
+}
+
+export async function moveTrainingStageParticipant(userId: string, sessionId: string, stageId: string, body: any) {
+  return changeTrainingStageGroup(userId, sessionId, stageId, body)
+}
+
 export async function getTrainingStageGroupSuggestions(userId: string, sessionId: string, stageId: string) {
   await assertManage(userId, sessionId)
   const stage = await prisma.trainingSessionStage.findFirst({
