@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-21
+last_verified: 2026-09-22
 source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/schema.prisma, packages/contracts/src/training.ts
 ---
 
@@ -13,7 +13,7 @@ source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/sch
 
 > 训练模块不是流程图编辑器，也不是简单发题器；它是一套以 Stage 表达课堂时间轴、以 Runtime Intervention 提供现场弹性的训练运行系统。
 
-`TrainingSession` 表示一堂课，`Stage` 表示这堂课时间轴上的一个片段。普通刷题训练只是只有一个 Stage 的 Session；“快速创建”和模板只是生成 Stage 的 UI 快捷方式，不形成普通训练/教练带练两套领域模型。`OI / ACM / GENERAL` 只描述题目与评测语义。
+`TrainingSession` 表示一堂课，`Stage` 是代码与数据层的领域名，产品界面统一称“阶段”，表示这堂课时间轴上的一个片段。普通刷题训练只是只有一个阶段的 Session；“快速创建 / 自定义多阶段 / 阶段模板”都只是生成阶段 Definition 的 UI 入口，不形成普通训练/教练带练两套领域模型。`OI / ACM / GENERAL` 只描述题目与评测语义。
 
 ```text
 TrainingSession
@@ -50,7 +50,7 @@ PENDING → SKIPPED
 - 教学用途：训练、讲解、复盘。
 - 学员组织：全班或 Stage 内分组。
 - 题目开放：全部开放、顺序开放、教师控制。
-- 时间：不限时、Stage 限时，以及显式的单题 `NONE / SOFT / HARD / SWITCH_REQUIRED` 策略。单题策略达到阈值后分别只提示、禁止继续提交或要求先切题；不再依赖写死的 30 分钟判断。
+- 时间：不限时、阶段限时，以及显式的单题 `REMIND / RECOMMEND_SWITCH / LOCK_SUBMISSION / FORCE_SWITCH` 动作。旧 `SOFT / HARD / SWITCH_REQUIRED` 只由迁移/防御性读取兼容，并规范化为 canonical action；不再依赖写死的 30 分钟判断。
 - 完成：AC、目标分、分数里程碑。
 - 提示：手动、有效时间、次数或分数。
 - 结束：手动、时间、完成度或混合。
@@ -90,8 +90,9 @@ OI 部分分使用一个题目的 `scoreGoals`（例如 30 → 60 → 100），�
 
 统一入口是“创建训练”：
 
-- 快速创建：名称、学员、题目、截止时间，生成一个全班自由训练 Stage。
-- 使用模板：生成 Stage 骨架，题目必须显式添加。内置骨架包括简单刷题、讲练结合、分层课堂、OI 部分分和 ACM 策略训练。设计器可以把当前 Stage、分组和规则保存成个人、学校或团队模板；数据库模板可在创建页复用和停用，但不会复制题目、学员或运行数据。
+- 快速创建（单阶段·全班统一）：名称、学员、题目、截止时间，生成一个全班阶段并直接发布。
+- 自定义多阶段：先创建草稿；创建弹窗即可一次建立 1～30 个阶段，每个阶段独立选择“全班统一 / 分组训练”。分组阶段可以先建立“基础组 / 提高组 / …”等组骨架；具体学生归属、题目、时长和规则在设计器中继续配置，确认后统一发布。训练开始后仍可追加新的未来 `PENDING` 阶段。
+- 使用阶段模板：生成阶段骨架，题目必须显式添加。内置骨架包括简单刷题、讲练结合、分层课堂、OI 部分分和 ACM 策略训练。设计器可以把当前阶段、分组和规则保存成个人、学校或团队模板；数据库模板可在创建页复用和停用，但不会复制题目、学员或运行数据。
 
 设计器步骤为“基本信息 → Stage 与规则 → 学员与 Stage 分组 → 提示 → 发布检查”。Hint Definition 只允许在所属 Stage 为 `PENDING` 时新增、编辑或删除；Stage 开始后 Definition 冻结，运行时只能开放/关闭已有提示。运行工作台只展示冻结定义与现场干预：完成/提前结束、跳过未来 Stage、复制未来 Stage、延时、换组和当前要求/历史进度。教练完成度以该学员当前 Stage/分组真正要求的题目为分母，不能只统计已经产生的 Progress。报告按 Plan 对名单做左连接，未提交题明确返回 `NOT_STARTED`，并区分“当前要求”和换组前“本阶段历史”；教师工作台支持导出学员明细 CSV 和包含完整时间线/换组记录的 JSON。ACM 排名按解题数降序、首 AC 相对开场时间与 AC 前错误提交罚时升序计算，不再按简单完成数冒充榜单。
 
@@ -106,15 +107,24 @@ JSON API 全部通过 `packages/contracts` 和 Training Feature API。核心结�
 - `POST /api/training-sessions/:id/structure/validate`
 - `PUT /api/training-sessions/:id/structure`
 - `POST /api/training-sessions/:id/stage-transitions`
+- `POST /api/training-sessions/:id/stages/:stageId/end`
+- `POST /api/training-sessions/:id/stages/:stageId/clone`
+- `POST /api/training-sessions/:id/stages/:stageId/move-participant`
 - `POST /api/training-sessions/:id/stages/:stageId/group-changes`
 - `GET /api/training-sessions/:id/stages/:stageId/group-suggestions`
 - `POST /api/training-sessions/:id/stages/:stageId/time-extensions`
 
 `/events` 是登记的 Raw Transport SSE。命令和事件追加保存；SSE 支持游标补偿，断线后客户端重新读取权威 Workspace。
 
+## 服务边界与命令调度
+
+Runtime Command 不再通过主服务中的巨型条件链执行。`training-command.service.ts` 提供 dispatcher，`training-command.handlers.ts` 承载暂停/恢复、Focus、Overlay、个人干预、卡题解除和 Hint 等 handler；`training-engine.service.ts` 只负责权限/目标规范化、事务上下文组装、调度以及 Command/Event 落库。规则求值独立在 `domain/training-rule-engine.ts`，事件常量集中在 `training-events.ts`，监控集中在 `training-metrics.ts`。
+
+领域事件与原始 Command 审计同时保留。生命周期和课堂干预会显式产生 `training.session.started/paused/resumed/ended`、`training.stage.started/ended/skipped`、`training.problem.unlocked/skipped/stuck/stuck_cleared`、`training.hint.opened`、`training.message.shown` 等事件，报告和审计不需要反推 Command payload。
+
 ## 权限与可靠性
 
-权限按“管理员/个人 override → Overlay → 当前 Stage/组 Plan → Session 默认规则”解析。学生只有在权限求值确认题目可见后才获得题号、平台、题名和题面快照；未来 Stage、锁题、顺序未解锁和教师控制未开放题目在 API 边界即脱敏，即使 Session 处于 `SCHEDULED` 或 `PAUSED` 也不能绕过。Workspace 一次加载 Participant、Override 与 Progress 后批量完成全部 StageProblem 权限求值，避免按题重新加载 Session/Progress 的 N+1。学生的 Stage 真相只读取 `TrainingSession.currentStageId`；`Participant.currentStageId` 仅作为兼容镜像。硬暂停禁止编辑与提交，软暂停允许编辑但不提交；暂停时间不计入 Session 或 Stage 有效时间。ENDED/ARCHIVED 后所有 Runtime Command fail-closed。
+权限按“管理员/个人 override → Runtime Overlay → Problem/Group/Stage EffectiveRule → Session 默认规则”解析。学生只有在权限求值确认题目可见后才获得题号、平台、题名和题面快照；未来 Stage、锁题、顺序未解锁和教师控制未开放题目在 API 边界即脱敏，即使 Session 处于 `SCHEDULED` 或 `PAUSED` 也不能绕过。Workspace 一次加载 Participant、Override 与 Progress 后批量完成全部 StageProblem 权限求值，避免按题重新加载 Session/Progress 的 N+1。`TrainingSession.currentStageId` 是唯一当前阶段真相；`SCHEDULED` 时保持 `null`，只有真正执行 `start` 后才指向第一个运行阶段。`Participant.currentStageId` 仅作为兼容镜像。硬暂停禁止编辑与提交，软暂停允许编辑但不提交；暂停时间不计入 Session 或 Stage 有效时间。ENDED/ARCHIVED 后所有 Runtime Command fail-closed。
 
 评测完成后幂等更新 Progress 与 ScoreEvent。Scheduler 是单例 Worker，只对 RUNNING Stage 评估 TIME/COMPLETION/HYBRID；与人工转换竞争时只有一个 CAS 成功。固定 Revision、运行快照、目标分层快照和追加事件共同保证历史可重放。
 
