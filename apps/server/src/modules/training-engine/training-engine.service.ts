@@ -67,7 +67,7 @@ type StructureStage = {
 const COMMANDS = new Set([
   'PAUSE_SESSION', 'RESUME_SESSION',
   'FOCUS_PROBLEM', 'END_FOCUS', 'LOCK_PROBLEM', 'UNLOCK_PROBLEM', 'ENABLE_SUBMISSION', 'DISABLE_SUBMISSION',
-  'OPEN_HINT', 'CLOSE_HINT', 'UNLOCK_FOR_USER', 'SKIP_FOR_USER', 'SHOW_MESSAGE', 'CLEAR_MESSAGE',
+  'OPEN_HINT', 'CLOSE_HINT', 'UNLOCK_FOR_USER', 'SKIP_FOR_USER', 'CLEAR_STUCK_FOR_USER', 'SHOW_MESSAGE', 'CLEAR_MESSAGE',
 ])
 const SESSION_WIDE_COMMANDS = new Set([
   'PAUSE_SESSION', 'RESUME_SESSION',
@@ -86,6 +86,7 @@ const COMMAND_ALLOWED_SESSION_STATUS: Record<string, ReadonlySet<string>> = {
   CLOSE_HINT: new Set(['RUNNING', 'PAUSED']),
   UNLOCK_FOR_USER: new Set(['RUNNING', 'PAUSED']),
   SKIP_FOR_USER: new Set(['RUNNING', 'PAUSED']),
+  CLEAR_STUCK_FOR_USER: new Set(['RUNNING', 'PAUSED']),
   SHOW_MESSAGE: new Set(['RUNNING', 'PAUSED']),
   CLEAR_MESSAGE: new Set(['RUNNING', 'PAUSED']),
 }
@@ -1625,6 +1626,24 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
       if (payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '个人干预只能作用于当前 Stage 的题目')
       await tx.trainingSessionUserOverride.create({ data: { sessionId, userId: targetId, type: type === 'SKIP_FOR_USER' ? 'SKIP_PROBLEM' : 'UNLOCK_PROBLEM', stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
       if (type === 'SKIP_FOR_USER' && payload.stageProblemId) await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: String(payload.stageProblemId) } }, update: { status: 'SKIPPED', lastProgressAt: new Date() }, create: { participantId: participant.id, stageProblemId: String(payload.stageProblemId), status: 'SKIPPED', lastProgressAt: new Date() } })
+    } else if (type === 'CLEAR_STUCK_FOR_USER') {
+      if (targetType !== 'USER' || !targetId) throw new TrainingEngineError(422, 'TRAINING_COMMAND_TARGET_REQUIRED', '清除卡题状态必须指定用户')
+      const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } } })
+      if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
+      const stageProblemId = String(payload.stageProblemId || '')
+      if (!stageProblemId || !session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === stageProblemId)) {
+        throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能清除当前 Stage 题目的卡题状态')
+      }
+      const progress = await tx.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })
+      if (progress?.status === 'STUCK') {
+        await tx.trainingSessionProblemProgress.update({ where: { id: progress.id }, data: { status: 'WORKING', stuckDetectedAt: null, continuousActiveSeconds: 0, lastProgressAt: new Date() } })
+        await appendEvent(tx, sessionId, 'training.problem.stuck_cleared', 'USER', targetId, {
+          participantId: participant.id,
+          stageProblemId,
+          reason: 'teacher_clear',
+          at: new Date().toISOString(),
+        })
+      }
     } else if (type === 'OPEN_HINT' || type === 'CLOSE_HINT') {
       const hintId = String(payload.hintId || '')
       const hint = await tx.trainingSessionHint.findFirst({ where: { id: hintId, sessionId } })
