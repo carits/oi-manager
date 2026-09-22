@@ -39,7 +39,6 @@ export type StageGroup = {
   clientKey: string
   name: string
   accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
-  accessScope: 'CURRENT_STAGE' | 'PREVIOUS_AND_CURRENT' | 'SESSION_ALL'
   submissionMode: 'ENABLED' | 'DISABLED'
   participantIds: string[]
   rules?: Record<string, unknown> | null
@@ -55,6 +54,7 @@ export type Stage = {
   lifecycle?: 'PENDING' | 'RUNNING' | 'ENDED' | 'SKIPPED'
   endPolicy: 'MANUAL' | 'TIME' | 'COMPLETION' | 'HYBRID'
   accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
+  accessScope: 'CURRENT_STAGE' | 'PREVIOUS_AND_CURRENT' | 'SESSION_ALL'
   submissionMode: 'ENABLED' | 'DISABLED'
   plannedDurationSeconds?: number | null
   defaultTargetScore?: number | null
