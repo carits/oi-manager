@@ -75,6 +75,16 @@ export const TrainingStructureValidationSchema = z.object({ valid: z.boolean(), 
 export const TrainingStageTransitionInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), action: z.enum(['start', 'advance', 'skip_pending', 'end_session']), stageId: z.string().min(1), outcome: z.enum(['completed', 'ended_early']).optional(), nextStageId: z.string().optional(), reason: z.string().max(2000).optional() })
 export const TrainingStageGroupChangeInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), participantId: z.string().min(1), toGroupId: z.string().min(1), effectiveMode: z.enum(['immediate', 'next_stage']), targetStageId: z.string().optional(), reason: z.string().min(1).max(2000) })
 export const TrainingStageTimeExtensionInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), seconds: z.number().int().min(60).max(86400), reason: z.string().min(1).max(2000) })
+export const TrainingStageEndInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  outcome: z.enum(['completed', 'ended_early']).default('completed'),
+  reason: z.string().max(2000).optional(),
+  endSession: z.boolean().default(false),
+})
+export const TrainingStageCloneInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  name: z.string().trim().min(1).max(200).optional(),
+})
 export const TrainingRosterInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), participants: z.array(z.object({ userId: z.string().min(1) })).max(5000) })
 
 export const TrainingTemplateStageSchema = z.object({
@@ -315,7 +325,10 @@ export const TrainingContracts = {
   validateStructure: defineApiEndpoint({ key: 'training.structure.validate', method: 'POST', scope: 'organization', body: TrainingStructureInputSchema, data: TrainingStructureValidationSchema }),
   replaceStructure: defineApiEndpoint({ key: 'training.structure.replace', method: 'PUT', scope: 'organization', body: TrainingStructureInputSchema, data: TrainingDesignSchema }),
   transitionStage: defineApiEndpoint({ key: 'training.stage.transition', method: 'POST', scope: 'organization', body: TrainingStageTransitionInputSchema, data: TrainingWorkspaceSchema }),
+  endStage: defineApiEndpoint({ key: 'training.stage.end', method: 'POST', scope: 'organization', body: TrainingStageEndInputSchema, data: TrainingWorkspaceSchema }),
+  cloneStage: defineApiEndpoint({ key: 'training.stage.clone', method: 'POST', scope: 'organization', body: TrainingStageCloneInputSchema, data: TrainingDesignSchema }),
   changeStageGroup: defineApiEndpoint({ key: 'training.stage.group.change', method: 'POST', scope: 'organization', body: TrainingStageGroupChangeInputSchema, data: TrainingWorkspaceSchema }),
+  moveStageParticipant: defineApiEndpoint({ key: 'training.stage.participant.move', method: 'POST', scope: 'organization', body: TrainingStageGroupChangeInputSchema, data: TrainingWorkspaceSchema }),
   extendStageTime: defineApiEndpoint({ key: 'training.stage.time.extend', method: 'POST', scope: 'organization', body: TrainingStageTimeExtensionInputSchema, data: TrainingWorkspaceSchema }),
   getWorkspace: defineApiEndpoint({ key: 'training.workspace', method: 'GET', scope: 'organization', data: TrainingWorkspaceSchema }),
   getRoster: defineApiEndpoint({ key: 'training.roster.get', method: 'GET', scope: 'organization', data: TrainingRosterSchema }),
