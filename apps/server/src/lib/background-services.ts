@@ -263,7 +263,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
         stopQualityEvaluations(),
         stopSolutionSimilarities(),
       ])
-      stopAutoVerify()
+      await stopAutoVerify()
       stopCronTasks()
       logger.info('scheduler_services_stopped', { action: 'background_scheduler' })
     },

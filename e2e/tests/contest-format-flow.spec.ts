@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import { accounts } from '../fixtures/auth'
-import { bearer, loginAs, type AuthSession } from '../fixtures/api'
+import { sessionCookie, loginAs, type AuthSession } from '../fixtures/api'
 import { loadFixtureIds } from '../fixtures/data'
 import { loadRuntimeSecrets } from '../fixtures/runtime'
 
@@ -9,7 +9,7 @@ const { judgeToken } = loadRuntimeSecrets()
 const organizationBase = `/org/org_${ids.school}`
 
 function workHeaders(session: AuthSession) {
-  return { ...bearer(session), 'X-OI-Organization-ID': `org_${ids.school}` }
+  return { ...sessionCookie(session), 'X-OI-Organization-ID': `org_${ids.school}` }
 }
 
 async function setJudgeMode(request: APIRequestContext, manager: AuthSession, mode: 'acm' | 'oi') {
@@ -17,7 +17,7 @@ async function setJudgeMode(request: APIRequestContext, manager: AuthSession, mo
     ? [{ input: '1.in', output: '1.out', score: 100, subtaskId: 1 }]
     : [{ input: '1.in', output: '1.out' }]
   const response = await request.put(`/api/problems/${ids.problem}/judge-config`, {
-    headers: bearer(manager),
+    headers: sessionCookie(manager),
     data: {
       problemType: 'standard',
       timeLimit: 1000,
@@ -140,6 +140,9 @@ async function completeJudge(
             type: 'result',
             payload: {
               submissionId: expectedSubmissionId,
+              judgeRunId: message.payload.judgeRunId,
+              judgeAttemptId: message.payload.judgeAttemptId,
+              fencingToken: message.payload.fencingToken,
               result: judgeResult,
               time: 3,
               wallTime: 4,

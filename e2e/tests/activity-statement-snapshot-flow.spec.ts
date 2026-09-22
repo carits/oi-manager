@@ -5,16 +5,16 @@ import { loadFixtureIds } from '../fixtures/data'
 
 const ids = loadFixtureIds()
 const organizationId = `org_${ids.school}`
-const headers = (token: string) => ({
-  Authorization: `Bearer ${token}`,
+const headers = (cookie: string) => ({
+  Cookie: cookie,
   'X-OI-Organization-ID': organizationId,
 })
 
 test('activity statement selection and editing preserve immutable revisions', async ({ request, browser }) => {
   const principal = await loginAs(request, 'principal')
   const student = await loginAs(request, 'campusStudent')
-  const principalHeaders = headers(principal.token)
-  const studentHeaders = headers(student.token)
+  const principalHeaders = headers(principal.cookie)
+  const studentHeaders = headers(student.cookie)
   const managementUrl = `/api/trainings/${ids.contest}/statement-management`
 
   const matrixResponse = await request.get(managementUrl, { headers: principalHeaders })

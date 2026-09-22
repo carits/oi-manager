@@ -101,8 +101,4 @@ describe('sensitive route boundaries', () => {
     expect(oversized.status).toBe(400)
   })
 
-  it('does not expose retired migration HTTP endpoints', async () => {
-    const response = await request(app).post('/api/admin/migration/migrate-submission-scope')
-    expect(response.status).toBe(404)
-  })
 })

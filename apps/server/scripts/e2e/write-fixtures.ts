@@ -58,7 +58,7 @@ async function main() {
     required('contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'campus' }, orderBy: { id: 'asc' } })),
     required('personal contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'personal' }, orderBy: { id: 'asc' } })),
     required('submission', prisma.submission.findFirst({
-      where: { userId: 'e2e-campus-student', submitScope: 'training', result: 'accepted' },
+      where: { userId: 'e2e-campus-student', submitScope: 'training', CurrentJudgeRun: { is: { result: 'accepted' } } },
       orderBy: { createdAt: 'asc' },
     })),
     required('personal submission', prisma.submission.findFirst({

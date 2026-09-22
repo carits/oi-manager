@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { loadRuntimeSecrets } from '../fixtures/runtime'
 
 const { judgeToken } = loadRuntimeSecrets()
@@ -7,7 +7,7 @@ const { judgeToken } = loadRuntimeSecrets()
 test('two simulated judges claim one task once and complete it', async ({ page, request }) => {
   const student = await loginAs(request, 'campusStudent')
   const submit = await request.post('/api/submit', {
-    headers: bearer(student),
+    headers: sessionCookie(student),
     data: {
       problemId: 'E2E-1000',
       oj: 'carits',
@@ -74,6 +74,9 @@ test('two simulated judges claim one task once and complete it', async ({ page, 
                 type: 'result',
                 payload: {
                   submissionId: message.payload.submissionId,
+                  judgeRunId: message.payload.judgeRunId,
+                  judgeAttemptId: message.payload.judgeAttemptId,
+                  fencingToken: message.payload.fencingToken,
                   result: 'accepted',
                   time: 1,
                   memory: 1024,
@@ -100,7 +103,7 @@ test('two simulated judges claim one task once and complete it', async ({ page, 
 
   await expect.poll(async () => {
     const response = await request.get(`/api/submissions/${submissionId}`, {
-      headers: bearer(student),
+      headers: sessionCookie(student),
     })
     if (!response.ok()) return `http-${response.status()}`
     const body = await response.json()

@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { accounts } from '../fixtures/auth'
 
 test('platform administrator can migrate and use the visual OI Test Graph workbench @compact', async ({ browser, request }) => {
   const manager = await loginAs(request, 'platformAdmin')
-  const headers = bearer(manager)
+  const headers = sessionCookie(manager)
   const created = await request.post('/api/problems', {
     headers,
     data: {

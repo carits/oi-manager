@@ -10,7 +10,6 @@ import { authRouter } from './routes/auth'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { filesRouter } from './routes/files'
 import { meRouter } from './routes/me'
-import { milestoneRouter } from './routes/milestones'
 import { ojAccountsRouter } from './routes/oj-accounts'
 import { ojFetcherRouter } from './routes/oj-fetcher'
 import { organizationMemberRouter } from './routes/organization-members'
@@ -94,7 +93,6 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api/auth', authRouter)
   app.use('/api/organizations/:organizationId/members', authenticate, organizationMemberRouter)
   app.use('/api/platform/organizations', platformOrganizationRouter)
-  app.use('/api/milestones', milestoneRouter)
   app.use('/api/teams', teamRouter)
   app.use('/api/users', authenticate, userRouter)
   app.use('/api/stats', authenticate, statsRouter)

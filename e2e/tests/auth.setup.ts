@@ -12,7 +12,6 @@ for (const role of authRoles) {
       data: {
         username: account.username,
         password: account.password,
-        role: account.loginRole,
         workspaceMode: account.workspaceMode,
       },
     })

@@ -237,6 +237,24 @@ describe('OJ Account Management', () => {
   })
 
   describe('Verify', () => {
+    it('should keep unsupported platform verification unverified', async () => {
+      const { user } = await createTestUser({ accountRole: 'platform_admin' })
+      const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'platform_admin' })
+
+      const createRes = await request(app)
+        .post('/api/oj-accounts')
+        .set('Cookie', `oi_session=${token}`)
+        .send({ platform: 'codeforces', username: 'unsupported_verify_user', cookie: 'cookie-value' })
+
+      const res = await request(app)
+        .post(`/api/oj-accounts/${createRes.body.data.id}/verify`)
+        .set('Cookie', `oi_session=${token}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('unverified')
+      expect(res.body.data.message).toMatch(/暂不支持自动验证/)
+    })
+
     it('should mark account as error when no cookie', async () => {
       const { user } = await createTestUser({ accountRole: 'platform_admin' })
       const token = generateTestToken({ userId: user.id, username: user.username, accountRole: 'platform_admin' })

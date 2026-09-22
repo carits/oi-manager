@@ -14,7 +14,7 @@ import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest
 import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx, syncCanonicalContestProblemFixtureTx } from './helpers/contest-fixture'
 
 const app = createTestApp()
 
@@ -232,20 +232,20 @@ describe('训练模块权限测试', () => {
       expect(res.status).toBe(403)
     })
 
-    it('A6: 旧 Training homework 写入通道已退役', async () => {
+    it('A6: 拒绝不支持的活动类型', async () => {
       const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .post(`/api/teams/${team.id}/trainings`)
         .send({
-          title: '不应创建的旧作业',
+          title: '不应创建的活动',
           format: 'ioi',
-          type: 'homework',
+          type: 'unsupported',
           startTime: new Date(Date.now() + 86400000).toISOString(),
           endTime: new Date(Date.now() + 86400000 * 2).toISOString(),
         })
 
-      expect(res.status).toBe(410)
-      expect(res.body.code).toBe('LEGACY_HOMEWORK_API_RETIRED')
-      expect(await prisma.training.count({ where: { title: '不应创建的旧作业' } })).toBe(0)
+      expect(res.status).toBe(400)
+      expect(res.body.code).toBe('TRAINING_TYPE_INVALID')
+      expect(await prisma.training.count({ where: { title: '不应创建的活动' } })).toBe(0)
     })
   })
 
@@ -426,7 +426,7 @@ describe('训练模块权限测试', () => {
           createdBy: ownerUser.user.id,
         },
       })
-      await prisma.$transaction(tx => ensureContestAggregateTx(tx, upcoming.id))
+      await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, upcoming.id))
 
       const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .post(`/api/trainings/${upcoming.id}/start`)
@@ -723,7 +723,7 @@ describe('OI 赛制可见性测试', () => {
         createdBy: ownerUser.user.id
       }
     })
-    await prisma.$transaction(tx => ensureContestAggregateTx(tx, oiTraining.id))
+    await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, oiTraining.id))
   })
 
   describe('OI 赛制排名隐藏', () => {
@@ -784,8 +784,8 @@ describe('OI 赛制可见性测试', () => {
         },
       })
       const canonicalProblem = await prisma.$transaction(async tx => {
-        await ensureContestAggregateTx(tx, oiTraining.id)
-        return syncContestProblemAggregateTx(tx, trainingProblem.id)
+        await ensureCanonicalContestFixtureTx(tx, oiTraining.id)
+        return syncCanonicalContestProblemFixtureTx(tx, trainingProblem.id)
       })
       if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
       const submission = await prisma.submission.create({

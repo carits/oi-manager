@@ -6,7 +6,7 @@ import { createAuthenticatedRequest, createTestApp } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
-import { ensureContestAggregateTx } from './helpers/legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx } from './helpers/contest-fixture'
 
 const app = createTestApp()
 
@@ -137,7 +137,7 @@ describe('V1 data product marketplace', () => {
     expect(rejected.status).toBe(403)
 
     const contest = await prisma.training.create({ data: { title: 'Real contest', type: 'contest', scope: 'personal', teamId: team.id, startTime: new Date(), endTime: new Date(Date.now() + 3600_000), status: 'upcoming', createdBy: buyer.user.id } })
-    await prisma.$transaction(tx => ensureContestAggregateTx(tx, contest.id))
+    await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, contest.id))
     const purchased = await client(buyer).post(`/api/data-products/${productId}/purchase`).set('Idempotency-Key', crypto.randomUUID()).send({ license: 'CONTEST', contestId: contest.id })
     expect(purchased.status).toBe(201)
     const entitlementId = purchased.body.data.Entitlement.id as string

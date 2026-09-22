@@ -116,9 +116,6 @@ export async function createTeamTraining(params: {
   }
   const { title, description, format, startTime, endTime, problemIdVisible,
     solutionVisible, includeAdminInRanking, type } = params.input
-  if (type === 'homework') {
-    fail(410, 'LEGACY_HOMEWORK_API_RETIRED', '旧作业写入接口已退役，请使用 Assignment 作业接口')
-  }
   if (type !== undefined && !['training', 'contest'].includes(type)) {
     fail(400, 'TRAINING_TYPE_INVALID', '活动类型无效')
   }

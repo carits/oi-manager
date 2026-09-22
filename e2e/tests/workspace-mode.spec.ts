@@ -40,13 +40,17 @@ test.describe('all-role workspace switching @smoke', () => {
         data: {
           username: account.username,
           password: account.password,
-          role: account.loginRole,
           workspaceMode: 'work',
         },
       })
       expect(login.status()).toBe(200)
       const workSession = (await login.json()).data
-      expect(workSession.role).toBe(entry.expectedRole)
+      expect(workSession.accountRole).toBe('user')
+      const workMe = await request.get('/api/auth/me', {
+        headers: { 'X-OI-Organization-ID': 'org_school-default' },
+      })
+      expect(workMe.status()).toBe(200)
+      expect((await workMe.json()).data.organizationRole).toBe(entry.expectedRole)
       expect(workSession.workspaceMode).toBe('work')
 
       const personalSwitch = await request.post('/api/auth/switch-workspace', {
@@ -59,7 +63,8 @@ test.describe('all-role workspace switching @smoke', () => {
       const me = await request.get('/api/auth/me')
       expect(me.status()).toBe(200)
       const personalUser = (await me.json()).data
-      expect(personalUser.role).toBe(entry.expectedRole)
+      expect(personalUser.accountRole).toBe('user')
+      expect(personalUser).not.toHaveProperty('organizationRole')
       expect(personalUser.workspaceMode).toBe('personal')
 
       const overview = await request.get('/api/me/overview')
@@ -120,7 +125,7 @@ test.describe('administrator workspace isolation @smoke', () => {
     test(`${entry.expectedRole} has only its administrator workspace`, async ({ browser, request }) => {
       const account = accounts[entry.account]
       const login = await request.post('/api/auth/login', {
-        data: { username: account.username, password: account.password, role: account.loginRole },
+        data: { username: account.username, password: account.password },
       })
       expect(login.status()).toBe(200)
 
@@ -174,7 +179,6 @@ test.describe('personal workspace isolation', () => {
       data: {
         username: account.username,
         password: account.password,
-        role: account.loginRole,
         workspaceMode: 'work',
       },
     })

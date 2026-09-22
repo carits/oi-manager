@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 
-export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, trainingId: number) {
+export async function ensureCanonicalContestFixtureTx(tx: Prisma.TransactionClient, trainingId: number) {
   const training = await tx.training.findUnique({ where: { id: trainingId } })
   if (!training || training.type !== 'contest') return null
   const contest = await tx.contest.upsert({
@@ -30,7 +30,7 @@ export async function ensureContestAggregateTx(tx: Prisma.TransactionClient, tra
   return contest
 }
 
-export async function syncContestProblemAggregateTx(tx: Prisma.TransactionClient, trainingProblemId: string) {
+export async function syncCanonicalContestProblemFixtureTx(tx: Prisma.TransactionClient, trainingProblemId: string) {
   const source = await tx.trainingProblem.findUnique({
     where: { id: trainingProblemId },
     include: { Training: true, Problem: true },
