@@ -11,6 +11,7 @@ export const TrainingEventTypes = {
   STAGE_ADVANCED: 'training.stage.advanced',
   STAGE_GROUP_CHANGED: 'training.stage.group_changed',
   STAGE_TIME_EXTENDED: 'training.stage.time_extended',
+  STAGE_CLONED: 'training.stage.cloned',
 
   PROBLEM_UNLOCKED: 'training.problem.unlocked',
   PROBLEM_SKIPPED: 'training.problem.skipped',
