@@ -49,7 +49,7 @@ export const BUILTIN_TRAINING_TEMPLATES: BuiltinTrainingTemplate[] = [
     key: 'acm-strategy', name: 'ACM 策略训练', sessionType: 'ACM', description: '扫题、主攻和自由训练。',
     stages: [
       { name: '扫题', description: '快速评估所有题目', kind: 'TRAINING', audienceMode: 'ALL', plannedDurationSeconds: 900, endPolicy: 'TIME', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' },
-      { name: '主攻', description: '围绕主攻题训练切题决策', kind: 'TRAINING', audienceMode: 'ALL', plannedDurationSeconds: 1800, endPolicy: 'MANUAL', accessPolicy: 'TEACHER_CONTROLLED', submissionMode: 'ENABLED', rules: { strategyIntervalSeconds: 900, timePolicy: { mode: 'SOFT', limitSeconds: 1800 }, stuckPolicy: { minActiveSeconds: 1200, minAttempts: 3, noImprovementSeconds: 600 } } },
+      { name: '主攻', description: '围绕主攻题训练切题决策', kind: 'TRAINING', audienceMode: 'ALL', plannedDurationSeconds: 1800, endPolicy: 'MANUAL', accessPolicy: 'TEACHER_CONTROLLED', submissionMode: 'ENABLED', rules: { strategyIntervalSeconds: 900, accessScope: 'CURRENT_STAGE', timePolicy: { mode: 'RECOMMEND_SWITCH', action: 'RECOMMEND_SWITCH', limitSeconds: 1800 }, stuckPolicy: { minActiveSeconds: 1200, minAttempts: 3, noImprovementSeconds: 600 } } },
       { name: '自由训练', description: '开放全部训练题', kind: 'REVIEW', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' },
     ],
   },

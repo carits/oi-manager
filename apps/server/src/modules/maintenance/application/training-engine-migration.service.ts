@@ -6,7 +6,22 @@ async function loadLegacyTrainings(db: typeof prisma | any) {
     where: { type: 'training' },
     orderBy: { id: 'asc' },
     include: {
-      TrainingProblem: { orderBy: { orderIndex: 'asc' }, include: { Problem: { select: { latestTestSetRevisionId: true } } } },
+      TrainingProblem: { orderBy: { orderIndex: 'asc' }, include: {
+        Problem: { select: {
+          title: true,
+          latestTestSetRevisionId: true,
+          ProblemStatement: {
+            where: { isVisible: true },
+            orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }],
+            select: { type: true, format: true, language: true, content: true, fileUrl: true },
+          },
+        } },
+        StatementSet: {
+          orderBy: { revision: 'desc' },
+          take: 1,
+          include: { Snapshot: { orderBy: { orderIndex: 'asc' } } },
+        },
+      } },
       TrainingParticipant: { orderBy: { joinedAt: 'asc' } },
       TrainingUserProblemStatus: true,
     },
@@ -16,7 +31,29 @@ async function loadLegacyTrainings(db: typeof prisma | any) {
 function stableHash(rows: any[], validUserIds: Set<string>) {
   return crypto.createHash('sha256').update(JSON.stringify({ rows: rows.map(row => ({
     id: row.id, updatedAt: row.updatedAt, type: row.type, teamId: row.teamId, organizationId: row.organizationId,
-    problems: row.TrainingProblem.map((problem: any) => [problem.id, problem.orderIndex, problem.testSetRevisionId, problem.Problem.latestTestSetRevisionId]),
+    problems: row.TrainingProblem.map((problem: any) => [
+      problem.id,
+      problem.orderIndex,
+      problem.testSetRevisionId,
+      problem.Problem.latestTestSetRevisionId,
+      problem.titleSnapshot,
+      problem.statementsSnapshotJson,
+      problem.Problem.title,
+      problem.Problem.ProblemStatement,
+      problem.StatementSet?.[0]?.revision,
+      problem.StatementSet?.[0]?.Snapshot?.map((snapshot: any) => [
+        snapshot.sourceType,
+        snapshot.name,
+        snapshot.title,
+        snapshot.language,
+        snapshot.format,
+        snapshot.content,
+        snapshot.snapshotFileId,
+        snapshot.fileName,
+        snapshot.isDefault,
+        snapshot.orderIndex,
+      ]),
+    ]),
     participants: row.TrainingParticipant.map((participant: any) => [participant.userId, participant.userType, participant.joinedAt]),
     progress: row.TrainingUserProblemStatus.map((item: any) => [item.userId, item.trainingProblemId, item.bestScore, item.bestResult, item.attemptCount, item.updatedAt]),
   })), users: [...validUserIds].sort() })).digest('hex')
@@ -31,10 +68,118 @@ function reasonFor(row: any, validUserIds: Set<string>) {
   return null
 }
 
+function parseLegacyStatementJson(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function legacyProblemSnapshot(problem: any) {
+  const selected = problem.StatementSet?.[0]?.Snapshot || []
+  const selectedStatements = selected.map((snapshot: any) => ({
+    type: 'statement',
+    format: snapshot.format,
+    language: snapshot.language,
+    content: snapshot.content,
+    fileUrl: null,
+    legacySnapshotFileId: snapshot.snapshotFileId || null,
+    legacyFileName: snapshot.fileName || null,
+    title: snapshot.title || null,
+    isDefault: Boolean(snapshot.isDefault),
+  }))
+  const legacyJson = parseLegacyStatementJson(problem.statementsSnapshotJson)
+  const fallbackStatements = problem.Problem.ProblemStatement.map((statement: any) => ({
+    type: statement.type,
+    format: statement.format,
+    language: statement.language,
+    content: statement.content,
+    fileUrl: statement.fileUrl,
+  }))
+  return {
+    title: problem.titleSnapshot || problem.Problem.title,
+    statements: selectedStatements.length ? selectedStatements : legacyJson.length ? legacyJson : fallbackStatements,
+  }
+}
+
 function mappedStatus(row: any, now = new Date()) {
   if (row.endTime <= now || row.status === 'finished') return 'ENDED'
   if (row.startTime <= now || row.status === 'ongoing') return 'RUNNING'
   return 'SCHEDULED'
+}
+
+async function snapshotMigratedStage(tx: any, stageId: string) {
+  const stage = await tx.trainingSessionStage.findUniqueOrThrow({
+    where: { id: stageId },
+    include: {
+      Problems: {
+        orderBy: { orderIndex: 'asc' },
+        include: {
+          Plans: { orderBy: { orderIndex: 'asc' } },
+          TestSetRevision: { select: { id: true, revisionNumber: true, judgeConfigHash: true, mode: true } },
+        },
+      },
+      Groups: {
+        orderBy: { orderIndex: 'asc' },
+        include: {
+          Assignments: { orderBy: { participantId: 'asc' } },
+          ProblemPlans: { orderBy: { orderIndex: 'asc' } },
+        },
+      },
+    },
+  })
+  const cleanPlan = (plan: any) => {
+    const { createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = plan
+    return rest
+  }
+  const projection = {
+    stage: {
+      id: stage.id,
+      name: stage.name,
+      description: stage.description,
+      orderIndex: stage.orderIndex,
+      kind: stage.kind,
+      audienceMode: stage.audienceMode,
+      endPolicy: stage.endPolicy,
+      accessPolicy: stage.accessPolicy,
+      submissionMode: stage.submissionMode,
+      plannedDurationSeconds: stage.plannedDurationSeconds,
+      defaultTargetScore: stage.defaultTargetScore,
+      completionThreshold: stage.completionThreshold,
+      minDurationSeconds: stage.minDurationSeconds,
+      rules: stage.rules,
+      definitionRevision: stage.definitionRevision,
+    },
+    groups: stage.Groups.map((group: any) => ({
+      id: group.id,
+      name: group.name,
+      orderIndex: group.orderIndex,
+      accessPolicy: group.accessPolicy,
+      submissionMode: group.submissionMode,
+      rules: group.rules,
+      assignments: group.Assignments.map((item: any) => ({ participantId: item.participantId })),
+      plans: group.ProblemPlans.map(cleanPlan),
+    })),
+    problems: stage.Problems.map((problem: any) => ({
+      id: problem.id,
+      problemId: problem.problemId,
+      testSetRevisionId: problem.testSetRevisionId,
+      revisionNumber: problem.TestSetRevision.revisionNumber,
+      judgeConfigHash: problem.TestSetRevision.judgeConfigHash,
+      mode: problem.TestSetRevision.mode,
+      alias: problem.alias,
+      titleSnapshot: problem.titleSnapshot,
+      statementsSnapshot: problem.statementsSnapshot,
+      plans: problem.Plans.map(cleanPlan),
+    })),
+  }
+  const projectionHash = crypto.createHash('sha256').update(JSON.stringify(projection)).digest('hex')
+  await tx.trainingSessionStageRuntimeSnapshot.create({
+    data: { stageId, definitionRevision: stage.definitionRevision, projection, projectionHash },
+  })
 }
 
 export async function inspectTrainingEngineMigration() {
@@ -67,29 +212,64 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
       if (await tx.trainingSession.findUnique({ where: { legacyTrainingId: row.id }, select: { id: true } })) continue
       const reason = reasonFor(row, validUserIds)
       if (reason) { blocked.push({ trainingId: row.id, reason }); continue }
-      const status = mappedStatus(row) as any
+      const status = mappedStatus(row) as 'SCHEDULED' | 'RUNNING' | 'ENDED'
+      const historicalDurationSeconds = Math.max(0, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000))
       const session = await tx.trainingSession.create({ data: {
-        legacyTrainingId: row.id, title: row.title, description: row.description, sessionType: row.format === 'acm' ? 'ACM' : 'OI',
-        status, teamId: row.teamId, organizationId: row.organizationId, createdBy: row.createdBy,
-        scheduledStartAt: row.startTime, startedAt: status === 'RUNNING' || status === 'ENDED' ? row.startTime : null,
-        runningSince: status === 'RUNNING' ? new Date() : null,
-        endedAt: status === 'ENDED' ? row.endTime : null, activeElapsedSeconds: status === 'ENDED' ? Math.max(0, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000)) : 0, rankingMode: row.format === 'acm' ? 'ACM_RANKING' : 'SCORE',
-        peerVisibility: 'PROGRESS', joinMode: 'CURRENT_STAGE', settings: { migratedFromLegacyTrainingId: row.id },
+        legacyTrainingId: row.id,
+        title: row.title,
+        description: row.description,
+        sessionType: row.format === 'acm' ? 'ACM' : 'OI',
+        status,
+        teamId: row.teamId,
+        organizationId: row.organizationId,
+        createdBy: row.createdBy,
+        scheduledStartAt: row.startTime,
+        startedAt: status === 'RUNNING' || status === 'ENDED' ? row.startTime : null,
+        runningSince: status === 'RUNNING' ? row.startTime : null,
+        endedAt: status === 'ENDED' ? row.endTime : null,
+        activeElapsedSeconds: status === 'ENDED' ? historicalDurationSeconds : 0,
+        currentStageId: null,
+        rankingMode: row.format === 'acm' ? 'ACM_RANKING' : 'SCORE',
+        peerVisibility: 'PROGRESS',
+        joinMode: 'CURRENT_STAGE',
+        settings: { migratedFromLegacyTrainingId: row.id },
       } })
       const stage = await tx.trainingSessionStage.create({ data: {
-        sessionId: session.id, name: '完整训练', orderIndex: 0, kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'TIME',
-        plannedDurationSeconds: Math.max(60, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000)),
-        accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', lifecycle: status === 'ENDED' ? 'COMPLETED' : status === 'RUNNING' ? 'RUNNING' : 'PENDING',
-        startedAt: status === 'RUNNING' || status === 'ENDED' ? row.startTime : null, runningSince: status === 'RUNNING' ? row.startTime : null, endedAt: status === 'ENDED' ? row.endTime : null,
-        activeElapsedSeconds: status === 'ENDED' ? Math.max(0, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000)) : 0,
+        sessionId: session.id,
+        name: '完整训练',
+        description: '由旧训练数据迁移生成',
+        orderIndex: 0,
+        kind: 'TRAINING',
+        audienceMode: 'ALL',
+        endPolicy: 'TIME',
+        plannedDurationSeconds: Math.max(60, historicalDurationSeconds),
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'ENABLED',
+        lifecycle: status === 'ENDED' ? 'ENDED' : status === 'RUNNING' ? 'RUNNING' : 'PENDING',
+        startedAt: status === 'RUNNING' || status === 'ENDED' ? row.startTime : null,
+        runningSince: status === 'RUNNING' ? row.startTime : null,
+        endedAt: status === 'ENDED' ? row.endTime : null,
+        endReason: status === 'ENDED' ? 'SYSTEM_ENDED' : null,
+        endNote: status === 'ENDED' ? '由旧训练迁移为历史结束状态' : null,
+        activeElapsedSeconds: status === 'ENDED' ? historicalDurationSeconds : 0,
       } })
-      await tx.trainingSession.update({ where: { id: session.id }, data: { currentStageId: stage.id } })
+      if (status === 'RUNNING') {
+        await tx.trainingSession.update({ where: { id: session.id }, data: { currentStageId: stage.id } })
+      }
       const stageProblems = new Map<string, string>()
       for (const problem of row.TrainingProblem) {
         const revisionId = problem.testSetRevisionId || problem.Problem.latestTestSetRevisionId!
+        const frozen = legacyProblemSnapshot(problem)
         const created = await tx.trainingSessionStageProblem.create({ data: {
-          stageId: stage.id, problemId: problem.problemId, testSetRevisionId: revisionId, alias: problem.alias,
-          orderIndex: problem.orderIndex, targetScore: problem.points || (row.format === 'acm' ? 100 : null), judgeConfigProjection: problem.judgeConfigSnapshot,
+          stageId: stage.id,
+          problemId: problem.problemId,
+          testSetRevisionId: revisionId,
+          alias: problem.alias,
+          orderIndex: problem.orderIndex,
+          titleSnapshot: frozen.title,
+          statementsSnapshot: frozen.statements,
+          targetScore: problem.points || (row.format === 'acm' ? 100 : null),
+          judgeConfigProjection: problem.judgeConfigSnapshot,
         } })
         await tx.trainingSessionStageProblemPlan.create({ data: { stageId: stage.id, stageProblemId: created.id, orderIndex: problem.orderIndex, targetScore: problem.points || (row.format === 'acm' ? 100 : null), judgeConfigProjection: problem.judgeConfigSnapshot } })
         stageProblems.set(problem.id, created.id)
@@ -97,14 +277,14 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
       const participantByUser = new Map<string, string>()
       for (const old of row.TrainingParticipant) {
         if (participantByUser.has(old.userId)) continue
-        const participant = await tx.trainingSessionParticipant.create({ data: { sessionId: session.id, userId: old.userId, joinedAt: old.joinedAt, currentStageId: stage.id } })
+        const participant = await tx.trainingSessionParticipant.create({ data: { sessionId: session.id, userId: old.userId, joinedAt: old.joinedAt, currentStageId: status === 'RUNNING' ? stage.id : null } })
         await tx.trainingSessionStageParticipantAssignment.create({ data: { stageId: stage.id, participantId: participant.id, source: 'legacy_migration' } })
         participantByUser.set(old.userId, participant.id)
       }
       for (const old of row.TrainingUserProblemStatus) {
         let participantId = participantByUser.get(old.userId)
         if (!participantId) {
-          const participant = await tx.trainingSessionParticipant.create({ data: { sessionId: session.id, userId: old.userId, currentStageId: stage.id } })
+          const participant = await tx.trainingSessionParticipant.create({ data: { sessionId: session.id, userId: old.userId, currentStageId: status === 'RUNNING' ? stage.id : null } })
           await tx.trainingSessionStageParticipantAssignment.create({ data: { stageId: stage.id, participantId: participant.id, source: 'legacy_migration' } })
           participantId = participant.id; participantByUser.set(old.userId, participant.id)
         }
@@ -121,6 +301,7 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
         const result = await tx.submission.updateMany({ where: { trainingId: row.id, trainingProblemId: oldProblemId, submitScope: 'training' }, data: { trainingSessionId: session.id, trainingStageProblemId: stageProblemId } })
         submissionsLinked += result.count
       }
+      if (status === 'RUNNING' || status === 'ENDED') await snapshotMigratedStage(tx, stage.id)
       migrated++
     }
     return { reportHash: currentHash, migrated, submissionsLinked, blocked }
