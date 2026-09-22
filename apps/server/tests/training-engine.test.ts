@@ -310,6 +310,9 @@ describe('Stage-driven Training Engine', () => {
       toGroupId: advanced.id,
       effectiveMode: 'IMMEDIATE',
     })
+    expect(report.groupSummaries.find(item => item.groupId === foundation.id)).toMatchObject({ initialParticipantCount: 1, finalParticipantCount: 0 })
+    expect(report.groupSummaries.find(item => item.groupId === advanced.id)).toMatchObject({ initialParticipantCount: 0, finalParticipantCount: 1 })
+    expect(report.problemSummaries.some(item => item.title === '训练引擎题目')).toBe(true)
   })
 
   it('loads design problem metadata through the declared :problemId route parameter', async () => {
@@ -546,6 +549,12 @@ describe('Stage-driven Training Engine', () => {
     expect(ended.status).toBe(200)
     expect(await prisma.trainingSession.findUnique({ where: { id: sessionId }, select: { status: true } })).toEqual({ status: 'ENDED' })
     expect(await prisma.trainingSessionStage.findUniqueOrThrow({ where: { id: stages[1].id } })).toMatchObject({ lifecycle: 'ENDED', endReason: 'SESSION_ENDED', endNote: '课堂目标完成' })
+    const report = await getTrainingReport(coach.user.id, sessionId)
+    expect(report.sessionSummary).toMatchObject({ id: sessionId, status: 'ENDED', stageCount: 2, participantCount: 1 })
+    expect(report.timeline[0]).toMatchObject({ lifecycle: 'ENDED', runtimeExtensionSeconds: 600, extensionSeconds: 600, endReason: 'TEACHER_ENDED' })
+    expect(report.timeline[0].actualDurationSeconds).toBeGreaterThanOrEqual(0)
+    expect(report.timeline[0].snapshotHash).toBeTruthy()
+    expect(report.timeline[1]).toMatchObject({ lifecycle: 'ENDED', endReason: 'SESSION_ENDED', endNote: '课堂目标完成' })
     const rejectedAfterEnd = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${sessionId}/commands`).send({
       expectedRevision: 5,
       type: 'CLEAR_MESSAGE',
