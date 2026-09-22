@@ -10,6 +10,7 @@ import { TrainingEngineError } from './training-engine.errors'
 import { eligibleTrainingParticipantIds, validateTrainingParticipantTarget } from './application/training-roster.service'
 import { trainingMetrics } from './training-metrics'
 import { assertTrainingDefinitionWritesEnabled } from './training-rollout'
+import { createTrainingCommandDispatcher } from './training-command.service'
 import {
   evaluateProblemTimePolicy,
   normalizeTrainingAccessScope,
@@ -1636,7 +1637,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
     targetId = await normalizeCommandTarget(tx, session, targetType, targetId)
     let nextStatus: TrainingEngineSessionStatus | undefined
     const update: Prisma.TrainingSessionUpdateInput = { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } }
-    if (type === 'PAUSE_SESSION') {
+    const pauseSession = async () => {
       if (current.status !== 'RUNNING') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有进行中的训练可以暂停')
       const at = new Date()
       nextStatus = 'PAUSED'; update.status = nextStatus; update.pausedAt = at; update.runningSince = null; update.pauseMode = payload.mode === 'HARD' ? 'HARD' : 'SOFT'
@@ -1645,14 +1646,18 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
         const stage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId } })
         if (stage?.lifecycle === 'RUNNING') await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { activeElapsedSeconds: { increment: activeStageIncrement(stage, at) }, runningSince: null } })
       }
-    } else if (type === 'RESUME_SESSION') {
+    }
+
+    const resumeSession = async () => {
       if (current.status !== 'PAUSED') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有暂停中的训练可以恢复')
       nextStatus = 'RUNNING'; update.status = nextStatus; update.pausedAt = null; update.runningSince = new Date(); update.pauseMode = null
       if (current.currentStageId) {
         const stage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId } })
         if (stage?.lifecycle === 'RUNNING') await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { runningSince: new Date() } })
       }
-    } else if (type === 'FOCUS_PROBLEM') {
+    }
+
+    const focusProblem = async () => {
       if (current.status !== 'RUNNING') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有进行中的训练可以聚焦题目')
       const stageProblemId = String(payload.stageProblemId || '')
       if (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === stageProblemId)) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能聚焦当前 Stage 的题目')
@@ -1664,12 +1669,16 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
         returnProblemId: participant.returnStageId || participant.returnProblemId ? participant.returnProblemId : participant.currentProblemId,
         currentProblemId: stageProblemId,
       } })
-    } else if (type === 'END_FOCUS') {
+    }
+
+    const endFocus = async () => {
       if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能结束聚焦')
       await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: { in: ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'] }, ...sameOverlayTarget(targetType, targetId) }, data: { status: 'ended', endedAt: new Date() } })
       const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active', OR: [{ returnStageId: { not: null } }, { returnProblemId: { not: null } }] } })
       await restoreFocusParticipants(tx, session, participants.filter(item => targetApplies(targetType, targetId, item, session)))
-    } else if (type === 'DISABLE_SUBMISSION' || type === 'LOCK_PROBLEM' || type === 'SHOW_MESSAGE') {
+    }
+
+    const createOverlay = async () => {
       if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能应用实时规则')
       if (type === 'LOCK_PROBLEM' && !payload.stageProblemId) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_REQUIRED', '锁题命令必须指定训练题目')
       if (type === 'LOCK_PROBLEM' && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能锁定当前 Stage 的题目')
@@ -1678,18 +1687,24 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
         payload.messageType = ['INFO', 'WARNING', 'INSTRUCTION', 'COUNTDOWN'].includes(String(payload.messageType || '').toUpperCase()) ? String(payload.messageType).toUpperCase() : 'INFO'
       }
       await tx.trainingSessionOverlay.create({ data: { sessionId, type: type === 'SHOW_MESSAGE' ? 'MESSAGE' : type, targetType, targetId, stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
-    } else if (type === 'ENABLE_SUBMISSION' || type === 'UNLOCK_PROBLEM' || type === 'CLEAR_MESSAGE') {
+    }
+
+    const endOverlay = async () => {
       if (type === 'UNLOCK_PROBLEM' && payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能解锁当前 Stage 的题目')
       const endingType = type === 'ENABLE_SUBMISSION' ? 'DISABLE_SUBMISSION' : type === 'UNLOCK_PROBLEM' ? 'LOCK_PROBLEM' : 'MESSAGE'
       await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: endingType, ...sameOverlayTarget(targetType, targetId), ...(payload.stageProblemId ? { stageProblemId: String(payload.stageProblemId) } : {}) }, data: { status: 'ended', endedAt: new Date() } })
-    } else if (type === 'UNLOCK_FOR_USER' || type === 'SKIP_FOR_USER') {
+    }
+
+    const userIntervention = async () => {
       if (targetType !== 'USER' || !targetId) throw new TrainingEngineError(422, 'TRAINING_COMMAND_TARGET_REQUIRED', '个人干预必须指定用户')
       const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } } })
       if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
       if (payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '个人干预只能作用于当前 Stage 的题目')
       await tx.trainingSessionUserOverride.create({ data: { sessionId, userId: targetId, type: type === 'SKIP_FOR_USER' ? 'SKIP_PROBLEM' : 'UNLOCK_PROBLEM', stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
       if (type === 'SKIP_FOR_USER' && payload.stageProblemId) await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: String(payload.stageProblemId) } }, update: { status: 'SKIPPED', lastProgressAt: new Date() }, create: { participantId: participant.id, stageProblemId: String(payload.stageProblemId), status: 'SKIPPED', lastProgressAt: new Date() } })
-    } else if (type === 'CLEAR_STUCK_FOR_USER') {
+    }
+
+    const clearStuckForUser = async () => {
       if (targetType !== 'USER' || !targetId) throw new TrainingEngineError(422, 'TRAINING_COMMAND_TARGET_REQUIRED', '清除卡题状态必须指定用户')
       const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } } })
       if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
@@ -1707,7 +1722,9 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
           at: new Date().toISOString(),
         })
       }
-    } else if (type === 'OPEN_HINT' || type === 'CLOSE_HINT') {
+    }
+
+    const hintControl = async () => {
       const hintId = String(payload.hintId || '')
       const hint = await tx.trainingSessionHint.findFirst({ where: { id: hintId, sessionId } })
       if (!hint) throw new TrainingEngineError(422, 'TRAINING_HINT_NOT_FOUND', '提示不存在')
@@ -1719,6 +1736,25 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
         await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: 'HINT_OPEN', ...sameOverlayTarget(targetType, targetId), payload: { path: ['hintId'], equals: hintId } }, data: { status: 'ended', endedAt: new Date() } })
       }
     }
+
+    const dispatcher = createTrainingCommandDispatcher({
+      PAUSE_SESSION: pauseSession,
+      RESUME_SESSION: resumeSession,
+      FOCUS_PROBLEM: focusProblem,
+      END_FOCUS: endFocus,
+      DISABLE_SUBMISSION: createOverlay,
+      LOCK_PROBLEM: createOverlay,
+      SHOW_MESSAGE: createOverlay,
+      ENABLE_SUBMISSION: endOverlay,
+      UNLOCK_PROBLEM: endOverlay,
+      CLEAR_MESSAGE: endOverlay,
+      UNLOCK_FOR_USER: userIntervention,
+      SKIP_FOR_USER: userIntervention,
+      CLEAR_STUCK_FOR_USER: clearStuckForUser,
+      OPEN_HINT: hintControl,
+      CLOSE_HINT: hintControl,
+    })
+    await dispatcher.dispatch(type)
     const updated = await tx.trainingSession.update({ where: { id: sessionId }, data: update })
     await tx.trainingSessionCommand.create({ data: { sessionId, seq: updated.commandSeq, type, targetType, targetId, payload: asJson(payload), createdBy: userId } })
     await appendEvent(tx, sessionId, `training.command.${type.toLowerCase()}`, targetType, targetId, { ...payload, status: nextStatus })
