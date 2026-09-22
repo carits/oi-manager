@@ -11,7 +11,7 @@ import { createTestApp } from './helpers/testRequest'
 import { generateTestToken } from './helpers/testToken'
 import { createTestSchoolContest, createTestSubmission } from './helpers/school-contest-helpers'
 import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from './helpers/testUser'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx, syncCanonicalContestProblemFixtureTx } from './helpers/contest-fixture'
 
 const app = createTestApp()
 
@@ -72,7 +72,7 @@ describe('organization contest contract', () => {
     })
 
     it('returns school contests and only team contests visible through active membership', async () => {
-      const schoolContest = await createTestSchoolContest({ schoolId: schoolA.id, createdBy: teacher.user.id, title: 'School contest' })
+      const schoolContest = await createTestSchoolContest({ organizationId: schoolA.organizationId!, createdBy: teacher.user.id, title: 'School contest' })
       const visibleTeam = await createTestTeam({ organizationId: schoolA.organizationId!, ownerId: student.user.id, ownerType: 'student' })
       const hiddenTeam = await createTestTeam({ organizationId: schoolA.organizationId! })
       const visibleTeamContest = await prisma.training.create({
@@ -84,8 +84,8 @@ describe('organization contest contract', () => {
         },
       })
       await prisma.$transaction(async tx => {
-        await ensureContestAggregateTx(tx, schoolContest.id)
-        await ensureContestAggregateTx(tx, visibleTeamContest.id)
+        await ensureCanonicalContestFixtureTx(tx, schoolContest.id)
+        await ensureCanonicalContestFixtureTx(tx, visibleTeamContest.id)
       })
       await prisma.training.create({
         data: {
@@ -115,7 +115,7 @@ describe('organization contest contract', () => {
 
     it('computes status from timestamps instead of trusting the stored status', async () => {
       const contest = await createTestSchoolContest({
-        schoolId: schoolA.id,
+        organizationId: schoolA.organizationId!,
         createdBy: teacher.user.id,
         status: 'upcoming',
         startTime: new Date(Date.now() - 60_000),
@@ -214,12 +214,12 @@ describe('organization contest contract', () => {
       expect(await isOrganizationMember(remoteTeacher.user.id, schoolA.organizationId!)).toBe(false)
       await prisma.organizationMembership.updateMany({
         where: { organizationId: schoolA.organizationId!, userId: student.user.id },
-        data: { status: 'removed' },
+        data: { status: 'archived' },
       })
       expect(await isOrganizationMember(student.user.id, schoolA.organizationId!)).toBe(false)
     })
 
-    it('keeps the explicit global read compatibility but only super admin has global management', async () => {
+    it('allows global account read scope but only super admin has global management', async () => {
       expect(await isOrganizationMember(superAdmin.user.id, schoolA.organizationId!)).toBe(true)
       expect(await isOrganizationMember(platformAdmin.user.id, schoolA.organizationId!)).toBe(true)
       expect(await isOrganizationContestAdmin(superAdmin.user.id, schoolA.organizationId!)).toBe(true)
@@ -245,7 +245,7 @@ describe('organization contest contract', () => {
 
   describe('contest submission visibility', () => {
     it('hides an ongoing OI result from the participant and exposes it to the manager', async () => {
-      const contest = await createTestSchoolContest({ schoolId: schoolA.id, createdBy: teacher.user.id, format: 'oi' })
+      const contest = await createTestSchoolContest({ organizationId: schoolA.organizationId!, createdBy: teacher.user.id, format: 'oi' })
       const problem = await prisma.problem.create({
         data: {
           id: crypto.randomUUID(), platform: 'carits', problemId: `ORG_${Date.now()}`, title: 'OI problem',
@@ -256,7 +256,7 @@ describe('organization contest contract', () => {
       const trainingProblem = await prisma.trainingProblem.create({
         data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 1, points: 100 },
       })
-      await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
+      await prisma.$transaction(tx => syncCanonicalContestProblemFixtureTx(tx, trainingProblem.id))
       await createTestSubmission({
         userId: student.user.id,
         trainingId: contest.id,
