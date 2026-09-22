@@ -94,6 +94,62 @@ describe('independent assignment domain', () => {
     expect(peerList.body.data.items.some((item: any) => item.id === assignmentId)).toBe(false)
   })
 
+  it('binds assignment list, create and direct-id access to the active organization context', async () => {
+    const token = generateTokenFromUser(teacher.user)
+    const secondOrgOwner = await createTestUser({ organization: { role: 'teacher' } })
+    const secondOrganizationId = (await prisma.school.findUniqueOrThrow({
+      where: { id: secondOrgOwner.organization!.organizationId! },
+    })).organizationId!
+
+    const membershipId = crypto.randomUUID()
+    await prisma.organizationMembership.create({
+      data: {
+        id: membershipId,
+        organizationId: secondOrganizationId,
+        userId: teacher.user.id,
+        memberRole: 'teacher',
+        relationType: 'employee',
+        status: 'active',
+        joinedAt: new Date(),
+        RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+      },
+    })
+    await prisma.organizationTeacherProfile.create({
+      data: { id: crypto.randomUUID(), membershipId, name: '跨校作业教师', status: 'active' },
+    })
+
+    const now = Date.now()
+    const secondOrgRequest = createAuthenticatedRequest(app, token, { organizationId: secondOrganizationId })
+    const createdInSecondOrg = await secondOrgRequest.post('/api/assignments').send({
+      organizationId: secondOrganizationId,
+      title: '学校B作业',
+      openAt: new Date(now + 60_000),
+      dueAt: new Date(now + 120_000),
+      closeAt: new Date(now + 180_000),
+    })
+    expect(createdInSecondOrg.status).toBe(201)
+    const assignmentId = createdInSecondOrg.body.data.id as string
+
+    const firstOrgRequest = createAuthenticatedRequest(app, token, { organizationId })
+    const crossList = await firstOrgRequest.get(`/api/assignments?organizationId=${secondOrganizationId}`)
+    expect(crossList.status).toBe(403)
+
+    const crossCreate = await firstOrgRequest.post('/api/assignments').send({
+      organizationId: secondOrganizationId,
+      title: '不应创建到学校B',
+      openAt: new Date(now + 60_000),
+      dueAt: new Date(now + 120_000),
+      closeAt: new Date(now + 180_000),
+    })
+    expect(crossCreate.status).toBe(403)
+
+    const crossDirect = await firstOrgRequest.get(`/api/assignments/${assignmentId}`)
+    expect(crossDirect.status).toBe(404)
+
+    const correctContext = await secondOrgRequest.get(`/api/assignments/${assignmentId}`)
+    expect(correctContext.status).toBe(200)
+  })
+
   it('keeps scheduled assignments hidden from recipients until publishAt', async () => {
     const token = generateTokenFromUser(teacher.user)
     const studentToken = generateTokenFromUser(student.user)
