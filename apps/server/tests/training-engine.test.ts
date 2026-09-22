@@ -136,6 +136,7 @@ describe('Stage-driven Training Engine', () => {
     const token = generateTokenFromUser(coach.user)
     const currentOrganizationId = coach.organization!.organizationId
 
+    const personalCreated = await createSession()
     const requestB = createAuthenticatedRequest(app, token, { organizationId: otherOrganizationId })
     const createdB = await requestB.post('/api/training-sessions').send({
       title: '学校B训练',
@@ -150,6 +151,16 @@ describe('Stage-driven Training Engine', () => {
     })
     expect(createdB.status).toBe(201)
     const sessionId = createdB.body.data.id as string
+
+    const personalList = await createAuthenticatedRequest(app, token).get('/api/training-sessions?page=1&pageSize=100')
+    expect(personalList.status).toBe(200)
+    expect(personalList.body.data.items.map((item: any) => item.id)).toContain(personalCreated.id)
+    expect(personalList.body.data.items.map((item: any) => item.id)).not.toContain(sessionId)
+
+    const implicitBList = await requestB.get('/api/training-sessions?page=1&pageSize=100')
+    expect(implicitBList.status).toBe(200)
+    expect(implicitBList.body.data.items.map((item: any) => item.id)).toContain(sessionId)
+    expect(implicitBList.body.data.items.map((item: any) => item.id)).not.toContain(personalCreated.id)
 
     const requestA = createAuthenticatedRequest(app, token, { organizationId: currentOrganizationId })
     const crossList = await requestA.get(`/api/training-sessions?organizationId=${otherOrganizationId}`)
