@@ -152,10 +152,10 @@ test.describe('coach-directed training engine @smoke @compact', () => {
 
 
 test.describe('stage-driven training acceptance', () => {
-  test('A: single Stage supports create, publish, student submit and report', async ({ browser }) => {
+  test('A: 单阶段支持创建、发布、学生提交和报告', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const studentContext = await browser.newContext({ storageState: accounts.campusStudent.storageState })
-    const session = await createTrainingSession(coachContext.request, 'E2E A 单 Stage', [allStage('单阶段训练')])
+    const session = await createTrainingSession(coachContext.request, 'E2E A 单阶段', [allStage('单阶段训练')])
     await publishAndStart(coachContext.request, session.id)
 
     const student = await studentContext.newPage()
@@ -177,7 +177,7 @@ test.describe('stage-driven training acceptance', () => {
 
   test('B: one global 当前阶段 advances through warmup, grouped, teaching and review', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
-    const session = await createTrainingSession(coachContext.request, 'E2E B 多 Stage', [
+    const session = await createTrainingSession(coachContext.request, 'E2E B 多阶段', [
       allStage('热身'),
       {
         name: '分层训练',
@@ -202,7 +202,7 @@ test.describe('stage-driven training acceptance', () => {
     const coach = await coachContext.newPage()
     await coach.goto(sessionPath(session.id))
     for (const expected of ['热身', '分层训练', '统一讲解', '自由补题']) {
-      await expect(coach.getByRole('heading', { name: `当前 Stage · ${expected}` })).toBeVisible()
+      await expect(coach.getByRole('heading', { name: `当前阶段 · ${expected}` })).toBeVisible()
       workspace = await trainingWorkspace(coachContext.request, session.id)
       expect(workspace.session.Stages.filter((stage: any) => stage.lifecycle === 'RUNNING')).toHaveLength(1)
       if (expected !== '自由补题') {
@@ -345,7 +345,7 @@ test.describe('stage-driven training acceptance', () => {
     await studentContext.close()
   })
 
-  test('F: Focus can target only the 当前阶段 and cannot reveal a future Stage', async ({ browser }) => {
+  test('F: Focus 只能作用于当前阶段且不能泄露未来阶段', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const studentContext = await browser.newContext({ storageState: accounts.campusStudent.storageState })
     const session = await createTrainingSession(coachContext.request, 'E2E F Focus', [
