@@ -19,7 +19,7 @@ export const TrainingProblemTimeActionSchema = z.enum(['REMIND', 'RECOMMEND_SWIT
 export const TrainingProblemTimePolicySchema = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('NONE') }),
   z.object({
-    mode: z.enum(['REMIND', 'RECOMMEND_SWITCH', 'LOCK_SUBMISSION', 'FORCE_SWITCH', 'SOFT', 'HARD', 'SWITCH_REQUIRED']),
+    mode: TrainingProblemTimeActionSchema,
     action: TrainingProblemTimeActionSchema.optional(),
     limitSeconds: z.number().int().min(60).max(86400),
   }),
