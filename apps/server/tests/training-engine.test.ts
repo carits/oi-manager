@@ -80,6 +80,73 @@ describe('Stage-driven Training Engine', () => {
     return response.body.data
   }
 
+  it('emits canonical domain events for lifecycle and runtime interventions', async () => {
+    const created = await createSession()
+    const token = generateTokenFromUser(coach.user)
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { Stages: { include: { Problems: true } }, Participants: true },
+    })
+    const stage = session.Stages[0]
+    const stageProblem = stage.Problems[0]
+
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/publish`)
+      .send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/stage-transitions`)
+      .send({ expectedRevision: 1, action: 'start', stageId: stage.id })).status).toBe(200)
+
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/commands`)
+      .send({ expectedRevision: 2, type: 'PAUSE_SESSION', targetType: 'ALL', payload: { mode: 'SOFT' } })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/commands`)
+      .send({ expectedRevision: 3, type: 'RESUME_SESSION', targetType: 'ALL', payload: {} })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/commands`)
+      .send({ expectedRevision: 4, type: 'SHOW_MESSAGE', targetType: 'ALL', payload: { message: '请关注当前题目' } })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/commands`)
+      .send({
+        expectedRevision: 5,
+        type: 'UNLOCK_FOR_USER',
+        targetType: 'USER',
+        targetId: student.user.id,
+        payload: { stageProblemId: stageProblem.id },
+      })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/commands`)
+      .send({
+        expectedRevision: 6,
+        type: 'SKIP_FOR_USER',
+        targetType: 'USER',
+        targetId: student.user.id,
+        payload: { stageProblemId: stageProblem.id },
+      })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/stage-transitions`)
+      .send({ expectedRevision: 7, action: 'end_session', stageId: stage.id, outcome: 'completed' })).status).toBe(200)
+
+    const events = await prisma.trainingSessionEvent.findMany({
+      where: { sessionId: session.id },
+      orderBy: { seq: 'asc' },
+      select: { type: true },
+    })
+    expect(events.map(event => event.type)).toEqual(expect.arrayContaining([
+      'training.session.scheduled',
+      'training.session.started',
+      'training.stage.started',
+      'training.session.paused',
+      'training.session.resumed',
+      'training.message.shown',
+      'training.problem.unlocked',
+      'training.problem.skipped',
+      'training.stage.ended',
+      'training.session.ended',
+    ]))
+  })
+
   it('supports a read-only rollout switch without interrupting existing runtime sessions', async () => {
     const existing = await createSession()
     const token = generateTokenFromUser(coach.user)
