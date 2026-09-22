@@ -30,7 +30,11 @@ export async function createAssignmentFromProblemList(user: AuthUser, problemLis
   if (!permission || permission === 'view') fail(403, '需要编辑权限才能发布作业')
 
   const team = await prisma.team.findUnique({ where: { id: teamId } })
-  if (!team || !team.organizationId || team.scope !== getResourceScope(user)) fail(404, '团队不存在')
+  if (!team
+    || !team.organizationId
+    || team.scope !== getResourceScope(user)
+    || !user.organizationId
+    || team.organizationId !== user.organizationId) fail(404, '团队不存在')
   const organizationId = team.organizationId
   const [member, creatorAuthorization] = await Promise.all([prisma.teamMember.findFirst({
     where: { teamId, userId: user.userId, status: 'active', role: { in: ['owner', 'admin'] } },
@@ -55,7 +59,9 @@ export async function createAssignmentFromProblemList(user: AuthUser, problemLis
       },
     },
   })
-  if (!problemList) fail(404, '题单不存在')
+  if (!problemList
+    || problemList.scope !== 'campus'
+    || problemList.organizationId !== organizationId) fail(404, '题单不存在')
   const entries = problemList.ProblemListSection.flatMap(section => section.ProblemListEntry)
   if (entries.length === 0) fail(400, '题单中没有题目，无法发布')
 
