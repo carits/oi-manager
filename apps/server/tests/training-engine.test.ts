@@ -149,6 +149,101 @@ describe('Stage-driven Training Engine', () => {
     expect(persisted.currentStageId).toBe(stage.id)
   })
 
+  it('freezes the running Stage definition while allowing future Stage edits', async () => {
+    const created = await createTwoStageSession('运行中结构冻结')
+    const token = generateTokenFromUser(coach.user)
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { Stages: { orderBy: { orderIndex: 'asc' } } },
+    })
+    const [currentStage, futureStage] = session.Stages
+
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/publish`)
+      .send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/stage-transitions`)
+      .send({ expectedRevision: 1, action: 'start', stageId: currentStage.id })).status).toBe(200)
+
+    const designResponse = await createAuthenticatedRequest(app, token)
+      .get(`/api/training-sessions/${session.id}/design`)
+    expect(designResponse.status).toBe(200)
+    const design = designResponse.body.data
+    const current = design.stages.find((stage: any) => stage.id === currentStage.id)
+    const future = design.stages.find((stage: any) => stage.id === futureStage.id)
+
+    const response = await createAuthenticatedRequest(app, token)
+      .put(`/api/training-sessions/${session.id}/structure`)
+      .send({
+        expectedRevision: design.statusRevision,
+        title: design.session.title,
+        description: design.session.description,
+        stages: design.stages.map((stage: any) => ({
+          id: stage.id,
+          clientKey: stage.clientKey,
+          name: stage.id === currentStage.id ? '不应写入的当前阶段新名称' : stage.id === futureStage.id ? '允许修改的未来阶段新名称' : stage.name,
+          description: stage.description,
+          kind: stage.kind,
+          audienceMode: stage.audienceMode,
+          endPolicy: stage.endPolicy,
+          accessPolicy: stage.accessPolicy,
+          accessScope: stage.accessScope || 'CURRENT_STAGE',
+          submissionMode: stage.submissionMode,
+          plannedDurationSeconds: stage.plannedDurationSeconds,
+          defaultTargetScore: stage.defaultTargetScore,
+          completionThreshold: stage.completionThreshold,
+          minDurationSeconds: stage.minDurationSeconds,
+          rules: stage.rules,
+          problems: stage.Problems.map((problem: any) => ({
+            assignmentId: problem.assignmentId,
+            clientKey: problem.clientKey,
+            problemId: problem.problemId,
+            testSetRevisionId: problem.testSetRevisionId,
+            alias: problem.alias,
+            unlockPolicy: problem.unlockPolicy,
+            targetScore: problem.targetScore,
+            scoreGoals: problem.scoreGoals,
+            timePolicy: problem.timePolicy,
+            stuckPolicy: problem.stuckPolicy,
+            allowedSubtaskIds: problem.allowedSubtaskIds,
+            strategyIntervalSeconds: problem.strategyIntervalSeconds,
+          })),
+          groups: stage.Groups.map((group: any) => ({
+            id: group.id,
+            clientKey: group.clientKey,
+            name: group.name,
+            accessPolicy: group.accessPolicy,
+            submissionMode: group.submissionMode,
+            rules: group.rules,
+            participantIds: group.participantIds,
+            problems: group.Problems.map((problem: any) => ({
+              assignmentId: problem.assignmentId,
+              clientKey: problem.clientKey,
+              problemId: problem.problemId,
+              testSetRevisionId: problem.testSetRevisionId,
+              alias: problem.alias,
+              unlockPolicy: problem.unlockPolicy,
+              targetScore: problem.targetScore,
+              scoreGoals: problem.scoreGoals,
+              timePolicy: problem.timePolicy,
+              stuckPolicy: problem.stuckPolicy,
+              allowedSubtaskIds: problem.allowedSubtaskIds,
+              strategyIntervalSeconds: problem.strategyIntervalSeconds,
+            })),
+          })),
+        })),
+      })
+    expect(response.status).toBe(200)
+
+    const persisted = await prisma.trainingSessionStage.findMany({
+      where: { sessionId: session.id },
+      orderBy: { orderIndex: 'asc' },
+      select: { id: true, name: true, lifecycle: true },
+    })
+    expect(persisted[0]).toMatchObject({ id: currentStage.id, name: current.name, lifecycle: 'RUNNING' })
+    expect(persisted[1]).toMatchObject({ id: futureStage.id, name: '允许修改的未来阶段新名称', lifecycle: 'PENDING' })
+  })
+
   it('creates Stage plans, pins the revision and reports missing progress as NOT_STARTED', async () => {
     const created = await createSession()
     const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: {
