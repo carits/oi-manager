@@ -1472,11 +1472,20 @@ export async function extendTrainingStageTime(userId: string, sessionId: string,
 }
 
 export async function getTrainingWorkspace(userId: string, sessionId: string) {
-  const session = await assertAccess(userId, sessionId)
+  const session = await loadSession(sessionId)
+  if (!session) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
   const manager = await canManageSession(userId, session)
   const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
-  const progress = participant ? await prisma.trainingSessionProblemProgress.findMany({ where: { participantId: participant.id } }) : []
-  const decisions = participant ? await prisma.trainingSessionStrategyDecision.findMany({ where: { sessionId, participantId: participant.id }, orderBy: { createdAt: 'desc' } }) : []
+  if (!manager && (participant?.status !== 'active' || session.status === 'DRAFT')) {
+    throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
+  }
+  const [progress, decisions, overrides] = await Promise.all([
+    participant ? prisma.trainingSessionProblemProgress.findMany({ where: { participantId: participant.id } }) : Promise.resolve([]),
+    participant ? prisma.trainingSessionStrategyDecision.findMany({ where: { sessionId, participantId: participant.id }, orderBy: { createdAt: 'desc' } }) : Promise.resolve([]),
+    participant && !manager
+      ? prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } })
+      : Promise.resolve([]),
+  ])
   const latestDecision = new Map<string, typeof decisions[number]>()
   for (const decision of decisions) if (decision.stageProblemId && !latestDecision.has(decision.stageProblemId)) latestDecision.set(decision.stageProblemId, decision)
   const progressByProblem = new Map(progress.map(item => [item.stageProblemId, item]))
@@ -1507,9 +1516,6 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
       lastDecision: last ? { decision: last.decision, reason: last.reason, createdAt: last.createdAt } : null,
     }]
   }))
-  const overrides = participant && !manager
-    ? await prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } })
-    : []
   const permissionStartedAt = performance.now()
   const permissionContext: TrainingPermissionContext = { session, manager, participant, overrides, progressByProblem }
   const resolvedPermissions = resolveAllTrainingPermissions(permissionContext)
