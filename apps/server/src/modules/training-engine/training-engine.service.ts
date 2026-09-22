@@ -2244,12 +2244,9 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     const improved = bestScore > (existing?.bestScore ?? -1)
     const assignment = await tx.trainingSessionStageParticipantAssignment.findUnique({ where: { stageId_participantId: { stageId: stageProblem.stageId, participantId: participant.id } } })
     const plan = stageProblem.Plans.find(item => item.groupId === (stageProblem.Stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
-    const snapshottedGoal = parseJsonObject(submission.trainingScoreGoalSnapshot)
     const effectiveRule = resolveEffectiveTrainingRule({ stage: stageProblem.Stage, group: plan?.Group || null, plan })
-    const targetScore = Number.isInteger(snapshottedGoal.score)
-      ? Number(snapshottedGoal.score)
-      : effectiveRule.scorePolicy.completionScore
-    const completed = accepted || bestScore >= targetScore
+    const completionScore = effectiveRule.scorePolicy.completionScore
+    const completed = accepted || bestScore >= completionScore
     const nextStatus = completed ? 'COMPLETED' : existing?.status === 'STUCK' && !improved ? 'STUCK' : 'WORKING'
     await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: nextStatus, stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
     await tx.trainingSessionScoreEvent.create({ data: { sessionId: submission.trainingSessionId!, participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, submissionId: submission.id, score: submission.score, verdict: submission.result } })
