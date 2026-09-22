@@ -81,10 +81,13 @@ describe('Stage-driven Training Engine', () => {
   }
 
   it('supports a read-only rollout switch without interrupting existing runtime sessions', async () => {
+    const existing = await createSession()
+    const token = generateTokenFromUser(coach.user)
+    const stage = await prisma.trainingSessionStage.findFirstOrThrow({ where: { sessionId: existing.id } })
     const previous = process.env.TRAINING_STAGE_ENGINE_ROLLOUT
     process.env.TRAINING_STAGE_ENGINE_ROLLOUT = 'read_only'
     try {
-      const response = await createAuthenticatedRequest(app, generateTokenFromUser(coach.user))
+      const blocked = await createAuthenticatedRequest(app, token)
         .post('/api/training-sessions')
         .send({
           title: '只读发布保护',
@@ -102,15 +105,19 @@ describe('Stage-driven Training Engine', () => {
             problems: [{ problemId: problem.id }],
           }],
         })
-      expect(response.status).toBe(503)
-      expect(response.body.error?.code || response.body.code).toBe('TRAINING_STAGE_ENGINE_READ_ONLY')
+      expect(blocked.status).toBe(503)
+      expect(blocked.body.error?.code || blocked.body.code).toBe('TRAINING_STAGE_ENGINE_READ_ONLY')
+
+      expect((await createAuthenticatedRequest(app, token)
+        .post(`/api/training-sessions/${existing.id}/publish`)
+        .send({ expectedRevision: 0 })).status).toBe(200)
+      expect((await createAuthenticatedRequest(app, token)
+        .post(`/api/training-sessions/${existing.id}/stage-transitions`)
+        .send({ expectedRevision: 1, action: 'start', stageId: stage.id })).status).toBe(200)
     } finally {
       if (previous === undefined) delete process.env.TRAINING_STAGE_ENGINE_ROLLOUT
       else process.env.TRAINING_STAGE_ENGINE_ROLLOUT = previous
     }
-
-    const created = await createSession()
-    expect(created.id).toBeTruthy()
   })
 
   it('serializes concurrent Stage transitions with advisory lock and revision CAS', async () => {
