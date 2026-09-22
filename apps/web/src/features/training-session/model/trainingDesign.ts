@@ -12,7 +12,8 @@ export type UnlockCondition = {
   value?: number
 }
 export type UnlockPolicy = { mode: 'ANY' | 'ALL'; conditions: UnlockCondition[] }
-export type ProblemTimePolicy = { mode: 'NONE' } | { mode: 'SOFT' | 'HARD' | 'SWITCH_REQUIRED'; limitSeconds: number }
+export type ProblemTimeAction = 'REMIND' | 'RECOMMEND_SWITCH' | 'LOCK_SUBMISSION' | 'FORCE_SWITCH'
+export type ProblemTimePolicy = { mode: 'NONE' } | { mode: ProblemTimeAction | 'SOFT' | 'HARD' | 'SWITCH_REQUIRED'; action?: ProblemTimeAction; limitSeconds: number }
 export type StuckPolicy = { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }
 export type Assignment = {
   id?: string
@@ -38,6 +39,7 @@ export type StageGroup = {
   clientKey: string
   name: string
   accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
+  accessScope: 'CURRENT_STAGE' | 'PREVIOUS_AND_CURRENT' | 'SESSION_ALL'
   submissionMode: 'ENABLED' | 'DISABLED'
   participantIds: string[]
   rules?: Record<string, unknown> | null
