@@ -303,7 +303,7 @@ test.describe('stage-driven training acceptance', () => {
       }),
     ])
     await publishAndStart(coachContext.request, session.id)
-    const stageProblem = await prisma.trainingSessionStageProblem.findFirstOrThrow({ where: { stage: { sessionId: session.id } } })
+    const stageProblem = await prisma.trainingSessionStageProblem.findFirstOrThrow({ where: { Stage: { sessionId: session.id } } })
     const problem = await prisma.problem.findUniqueOrThrow({ where: { id: ids.problem } })
 
     const student = await studentContext.newPage()
