@@ -70,7 +70,7 @@ export function TrainingProblemChain({
       <div className={styles.designColumnBody}>
         {activeStage ? (
           <fieldset disabled={readOnly} aria-label={readOnly ? "已开始阶段，只读" : "阶段定义"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-            {readOnly && <p className={styles.muted}>该 Stage 已开始，定义和题目计划永久只读；需要再次训练时请使用左侧“复制阶段”创建新的未来 Stage。</p>}
+            {readOnly && <p className={styles.muted}>该阶段已开始，定义和题目计划永久只读；需要再次训练时请使用左侧“复制阶段”创建新的未来阶段。</p>}
             <div className={styles.stageSettings}>
               <label className={styles.field}>
                 阶段名称
@@ -129,7 +129,7 @@ export function TrainingProblemChain({
                     }
                   >
                     <option value="ALL">全班统一</option>
-                    <option value="GROUPED">Stage 内分组</option>
+                    <option value="GROUPED">阶段内分组</option>
                   </Select>
                 </label>
                 <label className={styles.field}>
@@ -143,9 +143,9 @@ export function TrainingProblemChain({
                 <label className={styles.field}>
                   跨阶段可见范围
                   <Select value={activeStage.accessScope || "CURRENT_STAGE"} onChange={(event) => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, accessScope: event.target.value as Stage["accessScope"] }))}>
-                    <option value="CURRENT_STAGE">仅当前 Stage</option>
-                    <option value="PREVIOUS_AND_CURRENT">历史 + 当前 Stage</option>
-                    <option value="SESSION_ALL">整场 Session（未来只读）</option>
+                    <option value="CURRENT_STAGE">仅当前阶段</option>
+                    <option value="PREVIOUS_AND_CURRENT">历史 + 当前阶段</option>
+                    <option value="SESSION_ALL">整场训练（未来阶段只读）</option>
                   </Select>
                 </label>
                 <label className={styles.field}>
@@ -197,8 +197,8 @@ export function TrainingProblemChain({
                 )}
               </div>
               {activeStage.audienceMode === "GROUPED" && <div className={styles.assignmentPolicy}>
-                <strong>Stage 分组</strong>
-                <p>每个 Stage 的分组、学员和题目链彼此独立；先选择要编辑的分组。</p>
+                <strong>阶段分组</strong>
+                <p>每个阶段的分组、学员和题目链彼此独立；先选择要编辑的分组。</p>
                 <label className={styles.field}>当前编辑分组<Select value={activeGroup?.clientKey || ""} onChange={event => setActiveGroupKey(event.target.value)}>{activeStage.Groups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></label>
                 {activeStage.Groups.map((group, index) => {
                   const rules = (group.rules && typeof group.rules === "object" ? group.rules : {}) as Record<string, any>;
