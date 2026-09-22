@@ -884,6 +884,108 @@ describe('Stage-driven Training Engine', () => {
     expect(rejectedAfterEnd.status).toBe(409)
   })
 
+  it('keeps StageGroup assignments isolated across different Stages', async () => {
+    const secondProblem = await configuredProblem(coach.user.id)
+    const token = generateTokenFromUser(coach.user)
+    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({
+      title: '跨 Stage 分组隔离', teamId: team.id, participantUserIds: [student.user.id],
+      settings: { participantTarget: 'custom_students' },
+      stages: [
+        {
+          name: 'Stage 1', kind: 'TRAINING', audienceMode: 'GROUPED', endPolicy: 'MANUAL',
+          accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [],
+          groups: [
+            { clientKey: 's1-a', name: 'A组', participantIds: [student.user.id], problems: [{ problemId: problem.id }] },
+            { clientKey: 's1-b', name: 'B组', participantIds: [], problems: [{ problemId: secondProblem.id }] },
+          ],
+        },
+        {
+          name: 'Stage 2', kind: 'TRAINING', audienceMode: 'GROUPED', endPolicy: 'MANUAL',
+          accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [],
+          groups: [
+            { clientKey: 's2-a', name: 'A组', participantIds: [], problems: [{ problemId: problem.id }] },
+            { clientKey: 's2-b', name: 'B组', participantIds: [student.user.id], problems: [{ problemId: secondProblem.id }] },
+          ],
+        },
+      ],
+    })
+    expect(created.status).toBe(201)
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.body.data.id },
+      include: {
+        Stages: { orderBy: { orderIndex: 'asc' }, include: { Groups: true, Problems: true } },
+        Participants: true,
+      },
+    })
+    const participant = session.Participants[0]
+    const [stage1, stage2] = session.Stages
+    const stage1A = stage1.Groups.find(group => group.name === 'A组')!
+    const stage2B = stage2.Groups.find(group => group.name === 'B组')!
+
+    expect(await prisma.trainingSessionStageParticipantAssignment.findUnique({
+      where: { stageId_participantId: { stageId: stage1.id, participantId: participant.id } },
+      select: { groupId: true },
+    })).toEqual({ groupId: stage1A.id })
+    expect(await prisma.trainingSessionStageParticipantAssignment.findUnique({
+      where: { stageId_participantId: { stageId: stage2.id, participantId: participant.id } },
+      select: { groupId: true },
+    })).toEqual({ groupId: stage2B.id })
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: stage1.id })).status).toBe(200)
+    let workspace = await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/training-sessions/${session.id}`)
+    expect(workspace.status).toBe(200)
+    expect(workspace.body.data.participant.currentGroupId).toBe(stage1A.id)
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/stage-transitions`).send({ expectedRevision: 2, action: 'advance', stageId: stage1.id, outcome: 'completed' })).status).toBe(200)
+    workspace = await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/training-sessions/${session.id}`)
+    expect(workspace.status).toBe(200)
+    expect(workspace.body.data.participant.currentGroupId).toBe(stage2B.id)
+
+    expect(await prisma.trainingSessionStageParticipantAssignment.findUnique({
+      where: { stageId_participantId: { stageId: stage1.id, participantId: participant.id } },
+      select: { groupId: true },
+    })).toEqual({ groupId: stage1A.id })
+  })
+
+  it('keeps historical STUCK and WORKING progress out of the current Stage dashboard', async () => {
+    const created = await createTwoStageSession('Dashboard 当前 Stage 隔离')
+    const token = generateTokenFromUser(coach.user)
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.id },
+      include: {
+        Stages: { orderBy: { orderIndex: 'asc' }, include: { Problems: true } },
+        Participants: true,
+      },
+    })
+    const [stage1, stage2] = session.Stages
+    const participant = session.Participants[0]
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: stage1.id })).status).toBe(200)
+
+    await prisma.trainingSessionProblemProgress.create({
+      data: {
+        participantId: participant.id,
+        stageProblemId: stage1.Problems[0].id,
+        status: 'STUCK',
+        attemptCount: 4,
+        activeSeconds: 1800,
+        stuckDetectedAt: new Date(),
+        lastProgressAt: new Date(),
+      },
+    })
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/stage-transitions`).send({ expectedRevision: 2, action: 'advance', stageId: stage1.id, outcome: 'completed' })).status).toBe(200)
+
+    const dashboard = await getCoachDashboard(coach.user.id, session.id)
+    expect(dashboard.session.currentStageId).toBe(stage2.id)
+    expect(dashboard.summary).toMatchObject({ working: 0, stuck: 0, completed: 0 })
+    expect(dashboard.participants[0]).toMatchObject({ working: false, stuck: false, completed: false })
+    expect(dashboard.participants[0].progress).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stageProblemId: stage1.Problems[0].id, status: 'STUCK' }),
+    ]))
+  })
+
   it('previews explainable grouping and applies next-Stage changes only on transition', async () => {
     const peer = await createTestUser({ organization: { role: 'student', organizationId: coach.organization!.organizationId } })
     await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: peer.user.id, userType: 'student', role: 'member', status: 'active', joinedAt: new Date() } })
