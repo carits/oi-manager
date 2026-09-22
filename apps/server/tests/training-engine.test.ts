@@ -80,6 +80,39 @@ describe('Stage-driven Training Engine', () => {
     return response.body.data
   }
 
+  it('supports a read-only rollout switch without interrupting existing runtime sessions', async () => {
+    const previous = process.env.TRAINING_STAGE_ENGINE_ROLLOUT
+    process.env.TRAINING_STAGE_ENGINE_ROLLOUT = 'read_only'
+    try {
+      const response = await createAuthenticatedRequest(app, generateTokenFromUser(coach.user))
+        .post('/api/training-sessions')
+        .send({
+          title: '只读发布保护',
+          teamId: team.id,
+          participantUserIds: [student.user.id],
+          settings: { participantTarget: 'custom_students' },
+          stages: [{
+            name: '训练',
+            kind: 'TRAINING',
+            audienceMode: 'ALL',
+            endPolicy: 'MANUAL',
+            accessPolicy: 'ALL_AT_ONCE',
+            accessScope: 'CURRENT_STAGE',
+            submissionMode: 'ENABLED',
+            problems: [{ problemId: problem.id }],
+          }],
+        })
+      expect(response.status).toBe(503)
+      expect(response.body.error?.code || response.body.code).toBe('TRAINING_STAGE_ENGINE_READ_ONLY')
+    } finally {
+      if (previous === undefined) delete process.env.TRAINING_STAGE_ENGINE_ROLLOUT
+      else process.env.TRAINING_STAGE_ENGINE_ROLLOUT = previous
+    }
+
+    const created = await createSession()
+    expect(created.id).toBeTruthy()
+  })
+
   it('serializes concurrent Stage transitions with advisory lock and revision CAS', async () => {
     const created = await createSession()
     const token = generateTokenFromUser(coach.user)
@@ -130,7 +163,7 @@ describe('Stage-driven Training Engine', () => {
   })
 
   it('enforces an explicit single-problem time policy instead of a hard-coded switch rule', async () => {
-    const created = await createSession({ problems: [{ problemId: problem.id, timePolicy: { mode: 'HARD', limitSeconds: 60 }, stuckPolicy: { minActiveSeconds: 300, minAttempts: 2, noImprovementSeconds: 180 } }] })
+    const created = await createSession({ problems: [{ problemId: problem.id, timePolicy: { mode: 'LOCK_SUBMISSION', action: 'LOCK_SUBMISSION', limitSeconds: 60 }, stuckPolicy: { minActiveSeconds: 300, minAttempts: 2, noImprovementSeconds: 180 } }] })
     const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: { Stages: { include: { Problems: true } }, Participants: true } })
     const stage = session.Stages[0]
     const stageProblem = stage.Problems[0]
