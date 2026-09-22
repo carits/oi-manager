@@ -9,6 +9,7 @@ import { BUILTIN_TRAINING_TEMPLATES, getBuiltinTrainingTemplate } from './traini
 import { TrainingEngineError } from './training-engine.errors'
 import { eligibleTrainingParticipantIds, validateTrainingParticipantTarget } from './application/training-roster.service'
 import { trainingMetrics } from './training-metrics'
+import { assertTrainingDefinitionWritesEnabled } from './training-rollout'
 import {
   evaluateProblemTimePolicy,
   normalizeTrainingAccessScope,
@@ -575,6 +576,7 @@ async function createStageGraph(tx: Prisma.TransactionClient, sessionId: string,
 
 
 export async function createTrainingSession(userId: string, body: any) {
+  assertTrainingDefinitionWritesEnabled()
   const scope = await assertScopeManagement(userId, body || {})
   const template = await resolveTrainingTemplate(userId, body?.templateKey, scope)
   const sessionType = enumValue(body?.sessionType || template?.sessionType, SESSION_TYPES, 'GENERAL', '训练类型')
@@ -743,6 +745,7 @@ export async function getTrainingDesignProblem(userId: string, sessionId: string
 }
 
 export async function replaceTrainingStructure(userId: string, sessionId: string, body: any) {
+  assertTrainingDefinitionWritesEnabled()
   const session = await assertManage(userId, sessionId)
   if (['ENDED', 'ARCHIVED'].includes(session.status)) throw new TrainingEngineError(409, 'TRAINING_STRUCTURE_FROZEN', '已结束训练的结构不能修改')
   const expectedRevision = Number(body?.expectedRevision)
