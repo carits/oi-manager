@@ -130,3 +130,14 @@ JSON API 全部通过 `packages/contracts` 和 Training Feature API。核心结�
 7. 对账 Revision、Progress、Submission、Hint 和 Event 引用后删除旧 Group、participant groupId、productMode 和 StageMode 写路径。
 
 迁移不会重测历史提交，也不会伪造回滚事件。
+
+## 运行时入口与迁移边界
+
+当前运行时只使用 Stage 驱动的训练接口。新的写入入口为：
+
+- /api/training-sessions
+- /api/training-session-templates
+
+旧的 /api/trainings 接口已经停用，集合路径和所有嵌套路径统一返回 HTTP 410，并返回错误码 TRAINING_LEGACY_API_RETIRED；不会再猜测跳转到新地址。
+
+旧训练模型仅由一次性迁移服务读取，用于生成 TrainingSession、Stage、Assignment、ProblemPlan 和历史引用。迁移不重新评测、不伪造提交、不双写旧接口。迁移完成前保留旧模型及其迁移引用，以便审计与对账；运行时读写不再依赖旧路由。
