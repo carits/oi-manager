@@ -3914,8 +3914,6 @@ model TrainingSession {
   defaultSubmissionMode TrainingEngineSubmissionMode    @default(ENABLED)
   pauseMode             TrainingEnginePauseMode?
   allowHints            Boolean                         @default(true)
-  allowSolution         Boolean                         @default(false)
-  allowDiscussion       Boolean                         @default(false)
   rankingMode           TrainingEngineRankingMode       @default(PROGRESS_ONLY)
   peerVisibility        TrainingEnginePeerVisibility    @default(PROGRESS)
   joinMode              TrainingEngineJoinMode          @default(CURRENT_STAGE)
