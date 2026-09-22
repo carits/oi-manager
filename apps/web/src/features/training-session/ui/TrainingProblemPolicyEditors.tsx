@@ -41,7 +41,7 @@ function ScoreGoalsEditor({ assignment, onChange }: { assignment: Assignment; on
   </label>
 }
 
-const canonicalTimeMode = (mode: Assignment["timePolicy"] extends infer _ ? string : never): ProblemTimeAction | "NONE" => {
+const canonicalTimeMode = (mode: string): ProblemTimeAction | "NONE" => {
   if (mode === "SOFT") return "REMIND"
   if (mode === "HARD") return "LOCK_SUBMISSION"
   if (mode === "SWITCH_REQUIRED") return "FORCE_SWITCH"
