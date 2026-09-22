@@ -140,7 +140,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     setActiveStageKey(copy.clientKey);
   };
   const removeStage = (stage: Stage) => {
-    if (stage.lifecycle && stage.lifecycle !== "PENDING") return toast.error("已开始 Stage 永久只读，只能复制为新的未来 Stage");
+    if (stage.lifecycle && stage.lifecycle !== "PENDING") return toast.error("已开始阶段永久只读，只能复制为新的未来阶段");
     replaceStages((current) =>
       current.filter((item) => item.clientKey !== stage.clientKey),
     );
@@ -376,7 +376,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       <PageFrame>
         <Empty
           title="训练结构已冻结"
-          description="已结束训练不能再编排；已运行 Stage 永久只读。"
+          description="已结束训练不能再编排；已运行阶段永久只读。"
           action={
             <Button onClick={() => router.push(runtimePath)}>
               返回运行工作台
@@ -391,7 +391,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       <div className={styles.stack}>
         <PageHeader
           title={`编排：${design.session.title}`}
-          description={design.session.status === "DRAFT" ? "发布前可编辑全部 Stage；开始后只有未来 Stage 可调整。" : "运行中和历史 Stage 永久只读；可继续编辑、追加或复制未来 Stage。"}
+          description={design.session.status === "DRAFT" ? "发布前可编辑全部阶段；开始后只有未来阶段可调整。" : "运行中和历史阶段永久只读；可继续编辑、追加或复制未来阶段。"}
           breadcrumbs={[
             { label: "教练训练", href: runtimePath.replace(/\/[^/]+$/, "") },
             { label: "训练设计" },
@@ -636,8 +636,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           isOpen={templateOpen}
           onClose={() => setTemplateOpen(false)}
           onSubmit={() => void saveAsTemplate()}
-          title="保存 Stage 模板"
-          description="模板只保存 Stage、分组和训练规则骨架，不复制题目、学员、提交或运行进度。"
+          title="保存阶段模板"
+          description="模板只保存阶段、分组和训练规则骨架，不复制题目、学员、提交或运行进度。"
           submitText="保存模板"
           submitDisabled={!templateName.trim()}
           loading={templateSaving}
