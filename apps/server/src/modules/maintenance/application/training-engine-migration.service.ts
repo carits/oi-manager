@@ -195,7 +195,7 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
         activeElapsedSeconds: status === 'ENDED' ? historicalDurationSeconds : 0,
       } })
       if (status === 'RUNNING') {
-        await tx.trainingSession.update({ where: { id: session.id }, data: { currentStageId: status === 'RUNNING' ? stage.id : null } })
+        await tx.trainingSession.update({ where: { id: session.id }, data: { currentStageId: stage.id } })
       }
       const stageProblems = new Map<string, string>()
       for (const problem of row.TrainingProblem) {
