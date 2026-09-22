@@ -852,10 +852,10 @@ export async function publishTrainingSession(userId: string, sessionId: string, 
   const assigned = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, select: { userId: true } })
   const userIds = assigned.length ? assigned.map(item => item.userId) : await eligibleTrainingParticipantIds(session)
   await prisma.$transaction(async tx => {
-    const claimed = await tx.trainingSession.updateMany({ where: { id: sessionId, status: 'DRAFT', statusRevision: expectedRevision }, data: { status: 'SCHEDULED', statusRevision: { increment: 1 }, currentStageId: session.Stages[0].id } })
+    const claimed = await tx.trainingSession.updateMany({ where: { id: sessionId, status: 'DRAFT', statusRevision: expectedRevision }, data: { status: 'SCHEDULED', statusRevision: { increment: 1 }, currentStageId: null } })
     if (!claimed.count) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练已被其他管理员修改，请刷新')
     for (const participantUserId of [...new Set(userIds)]) {
-      const participant = await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active', currentStageId: session.Stages[0].id }, create: { sessionId, userId: participantUserId, currentStageId: session.Stages[0].id } })
+      const participant = await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active', currentStageId: null }, create: { sessionId, userId: participantUserId, currentStageId: null } })
       for (const stage of session.Stages) await tx.trainingSessionStageParticipantAssignment.upsert({ where: { stageId_participantId: { stageId: stage.id, participantId: participant.id } }, update: {}, create: { stageId: stage.id, participantId: participant.id, assignedBy: userId, source: 'publish' } })
     }
     await appendEvent(tx, sessionId, TrainingEventTypes.SESSION_SCHEDULED, 'ALL', null, { scheduledStartAt: session.scheduledStartAt })
