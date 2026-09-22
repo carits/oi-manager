@@ -1,3 +1,5 @@
+import { TrainingEngineError } from './training-engine.errors'
+
 export type TrainingStageEngineRolloutMode = 'enabled' | 'read_only'
 
 export function trainingStageEngineRolloutMode(): TrainingStageEngineRolloutMode {
@@ -8,9 +10,6 @@ export function trainingStageEngineRolloutMode(): TrainingStageEngineRolloutMode
 
 export function assertTrainingDefinitionWritesEnabled() {
   if (trainingStageEngineRolloutMode() === 'read_only') {
-    const error = new Error('Training Stage Engine is in read-only rollout mode') as Error & { code?: string; statusCode?: number }
-    error.code = 'TRAINING_STAGE_ENGINE_READ_ONLY'
-    error.statusCode = 503
-    throw error
+    throw new TrainingEngineError(503, 'TRAINING_STAGE_ENGINE_READ_ONLY', 'Training Stage Engine 当前处于只读发布模式，暂不允许新建或修改训练 Definition')
   }
 }
