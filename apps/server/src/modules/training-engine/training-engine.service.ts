@@ -769,7 +769,7 @@ export async function replaceTrainingStructure(userId: string, sessionId: string
     const frozenStages = existingStages.filter(stage => stage.lifecycle !== 'PENDING' || stage.RuntimeSnapshot)
     const requested = new Set(requestedStageIds)
     const missingFrozen = frozenStages.filter(stage => !requested.has(stage.id))
-    if (missingFrozen.length) throw new TrainingEngineError(409, 'TRAINING_STAGE_FROZEN', '运行中或已结束的 Stage 必须保留，不能删除或回滚')
+    if (missingFrozen.length) throw new TrainingEngineError(409, 'TRAINING_STAGE_FROZEN', '运行中或已结束的阶段必须保留，不能删除或回滚')
     const removedPending = existingStages.filter(stage => stage.lifecycle === 'PENDING' && !requested.has(stage.id))
     const removalImpact = removedPending.map(stage => ({
       stageId: stage.id,
@@ -780,7 +780,7 @@ export async function replaceTrainingStructure(userId: string, sessionId: string
       problemPlanCount: stage._count.ProblemPlans,
     })).filter(item => item.hintCount || item.participantAssignmentCount || item.groupCount || item.problemPlanCount)
     if (removalImpact.length && body?.confirmDependentRemoval !== true) {
-      throw new TrainingEngineError(409, 'TRAINING_STRUCTURE_REMOVAL_REQUIRES_CONFIRMATION', `删除未来 Stage 将同时移除 ${removalImpact.reduce((sum, item) => sum + item.hintCount, 0)} 条提示、${removalImpact.reduce((sum, item) => sum + item.participantAssignmentCount, 0)} 条预分组和 ${removalImpact.reduce((sum, item) => sum + item.problemPlanCount, 0)} 条题目要求，请确认后重试`, { stages: removalImpact })
+      throw new TrainingEngineError(409, 'TRAINING_STRUCTURE_REMOVAL_REQUIRES_CONFIRMATION', `删除未来阶段将同时移除 ${removalImpact.reduce((sum, item) => sum + item.hintCount, 0)} 条提示、${removalImpact.reduce((sum, item) => sum + item.participantAssignmentCount, 0)} 条预分组和 ${removalImpact.reduce((sum, item) => sum + item.problemPlanCount, 0)} 条题目要求，请确认后重试`, { stages: removalImpact })
     }
     await tx.trainingSessionStage.updateMany({ where: { sessionId, lifecycle: 'PENDING' }, data: { orderIndex: { increment: 10000 } } })
     const keepStageIds: string[] = []
@@ -788,7 +788,7 @@ export async function replaceTrainingStructure(userId: string, sessionId: string
       const requestedStageId = entry.stage.id && stageById.has(entry.stage.id) ? entry.stage.id : null
       const existing = requestedStageId ? stageById.get(requestedStageId)! : null
       if (existing && (existing.lifecycle !== 'PENDING' || existing.RuntimeSnapshot)) {
-        if (existing.orderIndex !== entry.stageIndex) throw new TrainingEngineError(409, 'TRAINING_STAGE_FROZEN', `Stage「${existing.name}」已经开始，不能重新排序`)
+        if (existing.orderIndex !== entry.stageIndex) throw new TrainingEngineError(409, 'TRAINING_STAGE_FROZEN', `阶段「${existing.name}」已经开始，不能重新排序`)
         keepStageIds.push(existing.id)
         continue
       }
@@ -1256,7 +1256,7 @@ async function createStageSnapshot(tx: Prisma.TransactionClient, stageId: string
 
 async function startStage(tx: Prisma.TransactionClient, sessionId: string, stageId: string, at: Date, running = true) {
   const stage = await tx.trainingSessionStage.findFirst({ where: { id: stageId, sessionId }, include: { RuntimeSnapshot: true } })
-  if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '目标 Stage 不是待开始状态')
+  if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '目标阶段不是待开始状态')
 
   // Apply deferred next-Stage moves before validating GROUPED assignments.
   await tx.trainingSessionStageGroupChange.updateMany({ where: { sessionId, targetStageId: stageId, effectiveMode: 'NEXT_STAGE', effectiveAt: null }, data: { effectiveAt: at } })
@@ -1279,7 +1279,7 @@ async function startStage(tx: Prisma.TransactionClient, sessionId: string, stage
       throw new TrainingEngineError(
         422,
         'TRAINING_GROUP_ASSIGNMENT_INCOMPLETE',
-        `分组 Stage 启动失败：${invalidParticipantIds.length} 名 active participant 没有有效的本 Stage 分组`,
+        `分组阶段启动失败：${invalidParticipantIds.length} 名有效学员没有本阶段的有效分组`,
       )
     }
   }
@@ -1319,8 +1319,8 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   if (input.action === 'start') {
     if (current.status !== 'SCHEDULED') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有已发布训练可以开始')
     const first = current.Stages.find(stage => stage.lifecycle === 'PENDING')
-    if (!first) throw new TrainingEngineError(422, 'TRAINING_STRUCTURE_INCOMPLETE', '训练没有待开始 Stage')
-    if (input.stageId !== first.id) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_INVALID', '只能从时间轴中的第一个待开始 Stage 启动')
+    if (!first) throw new TrainingEngineError(422, 'TRAINING_STRUCTURE_INCOMPLETE', '训练没有待开始阶段')
+    if (input.stageId !== first.id) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_INVALID', '只能从时间轴中的第一个待开始阶段启动')
     await startStage(tx, input.sessionId, first.id, at)
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: 'RUNNING', startedAt: current.startedAt || at, runningSince: at, pausedAt: null, pauseMode: null, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, input.sessionId, TrainingEventTypes.SESSION_STARTED, 'ALL', null, { stageId: first.id, ...eventMeta })
@@ -1332,7 +1332,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
 
   if (input.action === 'skip_pending') {
     const stage = current.Stages.find(item => item.id === input.stageId)
-    if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '只能跳过尚未开始的 Stage')
+    if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '只能跳过尚未开始的阶段')
     await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endNote: input.reason } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_SKIPPED, 'ALL', null, { stageId: stage.id, reason: input.reason, ...eventMeta })
@@ -1342,7 +1342,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   }
 
   const running = current.Stages.find(stage => stage.id === current.currentStageId && stage.lifecycle === 'RUNNING')
-  if (!running || running.id !== input.stageId || !['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '当前没有运行中的 Stage')
+  if (!running || running.id !== input.stageId || !['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '当前没有运行中的阶段')
   const increment = current.status === 'RUNNING' ? activeStageIncrement(running, at) : 0
   const outcome = input.outcome || 'completed'
   const next = input.nextStageId
@@ -1377,7 +1377,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     return 'ended' as const
   }
 
-  if (!next || next.lifecycle !== 'PENDING' || next.orderIndex <= running.orderIndex) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_INVALID', '只能进入当前 Stage 之后的待开始 Stage')
+  if (!next || next.lifecycle !== 'PENDING' || next.orderIndex <= running.orderIndex) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_INVALID', '只能进入当前阶段之后的待开始阶段')
   await startStage(tx, input.sessionId, next.id, at, current.status === 'RUNNING')
   await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: current.status === 'PAUSED' ? 'PAUSED' : 'RUNNING', runningSince: current.status === 'RUNNING' ? at : null, activeElapsedSeconds: { increment }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
   await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_STARTED, 'ALL', null, { stageId: next.id, fromStageId: running.id, ...eventMeta })
@@ -1392,11 +1392,11 @@ export async function executeStageTransition(userId: string, sessionId: string, 
   const expectedRevision = Number(body?.expectedRevision)
   if (expectedRevision !== session.statusRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
   const action = String(body?.action || '').toLowerCase()
-  if (!['start', 'advance', 'skip_pending', 'end_session'].includes(action)) throw new TrainingEngineError(422, 'INVALID_TRAINING_STAGE_TRANSITION', '不支持的 Stage 转换')
+  if (!['start', 'advance', 'skip_pending', 'end_session'].includes(action)) throw new TrainingEngineError(422, 'INVALID_TRAINING_STAGE_TRANSITION', '不支持的阶段转换')
   const reason = body?.reason ? boundedText(body.reason, 2000, '转换原因', 1) : null
   const outcome = String(body?.outcome || 'completed').toLowerCase()
-  if (action === 'advance' && !['completed', 'ended_early'].includes(outcome)) throw new TrainingEngineError(422, 'INVALID_TRAINING_STAGE_OUTCOME', 'Stage 结果不受支持')
-  if ((action === 'skip_pending' || outcome === 'ended_early') && !reason) throw new TrainingEngineError(422, 'TRAINING_STAGE_REASON_REQUIRED', '提前结束或跳过 Stage 必须填写原因')
+  if (action === 'advance' && !['completed', 'ended_early'].includes(outcome)) throw new TrainingEngineError(422, 'INVALID_TRAINING_STAGE_OUTCOME', '阶段结果不受支持')
+  if ((action === 'skip_pending' || outcome === 'ended_early') && !reason) throw new TrainingEngineError(422, 'TRAINING_STAGE_REASON_REQUIRED', '提前结束或跳过阶段必须填写原因')
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
     await applyStageTransition(tx, { sessionId, actorUserId: userId, action: action as StageTransitionAction, stageId: String(body?.stageId || ''), outcome: outcome as 'completed' | 'ended_early', endReason: outcome === 'ended_early' ? 'TEACHER_ENDED_EARLY' : action === 'end_session' ? 'SESSION_ENDED' : 'TEACHER_ENDED', nextStageId: body?.nextStageId ? String(body.nextStageId) : null, reason, expectedRevision })
@@ -1421,8 +1421,8 @@ export async function getTrainingStageGroupSuggestions(userId: string, sessionId
       },
     },
   })
-  if (!stage) throw new TrainingEngineError(404, 'TRAINING_STAGE_NOT_FOUND', 'Stage 不存在')
-  if (stage.lifecycle !== 'PENDING' || stage.audienceMode !== 'GROUPED' || !stage.Groups.length) throw new TrainingEngineError(409, 'TRAINING_GROUP_SUGGESTION_UNAVAILABLE', '只能为尚未开始的分组 Stage 生成建议')
+  if (!stage) throw new TrainingEngineError(404, 'TRAINING_STAGE_NOT_FOUND', '阶段不存在')
+  if (stage.lifecycle !== 'PENDING' || stage.audienceMode !== 'GROUPED' || !stage.Groups.length) throw new TrainingEngineError(409, 'TRAINING_GROUP_SUGGESTION_UNAVAILABLE', '只能为尚未开始的分组阶段生成建议')
   const previousProblemIds = new Set(stage.Session.Stages.filter(item => item.orderIndex < stage.orderIndex).flatMap(item => item.Problems.map(problem => problem.id)))
   const ranked = stage.Session.Participants.map(participant => {
     const prior = participant.Progress.filter(progress => previousProblemIds.has(progress.stageProblemId))
@@ -1464,11 +1464,11 @@ export async function changeTrainingStageGroup(userId: string, sessionId: string
     if (!participant) throw new TrainingEngineError(404, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不属于当前训练')
     const targetStageId = effectiveMode === 'NEXT_STAGE' ? String(body?.targetStageId || '') : stageId
     const targetStage = await tx.trainingSessionStage.findFirst({ where: { id: targetStageId, sessionId, audienceMode: 'GROUPED' } })
-    if (!targetStage) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_UNAVAILABLE', '目标 Stage 不支持分组')
-    if (effectiveMode === 'IMMEDIATE' && (current.currentStageId !== stageId || targetStage.lifecycle !== 'RUNNING')) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '立即换组只能作用于当前运行 Stage')
-    if (effectiveMode === 'NEXT_STAGE' && targetStage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '下一 Stage 换组只能预设待开始 Stage')
+    if (!targetStage) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_UNAVAILABLE', '目标阶段不支持分组')
+    if (effectiveMode === 'IMMEDIATE' && (current.currentStageId !== stageId || targetStage.lifecycle !== 'RUNNING')) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '立即换组只能作用于当前运行阶段')
+    if (effectiveMode === 'NEXT_STAGE' && targetStage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '下一阶段换组只能预设待开始阶段')
     const toGroup = await tx.trainingSessionStageGroup.findFirst({ where: { id: String(body?.toGroupId || ''), stageId: targetStageId } })
-    if (!toGroup) throw new TrainingEngineError(422, 'TRAINING_GROUP_NOT_FOUND', '目标分组不属于目标 Stage')
+    if (!toGroup) throw new TrainingEngineError(422, 'TRAINING_GROUP_NOT_FOUND', '目标分组不属于目标阶段')
     const old = await tx.trainingSessionStageParticipantAssignment.findUnique({ where: { stageId_participantId: { stageId: targetStageId, participantId: participant.id } } })
     await tx.trainingSessionStageParticipantAssignment.upsert({ where: { stageId_participantId: { stageId: targetStageId, participantId: participant.id } }, update: { groupId: toGroup.id, assignedAt: new Date(), assignedBy: userId, source: effectiveMode.toLowerCase() }, create: { stageId: targetStageId, participantId: participant.id, groupId: toGroup.id, assignedBy: userId, source: effectiveMode.toLowerCase() } })
     let clearCurrentProblem = false
@@ -1495,9 +1495,9 @@ export async function extendTrainingStageTime(userId: string, sessionId: string,
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
     const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId } })
-    if (current.statusRevision !== expectedRevision || current.currentStageId !== stageId) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '当前 Stage 已变化，请刷新')
+    if (current.statusRevision !== expectedRevision || current.currentStageId !== stageId) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '当前阶段已变化，请刷新')
     const stage = await tx.trainingSessionStage.findFirst({ where: { id: stageId, sessionId, lifecycle: 'RUNNING' } })
-    if (!stage) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '只能延长当前运行 Stage')
+    if (!stage) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '只能延长当前运行阶段')
     await tx.trainingSessionStageTimeAdjustment.create({ data: { stageId, seconds, reason, createdBy: userId } })
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, sessionId, TrainingEventTypes.STAGE_TIME_EXTENDED, 'ALL', null, { stageId, seconds, reason })
@@ -1696,7 +1696,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
     const focusProblem = async () => {
       if (current.status !== 'RUNNING') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有进行中的训练可以聚焦题目')
       const stageProblemId = String(payload.stageProblemId || '')
-      if (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === stageProblemId)) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能聚焦当前 Stage 的题目')
+      if (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === stageProblemId)) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能聚焦当前阶段的题目')
       await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: { in: ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'] }, ...sameOverlayTarget(targetType, targetId) }, data: { status: 'ended', endedAt: new Date() } })
       await tx.trainingSessionOverlay.create({ data: { sessionId, type: ['SOFT_FOCUS', 'EXAM_FOCUS'].includes(String(payload.mode)) ? String(payload.mode) : 'LOCKED_FOCUS', targetType, targetId, stageProblemId, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
       const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' } })
@@ -1717,7 +1717,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
     const createOverlay = async () => {
       if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能应用实时规则')
       if (type === 'LOCK_PROBLEM' && !payload.stageProblemId) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_REQUIRED', '锁题命令必须指定训练题目')
-      if (type === 'LOCK_PROBLEM' && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能锁定当前 Stage 的题目')
+      if (type === 'LOCK_PROBLEM' && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能锁定当前阶段的题目')
       if (type === 'SHOW_MESSAGE') {
         payload.message = boundedText(payload.message, 2000, '教练消息', 1)
         payload.messageType = ['INFO', 'WARNING', 'INSTRUCTION', 'COUNTDOWN'].includes(String(payload.messageType || '').toUpperCase()) ? String(payload.messageType).toUpperCase() : 'INFO'
@@ -1726,7 +1726,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
     }
 
     const endOverlay = async () => {
-      if (type === 'UNLOCK_PROBLEM' && payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能解锁当前 Stage 的题目')
+      if (type === 'UNLOCK_PROBLEM' && payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能解锁当前阶段的题目')
       const endingType = type === 'ENABLE_SUBMISSION' ? 'DISABLE_SUBMISSION' : type === 'UNLOCK_PROBLEM' ? 'LOCK_PROBLEM' : 'MESSAGE'
       await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: endingType, ...sameOverlayTarget(targetType, targetId), ...(payload.stageProblemId ? { stageProblemId: String(payload.stageProblemId) } : {}) }, data: { status: 'ended', endedAt: new Date() } })
     }
@@ -1735,7 +1735,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
       if (targetType !== 'USER' || !targetId) throw new TrainingEngineError(422, 'TRAINING_COMMAND_TARGET_REQUIRED', '个人干预必须指定用户')
       const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } } })
       if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
-      if (payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '个人干预只能作用于当前 Stage 的题目')
+      if (payload.stageProblemId && (!session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '个人干预只能作用于当前阶段的题目')
       await tx.trainingSessionUserOverride.create({ data: { sessionId, userId: targetId, type: type === 'SKIP_FOR_USER' ? 'SKIP_PROBLEM' : 'UNLOCK_PROBLEM', stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
       if (type === 'SKIP_FOR_USER' && payload.stageProblemId) await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: String(payload.stageProblemId) } }, update: { status: 'SKIPPED', lastProgressAt: new Date() }, create: { participantId: participant.id, stageProblemId: String(payload.stageProblemId), status: 'SKIPPED', lastProgressAt: new Date() } })
     }
@@ -1746,7 +1746,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
       if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
       const stageProblemId = String(payload.stageProblemId || '')
       if (!stageProblemId || !session.currentStageId || !session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.some(problem => problem.id === stageProblemId)) {
-        throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能清除当前 Stage 题目的卡题状态')
+        throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能清除当前阶段题目的卡题状态')
       }
       const progress = await tx.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })
       if (progress?.status === 'STUCK') {
@@ -1926,7 +1926,7 @@ export async function createTrainingHint(userId: string, sessionId: string, body
   const stageProblemId = String(body?.stageProblemId || '')
   const belongs = await prisma.trainingSessionStageProblem.findFirst({ where: { id: stageProblemId, Stage: { sessionId } }, include: { Stage: { select: { lifecycle: true } } } })
   if (!belongs) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_FOUND', '训练题目不存在')
-  if (belongs.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', 'Stage 开始后提示定义不可新增或修改，请使用运行时开放已有提示')
+  if (belongs.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', '阶段开始后提示定义不可新增或修改，请使用运行时开放已有提示')
   const level = boundedInteger(body?.level, 1, 20, '提示级别', false)!
   const openMode = enumValue(body?.openMode, HINT_OPEN_MODES, 'MANUAL', '提示开放方式')
   const triggerSeconds = boundedInteger(body?.triggerSeconds, 60, 86400, '触发时间')
@@ -1941,7 +1941,7 @@ export async function updateTrainingHint(userId: string, sessionId: string, hint
   await assertManage(userId, sessionId)
   const hint = await prisma.trainingSessionHint.findFirst({ where: { id: hintId, sessionId }, include: { StageProblem: { include: { Stage: { select: { lifecycle: true } } } } } })
   if (!hint) throw new TrainingEngineError(404, 'TRAINING_HINT_NOT_FOUND', '提示不存在')
-  if (hint.StageProblem.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', 'Stage 开始后提示定义不可修改')
+  if (hint.StageProblem.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', '阶段开始后提示定义不可修改')
   const level = boundedInteger(body?.level, 1, 20, '提示级别', false)!
   const openMode = enumValue(body?.openMode, HINT_OPEN_MODES, 'MANUAL', '提示开放方式')
   const triggerSeconds = boundedInteger(body?.triggerSeconds, 60, 86400, '触发时间')
@@ -1957,7 +1957,7 @@ export async function deleteTrainingHint(userId: string, sessionId: string, hint
   await assertManage(userId, sessionId)
   const hint = await prisma.trainingSessionHint.findFirst({ where: { id: hintId, sessionId }, include: { StageProblem: { include: { Stage: { select: { lifecycle: true } } } } } })
   if (!hint) throw new TrainingEngineError(404, 'TRAINING_HINT_NOT_FOUND', '提示不存在')
-  if (hint.StageProblem.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', 'Stage 开始后提示定义不可删除')
+  if (hint.StageProblem.Stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_HINT_DEFINITION_FROZEN', '阶段开始后提示定义不可删除')
   await prisma.trainingSessionHint.delete({ where: { id: hintId } })
   return { deleted: true as const }
 }
