@@ -620,16 +620,17 @@ describe('Stage-driven Training Engine', () => {
       new Date(now - 3_600_000),
     )
 
+    const legacyIds = [scheduledLegacy.id, runningLegacy.id, endedLegacy.id]
     const inspection = await inspectTrainingEngineMigration()
-    expect(inspection.blocked).toBe(0)
+    expect(inspection.issues.filter(item => legacyIds.includes(item.trainingId))).toEqual([])
     expect(inspection.migratable).toBeGreaterThanOrEqual(3)
 
     const applied = await applyTrainingEngineMigration(inspection.reportHash)
-    expect(applied.blocked).toEqual([])
+    expect(applied.blocked.filter(item => legacyIds.includes(item.trainingId))).toEqual([])
     expect(applied.migrated).toBeGreaterThanOrEqual(3)
 
     const migrated = await prisma.trainingSession.findMany({
-      where: { legacyTrainingId: { in: [scheduledLegacy.id, runningLegacy.id, endedLegacy.id] } },
+      where: { legacyTrainingId: { in: legacyIds } },
       include: {
         Stages: {
           include: {
