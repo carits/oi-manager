@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
@@ -5,12 +6,47 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/FormControls";
 import type {
   Assignment,
+  ProblemTimeAction,
   Stage,
   UnlockCondition,
   UnlockPolicy,
 } from "../model/trainingDesign";
 import { conditionLabels } from "../model/trainingDesign";
 import styles from "./TrainingEngine.module.css";
+
+function ScoreGoalsEditor({ assignment, onChange }: { assignment: Assignment; onChange: (value: Partial<Assignment>) => void }) {
+  const serialized = (assignment.scoreGoals || []).map(item => item.score).join(",")
+  const [draft, setDraft] = useState(serialized)
+  useEffect(() => setDraft(serialized), [serialized])
+  const commit = () => {
+    const scores = [...new Set(draft.split(/[，,\s]+/).map(Number).filter(value => Number.isInteger(value) && value > 0 && value <= 100))].sort((a, b) => a - b)
+    onChange({ scoreGoals: scores.map(score => ({ score })) })
+    setDraft(scores.join(","))
+  }
+  return <label className={styles.field}>
+    递进目标分
+    <Input
+      aria-label="递进目标分"
+      value={draft}
+      placeholder="例如 30,60,100"
+      onChange={event => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); commit() } }}
+    />
+    <small>{assignment.scoreGoals?.length ? `目标路径：${assignment.scoreGoals.map(item => item.score).join(" → ")}` : "留空表示只使用单一目标分 / AC"}</small>
+    <div className={styles.actions}>
+      <Button size="sm" variant="text" onClick={() => { setDraft("30,60,100"); onChange({ scoreGoals: [{ score: 30 }, { score: 60 }, { score: 100 }] }) }}>30 → 60 → 100</Button>
+      <Button size="sm" variant="text" onClick={() => { setDraft(""); onChange({ scoreGoals: [] }) }}>清除递进</Button>
+    </div>
+  </label>
+}
+
+const canonicalTimeMode = (mode: Assignment["timePolicy"] extends infer _ ? string : never): ProblemTimeAction | "NONE" => {
+  if (mode === "SOFT") return "REMIND"
+  if (mode === "HARD") return "LOCK_SUBMISSION"
+  if (mode === "SWITCH_REQUIRED") return "FORCE_SWITCH"
+  return (["REMIND", "RECOMMEND_SWITCH", "LOCK_SUBMISSION", "FORCE_SWITCH"].includes(mode) ? mode : "NONE") as ProblemTimeAction | "NONE"
+}
 
 export function AssignmentPolicyEditor({
   assignment,
@@ -45,18 +81,26 @@ export function AssignmentPolicyEditor({
             {assignment.targetScore ?? stage.defaultTargetScore ?? "未设置"}
           </small>
         </label>
+        <ScoreGoalsEditor assignment={assignment} onChange={onChange} />
         <label className={styles.field}>
-          单题时间策略
-          <Select value={assignment.timePolicy?.mode || "NONE"} onChange={(event) => onChange({ timePolicy: event.target.value === "NONE" ? { mode: "NONE" } : { mode: event.target.value as "SOFT" | "HARD" | "SWITCH_REQUIRED", limitSeconds: assignment.timePolicy && "limitSeconds" in assignment.timePolicy ? assignment.timePolicy.limitSeconds : 900 } })}>
+          单题时间动作
+          <Select value={canonicalTimeMode(assignment.timePolicy?.mode || "NONE")} onChange={(event) => {
+            const mode = event.target.value as ProblemTimeAction | "NONE"
+            onChange({ timePolicy: mode === "NONE" ? { mode: "NONE" } : { mode, action: mode, limitSeconds: assignment.timePolicy && "limitSeconds" in assignment.timePolicy ? assignment.timePolicy.limitSeconds : 900 } })
+          }}>
             <option value="NONE">不限时</option>
-            <option value="SOFT">到时提醒</option>
-            <option value="HARD">到时禁止提交</option>
-            <option value="SWITCH_REQUIRED">到时必须切题</option>
+            <option value="REMIND">到时提醒</option>
+            <option value="RECOMMEND_SWITCH">建议切题</option>
+            <option value="LOCK_SUBMISSION">禁止继续提交</option>
+            <option value="FORCE_SWITCH">必须切题</option>
           </Select>
         </label>
         {assignment.timePolicy?.mode !== "NONE" && assignment.timePolicy?.mode && <label className={styles.field}>
           时间限制（分钟）
-          <Input type="number" min={1} max={1440} value={Math.round(assignment.timePolicy.limitSeconds / 60)} onChange={(event) => onChange({ timePolicy: { mode: assignment.timePolicy!.mode as "SOFT" | "HARD" | "SWITCH_REQUIRED", limitSeconds: Math.max(60, Number(event.target.value || 1) * 60) } })} />
+          <Input type="number" min={1} max={1440} value={Math.round(assignment.timePolicy.limitSeconds / 60)} onChange={(event) => {
+            const mode = canonicalTimeMode(assignment.timePolicy!.mode)
+            if (mode !== "NONE") onChange({ timePolicy: { mode, action: mode, limitSeconds: Math.max(60, Number(event.target.value || 1) * 60) } })
+          }} />
         </label>}
         {strategyMode && (
           <>
