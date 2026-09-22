@@ -2038,23 +2038,180 @@ export async function getTrainingReport(userId: string, sessionId: string) {
   const session = await assertAccess(userId, sessionId)
   const manager = await canManageSession(userId, session)
   const where = manager ? { sessionId } : { sessionId, userId }
-  const participants = await prisma.trainingSessionParticipant.findMany({ where, include: { User: { select: { id: true, username: true } }, Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } }, ScoreEvents: { orderBy: { createdAt: 'asc' } } } })
-  const timeline = session.Stages.map(stage => ({ id: stage.id, name: stage.name, kind: stage.kind, lifecycle: stage.lifecycle, plannedDurationSeconds: stage.plannedDurationSeconds, extensionSeconds: stage.TimeAdjustments.reduce((sum, item) => sum + item.seconds, 0), activeElapsedSeconds: stage.activeElapsedSeconds + (stage.lifecycle === 'RUNNING' ? activeStageIncrement(stage, new Date()) : 0), endedAt: stage.endedAt, endReason: stage.endReason, endNote: stage.endNote, snapshotHash: stage.RuntimeSnapshot?.projectionHash || null }))
-  const groupChanges = await prisma.trainingSessionStageGroupChange.findMany({ where: { sessionId }, orderBy: { requestedAt: 'asc' }, select: { stageId: true, participantId: true, fromGroupId: true, toGroupId: true, effectiveMode: true, reason: true, effectiveAt: true, requestedAt: true } })
+  const participants = await prisma.trainingSessionParticipant.findMany({
+    where,
+    include: {
+      User: { select: { id: true, username: true } },
+      Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } },
+      ScoreEvents: { orderBy: { createdAt: 'asc' } },
+    },
+  })
+  const participantIds = new Set(participants.map(item => item.id))
+  const now = new Date()
+
+  const timeline = session.Stages.map(stage => {
+    const snapshot = parseJsonObject(stage.RuntimeSnapshot?.projection)
+    const snapshotStage = parseJsonObject(snapshot.stage)
+    const runtimeExtensionSeconds = stage.TimeAdjustments.reduce((sum, item) => sum + item.seconds, 0)
+    const actualDurationSeconds = stage.activeElapsedSeconds + (stage.lifecycle === 'RUNNING' ? activeStageIncrement(stage, now) : 0)
+    const plannedDurationSeconds = Number.isInteger(snapshotStage.plannedDurationSeconds)
+      ? Number(snapshotStage.plannedDurationSeconds)
+      : stage.plannedDurationSeconds
+    return {
+      id: stage.id,
+      name: String(snapshotStage.name || stage.name),
+      kind: String(snapshotStage.kind || stage.kind),
+      lifecycle: stage.lifecycle,
+      plannedDurationSeconds,
+      runtimeExtensionSeconds,
+      extensionSeconds: runtimeExtensionSeconds,
+      effectiveDurationSeconds: (plannedDurationSeconds || 0) + runtimeExtensionSeconds,
+      actualDurationSeconds,
+      activeElapsedSeconds: actualDurationSeconds,
+      startedAt: stage.startedAt,
+      endedAt: stage.endedAt,
+      endReason: stage.endReason,
+      endNote: stage.endNote,
+      snapshotHash: stage.RuntimeSnapshot?.projectionHash || null,
+    }
+  })
+
+  const groupChanges = await prisma.trainingSessionStageGroupChange.findMany({
+    where: { sessionId, ...(manager ? {} : { participantId: { in: [...participantIds] } }) },
+    orderBy: { requestedAt: 'asc' },
+    select: { stageId: true, participantId: true, fromGroupId: true, toGroupId: true, effectiveMode: true, reason: true, changedBy: true, effectiveAt: true, requestedAt: true },
+  })
+
+  const stageByProblemId = new Map(session.Stages.flatMap(stage => stage.Problems.map(problem => [problem.id, stage] as const)))
   const stageProblemById = new Map(session.Stages.flatMap(stage => stage.Problems.map(problem => [problem.id, problem] as const)))
-  return { timeline, groupChanges, participants: participants.map(item => {
+
+  const participantReports = participants.map(item => {
     const requirements = resolveParticipantSessionRequirements(session, item.id, item.Progress)
     const requirementByProblemId = new Map(requirements.map(requirement => [requirement.stageProblemId, requirement]))
     const progressById = new Map(item.Progress.map(progress => [progress.stageProblemId, progress]))
     const visibleIds = new Set([...requirementByProblemId.keys(), ...progressById.keys()])
-    return { user: item.User, activeSeconds: item.activeSeconds, problems: [...visibleIds].flatMap(stageProblemId => {
+    const problems = [...visibleIds].flatMap(stageProblemId => {
       const stageProblem = stageProblemById.get(stageProblemId)
-      if (!stageProblem) return []
+      const stage = stageByProblemId.get(stageProblemId)
+      if (!stageProblem || !stage) return []
       const progress = progressById.get(stageProblemId)
       const requirementState = requirementByProblemId.get(stageProblemId)?.state || 'RETIRED'
-      return [{ title: stageProblem.Problem.title, problemId: stageProblem.Problem.problemId, status: progress?.status || 'NOT_STARTED', requirementState, activeSeconds: progress?.activeSeconds || 0, attemptCount: progress?.attemptCount || 0, bestScore: progress?.bestScore ?? null, bestVerdict: progress?.bestVerdict ?? null, hintCount: progress?.hintCount || 0, highestHintLevel: progress?.highestHintLevel || 0, stuckDetectedAt: progress?.stuckDetectedAt || null, scoreProgression: item.ScoreEvents.filter(event => event.stageProblemId === stageProblemId).map(event => ({ score: event.score, verdict: event.verdict, at: event.createdAt })) }]
-    }) }
-  }) }
+      return [{
+        stageProblemId,
+        stageId: stage.id,
+        stageName: stage.name,
+        title: stageProblem.titleSnapshot || stageProblem.Problem.title,
+        problemId: stageProblem.Problem.problemId,
+        status: progress?.status || 'NOT_STARTED',
+        requirementState,
+        activeSeconds: progress?.activeSeconds || 0,
+        attemptCount: progress?.attemptCount || 0,
+        bestScore: progress?.bestScore ?? null,
+        bestVerdict: progress?.bestVerdict ?? null,
+        hintCount: progress?.hintCount || 0,
+        highestHintLevel: progress?.highestHintLevel || 0,
+        stuckDetectedAt: progress?.stuckDetectedAt || null,
+        scoreProgression: item.ScoreEvents
+          .filter(event => event.stageProblemId === stageProblemId)
+          .map(event => ({ score: event.score, verdict: event.verdict, at: event.createdAt })),
+      }]
+    })
+    const requiredProblems = problems.filter(problem => problem.requirementState !== 'RETIRED')
+    const satisfiedProblems = requiredProblems.filter(problem => ['SATISFIED', 'BYPASSED'].includes(problem.requirementState))
+    return {
+      id: item.id,
+      user: item.User,
+      activeSeconds: item.activeSeconds,
+      summary: {
+        requiredCount: requiredProblems.length,
+        satisfiedCount: satisfiedProblems.length,
+        retiredCount: problems.filter(problem => problem.requirementState === 'RETIRED').length,
+        stuckCount: problems.filter(problem => problem.status === 'STUCK').length,
+        attemptCount: problems.reduce((sum, problem) => sum + problem.attemptCount, 0),
+        hintCount: problems.reduce((sum, problem) => sum + problem.hintCount, 0),
+      },
+      problems,
+    }
+  })
+
+  const groupSummaries = manager ? session.Stages.flatMap(stage => {
+    const snapshot = parseJsonObject(stage.RuntimeSnapshot?.projection)
+    const snapshotGroups = Array.isArray(snapshot.groups) ? snapshot.groups.map(item => parseJsonObject(item)) : []
+    return stage.Groups.map(group => {
+      const initial = snapshotGroups.find(item => String(item.id || '') === group.id)
+      return {
+        stageId: stage.id,
+        stageName: stage.name,
+        groupId: group.id,
+        groupName: String(initial?.name || group.name),
+        initialParticipantCount: Array.isArray(initial?.assignments) ? initial.assignments.length : group.Assignments.length,
+        finalParticipantCount: group.Assignments.length,
+        problemCount: Array.isArray(initial?.plans) ? initial.plans.length : group.ProblemPlans.length,
+      }
+    })
+  }) : []
+
+  const problemSummaries = manager ? session.Stages.flatMap(stage => stage.Problems.map(stageProblem => {
+    const entries = participantReports.flatMap(participant => participant.problems.filter(problem => problem.stageProblemId === stageProblem.id))
+    const scores = entries.map(entry => entry.bestScore).filter((score): score is number => typeof score === 'number')
+    return {
+      stageId: stage.id,
+      stageName: stage.name,
+      stageProblemId: stageProblem.id,
+      problemId: stageProblem.Problem.problemId,
+      title: stageProblem.titleSnapshot || stageProblem.Problem.title,
+      requiredCount: entries.filter(entry => entry.requirementState !== 'RETIRED').length,
+      satisfiedCount: entries.filter(entry => ['SATISFIED', 'BYPASSED'].includes(entry.requirementState)).length,
+      retiredCount: entries.filter(entry => entry.requirementState === 'RETIRED').length,
+      notStartedCount: entries.filter(entry => entry.status === 'NOT_STARTED').length,
+      stuckCount: entries.filter(entry => entry.status === 'STUCK').length,
+      attemptCount: entries.reduce((sum, entry) => sum + entry.attemptCount, 0),
+      hintCount: entries.reduce((sum, entry) => sum + entry.hintCount, 0),
+      averageBestScore: scores.length ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100) / 100 : null,
+    }
+  })) : []
+
+  const stuckEvents = await prisma.trainingSessionEvent.findMany({
+    where: { sessionId, type: { in: ['training.problem.stuck', 'training.problem.stuck_cleared'] } },
+    orderBy: { seq: 'asc' },
+    select: { seq: true, type: true, targetId: true, payload: true, createdAt: true },
+  })
+  const stuckHistory = stuckEvents.flatMap(event => {
+    const payload = parseJsonObject(event.payload)
+    const participantId = String(payload.participantId || '')
+    if (!manager && participantId && !participantIds.has(participantId)) return []
+    return [{
+      seq: event.seq,
+      type: event.type === 'training.problem.stuck' ? 'DETECTED' : 'CLEARED',
+      participantId: participantId || null,
+      stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null,
+      reason: payload.reason ? String(payload.reason) : null,
+      at: event.createdAt,
+    }]
+  })
+
+  const actualSessionSeconds = session.activeElapsedSeconds + (session.status === 'RUNNING' && session.runningSince
+    ? Math.max(0, Math.floor((now.getTime() - session.runningSince.getTime()) / 1000))
+    : 0)
+
+  return {
+    sessionSummary: {
+      id: session.id,
+      title: session.title,
+      status: session.status,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      actualDurationSeconds: actualSessionSeconds,
+      stageCount: session.Stages.length,
+      participantCount: manager ? await prisma.trainingSessionParticipant.count({ where: { sessionId, status: 'active' } }) : participants.length,
+    },
+    timeline,
+    groupSummaries,
+    groupChanges,
+    problemSummaries,
+    stuckHistory,
+    participants: participantReports,
+  }
 }
 
 export async function listTrainingEvents(userId: string, sessionId: string, afterSeq: number) {
