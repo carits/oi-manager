@@ -208,7 +208,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setCommandBusy(true)
     const response = await transitionTrainingStage(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, action, stageId, ...extra })
     setCommandBusy(false)
-    if (!response.ok) { toast.error(response.error.message || 'Stage 转换失败'); return false }
+    if (!response.ok) { toast.error(response.error.message || '阶段转换失败'); return false }
     await load()
     return true
   }
