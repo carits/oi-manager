@@ -1282,10 +1282,10 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     : current.Stages.find(stage => stage.orderIndex > running.orderIndex && stage.lifecycle === 'PENDING')
   const shouldEnd = input.action === 'end_session' || (!next && input.endWhenNoNext)
   const endReason = input.endReason || (
-    input.action === 'end_session'
-      ? 'SESSION_ENDED'
-      : outcome === 'ended_early'
-        ? 'TEACHER_ENDED_EARLY'
+    outcome === 'ended_early'
+      ? 'TEACHER_ENDED_EARLY'
+      : input.action === 'end_session'
+        ? 'SESSION_ENDED'
         : input.automatic
           ? 'SYSTEM_ENDED'
           : 'TEACHER_ENDED'
@@ -1323,7 +1323,7 @@ export async function executeStageTransition(userId: string, sessionId: string, 
   if ((action === 'skip_pending' || outcome === 'ended_early') && !reason) throw new TrainingEngineError(422, 'TRAINING_STAGE_REASON_REQUIRED', '提前结束或跳过 Stage 必须填写原因')
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
-    await applyStageTransition(tx, { sessionId, actorUserId: userId, action: action as StageTransitionAction, stageId: String(body?.stageId || ''), outcome: outcome as 'completed' | 'ended_early', endReason: action === 'end_session' ? 'SESSION_ENDED' : outcome === 'ended_early' ? 'TEACHER_ENDED_EARLY' : 'TEACHER_ENDED', nextStageId: body?.nextStageId ? String(body.nextStageId) : null, reason, expectedRevision })
+    await applyStageTransition(tx, { sessionId, actorUserId: userId, action: action as StageTransitionAction, stageId: String(body?.stageId || ''), outcome: outcome as 'completed' | 'ended_early', endReason: outcome === 'ended_early' ? 'TEACHER_ENDED_EARLY' : action === 'end_session' ? 'SESSION_ENDED' : 'TEACHER_ENDED', nextStageId: body?.nextStageId ? String(body.nextStageId) : null, reason, expectedRevision })
   })
   return getTrainingWorkspace(userId, sessionId)
 }
