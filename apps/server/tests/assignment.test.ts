@@ -94,6 +94,37 @@ describe('independent assignment domain', () => {
     expect(peerList.body.data.items.some((item: any) => item.id === assignmentId)).toBe(false)
   })
 
+  it('rejects Assignment APIs outside an active organization workspace', async () => {
+    const token = generateTokenFromUser(teacher.user)
+    const personal = createAuthenticatedRequest(app, token)
+
+    const list = await personal.get('/api/assignments')
+    expect(list.status).toBe(403)
+    expect(list.body.code).toBe('ORGANIZATION_CONTEXT_REQUIRED')
+
+    const create = await personal.post('/api/assignments').send({
+      title: '不应在个人工作区创建',
+      organizationId,
+      openAt: new Date(Date.now() + 60_000),
+      dueAt: new Date(Date.now() + 120_000),
+      closeAt: new Date(Date.now() + 180_000),
+    })
+    expect(create.status).toBe(403)
+
+    const orgRequest = createAuthenticatedRequest(app, token, { organizationId })
+    const created = await orgRequest.post('/api/assignments').send({
+      title: '组织作业',
+      openAt: new Date(Date.now() + 60_000),
+      dueAt: new Date(Date.now() + 120_000),
+      closeAt: new Date(Date.now() + 180_000),
+    })
+    expect(created.status).toBe(201)
+
+    const direct = await personal.get(`/api/assignments/${created.body.data.id}`)
+    expect(direct.status).toBe(403)
+    expect(direct.body.code).toBe('ORGANIZATION_CONTEXT_REQUIRED')
+  })
+
   it('binds assignment list, create and direct-id access to the active organization context', async () => {
     const token = generateTokenFromUser(teacher.user)
     const secondOrgOwner = await createTestUser({ organization: { role: 'teacher' } })
