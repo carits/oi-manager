@@ -80,6 +80,35 @@ describe('Stage-driven Training Engine', () => {
     return response.body.data
   }
 
+  it('serializes concurrent Stage transitions with advisory lock and revision CAS', async () => {
+    const created = await createSession()
+    const token = generateTokenFromUser(coach.user)
+    const stage = await prisma.trainingSessionStage.findFirstOrThrow({ where: { sessionId: created.id } })
+
+    const published = await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${created.id}/publish`)
+      .send({ expectedRevision: 0 })
+    expect(published.status).toBe(200)
+
+    const [first, second] = await Promise.all([
+      createAuthenticatedRequest(app, token)
+        .post(`/api/training-sessions/${created.id}/stage-transitions`)
+        .send({ expectedRevision: 1, action: 'start', stageId: stage.id }),
+      createAuthenticatedRequest(app, token)
+        .post(`/api/training-sessions/${created.id}/stage-transitions`)
+        .send({ expectedRevision: 1, action: 'start', stageId: stage.id }),
+    ])
+
+    expect([first.status, second.status].sort()).toEqual([200, 409])
+    const persisted = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { Stages: { where: { lifecycle: 'RUNNING' } } },
+    })
+    expect(persisted.status).toBe('RUNNING')
+    expect(persisted.Stages).toHaveLength(1)
+    expect(persisted.currentStageId).toBe(stage.id)
+  })
+
   it('creates Stage plans, pins the revision and reports missing progress as NOT_STARTED', async () => {
     const created = await createSession()
     const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: {
