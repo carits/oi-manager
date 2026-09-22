@@ -174,6 +174,55 @@ describe('Stage-driven Training Engine', () => {
     expect(await resolveTrainingPermission(student.user.id, session.id, second.id)).toMatchObject({ canView: true, canSubmit: true, reason: 'ALLOWED' })
   })
 
+  it('advances progressive score targets without completing before the final target', async () => {
+    const created = await createSession({
+      problems: [{ problemId: problem.id, scoreGoals: [{ score: 30 }, { score: 60 }, { score: 100 }] }],
+    })
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { Stages: { include: { Problems: true } }, Participants: true },
+    })
+    const stageProblem = session.Stages[0].Problems[0]
+    const participant = session.Participants[0]
+
+    for (const score of [30, 60, 100]) {
+      const submission = await prisma.submission.create({ data: {
+        userId: student.user.id,
+        oj: 'carits',
+        problemId: problem.problemId,
+        language: 'cpp17',
+        code: 'int main(){}',
+        codeLength: 12,
+        submitMethod: 'local',
+        submitScope: 'training_engine',
+        trainingSessionId: session.id,
+        trainingStageProblemId: stageProblem.id,
+        result: score === 100 ? 'Accepted' : 'Partial Accepted',
+        score,
+      } })
+      await syncTrainingEngineSubmission({
+        id: submission.id,
+        userId: student.user.id,
+        trainingSessionId: session.id,
+        trainingStageProblemId: stageProblem.id,
+        result: score === 100 ? 'Accepted' : 'Partial Accepted',
+        score,
+        trainingScoreGoalSnapshot: { score },
+      })
+      const progress = await prisma.trainingSessionProblemProgress.findUniqueOrThrow({
+        where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: stageProblem.id } },
+      })
+      expect(progress.bestScore).toBe(score)
+      expect(progress.status).toBe(score === 100 ? 'COMPLETED' : 'WORKING')
+    }
+
+    const events = await prisma.trainingSessionScoreEvent.findMany({
+      where: { sessionId: session.id, stageProblemId: stageProblem.id },
+      orderBy: { createdAt: 'asc' },
+    })
+    expect(events.map(event => event.score)).toEqual([30, 60, 100])
+  })
+
   it('keeps STUCK after an ordinary non-improving submission', async () => {
     const created = await createSession()
     const session = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id }, include: { Stages: { include: { Problems: true } }, Participants: true } })
