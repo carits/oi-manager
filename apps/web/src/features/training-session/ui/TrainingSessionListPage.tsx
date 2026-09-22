@@ -28,6 +28,7 @@ type TeamPayload = Team[] | { items?: Team[]; data?: Team[]; totalPages?: number
 type Problem = { id: string; platform: string; problemId: string; title: string; difficulty?: string | null }
 type CreateMode = 'quick' | 'custom' | 'template'
 type ParticipantTarget = 'team' | 'organization_students' | 'custom_students'
+type CustomStageDraft = { name: string; audienceMode: 'ALL' | 'GROUPED'; groups: string[] }
 type ListFilter = 'active' | 'upcoming' | 'completed' | 'draft'
 type CoachFieldsProps = {
   organizationId?: string
@@ -95,7 +96,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   const [allowHints, setAllowHints] = useState(true)
   const [completionMode, setCompletionMode] = useState<'all' | 'count'>('all'), [requiredCount, setRequiredCount] = useState(1)
   const [selectedProblems, setSelectedProblems] = useState<Problem[]>([])
-  const [customStageNames, setCustomStageNames] = useState<string[]>(['阶段 1'])
+  const [customStages, setCustomStages] = useState<CustomStageDraft[]>([{ name: '阶段 1', audienceMode: 'ALL', groups: [] }])
   const [listFilter, setListFilter] = useState<ListFilter>('active'), [listQuery, setListQuery] = useState(''), [listTeamId, setListTeamId] = useState(() => teamId || searchParams.get('teamId') || '')
   const [listPage, setListPage] = useState(1), [listTotal, setListTotal] = useState(0), [listTotalPages, setListTotalPages] = useState(1)
   const [statusCounts, setStatusCounts] = useState<Record<ListFilter, number>>({ active: 0, upcoming: 0, completed: 0, draft: 0 })
@@ -143,7 +144,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     })
   }, [mode, open, organizationId, participantTarget, scopeReady, selectedStudentIds, simpleStep, targetTeamId, toast, useTeamScope])
   const resetDialog = () => {
-    setSimpleStep(0); setTitle(''); setDescription(''); setSelectedProblems([]); setCustomStageNames(['阶段 1']); setCompletionMode('all'); setRequiredCount(1); setSelectedStudentIds([]); setParticipantTarget('team'); setParticipantPreview(null); setSchoolWideConfirmed(false)
+    setSimpleStep(0); setTitle(''); setDescription(''); setSelectedProblems([]); setCustomStages([{ name: '阶段 1', audienceMode: 'ALL', groups: [] }]); setCompletionMode('all'); setRequiredCount(1); setSelectedStudentIds([]); setParticipantTarget('team'); setParticipantPreview(null); setSchoolWideConfirmed(false)
     setScheduledStartAt(localDateTime(new Date())); setDueAt(localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)))
   }
   const closeDialog = () => { if (!creating) { setOpen(false); resetDialog() } }
@@ -164,17 +165,26 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
       joinMode: joinMode as 'CURRENT_STAGE',
       allowHints,
       settings: { participantTarget },
-      stages: customStageNames.map((name, index) => ({
-        name: name.trim() || `阶段 ${index + 1}`,
+      stages: customStages.map((stage, index) => ({
+        name: stage.name.trim() || `阶段 ${index + 1}`,
         description: '',
         kind: 'TRAINING',
-        audienceMode: 'ALL',
+        audienceMode: stage.audienceMode,
         endPolicy: 'MANUAL',
         accessPolicy: 'ALL_AT_ONCE',
         accessScope: 'CURRENT_STAGE',
         submissionMode: 'ENABLED',
         problems: [],
-        groups: [],
+        groups: stage.audienceMode === 'GROUPED'
+          ? stage.groups.map((groupName, groupIndex) => ({
+              clientKey: `create-${index}-group-${groupIndex}`,
+              name: groupName.trim() || `分组 ${groupIndex + 1}`,
+              accessPolicy: 'ALL_AT_ONCE',
+              submissionMode: 'ENABLED',
+              participantIds: [],
+              problems: [],
+            }))
+          : [],
       })),
     })
     setCreating(false)
@@ -275,7 +285,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     <FormDialog isOpen={open} onClose={closeDialog} title="创建训练" description={mode === 'quick' ? '快速创建会生成一个全班阶段并直接发布。' : mode === 'custom' ? '自定义多阶段会先创建草稿，你可以自由新增、排序和配置多个阶段后再发布。' : '模板只生成可编辑的阶段骨架。'} size="wide" loading={creating} dirty={Boolean(title || selectedProblems.length)} footer={mode === 'quick'
       ? <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button>{simpleStep > 0 && <Button variant="secondary" onClick={() => setSimpleStep(step => step - 1)} disabled={creating}>上一步</Button>}{simpleStep < 3 ? <Button onClick={() => setSimpleStep(step => step + 1)} disabled={!simpleValid}>下一步</Button> : <Button onClick={() => void createSimpleTraining()} loading={creating} disabled={!simpleValid || previewLoading}>确认并发布</Button>}</>
       : mode === 'custom'
-        ? <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createCustomDraft()} loading={creating} disabled={!title.trim() || !scopeReady || !customStageNames.length}>创建并编排多个阶段</Button></>
+        ? <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createCustomDraft()} loading={creating} disabled={!title.trim() || !scopeReady || !customStages.length}>创建并编排多个阶段</Button></>
         : <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createTemplateDraft()} loading={creating} disabled={!title.trim() || !chosenTemplate || !scopeReady}>创建并编排</Button></>}>
       <div className={styles.stack}>
         <Tabs label="创建起点" value={mode} onChange={value => setMode(value as CreateMode)} items={[{ value: 'quick', label: '快速创建（单阶段）' }, { value: 'custom', label: '自定义多阶段' }, { value: 'template', label: '使用阶段模板' }]} />
@@ -298,33 +308,93 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
             <strong>阶段编排</strong>
             <p>现在就可以先建立多个阶段骨架。创建后进入设计器继续为每个阶段配置题目、分组、时长和规则。</p>
             <div className={styles.stack}>
-              {customStageNames.map((stageName, index) => <div className={styles.actions} key={index}>
-                <Input
-                  aria-label={`阶段 ${index + 1} 名称`}
-                  value={stageName}
-                  maxLength={200}
-                  placeholder={`阶段 ${index + 1}`}
-                  onChange={event => setCustomStageNames(current => current.map((name, currentIndex) => currentIndex === index ? event.target.value : name))}
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={customStageNames.length === 1}
-                  onClick={() => setCustomStageNames(current => current.filter((_, currentIndex) => currentIndex !== index))}
-                >
-                  删除
-                </Button>
-              </div>)}
+              {customStages.map((stage, index) => <article className={styles.card} key={index}>
+                <div className={styles.actions}>
+                  <label className={styles.field}>
+                    阶段名称
+                    <Input
+                      aria-label={`阶段 ${index + 1} 名称`}
+                      value={stage.name}
+                      maxLength={200}
+                      placeholder={`阶段 ${index + 1}`}
+                      onChange={event => setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? { ...item, name: event.target.value } : item))}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    参与方式
+                    <Select
+                      aria-label={`阶段 ${index + 1} 参与方式`}
+                      value={stage.audienceMode}
+                      onChange={event => {
+                        const audienceMode = event.target.value as 'ALL' | 'GROUPED'
+                        setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
+                          ...item,
+                          audienceMode,
+                          groups: audienceMode === 'GROUPED' && !item.groups.length ? ['基础组', '提高组'] : item.groups,
+                        } : item))
+                      }}
+                    >
+                      <option value="ALL">全班统一</option>
+                      <option value="GROUPED">分组训练</option>
+                    </Select>
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={customStages.length === 1}
+                    onClick={() => setCustomStages(current => current.filter((_, currentIndex) => currentIndex !== index))}
+                  >
+                    删除阶段
+                  </Button>
+                </div>
+                {stage.audienceMode === 'GROUPED' && <div className={styles.stack}>
+                  <strong>阶段分组</strong>
+                  <small className={styles.muted}>这里只先建立分组骨架；具体学生归属可在进入设计器后按阶段配置。</small>
+                  {stage.groups.map((groupName, groupIndex) => <div className={styles.actions} key={groupIndex}>
+                    <Input
+                      aria-label={`阶段 ${index + 1} 分组 ${groupIndex + 1}`}
+                      value={groupName}
+                      maxLength={100}
+                      placeholder={`分组 ${groupIndex + 1}`}
+                      onChange={event => setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
+                        ...item,
+                        groups: item.groups.map((name, currentGroupIndex) => currentGroupIndex === groupIndex ? event.target.value : name),
+                      } : item))}
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={stage.groups.length === 1}
+                      onClick={() => setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
+                        ...item,
+                        groups: item.groups.filter((_, currentGroupIndex) => currentGroupIndex !== groupIndex),
+                      } : item))}
+                    >
+                      删除分组
+                    </Button>
+                  </div>)}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
+                      ...item,
+                      groups: [...item.groups, `分组 ${item.groups.length + 1}`],
+                    } : item))}
+                  >
+                    新增分组
+                  </Button>
+                </div>}
+              </article>)}
               <Button
                 size="sm"
                 variant="outline"
                 icon={<Plus size={14} />}
-                disabled={customStageNames.length >= 30}
-                onClick={() => setCustomStageNames(current => [...current, `阶段 ${current.length + 1}`])}
+                disabled={customStages.length >= 30}
+                onClick={() => setCustomStages(current => [...current, { name: `阶段 ${current.length + 1}`, audienceMode: 'ALL', groups: [] }])}
               >
                 新增阶段
               </Button>
-              <small className={styles.muted}>当前 {customStageNames.length}/30 个阶段；顺序会直接作为训练时间线初始顺序。</small>
+              <small className={styles.muted}>当前 {customStages.length}/30 个阶段；每个阶段可以独立选择“全班统一”或“分组训练”。</small>
             </div>
           </div>
         </div> : <CoachFields organizationId={organizationId} teamId={teamId} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} participantTarget={participantTarget} setParticipantTarget={setParticipantTarget} selectedStudentIds={selectedStudentIds} setSelectedStudentIds={setSelectedStudentIds} canUseSchoolWide={user?.organizationRole === 'school_principal'} title={title} setTitle={setTitle} description={description} setDescription={setDescription} scheduledStartAt={scheduledStartAt} setScheduledStartAt={setScheduledStartAt} templateKey={templateKey} setTemplateKey={setTemplateKey} templates={templates} rankingMode={rankingMode} setRankingMode={setRankingMode} peerVisibility={peerVisibility} setPeerVisibility={setPeerVisibility} joinMode={joinMode} setJoinMode={setJoinMode} allowHints={allowHints} setAllowHints={setAllowHints} onDeleteTemplate={template => void removeTemplate(template)} />}
