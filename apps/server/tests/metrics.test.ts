@@ -5,18 +5,55 @@ import { afterEach, describe, expect, it } from 'vitest'
 import logger from '../src/lib/logger'
 import { MetricsCollector } from '../src/lib/metrics'
 import { resetRuntimeTelemetry } from '../src/lib/runtimeTelemetry'
+import { trainingMetrics } from '../src/modules/training-engine/training-metrics'
 
 const originalSnapshotPath = process.env.METRICS_SNAPSHOT_PATH
 const temporaryDirectories: string[] = []
 
 afterEach(() => {
   resetRuntimeTelemetry()
+  trainingMetrics.resetAll()
   if (originalSnapshotPath === undefined) delete process.env.METRICS_SNAPSHOT_PATH
   else process.env.METRICS_SNAPSHOT_PATH = originalSnapshotPath
   for (const directory of temporaryDirectories.splice(0)) fs.rmSync(directory, { recursive: true, force: true })
 })
 
 describe('runtime metrics snapshots', () => {
+  it('exposes the required Training Engine observability metrics', () => {
+    trainingMetrics.observeSession('session-a', 'RUNNING')
+    trainingMetrics.recordStageTransition()
+    trainingMetrics.recordCommand(true)
+    trainingMetrics.recordCommand(false)
+    trainingMetrics.openSseConnection()
+    trainingMetrics.recordPermissionLatency(12)
+    trainingMetrics.recordPermissionLatency(28)
+    trainingMetrics.recordWorkspaceQueries(4)
+    trainingMetrics.recordGroupMove()
+
+    const collector = new MetricsCollector()
+    expect(collector.getSnapshot().training).toMatchObject({
+      training_session_active_count: 1,
+      training_stage_transition_total: 1,
+      training_command_total: 2,
+      training_command_failure_total: 1,
+      training_sse_connections: 1,
+      training_workspace_query_count: 4,
+      training_group_move_total: 1,
+      training_permission_latency: {
+        count: 2,
+        avgMs: 20,
+        maxMs: 28,
+      },
+    })
+
+    trainingMetrics.closeSseConnection()
+    trainingMetrics.observeSession('session-a', 'ENDED')
+    expect(collector.getSnapshot().training).toMatchObject({
+      training_session_active_count: 0,
+      training_sse_connections: 0,
+    })
+  })
+
   it('records normalized HTTP status families, process health and structured events', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'oi-metrics-'))
     temporaryDirectories.push(directory)
