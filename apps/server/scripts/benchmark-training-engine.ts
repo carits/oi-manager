@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks'
 import { resolveEffectiveTrainingRule, evaluateProblemTimePolicy, resolveNextScoreTarget } from '../src/modules/training-engine/domain/training-rule-engine'
 import { getCoachDashboard, getTrainingWorkspace } from '../src/modules/training-engine/training-engine.service'
-import prisma from '../src/lib/prisma'
+import { prisma } from '../src/prisma'
 
 const STUDENTS = 50
 const PROBLEMS = 100
