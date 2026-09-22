@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-21
+last_verified: 2026-09-22
 source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/schema.prisma, packages/contracts/src/training.ts
 ---
 
@@ -64,7 +64,7 @@ PENDING → SKIPPED
 
 基础名单只决定谁参加训练。Group 只属于一个 Stage；新的 grouped Stage 可以显式沿用映射、手工重分或展示可解释建议，系统不能自动替教师决定。
 
-`StageProblem` 是题目与固定 Revision 的稳定身份；创建/保存 Definition 时同时固定题名和题面快照，历史训练不再跟随题库当前题面漂移。同一 Stage 的多个组通过 `ProblemPlan` 复用它。草稿也以 `Session + User + StageProblem` 为身份，因此同一道 Problem 出现在不同 Stage 时不会互相覆盖。换组不会删除提交、草稿或 Progress。当前要求来自当前 Stage/组的 Plan，历史成绩来自稳定 Progress：
+`StageProblem` 是题目与固定 Revision 的稳定身份；同一 Stage 的多个组通过 `ProblemPlan` 复用它。因此换组不会删除提交、草稿或 Progress。当前要求来自当前 Stage/组的 Plan，历史成绩来自稳定 Progress：
 
 - 换组后不属于新组的题进入“本阶段历史”，不计当前组完成度。
 - 两组共有题继续使用已有 Progress。
@@ -92,7 +92,7 @@ OI 部分分使用一个题目的 `scoreGoals`（例如 30 → 60 → 100），�
 - 快速创建：名称、学员、题目、截止时间，生成一个全班自由训练 Stage。
 - 使用模板：生成 Stage 骨架，题目必须显式添加。内置骨架包括简单刷题、讲练结合、分层课堂、OI 部分分和 ACM 策略训练。设计器可以把当前 Stage、分组和规则保存成个人、学校或团队模板；数据库模板可在创建页复用和停用，但不会复制题目、学员或运行数据。
 
-设计器步骤为“基本信息 → Stage 与规则 → 学员与 Stage 分组 → 提示 → 发布检查”。Hint Definition 只允许在所属 Stage 为 `PENDING` 时新增、编辑或删除；Stage 开始后 Definition 冻结，运行时只能开放/关闭已有提示。运行工作台只展示冻结定义与现场干预：完成/提前结束、跳过未来 Stage、复制未来 Stage、延时、换组和当前要求/历史进度。教练完成度以该学员当前 Stage/分组真正要求的题目为分母，不能只统计已经产生的 Progress。报告按 Plan 对名单做左连接，未提交题明确返回 `NOT_STARTED`，并区分“当前要求”和换组前“本阶段历史”；教师工作台支持导出学员明细 CSV 和包含完整时间线/换组记录的 JSON。ACM 排名按解题数降序、首 AC 相对开场时间与 AC 前错误提交罚时升序计算，不再按简单完成数冒充榜单。
+设计器步骤为“基本信息 → Stage 与规则 → 学员与 Stage 分组 → 提示 → 发布检查”。运行工作台只展示冻结定义与现场干预：完成/提前结束、跳过未来 Stage、复制未来 Stage、延时、换组和当前要求/历史进度。教练完成度以该学员当前 Stage/分组真正要求的题目为分母，不能只统计已经产生的 Progress。报告按 Plan 对名单做左连接，未提交题明确返回 `NOT_STARTED`，并区分“当前要求”和换组前“本阶段历史”。ACM 排名按解题数降序、首 AC 相对开场时间与 AC 前错误提交罚时升序计算，不再按简单完成数冒充榜单。
 
 ## API、Contract 与实时事件
 
@@ -113,13 +113,13 @@ JSON API 全部通过 `packages/contracts` 和 Training Feature API。核心结�
 
 ## 权限与可靠性
 
-权限按“管理员/个人 override → Overlay → 当前 Stage/组 Plan → Session 默认规则”解析。学生只有在权限求值确认题目可见后才获得题号、平台、题名和题面快照；未来 Stage、锁题、顺序未解锁和教师控制未开放题目在 API 边界即脱敏，即使 Session 处于 `SCHEDULED` 或 `PAUSED` 也不能绕过。Workspace 一次加载 Participant、Override 与 Progress 后批量完成全部 StageProblem 权限求值，避免按题重新加载 Session/Progress 的 N+1。硬暂停禁止编辑与提交，软暂停允许编辑但不提交；暂停时间不计入 Session 或 Stage 有效时间。
+权限按“管理员/个人 override → Overlay → 当前 Stage/组 Plan → Session 默认规则”解析。硬暂停禁止编辑与提交，软暂停允许编辑但不提交；暂停时间不计入 Session 或 Stage 有效时间。
 
 评测完成后幂等更新 Progress 与 ScoreEvent。Scheduler 是单例 Worker，只对 RUNNING Stage 评估 TIME/COMPLETION/HYBRID；与人工转换竞争时只有一个 CAS 成功。固定 Revision、运行快照、目标分层快照和追加事件共同保证历史可重放。
 
 ## 一次性迁移
 
-当前开发阶段直接迁移，不双写旧模型。2026-09-21 的 usability hardening migration 已写入仓库，但按本轮审计约束**尚未实际执行或演练**；以下仍是待执行迁移规则：
+当前开发阶段直接迁移，不双写旧模型：
 
 1. 有 SCHEDULED/RUNNING/PAUSED Session 时拒绝迁移。
 2. 无旧 Group 的 Stage 迁为 `audienceMode=ALL`；旧 Session Group 为每个 Stage 克隆独立 StageGroup。
@@ -131,12 +131,28 @@ JSON API 全部通过 `packages/contracts` 和 Training Feature API。核心结�
 
 迁移不会重测历史提交，也不会伪造回滚事件。
 
+## 运行时入口与迁移边界
 
-## 2026-09-21 usability hardening 补充约束
+当前运行时只使用 Stage 驱动的训练接口。新的写入入口为：
 
-- Session 只维护一条全局 Current Stage 时间线；迟到加入只支持 `CURRENT_STAGE` 或 `TEACHER_ASSIGN`，不再支持每个学员从第一 Stage 独立推进。
-- Runtime Focus、Lock/Unlock、个人 Skip/Unlock 只能作用于 Current Stage；跨 Stage 请求由服务端拒绝。
-- TEAM 级 Runtime Command 的目标由当前 Session 的 `teamId` 规范化，前端不要求用户再次选择同一个团队 ID。
-- OI Subtask 选择在前后端都补齐依赖闭包，避免只选择依赖方而漏掉 prerequisite。
-- 已新增针对上述语义的 Server/E2E 回归用例定义；**本轮未实际执行这些测试**。
-- 历史数据迁移仍需单独演练：旧 `problemId` 草稿映射到重复出现的 StageProblem 时存在语义歧义；历史题面快照回填只能代表 migration-time reconstruction，不能追溯迁移前已丢失的旧题面版本。
+- /api/training-sessions
+- /api/training-session-templates
+
+旧的 /api/trainings 接口已经停用，集合路径和所有嵌套路径统一返回 HTTP 410，并返回错误码 TRAINING_LEGACY_API_RETIRED；不会再猜测跳转到新地址。
+
+旧训练模型仅由一次性迁移服务读取，用于生成 TrainingSession、Stage、Assignment、ProblemPlan 和历史引用。迁移不重新评测、不伪造提交、不双写旧接口。迁移完成前保留旧模型及其迁移引用，以便审计与对账；运行时读写不再依赖旧路由。
+
+
+## 2026-09-22 usability hardening 补充
+
+- Session 只有一条全局 Current Stage 时间线；迟到加入只允许 `CURRENT_STAGE` 或 `TEACHER_ASSIGN`，不再允许每个学员以 `FROM_BEGINNING` 建立独立 Stage 时间线。
+- Runtime Focus、Lock/Unlock、个人 Skip/Unlock 只能作用于 Current Stage。教师显式 Skip 视为顺序前置条件已处理，但不会改写历史提交。
+- `StageProblem` 除固定 TestSet Revision 外，同时固定题名和题面快照；草稿身份为 `Session + User + StageProblem`，同一道 Problem 在不同 Stage 中互不覆盖。
+- Hint Definition 仅在所属 Stage 为 `PENDING` 时允许新增、编辑和删除；Stage 启动后 Definition 冻结，运行时只允许开放/关闭已有提示。
+- OI Subtask 与 scoreGoal 的允许集合在前端和服务端都补齐 prerequisite dependency closure，避免只选择依赖方却漏掉依赖项。
+- 学生题目可见性先经过 Stage、Overlay、Plan、顺序条件和个人 override 求值，再叠加 Session 状态；`SCHEDULED`、`PAUSED` 不再绕过未来 Stage、锁题或顺序锁定。未开放题在 API 边界即脱敏题号、平台、题名和题面。
+- Workspace 一次加载 Participant、Override 与 Progress 后批量求值全部 StageProblem 权限，不再逐题重新读取 Session/Progress。
+- 教师运行台补充当前 Stage、有效/剩余时间、当前分组、完成度、score-goal 下一目标、学员搜索/状态/分组筛选；TEAM 命令目标由当前 Session `teamId` 规范化。
+- 训练过程报告支持学员明细 CSV 与完整 JSON 导出；草稿、Hint、教练看板、同伴进度和列表依赖加载失败均显式反馈，不再把失败伪装为空状态。
+- 当前运行时仍遵循本文件的兼容退役结论：普通旧 `/api/trainings` 训练接口保持 HTTP 410；Rating/Activity 等仍使用数字 Contest publicId 的独立入口必须继续经过相同 workspace / organization 边界。
+- 仓库包含 `20260921_training_usability_hardening` 迁移定义。本 hardening pass **没有执行该迁移、没有做恢复库迁移演练，也没有运行新增回归测试**；迁移前必须单独验证重复 Problem 跨 Stage 的旧草稿归属、历史题面 reconstruction、Draft/Progress/Submission/Hint/Event 引用和活动中的 Session 阻塞条件。
