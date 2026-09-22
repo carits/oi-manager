@@ -87,10 +87,11 @@ describe('authorization boundary', () => {
     const authRouteSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/auth.ts'), 'utf8')
     const sessionShape = sharedSource.match(/export interface SessionJwtPayload \{([\s\S]*?)\n\}/)?.[1] || ''
 
-    expect(sessionShape).toContain('accountRole?: AccountRole')
+    expect(sessionShape).toContain('accountRole: AccountRole')
     expect(sessionShape).not.toMatch(/organizationId|organizationRole|organizationCapabilities|teacherId|studentId|schoolId|studentMode/)
     expect(authRouteSource).toContain('function renewablePayload(payload: SessionJwtPayload): SessionJwtPayload')
-    expect(authRouteSource).toContain("role: accountRole")
+    expect(authRouteSource).toContain("accountRole: payload.accountRole")
+    expect(authRouteSource).not.toContain('role: payload.accountRole')
     expect(authRouteSource).not.toMatch(/function renewablePayload[\s\S]{0,300}\.\.\.claims/)
   })
 

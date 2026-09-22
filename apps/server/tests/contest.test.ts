@@ -19,13 +19,13 @@ import {
   reorderContestProblemsTx,
   updateContestProblemTx,
 } from '../src/modules/contest/contest-command.service'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx, syncCanonicalContestProblemFixtureTx } from './helpers/contest-fixture'
 
 const app = createTestApp()
 
 async function createContestRuntimeFixture(args: Prisma.TrainingCreateArgs) {
   const runtime = await prisma.training.create(args)
-  await prisma.$transaction(tx => ensureContestAggregateTx(tx, runtime.id))
+  await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, runtime.id))
   return runtime
 }
 

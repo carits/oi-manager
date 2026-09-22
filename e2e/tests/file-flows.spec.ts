@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { loadFixtureIds } from '../fixtures/data'
 import { fileFixtures } from '../fixtures/files'
 
@@ -17,7 +17,7 @@ test.describe('isolated file upload and download', () => {
 
     for (const item of cases) {
       const upload = await request.post('/api/files/upload', {
-        headers: bearer(admin),
+        headers: sessionCookie(admin),
         multipart: {
           file: item.file,
           category: item.category,
@@ -31,7 +31,7 @@ test.describe('isolated file upload and download', () => {
       expect(uploaded.success).toBe(true)
 
       const download = await request.get(`/api/files/${uploaded.data.id}/download`, {
-        headers: bearer(admin),
+        headers: sessionCookie(admin),
       })
       expect(download.status(), `${item.file.name} download`).toBe(200)
       expect(Buffer.from(await download.body())).toEqual(item.file.buffer)
@@ -41,7 +41,7 @@ test.describe('isolated file upload and download', () => {
   test('rejects an invalid extension as a client error', async ({ request }) => {
     const admin = await loginAs(request, 'superAdmin')
     const upload = await request.post('/api/files/upload', {
-      headers: bearer(admin),
+      headers: sessionCookie(admin),
       multipart: {
         file: {
           name: 'payload.exe',

@@ -113,7 +113,6 @@ export function routeOwner(pattern: RoutePattern): RouteOwner {
   if (pattern.startsWith('/account') || pattern === '/identity') return 'campusStudent'
   if (pattern === '/super_admin' || pattern.startsWith('/admin')) return 'superAdmin'
   if (pattern.startsWith('/platform-admin')) return 'platformAdmin'
-  if (pattern.startsWith('/teacher')) return 'principal'
   return 'campusStudent'
 }
 

@@ -15,7 +15,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 |---|---:|
 | Prisma models | 206 |
 | Prisma enums | 77 |
-| Legacy route adapters | 19 |
+| Legacy route adapters | 18 |
 | Module route adapters | 53 |
 | systemd units | 8 |
 | Referenced environment keys | 485 |
@@ -29,7 +29,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/routes/demo-scenario.ts`
 - `apps/server/src/routes/files.ts`
 - `apps/server/src/routes/me.ts`
-- `apps/server/src/routes/milestones.ts`
 - `apps/server/src/routes/oj-accounts.ts`
 - `apps/server/src/routes/oj-fetcher.ts`
 - `apps/server/src/routes/organization-members.ts`

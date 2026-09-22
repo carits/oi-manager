@@ -6,7 +6,7 @@ import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
-import { ensureContestAggregateTx } from './helpers/legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx } from './helpers/contest-fixture'
 
 const app = createTestApp()
 
@@ -313,7 +313,7 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       scope: 'platform',
       finalizationStatus: 'FINALIZED',
     } })
-    const contest = await prisma.$transaction(tx => ensureContestAggregateTx(tx, training.id))
+    const contest = await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, training.id))
     if (!contest) throw new Error('Contest aggregate missing')
     const standingId = crypto.randomUUID()
     await prisma.contestStandingSnapshot.create({ data: {

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { accounts } from '../fixtures/auth'
 import { loadFixtureIds } from '../fixtures/data'
 import { assertPageHealth, waitForPageReady, watchPage } from '../support/page-audit'
@@ -11,11 +11,11 @@ function teamRows(body: any) {
   return body?.data?.data || []
 }
 
-test.describe('student mode API isolation @smoke', () => {
+test.describe('workspace isolation API isolation @smoke', () => {
   test('campus and personal team resources stay isolated', async ({ request }) => {
     const campus = await loginAs(request, 'campusStudent')
     const personal = await loginAs(request, 'personalStudent')
-    const campusHeaders = { ...bearer(campus), 'X-OI-Organization-ID': `org_${ids.school}` }
+    const campusHeaders = { ...sessionCookie(campus), 'X-OI-Organization-ID': `org_${ids.school}` }
 
     const campusMine = await request.get('/api/teams?view=mine&pageSize=100', {
       headers: campusHeaders,
@@ -27,7 +27,7 @@ test.describe('student mode API isolation @smoke', () => {
     expect(campusTeams.every((team: any) => team.scope === 'campus')).toBe(true)
 
     const personalMine = await request.get('/api/teams?view=mine&pageSize=100', {
-      headers: bearer(personal),
+      headers: sessionCookie(personal),
     })
     expect(personalMine.status()).toBe(200)
     const personalTeams = teamRows(await personalMine.json())
@@ -37,7 +37,7 @@ test.describe('student mode API isolation @smoke', () => {
     expect(personalTeams.every((team: any) => !('schoolId' in team))).toBe(true)
 
     const personalDetail = await request.get(`/api/teams/${ids.personalTeam}`, {
-      headers: bearer(personal),
+      headers: sessionCookie(personal),
     })
     expect(personalDetail.status()).toBe(200)
     const personalTeam = (await personalDetail.json()).data
@@ -50,7 +50,7 @@ test.describe('student mode API isolation @smoke', () => {
       headers: campusHeaders,
     })).status()).toBe(403)
     expect((await request.get(`/api/teams/${ids.team}`, {
-      headers: bearer(personal),
+      headers: sessionCookie(personal),
     })).status()).toBe(403)
 
     for (const path of [
@@ -60,7 +60,7 @@ test.describe('student mode API isolation @smoke', () => {
       `/api/teams/${ids.personalTeam}/pending-invites`,
       `/api/teams/${ids.personalTeam}/join-requests`,
     ]) {
-      expect((await request.get(path, { headers: bearer(personal) })).status()).toBe(200)
+      expect((await request.get(path, { headers: sessionCookie(personal) })).status()).toBe(200)
       expect((await request.get(path, { headers: campusHeaders })).status()).toBe(403)
     }
   })
@@ -68,11 +68,11 @@ test.describe('student mode API isolation @smoke', () => {
   test('campus and personal rankings expose separate identity contracts', async ({ request }) => {
     const campus = await loginAs(request, 'campusStudent')
     const personal = await loginAs(request, 'personalStudent')
-    const campusHeaders = { ...bearer(campus), 'X-OI-Organization-ID': `org_${ids.school}` }
+    const campusHeaders = { ...sessionCookie(campus), 'X-OI-Organization-ID': `org_${ids.school}` }
 
     for (const endpoint of ['rating', 'solved']) {
       const response = await request.get(`/api/rankings/personal/${endpoint}?pageSize=100`, {
-        headers: bearer(personal),
+        headers: sessionCookie(personal),
       })
       expect(response.status()).toBe(200)
       const body = await response.json()
@@ -88,7 +88,7 @@ test.describe('student mode API isolation @smoke', () => {
       headers: campusHeaders,
     })).status()).toBe(200)
     expect((await request.get(`/api/rankings/organizations/org_${ids.school}/rating`, {
-      headers: bearer(personal),
+      headers: sessionCookie(personal),
     })).status()).toBe(403)
   })
 })

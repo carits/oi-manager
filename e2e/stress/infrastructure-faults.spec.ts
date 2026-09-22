@@ -4,7 +4,7 @@ import path from 'node:path'
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { PrismaClient } from '@prisma/client'
 import WebSocket from 'ws'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { loadRuntimeSecrets } from '../fixtures/runtime'
 
 const databaseUrl = process.env.E2E_DATABASE_URL!
@@ -12,9 +12,9 @@ const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
 const resultDir = path.resolve('test-results/stress')
 const judgeToken = loadRuntimeSecrets().judgeToken
 
-async function submit(request: APIRequestContext, token: string, code: string) {
+async function submit(request: APIRequestContext, cookie: string, code: string) {
   const response = await request.post('/api/submit', {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Cookie: cookie },
     data: { problemId: 'E2E-1000', oj: 'carits', language: 'cpp', code, submitMethod: 'local' },
   })
   const body = await response.json()
@@ -46,13 +46,22 @@ test('sandbox and database interruptions retry without losing or mis-scoring sub
   const student = await loginAs(request, 'campusStudent')
   const arm = await fetch('http://127.0.0.1:15052/__fault/next-reset', { method: 'POST' })
   expect(arm.status).toBe(204)
-  const sandboxSubmission = await submit(request, student.token,
+  const sandboxSubmission = await submit(request, student.cookie,
     '#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}')
-  await expect.poll(async () => (await prisma.submission.findUniqueOrThrow({ where: { id: sandboxSubmission } })).result,
-    { intervals: [100, 250, 500, 1000], timeout: 90_000 }).toBe('accepted')
+  await expect.poll(async () => (
+    await prisma.submission.findUniqueOrThrow({
+      where: { id: sandboxSubmission },
+      include: { CurrentJudgeRun: true },
+    })
+  ).CurrentJudgeRun?.result,
+  { intervals: [100, 250, 500, 1000], timeout: 90_000 }).toBe('accepted')
   expect(fs.readFileSync(path.join(resultDir, 'judge.log'), 'utf8')).toContain('Retryable infrastructure failure')
-  expect(await prisma.submission.findUniqueOrThrow({ where: { id: sandboxSubmission } }))
-    .toMatchObject({ result: 'accepted', score: 100, judgeId: null, judgeStarted: null })
+  const sandboxFinal = await prisma.submission.findUniqueOrThrow({
+    where: { id: sandboxSubmission },
+    include: { CurrentJudgeRun: { include: { CurrentAttempt: true } } },
+  })
+  expect(sandboxFinal.CurrentJudgeRun).toMatchObject({ status: 'FINALIZED', result: 'accepted', score: 100 })
+  expect(sandboxFinal.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ state: 'SUCCEEDED', leaseUntil: null })
 
   const problem = await prisma.problem.findUniqueOrThrow({ where: { id: 'e2e-problem' } })
   const config = JSON.stringify({ mode: 'acm', type: 'default', time: '5000ms', memory: '256MB',
@@ -61,26 +70,43 @@ test('sandbox and database interruptions retry without losing or mis-scoring sub
   if (problem.latestTestSetRevisionId) {
     await prisma.problemTestSetRevision.update({ where: { id: problem.latestTestSetRevisionId }, data: { judgeConfig: config } })
   }
-  const databaseSubmission = await submit(request, student.token,
+  const databaseSubmission = await submit(request, student.cookie,
     '#include <chrono>\n#include <iostream>\n#include <thread>\nint main(){int a,b;std::cin>>a>>b;std::this_thread::sleep_for(std::chrono::milliseconds(1800));std::cout<<a+b;}')
-  await expect.poll(async () => (await prisma.submission.findUniqueOrThrow({ where: { id: databaseSubmission } })).result,
-    { intervals: [50, 100, 200], timeout: 15_000 }).toBe('judging')
+  await expect.poll(async () => (
+    await prisma.submission.findUniqueOrThrow({
+      where: { id: databaseSubmission },
+      include: { CurrentJudgeRun: true },
+    })
+  ).CurrentJudgeRun?.status,
+  { intervals: [50, 100, 200], timeout: 15_000 }).toBe('RUNNING')
   const dropDatabase = await fetch('http://127.0.0.1:15434/__fault/drop?ms=3000', { method: 'POST' })
   expect(dropDatabase.status).toBe(204)
 
   await expect.poll(async () => {
     try {
-      return (await prisma.submission.findUniqueOrThrow({ where: { id: databaseSubmission } })).result
+      return (await prisma.submission.findUniqueOrThrow({
+        where: { id: databaseSubmission },
+        include: { CurrentJudgeRun: true },
+      })).CurrentJudgeRun?.result
     } catch {
       return 'database-unavailable'
     }
   },
     { intervals: [250, 500, 1000], timeout: 30_000 }).toBe('accepted')
-  expect(await prisma.submission.findUniqueOrThrow({ where: { id: databaseSubmission } }))
-    .toMatchObject({ result: 'accepted', score: 100, judgeId: null, judgeStarted: null })
+  const databaseFinal = await prisma.submission.findUniqueOrThrow({
+    where: { id: databaseSubmission },
+    include: { CurrentJudgeRun: { include: { CurrentAttempt: true } } },
+  })
+  expect(databaseFinal.CurrentJudgeRun).toMatchObject({ status: 'FINALIZED', result: 'accepted', score: 100 })
+  expect(databaseFinal.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ state: 'SUCCEEDED', leaseUntil: null })
   expect(fs.readFileSync(path.join(resultDir, 'server.log'), 'utf8')).toContain('judge_result_persistence_retry')
-  const statuses = await prisma.submission.groupBy({
-    by: ['result'], where: { id: { in: [sandboxSubmission, databaseSubmission] } }, _count: true,
+  const statuses = await prisma.judgeRun.groupBy({
+    by: ['result'],
+    where: {
+      status: 'FINALIZED',
+      Submission: { id: { in: [sandboxSubmission, databaseSubmission] }, currentJudgeRunId: { not: null } },
+    },
+    _count: true,
   })
   expect(statuses).toEqual([{ result: 'accepted', _count: 2 }])
 
@@ -136,5 +162,5 @@ test('sandbox and database interruptions retry without losing or mis-scoring sub
   expect(problemFiles.filter(file => file.includes(faultHackId) && file.endsWith('.pending'))).toEqual([])
   expect(fs.readFileSync(path.join(resultDir, 'server.log'), 'utf8')).toContain(faultHackId)
   expect(fs.readFileSync(path.join(resultDir, 'server.log'), 'utf8')).toContain('judge_result_persistence_retry')
-  expect((await request.get('/api/readiness', { headers: bearer(student) })).status()).toBe(200)
+  expect((await request.get('/api/readiness', { headers: sessionCookie(student) })).status()).toBe(200)
 })

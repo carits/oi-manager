@@ -12,7 +12,6 @@ export type AuthRole =
 export interface AuthAccount {
   username: string
   password: string
-  loginRole: 'admin' | 'teacher' | 'student'
   workspaceMode?: 'work' | 'personal'
   storageState: string
 }
@@ -24,38 +23,32 @@ export const accounts: Record<AuthRole, AuthAccount> = {
   superAdmin: {
     username: 'admin',
     password: accountPassword,
-    loginRole: 'admin',
     storageState: path.join(authDir, 'super-admin.json'),
   },
   platformAdmin: {
     username: 'platform_admin',
     password: accountPassword,
-    loginRole: 'admin',
     storageState: path.join(authDir, 'platform-admin.json'),
   },
   principal: {
     username: 'teacher1',
     password: accountPassword,
-    loginRole: 'teacher',
     storageState: path.join(authDir, 'principal.json'),
   },
   teacher: {
     username: 'teacher2',
     password: accountPassword,
-    loginRole: 'teacher',
     storageState: path.join(authDir, 'teacher.json'),
   },
   campusStudent: {
     username: 'student1',
     password: accountPassword,
-    loginRole: 'student',
     workspaceMode: 'work',
     storageState: path.join(authDir, 'campus-student.json'),
   },
   personalStudent: {
     username: 'personal_student1',
     password: accountPassword,
-    loginRole: 'student',
     workspaceMode: 'personal',
     storageState: path.join(authDir, 'personal-student.json'),
   },

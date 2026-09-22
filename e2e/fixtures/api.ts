@@ -2,11 +2,9 @@ import { expect, type APIRequestContext } from '@playwright/test'
 import { accounts, type AuthRole } from './auth'
 
 export interface AuthSession {
-  token: string
+  cookie: string
   userId: string
-  role: string
-  schoolId?: string
-  studentMode?: string
+  accountRole: 'user' | 'platform_admin' | 'super_admin'
   workspaceMode?: 'work' | 'personal'
 }
 
@@ -19,7 +17,6 @@ export async function loginAs(
     data: {
       username: account.username,
       password: account.password,
-      role: account.loginRole,
       workspaceMode: account.workspaceMode,
     },
   })
@@ -27,11 +24,13 @@ export async function loginAs(
   expect(response.status()).toBe(200)
   const body = await response.json()
   expect(body.success).toBe(true)
-  return body.data as AuthSession
+  const cookie = response.headers()['set-cookie']?.split(';', 1)[0]
+  expect(cookie).toBeTruthy()
+  return { ...body.data, cookie } as AuthSession
 }
 
-export function bearer(session: AuthSession) {
-  return { Authorization: `Bearer ${session.token}` }
+export function sessionCookie(session: AuthSession) {
+  return { Cookie: session.cookie }
 }
 
 export function responseItems(data: unknown): unknown[] {

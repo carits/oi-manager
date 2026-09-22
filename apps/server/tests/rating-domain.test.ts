@@ -8,14 +8,14 @@ import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from '.
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 import { lockRatingParticipantTx, processDueContestRatings } from '../src/modules/rating/application/contest-rating.service'
-import { ensureContestAggregateTx, syncContestProblemAggregateTx } from './helpers/legacy-contest-fixture'
+import { ensureCanonicalContestFixtureTx, syncCanonicalContestProblemFixtureTx } from './helpers/contest-fixture'
 import { holdContestFinalizationForRejudgeTx } from '../src/modules/contest/contest-command.service'
 
 const app = createTestApp()
 
 async function createContestRuntimeFixture(args: Prisma.TrainingCreateArgs) {
   const runtime = await prisma.training.create(args)
-  const aggregate = await prisma.$transaction(tx => ensureContestAggregateTx(tx, runtime.id))
+  const aggregate = await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, runtime.id))
   if (!aggregate) throw new Error('Contest aggregate missing')
   return { ...runtime, canonicalContestId: aggregate.id }
 }
@@ -159,7 +159,7 @@ describe('rating domain HTTP and persistence', () => {
     const problem = await prisma.problem.create({ data: { id: crypto.randomUUID(), platform: 'carits', problemId: `RATING_${crypto.randomUUID()}`, title: 'Rating test', ownerId: manager.user.id, visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', publishedAt: new Date() } })
     const contest = await createContestRuntimeFixture({ data: { title: options.title || 'Rated IOI contest', format: 'ioi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() - startHoursAgo * 3600_000), endTime: new Date(Date.now() - endHoursAgo * 3600_000), status: 'finished', finalizationStatus: 'JUDGING', createdBy: manager.user.id } })
     const trainingProblem = await prisma.trainingProblem.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 0, points: 100 } })
-    const canonicalProblem = await prisma.$transaction(tx => syncContestProblemAggregateTx(tx, trainingProblem.id))
+    const canonicalProblem = await prisma.$transaction(tx => syncCanonicalContestProblemFixtureTx(tx, trainingProblem.id))
     if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
     await prisma.contestRatingConfig.create({ data: { id: crypto.randomUUID(), contestId: contest.canonicalContestId, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
     for (const [index, user] of [first, second].entries()) {

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 
 const submissionCount = Number(process.env.E2E_STRESS_SUBMISSIONS || 100)
 const roundCount = Number(process.env.E2E_STRESS_ROUNDS || 1)
@@ -68,7 +68,7 @@ async function loadSubmissionPages(request: APIRequestContext, headers: Record<s
 test(`real go-judge completes ${roundCount} × ${submissionCount} isolated submissions without leaks or stuck work`, async ({ request }) => {
   test.setTimeout(Math.max(15 * 60_000, roundCount * 3 * 60_000))
   const student = await loginAs(request, 'campusStudent')
-  const headers = bearer(student)
+  const headers = sessionCookie(student)
   const stack = JSON.parse(fs.readFileSync(path.resolve('test-results/stress/stack-pids.json'), 'utf8')) as {
     apiPid: number
     judgePid: number
