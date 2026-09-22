@@ -308,8 +308,13 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setGroupChangeParticipant(undefined); setGroupChangeTarget(''); setGroupChangeReason(''); setGroupChangeMode('immediate'); setGroupChangeStageId(''); await load()
   }
   const submitTransition = async () => {
-    if (!transitionDialog || !transitionReason.trim()) return
-    if (await transitionStage(transitionDialog.action, transitionDialog.stageId, { ...(transitionDialog.outcome ? { outcome: transitionDialog.outcome } : {}), reason: transitionReason.trim() })) {
+    if (!transitionDialog) return
+    const requiresReason = transitionDialog.action === 'skip_pending' || transitionDialog.outcome === 'ended_early'
+    if (requiresReason && !transitionReason.trim()) return
+    if (await transitionStage(transitionDialog.action, transitionDialog.stageId, {
+      ...(transitionDialog.outcome ? { outcome: transitionDialog.outcome } : {}),
+      ...(transitionReason.trim() ? { reason: transitionReason.trim() } : {}),
+    })) {
       setTransitionDialog(undefined); setTransitionReason('')
     }
   }
@@ -334,6 +339,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const currentStageLimit = currentStage?.effectiveDurationSeconds || currentStage?.plannedDurationSeconds || null
   const currentStageRemaining = currentStageLimit == null ? null : Math.max(0, currentStageLimit - currentStageElapsed)
   const currentGroupName = data.participant?.currentGroupId ? currentStage?.Groups.find(group => group.id === data.participant?.currentGroupId)?.name : null
+  const transitionStageRecord = transitionDialog ? data.session.Stages.find(stage => stage.id === transitionDialog.stageId) : undefined
+  const transitionIsCurrent = Boolean(transitionStageRecord && transitionStageRecord.id === currentStage?.id)
+  const transitionElapsedSeconds = transitionIsCurrent ? currentStageElapsed : transitionStageRecord?.activeElapsedSeconds || 0
+  const transitionPlannedSeconds = transitionStageRecord?.plannedDurationSeconds || 0
+  const transitionCompletionPercent = dashboard?.summary.total
+    ? Math.round((dashboard.summary.completed / dashboard.summary.total) * 100)
+    : 0
+  const transitionNextStage = transitionDialog?.action === 'advance' ? nextPendingStage : undefined
   const currentProblemProgress = selectedId ? data.progress.find(item => item.stageProblemId === selectedId) : undefined
   const scoreGoals = problem?.scoreGoals?.map(goal => goal.score).sort((a, b) => a - b) || []
   const nextScoreGoal = activeStrategy?.nextScoreTarget ?? scoreGoals.find(score => score > (currentProblemProgress?.bestScore || 0))
@@ -370,7 +383,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {status === 'SCHEDULED' && currentStage && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void transitionStage('start', currentStage.id)}>开始</Button>}
         {status === 'RUNNING' && <><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>软暂停</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>硬暂停</Button></>}
         {status === 'PAUSED' && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void command('RESUME_SESSION', {}, 'ALL', '')}>恢复</Button>}
-        {['RUNNING', 'PAUSED'].includes(status) && currentStage && <><Button variant="secondary" disabled={commandBusy} onClick={() => void transitionStage(nextPendingStage ? 'advance' : 'end_session', currentStage.id, { outcome: 'completed', ...(nextPendingStage ? {} : { reason: '全部阶段已完成' }) })}>{nextPendingStage ? '完成并进入下一阶段' : '完成并结束训练'}</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前阶段</Button><Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束整场训练</Button></>}
+        {['RUNNING', 'PAUSED'].includes(status) && currentStage && <><Button variant="secondary" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'completed' }); setTransitionReason('') }}>{nextPendingStage ? '完成并进入下一阶段' : '完成并结束训练'}</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前阶段</Button><Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束整场训练</Button></>}
         {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
         {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(`${pathname}/design?copyStage=${encodeURIComponent(currentStage.id)}`)}>复制当前阶段为未来阶段</Button>}
         {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
@@ -401,7 +414,46 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     {!data.manager && peerProgress && peerProgress.entries.length > 0 && <Section title="同学训练进度" description={`可见内容：${visibilityLabel[peerProgress.peerVisibility] || peerProgress.peerVisibility} · 排列方式：${rankingLabel[peerProgress.rankingMode] || peerProgress.rankingMode}`}><div className={styles.peerGrid}>{peerProgress.entries.map(item => <article className={styles.peerCard} key={item.user.id}>{item.rank && <span>#{item.rank}</span>}<strong>{item.user.username}</strong><span>完成 {item.completed}/{item.total}</span>{item.score !== undefined && <span>{item.score} 分</span>}{item.penaltyMinutes !== undefined && <span>罚时 {item.penaltyMinutes} 分钟</span>}{item.attempts !== undefined && <span>{item.attempts} 次提交</span>}</article>)}</div></Section>}
     <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理基础学员名单" description="基础名单只决定谁参加训练；分组在每个阶段中独立配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
     <FormDialog isOpen={Boolean(groupChangeParticipant)} onClose={() => setGroupChangeParticipant(undefined)} title="调整阶段分组" description="可立即调整当前要求，也可预设下一阶段；既有草稿、提交和历史进度永不删除。" onSubmit={() => void submitGroupChange()} submitText="确认换组" loading={commandBusy} dirty={Boolean(groupChangeReason)}><div className={styles.stack}><p>学员：<strong>{groupChangeParticipant?.user.username}</strong></p><label className={styles.field}>生效方式<Select value={groupChangeMode} onChange={event => { const mode = event.target.value as 'immediate' | 'next_stage'; setGroupChangeMode(mode); setGroupChangeTarget(''); if (mode === 'next_stage') setGroupChangeStageId(futureGroupedStages[0]?.id || '') }}><option value="immediate" disabled={currentStage?.audienceMode !== 'GROUPED'}>立即应用到当前阶段</option><option value="next_stage" disabled={!futureGroupedStages.length}>预设下一阶段</option></Select></label>{groupChangeMode === 'next_stage' && <label className={styles.field}>目标阶段<Select value={groupChangeStageId} onChange={event => { setGroupChangeStageId(event.target.value); setGroupChangeTarget('') }}>{futureGroupedStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}<label className={styles.field}>目标分组<Select value={groupChangeTarget} onChange={event => setGroupChangeTarget(event.target.value)}><option value="">请选择</option>{groupTargetStage?.Groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label><label className={styles.field}>调整原因<Textarea rows={4} maxLength={2000} value={groupChangeReason} onChange={event => setGroupChangeReason(event.target.value)} /></label></div></FormDialog>
-    <FormDialog isOpen={Boolean(transitionDialog)} onClose={() => setTransitionDialog(undefined)} title={transitionDialog?.action === 'skip_pending' ? '跳过未来阶段' : transitionDialog?.action === 'end_session' ? '结束训练' : '提前结束当前阶段'} description="该操作会写入不可变课堂时间线，已运行阶段不可回滚。" onSubmit={() => void submitTransition()} submitText="确认执行" loading={commandBusy} dirty={Boolean(transitionReason)}><label className={styles.field}>原因<Textarea rows={5} maxLength={2000} value={transitionReason} onChange={event => setTransitionReason(event.target.value)} /></label></FormDialog>
+    <FormDialog
+      isOpen={Boolean(transitionDialog)}
+      onClose={() => { setTransitionDialog(undefined); setTransitionReason('') }}
+      title={transitionDialog?.action === 'skip_pending'
+        ? '跳过未来阶段'
+        : transitionDialog?.outcome === 'completed'
+          ? transitionDialog?.action === 'end_session' ? '确认完成并结束训练' : '确认完成当前阶段'
+          : transitionDialog?.action === 'end_session' ? '提前结束训练' : '提前结束当前阶段'}
+      description="阶段结束会写入不可变课堂时间线；已运行阶段不能回滚或重新编辑。"
+      onSubmit={() => void submitTransition()}
+      submitText={transitionDialog?.action === 'skip_pending' ? '确认跳过' : transitionDialog?.outcome === 'completed' ? '确认完成' : '确认提前结束'}
+      loading={commandBusy}
+      dirty={Boolean(transitionReason)}
+    >
+      <div className={styles.stack}>
+        {transitionStageRecord && <div className={styles.card}>
+          <strong>{transitionStageRecord.name}</strong>
+          <div className={styles.summary}>
+            <div className={styles.metric}><strong>{transitionPlannedSeconds ? formatDuration(transitionPlannedSeconds) : '未设置'}</strong>计划时长</div>
+            <div className={styles.metric}><strong>{formatDuration(transitionElapsedSeconds)}</strong>实际用时</div>
+            {transitionIsCurrent && <div className={styles.metric}><strong>{transitionCompletionPercent}%</strong>学员完成率</div>}
+            {transitionNextStage && <div className={styles.metric}><strong>{transitionNextStage.name}</strong>下一阶段</div>}
+          </div>
+        </div>}
+        {transitionDialog?.action !== 'skip_pending' && <label className={styles.field}>
+          结束方式
+          <Select
+            value={transitionDialog?.outcome || 'completed'}
+            onChange={event => setTransitionDialog(current => current ? { ...current, outcome: event.target.value as 'completed' | 'ended_early' } : current)}
+          >
+            <option value="completed">正常完成</option>
+            <option value="ended_early">提前结束</option>
+          </Select>
+        </label>}
+        <label className={styles.field}>
+          {transitionDialog?.action === 'skip_pending' || transitionDialog?.outcome === 'ended_early' ? '原因（必填）' : '备注（可选）'}
+          <Textarea rows={5} maxLength={2000} value={transitionReason} onChange={event => setTransitionReason(event.target.value)} />
+        </label>
+      </div>
+    </FormDialog>
     <FormDialog isOpen={extensionOpen} onClose={() => setExtensionOpen(false)} title="延长当前阶段" description="延时作为运行记录追加，不会覆盖原计划时长。" onSubmit={() => void extendCurrentStage()} submitText="确认延长" loading={commandBusy} dirty={Boolean(extensionReason)}><div className={styles.stack}><label className={styles.field}>延长分钟数<Input type="number" min={1} max={1440} value={extensionMinutes} onChange={event => setExtensionMinutes(Number(event.target.value))} /></label><label className={styles.field}>原因<Textarea rows={4} maxLength={2000} value={extensionReason} onChange={event => setExtensionReason(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={messageOpen} onClose={() => setMessageOpen(false)} title="发送教练消息" description={`发送给：${commandTargetType === 'ALL' ? '全体学员' : commandTargetType === 'GROUP' ? '指定分组' : commandTargetType === 'USER' ? '指定学员' : '当前团队'}`} onSubmit={() => void command('SHOW_MESSAGE', { message, messageType }).then(success => { if (success) { setMessageOpen(false); setMessage('') } })} submitText="发送消息" dirty={Boolean(message)}><div className={styles.stack}><label className={styles.field}>消息类型<Select value={messageType} onChange={event => setMessageType(event.target.value)}><option value="INFO">信息</option><option value="WARNING">提醒</option><option value="INSTRUCTION">教学指令</option><option value="COUNTDOWN">倒计时</option></Select></label><label className={styles.field}>消息内容<Textarea rows={6} maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={hintOpen} onClose={() => setHintOpen(false)} title="新增分级提示" onSubmit={() => void createHint()} submitText="创建提示" dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>{hintMode === 'TIME' ? '触发秒数' : hintMode === 'ATTEMPT' ? '触发提交次数' : '触发分数'}<Input type="number" min={hintMode === 'TIME' ? 60 : hintMode === 'SCORE' ? 0 : 1} max={hintMode === 'TIME' ? 86400 : 100} value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>
