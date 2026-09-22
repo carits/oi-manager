@@ -13,7 +13,7 @@ export type UnlockCondition = {
 }
 export type UnlockPolicy = { mode: 'ANY' | 'ALL'; conditions: UnlockCondition[] }
 export type ProblemTimeAction = 'REMIND' | 'RECOMMEND_SWITCH' | 'LOCK_SUBMISSION' | 'FORCE_SWITCH'
-export type ProblemTimePolicy = { mode: 'NONE' } | { mode: ProblemTimeAction | 'SOFT' | 'HARD' | 'SWITCH_REQUIRED'; action?: ProblemTimeAction; limitSeconds: number }
+export type ProblemTimePolicy = { mode: 'NONE' } | { mode: ProblemTimeAction; action?: ProblemTimeAction; limitSeconds: number }
 export type StuckPolicy = { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }
 export type Assignment = {
   id?: string
