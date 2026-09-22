@@ -19,6 +19,7 @@ import {
 import type { StorageType, AccessLevel, FileCategory, OwnerType } from '../config/storage'
 import type { JwtPayload } from '@oi-manager/shared'
 import { canViewProblem } from '../modules/problem/problem.access'
+import { canAccessTraining } from '../modules/training/training.helpers'
 import { resolveStoragePath, validateMimeForExtension, validateUploadedFileContent } from './file-security'
 
 // ==================== 类型定义 ====================
@@ -416,17 +417,31 @@ class FileService {
         return !!problem && canViewProblem(user, problem)
       }
       case 'contest': {
-        // 比赛资源：检查是否是团队成员
-        const contest = await prisma.contest.findUnique({
-          where: { id: file.ownerId },
-          select: { teamId: true }
+        const numericPublicId = /^\d+$/.test(file.ownerId) ? Number(file.ownerId) : null
+        const contest = await prisma.contest.findFirst({
+          where: numericPublicId ? { OR: [{ id: file.ownerId }, { publicId: numericPublicId }] } : { id: file.ownerId },
+          select: {
+            teamId: true,
+            organizationId: true,
+            createdBy: true,
+            scope: true,
+            Team: { select: { organizationId: true } },
+          },
         })
         if (!contest) return false
-        // 团队成员允许访问
-        if (contest.teamId) {
-          return this.checkTeamMembership(user, contest.teamId)
+        const resourceOrganizationId = contest.organizationId || contest.Team?.organizationId || null
+        if (contest.scope !== 'platform') {
+          if (resourceOrganizationId) {
+            if (!user.organizationId || resourceOrganizationId !== user.organizationId) return false
+          } else if (user.organizationId) {
+            return false
+          }
         }
-        return false
+        return canAccessTraining(user.userId, {
+          teamId: contest.teamId,
+          organizationId: resourceOrganizationId,
+          scope: contest.scope,
+        })
       }
       case 'team': {
         // 团队资源：检查是否是团队成员
