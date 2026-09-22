@@ -97,9 +97,7 @@ describe('independent assignment domain', () => {
   it('binds assignment list, create and direct-id access to the active organization context', async () => {
     const token = generateTokenFromUser(teacher.user)
     const secondOrgOwner = await createTestUser({ organization: { role: 'teacher' } })
-    const secondOrganizationId = (await prisma.school.findUniqueOrThrow({
-      where: { id: secondOrgOwner.organization!.organizationId! },
-    })).organizationId!
+    const secondOrganizationId = secondOrgOwner.organization!.organizationId
 
     const membershipId = crypto.randomUUID()
     await prisma.organizationMembership.create({
