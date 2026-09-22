@@ -120,6 +120,41 @@ describe('Stage-driven Training Engine', () => {
     }
   })
 
+  it('keeps currentStageId empty after publish and enters the first stage only on start', async () => {
+    const created = await createTwoStageSession('发布不提前进入阶段')
+    const token = generateTokenFromUser(coach.user)
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { Stages: { orderBy: { orderIndex: 'asc' } }, Participants: true },
+    })
+    const first = session.Stages[0]
+
+    const published = await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/publish`)
+      .send({ expectedRevision: 0 })
+    expect(published.status).toBe(200)
+
+    const scheduled = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: session.id },
+      include: { Participants: true },
+    })
+    expect(scheduled.status).toBe('SCHEDULED')
+    expect(scheduled.currentStageId).toBeNull()
+    expect(scheduled.Participants.every(participant => participant.currentStageId === null)).toBe(true)
+
+    const started = await createAuthenticatedRequest(app, token)
+      .post(`/api/training-sessions/${session.id}/stage-transitions`)
+      .send({ expectedRevision: 1, action: 'start', stageId: first.id })
+    expect(started.status).toBe(200)
+
+    const running = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: session.id },
+      include: { Participants: true },
+    })
+    expect(running.currentStageId).toBe(first.id)
+    expect(running.Participants.every(participant => participant.currentStageId === first.id)).toBe(true)
+  })
+
   it('ends the current stage through the explicit stage endpoint and advances to the next stage', async () => {
     const created = await createTwoStageSession('显式结束阶段')
     const token = generateTokenFromUser(coach.user)
