@@ -223,6 +223,80 @@ describe('Stage-driven Training Engine', () => {
     expect(running.Participants.every(participant => participant.currentStageId === first.id)).toBe(true)
   })
 
+  it('creates a multi-stage draft with independent grouping skeletons before problem assignment', async () => {
+    const token = generateTokenFromUser(coach.user)
+    const created = await createAuthenticatedRequest(app, token)
+      .post('/api/training-sessions')
+      .send({
+        title: '创建时多阶段分组骨架',
+        teamId: team.id,
+        participantUserIds: [student.user.id],
+        settings: { participantTarget: 'custom_students' },
+        stages: [
+          {
+            name: '热身',
+            kind: 'TRAINING',
+            audienceMode: 'ALL',
+            endPolicy: 'MANUAL',
+            accessPolicy: 'ALL_AT_ONCE',
+            accessScope: 'CURRENT_STAGE',
+            submissionMode: 'ENABLED',
+            problems: [],
+            groups: [],
+          },
+          {
+            name: '分层训练',
+            kind: 'TRAINING',
+            audienceMode: 'GROUPED',
+            endPolicy: 'MANUAL',
+            accessPolicy: 'ALL_AT_ONCE',
+            accessScope: 'CURRENT_STAGE',
+            submissionMode: 'ENABLED',
+            problems: [],
+            groups: [
+              { clientKey: 'foundation', name: '基础组', participantIds: [], problems: [] },
+              { clientKey: 'advanced', name: '提高组', participantIds: [], problems: [] },
+            ],
+          },
+          {
+            name: '统一讲解',
+            kind: 'TEACHING',
+            audienceMode: 'ALL',
+            endPolicy: 'MANUAL',
+            accessPolicy: 'TEACHER_CONTROLLED',
+            accessScope: 'CURRENT_STAGE',
+            submissionMode: 'DISABLED',
+            problems: [],
+            groups: [],
+          },
+        ],
+      })
+
+    expect(created.status).toBe(201)
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.body.data.id },
+      include: {
+        Stages: {
+          orderBy: { orderIndex: 'asc' },
+          include: {
+            Groups: { orderBy: { orderIndex: 'asc' } },
+            ParticipantAssignments: true,
+          },
+        },
+      },
+    })
+
+    expect(session.status).toBe('DRAFT')
+    expect(session.Stages.map(stage => [stage.name, stage.audienceMode])).toEqual([
+      ['热身', 'ALL'],
+      ['分层训练', 'GROUPED'],
+      ['统一讲解', 'ALL'],
+    ])
+    expect(session.Stages[1].Groups.map(group => group.name)).toEqual(['基础组', '提高组'])
+    expect(session.Stages[1].ParticipantAssignments).toHaveLength(1)
+    expect(session.Stages[1].ParticipantAssignments[0].groupId).toBeNull()
+  })
+
   it('ends the current stage through the explicit stage endpoint and advances to the next stage', async () => {
     const created = await createTwoStageSession('显式结束阶段')
     const token = generateTokenFromUser(coach.user)
