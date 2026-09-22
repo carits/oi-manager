@@ -1057,7 +1057,11 @@ function resolveTrainingPermissionLoaded(
   const plan = stageProblem.Plans.find(item => item.groupId === (stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
   const group = assignment?.groupId ? stage.Groups.find(item => item.id === assignment.groupId) : null
-  const effectiveRule = resolveEffectiveTrainingRule({ stage, group, plan })
+  const submissionDisabled = overlays.some(item => item.type === 'DISABLE_SUBMISSION')
+  const runtimeOverride = {
+    ...(submissionOverride ? { submissionPolicy: 'ENABLED' } : submissionDisabled ? { submissionPolicy: 'DISABLED' } : {}),
+  }
+  const effectiveRule = resolveEffectiveTrainingRule({ stage, group, plan, runtimeOverride })
   const accessPolicy = effectiveRule.problemAccessPolicy
 
   if (accessPolicy === 'TEACHER_CONTROLLED' && !unlocked) {
@@ -1084,10 +1088,6 @@ function resolveTrainingPermissionLoaded(
 
   if (session.status === 'SCHEDULED') return { canView: true, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SESSION_NOT_RUNNING' }
   if (session.status === 'PAUSED') return { canView: true, canSubmit: false, canEdit: session.pauseMode !== 'HARD', canOpenHint: false, reason: session.pauseMode === 'HARD' ? 'HARD_PAUSE' : 'SOFT_PAUSE' }
-
-  if (overlays.some(item => item.type === 'DISABLE_SUBMISSION') && !submissionOverride) {
-    return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'SUBMISSION_DISABLED' }
-  }
 
   const currentProgress = progressByProblem.get(stageProblemId)
   const timeState = evaluateProblemTimePolicy(
@@ -1134,7 +1134,7 @@ export async function joinTrainingSession(userId: string, sessionId: string) {
   const existing = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
   if (existing?.status === 'active') return existing
   if (session.joinMode === 'TEACHER_ASSIGN' || parseJsonObject(session.settings).rosterExplicit === true) throw new TrainingEngineError(409, 'TRAINING_JOIN_REQUIRES_ASSIGNMENT', '该训练需要教练将你加入名单并分配阶段')
-  const stageId = session.currentStageId || session.Stages[0]?.id
+  const stageId = session.currentStageId
   return prisma.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId } }, update: { status: 'active', currentStageId: stageId }, create: { sessionId, userId, currentStageId: stageId } })
 }
 
