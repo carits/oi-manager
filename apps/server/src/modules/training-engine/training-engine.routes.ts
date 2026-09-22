@@ -170,7 +170,7 @@ trainingEngineRouter.post('/training-sessions/participant-preview', authenticate
   } catch (error) { return sendError(error, res) }
 }))
 
-trainingEngineRouter.use('/training-sessions/:id', asyncHandler(async (request, _res, next) => {
+trainingEngineRouter.use('/training-sessions/:id', authenticate, asyncHandler(async (request, _res, next) => {
   const req = request as AuthRequest
   await assertTrainingSessionContext(req, req.params.id)
   next()
