@@ -16,20 +16,13 @@ export type TrainingRuntimeCommandContext = {
   payload: JsonRecord
   update: Prisma.TrainingSessionUpdateInput
   setNextStatus: (status: TrainingEngineSessionStatus | undefined) => void
-  activeStageIncrement: (stage: any, at?: Date) => number
-  sameOverlayTarget: (targetType: TrainingEngineTargetType, targetId: string | null) => Record<string, unknown>
-  restoreFocusParticipants: (tx: Prisma.TransactionClient, session: any, participants: any[]) => Promise<void>
-  targetApplies: (targetType: TrainingEngineTargetType, targetId: string | null, participant: any, session: any) => boolean
+  activeStageIncrement: (stage: any, at: Date) => number
+  sameOverlayTarget: (...args: any[]) => any
+  restoreFocusParticipants: (...args: any[]) => Promise<any>
+  targetApplies: (...args: any[]) => boolean
   boundedText: (value: unknown, maxLength: number, label: string, minLength?: number) => string
-  asJson: (value: unknown) => Prisma.InputJsonValue
-  appendEvent: (
-    tx: Prisma.TransactionClient,
-    sessionId: string,
-    type: string,
-    targetType: TrainingEngineTargetType,
-    targetId: string | null,
-    payload: Record<string, unknown>,
-  ) => Promise<unknown>
+  asJson: (value: unknown) => Prisma.InputJsonValue | undefined
+  appendEvent: (...args: any[]) => Promise<any>
 }
 
 export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCommandContext) {
