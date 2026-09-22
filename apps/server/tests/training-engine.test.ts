@@ -744,6 +744,46 @@ describe('Stage-driven Training Engine', () => {
     expect(await prisma.trainingSessionOverlay.count({ where: { sessionId: created.id, stageProblemId: futureStage.Problems[0].id } })).toBe(0)
   })
 
+  it('keeps the code draft after submitting the same StageProblem', async () => {
+    const created = await createSession()
+    const coachToken = generateTokenFromUser(coach.user)
+    const studentToken = generateTokenFromUser(student.user)
+    const stage = await prisma.trainingSessionStage.findFirstOrThrow({
+      where: { sessionId: created.id },
+      include: { Problems: true },
+    })
+    const stageProblem = stage.Problems[0]
+
+    expect((await createAuthenticatedRequest(app, coachToken)
+      .post(`/api/training-sessions/${created.id}/publish`)
+      .send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, coachToken)
+      .post(`/api/training-sessions/${created.id}/stage-transitions`)
+      .send({ expectedRevision: 1, action: 'start', stageId: stage.id })).status).toBe(200)
+
+    const source = '#include <bits/stdc++.h>\nint main(){return 0;}'
+    const saved = await createAuthenticatedRequest(app, studentToken)
+      .put(`/api/training-sessions/${created.id}/drafts/${stageProblem.id}`)
+      .send({ language: 'cpp17', code: source })
+    expect(saved.status).toBe(200)
+    const revision = saved.body.data.revision
+
+    const submitted = await createAuthenticatedRequest(app, studentToken)
+      .post(`/api/training-sessions/${created.id}/submit`)
+      .send({ stageProblemId: stageProblem.id, language: 'cpp17', code: source })
+    expect(submitted.status).toBe(201)
+
+    const draft = await createAuthenticatedRequest(app, studentToken)
+      .get(`/api/training-sessions/${created.id}/drafts/${stageProblem.id}`)
+    expect(draft.status).toBe(200)
+    expect(draft.body.data).toMatchObject({
+      stageProblemId: stageProblem.id,
+      language: 'cpp17',
+      code: source,
+      revision,
+    })
+  })
+
   it('isolates drafts when the same Problem appears in different Stages', async () => {
     const created = await createTwoStageSession('跨阶段草稿隔离')
     const coachToken = generateTokenFromUser(coach.user)
