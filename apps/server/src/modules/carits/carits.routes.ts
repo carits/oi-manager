@@ -3,7 +3,7 @@ import { asyncHandler } from '../../lib/asyncHandler'
 import { CaritsContracts } from '@oi-manager/contracts'
 import { sendContractData } from '../../lib/api-contract'
 import type { AuthRequest } from '../../middleware/auth'
-import { isPlatformAdministrator } from '../featureAvailability'
+import { hasOrganizationContext, isPlatformAdministrator } from '../featureAvailability'
 import {
   CaritsApplicationError,
   getOrganizationCaritsAccount,
@@ -34,11 +34,17 @@ caritsRouter.get('/me/transactions', caritsEndpoint(async (req, res) => {
 }))
 
 caritsRouter.get('/organizations/:organizationId', caritsEndpoint(async (req, res) => {
-  sendContractData(res, CaritsContracts.organizationAccount, await getOrganizationCaritsAccount(req.user!.userId, req.params.organizationId))
+  if (!hasOrganizationContext(req.user, req.params.organizationId)) {
+    return res.status(403).json({ success: false, message: '当前组织上下文无效' })
+  }
+  return sendContractData(res, CaritsContracts.organizationAccount, await getOrganizationCaritsAccount(req.user!.userId, req.params.organizationId))
 }))
 
 caritsRouter.get('/organizations/:organizationId/transactions', caritsEndpoint(async (req, res) => {
-  sendContractData(res, CaritsContracts.organizationTransactions, await getOrganizationCaritsAccount(req.user!.userId, req.params.organizationId, true))
+  if (!hasOrganizationContext(req.user, req.params.organizationId)) {
+    return res.status(403).json({ success: false, message: '当前组织上下文无效' })
+  }
+  return sendContractData(res, CaritsContracts.organizationTransactions, await getOrganizationCaritsAccount(req.user!.userId, req.params.organizationId, true))
 }))
 
 caritsRouter.get('/platform', caritsEndpoint(async (req, res) => {
