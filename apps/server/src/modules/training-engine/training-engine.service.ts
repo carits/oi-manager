@@ -1571,7 +1571,7 @@ export async function replaceTrainingRoster(userId: string, sessionId: string, b
     for (const item of participants) {
       const participantUserId = String(item.userId || '')
       if (!requested.has(participantUserId)) continue
-      await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active', currentStageId: session.currentStageId || session.Stages[0]?.id || null, currentProblemId: null, returnStageId: null, returnProblemId: null }, create: { sessionId, userId: participantUserId, currentStageId: session.currentStageId || session.Stages[0]?.id || null } })
+      await tx.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId: participantUserId } }, update: { status: 'active', currentStageId: session.currentStageId, currentProblemId: null, returnStageId: null, returnProblemId: null }, create: { sessionId, userId: participantUserId, currentStageId: session.currentStageId } })
     }
     await appendEvent(tx, sessionId, 'training.roster.updated', 'ALL', null, { participantCount: userIds.length })
   })
