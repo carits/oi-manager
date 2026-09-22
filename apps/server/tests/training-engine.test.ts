@@ -452,6 +452,55 @@ describe('Stage-driven Training Engine', () => {
     expect(report.problemSummaries.some(item => item.title === '题库后来改名，不应污染历史报告')).toBe(false)
   })
 
+  it('dispatches MOVE_GROUP as a Runtime Command without changing Stage Definition', async () => {
+    const secondProblem = await configuredProblem(coach.user.id)
+    const token = generateTokenFromUser(coach.user)
+    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({
+      title: 'Runtime MOVE_GROUP', teamId: team.id, participantUserIds: [student.user.id],
+      settings: { participantTarget: 'custom_students' },
+      stages: [{
+        name: '分层训练', kind: 'TRAINING', audienceMode: 'GROUPED', endPolicy: 'MANUAL',
+        accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [],
+        groups: [
+          { clientKey: 'foundation', name: '基础组', participantIds: [student.user.id], problems: [{ problemId: problem.id }] },
+          { clientKey: 'advanced', name: '提高组', participantIds: [], problems: [{ problemId: secondProblem.id }] },
+        ],
+      }],
+    })
+    expect(created.status).toBe(201)
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.body.data.id },
+      include: { Stages: { include: { Groups: true } } },
+    })
+    const stage = session.Stages[0]
+    const advanced = stage.Groups.find(item => item.name === '提高组')!
+    const definitionRevisionBefore = stage.definitionRevision
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: stage.id })).status).toBe(200)
+
+    const moved = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/commands`).send({
+      expectedRevision: 2,
+      type: 'MOVE_GROUP',
+      targetType: 'USER',
+      targetId: student.user.id,
+      payload: {
+        stageId: stage.id,
+        toGroupId: advanced.id,
+        effectiveMode: 'IMMEDIATE',
+        reason: 'Runtime command group move',
+      },
+    })
+    expect(moved.status).toBe(200)
+    expect(moved.body.data.participant).toMatchObject({ currentGroupId: advanced.id })
+
+    const persistedStage = await prisma.trainingSessionStage.findUniqueOrThrow({ where: { id: stage.id } })
+    expect(persistedStage.definitionRevision).toBe(definitionRevisionBefore)
+    expect(await prisma.trainingSessionStageGroupChange.findFirst({
+      where: { sessionId: session.id, toGroupId: advanced.id },
+    })).toMatchObject({ effectiveMode: 'IMMEDIATE', reason: 'Runtime command group move' })
+  })
+
   it('loads design problem metadata through the declared :problemId route parameter', async () => {
     const created = await createSession()
     const response = await createAuthenticatedRequest(app, generateTokenFromUser(coach.user))
