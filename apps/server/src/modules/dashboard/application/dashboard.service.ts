@@ -36,7 +36,12 @@ async function currentTeamIds(actor: DashboardActor) {
       userId: actor.userId,
       userType: actor.membershipType,
       status: 'active',
-      Team: { scope: actor.resourceScope },
+      Team: {
+        scope: actor.resourceScope,
+        ...(actor.resourceScope === 'campus'
+          ? { organizationId: actor.organizationId || '__missing_organization__' }
+          : { organizationId: null }),
+      },
     },
     select: { teamId: true },
   })
