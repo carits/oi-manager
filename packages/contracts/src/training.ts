@@ -46,7 +46,7 @@ export const TrainingStructureStageInputSchema = z.object({
 })
 export const TrainingStructureInputSchema = z.object({
   expectedRevision: z.number().int().nonnegative(), title: z.string().min(1).max(200), description: z.string().max(5000),
-  confirmDependentRemoval: z.boolean().optional(), stages: z.array(TrainingStructureStageInputSchema).min(1).max(100),
+  confirmDependentRemoval: z.boolean().optional(), stages: z.array(TrainingStructureStageInputSchema).min(1).max(30),
 })
 
 export const TrainingDesignProblemSchema = TrainingStructureProblemInputSchema.partial({ clientKey: true }).extend({
@@ -293,7 +293,7 @@ export const TrainingSessionCreateInputSchema = z.object({
   rankingMode: z.enum(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING']).optional(), peerVisibility: z.enum(['NONE', 'PROGRESS', 'SCORE', 'FULL']).optional(), joinMode: z.enum(['CURRENT_STAGE', 'TEACHER_ASSIGN']).optional(),
   allowHints: z.boolean().optional(),
   defaultAccessPolicy: TrainingStageAccessPolicySchema.optional(), defaultSubmissionMode: z.enum(['ENABLED', 'DISABLED']).optional(),
-  settings: JsonObjectSchema.optional(), stages: z.array(TrainingSessionCreateStageInputSchema).min(1).max(100).optional(),
+  settings: JsonObjectSchema.optional(), stages: z.array(TrainingSessionCreateStageInputSchema).min(1).max(30).optional(),
 })
 export const TrainingParticipantPreviewInputSchema = z.object({ organizationId: z.string().optional(), teamId: z.string().optional(), participantTarget: z.enum(['team', 'organization_students', 'custom_students']), participantUserIds: z.array(z.string()).max(5000).optional() })
 export const TrainingParticipantPreviewSchema = z.object({ participantCount: z.number().int(), targetName: z.string() })
