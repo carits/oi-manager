@@ -14,6 +14,11 @@ import { createTrainingCommandDispatcher } from './training-command.service'
 import { createTrainingRuntimeCommandHandlers } from './training-command.handlers'
 import { TrainingEventTypes } from './training-events'
 import {
+  requiredSessionProblemIds,
+  resolveParticipantSessionRequirements,
+  resolveParticipantStageRequirements,
+} from './training-requirement.service'
+import {
   evaluateProblemTimePolicy,
   normalizeTrainingAccessScope,
   normalizeTrainingProblemTimePolicy,
@@ -935,65 +940,6 @@ function conditionSatisfied(condition: any, progress: any) {
   if (condition?.type === 'TIME') return Number(progress?.activeSeconds || 0) >= Number(condition.value || 0)
   if (condition?.type === 'ATTEMPTS') return Number(progress?.attemptCount || 0) >= Number(condition.value || 0)
   return false
-}
-
-function requiredStageProblemIds(stage: SessionShape['Stages'][number], participantId: string) {
-  const assignment = stage.ParticipantAssignments.find(item => item.participantId === participantId)
-  const groupId = stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null
-  if (stage.audienceMode === 'GROUPED' && !groupId) return new Set<string>()
-  return new Set(stage.Problems
-    .filter(problem => problem.Plans.some(plan => plan.groupId === groupId))
-    .map(problem => problem.id))
-}
-
-type TrainingRequirementState = 'REQUIRED' | 'SATISFIED' | 'BYPASSED' | 'RETIRED'
-
-type RequirementProgress = {
-  stageProblemId: string
-  status: string
-}
-
-function resolveParticipantStageRequirements(
-  stage: SessionShape['Stages'][number],
-  participantId: string,
-  progressRows: RequirementProgress[] = [],
-) {
-  const requiredIds = requiredStageProblemIds(stage, participantId)
-  const stageProblemIds = new Set(stage.Problems.map(problem => problem.id))
-  const progressById = new Map(
-    progressRows
-      .filter(progress => stageProblemIds.has(progress.stageProblemId))
-      .map(progress => [progress.stageProblemId, progress] as const),
-  )
-  const visibleIds = new Set([...requiredIds, ...progressById.keys()])
-  return [...visibleIds].map(stageProblemId => {
-    const progress = progressById.get(stageProblemId)
-    let state: TrainingRequirementState
-    if (!requiredIds.has(stageProblemId)) state = 'RETIRED'
-    else if (progress?.status === 'SKIPPED') state = 'BYPASSED'
-    else if (progress?.status === 'COMPLETED') state = 'SATISFIED'
-    else state = 'REQUIRED'
-    return { stageProblemId, state, progress }
-  })
-}
-
-function resolveParticipantSessionRequirements(
-  session: SessionShape,
-  participantId: string,
-  progressRows: RequirementProgress[] = [],
-) {
-  return session.Stages.flatMap(stage =>
-    resolveParticipantStageRequirements(stage, participantId, progressRows)
-      .map(requirement => ({ ...requirement, stageId: stage.id })),
-  )
-}
-
-function requiredSessionProblemIds(session: SessionShape, participantId: string) {
-  return new Set(
-    resolveParticipantSessionRequirements(session, participantId)
-      .filter(requirement => requirement.state !== 'RETIRED')
-      .map(requirement => requirement.stageProblemId),
-  )
 }
 
 type TrainingPermissionResult = {
