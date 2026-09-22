@@ -6,15 +6,22 @@ async function loadLegacyTrainings(db: typeof prisma | any) {
     where: { type: 'training' },
     orderBy: { id: 'asc' },
     include: {
-      TrainingProblem: { orderBy: { orderIndex: 'asc' }, include: { Problem: { select: {
-        title: true,
-        latestTestSetRevisionId: true,
-        ProblemStatement: {
-          where: { isVisible: true },
-          orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }],
-          select: { type: true, format: true, language: true, content: true, fileUrl: true },
+      TrainingProblem: { orderBy: { orderIndex: 'asc' }, include: {
+        Problem: { select: {
+          title: true,
+          latestTestSetRevisionId: true,
+          ProblemStatement: {
+            where: { isVisible: true },
+            orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }],
+            select: { type: true, format: true, language: true, content: true, fileUrl: true },
+          },
+        } },
+        StatementSet: {
+          orderBy: { revision: 'desc' },
+          take: 1,
+          include: { Snapshot: { orderBy: { orderIndex: 'asc' } } },
         },
-      } } } },
+      } },
       TrainingParticipant: { orderBy: { joinedAt: 'asc' } },
       TrainingUserProblemStatus: true,
     },
@@ -29,8 +36,23 @@ function stableHash(rows: any[], validUserIds: Set<string>) {
       problem.orderIndex,
       problem.testSetRevisionId,
       problem.Problem.latestTestSetRevisionId,
+      problem.titleSnapshot,
+      problem.statementsSnapshotJson,
       problem.Problem.title,
       problem.Problem.ProblemStatement,
+      problem.StatementSet?.[0]?.revision,
+      problem.StatementSet?.[0]?.Snapshot?.map((snapshot: any) => [
+        snapshot.sourceType,
+        snapshot.name,
+        snapshot.title,
+        snapshot.language,
+        snapshot.format,
+        snapshot.content,
+        snapshot.snapshotFileId,
+        snapshot.fileName,
+        snapshot.isDefault,
+        snapshot.orderIndex,
+      ]),
     ]),
     participants: row.TrainingParticipant.map((participant: any) => [participant.userId, participant.userType, participant.joinedAt]),
     progress: row.TrainingUserProblemStatus.map((item: any) => [item.userId, item.trainingProblemId, item.bestScore, item.bestResult, item.attemptCount, item.updatedAt]),
@@ -44,6 +66,43 @@ function reasonFor(row: any, validUserIds: Set<string>) {
   const orphanUsers = [...new Set<string>([...row.TrainingParticipant.map((item: any) => item.userId), ...row.TrainingUserProblemStatus.map((item: any) => item.userId)])].filter(id => !validUserIds.has(id))
   if (orphanUsers.length) return `${orphanUsers.length} 个历史参与者已无有效 User 账号`
   return null
+}
+
+function parseLegacyStatementJson(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function legacyProblemSnapshot(problem: any) {
+  const selected = problem.StatementSet?.[0]?.Snapshot || []
+  const selectedStatements = selected.map((snapshot: any) => ({
+    type: 'statement',
+    format: snapshot.format,
+    language: snapshot.language,
+    content: snapshot.content,
+    fileUrl: null,
+    legacySnapshotFileId: snapshot.snapshotFileId || null,
+    legacyFileName: snapshot.fileName || null,
+    title: snapshot.title || null,
+    isDefault: Boolean(snapshot.isDefault),
+  }))
+  const legacyJson = parseLegacyStatementJson(problem.statementsSnapshotJson)
+  const fallbackStatements = problem.Problem.ProblemStatement.map((statement: any) => ({
+    type: statement.type,
+    format: statement.format,
+    language: statement.language,
+    content: statement.content,
+    fileUrl: statement.fileUrl,
+  }))
+  return {
+    title: problem.titleSnapshot || problem.Problem.title,
+    statements: selectedStatements.length ? selectedStatements : legacyJson.length ? legacyJson : fallbackStatements,
+  }
 }
 
 function mappedStatus(row: any, now = new Date()) {
@@ -200,21 +259,15 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
       const stageProblems = new Map<string, string>()
       for (const problem of row.TrainingProblem) {
         const revisionId = problem.testSetRevisionId || problem.Problem.latestTestSetRevisionId!
-        const statementSnapshot = problem.Problem.ProblemStatement.map((statement: any) => ({
-          type: statement.type,
-          format: statement.format,
-          language: statement.language,
-          content: statement.content,
-          fileUrl: statement.fileUrl,
-        }))
+        const frozen = legacyProblemSnapshot(problem)
         const created = await tx.trainingSessionStageProblem.create({ data: {
           stageId: stage.id,
           problemId: problem.problemId,
           testSetRevisionId: revisionId,
           alias: problem.alias,
           orderIndex: problem.orderIndex,
-          titleSnapshot: problem.Problem.title,
-          statementsSnapshot: statementSnapshot,
+          titleSnapshot: frozen.title,
+          statementsSnapshot: frozen.statements,
           targetScore: problem.points || (row.format === 'acm' ? 100 : null),
           judgeConfigProjection: problem.judgeConfigSnapshot,
         } })
