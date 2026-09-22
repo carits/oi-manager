@@ -150,7 +150,6 @@ trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/group-changes'
   try {
     const body = parseContractBody(TrainingContracts.changeStageGroup, req.body)
     const workspace = await changeTrainingStageGroup(req.user!.userId, req.params.id, req.params.stageId, body)
-    trainingMetrics.recordGroupMove()
     trainingMetrics.observeSession(req.params.id, workspace.session.status)
     sendContractData(res, TrainingContracts.changeStageGroup, workspace)
   } catch (error) { return sendError(error, res) }
