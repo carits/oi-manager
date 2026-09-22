@@ -1696,7 +1696,28 @@ export async function recordHeartbeat(userId: string, sessionId: string, body: a
     const current = await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } }, update: { lastOpenedAt: now, activeSeconds: { increment: elapsed }, continuousActiveSeconds: switchedProblem ? elapsed : { increment: elapsed }, lastProgressAt: now, status: preservedStatus }, create: { participantId: participant.id, stageProblemId, status: 'WORKING', firstOpenedAt: now, lastOpenedAt: now, activeSeconds: elapsed, continuousActiveSeconds: elapsed, lastProgressAt: now } })
     const terminal = ['COMPLETED', 'SKIPPED'].includes(current.status)
     const stuck = !terminal && current.activeSeconds >= minActiveSeconds && current.attemptCount >= minAttempts && (!current.lastScoreImprovedAt || now.getTime() - current.lastScoreImprovedAt.getTime() >= noImprovementSeconds * 1000)
-    if (stuck && current.status !== 'STUCK') await tx.trainingSessionProblemProgress.update({ where: { id: current.id }, data: { status: 'STUCK', stuckDetectedAt: now } })
+    if (switchedProblem && participant.currentProblemId) {
+      const previousProgress = await tx.trainingSessionProblemProgress.findUnique({
+        where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: participant.currentProblemId } },
+      })
+      if (previousProgress?.status === 'STUCK') {
+        await tx.trainingSessionProblemProgress.update({ where: { id: previousProgress.id }, data: { status: 'WORKING', stuckDetectedAt: null, continuousActiveSeconds: 0 } })
+        await appendEvent(tx, sessionId, 'training.problem.stuck_cleared', 'USER', userId, {
+          participantId: participant.id,
+          stageProblemId: participant.currentProblemId,
+          reason: 'problem_switch',
+          at: now.toISOString(),
+        })
+      }
+    }
+    if (stuck && current.status !== 'STUCK') {
+      await tx.trainingSessionProblemProgress.update({ where: { id: current.id }, data: { status: 'STUCK', stuckDetectedAt: now } })
+      await appendEvent(tx, sessionId, 'training.problem.stuck', 'USER', userId, {
+        participantId: participant.id,
+        stageProblemId,
+        at: now.toISOString(),
+      })
+    }
     return { participant: updatedParticipant, progress: { ...current, status: stuck ? 'STUCK' : current.status } }
   })
 }
@@ -2053,6 +2074,14 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     const nextStatus = completed ? 'COMPLETED' : existing?.status === 'STUCK' && !improved ? 'STUCK' : 'WORKING'
     await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: nextStatus, stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
     await tx.trainingSessionScoreEvent.create({ data: { sessionId: submission.trainingSessionId!, participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, submissionId: submission.id, score: submission.score, verdict: submission.result } })
+    if (existing?.status === 'STUCK' && (improved || completed)) {
+      await appendEvent(tx, submission.trainingSessionId!, 'training.problem.stuck_cleared', 'USER', submission.userId, {
+        participantId: participant.id,
+        stageProblemId: submission.trainingStageProblemId,
+        reason: completed ? 'completed' : 'score_improved',
+        at: new Date().toISOString(),
+      })
+    }
     await appendEvent(tx, submission.trainingSessionId!, 'training.progress.updated', 'USER', submission.userId, { stageProblemId: submission.trainingStageProblemId, score: submission.score, verdict: submission.result })
   })
 }
