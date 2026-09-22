@@ -128,6 +128,24 @@ Runtime Command 不再通过主服务中的巨型条件链执行。`training-com
 
 评测完成后幂等更新 Progress 与 ScoreEvent。Scheduler 是单例 Worker，只对 RUNNING Stage 评估 TIME/COMPLETION/HYBRID；与人工转换竞争时只有一个 CAS 成功。固定 Revision、运行快照、目标分层快照和追加事件共同保证历史可重放。
 
+## 上线前验证与可观测性
+
+Training Engine 的代码完成不等于可发布。每次涉及 Stage/规则/迁移的发布至少执行：
+
+```bash
+pnpm training:inventory
+pnpm training:consistency
+pnpm training:benchmark
+```
+
+- `training:inventory` 记录 Session、阶段、阶段分组、Assignment、StageProblem、Progress、Event、Template 以及 Legacy Training 的数量，并输出 PostgreSQL relation size，作为迁移前后对账基线。
+- `training:consistency` 必须为 0 error；至少检查 RUNNING Session 无 currentStage、同 Session 多 RUNNING 阶段、终态 Session 仍有 RUNNING 阶段、GROUPED 阶段未分组学员、跨阶段 Group Assignment、孤儿 Progress。
+- `training:benchmark` 默认包含 50 名学生 × 100 道题的规则/权限基准，并可通过真实 Session 环境变量测 Workspace 与 Dashboard p95。
+- `TRAINING_STAGE_ENGINE_ROLLOUT=read_only` 可在发布观察期禁止新建/修改 Definition，但不会中断已经存在的 Runtime Session。
+- 监控至少暴露 `training_session_active_count`、`training_stage_transition_total`、`training_command_total`、`training_command_failure_total`、`training_sse_connections`、`training_permission_latency`、`training_workspace_query_count`、`training_group_move_total`。
+
+迁移测试必须在独立 PostgreSQL schema 中实际执行 migration SQL；不得仅通过字符串扫描代替。上线与演练禁止使用 `prisma migrate reset`、`prisma db push --force-reset` 或任何等价的破坏性重建路径。
+
 ## 一次性迁移
 
 当前开发阶段直接迁移，不双写旧模型。2026-09-21 的 usability hardening migration 已写入仓库，但按本轮审计约束**尚未实际执行或演练**；以下仍是待执行迁移规则：
