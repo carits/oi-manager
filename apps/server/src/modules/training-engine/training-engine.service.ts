@@ -1032,10 +1032,13 @@ export async function joinTrainingSession(userId: string, sessionId: string) {
   return prisma.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId } }, update: { status: 'active', currentStageId: stageId }, create: { sessionId, userId, currentStageId: stageId } })
 }
 
-export async function listTrainingSessions(userId: string, query: any) {
+export async function listTrainingSessions(userId: string, query: any, activeOrganizationId?: string | null) {
   const role = await globalRole(userId)
   if (!role || role.status !== 'active') throw new TrainingEngineError(401, 'UNAUTHENTICATED', '请先登录')
-  const teamId = query?.teamId ? String(query.teamId) : null, organizationId = query?.organizationId ? String(query.organizationId) : null
+  const teamId = query?.teamId ? String(query.teamId) : null
+  const requestedOrganizationId = query?.organizationId ? String(query.organizationId) : null
+  const organizationId = requestedOrganizationId || (!teamId && activeOrganizationId ? activeOrganizationId : null)
+  const personalWorkspace = !teamId && !organizationId && activeOrganizationId === null
   if (teamId && !await isTeamMember(userId, teamId)) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练范围不存在')
   if (organizationId && !await isOrganizationMember(userId, organizationId)) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练范围不存在')
   const scopeManager = role.role === 'super_admin' || Boolean(teamId && await isTeamAdmin(userId, teamId)) || Boolean(organizationId && await isOrganizationContestAdmin(userId, organizationId))
@@ -1050,7 +1053,9 @@ export async function listTrainingSessions(userId: string, query: any) {
               ? { Team: { organizationId }, OR: [{ createdBy: userId }, { Team: { TeamMember: { some: { userId, status: 'active', role: { in: ['owner', 'admin'] } } } } }] }
               : { Team: { organizationId, TeamMember: { some: { userId, status: 'active' } } } },
         ] }
-      : {}
+      : personalWorkspace
+        ? { organizationId: null, Team: { scope: 'personal', organizationId: null } }
+        : {}
   const visibilityWhere: Prisma.TrainingSessionWhereInput = scopeManager
     ? {}
     : { OR: [{ createdBy: userId }, { Participants: { some: { userId, status: 'active' } } }, ...((teamId || organizationId) ? [{ status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] as any } }] : [])] }
