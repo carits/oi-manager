@@ -94,6 +94,83 @@ describe('题单权限模块', () => {
     })
   })
 
+  describe('多校园上下文隔离', () => {
+    it('同一账号不能在学校 A 上下文读取或修改学校 B 的题单', async () => {
+      const schoolB = await createTestSchoolWithPrincipal('题单第二校园')
+      const membershipId = crypto.randomUUID()
+      await prisma.organizationMembership.create({
+        data: {
+          id: membershipId,
+          organizationId: schoolB.school.organizationId!,
+          userId: ownerUser.user.id,
+          memberRole: 'teacher',
+          relationType: 'employee',
+          status: 'active',
+          joinedAt: new Date(),
+          RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+        },
+      })
+      await prisma.organizationTeacherProfile.create({
+        data: { id: crypto.randomUUID(), membershipId, name: '跨校题单教师', status: 'active' },
+      })
+      const listB = await createTestProblemList({
+        ownerId: ownerUser.user.id,
+        schoolId: schoolB.school.id,
+      })
+      const token = generateTokenFromUser(ownerUser.user)
+      const requestA = createAuthenticatedRequest(app, token, { organizationId: schoolData.school.organizationId! })
+      const requestB = createAuthenticatedRequest(app, token, { organizationId: schoolB.school.organizationId! })
+
+      const listA = await requestA.get('/api/problem-lists?tab=all&pageSize=100')
+      expect(listA.status).toBe(200)
+      expect(listA.body.data.lists.some((item: any) => item.id === listB.list.id)).toBe(false)
+
+      const directFromA = await requestA.get(`/api/problem-lists/${listB.list.id}`)
+      expect(directFromA.status).toBe(404)
+
+      const deleteFromA = await requestA.delete(`/api/problem-lists/${listB.list.id}`)
+      expect(deleteFromA.status).toBe(404)
+      expect(await prisma.problemList.findUnique({ where: { id: listB.list.id } })).not.toBeNull()
+
+      const directFromB = await requestB.get(`/api/problem-lists/${listB.list.id}`)
+      expect(directFromB.status).toBe(200)
+    })
+
+    it('不能用当前学校题单配另一学校团队创建作业', async () => {
+      const schoolB = await createTestSchoolWithPrincipal('题单作业第二校园')
+      const membershipId = crypto.randomUUID()
+      await prisma.organizationMembership.create({
+        data: {
+          id: membershipId,
+          organizationId: schoolB.school.organizationId!,
+          userId: ownerUser.user.id,
+          memberRole: 'teacher',
+          relationType: 'employee',
+          status: 'active',
+          joinedAt: new Date(),
+          RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+        },
+      })
+      await prisma.organizationTeacherProfile.create({
+        data: { id: crypto.randomUUID(), membershipId, name: '跨校题单作业教师', status: 'active' },
+      })
+      const teamB = await createTestTeam({
+        organizationId: schoolB.school.organizationId!,
+        ownerId: ownerUser.user.id,
+        ownerType: 'teacher',
+      })
+      const token = generateTokenFromUser(ownerUser.user)
+      const response = await createAuthenticatedRequest(app, token, { organizationId: schoolData.school.organizationId! })
+        .post(`/api/problem-lists/${testList.list.id}/create-assignment`)
+        .send({
+          teamId: teamB.id,
+          startTime: '2026-09-23T00:00:00.000Z',
+          endTime: '2026-09-24T00:00:00.000Z',
+        })
+      expect(response.status).toBe(404)
+    })
+  })
+
   // ====== CRUD 权限 ======
 
   describe('创建题单', () => {
