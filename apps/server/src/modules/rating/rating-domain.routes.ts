@@ -1,6 +1,6 @@
 import { Router, type Response } from 'express'
 import { ContestRatingContracts, RatingAccountContracts, RatingLeaderboardContracts } from '@oi-manager/contracts'
-import { authenticate, type AuthRequest } from '../../middleware/auth'
+import { authenticate, isPersonalContext, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseTrainingId } from '../training/training.helpers'
 import { ContestRatingError, finalizeContestRating, getContestRating, getContestRatingConfig, getRatingParticipation, rebuildContestRating, setFinalSubmission, updateContestRatingConfig, updateRatingParticipantDisposition, updateRatingParticipation } from './application/contest-rating.service'
@@ -25,8 +25,11 @@ ratingDomainRouter.get('/ratings/global/:track', authenticate, endpoint(async (r
   sendContractData(res, RatingLeaderboardContracts.global, await getRatingLeaderboard({ scope: 'GLOBAL', track: req.params.track, query, requestingUserId: req.user!.userId }))
 }))
 ratingDomainRouter.get('/ratings/organizations/:organizationId/:track', authenticate, endpoint(async (req, res) => {
+  if (isPersonalContext(req.user!) || req.user!.organizationId !== req.params.organizationId) {
+    return res.status(403).json({ success: false, code: 'ORGANIZATION_RATING_ACCESS_DENIED', message: '当前组织上下文无效' })
+  }
   const query = parseContractQuery(RatingLeaderboardContracts.organization, req.query)
-  sendContractData(res, RatingLeaderboardContracts.organization, await getRatingLeaderboard({ scope: 'ORGANIZATION', organizationId: req.params.organizationId, track: req.params.track, query, requestingUserId: req.user!.userId }))
+  return sendContractData(res, RatingLeaderboardContracts.organization, await getRatingLeaderboard({ scope: 'ORGANIZATION', organizationId: req.params.organizationId, track: req.params.track, query, requestingUserId: req.user!.userId }))
 }))
 ratingDomainRouter.get('/ratings/users/:userId/history', authenticate, endpoint(async (req, res) => {
   const query = parseContractQuery(RatingAccountContracts.history, req.query)
