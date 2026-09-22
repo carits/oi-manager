@@ -277,6 +277,140 @@ describe('Stage-driven Training Engine', () => {
     expect(await resolveTrainingPermission(student.user.id, session.id, stageProblem.id)).toMatchObject({ canSubmit: false, reason: 'PROBLEM_TIME_LIMIT_REACHED' })
   })
 
+  it('supports AC, score, time, attempts and teacher unlock sequential prerequisites', async () => {
+    const secondProblem = await configuredProblem(coach.user.id)
+    const token = generateTokenFromUser(coach.user)
+    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({
+      title: '顺序解锁条件全集', teamId: team.id, participantUserIds: [student.user.id],
+      settings: { participantTarget: 'custom_students' },
+      stages: [{
+        name: '顺序训练', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL',
+        accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED',
+        problems: [
+          { problemId: problem.id },
+          { problemId: secondProblem.id, unlockPolicy: { mode: 'ALL', conditions: [{ type: 'AC' }] } },
+        ],
+      }],
+    })
+    expect(created.status).toBe(201)
+    const session = await prisma.trainingSession.findUniqueOrThrow({
+      where: { id: created.body.data.id },
+      include: {
+        Stages: { include: { Problems: { orderBy: { orderIndex: 'asc' }, include: { Plans: true } } } },
+        Participants: true,
+      },
+    })
+    const stage = session.Stages[0]
+    const [first, second] = stage.Problems
+    const secondPlan = second.Plans[0]
+    const participant = session.Participants[0]
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: stage.id })).status).toBe(200)
+
+    await prisma.trainingSessionProblemProgress.create({
+      data: {
+        participantId: participant.id,
+        stageProblemId: first.id,
+        status: 'WORKING',
+        activeSeconds: 0,
+        attemptCount: 0,
+        bestScore: 0,
+      },
+    })
+
+    const assertGate = async (
+      condition: Record<string, unknown>,
+      progress: { acAt?: Date | null; bestVerdict?: string | null; bestScore?: number | null; activeSeconds?: number; attemptCount?: number },
+    ) => {
+      await prisma.trainingSessionStageProblemPlan.update({
+        where: { id: secondPlan.id },
+        data: { unlockPolicy: { mode: 'ALL', conditions: [condition] } },
+      })
+      await prisma.trainingSessionProblemProgress.update({
+        where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: first.id } },
+        data: {
+          status: 'WORKING',
+          acAt: progress.acAt ?? null,
+          bestVerdict: progress.bestVerdict ?? null,
+          bestScore: progress.bestScore ?? 0,
+          activeSeconds: progress.activeSeconds ?? 0,
+          attemptCount: progress.attemptCount ?? 0,
+        },
+      })
+      expect(await resolveTrainingPermission(student.user.id, session.id, second.id)).toMatchObject({
+        canView: true,
+        canSubmit: true,
+        reason: 'ALLOWED',
+      })
+    }
+
+    await assertGate({ type: 'AC' }, { acAt: new Date(), bestVerdict: 'Accepted' })
+    await assertGate({ type: 'SCORE', value: 60 }, { bestScore: 60 })
+    await assertGate({ type: 'TIME', value: 120 }, { activeSeconds: 120 })
+    await assertGate({ type: 'ATTEMPTS', value: 3 }, { attemptCount: 3 })
+
+    await prisma.trainingSessionStageProblemPlan.update({
+      where: { id: secondPlan.id },
+      data: { unlockPolicy: { mode: 'ALL', conditions: [{ type: 'TEACHER' }] } },
+    })
+    await prisma.trainingSessionProblemProgress.update({
+      where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: first.id } },
+      data: { status: 'WORKING', acAt: null, bestVerdict: null, bestScore: 0, activeSeconds: 0, attemptCount: 0 },
+    })
+    expect(await resolveTrainingPermission(student.user.id, session.id, second.id)).toMatchObject({ canView: false, reason: 'SEQUENTIAL_LOCK' })
+
+    const unlocked = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/commands`).send({
+      expectedRevision: 2,
+      type: 'UNLOCK_FOR_USER',
+      targetType: 'USER',
+      targetId: student.user.id,
+      payload: { stageProblemId: second.id },
+    })
+    expect(unlocked.status).toBe(200)
+    expect(await resolveTrainingPermission(student.user.id, session.id, second.id)).toMatchObject({ canView: true, canSubmit: true, reason: 'ALLOWED' })
+  })
+
+  it('does not count paused wall-clock time toward Session or Stage active time', async () => {
+    const created = await createSession()
+    const token = generateTokenFromUser(coach.user)
+    const stage = await prisma.trainingSessionStage.findFirstOrThrow({ where: { sessionId: created.id } })
+
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: stage.id })).status).toBe(200)
+
+    const twoMinutesAgo = new Date(Date.now() - 120_000)
+    await prisma.trainingSession.update({ where: { id: created.id }, data: { runningSince: twoMinutesAgo, activeElapsedSeconds: 0 } })
+    await prisma.trainingSessionStage.update({ where: { id: stage.id }, data: { runningSince: twoMinutesAgo, activeElapsedSeconds: 0 } })
+
+    const paused = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/commands`).send({
+      expectedRevision: 2,
+      type: 'PAUSE_SESSION',
+      targetType: 'ALL',
+      payload: { mode: 'SOFT' },
+    })
+    expect(paused.status).toBe(200)
+    const afterPauseSession = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id } })
+    const afterPauseStage = await prisma.trainingSessionStage.findUniqueOrThrow({ where: { id: stage.id } })
+    expect(afterPauseSession.activeElapsedSeconds).toBeGreaterThanOrEqual(119)
+    expect(afterPauseSession.activeElapsedSeconds).toBeLessThanOrEqual(121)
+    expect(afterPauseStage.activeElapsedSeconds).toBeGreaterThanOrEqual(119)
+    expect(afterPauseStage.activeElapsedSeconds).toBeLessThanOrEqual(121)
+
+    await prisma.trainingSession.update({ where: { id: created.id }, data: { pausedAt: new Date(Date.now() - 600_000) } })
+    const resumed = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.id}/commands`).send({
+      expectedRevision: 3,
+      type: 'RESUME_SESSION',
+      targetType: 'ALL',
+      payload: {},
+    })
+    expect(resumed.status).toBe(200)
+    const afterResumeSession = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.id } })
+    const afterResumeStage = await prisma.trainingSessionStage.findUniqueOrThrow({ where: { id: stage.id } })
+    expect(afterResumeSession.activeElapsedSeconds).toBe(afterPauseSession.activeElapsedSeconds)
+    expect(afterResumeStage.activeElapsedSeconds).toBe(afterPauseStage.activeElapsedSeconds)
+  })
+
   it('treats teacher SKIP as a sequential prerequisite bypass', async () => {
     const secondProblem = await configuredProblem(coach.user.id)
     const token = generateTokenFromUser(coach.user)
