@@ -30,6 +30,7 @@ type StructureStage = {
   plannedDurationSeconds?: number | null
   endPolicy?: string
   accessPolicy?: string
+  accessScope?: string
   submissionMode?: string
   defaultTargetScore?: number | null
   completionThreshold?: number | null
@@ -287,6 +288,7 @@ function templateRecord(template: any) {
         ...(stage.plannedDurationSeconds ? { plannedDurationSeconds: stage.plannedDurationSeconds } : {}),
         endPolicy: stage.endPolicy,
         accessPolicy: stage.accessPolicy,
+        accessScope: normalizeTrainingAccessScope(rules.accessScope),
         submissionMode: stage.submissionMode,
         ...(stageSettings.defaultTargetScore != null ? { defaultTargetScore: stageSettings.defaultTargetScore } : {}),
         ...(stageSettings.completionThreshold != null ? { completionThreshold: stageSettings.completionThreshold } : {}),
@@ -397,6 +399,7 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
     const audienceMode = enumValue(stage.audienceMode, AUDIENCE_MODES, 'ALL', `阶段 ${stageIndex + 1} 学员组织方式`)
     const endPolicy = enumValue(stage.endPolicy, END_POLICIES, 'MANUAL', `阶段 ${stageIndex + 1} 结束方式`)
     const accessPolicy = enumValue(stage.accessPolicy, ACCESS_POLICIES, 'ALL_AT_ONCE', `阶段 ${stageIndex + 1} 题目开放方式`)
+    const accessScope = normalizeTrainingAccessScope(stage.accessScope ?? parseJsonObject(stage.rules).accessScope)
     const submissionMode = enumValue(stage.submissionMode, SUBMISSION_MODES, 'ENABLED', `阶段 ${stageIndex + 1} 提交方式`)
     const plannedDurationSeconds = boundedInteger(stage.plannedDurationSeconds, 60, 24 * 3600, '阶段计划时长')
     const completionThreshold = boundedInteger(stage.completionThreshold ?? (['COMPLETION', 'HYBRID'].includes(endPolicy) ? 100 : null), 1, 100, '完成比例')
@@ -405,6 +408,7 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
     const rawRules = parseJsonObject(stage.rules)
     const rules: Record<string, any> = {
       ...rawRules,
+      accessScope,
       ...(rawRules.defaultUnlock ? { defaultUnlock: normalizeUnlockPolicy(rawRules.defaultUnlock) } : {}),
       ...(rawRules.timePolicy ? { timePolicy: normalizeProblemTimePolicy(rawRules.timePolicy) } : {}),
       ...(rawRules.stuckPolicy ? { stuckPolicy: normalizeStuckPolicy(rawRules.stuckPolicy) } : {}),
@@ -485,7 +489,7 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
       const maximum = audienceMode === 'ALL' ? stageProblems.length : Math.max(0, ...groups.map(group => group.problems.length))
       rules.requiredProblemCount = boundedInteger(rules.requiredProblemCount, 1, Math.max(1, maximum), '阶段至少完成题数', false)
     }
-    return { stage: { ...stage, kind, audienceMode, endPolicy, accessPolicy, submissionMode, plannedDurationSeconds, completionThreshold, rules }, stageIndex, name, stageProblems, groups }
+    return { stage: { ...stage, kind, audienceMode, endPolicy, accessPolicy, accessScope, submissionMode, plannedDurationSeconds, completionThreshold, rules }, stageIndex, name, stageProblems, groups }
   })
 }
 
@@ -593,7 +597,7 @@ export async function createTrainingSession(userId: string, body: any) {
       sessionType: sessionType as any, ...scope, createdBy: userId,
       scheduledStartAt,
       defaultAccessPolicy: defaultAccessPolicy as any, defaultSubmissionMode: defaultSubmissionMode as any,
-      allowHints: body?.allowHints !== false, allowSolution: Boolean(body?.allowSolution), allowDiscussion: Boolean(body?.allowDiscussion),
+      allowHints: body?.allowHints !== false,
       rankingMode: rankingMode as any, peerVisibility: peerVisibility as any, joinMode: joinMode as any,
       settings: asJson(requestedParticipantIds.length ? { ...settings, rosterExplicit: true } : settings),
     } })
@@ -699,11 +703,12 @@ export async function getTrainingDesign(userId: string, sessionId: string) {
         participantIds: group.Assignments.map(item => item.Participant.userId),
         Problems: group.ProblemPlans.map(decorate),
       })),
+      accessScope: normalizeTrainingAccessScope(parseJsonObject(stage.rules).accessScope),
       effectiveDurationSeconds: (stage.plannedDurationSeconds || 0) + stage.TimeAdjustments.reduce((sum, item) => sum + item.seconds, 0),
     }
   })
   const payloadStages = stages.map(stage => ({ ...stage, problems: stage.Problems, groups: stage.Groups.map(group => ({ ...group, problems: group.Problems })) })) as unknown as StructureStage[]
-  return { editable: !['ENDED', 'ARCHIVED'].includes(session.status), statusRevision: session.statusRevision, session: { id: session.id, title: session.title, description: session.description, sessionType: session.sessionType, status: session.status, organizationId: session.organizationId, teamId: session.teamId, scheduledStartAt: session.scheduledStartAt, rankingMode: session.rankingMode, peerVisibility: session.peerVisibility, joinMode: session.joinMode, allowHints: session.allowHints, allowSolution: session.allowSolution, allowDiscussion: session.allowDiscussion }, stages, issues: structureIssues(payloadStages) }
+  return { editable: !['ENDED', 'ARCHIVED'].includes(session.status), statusRevision: session.statusRevision, session: { id: session.id, title: session.title, description: session.description, sessionType: session.sessionType, status: session.status, organizationId: session.organizationId, teamId: session.teamId, scheduledStartAt: session.scheduledStartAt, rankingMode: session.rankingMode, peerVisibility: session.peerVisibility, joinMode: session.joinMode, allowHints: session.allowHints }, stages, issues: structureIssues(payloadStages) }
 }
 
 export async function getTrainingDesignProblem(userId: string, sessionId: string, problemId: string) {
