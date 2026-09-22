@@ -5,6 +5,17 @@ last_verified: 2026-09-22
 source_of_truth: Git history
 ---
 
+## 2026-09-22 — Training Engine P0 完整收口补充
+
+- 创建训练新增“自定义多阶段”入口：创建弹窗即可一次建立 1～30 个阶段，每个阶段独立选择“全班统一 / 分组训练”，分组阶段可先建立组骨架；产品界面统一使用“阶段”中文术语。
+- 发布训练只进入 `SCHEDULED`，`TrainingSession.currentStageId` 与 Participant mirror 均保持空；只有真正执行 start 后才进入第一个阶段，进一步固定 Session currentStageId 的唯一真相语义。
+- 新增显式阶段 API：`/stages/:stageId/end`、`/clone`、`/move-participant`，均复用现有领域逻辑；阶段复制只复制 Definition，Runtime Snapshot、Progress、运行时间与终态全部重置。
+- GROUPED 阶段在启动事务中 fail-fast 校验全部 active participant 的本阶段 Assignment；缺失或跨阶段 Group 会拒绝启动。
+- Runtime Command 改为 Dispatcher + 独立 Handler 文件：暂停/恢复、Focus、Overlay、个人解锁/跳过、卡题解除和 Hint 不再堆在主 `training-engine.service.ts` 巨型条件链。
+- canonical Training Event 已接入生命周期与课堂干预，并新增事件回归测试；发布、开始、暂停、恢复、消息、个人解锁均能产生显式领域事件。
+- 新增“提交后草稿仍保留”“发布不提前进入阶段”“显式阶段 API”“分组启动校验”等 Server 回归用例。
+- 本批仍未宣称真实 CI、数据库迁移、consistency、benchmark 与 Playwright 已通过；这些必须以可实际执行的 runner / PostgreSQL 环境结果为准。
+
 ## 2026-09-22 — Training Engine Stage 语义最终收口
 
 - Stage 持久生命周期统一为 `PENDING / RUNNING / ENDED / SKIPPED`；原 `COMPLETED / ENDED_EARLY` 迁为 `ENDED`，结构化 `endReason` 与教师文字 `endNote` 分离，历史数据迁移保留原含义。
