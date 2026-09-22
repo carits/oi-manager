@@ -224,6 +224,19 @@ async function requireVisibleSubmission(
       }
     }
     training = activity.activity
+
+    if (!context.isGlobalAdmin && training.scope !== 'platform') {
+      if (training.scope !== context.workspaceScope) throw notFound()
+      if (context.workspaceScope === 'campus') {
+        const resourceOrganizationId = training.organizationId || (training.teamId
+          ? (await prisma.team.findUnique({ where: { id: training.teamId }, select: { organizationId: true } }))?.organizationId || null
+          : null)
+        if (!context.organizationId || resourceOrganizationId !== context.organizationId) throw notFound()
+      } else if (training.organizationId) {
+        throw notFound()
+      }
+    }
+
     hasContestManagerAccess = context.isGlobalAdmin || await canManageTraining(context.userId, training)
 
     if (!hasContestManagerAccess) {
