@@ -68,7 +68,7 @@ type StructureStage = {
 const COMMANDS = new Set([
   'PAUSE_SESSION', 'RESUME_SESSION',
   'FOCUS_PROBLEM', 'END_FOCUS', 'LOCK_PROBLEM', 'UNLOCK_PROBLEM', 'ENABLE_SUBMISSION', 'DISABLE_SUBMISSION',
-  'OPEN_HINT', 'CLOSE_HINT', 'UNLOCK_FOR_USER', 'SKIP_FOR_USER', 'CLEAR_STUCK_FOR_USER', 'SHOW_MESSAGE', 'CLEAR_MESSAGE',
+  'OPEN_HINT', 'CLOSE_HINT', 'UNLOCK_FOR_USER', 'SKIP_FOR_USER', 'CLEAR_STUCK_FOR_USER', 'MOVE_GROUP', 'SHOW_MESSAGE', 'CLEAR_MESSAGE',
 ])
 const SESSION_WIDE_COMMANDS = new Set([
   'PAUSE_SESSION', 'RESUME_SESSION',
@@ -88,6 +88,7 @@ const COMMAND_ALLOWED_SESSION_STATUS: Record<string, ReadonlySet<string>> = {
   UNLOCK_FOR_USER: new Set(['RUNNING', 'PAUSED']),
   SKIP_FOR_USER: new Set(['RUNNING', 'PAUSED']),
   CLEAR_STUCK_FOR_USER: new Set(['RUNNING', 'PAUSED']),
+  MOVE_GROUP: new Set(['RUNNING', 'PAUSED']),
   SHOW_MESSAGE: new Set(['RUNNING', 'PAUSED']),
   CLEAR_MESSAGE: new Set(['RUNNING', 'PAUSED']),
 }
@@ -1000,6 +1001,37 @@ type TrainingPermissionResult = {
   reason: string
 }
 
+type TrainingPermissionContext = {
+  session: SessionShape
+  manager: boolean
+  participant: any
+  overrides: any[]
+  progressByProblem: Map<string, any>
+}
+
+function resolveTrainingPermissionFromContext(
+  context: TrainingPermissionContext,
+  stageProblemId: string | null | undefined,
+): TrainingPermissionResult {
+  return resolveTrainingPermissionLoaded(
+    context.session,
+    context.manager,
+    context.participant,
+    stageProblemId,
+    context.overrides,
+    context.progressByProblem,
+  )
+}
+
+function resolveAllTrainingPermissions(context: TrainingPermissionContext) {
+  return Object.fromEntries(
+    context.session.Stages.flatMap(stage => stage.Problems).map(problem => [
+      problem.id,
+      resolveTrainingPermissionFromContext(context, problem.id),
+    ]),
+  ) as Record<string, TrainingPermissionResult>
+}
+
 function resolveTrainingPermissionLoaded(
   session: SessionShape,
   manager: boolean,
@@ -1121,7 +1153,14 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
     prisma.trainingSessionProblemProgress.findMany({ where: { participantId: participant.id } }),
   ])
   const startedAt = performance.now()
-  const resolved = resolveTrainingPermissionLoaded(session, false, participant, stageProblemId, overrides, new Map(progress.map(item => [item.stageProblemId, item])))
+  const context: TrainingPermissionContext = {
+    session,
+    manager: false,
+    participant,
+    overrides,
+    progressByProblem: new Map(progress.map(item => [item.stageProblemId, item])),
+  }
+  const resolved = resolveTrainingPermissionFromContext(context, stageProblemId)
   trainingMetrics.recordPermissionLatency(performance.now() - startedAt)
   return resolved
 }
@@ -1406,6 +1445,7 @@ export async function changeTrainingStageGroup(userId: string, sessionId: string
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, sessionId, 'training.stage.group_changed', 'USER', participant.userId, { stageId, targetStageId, fromGroupId: old?.groupId || null, toGroupId: toGroup.id, effectiveMode, clearCurrentProblem })
   })
+  trainingMetrics.recordGroupMove()
   return getTrainingWorkspace(userId, sessionId)
 }
 
@@ -1468,10 +1508,12 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
     ? await prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } })
     : []
   const permissionStartedAt = performance.now()
-  const permissions = Object.fromEntries(session.Stages.flatMap(stage => stage.Problems).map(item => {
-    const permission = resolveTrainingPermissionLoaded(session, manager, participant, item.id, overrides, progressByProblem)
-    return [item.id, { ...permission, canSeeMetadata: manager || permission.canView }] as const
-  }))
+  const permissionContext: TrainingPermissionContext = { session, manager, participant, overrides, progressByProblem }
+  const resolvedPermissions = resolveAllTrainingPermissions(permissionContext)
+  const permissions = Object.fromEntries(Object.entries(resolvedPermissions).map(([stageProblemId, permission]) => [
+    stageProblemId,
+    { ...permission, canSeeMetadata: manager || permission.canView },
+  ]))
   trainingMetrics.recordPermissionLatency(performance.now() - permissionStartedAt)
   const visibleOverlays = manager || !participant ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
   const currentStage = participant ? session.Stages.find(stage => stage.id === session.currentStageId) : null
@@ -1568,6 +1610,24 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
   if (SESSION_WIDE_COMMANDS.has(type) && targetType !== 'ALL') throw new TrainingEngineError(422, 'INVALID_TRAINING_COMMAND_TARGET', '训练生命周期、阶段切换和延时命令只能作用于全员')
   let targetId = body?.targetId ? String(body.targetId) : null
   const payload = parseJsonObject(body?.payload)
+
+  if (type === 'MOVE_GROUP') {
+    assertTrainingCommandAllowed(type, session.status)
+    if (targetType !== 'USER' || !targetId) throw new TrainingEngineError(422, 'TRAINING_COMMAND_TARGET_REQUIRED', '换组命令必须指定学员')
+    const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } } })
+    if (!participant || participant.status !== 'active') throw new TrainingEngineError(404, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不属于当前训练')
+    const effectiveMode = String(payload.effectiveMode || 'IMMEDIATE').toUpperCase()
+    const sourceStageId = String(payload.stageId || session.currentStageId || '')
+    return changeTrainingStageGroup(userId, sessionId, sourceStageId, {
+      expectedRevision,
+      participantId: participant.id,
+      toGroupId: payload.toGroupId,
+      effectiveMode,
+      targetStageId: payload.targetStageId,
+      reason: payload.reason || 'Runtime MOVE_GROUP',
+    })
+  }
+
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
     const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId } })
