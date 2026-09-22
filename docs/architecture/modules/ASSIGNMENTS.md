@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, testing, operations
-last_verified: 2026-09-10
+last_verified: 2026-09-20
 source_of_truth: apps/server/src/modules/assignment, apps/server/prisma/schema.prisma, apps/web/src/components/assignment
 ---
 
@@ -9,9 +9,9 @@ source_of_truth: apps/server/src/modules/assignment, apps/server/prisma/schema.p
 
 ## 边界
 
-新作业由 `Assignment` 聚合承载，不再创建 `Training(type=homework)`。旧记录在受保护迁移完成前保持原样；迁移只建立新聚合和关联，不删除旧活动、不改历史评测结果。
+作业只由 `Assignment` 聚合承载，不创建或读取 `Training(type=homework)`。历史 Training 作业行仅作为不再参与运行时查询的归档数据保留，不改历史评测结果。
 
-所有当前产品写入通道均进入该聚合：作业工作台直接创建、题单“创建作业草稿”和已结束活动的“创建补题作业”都创建 `DRAFT Assignment`并固定题目当前正式 TestSet Revision。旧 `publish-homework` 和团队训练 `type=homework` 写入统一返回 `410 LEGACY_HOMEWORK_API_RETIRED`；历史 `Training(type=homework)` 仅保留读兼容与受保护迁移。
+所有产品写入通道均进入该聚合：作业工作台直接创建、题单“创建作业草稿”和已结束活动的“创建补题作业”都创建 `DRAFT Assignment` 并固定题目当前正式 TestSet Revision。旧 `publish-homework` 路由与团队训练 `type=homework` 特判均已删除，不再维护旧协议或专用错误码。
 
 ```text
 Assignment

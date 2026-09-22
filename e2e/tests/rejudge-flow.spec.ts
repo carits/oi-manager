@@ -3,9 +3,10 @@ import { PrismaClient } from '@prisma/client'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { loadFixtureIds } from '../fixtures/data'
 import { persistOwnedSubmissionResult } from '../../apps/server/src/ws/judge'
+import { claimNextQueuedSubmission } from '../../apps/server/src/modules/judge/application/judge-run.service'
 
 const ids = loadFixtureIds()
 const problemId = 'e2e-contest-problem-b'
@@ -15,8 +16,8 @@ if (new URL(databaseUrl).searchParams.get('schema') !== 'e2e') {
   throw new Error('Rejudge concurrency test requires schema=e2e')
 }
 const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
-const organizationHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
+const organizationHeaders = (cookie: string) => ({
+  Cookie: cookie,
   'X-OI-Organization-ID': `org_${ids.school}`,
 })
 
@@ -25,8 +26,8 @@ test.afterAll(async () => prisma.$disconnect())
 test('contest rejudge is scoped, skips active work and excludes archives', async ({ request }) => {
   const principal = await loginAs(request, 'principal')
   const student = await loginAs(request, 'campusStudent')
-  const principalHeaders = organizationHeaders(principal.token)
-  const studentHeaders = organizationHeaders(student.token)
+  const principalHeaders = organizationHeaders(principal.cookie)
+  const studentHeaders = organizationHeaders(student.cookie)
   const previewUrl = `/api/trainings/${ids.contest}/rejudge/preview?scopeType=problem&trainingProblemId=${problemId}`
 
   const before = await request.get(previewUrl, { headers: principalHeaders })
@@ -81,9 +82,9 @@ test('contest rejudge is scoped, skips active work and excludes archives', async
     select: { id: true },
   })
   expect(localRows).toHaveLength(3)
-  await prisma.submission.updateMany({
-    where: { id: { in: localRows.map(item => item.id) } },
-    data: { result: 'accepted', score: 100, judgeId: null, judgeStarted: null },
+  await prisma.judgeRun.updateMany({
+    where: { Submission: { id: { in: localRows.map(item => item.id) }, currentJudgeRunId: { not: null } } },
+    data: { status: 'FINALIZED', result: 'accepted', score: 100, finalizedAt: new Date() },
   })
   const trainingProblem = await prisma.trainingProblem.findUniqueOrThrow({
     where: { id: problemId },
@@ -160,25 +161,29 @@ test('contest rejudge is scoped, skips active work and excludes archives', async
   const afterRace = await prisma.submission.findMany({
     where: { trainingId: Number(ids.contest), trainingProblemId: problemId, submitMethod: 'local' },
     orderBy: { id: 'asc' },
+    include: { CurrentJudgeRun: { include: { CurrentAttempt: true } } },
   })
   expect(afterRace).toHaveLength(4)
-  expect(afterRace.every(item => item.result === 'queuing' && item.judgeId === null)).toBe(true)
+  expect(afterRace.every(item => item.CurrentJudgeRun?.status === 'QUEUED'
+    && item.CurrentJudgeRun.CurrentAttempt?.state === 'QUEUED')).toBe(true)
 
-  const judged = afterRace[0]
-  await prisma.submission.update({
-    where: { id: judged.id },
-    data: { result: 'judging', judgeId: 'rejudge-race-judge', judgeStarted: new Date(), score: null },
-  })
+  const ownership = await claimNextQueuedSubmission('rejudge-race-judge')
+  expect(ownership).toBeTruthy()
+  const judged = afterRace.find(item => item.id === ownership!.submissionId)!
+  const resultPayload = {
+    submissionId: judged.id,
+    judgeRunId: ownership!.judgeRunId,
+    judgeAttemptId: ownership!.judgeAttemptId,
+    fencingToken: ownership!.fencingToken,
+    result: 'Accepted',
+    time: 2,
+    wallTime: 3,
+    memory: 1024,
+    score: 100,
+    cases: [],
+  }
   const [claimed, racingRejudge] = await Promise.all([
-    persistOwnedSubmissionResult({
-      submissionId: judged.id,
-      result: 'Accepted',
-      time: 2,
-      wallTime: 3,
-      memory: 1024,
-      score: 100,
-      cases: [],
-    }, 'rejudge-race-judge'),
+    persistOwnedSubmissionResult(resultPayload, 'rejudge-race-judge'),
     request.post(`/api/trainings/${ids.contest}/rejudge`, {
       headers: principalHeaders,
       data: { scope: { type: 'problem', trainingProblemId: problemId } },
@@ -189,12 +194,26 @@ test('contest rejudge is scoped, skips active work and excludes archives', async
   const racingSummary = (await racingRejudge.json()).data as { resetCount: number; skippedCount: number }
   expect(racingSummary.resetCount + racingSummary.skippedCount).toBe(4)
 
-  const final = await prisma.submission.findUniqueOrThrow({ where: { id: judged.id } })
-  expect(['accepted', 'queuing']).toContain(final.result)
-  expect(final.judgeId).toBeNull()
-  expect(final.judgeStarted).toBeNull()
-  if (final.result === 'accepted') expect(final.score).toBe(100)
-  else expect(final.score).toBeNull()
-  expect(await persistOwnedSubmissionResult({ submissionId: judged.id, result: 'Wrong Answer', score: 0 }, 'rejudge-race-judge')).toBe(false)
-  expect((await prisma.submission.findUniqueOrThrow({ where: { id: judged.id } })).result).toBe(final.result)
+  const final = await prisma.submission.findUniqueOrThrow({
+    where: { id: judged.id },
+    include: { CurrentJudgeRun: { include: { CurrentAttempt: true } } },
+  })
+  expect(['FINALIZED', 'QUEUED']).toContain(final.CurrentJudgeRun?.status)
+  if (final.CurrentJudgeRun?.status === 'FINALIZED') {
+    expect(final.CurrentJudgeRun).toMatchObject({ result: 'accepted', score: 100 })
+    expect(final.CurrentJudgeRun.CurrentAttempt?.state).toBe('SUCCEEDED')
+  } else {
+    expect(final.CurrentJudgeRun?.result).toBeNull()
+    expect(final.CurrentJudgeRun?.CurrentAttempt?.state).toBe('QUEUED')
+  }
+  expect(await persistOwnedSubmissionResult(
+    { ...resultPayload, result: 'Wrong Answer', score: 0 },
+    'rejudge-race-judge',
+  )).toBe(false)
+  const unchanged = await prisma.submission.findUniqueOrThrow({
+    where: { id: judged.id },
+    include: { CurrentJudgeRun: true },
+  })
+  expect(unchanged.CurrentJudgeRun?.id).toBe(final.CurrentJudgeRun?.id)
+  expect(unchanged.CurrentJudgeRun?.result).toBe(final.CurrentJudgeRun?.result)
 })

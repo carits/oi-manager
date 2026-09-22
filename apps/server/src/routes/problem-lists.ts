@@ -241,7 +241,3 @@ problemListsRouter.delete('/:id/shares/:shareId', authenticate, problemListEndpo
 problemListsRouter.post('/:id/create-assignment', authenticate, problemListEndpoint('创建作业草稿失败', async (req, res) => {
   res.status(201).json({ success: true, data: await createAssignmentFromProblemList(req.user!, req.params.id, req.body) })
 }))
-
-problemListsRouter.post('/:id/publish-homework', authenticate, (_req, res) => {
-  res.status(410).json({ success: false, code: 'LEGACY_HOMEWORK_API_RETIRED', message: '旧作业发布接口已退役，请创建独立 Assignment 草稿' })
-})

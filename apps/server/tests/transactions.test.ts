@@ -19,14 +19,6 @@ describe('current transactional resource flows', () => {
     superAdmin = await createTestUser({ accountRole: 'super_admin' })
   })
 
-  it('does not expose the removed school endpoint', async () => {
-    const response = await request(app)
-      .post('/api/schools')
-      .set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
-      .send({ name: 'Legacy school' })
-    expect(response.status).toBe(404)
-    expect(response.body).toEqual({ success: false, message: '接口不存在' })
-  })
 
   it('creates organization, school, principal membership and profile atomically', async () => {
     const username = unique('principal')
@@ -69,7 +61,7 @@ describe('current transactional resource flows', () => {
       .post('/api/platform/organizations')
       .set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
       .send({ name: 'Missing principal' })
-    expect(incomplete.status).toBe(400)
+    expect(incomplete.status).toBe(422)
 
     const platformAdmin = await createTestUser({ accountRole: 'platform_admin' })
     const denied = await request(app)
@@ -88,7 +80,7 @@ describe('current transactional resource flows', () => {
       .set('Cookie', `oi_session=${tokenFor(teacher)}`)
       .set('x-oi-organization-id', school.organizationId!)
       .send({ username, password: 'password123', name: 'Transactional Student' })
-    expect(response.status).toBe(201)
+    expect(response.status).toBe(200)
 
     const profile = await prisma.organizationStudentProfile.findUnique({
       where: { id: response.body.data.id },

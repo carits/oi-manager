@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
-import { PrismaClient } from '@prisma/client'
-import { createHash } from 'node:crypto'
+import { Prisma, PrismaClient } from '@prisma/client'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import sharp from 'sharp'
@@ -49,6 +49,40 @@ const ids = {
   trainingSession: 'e2e-training-session',
 }
 
+type FinalizedSubmissionSeed = Prisma.SubmissionUncheckedCreateInput & {
+  result: string
+  score: number
+  cases?: string
+  timeUsed?: number
+  memoryUsed?: number
+}
+
+async function createFinalizedSubmission(prisma: PrismaClient, data: FinalizedSubmissionSeed) {
+  const { result, score, cases, timeUsed, memoryUsed, ...submissionData } = data
+  const submission = await prisma.submission.create({ data: submissionData })
+  const runId = randomUUID()
+  await prisma.judgeRun.create({
+    data: {
+      id: runId,
+      submissionId: submission.id,
+      runNumber: 1,
+      runType: 'NORMAL',
+      status: 'FINALIZED',
+      result,
+      score,
+      cases,
+      timeUsed,
+      memoryUsed,
+      finalizedAt: submission.createdAt,
+    },
+  })
+  await prisma.submission.update({
+    where: { id: submission.id },
+    data: { currentJudgeRunId: runId },
+  })
+  return submission
+}
+
 async function seedChatSticker(prisma: PrismaClient) {
   const webp = await sharp({ create: { width: 64, height: 64, channels: 4, background: { r: 72, g: 99, b: 235, alpha: 1 } } }).webp().toBuffer()
   const sha256 = createHash('sha256').update(webp).digest('hex')
@@ -71,10 +105,10 @@ async function seedIdentityGraph(prisma: PrismaClient, passwordHash: string) {
     data: [
       { id: ids.superAdmin, username: 'admin', passwordHash, role: 'super_admin', status: 'active', email: 'admin@e2e.test' },
       { id: ids.platformAdmin, username: 'platform_admin', passwordHash, role: 'platform_admin', status: 'active', email: 'platform@e2e.test' },
-      { id: ids.principal, username: 'teacher1', passwordHash, role: 'school_principal', status: 'active', email: 'principal@e2e.test' },
-      { id: ids.teacher, username: 'teacher2', passwordHash, role: 'teacher', status: 'active', email: 'teacher@e2e.test' },
-      { id: ids.campusStudent, username: 'student1', passwordHash, role: 'student', status: 'active', email: 'student@e2e.test' },
-      { id: ids.personalStudent, username: 'personal_student1', passwordHash, role: 'student', status: 'active', email: 'personal@e2e.test' },
+      { id: ids.principal, username: 'teacher1', passwordHash, role: 'user', status: 'active', email: 'principal@e2e.test' },
+      { id: ids.teacher, username: 'teacher2', passwordHash, role: 'user', status: 'active', email: 'teacher@e2e.test' },
+      { id: ids.campusStudent, username: 'student1', passwordHash, role: 'user', status: 'active', email: 'student@e2e.test' },
+      { id: ids.personalStudent, username: 'personal_student1', passwordHash, role: 'user', status: 'active', email: 'personal@e2e.test' },
       { id: ids.chatSender, username: 'chat_sender', passwordHash, role: 'user', status: 'active', email: 'chat-sender@e2e.test' },
       { id: ids.chatReceiver, username: 'chat_receiver', passwordHash, role: 'user', status: 'active', email: 'chat-receiver@e2e.test' },
       { id: ids.chatOutsider, username: 'chat_outsider', passwordHash, role: 'user', status: 'active', email: 'chat-outsider@e2e.test' },
@@ -646,7 +680,7 @@ async function main() {
     const canonicalContest = await prisma.contest.create({
       data: {
         id: 'e2e-canonical-contest',
-        runtimeTrainingId: contest.id,
+        publicId: contest.id,
         createdBy: ids.principal,
         organizationId: ids.organization,
         title: contest.title,
@@ -663,9 +697,9 @@ async function main() {
         solutionVisible: true,
         ContestProblem: {
           create: [
-            { id: 'e2e-canonical-contest-problem', runtimeTrainingProblemId: 'e2e-contest-problem', canonicalProblemId: ids.problem, orderIndex: 0, title: 'E2E A Plus B', ojName: 'internal', problemId: 'E2E-1000', points: 100 },
-            { id: 'e2e-canonical-contest-problem-b', runtimeTrainingProblemId: 'e2e-contest-problem-b', canonicalProblemId: ids.secondProblem, orderIndex: 1, title: 'E2E Sequence', ojName: 'internal', problemId: 'E2E-1001', points: 100 },
-            { id: 'e2e-canonical-contest-problem-c', runtimeTrainingProblemId: 'e2e-contest-problem-c', canonicalProblemId: ids.thirdProblem, orderIndex: 2, title: 'E2E Prefix Sum', ojName: 'internal', problemId: 'E2E-1002', points: 100 },
+            { id: 'e2e-canonical-contest-problem', canonicalProblemId: ids.problem, orderIndex: 0, title: 'E2E A Plus B', ojName: 'internal', problemId: 'E2E-1000', points: 100 },
+            { id: 'e2e-canonical-contest-problem-b', canonicalProblemId: ids.secondProblem, orderIndex: 1, title: 'E2E Sequence', ojName: 'internal', problemId: 'E2E-1001', points: 100 },
+            { id: 'e2e-canonical-contest-problem-c', canonicalProblemId: ids.thirdProblem, orderIndex: 2, title: 'E2E Prefix Sum', ojName: 'internal', problemId: 'E2E-1002', points: 100 },
           ],
         },
       },
@@ -673,10 +707,10 @@ async function main() {
     await prisma.contest.create({
       data: {
         id: 'e2e-canonical-personal-contest',
-        runtimeTrainingId: personalContest.id,
         createdBy: ids.personalStudent,
         title: personalContest.title,
         description: personalContest.description,
+        publicId: personalContest.id,
         contestDate: personalContest.startTime,
         startAt: personalContest.startTime,
         endAt: personalContest.endTime,
@@ -690,7 +724,6 @@ async function main() {
         ContestProblem: {
           create: {
             id: 'e2e-canonical-personal-contest-problem',
-            runtimeTrainingProblemId: 'e2e-personal-contest-problem',
             canonicalProblemId: ids.problem,
             orderIndex: 0,
             title: 'E2E A Plus B',
@@ -744,19 +777,16 @@ async function main() {
     await prisma.contestUserProblemStatus.create({
       data: {
         id: 'e2e-contest-status',
-        contestId: contest.id,
-        canonicalContestId: canonicalContest.id,
+        contestId: canonicalContest.id,
         userId: ids.campusStudent,
-        contestProblemId: 'e2e-contest-problem',
-        canonicalContestProblemId: 'e2e-canonical-contest-problem',
+        contestProblemId: 'e2e-canonical-contest-problem',
         bestScore: 100,
         bestResult: 'accepted',
         attemptCount: 1,
         acAt: new Date(now - 25 * 60 * 60 * 1000),
       },
     })
-    await prisma.submission.create({
-      data: {
+    await createFinalizedSubmission(prisma, {
         userId: ids.campusStudent,
         organizationId: ids.organization,
         oj: 'carits',
@@ -773,10 +803,8 @@ async function main() {
         submitScope: 'training',
         trainingId: homework.id,
         trainingProblemId: 'e2e-homework-problem',
-      },
     })
-    await prisma.submission.create({
-      data: {
+    await createFinalizedSubmission(prisma, {
         userId: ids.personalStudent,
         workspaceScope: 'personal',
         oj: 'codeforces',
@@ -797,10 +825,8 @@ async function main() {
         submitScope: 'problem',
         isGlobalVisible: true,
         ojRemoteId: '123456789',
-      },
     })
-    await prisma.submission.create({
-      data: {
+    await createFinalizedSubmission(prisma, {
         userId: ids.campusStudent,
         organizationId: ids.organization,
         oj: 'carits',
@@ -816,16 +842,12 @@ async function main() {
         cases: JSON.stringify([{ result: 'Accepted', time: 2, memory: 768 }]),
         submitMethod: 'judge',
         submitScope: 'contest',
-        trainingId: contest.id,
-        trainingProblemId: 'e2e-contest-problem',
-        contestId: contest.id,
-        contestProblemId: 'e2e-contest-problem',
+        canonicalContestId: canonicalContest.id,
+        canonicalContestProblemId: 'e2e-canonical-contest-problem',
         isGlobalVisible: true,
         createdAt: new Date(contestStartTime.getTime() + 37 * 60 * 1000),
-      },
     })
-    await prisma.submission.createMany({
-      data: [
+    for (const data of [
         {
           userId: ids.personalStudent,
           organizationId: ids.organization,
@@ -842,10 +864,8 @@ async function main() {
           cases: JSON.stringify([{ result: 'Accepted', time: 2, memory: 768 }]),
           submitMethod: 'judge',
           submitScope: 'contest',
-          trainingId: contest.id,
-          trainingProblemId: 'e2e-contest-problem-b',
-          contestId: contest.id,
-          contestProblemId: 'e2e-contest-problem-b',
+          canonicalContestId: canonicalContest.id,
+          canonicalContestProblemId: 'e2e-canonical-contest-problem-b',
           isGlobalVisible: true,
           createdAt: new Date(contestStartTime.getTime() + 20 * 60 * 1000),
         },
@@ -865,10 +885,8 @@ async function main() {
           cases: JSON.stringify([{ result: 'Wrong Answer', time: 2, memory: 768 }]),
           submitMethod: 'judge',
           submitScope: 'contest',
-          trainingId: contest.id,
-          trainingProblemId: 'e2e-contest-problem-b',
-          contestId: contest.id,
-          contestProblemId: 'e2e-contest-problem-b',
+          canonicalContestId: canonicalContest.id,
+          canonicalContestProblemId: 'e2e-canonical-contest-problem-b',
           isGlobalVisible: true,
           createdAt: new Date(contestStartTime.getTime() + 25 * 60 * 1000),
         },
@@ -888,10 +906,8 @@ async function main() {
           cases: JSON.stringify([{ result: 'Accepted', time: 2, memory: 768 }]),
           submitMethod: 'judge',
           submitScope: 'contest',
-          trainingId: contest.id,
-          trainingProblemId: 'e2e-contest-problem-b',
-          contestId: contest.id,
-          contestProblemId: 'e2e-contest-problem-b',
+          canonicalContestId: canonicalContest.id,
+          canonicalContestProblemId: 'e2e-canonical-contest-problem-b',
           isGlobalVisible: true,
           createdAt: new Date(contestStartTime.getTime() + 50 * 60 * 1000),
         },
@@ -911,10 +927,8 @@ async function main() {
           cases: JSON.stringify([{ result: 'Wrong Answer', time: 2, memory: 768 }]),
           submitMethod: 'judge',
           submitScope: 'contest',
-          trainingId: contest.id,
-          trainingProblemId: 'e2e-contest-problem-c',
-          contestId: contest.id,
-          contestProblemId: 'e2e-contest-problem-c',
+          canonicalContestId: canonicalContest.id,
+          canonicalContestProblemId: 'e2e-canonical-contest-problem-c',
           isGlobalVisible: true,
           createdAt: new Date(contestStartTime.getTime() + 15 * 60 * 1000),
         },
@@ -934,15 +948,14 @@ async function main() {
           cases: JSON.stringify([{ result: 'Wrong Answer', time: 2, memory: 768 }]),
           submitMethod: 'judge',
           submitScope: 'contest',
-          trainingId: contest.id,
-          trainingProblemId: 'e2e-contest-problem-c',
-          contestId: contest.id,
-          contestProblemId: 'e2e-contest-problem-c',
+          canonicalContestId: canonicalContest.id,
+          canonicalContestProblemId: 'e2e-canonical-contest-problem-c',
           isGlobalVisible: true,
           createdAt: new Date(contestStartTime.getTime() + 30 * 60 * 1000),
         },
-      ],
-    })
+      ] satisfies FinalizedSubmissionSeed[]) {
+      await createFinalizedSubmission(prisma, data)
+    }
   } finally {
     await prisma.$disconnect()
   }

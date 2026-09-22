@@ -160,7 +160,6 @@ pnpm training:benchmark
 
 迁移不会重测历史提交，也不会伪造回滚事件。
 
-
 ## 2026-09-21 usability hardening 补充约束
 
 - Session 只维护一条全局 Current Stage 时间线；迟到加入只支持 `CURRENT_STAGE` 或 `TEACHER_ASSIGN`，不再支持每个学员从第一 Stage 独立推进。
@@ -169,3 +168,14 @@ pnpm training:benchmark
 - OI Subtask 选择在前后端都补齐依赖闭包，避免只选择依赖方而漏掉 prerequisite。
 - 已新增针对上述语义的 Server/E2E 回归用例定义；**本轮未实际执行这些测试**。
 - 历史数据迁移仍需单独演练：旧 `problemId` 草稿映射到重复出现的 StageProblem 时存在语义歧义；历史题面快照回填只能代表 migration-time reconstruction，不能追溯迁移前已丢失的旧题面版本。
+
+## 运行时入口与迁移边界
+
+当前运行时只使用 Stage 驱动的训练接口。新的写入入口为：
+
+- /api/training-sessions
+- /api/training-session-templates
+
+旧的 /api/trainings 接口已经停用，集合路径和所有嵌套路径统一返回 HTTP 410，并返回错误码 TRAINING_LEGACY_API_RETIRED；不会再猜测跳转到新地址。
+
+旧训练模型仅由一次性迁移服务读取，用于生成 TrainingSession、Stage、Assignment、ProblemPlan 和历史引用。迁移不重新评测、不伪造提交、不双写旧接口。迁移完成前保留旧模型及其迁移引用，以便审计与对账；运行时读写不再依赖旧路由。

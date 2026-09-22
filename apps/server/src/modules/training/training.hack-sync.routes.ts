@@ -58,13 +58,3 @@ trainingHackSyncRouter.post('/trainings/:id/problems/:trainingProblemId/test-set
     return sendTestSetUpdateError(error, res)
   }
 }))
-
-for (const suffix of ['hack-sync-preview', 'hack-sync']) {
-  trainingHackSyncRouter.all(`/trainings/:id/problems/:trainingProblemId/${suffix}`, authenticate, (_req, res) => {
-    res.status(410).json({
-      success: false,
-      code: 'HACK_SYNC_RETIRED',
-      message: '题库 Hack 不再直接同步活动，请使用测试版本更新接口',
-    })
-  })
-}

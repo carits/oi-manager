@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { accounts } from '../fixtures/auth'
 import { loadFixtureIds } from '../fixtures/data'
 import { installExternalMocks } from '../fixtures/external-mocks'
@@ -327,7 +327,7 @@ test.describe('published work and ranking contracts', () => {
     const publishResponse = await request.post(
       `/api/problem-lists/${ids.problemList}/create-assignment`,
       {
-        headers: { ...bearer(teacher), ...organizationHeaders },
+        headers: { ...sessionCookie(teacher), ...organizationHeaders },
         data: {
           teamId: ids.team,
           title,
@@ -341,13 +341,13 @@ test.describe('published work and ranking contracts', () => {
     expect(published.success).toBe(true)
     const assignmentId = published.data.assignmentId
     const publishAssignment = await request.post(`/api/assignments/${assignmentId}/publish`, {
-      headers: { ...bearer(teacher), ...organizationHeaders },
+      headers: { ...sessionCookie(teacher), ...organizationHeaders },
       data: { expectedRevision: 0 },
     })
     expect(publishAssignment.status()).toBe(200)
 
     const listResponse = await request.get(`/api/assignments?organizationId=org_${ids.school}&pageSize=100`, {
-      headers: { ...bearer(student), ...organizationHeaders },
+      headers: { ...sessionCookie(student), ...organizationHeaders },
     })
     expect(listResponse.status()).toBe(200)
     const list = await listResponse.json()
@@ -359,7 +359,7 @@ test.describe('published work and ranking contracts', () => {
     const response = await request.post(
       `/api/trainings/${ids.contest}/create-makeup-homework`,
       {
-        headers: { ...bearer(teacher), ...organizationHeaders },
+        headers: { ...sessionCookie(teacher), ...organizationHeaders },
         data: {
           title: `E2E Makeup ${Date.now()}`,
           startTime: new Date(Date.now() - 60_000).toISOString(),
@@ -374,7 +374,7 @@ test.describe('published work and ranking contracts', () => {
     expect(String(body.data.sourceTrainingId)).toBe(ids.contest)
 
     const rankingResponse = await request.get(`/api/trainings/${ids.contest}/ranking`, {
-      headers: { ...bearer(teacher), ...organizationHeaders },
+      headers: { ...sessionCookie(teacher), ...organizationHeaders },
     })
     expect(rankingResponse.status()).toBe(200)
     const ranking = await rankingResponse.json()

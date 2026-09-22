@@ -39,6 +39,15 @@ source_of_truth: Git history
 - 本批**没有实际执行测试、数据库迁移、迁移演练或部署**；这些验证项按本轮约束保留为显式未完成事项，不计入“已验证”。
 
 ## 2026-09-20 — Contest 与 Judge 双模型兼容退役
+## 2026-09-20 — 内部兼容债务最终收口
+
+- 删除已完成且无运行时引用的 Assignment、Economy Loop、Judge Program、Membership Role、School Name Key、Submission I/O 与 Test Graph 一次性迁移服务；在线维护迁移 API 不再存在。
+- 生产只读审计确认 Assignment 11/11、Judge Program 10/10、Membership Role 20,186/20,186 与 School Name Key 2/2 已完成，Submission I/O 与 Economy Loop 零阻塞。
+- Training Engine 仍有 6 条无法安全自动归属的历史记录，只保留离线审计与显式修复服务；School Directory 的 `legacy` 状态继续作为真实目录治理事实处理。
+- 删除 Milestone 与题单发布作业、训练 Hack 同步的旧路由墓碑，未支持类型统一走当前参数校验，不再永久维护旧错误码。
+- 清理旧 Student/Teacher 测试令牌、学校 ID 测试回退、过期比赛投影测试和共享旧 DTO；组织测试必须显式携带当前 `organizationId`。
+- 新增 `audit-internal-compatibility.mjs` 架构门禁，持续禁止旧登录字段、万能 `role`、Bearer 网页认证、旧 Session Claims、在线迁移路由和退役页面重新进入代码库。
+
 
 - Contest 获得独立 publicId，直接拥有题目、参赛者、生命周期和 Rating 事实；删除 runtimeTrainingId、runtimeTrainingProblemId、投影写入服务和自动补聚合维护服务。
 - ContestUserProblemStatus 删除旧 Training/TrainingProblem 整数身份，只保留带复合外键的 Contest/ContestProblem 身份；ContestRecord 强制每行只归属普通训练或比赛之一。

@@ -79,7 +79,7 @@
     "architecture:progress:check": "node scripts/architecture-progress.mjs --check --gate",
     "architecture:progress:verify": "node scripts/verify-architecture-progress.mjs",
     "architecture:routes:baseline": "node scripts/audit-route-boundaries.mjs --update",
-    "architecture:check": "node scripts/generate-architecture-inventory.mjs --check && node scripts/audit-route-boundaries.mjs && node scripts/audit-domain-state-writes.mjs && node scripts/audit-domain-boundaries.mjs && node scripts/audit-api-contract-layer.mjs && pnpm architecture:progress:check && pnpm db:baseline:check",
+    "architecture:check": "node scripts/generate-architecture-inventory.mjs --check && node scripts/audit-route-boundaries.mjs && node scripts/audit-domain-state-writes.mjs && node scripts/audit-domain-boundaries.mjs && node scripts/audit-api-contract-layer.mjs && node scripts/audit-internal-compatibility.mjs && pnpm architecture:progress:check && pnpm db:baseline:check",
     "judge:slo": "pnpm --filter server exec tsx scripts/check-judge-slo.ts",
     "judge:slo:check": "pnpm --filter server exec tsx scripts/check-judge-slo.ts --enforce",
     "judge:projection:audit": "pnpm --filter server exec tsx scripts/audit-judge-projection.ts",

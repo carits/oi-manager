@@ -2,14 +2,14 @@ import { expect, test } from '@playwright/test'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { bearer, loginAs } from '../fixtures/api'
+import { sessionCookie, loginAs } from '../fixtures/api'
 import { accounts } from '../fixtures/auth'
 import { ensureInitialTestSetRevision, transitionJudgeMode } from '../../apps/server/src/modules/problem/problem.testset-revision.service'
 import { prisma } from '../../apps/server/src/prisma'
 
 test('judge program workspace exposes complete templates and blocks unknown Classifier subtasks @compact', async ({ browser, request }) => {
   const manager = await loginAs(request, 'platformAdmin')
-  const headers = bearer(manager)
+  const headers = sessionCookie(manager)
   const created = await request.post('/api/problems', {
     headers,
     data: {

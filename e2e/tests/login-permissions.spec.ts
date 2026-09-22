@@ -15,22 +15,22 @@ test.describe('login and permission boundaries @smoke @compact', () => {
     await expect(page.locator('form')).toBeVisible()
   })
 
-  test('legacy role query keeps the unified login form', async ({ page }) => {
-    await page.goto('/login?role=student')
+  test('unified login form has no role selector', async ({ page }) => {
+    await page.goto('/login')
     await expect(page.getByRole('button', { name: '学生', exact: true })).toHaveCount(0)
     await expect(page.getByLabel('用户名')).toBeVisible()
     await expect(page.getByLabel('密码')).toBeVisible()
   })
 
   test('invalid credentials show a user-facing error', async ({ page }) => {
-    await page.goto('/login?role=student')
+    await page.goto('/login')
     await page.getByLabel('用户名').fill('student1')
     await page.getByLabel('密码').fill('incorrect-password')
     await page.getByRole('button', { name: '登录' }).click()
     await expect(page.getByText(/用户名或密码错误|登录失败/)).toBeVisible()
   })
 
-  test('anonymous protected route redirects to role login', async ({ page }) => {
+  test('anonymous protected route redirects to unified login', async ({ page }) => {
     await page.goto(`${organizationBase}/teams`)
     await expect(page).toHaveURL(/\/login\?next=%2Forg%2Forg_school-default%2Fteams/)
   })

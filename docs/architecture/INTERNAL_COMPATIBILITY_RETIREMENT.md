@@ -21,7 +21,9 @@ source_of_truth: auth contracts, auth middleware, organization authorization, of
 
 ## 保留的离线能力
 
-- 一次性迁移服务保留为离线审计与修复实现，不挂载 HTTP 路由。
+- 已完成且无运行时引用的一次性迁移服务已删除：Assignment 11/11 已迁移，Judge Program 10/10 已迁移，Membership Role 20,186/20,186 已规范化，School Name Key 2/2 已校验；Submission I/O 与 Economy Loop 审计均为零阻塞。
+- Training Engine 审计仍有 6 条无法安全自动归属的历史记录，因此只保留离线审计与显式修复服务；不得默认补组织或重新挂载 HTTP API。
+- School Directory 的 `legacy` 状态仍是当前目录治理事实，保留离线目录状态修复能力，不作为登录、授权或资源归属回退。
 - `pnpm --filter server migrate:account-roles` 会先写快照，再校验成员关系、更新账号角色并复核；重复运行应报告零待迁移记录。
 - 数据修复必须在服务器运行，输出报告并保留快照；不得临时恢复在线维护接口。
 

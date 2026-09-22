@@ -96,12 +96,12 @@ describe('current list and detail regressions', () => {
     await createTestUser({ accountRole: 'platform_admin', status: 'active' })
     await createTestUser({ accountRole: 'platform_admin', status: 'disabled' })
     const response = await request(app)
-      .get('/api/users?page=1&pageSize=10&role=platform_admin&status=active')
+      .get('/api/users?page=1&pageSize=10&accountRole=platform_admin&status=active')
       .set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
     expect(response.status).toBe(200)
     expect(response.body.data.users.length).toBeGreaterThan(0)
     for (const user of response.body.data.users) {
-      expect(user).toMatchObject({ role: 'platform_admin', status: 'active' })
+      expect(user).toMatchObject({ accountRole: 'platform_admin', status: 'active' })
     }
   })
 
@@ -131,12 +131,4 @@ describe('current list and detail regressions', () => {
     expect(new Date(response.body.timestamp).toISOString()).toBe(response.body.timestamp)
   })
 
-  it('does not expose the removed school list', async () => {
-    const response = await request(app)
-      .get('/api/schools')
-      .set('Cookie', `oi_session=${tokenFor(superAdmin)}`)
-    expect(response.status).toBe(404)
-    expect(response.body).toEqual({ success: false, message: '接口不存在' })
-    expect(await prisma.organization.count()).toBeGreaterThan(0)
-  })
 })
