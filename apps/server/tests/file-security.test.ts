@@ -109,6 +109,28 @@ describe('file storage security', () => {
       .set('x-oi-organization-id', schoolA.organizationId!)
     expect(local.status).toBe(200)
 
+    const privateFile = await prisma.file.create({
+      data: {
+        id: crypto.randomUUID(),
+        relativePath: 'private/contest',
+        fileName: 'contest-note.txt',
+        originalName: 'contest-note.txt',
+        mimeType: 'text/plain',
+        fileSize: 4,
+        isPublic: false,
+        accessLevel: 'private',
+        ownerType: 'contest',
+        ownerId: contest.id,
+        category: 'attachment',
+        status: 'active',
+      },
+    })
+    const metadata = await request(app)
+      .get(`/api/files/${privateFile.id}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
+      .set('x-oi-organization-id', schoolA.organizationId!)
+    expect(metadata.status).toBe(200)
+
     await prisma.organizationMembership.create({
       data: {
         id: crypto.randomUUID(),
@@ -125,6 +147,11 @@ describe('file storage security', () => {
       .set('Cookie', `oi_session=${tokenFor(manager)}`)
       .set('x-oi-organization-id', schoolB.organizationId!)
     expect(crossOrganization.status).toBe(403)
+    const crossMetadata = await request(app)
+      .get(`/api/files/${privateFile.id}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
+      .set('x-oi-organization-id', schoolB.organizationId!)
+    expect(crossMetadata.status).toBe(404)
   })
 
   it('does not let global administrators browse arbitrary user files', async () => {
