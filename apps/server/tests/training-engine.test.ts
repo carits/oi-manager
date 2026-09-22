@@ -8,6 +8,7 @@ import { getCoachDashboard, getTrainingReport, listTrainingSessionTemplates, res
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestTeam, createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
+import { applyTrainingEngineMigration, inspectTrainingEngineMigration } from '../src/modules/maintenance/application/training-engine-migration.service'
 
 const app = createTestApp()
 const directories: string[] = []
@@ -538,6 +539,147 @@ describe('Stage-driven Training Engine', () => {
     expect(persisted[1]).toMatchObject({ id: futureStage.id, name: '允许修改的未来阶段新名称', lifecycle: 'PENDING' })
     expect(persisted[2]).toMatchObject({ name: '运行中新增的未来复盘阶段', lifecycle: 'PENDING' })
     expect((await prisma.trainingSession.findUniqueOrThrow({ where: { id: session.id }, select: { currentStageId: true } })).currentStageId).toBe(currentStage.id)
+  })
+
+  it('migrates scheduled, running and ended legacy trainings into valid Stage-driven sessions', async () => {
+    const createLegacy = async (
+      label: string,
+      status: 'upcoming' | 'ongoing' | 'finished',
+      startTime: Date,
+      endTime: Date,
+    ) => {
+      const legacy = await prisma.training.create({
+        data: {
+          teamId: team.id,
+          organizationId: null,
+          title: `旧训练-${label}`,
+          description: `旧训练迁移测试-${label}`,
+          format: 'ioi',
+          type: 'training',
+          scope: 'personal',
+          startTime,
+          endTime,
+          status,
+          createdBy: coach.user.id,
+          updatedAt: new Date(),
+        },
+      })
+      const trainingProblemId = crypto.randomUUID()
+      await prisma.trainingProblem.create({
+        data: {
+          id: trainingProblemId,
+          trainingId: legacy.id,
+          problemId: problem.id,
+          alias: 'A',
+          orderIndex: 0,
+          points: 100,
+        },
+      })
+      await prisma.trainingParticipant.create({
+        data: {
+          id: crypto.randomUUID(),
+          trainingId: legacy.id,
+          userId: student.user.id,
+          userType: 'student',
+          joinedAt: startTime,
+        },
+      })
+      await prisma.trainingUserProblemStatus.create({
+        data: {
+          id: crypto.randomUUID(),
+          trainingId: legacy.id,
+          userId: student.user.id,
+          trainingProblemId,
+          bestScore: status === 'upcoming' ? null : 100,
+          bestResult: status === 'upcoming' ? null : 'Accepted',
+          attemptCount: status === 'upcoming' ? 0 : 1,
+          acAt: status === 'upcoming' ? null : new Date(Math.max(startTime.getTime(), Date.now() - 60_000)),
+          updatedAt: new Date(),
+        },
+      })
+      return legacy
+    }
+
+    const now = Date.now()
+    const scheduledLegacy = await createLegacy(
+      '未开始',
+      'upcoming',
+      new Date(now + 3_600_000),
+      new Date(now + 7_200_000),
+    )
+    const runningLegacy = await createLegacy(
+      '进行中',
+      'ongoing',
+      new Date(now - 1_800_000),
+      new Date(now + 1_800_000),
+    )
+    const endedLegacy = await createLegacy(
+      '已结束',
+      'finished',
+      new Date(now - 7_200_000),
+      new Date(now - 3_600_000),
+    )
+
+    const inspection = await inspectTrainingEngineMigration()
+    expect(inspection.blocked).toBe(0)
+    expect(inspection.migratable).toBeGreaterThanOrEqual(3)
+
+    const applied = await applyTrainingEngineMigration(inspection.reportHash)
+    expect(applied.blocked).toEqual([])
+    expect(applied.migrated).toBeGreaterThanOrEqual(3)
+
+    const migrated = await prisma.trainingSession.findMany({
+      where: { legacyTrainingId: { in: [scheduledLegacy.id, runningLegacy.id, endedLegacy.id] } },
+      include: {
+        Stages: {
+          include: {
+            RuntimeSnapshot: true,
+            Problems: true,
+          },
+        },
+        Participants: true,
+      },
+      orderBy: { legacyTrainingId: 'asc' },
+    })
+    expect(migrated).toHaveLength(3)
+
+    const scheduled = migrated.find(item => item.legacyTrainingId === scheduledLegacy.id)!
+    const running = migrated.find(item => item.legacyTrainingId === runningLegacy.id)!
+    const ended = migrated.find(item => item.legacyTrainingId === endedLegacy.id)!
+
+    expect(scheduled).toMatchObject({ status: 'SCHEDULED', currentStageId: null })
+    expect(scheduled.Stages[0]).toMatchObject({ lifecycle: 'PENDING' })
+    expect(scheduled.Stages[0].RuntimeSnapshot).toBeNull()
+    expect(scheduled.Participants[0].currentStageId).toBeNull()
+
+    expect(running.status).toBe('RUNNING')
+    expect(running.currentStageId).toBe(running.Stages[0].id)
+    expect(running.Stages[0]).toMatchObject({ lifecycle: 'RUNNING' })
+    expect(running.Stages[0].RuntimeSnapshot).not.toBeNull()
+    expect(running.Participants[0].currentStageId).toBe(running.Stages[0].id)
+
+    expect(ended).toMatchObject({ status: 'ENDED', currentStageId: null })
+    expect(ended.Stages[0]).toMatchObject({ lifecycle: 'ENDED', endReason: 'SYSTEM_ENDED' })
+    expect(ended.Stages[0].RuntimeSnapshot).not.toBeNull()
+    expect(ended.Participants[0].currentStageId).toBeNull()
+    expect(ended.Stages[0].Problems[0].titleSnapshot).toBe('训练引擎题目')
+
+    const studentToken = generateTokenFromUser(student.user)
+    const workspace = await createAuthenticatedRequest(app, studentToken)
+      .get(`/api/training-sessions/${ended.id}`)
+    expect(workspace.status).toBe(200)
+    expect(workspace.body.data.session).toMatchObject({ id: ended.id, status: 'ENDED', currentStageId: null })
+
+    const report = await createAuthenticatedRequest(app, studentToken)
+      .get(`/api/training-sessions/${ended.id}/report`)
+    expect(report.status).toBe(200)
+    expect(report.body.data.sessionSummary).toMatchObject({ id: ended.id, status: 'ENDED', participantCount: 1 })
+    expect(report.body.data.participants).toHaveLength(1)
+    expect(report.body.data.participants[0].problems[0]).toMatchObject({
+      title: '训练引擎题目',
+      status: 'COMPLETED',
+      requirementState: 'SATISFIED',
+    })
   })
 
   it('limits participant reports to the requesting student while managers see the full roster', async () => {
