@@ -141,7 +141,6 @@ trainingEngineRouter.post('/training-sessions/:id/stage-transitions', authentica
   try {
     const body = parseContractBody(TrainingContracts.transitionStage, req.body)
     const workspace = await executeStageTransition(req.user!.userId, req.params.id, body)
-    trainingMetrics.recordStageTransition()
     trainingMetrics.observeSession(req.params.id, workspace.session.status)
     sendContractData(res, TrainingContracts.transitionStage, workspace)
   } catch (error) { return sendError(error, res) }
