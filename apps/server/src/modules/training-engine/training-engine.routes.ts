@@ -14,6 +14,8 @@ import {
   createTrainingSession,
   deleteTrainingSessionTemplate,
   changeTrainingStageGroup,
+  cloneTrainingStage,
+  endTrainingStage,
   executeStageTransition,
   executeTrainingCommand,
   extendTrainingStageTime,
@@ -31,6 +33,7 @@ import {
   listTrainingEvents,
   listTrainingSessionTemplates,
   listTrainingSessions,
+  moveTrainingStageParticipant,
   openTrainingHint,
   previewTrainingParticipants,
   publishTrainingSession,
@@ -143,6 +146,31 @@ trainingEngineRouter.post('/training-sessions/:id/stage-transitions', authentica
     const workspace = await executeStageTransition(req.user!.userId, req.params.id, body)
     trainingMetrics.observeSession(req.params.id, workspace.session.status)
     sendContractData(res, TrainingContracts.transitionStage, workspace)
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/end', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.endStage, req.body)
+    const workspace = await endTrainingStage(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.endStage, workspace)
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/clone', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.cloneStage, req.body)
+    sendContractData(res, TrainingContracts.cloneStage, await cloneTrainingStage(req.user!.userId, req.params.id, req.params.stageId, body))
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/move-participant', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.moveStageParticipant, req.body)
+    const workspace = await moveTrainingStageParticipant(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.moveStageParticipant, workspace)
   } catch (error) { return sendError(error, res) }
 }))
 
