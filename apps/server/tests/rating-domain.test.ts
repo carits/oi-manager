@@ -320,6 +320,37 @@ describe('rating domain HTTP and persistence', () => {
       .toMatchObject({ organizationIdSnapshot: organizationId, ratingStatus: 'RATING_LOCKED' })
   })
 
+  it('binds organization rating leaderboards to the active organization context', async () => {
+    const otherSchool = (await createTestSchoolWithPrincipal(`Rating context ${crypto.randomUUID()}`)).school
+    const membershipId = crypto.randomUUID()
+    await prisma.organizationMembership.create({
+      data: {
+        id: membershipId,
+        organizationId: otherSchool.organizationId!,
+        userId: manager.user.id,
+        memberRole: 'teacher',
+        relationType: 'employee',
+        status: 'active',
+        joinedAt: new Date(),
+        RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+      },
+    })
+    await prisma.organizationTeacherProfile.create({
+      data: { id: crypto.randomUUID(), membershipId, name: '跨校 Rating 管理员', status: 'active' },
+    })
+
+    const wrongContext = await createAuthenticatedRequest(app, managerToken)
+      .get(`/api/ratings/organizations/${otherSchool.organizationId}/OI`)
+      .set('X-OI-Organization-ID', organizationId)
+    expect(wrongContext.status).toBe(403)
+    expect(wrongContext.body.code).toBe('ORGANIZATION_RATING_ACCESS_DENIED')
+
+    const correctContext = await createAuthenticatedRequest(app, managerToken)
+      .get(`/api/ratings/organizations/${otherSchool.organizationId}/OI`)
+      .set('X-OI-Organization-ID', otherSchool.organizationId!)
+    expect(correctContext.status).toBe(200)
+  })
+
   it('keeps Rating history private to the authenticated user', async () => {
     const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, accountRole: first.user.accountRole })
     const own = await createAuthenticatedRequest(app, firstToken).get(`/api/ratings/users/${first.user.id}/history?track=OI`)
