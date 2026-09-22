@@ -42,12 +42,21 @@ export class TeamService {
     return isPersonalContextForTeams(user) ? 'personal' : 'campus'
   }
 
+  private teamMatchesUserContext(team: { scope: string; organizationId?: string | null }, user: JwtPayload) {
+    const scope = this.getScopeForUser(user)
+    if (team.scope !== scope) return false
+    if (scope === 'campus') {
+      return Boolean(user.organizationId && team.organizationId === user.organizationId)
+    }
+    return team.organizationId == null
+  }
+
   async assertTeamScope(teamId: string, user: JwtPayload) {
     const team = await this.repo.findById(teamId)
     if (!team) {
       throw new Error('TEAM_NOT_FOUND')
     }
-    if (team.scope !== this.getScopeForUser(user)) {
+    if (!this.teamMatchesUserContext(team, user)) {
       throw new Error('TEAM_SCOPE_MISMATCH')
     }
     return team
@@ -65,7 +74,7 @@ export class TeamService {
     }
 
     const team = await this.repo.findById(teamId)
-    if (!team || team.scope !== this.getScopeForUser(user)) {
+    if (!team || !this.teamMatchesUserContext(team, user)) {
       return { role: null, memberId: null }
     }
 
@@ -126,7 +135,7 @@ export class TeamService {
    * 获取学校团队列表
    */
   async getOrganizationTeams(organizationId: string, user: JwtPayload) {
-    if (this.getScopeForUser(user) !== 'campus') {
+    if (this.getScopeForUser(user) !== 'campus' || !user.organizationId || user.organizationId !== organizationId) {
       throw new Error('TEAM_SCOPE_MISMATCH')
     }
     const teams = await this.repo.findByOrganization(organizationId)
@@ -283,6 +292,7 @@ export class TeamService {
     if (keyword?.trim()) where.name = { contains: keyword.trim(), mode: 'insensitive' }
     if (scope === 'campus') {
       if (!user.organizationId) throw new Error('NO_ORGANIZATION')
+      if (organizationId && organizationId !== user.organizationId) throw new Error('TEAM_SCOPE_MISMATCH')
       where.organizationId = user.organizationId
     }
 
