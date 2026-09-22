@@ -2,6 +2,7 @@ import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../../prisma'
 import { fileService } from '../../../lib/storage'
 import { canModifyProblem, canViewProblem } from '../../problem/problem.access'
+import { canAccessTraining, canManageTraining } from '../../training/training.helpers'
 import type { FileCategory, OwnerType } from '../../../config/storage'
 
 const UPLOAD_CATEGORIES = new Set<FileCategory>(['pdf', 'attachment', 'avatar', 'image', 'testdata'])
@@ -56,8 +57,34 @@ async function hasOwnerPermission(user: JwtPayload, ownerType: OwnerType, ownerI
       return Boolean(problem && (action === 'view' ? canViewProblem(user, problem) : canModifyProblem(user, problem)))
     }
     case 'contest': {
-      const contest = await prisma.contest.findUnique({ where: { id: ownerId }, select: { teamId: true } })
-      return Boolean(contest?.teamId && await hasTeamPermission(user, contest.teamId, action === 'modify'))
+      const numericPublicId = /^\d+$/.test(ownerId) ? Number(ownerId) : null
+      const contest = await prisma.contest.findFirst({
+        where: numericPublicId ? { OR: [{ id: ownerId }, { publicId: numericPublicId }] } : { id: ownerId },
+        select: {
+          id: true, teamId: true, organizationId: true, createdBy: true, scope: true,
+          Team: { select: { organizationId: true } },
+        },
+      })
+      if (!contest) return false
+
+      const resourceOrganizationId = contest.organizationId || contest.Team?.organizationId || null
+      if (contest.scope !== 'platform') {
+        if (resourceOrganizationId) {
+          if (!user.organizationId || resourceOrganizationId !== user.organizationId) return false
+        } else if (user.organizationId) {
+          return false
+        }
+      }
+
+      const activity = {
+        teamId: contest.teamId,
+        organizationId: resourceOrganizationId,
+        createdBy: contest.createdBy || '',
+        scope: contest.scope,
+      }
+      return action === 'modify'
+        ? canManageTraining(user.userId, activity)
+        : canAccessTraining(user.userId, activity)
     }
     case 'team':
       return hasTeamPermission(user, ownerId, action === 'modify')
