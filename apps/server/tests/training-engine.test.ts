@@ -341,6 +341,7 @@ describe('Stage-driven Training Engine', () => {
       reason: '当前表现适合提高组',
     })
     expect(moved.status).toBe(200)
+    await prisma.problem.update({ where: { id: problem.id }, data: { title: '题库后来改名，不应污染历史报告' } })
     const report = await getTrainingReport(coach.user.id, session.id)
     const entries = report.participants[0].problems
     expect(entries.find(item => item.problemId === problem.problemId)).toMatchObject({ requirementState: 'RETIRED', status: 'WORKING' })
@@ -353,6 +354,7 @@ describe('Stage-driven Training Engine', () => {
     expect(report.groupSummaries.find(item => item.groupId === foundation.id)).toMatchObject({ initialParticipantCount: 1, finalParticipantCount: 0 })
     expect(report.groupSummaries.find(item => item.groupId === advanced.id)).toMatchObject({ initialParticipantCount: 0, finalParticipantCount: 1 })
     expect(report.problemSummaries.some(item => item.title === '训练引擎题目')).toBe(true)
+    expect(report.problemSummaries.some(item => item.title === '题库后来改名，不应污染历史报告')).toBe(false)
   })
 
   it('loads design problem metadata through the declared :problemId route parameter', async () => {
