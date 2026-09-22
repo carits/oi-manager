@@ -10,7 +10,6 @@ import { authRouter } from './routes/auth'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { filesRouter } from './routes/files'
 import { meRouter } from './routes/me'
-import { milestoneRouter } from './routes/milestones'
 import { ojAccountsRouter } from './routes/oj-accounts'
 import { ojFetcherRouter } from './routes/oj-fetcher'
 import { organizationMemberRouter } from './routes/organization-members'
@@ -45,7 +44,7 @@ import { ratingDomainRouter } from './modules/rating/rating-domain.routes'
 import { solutionContributionRouter, solutionReviewRouter, solutionRouter } from './modules/solution/solution.routes'
 import { healthRouter } from './modules/system/health.routes'
 import { trainingEngineRouter } from './modules/training-engine/training-engine.routes'
-import { trainingsRouter } from './modules/training/training.routes'
+import { retiredTrainingRouter } from './modules/training/training-legacy-retired.routes'
 import { teamImportRouter } from './modules/team-import/team-import.routes'
 import { getCorsOptions } from './config/cors'
 import { isProduction } from './config/env'
@@ -94,7 +93,6 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api/auth', authRouter)
   app.use('/api/organizations/:organizationId/members', authenticate, organizationMemberRouter)
   app.use('/api/platform/organizations', platformOrganizationRouter)
-  app.use('/api/milestones', milestoneRouter)
   app.use('/api/teams', teamRouter)
   app.use('/api/users', authenticate, userRouter)
   app.use('/api/stats', authenticate, statsRouter)
@@ -111,7 +109,7 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api/oj-accounts', authenticate, ojAccountsRouter)
   app.use('/api/submit', submitRouter)
   app.use('/api', testdataRouter)
-  app.use('/api', trainingsRouter)
+  app.use('/api', retiredTrainingRouter)
   app.use('/api', trainingEngineRouter)
   app.use('/api', assignmentRouter)
   app.use('/api/admin/data', authenticate, adminDataRouter)
