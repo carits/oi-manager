@@ -1257,7 +1257,33 @@ async function createStageSnapshot(tx: Prisma.TransactionClient, stageId: string
 async function startStage(tx: Prisma.TransactionClient, sessionId: string, stageId: string, at: Date, running = true) {
   const stage = await tx.trainingSessionStage.findFirst({ where: { id: stageId, sessionId }, include: { RuntimeSnapshot: true } })
   if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '目标 Stage 不是待开始状态')
+
+  // Apply deferred next-Stage moves before validating GROUPED assignments.
   await tx.trainingSessionStageGroupChange.updateMany({ where: { sessionId, targetStageId: stageId, effectiveMode: 'NEXT_STAGE', effectiveAt: null }, data: { effectiveAt: at } })
+
+  if (stage.audienceMode === 'GROUPED') {
+    const [participants, assignments, groups] = await Promise.all([
+      tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, select: { id: true } }),
+      tx.trainingSessionStageParticipantAssignment.findMany({ where: { stageId }, select: { participantId: true, groupId: true } }),
+      tx.trainingSessionStageGroup.findMany({ where: { stageId }, select: { id: true } }),
+    ])
+    const validGroupIds = new Set(groups.map(group => group.id))
+    const assignmentByParticipant = new Map(assignments.map(assignment => [assignment.participantId, assignment.groupId] as const))
+    const invalidParticipantIds = participants
+      .filter(participant => {
+        const groupId = assignmentByParticipant.get(participant.id)
+        return !groupId || !validGroupIds.has(groupId)
+      })
+      .map(participant => participant.id)
+    if (invalidParticipantIds.length) {
+      throw new TrainingEngineError(
+        422,
+        'TRAINING_GROUP_ASSIGNMENT_INCOMPLETE',
+        `分组 Stage 启动失败：${invalidParticipantIds.length} 名 active participant 没有有效的本 Stage 分组`,
+      )
+    }
+  }
+
   if (!stage.RuntimeSnapshot) await createStageSnapshot(tx, stage.id)
   await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'RUNNING', startedAt: at, runningSince: running ? at : null, endedAt: null, endedBy: null, endReason: null, endNote: null } })
   await tx.trainingSession.update({ where: { id: sessionId }, data: { currentStageId: stage.id } })
