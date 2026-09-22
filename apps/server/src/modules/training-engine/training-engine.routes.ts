@@ -4,6 +4,7 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { TrainingContracts } from '@oi-manager/contracts'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
+import { trainingMetrics } from './training-metrics'
 import {
   TrainingEngineError,
   archiveTrainingSession,
@@ -76,7 +77,12 @@ trainingEngineRouter.post('/training-sessions/participant-preview', authenticate
 }))
 
 trainingEngineRouter.get('/training-sessions/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.getWorkspace, await getTrainingWorkspace(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
+  try {
+    const workspace = await getTrainingWorkspace(req.user!.userId, req.params.id)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    trainingMetrics.recordWorkspaceQueries(1)
+    sendContractData(res, TrainingContracts.getWorkspace, workspace)
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/design', authenticate, asyncHandler(async (req: AuthRequest, res) => {
@@ -120,20 +126,34 @@ trainingEngineRouter.post('/training-sessions/:id/join', authenticate, asyncHand
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/commands', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.executeCommand, await executeTrainingCommand(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.executeCommand, req.body))) } catch (error) { return sendError(error, res) }
+  try {
+    const result = await executeTrainingCommand(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.executeCommand, req.body))
+    trainingMetrics.recordCommand(true)
+    trainingMetrics.observeSession(req.params.id, result.status)
+    sendContractData(res, TrainingContracts.executeCommand, result)
+  } catch (error) {
+    trainingMetrics.recordCommand(false)
+    return sendError(error, res)
+  }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/stage-transitions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const body = parseContractBody(TrainingContracts.transitionStage, req.body)
-    sendContractData(res, TrainingContracts.transitionStage, await executeStageTransition(req.user!.userId, req.params.id, body))
+    const workspace = await executeStageTransition(req.user!.userId, req.params.id, body)
+    trainingMetrics.recordStageTransition()
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.transitionStage, workspace)
   } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/group-changes', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const body = parseContractBody(TrainingContracts.changeStageGroup, req.body)
-    sendContractData(res, TrainingContracts.changeStageGroup, await changeTrainingStageGroup(req.user!.userId, req.params.id, req.params.stageId, body))
+    const workspace = await changeTrainingStageGroup(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.recordGroupMove()
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.changeStageGroup, workspace)
   } catch (error) { return sendError(error, res) }
 }))
 
@@ -211,6 +231,7 @@ trainingEngineRouter.get('/training-sessions/:id/events', authenticate, asyncHan
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
+  trainingMetrics.openSseConnection()
   res.write(`event: ready\ndata: ${JSON.stringify({ cursor })}\n\n`)
   let closed = false, busy = false
   const poll = async () => {
@@ -228,5 +249,11 @@ trainingEngineRouter.get('/training-sessions/:id/events', authenticate, asyncHan
   }
   const pollTimer = setInterval(() => void poll(), 1000)
   const heartbeatTimer = setInterval(() => res.write(': heartbeat\n\n'), 20_000)
-  req.once('close', () => { closed = true; clearInterval(pollTimer); clearInterval(heartbeatTimer) })
+  req.once('close', () => {
+    if (closed) return
+    closed = true
+    trainingMetrics.closeSseConnection()
+    clearInterval(pollTimer)
+    clearInterval(heartbeatTimer)
+  })
 }))
