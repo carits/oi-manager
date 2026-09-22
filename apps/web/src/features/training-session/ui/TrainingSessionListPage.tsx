@@ -76,7 +76,9 @@ async function loadAllManagedTeams(organizationId?: string) {
     const params = new URLSearchParams(base); params.set('page', String(index + 2))
     return listManagedTrainingTeams<TeamPayload>(params)
   }))
-  const data = [first, ...remaining].flatMap(result => result.success ? normalizeTeams(result.data) : [])
+  const failedPage = remaining.find(result => !result.success)
+  if (failedPage) return failedPage
+  const data = [first, ...remaining].flatMap(result => normalizeTeams(result.data))
   return { success: true, status: 200, data } as const
 }
 
@@ -108,23 +110,53 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     listParams.set('statusGroup', listFilter); listParams.set('page', String(listPage)); listParams.set('pageSize', '20')
     if (listQuery.trim()) listParams.set('keyword', listQuery.trim())
     if (organizationId && listTeamId) listParams.set('filterTeamId', listTeamId)
-    const [list, templateResult, teamResult] = await Promise.all([
-      listTrainingSessions(Object.fromEntries(listParams.entries())).catch(() => null),
-      listTrainingTemplates({ organizationId, teamId }),
-      teamId ? Promise.resolve({ success: true, data: [] as Team[], status: 200 })
-        : organizationId && canViewTrainingManagement
-          ? loadAllManagedTeams(organizationId)
-          : organizationId
-            ? Promise.resolve({ success: true, data: [] as Team[], status: 200 })
-            : loadAllManagedTeams(),
-    ])
-    if (list && !Array.isArray(list)) { setSessions(list.items as Session[]); setStatusCounts(list.statusCounts as Record<ListFilter, number>); setListTotal(list.pagination.total); setListTotalPages(Math.max(1, list.pagination.totalPages)) } else toast.error('训练列表加载失败')
-    setTemplates(templateResult || [])
-    if (teamResult.success) {
-      const manageable = normalizeTeams(teamResult.data)
-      setTeams(manageable); setSelectedTeamId(current => current || manageable[0]?.id || '')
+    try {
+      const [listResult, templateResult, teamResult] = await Promise.allSettled([
+        listTrainingSessions(Object.fromEntries(listParams.entries())),
+        listTrainingTemplates({ organizationId, teamId }),
+        teamId ? Promise.resolve({ success: true, data: [] as Team[], status: 200 })
+          : organizationId && canViewTrainingManagement
+            ? loadAllManagedTeams(organizationId)
+            : organizationId
+              ? Promise.resolve({ success: true, data: [] as Team[], status: 200 })
+              : loadAllManagedTeams(),
+      ])
+
+      if (listResult.status === 'fulfilled') {
+        const list = listResult.value
+        if (Array.isArray(list)) {
+          setSessions(list as Session[])
+          setStatusCounts({ active: 0, upcoming: 0, completed: 0, draft: 0 })
+          setListTotal(list.length)
+          setListTotalPages(1)
+        } else {
+          setSessions(list.items as Session[])
+          setStatusCounts(list.statusCounts as Record<ListFilter, number>)
+          setListTotal(list.pagination.total)
+          setListTotalPages(Math.max(1, list.pagination.totalPages))
+        }
+      } else {
+        toast.error(listResult.reason instanceof Error ? listResult.reason.message : '训练列表加载失败')
+      }
+
+      if (templateResult.status === 'fulfilled') {
+        setTemplates(templateResult.value || [])
+      } else {
+        toast.error(templateResult.reason instanceof Error ? templateResult.reason.message : '训练模板加载失败')
+      }
+
+      if (teamResult.status === 'fulfilled' && teamResult.value.success) {
+        const manageable = normalizeTeams(teamResult.value.data)
+        setTeams(manageable)
+        setSelectedTeamId(current => current || manageable[0]?.id || '')
+      } else if (teamResult.status === 'rejected') {
+        toast.error(teamResult.reason instanceof Error ? teamResult.reason.message : '可管理团队加载失败')
+      } else if (!teamResult.value.success) {
+        toast.error(teamResult.value.message || '可管理团队加载失败')
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [canViewTrainingManagement, listFilter, listPage, listQuery, listTeamId, organizationId, scopeQuery, teamId, toast])
   useEffect(() => { const timer = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timer) }, [load])
 
