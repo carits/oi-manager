@@ -69,7 +69,7 @@ export function TrainingProblemChain({
       </header>
       <div className={styles.designColumnBody}>
         {activeStage ? (
-          <fieldset disabled={readOnly} aria-label={readOnly ? "已开始阶段，只读" : "阶段定义"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <fieldset disabled={readOnly} aria-label={readOnly ? "已开始阶段，只读" : "阶段定义"} className={styles.definitionFieldset}>
             {readOnly && <p className={styles.muted}>该阶段已开始，定义和题目计划永久只读；需要再次训练时请使用左侧“复制阶段”创建新的未来阶段。</p>}
             <div className={styles.stageSettings}>
               <label className={styles.field}>
@@ -201,9 +201,9 @@ export function TrainingProblemChain({
                 <p>每个阶段的分组、学员和题目链彼此独立；先选择要编辑的分组。</p>
                 <label className={styles.field}>当前编辑分组<Select value={activeGroup?.clientKey || ""} onChange={event => setActiveGroupKey(event.target.value)}>{activeStage.Groups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></label>
                 {activeStage.Groups.map((group, index) => {
-                  const rules = (group.rules && typeof group.rules === "object" ? group.rules : {}) as Record<string, any>;
-                  const timePolicy = (rules.timePolicy && typeof rules.timePolicy === "object" ? rules.timePolicy : { mode: "NONE" }) as Record<string, any>;
-                  const stuckPolicy = (rules.stuckPolicy && typeof rules.stuckPolicy === "object" ? rules.stuckPolicy : {}) as Record<string, any>;
+                  const rules = (group.rules && typeof group.rules === "object" ? group.rules : {}) as Record<string, unknown>;
+                  const timePolicy = (rules.timePolicy && typeof rules.timePolicy === "object" ? rules.timePolicy : { mode: "NONE" }) as Record<string, unknown>;
+                  const stuckPolicy = (rules.stuckPolicy && typeof rules.stuckPolicy === "object" ? rules.stuckPolicy : {}) as Record<string, unknown>;
                   const updateRules = (patch: Record<string, unknown>) => onUpdateStage(activeStage.clientKey, stage => ({
                     ...stage,
                     Groups: stage.Groups.map(item => item.clientKey === group.clientKey ? { ...item, rules: { ...(item.rules || {}), ...patch } } : item),

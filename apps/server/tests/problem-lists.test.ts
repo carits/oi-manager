@@ -96,7 +96,7 @@ describe('题单权限模块', () => {
       })
       const listB = await createTestProblemList({
         ownerId: ownerUser.user.id,
-        schoolId: schoolB.school.id,
+        organizationId: schoolB.school.organizationId!,
       })
       const token = generateTokenFromUser(ownerUser.user)
       const requestA = createAuthenticatedRequest(app, token, { organizationId: schoolData.school.organizationId! })

@@ -222,7 +222,8 @@ export async function deleteProblemList(user: AuthUser, id: string) {
   const list = await prisma.problemList.findUnique({ where: { id } })
   if (!list) fail(404, '题单不存在')
   const permission = await getProblemListPermission(id, user)
-  if (permission !== 'admin' || list.ownerId !== user.userId) fail(404, '题单不存在')
+  if (!permission) fail(404, '题单不存在')
+  if (permission !== 'admin' || list.ownerId !== user.userId) fail(403, '无权限删除')
   const [schoolLink, teamLink] = await Promise.all([
     prisma.schoolProblemList.findFirst({ where: { problemListId: id }, select: { id: true } }),
     prisma.teamProblemList.findFirst({ where: { problemListId: id }, select: { id: true } }),

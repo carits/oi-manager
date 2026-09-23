@@ -107,6 +107,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [extensionOpen, setExtensionOpen] = useState(false), [extensionMinutes, setExtensionMinutes] = useState(10), [extensionReason, setExtensionReason] = useState('')
   const [report, setReport] = useState<TrainingReport>(), [reportOpen, setReportOpen] = useState(false)
   const cursor = useRef(0), saveDraftRef = useRef<(quiet?: boolean) => Promise<number | false>>(async () => false)
+  const draftRevisionRef = useRef<Record<string, number | undefined>>({})
+  const draftSaveQueueRef = useRef<Promise<number | false>>(Promise.resolve(false))
   const commandInFlight = useRef(false), statusRevisionRef = useRef<number>(), hintLoadVersion = useRef(0)
 
   const load = useCallback(async () => {
@@ -161,6 +163,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         setCode(draft?.code || local || '')
         setLanguage(draft?.language || 'cpp17')
         setDraftRevision(draft?.revision)
+        draftRevisionRef.current[problem.id] = draft?.revision
         setSubmissionIo({ inputFilename: draft?.inputFilename || null, outputFilename: draft?.outputFilename || null })
         if (local) window.localStorage.removeItem(draftKey)
       } catch (error) {
@@ -177,15 +180,22 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }, [draftKey, loadHints, problem?.id, problem?.problemId, sessionId, toast])
   const saveDraft = useCallback(async (quiet = false) => {
     if (!problem) return false
-    setSaving(true)
-    const response = await saveTrainingDraft(sessionId, problem.id, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevision, editorFocused: document.hasFocus() })
-    setSaving(false)
-    if (!response.ok) { if (!quiet) toast.error(response.error.message || '草稿保存失败'); return false }
-    setDraftRevision(response.data?.revision)
-    if (draftKey) window.localStorage.removeItem(draftKey)
-    if (!quiet) toast.success('草稿已保存')
-    return Number(response.data?.revision ?? draftRevision ?? 0)
-  }, [code, draftKey, draftRevision, language, problem, sessionId, submissionIo.inputFilename, submissionIo.outputFilename, toast])
+    const save = async () => {
+      setSaving(true)
+      const response = await saveTrainingDraft(sessionId, problem.id, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevisionRef.current[problem.id], editorFocused: document.hasFocus() })
+      setSaving(false)
+      if (!response.ok) { if (!quiet) toast.error(response.error.message || '草稿保存失败'); return false }
+      const nextRevision = Number(response.data?.revision ?? draftRevisionRef.current[problem.id] ?? 0)
+      draftRevisionRef.current[problem.id] = nextRevision
+      setDraftRevision(nextRevision)
+      if (draftKey) window.localStorage.removeItem(draftKey)
+      if (!quiet) toast.success('草稿已保存')
+      return nextRevision
+    }
+    const queued = draftSaveQueueRef.current.then(save, save)
+    draftSaveQueueRef.current = queued
+    return queued
+  }, [code, draftKey, language, problem, sessionId, submissionIo.inputFilename, submissionIo.outputFilename, toast])
   saveDraftRef.current = saveDraft
   useEffect(() => { const timer = setInterval(() => { if (code && problem) void saveDraftRef.current(true) }, 30_000); return () => clearInterval(timer) }, [code, problem])
   useEffect(() => {
@@ -198,11 +208,11 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     if (!problem || !draftKey) return
     const persistOnExit = () => {
-      void saveTrainingDraft(sessionId, problem.id, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevision, editorFocused: false }, { keepalive: true })
+      void saveTrainingDraft(sessionId, problem.id, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevisionRef.current[problem.id], editorFocused: false }, { keepalive: true })
     }
     window.addEventListener('pagehide', persistOnExit)
     return () => window.removeEventListener('pagehide', persistOnExit)
-  }, [code, draftKey, draftRevision, language, problem, sessionId, submissionIo.inputFilename, submissionIo.outputFilename])
+  }, [code, draftKey, language, problem, sessionId, submissionIo.inputFilename, submissionIo.outputFilename])
   useEffect(() => {
     const source = new EventSource(`/api/training-sessions/${sessionId}/events?afterSeq=${cursor.current}`, { withCredentials: true })
     source.addEventListener('training', event => { cursor.current = Number((event as MessageEvent).lastEventId || cursor.current); void saveDraftRef.current(true).finally(() => load()) })
@@ -223,7 +233,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       await saveDraftRef.current(true)
       const response = await executeTrainingCommand(sessionId, { type: type as 'PAUSE_SESSION', expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, targetType: targetType as 'ALL', targetId: resolvedTargetId, payload })
       if (!response.ok) { toast.error(response.error.message || '训练指令失败'); return false }
-      if (typeof response.data?.statusRevision === 'number') statusRevisionRef.current = response.data.statusRevision
+      if (response.data && 'statusRevision' in response.data && typeof response.data.statusRevision === 'number') statusRevisionRef.current = response.data.statusRevision
       await load(); await loadHints(selectedId)
       return true
     } finally {
@@ -274,7 +284,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const showReport = async () => { const response = await getTrainingReport(sessionId).catch(() => null); if (!response) return toast.error('训练报告加载失败'); setReport(response as TrainingReport); setReportOpen(true) }
   const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const exportReportCsv = () => {
-    if (!report) return
+    if (!report || !data) return
     const rows = [
       ['学员', '题号', '题目', '要求类型', '状态', '最高分', '提交次数', '提示次数', '学员有效训练秒数'],
       ...report.participants.flatMap(participant => participant.problems.map(entry => [
@@ -294,7 +304,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     saveBlobDownload(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${safeTitle}-训练报告.csv`)
   }
   const exportReportJson = () => {
-    if (!report) return
+    if (!report || !data) return
     const safeTitle = data.session.title.replace(/[\\/:*?"<>|]/g, '_')
     saveBlobDownload(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' }), `${safeTitle}-训练报告.json`)
   }
@@ -325,7 +335,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const activeStrategy = selectedId ? data.strategy[selectedId] : undefined
   const currentStage = data.session.Stages.find(stage => stage.id === data.session.currentStageId)
   const pendingStages = data.session.Stages.filter(stage => stage.lifecycle === 'PENDING')
-  const nextPendingStage = pendingStages.find(stage => !currentStage || data.session.Stages.indexOf(stage) > data.session.Stages.indexOf(currentStage))
+  const nextPendingStage = pendingStages.find(stage => !currentStage || stage.id === currentStage.id || data.session.Stages.indexOf(stage) > data.session.Stages.indexOf(currentStage))
   const futureGroupedStages = pendingStages.filter(stage => stage.audienceMode === 'GROUPED')
   const groupTargetStage = groupChangeMode === 'next_stage' ? futureGroupedStages.find(stage => stage.id === groupChangeStageId) : currentStage
   const reportStageName = (stageId: string) => data.session.Stages.find(stage => stage.id === stageId)?.name || stageId

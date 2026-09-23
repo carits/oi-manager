@@ -28,9 +28,9 @@ export const TrainingStuckPolicySchema = z.object({ minActiveSeconds: z.number()
 
 export const TrainingStructureProblemInputSchema = z.object({
   assignmentId: z.string().optional(), clientKey: z.string().min(1), problemId: z.string().min(1), testSetRevisionId: z.string().min(1),
-  alias: z.string().max(50).nullable().optional(), unlockPolicy: TrainingUnlockPolicySchema.optional(), targetScore: NullableNumber,
-  scoreGoals: z.array(TrainingScoreGoalSchema).max(20).optional(), timePolicy: TrainingProblemTimePolicySchema.optional(), stuckPolicy: TrainingStuckPolicySchema.optional(), hintPolicy: JsonObjectSchema.optional(),
-  allowedSubtaskIds: z.array(z.number().int().positive()).default([]), strategyIntervalSeconds: NullableNumber,
+  alias: z.string().max(50).nullable().optional(), unlockPolicy: TrainingUnlockPolicySchema.nullable().optional(), targetScore: NullableNumber,
+  scoreGoals: z.array(TrainingScoreGoalSchema).max(20).nullable().optional(), timePolicy: TrainingProblemTimePolicySchema.nullable().optional(), stuckPolicy: TrainingStuckPolicySchema.nullable().optional(), hintPolicy: JsonObjectSchema.nullable().optional(),
+  allowedSubtaskIds: z.array(z.number().int().positive()).nullable().optional(), strategyIntervalSeconds: NullableNumber,
 })
 export const TrainingStructureGroupInputSchema = z.object({
   id: z.string().optional(), clientKey: z.string().min(1), name: z.string().min(1).max(100),
@@ -45,7 +45,7 @@ export const TrainingStructureStageInputSchema = z.object({
   rules: JsonObjectSchema.optional(), problems: z.array(TrainingStructureProblemInputSchema).default([]), groups: z.array(TrainingStructureGroupInputSchema).default([]),
 })
 export const TrainingStructureInputSchema = z.object({
-  expectedRevision: z.number().int().nonnegative(), title: z.string().min(1).max(200), description: z.string().max(5000),
+  expectedRevision: z.number().int().nonnegative(), title: z.string().min(1).max(200), description: z.string().max(5000).nullable(),
   confirmDependentRemoval: z.boolean().optional(), stages: z.array(TrainingStructureStageInputSchema).min(1).max(30),
 })
 
@@ -108,7 +108,7 @@ const TrainingUserSummarySchema = z.object({ id: z.string(), username: z.string(
 const TrainingRuntimeProblemSchema = z.object({
   id: z.string(), problemId: z.string(), alias: z.string().nullable().optional(), targetScore: z.number().int().nullable().optional(),
   timePolicy: TrainingProblemTimePolicySchema.nullable().optional(), stuckPolicy: TrainingStuckPolicySchema.nullable().optional(), allowedSubtaskIds: z.array(z.number().int()).nullable().optional(),
-  strategyIntervalSeconds: z.number().int().nullable().optional(), scoreGoals: z.array(TrainingScoreGoalSchema).optional(), unlockPolicy: TrainingUnlockPolicySchema.nullable().optional(),
+  strategyIntervalSeconds: z.number().int().nullable().optional(), scoreGoals: z.array(TrainingScoreGoalSchema).nullable().optional(), unlockPolicy: TrainingUnlockPolicySchema.nullable().optional(),
   Problem: z.object({ problemId: z.string(), title: z.string(), platform: z.string() }).passthrough(),
   TestSetRevision: z.object({ revisionNumber: z.number().int(), mode: z.string() }).passthrough(),
 }).passthrough()
@@ -337,7 +337,10 @@ export const TrainingContracts = {
   getReport: defineApiEndpoint({ key: 'training.report', method: 'GET', scope: 'organization', data: TrainingReportSchema }),
   archiveSession: defineApiEndpoint({ key: 'training.archive', method: 'POST', scope: 'organization', body: TrainingExpectedRevisionSchema, data: TrainingSessionSummarySchema }),
   joinSession: defineApiEndpoint({ key: 'training.join', method: 'POST', scope: 'organization', body: z.object({}).default({}), data: z.object({ id: z.string() }).passthrough() }),
-  executeCommand: defineApiEndpoint({ key: 'training.command', method: 'POST', scope: 'organization', body: TrainingCommandInputSchema, data: z.object({ id: z.string(), status: z.string(), statusRevision: z.number().int() }).passthrough() }),
+  executeCommand: defineApiEndpoint({ key: 'training.command', method: 'POST', scope: 'organization', body: TrainingCommandInputSchema, data: z.union([
+    z.object({ id: z.string(), status: z.string(), statusRevision: z.number().int() }).passthrough(),
+    TrainingWorkspaceSchema,
+  ]) }),
   heartbeat: defineApiEndpoint({ key: 'training.heartbeat', method: 'POST', scope: 'organization', body: TrainingHeartbeatInputSchema, data: z.object({ participant: z.object({ id: z.string() }).passthrough(), progress: z.object({ stageProblemId: z.string(), status: z.string() }).passthrough() }) }),
   getDraft: defineApiEndpoint({ key: 'training.draft.get', method: 'GET', scope: 'organization', data: TrainingDraftSchema.nullable() }),
   saveDraft: defineApiEndpoint({ key: 'training.draft.save', method: 'PUT', scope: 'organization', body: TrainingDraftInputSchema, data: TrainingDraftSchema }),

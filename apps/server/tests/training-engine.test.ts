@@ -1061,7 +1061,7 @@ describe('Stage-driven Training Engine', () => {
       stages: [{
         name: '顺序训练', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL',
         accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED',
-        problems: [{ problemId: problem.id }, { problemId: secondProblem.id }],
+        problems: [{ problemId: problem.id }, { problemId: secondProblem.id, unlockPolicy: { mode: 'ALL', conditions: [{ type: 'TEACHER' }] } }],
       }],
     })
     expect(created.status).toBe(201)
@@ -1107,8 +1107,6 @@ describe('Stage-driven Training Engine', () => {
         submitScope: 'training_engine',
         trainingSessionId: session.id,
         trainingStageProblemId: stageProblem.id,
-        result: score === 100 ? 'Accepted' : 'Partial Accepted',
-        score,
       } })
       await syncTrainingEngineSubmission({
         id: submission.id,

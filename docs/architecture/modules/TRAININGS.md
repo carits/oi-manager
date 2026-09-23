@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-22
+last_verified: 2026-09-23
 source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/schema.prisma, packages/contracts/src/training.ts
 ---
 

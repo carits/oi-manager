@@ -66,7 +66,6 @@ export default defineConfig({
         JWT_SECRET: runtimeSecrets.jwtSecret,
         JUDGE_TOKEN: runtimeSecrets.judgeToken,
         DISABLE_BACKGROUND_JOBS: 'true',
-        ENABLE_MAINTENANCE_API: 'false',
         STORAGE_ROOT: storageRoot,
         TESTDATA_DIR: testdataDir,
       },

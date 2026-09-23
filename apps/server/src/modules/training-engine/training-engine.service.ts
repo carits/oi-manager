@@ -1449,7 +1449,21 @@ export async function changeTrainingStageGroup(userId: string, sessionId: string
     await appendEvent(tx, sessionId, TrainingEventTypes.STAGE_GROUP_CHANGED, 'USER', participant.userId, { stageId, targetStageId, fromGroupId: old?.groupId || null, toGroupId: toGroup.id, effectiveMode, clearCurrentProblem })
   })
   trainingMetrics.recordGroupMove()
-  return getTrainingWorkspace(userId, sessionId)
+  const workspace = await getTrainingWorkspace(userId, sessionId)
+  const changedParticipant = await prisma.trainingSessionParticipant.findFirstOrThrow({
+    where: { id: String(body?.participantId || ''), sessionId },
+  })
+  const currentAssignment = workspace.session.currentStageId
+    ? await prisma.trainingSessionStageParticipantAssignment.findUnique({
+      where: {
+        stageId_participantId: {
+          stageId: workspace.session.currentStageId,
+          participantId: changedParticipant.id,
+        },
+      },
+    })
+    : null
+  return { ...workspace, participant: { ...changedParticipant, currentStageId: workspace.session.currentStageId, currentGroupId: currentAssignment?.groupId || null } }
 }
 
 export async function extendTrainingStageTime(userId: string, sessionId: string, stageId: string, body: any) {

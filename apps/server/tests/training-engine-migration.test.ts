@@ -7,6 +7,12 @@ const databaseUrl = process.env.DATABASE_URL
 const schema = `training_migration_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 let client: Client
 
+function parsePgTextArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String)
+  if (typeof value !== 'string') return []
+  return value.replace(/^\{|\}$/g, '').split(',').filter(Boolean)
+}
+
 describe.skipIf(!databaseUrl)('training stage terminal lifecycle migration', () => {
   beforeAll(async () => {
     client = new Client({ connectionString: databaseUrl })
@@ -91,7 +97,7 @@ describe.skipIf(!databaseUrl)('training stage terminal lifecycle migration', () 
       ORDER BY t.typname
     `, [schema])
 
-    const byName = Object.fromEntries(enums.rows.map(row => [row.typname, row.values]))
+    const byName = Object.fromEntries(enums.rows.map(row => [row.typname, parsePgTextArray(row.values)]))
     expect(byName.TrainingEngineStageLifecycle).toEqual(['PENDING', 'RUNNING', 'ENDED', 'SKIPPED'])
     expect(byName.TrainingEngineProgressStatus).toEqual(['NOT_STARTED', 'WORKING', 'STUCK', 'COMPLETED', 'SKIPPED', 'PAUSED'])
     expect(byName.TrainingEngineStageEndReason).toEqual([

@@ -93,7 +93,7 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     await expect(coach).toHaveURL(/\/training-sessions\/[^/]+\/design$/)
     await expect(coach.getByRole('region', { name: '阶段时间线' })).toBeVisible()
     await expect(coach.getByRole('region', { name: '当前阶段题目链' })).toBeVisible()
-    const problemInput = coach.getByRole('region', { name: '按题号添加' })
+    const problemInput = coach.getByRole('region', { name: '按题号添加' }).filter({ has: coach.getByLabel('题目平台') }).last()
     await expect(problemInput).toBeVisible()
     await problemInput.getByLabel('题目平台').selectOption('carits')
     await problemInput.getByLabel('题号').fill('E2E-1000')
@@ -107,7 +107,7 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     await coach.reload()
     await expect(coach.getByRole('heading', { name: '完整流程预览' })).toBeVisible()
     await coach.getByRole('button', { name: '3 学员与分组' }).click()
-    await expect(coach.getByRole('heading', { name: '学员与分组' })).toBeVisible()
+    await expect(coach.getByRole('heading', { name: '基础学员名单' })).toBeVisible()
     await coach.getByRole('button', { name: '4 提示配置' }).click()
     await expect(coach.getByRole('heading', { name: '提示配置' })).toBeVisible()
     await coach.getByRole('button', { name: '5 发布检查' }).click()
@@ -121,17 +121,24 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     const coach = await coachContext.newPage(), student = await studentContext.newPage()
 
     await coach.goto(base)
+    const baseWorkspace = await trainingWorkspace(coachContext.request, ids.trainingSession)
+    if (baseWorkspace.session.status === 'DRAFT') {
+      await apiData(await coachContext.request.post(`/api/training-sessions/${ids.trainingSession}/publish`, {
+        data: { expectedRevision: baseWorkspace.session.statusRevision },
+      }))
+      await coach.reload()
+    }
     await expect(coach.getByRole('heading', { name: 'E2E 教练训练' })).toBeVisible()
     const start = coach.getByRole('button', { name: '开始', exact: true })
     const resume = coach.getByRole('button', { name: '恢复', exact: true })
     await expect(start.or(resume)).toBeVisible()
     if (await start.isVisible()) await start.click()
     else await resume.click()
-    await expect(coach.getByText('进行中', { exact: true })).toBeVisible()
+    await expect(coach.locator('span').filter({ hasText: /^进行中$/ }).first()).toBeVisible()
 
     await student.goto(base)
     await expect(student.getByRole('heading', { name: /A.*E2E A Plus B/ })).toBeVisible()
-    const editor = student.getByLabel('代码草稿')
+    const editor = student.getByLabel('提交源码')
     await editor.fill('#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}')
     await student.getByRole('button', { name: '保存草稿' }).click()
     await expect(student.getByText('草稿已保存')).toBeVisible()
@@ -142,9 +149,9 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     await coach.getByRole('button', { name: '硬暂停', exact: true }).click()
     await expect(student.getByText('已暂停', { exact: true })).toBeVisible({ timeout: 10_000 })
     await expect(student.getByRole('button', { name: '提交评测' })).toBeDisabled()
-    await expect(student.getByLabel('代码草稿')).toBeDisabled()
+    await expect(student.getByLabel('提交源码')).toHaveAttribute('aria-readonly', 'true')
     await student.reload()
-    await expect(student.getByLabel('代码草稿')).toHaveValue(/std::cout/)
+    await expect(student.getByLabel('提交源码')).toContainText('std::cout')
 
     await coachContext.close(); await studentContext.close()
   })
@@ -161,9 +168,12 @@ test.describe('stage-driven training acceptance', () => {
     const student = await studentContext.newPage()
     await student.goto(sessionPath(session.id))
     await expect(student.getByRole('heading', { name: /E2E-1000.*E2E A Plus B/ })).toBeVisible()
-    await student.getByLabel('代码草稿').fill('#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}')
+    await student.getByLabel('提交源码').fill('#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}')
+    const submitResponsePromise = student.waitForResponse(response => response.url().includes(`/api/training-sessions/${session.id}/submit`) && response.request().method() === 'POST')
     await student.getByRole('button', { name: '提交评测' }).click()
-    await expect(student.getByText(/已进入评测队列，代码已保留/)).toBeVisible()
+    const submitResponse = await submitResponsePromise
+    expect(submitResponse.status()).toBe(201)
+    await expect(student.getByText(/提交 #\d+ 已进入评测队列，代码已保留，可继续修改/)).toBeVisible()
 
     const coach = await coachContext.newPage()
     await coach.goto(sessionPath(session.id))
@@ -323,8 +333,6 @@ test.describe('stage-driven training acceptance', () => {
           submitScope: 'training_engine',
           trainingSessionId: session.id,
           trainingStageProblemId: stageProblem.id,
-          result: score === 100 ? 'Accepted' : 'Partial Accepted',
-          score,
         },
       })
       await syncTrainingEngineSubmission({

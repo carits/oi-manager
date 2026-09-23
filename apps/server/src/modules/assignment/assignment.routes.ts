@@ -3,11 +3,11 @@ import { AssignmentContracts } from '@oi-manager/contracts'
 import type { AuthRequest } from '../../middleware/auth'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { prisma } from '../../prisma'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import {
   AssignmentError,
   adjustAssignmentScore,
+  assertAssignmentOrganizationContext,
   createAssignmentCorrection,
   createAssignmentFeedback,
   createAssignment,
@@ -65,14 +65,7 @@ assignmentRouter.post('/assignments', asyncHandler(async (req: AuthRequest, res)
 assignmentRouter.use('/assignments/:id', asyncHandler(async (req: AuthRequest, res, next) => {
   const organizationId = req.user!.organizationId
   if (!organizationId) return next()
-  const assignment = await prisma.assignment.findUnique({
-    where: { id: req.params.id },
-    select: { organizationId: true },
-  })
-  if (!assignment) return res.status(404).json({ success: false, code: 'ASSIGNMENT_NOT_FOUND', message: '作业不存在' })
-  if (assignment.organizationId !== organizationId) {
-    return res.status(404).json({ success: false, code: 'ASSIGNMENT_NOT_FOUND', message: '作业不存在' })
-  }
+  await assertAssignmentOrganizationContext(req.params.id, organizationId)
   next()
 }, '校验作业组织上下文失败'))
 

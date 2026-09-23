@@ -24,7 +24,7 @@ export type Assignment = {
   alias?: string | null
   unlockPolicy?: UnlockPolicy | null
   targetScore?: number | null
-  scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>
+  scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }> | null
   timePolicy?: ProblemTimePolicy | null
   stuckPolicy?: StuckPolicy | null
   strategyIntervalSeconds?: number | null

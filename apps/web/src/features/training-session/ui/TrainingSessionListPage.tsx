@@ -114,11 +114,11 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
       const [listResult, templateResult, teamResult] = await Promise.allSettled([
         listTrainingSessions(Object.fromEntries(listParams.entries())),
         listTrainingTemplates({ organizationId, teamId }),
-        teamId ? Promise.resolve({ success: true, data: [] as Team[], status: 200 })
+        teamId ? Promise.resolve({ success: true, data: [] as Team[], status: 200, message: undefined })
           : organizationId && canViewTrainingManagement
             ? loadAllManagedTeams(organizationId)
             : organizationId
-              ? Promise.resolve({ success: true, data: [] as Team[], status: 200 })
+              ? Promise.resolve({ success: true, data: [] as Team[], status: 200, message: undefined })
               : loadAllManagedTeams(),
       ])
 
@@ -247,7 +247,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
       allowHints: true,
       participantUserIds: participantTarget === 'custom_students' ? selectedStudentIds : undefined,
       settings: { dueAt: new Date(dueAt).toISOString(), completionMode, requiredProblemCount: count, participantTarget },
-      stages: [{ name: '训练任务', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', rules: completionMode === 'count' ? { requiredProblemCount: count } : {}, problems: selectedProblems.map(problem => ({ problemId: problem.id, allowedSubtaskIds: [] })), groups: [] }],
+      stages: [{ name: '训练任务', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', accessScope: 'CURRENT_STAGE', submissionMode: 'ENABLED', rules: completionMode === 'count' ? { requiredProblemCount: count } : {}, problems: selectedProblems.map(problem => ({ problemId: problem.id, allowedSubtaskIds: [] })), groups: [] }],
     })
     if (!response.ok || !response.data) { setCreating(false); return toast.error(response.ok ? '创建训练失败' : response.error.message) }
     const published = await publishTraining(response.data.id, { expectedRevision: response.data.statusRevision ?? 0 })

@@ -47,6 +47,7 @@ function record(value: unknown): Record<string, any> {
 }
 
 function finiteInt(value: unknown, fallback: number, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  if (value === null || value === undefined || value === '') return fallback
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback
 }

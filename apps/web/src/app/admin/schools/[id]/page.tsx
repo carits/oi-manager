@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './page.unified.module.css'
 import { Button } from '@/components/ui/Button'
@@ -101,9 +102,9 @@ export default function AdminSchoolDetailPage() {
         <main className={unifiedStyles.u3}>
           {/* 返回按钮 */}
           <div className={unifiedStyles.u4}>
-            <a href="/admin/schools" onClick={(e) => { e.preventDefault(); router.push('/admin/schools') }} className={unifiedStyles.u5}>
+            <Link href="/admin/schools" className={unifiedStyles.u5}>
               ← 返回学校列表
-            </a>
+            </Link>
           </div>
 
           {/* 学校基本信息 */}

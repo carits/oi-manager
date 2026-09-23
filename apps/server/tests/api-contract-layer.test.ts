@@ -58,12 +58,12 @@ describe('shared API contract adapter', () => {
 
     const { response, json } = responseStub()
     sendContractData(response, AuthContracts.me, {
-      userId: 'user-1', username: 'teacher1', accountRole: 'user', role: 'teacher',
-      organizationId: 'organization-1', organizationRole: 'teacher', schoolId: 'school-1', workspaceMode: 'work',
+      userId: 'user-1', username: 'teacher1', accountRole: 'user',
+      organizationId: 'organization-1', organizationRole: 'teacher', workspaceMode: 'work',
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
-      data: expect.objectContaining({ accountRole: 'user', organizationRole: 'teacher', schoolId: 'school-1' }),
+      data: expect.objectContaining({ accountRole: 'user', organizationRole: 'teacher', organizationId: 'organization-1' }),
     }))
 
     const avatarResponse = responseStub()
@@ -773,7 +773,7 @@ describe('shared API contract adapter', () => {
 
     const managedUser = responseStub()
     sendContractData(managedUser.response, IdentityContracts.managedUser, {
-      id: 'user-1', username: 'teacher1', name: '教师甲', role: 'user', status: 'active',
+      id: 'user-1', username: 'teacher1', name: '教师甲', accountRole: 'user', status: 'active',
       createdAt: new Date('2026-09-15T00:00:00Z'), passwordHash: 'must-not-leak', sessionVersion: 7,
     })
     expect(managedUser.json).toHaveBeenCalledWith(expect.objectContaining({
