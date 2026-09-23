@@ -18,7 +18,10 @@
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
     "migrate:school-problem-files": "tsx scripts/migrate-school-problem-files.ts",
-    "migrate:account-roles": "tsx scripts/migrate-account-roles.ts"
+    "migrate:account-roles": "tsx scripts/migrate-account-roles.ts",
+    "training:consistency": "tsx scripts/check-training-engine-consistency.ts",
+    "training:inventory": "tsx scripts/inventory-training-engine-data.ts",
+    "training:benchmark": "tsx scripts/benchmark-training-engine.ts"
   },
   "dependencies": {
     "@oi-manager/contracts": "workspace:*",

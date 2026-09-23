@@ -71,12 +71,13 @@ export default function TeamsPage() {
         setInvitations([...adminInvitations, ...memberInvitations])
       } catch (error) {
         console.error('Failed to fetch invitations:', error)
+        toast.error(error instanceof Error ? error.message : '团队邀请加载失败')
       } finally {
         setLoadingInvitations(false)
       }
     }
     if (user?.organizationRole === 'teacher' || user?.organizationRole === 'school_principal') fetchData()
-  }, [user?.organizationRole])
+  }, [toast, user?.organizationRole])
 
   // 接受邀请
   const handleAcceptInvitation = async (invitationId: string, type: 'admin' | 'member') => {

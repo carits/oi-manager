@@ -12,7 +12,8 @@ export type UnlockCondition = {
   value?: number
 }
 export type UnlockPolicy = { mode: 'ANY' | 'ALL'; conditions: UnlockCondition[] }
-export type ProblemTimePolicy = { mode: 'NONE' } | { mode: 'SOFT' | 'HARD' | 'SWITCH_REQUIRED'; limitSeconds: number }
+export type ProblemTimeAction = 'REMIND' | 'RECOMMEND_SWITCH' | 'LOCK_SUBMISSION' | 'FORCE_SWITCH'
+export type ProblemTimePolicy = { mode: 'NONE' } | { mode: ProblemTimeAction; action?: ProblemTimeAction; limitSeconds: number }
 export type StuckPolicy = { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }
 export type Assignment = {
   id?: string
@@ -23,7 +24,7 @@ export type Assignment = {
   alias?: string | null
   unlockPolicy?: UnlockPolicy | null
   targetScore?: number | null
-  scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>
+  scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }> | null
   timePolicy?: ProblemTimePolicy | null
   stuckPolicy?: StuckPolicy | null
   strategyIntervalSeconds?: number | null
@@ -50,9 +51,10 @@ export type Stage = {
   description?: string | null
   kind: 'TRAINING' | 'TEACHING' | 'REVIEW'
   audienceMode: 'ALL' | 'GROUPED'
-  lifecycle?: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'ENDED_EARLY' | 'SKIPPED'
+  lifecycle?: 'PENDING' | 'RUNNING' | 'ENDED' | 'SKIPPED'
   endPolicy: 'MANUAL' | 'TIME' | 'COMPLETION' | 'HYBRID'
   accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
+  accessScope: 'CURRENT_STAGE' | 'PREVIOUS_AND_CURRENT' | 'SESSION_ALL'
   submissionMode: 'ENABLED' | 'DISABLED'
   plannedDurationSeconds?: number | null
   defaultTargetScore?: number | null
@@ -120,6 +122,38 @@ export const normalizeProblemOrder = (items: Assignment[]): Assignment[] =>
   items.map((item, index) => index === 0 || item.unlockPolicy
     ? item
     : { ...item, unlockPolicy: { mode: 'ANY', conditions: [{ type: 'AC' }] } })
+
+export const closeSubtaskSelection = (subtasks: Subtask[], selectedIds: number[]) => {
+  const byId = new Map(subtasks.map(item => [item.id, item]))
+  const selected = new Set(selectedIds)
+  const addDependencies = (id: number, visiting = new Set<number>()) => {
+    if (visiting.has(id)) return
+    const nextVisiting = new Set(visiting); nextVisiting.add(id)
+    for (const dependencyId of byId.get(id)?.dependencies || []) {
+      selected.add(dependencyId)
+      addDependencies(dependencyId, nextVisiting)
+    }
+  }
+  for (const id of [...selected]) addDependencies(id)
+  return [...selected].sort((a, b) => a - b)
+}
+
+export const removeSubtaskWithDependents = (subtasks: Subtask[], selectedIds: number[], removedId: number) => {
+  const selected = new Set(selectedIds)
+  selected.delete(removedId)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const subtask of subtasks) {
+      if (!selected.has(subtask.id)) continue
+      if ((subtask.dependencies || []).some(dependencyId => !selected.has(dependencyId))) {
+        selected.delete(subtask.id)
+        changed = true
+      }
+    }
+  }
+  return [...selected].sort((a, b) => a - b)
+}
 
 export const newTrainingDesignKey = () =>
   globalThis.crypto?.randomUUID?.() || `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`

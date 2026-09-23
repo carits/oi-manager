@@ -14,9 +14,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | 项目 | 数量 |
 |---|---:|
 | Prisma models | 206 |
-| Prisma enums | 77 |
+| Prisma enums | 78 |
 | Legacy route adapters | 18 |
-| Module route adapters | 53 |
+| Module route adapters | 54 |
 | systemd units | 8 |
 | Referenced environment keys | 485 |
 
@@ -87,6 +87,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/team/team.routes.ts`
 - `apps/server/src/modules/telemetry/telemetry.routes.ts`
 - `apps/server/src/modules/training-engine/training-engine.routes.ts`
+- `apps/server/src/modules/training/training-legacy-retired.routes.ts`
 - `apps/server/src/modules/training/training.content.routes.ts`
 - `apps/server/src/modules/training/training.crud.routes.ts`
 - `apps/server/src/modules/training/training.hack-sync.routes.ts`
@@ -383,6 +384,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingEngineStageAccessPolicy`
 - `TrainingEngineStageAudienceMode`
 - `TrainingEngineStageEndPolicy`
+- `TrainingEngineStageEndReason`
 - `TrainingEngineStageKind`
 - `TrainingEngineStageLifecycle`
 - `TrainingEngineSubmissionMode`
@@ -738,7 +740,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `PASSWORD_RESET_MAX`
 - `PATH`
 - `PATTERN`
-- `PG_DATABASE_URL`
 - `PIDS`
 - `PID_FILE`
 - `PLAYWRIGHT_BROWSERS_PATH`
@@ -869,6 +870,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TEST_SCOPE`
 - `TIMEOUT_SECONDS`
 - `TMP_DIR`
+- `TRAINING_STAGE_ENGINE_ROLLOUT`
 - `TRANSLATION_ENABLE_CACHE`
 - `TRASH_RETENTION_DAYS`
 - `UNIT_DIR`

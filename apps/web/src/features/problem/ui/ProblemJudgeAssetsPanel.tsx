@@ -79,26 +79,49 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const [emergencyReason, setEmergencyReason] = useState('')
 
   const load = useCallback(async () => {
-    const [programResult, jobResult, graphResult, aiUsageResult, poolResult, corpusResult, templateResult] = await Promise.all([
-      apiClient.get<Program[]>(`/api/problems/${problemId}/judge-programs`),
-      apiClient.get<Job[]>(`/api/problems/${problemId}/data-generation-jobs`),
-      judgeMode === 'oi' ? getProblemTestGraph(problemId).catch(() => null) : Promise.resolve(null),
-      apiClient.get<AiUsage>(`/api/problems/${problemId}/ai/usage`),
-      apiClient.get<CandidatePool>(`/api/problems/${problemId}/candidate-pool`),
-      apiClient.get<Corpus>(`/api/problems/${problemId}/wrong-corpus`),
-      listJudgeProgramTemplates().catch(() => null),
-    ])
-    if (programResult.success && programResult.data) setPrograms(programResult.data)
-    if (jobResult.success && jobResult.data) setJobs(jobResult.data)
-    if (graphResult) setGraph(graphResult)
-    if (aiUsageResult.success && aiUsageResult.data) {
-      setAiUsage(aiUsageResult.data)
-      setStatementId(current => current || aiUsageResult.data!.markdownStatements[0]?.id || '')
+    try {
+      const graphRequest = judgeMode === 'oi'
+        ? getProblemTestGraph(problemId)
+            .then(data => ({ data: data as Graph, error: null as string | null }))
+            .catch(error => ({ data: null, error: error instanceof Error ? error.message : 'Test Graph 加载失败' }))
+        : Promise.resolve({ data: null, error: null as string | null })
+      const templateRequest = listJudgeProgramTemplates()
+        .then(data => ({ data, error: null as string | null }))
+        .catch(error => ({ data: null, error: error instanceof Error ? error.message : '评测程序模板加载失败' }))
+
+      const [programResult, jobResult, graphResult, aiUsageResult, poolResult, corpusResult, templateResult] = await Promise.all([
+        apiClient.get<Program[]>(`/api/problems/${problemId}/judge-programs`),
+        apiClient.get<Job[]>(`/api/problems/${problemId}/data-generation-jobs`),
+        graphRequest,
+        apiClient.get<AiUsage>(`/api/problems/${problemId}/ai/usage`),
+        apiClient.get<CandidatePool>(`/api/problems/${problemId}/candidate-pool`),
+        apiClient.get<Corpus>(`/api/problems/${problemId}/wrong-corpus`),
+        templateRequest,
+      ])
+
+      const failures: string[] = []
+      if (programResult.success && programResult.data) setPrograms(programResult.data)
+      else failures.push(`评测程序：${programResult.message || '加载失败'}`)
+      if (jobResult.success && jobResult.data) setJobs(jobResult.data)
+      else failures.push(`生成任务：${jobResult.message || '加载失败'}`)
+      if (graphResult.data) setGraph(graphResult.data)
+      else if (graphResult.error) failures.push(`Test Graph：${graphResult.error}`)
+      if (aiUsageResult.success && aiUsageResult.data) {
+        setAiUsage(aiUsageResult.data)
+        setStatementId(current => current || aiUsageResult.data!.markdownStatements[0]?.id || '')
+      } else failures.push(`AI 使用信息：${aiUsageResult.message || '加载失败'}`)
+      if (poolResult.success && poolResult.data) setCandidatePool(poolResult.data)
+      else failures.push(`Candidate Pool：${poolResult.message || '加载失败'}`)
+      if (corpusResult.success && corpusResult.data) setCorpus(corpusResult.data)
+      else failures.push(`Wrong Corpus：${corpusResult.message || '加载失败'}`)
+      if (templateResult.data) setCatalog(templateResult.data)
+      else if (templateResult.error) failures.push(`评测程序模板：${templateResult.error}`)
+
+      if (failures.length) toast.error(`部分评测配置加载失败：${failures.join('；')}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '评测配置加载失败')
     }
-    if (poolResult.success && poolResult.data) setCandidatePool(poolResult.data)
-    if (corpusResult.success && corpusResult.data) setCorpus(corpusResult.data)
-    if (templateResult) setCatalog(templateResult)
-  }, [problemId, judgeMode])
+  }, [judgeMode, problemId, toast])
   useEffect(() => { void load() }, [load])
 
   const versions = (programKind: string) => programs.filter(item => item.kind === programKind).flatMap(item => item.versions.filter(version => item.currentVersionId === version.id).map(version => ({ ...version, programName: item.name })))

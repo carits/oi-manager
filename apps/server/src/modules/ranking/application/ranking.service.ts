@@ -51,14 +51,13 @@ export async function getPersonalSolvedRanking(queryParams: any) {
           workspaceScope: 'personal',
           AND: [currentJudgeAcceptedWhere()],
         },
-        select: { userId: true, problemId: true },
-        distinct: ['userId', 'problemId'],
+        select: { userId: true, problemInternalId: true, oj: true, problemId: true },
       })
     : []
   const solvedByUser = new Map<string, Set<string>>()
   for (const row of submissions) {
     const solved = solvedByUser.get(row.userId) || new Set<string>()
-    solved.add(row.problemId)
+    solved.add(row.problemInternalId || `${row.oj}:${row.problemId}`)
     solvedByUser.set(row.userId, solved)
   }
   const ranked = profiles.map(profile => ({
@@ -110,15 +109,16 @@ export async function getOrganizationRanking(organizationId: string, metric: str
     const accepted = await prisma.submission.findMany({
       where: {
         userId: { in: baseRows.map(row => row.userId) },
-        Training: { organizationId },
+        workspaceScope: 'campus',
+        organizationId,
         AND: [currentJudgeAcceptedWhere()],
       },
-      select: { userId: true, problemInternalId: true, problemId: true },
+      select: { userId: true, problemInternalId: true, oj: true, problemId: true },
     })
     const solved = new Map<string, Set<string>>()
     for (const item of accepted) {
       const set = solved.get(item.userId) || new Set<string>()
-      set.add(item.problemInternalId || item.problemId)
+      set.add(item.problemInternalId || `${item.oj}:${item.problemId}`)
       solved.set(item.userId, set)
     }
     ranked = baseRows.map(row => ({ ...row, solvedCount: solved.get(row.userId)?.size || 0 }))

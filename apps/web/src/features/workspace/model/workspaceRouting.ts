@@ -3,7 +3,7 @@ import type { NavigationContext } from '@/lib/navigationContext'
 export type { NavigationContext } from '@/lib/navigationContext'
 
 export const personalWorkspaceModules = new Set(['teams', 'problems', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions', 'knowledge'])
-export const organizationModules = new Set(['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'training-sessions', 'problems', 'problem-lists', 'rankings', 'knowledge'])
+export const organizationModules = new Set(['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'training-sessions', 'problems', 'problem-lists', 'rankings', 'submissions', 'knowledge'])
 export type ResourceKind = 'team' | 'contest' | 'homework' | 'training' | 'submission'
 
 export function canNavigate(id?: string | number | null) { return id !== undefined && id !== null && String(id).trim() !== '' }
@@ -39,11 +39,15 @@ export function resourceHref(kind: ResourceKind, context: NavigationContext, id?
 
 export function listHref(kind: 'contest' | 'homework' | 'training', context: NavigationContext) {
   if (context.workspace === 'platform') return kind === 'contest' ? `${context.platformBasePath || '/platform-admin'}/contests` : context.platformBasePath || '/platform-admin'
-  if (context.workspace === 'personal') return kind === 'contest' ? '/personal/contests' : '/personal'
+  if (context.workspace === 'personal') {
+    if (kind === 'contest') return '/personal/contests'
+    if (kind === 'training') return '/personal/training-sessions'
+    return '/personal'
+  }
   if (!context.organizationId) return '/identity'
   if (kind === 'contest') return `/org/${context.organizationId}/contests`
   if (kind === 'homework') return `/org/${context.organizationId}/homeworks`
-  return `/org/${context.organizationId}/teams`
+  return `/org/${context.organizationId}/training-sessions`
 }
 
 export function workspaceModule(pathname: string) {

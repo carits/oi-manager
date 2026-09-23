@@ -1,94 +1,4 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/api/health)",
-      "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"teacher\"\",\"\"password\"\":\"\"123456\"\",\"\"role\"\":\"\"teacher\"\"}')",
-      "Bash(pnpm --filter web build)",
-      "Bash(pnpm --filter server build)",
-      "Bash(npx prisma:*)",
-      "Bash(rm -rf node_modules/.prisma)",
-      "Bash(rm -rf ../node_modules/.prisma)",
-      "Bash(pnpm exec:*)",
-      "Bash(curl -s http://localhost:3001/api/students)",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"username\"\"\"\":\"\"\"\"teacher\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"123456\"\"\"\",\"\"\"\"role\"\"\"\":\"\"\"\"teacher\"\"\"\"}')",
-      "Bash(curl -s \"http://localhost:3001/api/students/3b69aeda-7f9a-4e6a-9dec-8e517981b17e\" -H \"Authorization: Bearer $TOKEN\")",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"student1\"\",\"\"password\"\":\"\"123456\"\",\"\"role\"\":\"\"student\"\"}')",
-      "Bash(pnpm build:*)",
-      "Bash(pnpm tsc:*)",
-      "Bash(curl -s http://localhost:3001/api/contests)",
-      "Bash(taskkill /F /IM node.exe)",
-      "Bash(netstat -ano)",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"username\"\"\"\":\"\"\"\"teacher\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"123456\"\"\"\"}')",
-      "Bash(TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjN2E0NTc5Mi03MjE2LTQyMTEtYjk2OC1lYmYxM2JjMDZhYTgiLCJyb2xlIjoidGVhY2hlciIsInVzZXJuYW1lIjoidGVhY2hlciIsImlhdCI6MTc3MzIzMjIxMywiZXhwIjoxNzczODM3MDEzfQ.lrJosHCG3CwJP1ilXy5aK6YYKkkl2JYcJx_wdNgBjvQ)",
-      "Bash(curl -s http://localhost:3001/api/contests -H 'Authorization: Bearer $TOKEN')",
-      "Bash(taskkill /F /FI \"WINDOWTITLE eq *node*\")",
-      "Bash(taskkill /F /FI \"WINDOWTITLE eq *tsx*\")",
-      "Bash(taskkill /F /PID 50804)",
-      "Bash(cmd //c \"taskkill /F /PID 50804\")",
-      "Bash(sqlite3 prisma/dev.db \".schema ContestResource\")",
-      "Bash(node -e \":*)",
-      "Bash(taskkill //F //IM node.exe)",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"teacher1\"\",\"\"password\"\":\"\"password123\"\"}')",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"teacher\"\",\"\"password\"\":\"\"123456\"\"}')",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"teacher\"\",\"\"password\"\":\"\"123456\"\",\"\"role\"\":\"\"teacher\"\"}')",
-      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjN2E0NTc5Mi03MjE2LTQyMTEtYjk2OC1lYmYxM2JjMDZhYTgiLCJyb2xlIjoidGVhY2hlciIsInVzZXJuYW1lIjoidGVhY2hlciIsImlhdCI6MTc3MzIzMzE0MiwiZXhwIjoxNzczODM3OTQyfQ.PAeE94FpK99IfkNAbrdeM958uF5UrEaYOOWzrbdW78A\" curl -s http://localhost:3001/api/contests -H \"Authorization: Bearer $TOKEN\")",
-      "Bash(findstr :3001)",
-      "Bash(taskkill //F //PID 24196)",
-      "Bash(curl -s http://localhost:3000)",
-      "Bash(findstr \"3000\")",
-      "Bash(curl -s -X POST http://localhost:3001/api/contests/98fa7a55-f54f-4ebc-9319-0a54408f1016/problems -H \"Content-Type: application/json\" -d '{\"\"title\"\":\"\"test\"\",\"\"orderIndex\"\":1,\"\"isCustom\"\":true,\"\"statementType\"\":\"\"markdown\"\",\"\"statementMarkdown\"\":\"\"# test\"\",\"\"solutionType\"\":\"\"none\"\",\"\"solutionMarkdown\"\":null}')",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"teacher1\"\",\"\"password\"\":\"\"123456\"\"}')",
-      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"teacher\"\",\"\"password\"\":\"\"teacher123\"\"}')",
-      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjN2E0NTc5Mi03MjE2LTQyMTEtYjk2OC1lYmYxM2JjMDZhYTgiLCJyb2xlIjoidGVhY2hlciIsInVzZXJuYW1lIjoidGVhY2hlciIsImlhdCI6MTc3MzI4NjA2MCwiZXhwIjoxNzczODkwODYwfQ.TDZ0j68Fx0EIdsFgPVKUgzpRVBMIuYVuBxeDI94V58o\")",
-      "Bash(curl -s -X POST http://localhost:3001/api/contests/98fa7a55-f54f-4ebc-9319-0a54408f1016/problems -H \"Content-Type: application/json\" -H \"Authorization: Bearer $TOKEN\" -d '{\"\"title\"\":\"\"A+Problem\"\",\"\"orderIndex\"\":1,\"\"isCustom\"\":true,\"\"statementType\"\":\"\"markdown\"\",\"\"statementMarkdown\"\":\"\"# A+Problem\\\\n\\\\n## Description\\\\n\\\\nThis is a test problem.\"\",\"\"solutionType\"\":\"\"markdown\"\",\"\"solutionMarkdown\"\":\"\"# Solution\\\\n\\\\nThis is the solution.\"\",\"\"solutionVisible\"\":true}')",
-      "Bash(curl -s -X POST http://localhost:3001/api/contests/98fa7a55-f54f-4ebc-9319-0a54408f1016/problems -H \"Content-Type: application/json\" -H \"Authorization: Bearer $TOKEN\" -d '{\"\"title\"\":\"\"B-Problem\"\",\"\"orderIndex\"\":2,\"\"isCustom\"\":true,\"\"statementType\"\":\"\"markdown\"\",\"\"statementMarkdown\"\":\"\"# B Problem\\\\n\\\\n## Description\\\\n\\\\nThis is the second problem.\"\",\"\"solutionType\"\":\"\"markdown\"\",\"\"solutionMarkdown\"\":\"\"# Solution for B\\\\n\\\\nSolution content.\"\",\"\"solutionVisible\"\":true}')",
-      "Bash(curl -s -X POST http://localhost:3001/api/contests/98fa7a55-f54f-4ebc-9319-0a54408f1016/problems -H \"Content-Type: application/json\" -H \"Authorization: Bearer $TOKEN\" -d '{\"\"title\"\":\"\"C-Problem\"\",\"\"orderIndex\"\":3,\"\"isCustom\"\":true,\"\"statementType\"\":\"\"markdown\"\",\"\"statementMarkdown\"\":\"\"# C Problem\\\\n\\\\n## Description\\\\n\\\\nThis is the third problem.\\\\n\\\\n### Input\\\\n\\\\n```\\\\n1 2\\\\n```\\\\n\\\\n### Output\\\\n\\\\n```\\\\n3\\\\n```\"\",\"\"solutionType\"\":\"\"markdown\"\",\"\"solutionMarkdown\"\":\"\"# Solution\\\\n\\\\nSimply add the two numbers.\"\",\"\"solutionVisible\"\":true}')",
-      "Bash(curl -s http://localhost:3001/api/contests/98fa7a55-f54f-4ebc-9319-0a54408f1016 -H \"Authorization: Bearer $TOKEN\")",
-      "Bash(taskkill /F /PID 30756)",
-      "Bash(powershell -Command \"Stop-Process -Id 30756 -Force\")",
-      "Bash(powershell -Command \"Stop-Process -Id 23048 -Force -ErrorAction SilentlyContinue\")",
-      "Bash(node -e \"console.log\\(require\\(''fs''\\).readFileSync\\(''src/app/teacher/contests/[id]/page.tsx'', ''utf8''\\).substring\\(0, 2000\\)\\)\")",
-      "Bash(taskkill //F //PID 30272)",
-      "Bash(findstr \":3000\\\\|:3001\")",
-      "Bash(taskkill //F //PID 79276)",
-      "Bash(curl -s http://localhost:3003/teacher/students)",
-      "Bash(findstr :3003)",
-      "Bash(taskkill //F //PID 31736)",
-      "Bash(taskkill //F //PID 33068)",
-      "Bash(taskkill //F //PID 35904)",
-      "Bash(taskkill //F //PID 52372)",
-      "Bash(pnpm prisma:push --force-reset)",
-      "Bash(taskkill //F //PID 37996)",
-      "Read(//d/oi-manager-v2/**)",
-      "Bash(taskkill //F //PID 16036 //PID 24260 //PID 43916)",
-      "Bash(lsof -ti:3001)",
-      "Bash(xargs kill:*)",
-      "Bash(taskkill /F /PID 9104)",
-      "Bash(taskkill //F //PID 9104)",
-      "Bash(taskkill //F //PID 35028)",
-      "Bash(mv seed.ts seed.ts.old)",
-      "Bash(mv seed_new.ts seed.ts)",
-      "Bash(taskkill //F //PID 34316)",
-      "Bash(taskkill //F //PID 32760)",
-      "Bash(npx ts-node:*)",
-      "Bash(sqlite3 prisma/dev.db \"SELECT s.id, s.name, s.currentPrincipalTeacherId, t.name as principal_name FROM School s LEFT JOIN Teacher t ON s.currentPrincipalTeacherId = t.id;\")",
-      "Bash(sqlite3 prisma/dev.db \"SELECT u.id, u.username, u.role, t.id as teacher_id, t.name as teacher_name FROM User u LEFT JOIN Teacher t ON u.id = t.userId WHERE u.username = ''teacher4'';\")",
-      "Bash(sqlite3 prisma/dev.db \"SELECT u.id, u.username, u.role, t.id as teacher_id, t.name as teacher_name FROM User u LEFT JOIN Teacher t ON u.id = t.userId WHERE u.role = ''school_principal'';\")",
-      "Bash(pnpm add:*)",
-      "Bash(node check-student.js)",
-      "Bash(node check_students.js)",
-      "Bash(curl -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d \"{\"\"username\"\":\"\"teacher\"\",\"\"password\"\":\"\"123456\"\"}\")",
-      "Bash(findstr \"75908\")",
-      "Bash(sed -i \"38s/enrollmentYear: 2018/enrollmentYear: 2021, enrollmentStage: ''high''/\" seed.ts)",
-      "Bash(sed -i \"39s/enrollmentYear: 2015/enrollmentYear: 2018, enrollmentStage: ''high''/\" seed.ts)",
-      "Bash(sed -i \"40s/enrollmentYear: 2017/enrollmentYear: 2020, enrollmentStage: ''high''/\" seed.ts)"
-    ],
-    "additionalDirectories": [
-      "d:\\oi-manager-v2\\apps\\web\\src\\app\\api\\contests",
-      "d:\\oi-manager-v2\\apps\\web\\src\\app\\api\\task-lists",
-      "D:\\oi-manager-v2\\apps\\web\\src\\app\\api\\feedbacks"
-    ]
-  },
   "hooks": {
     "SessionStart": [
       {
@@ -101,17 +11,17 @@
         ]
       }
     ],
-   "TaskCompleted": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "powershell.exe -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/.claude/hooks/task-complete.ps1\"",
-          "async": true,
-          "timeout": 120
-        }
-      ]
-    }
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File .claude/hooks/task-complete.ps1",
+            "async": true,
+            "timeout": 120
+          }
+        ]
+      }
     ]
   }
 }

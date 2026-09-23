@@ -99,6 +99,13 @@ async function loadAssignment(id: string) {
   return prisma.assignment.findUnique({ where: { id }, include: ASSIGNMENT_INCLUDE })
 }
 
+export async function assertAssignmentOrganizationContext(id: string, organizationId: string) {
+  const assignment = await prisma.assignment.findUnique({ where: { id }, select: { organizationId: true } })
+  if (!assignment || assignment.organizationId !== organizationId) {
+    throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
+  }
+}
+
 async function assertManage(userId: string, id: string) {
   const assignment = await loadAssignment(id)
   if (!assignment) throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')

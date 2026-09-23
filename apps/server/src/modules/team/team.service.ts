@@ -42,12 +42,21 @@ export class TeamService {
     return isPersonalContextForTeams(user) ? 'personal' : 'campus'
   }
 
+  private teamMatchesUserContext(team: { scope: string; organizationId?: string | null }, user: JwtPayload) {
+    const scope = this.getScopeForUser(user)
+    if (team.scope !== scope) return false
+    if (scope === 'campus') {
+      return Boolean(user.organizationId && team.organizationId === user.organizationId)
+    }
+    return team.organizationId == null
+  }
+
   async assertTeamScope(teamId: string, user: JwtPayload) {
     const team = await this.repo.findById(teamId)
     if (!team) {
       throw new Error('TEAM_NOT_FOUND')
     }
-    if (team.scope !== this.getScopeForUser(user)) {
+    if (!this.teamMatchesUserContext(team, user)) {
       throw new Error('TEAM_SCOPE_MISMATCH')
     }
     return team
@@ -65,7 +74,7 @@ export class TeamService {
     }
 
     const team = await this.repo.findById(teamId)
-    if (!team || team.scope !== this.getScopeForUser(user)) {
+    if (!team || !this.teamMatchesUserContext(team, user)) {
       return { role: null, memberId: null }
     }
 
@@ -126,7 +135,7 @@ export class TeamService {
    * 获取学校团队列表
    */
   async getOrganizationTeams(organizationId: string, user: JwtPayload) {
-    if (this.getScopeForUser(user) !== 'campus') {
+    if (this.getScopeForUser(user) !== 'campus' || !user.organizationId || user.organizationId !== organizationId) {
       throw new Error('TEAM_SCOPE_MISMATCH')
     }
     const teams = await this.repo.findByOrganization(organizationId)
@@ -157,7 +166,7 @@ export class TeamService {
 
     // 如果是学生，检查申请状态（统一从 TeamMember 查询）
     if (user.organizationRole === 'student') {
-      const memberRecords = await this.repo.findMembersByUser(user.userId, 'student')
+      const memberRecords = await this.repo.findMembersByUser(user.userId, 'student', undefined, 'campus', organizationId)
 
       // 区分：已加入(active)、邀请(pending + invitedBy!=null)、申请(pending + invitedBy==null)
       const requestMap = new Map(
@@ -187,7 +196,7 @@ export class TeamService {
   async getStudentTeams(studentId: string, user: JwtPayload) {
     const scope = this.getScopeForUser(user)
     const membershipType = getMembershipType(user)
-    const memberRecords = await this.repo.findMembersByUser(studentId, membershipType, undefined, scope)
+    const memberRecords = await this.repo.findMembersByUser(studentId, membershipType, undefined, scope, scope === 'campus' ? user.organizationId : undefined)
     logger.info('getStudentTeams_debug', { studentId, memberCount: memberRecords.length } as any)
 
     // 批量加载团队信息
@@ -283,6 +292,7 @@ export class TeamService {
     if (keyword?.trim()) where.name = { contains: keyword.trim(), mode: 'insensitive' }
     if (scope === 'campus') {
       if (!user.organizationId) throw new Error('NO_ORGANIZATION')
+      if (organizationId && organizationId !== user.organizationId) throw new Error('TEAM_SCOPE_MISMATCH')
       where.organizationId = user.organizationId
     }
 
@@ -292,7 +302,7 @@ export class TeamService {
         return paginatedResponse([], 0, page, pageSize)
       }
 
-      const myTeamIds = await this.repo.findUserTeamIds(userId, userType, 'active', scope)
+      const myTeamIds = await this.repo.findUserTeamIds(userId, userType, 'active', scope, scope === 'campus' ? user.organizationId : undefined)
       where.id = { in: myTeamIds }
     } else if (view === 'managed') {
       if (!userId || userId === 'undefined' || userId === 'null') return paginatedResponse([], 0, page, pageSize)
@@ -304,7 +314,7 @@ export class TeamService {
       where.isPublic = true
 
       if (userId && userId !== 'undefined' && userId !== 'null') {
-        const myTeamIds = await this.repo.findUserTeamIds(userId, userType, 'active', scope)
+        const myTeamIds = await this.repo.findUserTeamIds(userId, userType, 'active', scope, scope === 'campus' ? user.organizationId : undefined)
         if (myTeamIds.length > 0) {
           where.id = { notIn: myTeamIds }
         }

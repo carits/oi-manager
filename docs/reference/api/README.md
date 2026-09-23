@@ -552,11 +552,14 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/training-sessions/:id/publish` | 发布训练并固定参与名单；Stage 在实际开始时生成不可变快照 |
 | `POST` | `/api/training-sessions/:id/stage-transitions` | 开始、完成/提前结束、跳过 pending Stage 或结束 Session；不支持回滚 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/group-changes` | 即时换组或预设下一 Stage 分组，必须记录原因 |
+| `POST` | `/api/training-sessions/:id/stages/:stageId/end` | 结束当前阶段并记录结束原因与备注 |
+| `POST` | `/api/training-sessions/:id/stages/:stageId/clone` | 复制未来阶段定义，不复制运行时快照、进度或事件 |
+| `POST` | `/api/training-sessions/:id/stages/:stageId/move-participant` | 将学员移动到当前阶段的指定分组并保留历史进度 |
 | `GET` | `/api/training-sessions/:id/stages/:stageId/group-suggestions` | 为尚未开始的 grouped Stage 生成基于前序完成度、分数、尝试次数和有效时间的可解释分组建议；只预览，不自动写入 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/time-extensions` | 追加 Stage 延时记录，不改写计划时长 |
 | `POST` | `/api/training-sessions/:id/commands` | 执行暂停、Focus、锁定、提示、消息和个人干预；不能改写 Stage 定义 |
-| `GET` | `/api/training-sessions/:id/drafts/:problemId` | 获取训练代码草稿 |
-| `PUT` | `/api/training-sessions/:id/drafts/:problemId` | 乐观锁保存训练代码草稿 |
+| `GET` | `/api/training-sessions/:id/drafts/:stageProblemId` | 获取指定阶段题目的训练代码草稿 |
+| `PUT` | `/api/training-sessions/:id/drafts/:stageProblemId` | 按阶段题目 ID 乐观锁保存训练代码草稿 |
 | `POST` | `/api/training-sessions/:id/heartbeat` | 上报可见且聚焦的有效训练时间 |
 | `POST` | `/api/training-sessions/:id/submit` | 使用固定 Revision/专项投影创建训练提交 |
 | `GET` | `/api/training-sessions/:id/coach-dashboard` | 教练实时进度和卡题概览 |
@@ -568,6 +571,8 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/training-sessions/:id/hints` | 教练创建分级提示 |
 | `GET` | `/api/training-sessions/:id/problems/:stageProblemId/hints` | 获取当前学员已满足条件的提示 |
 | `POST` | `/api/training-sessions/:id/hints/:hintId/open` | 幂等记录并打开提示 |
+| `PATCH` | `/api/training-sessions/:id/hints/:hintId` | 更新尚未开始阶段的提示定义 |
+| `DELETE` | `/api/training-sessions/:id/hints/:hintId` | 删除尚未开始阶段的提示定义 |
 | `POST` | `/api/training-sessions/:id/strategy-decisions` | 记录 ACM 策略训练决策 |
 | `PUT` | `/api/users/:id/status` | 见对应路由实现 |
 | `GET` | `/api/problems/:id/checker` | 题目 Checker 文件列表 |

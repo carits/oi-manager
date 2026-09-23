@@ -607,6 +607,33 @@ describe('训练提交隔离', () => {
     })
   })
 
+  it('TI1.0: 多校园用户不能在当前校园读取另一校园的活动提交详情', async () => {
+    const secondSchool = await createTestSchoolWithPrincipal('训练提交第二校园')
+    const membershipId = crypto.randomUUID()
+    await prisma.organizationMembership.create({
+      data: {
+        id: membershipId,
+        organizationId: secondSchool.school.organizationId!,
+        userId: studentUser.user.id,
+        memberRole: 'student',
+        relationType: 'student',
+        status: 'active',
+        joinedAt: new Date(),
+      },
+    })
+    await prisma.organizationStudentProfile.create({
+      data: { id: crypto.randomUUID(), membershipId, name: '跨校训练学生', status: 'active' },
+    })
+
+    const wrongContext = await organizationRequest(studentToken, secondSchool.school.organizationId!)
+      .get(`/api/submissions/${trainingSubmission.id}`)
+    expect(wrongContext.status).toBe(404)
+
+    const correctContext = await organizationRequest(studentToken, schoolData.school.organizationId!)
+      .get(`/api/submissions/${trainingSubmission.id}`)
+    expect(correctContext.status).toBe(200)
+  })
+
   it('TI1.1: OI 赛中通过任意详情端点都不会泄露真实评测结果', async () => {
     await prisma.training.update({
       where: { id: training.id },

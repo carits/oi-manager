@@ -10,7 +10,10 @@ function fail(statusCode: number, message: string): never { throw new ProblemLis
 
 async function ownedList(user: AuthUser, id: string) {
   const list = await prisma.problemList.findUnique({ where: { id } })
-  if (!list || list.scope !== getResourceScope(user)) fail(404, '题单不存在')
+  const scope = getResourceScope(user)
+  if (!list || list.scope !== scope) fail(404, '题单不存在')
+  if (scope === 'campus' && (!user.organizationId || list.organizationId !== user.organizationId)) fail(404, '题单不存在')
+  if (scope === 'personal' && list.organizationId !== null) fail(404, '题单不存在')
   if (list.ownerId !== user.userId) fail(403, '只有创建者可以管理分享')
   return list
 }

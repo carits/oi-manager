@@ -69,7 +69,13 @@ export async function getProblemListPermission(
     where: { id: problemListId },
     select: { ownerId: true, scope: true, organizationId: true },
   })
-  if (!list || list.scope !== getResourceScope(user)) return null
+  const scope = getResourceScope(user)
+  if (!list || list.scope !== scope) return null
+  if (scope === 'campus') {
+    if (!user.organizationId || list.organizationId !== user.organizationId) return null
+  } else if (list.organizationId !== null) {
+    return null
+  }
   if (list.ownerId === user.userId) return 'admin'
 
   const shares = await prisma.problemListShare.findMany({ where: { problemListId } })
@@ -87,7 +93,15 @@ export async function getProblemListPermission(
     if (schoolLink) best = maxPermission(best, 'view')
   }
   const teamIds = (await prisma.teamMember.findMany({
-    where: { userId: user.userId, userType: getMembershipType(user), status: 'active' },
+    where: {
+      userId: user.userId,
+      userType: getMembershipType(user),
+      status: 'active',
+      Team: {
+        scope,
+        ...(scope === 'campus' ? { organizationId: user.organizationId! } : { organizationId: null }),
+      },
+    },
     select: { teamId: true },
   })).map(member => member.teamId)
   if (teamIds.length > 0) {

@@ -4,14 +4,18 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { TrainingContracts } from '@oi-manager/contracts'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
+import { trainingMetrics } from './training-metrics'
 import {
   TrainingEngineError,
   archiveTrainingSession,
   createTrainingSessionTemplate,
   createTrainingHint,
+  deleteTrainingHint,
   createTrainingSession,
   deleteTrainingSessionTemplate,
   changeTrainingStageGroup,
+  cloneTrainingStage,
+  endTrainingStage,
   executeStageTransition,
   executeTrainingCommand,
   extendTrainingStageTime,
@@ -29,6 +33,7 @@ import {
   listTrainingEvents,
   listTrainingSessionTemplates,
   listTrainingSessions,
+  moveTrainingStageParticipant,
   openTrainingHint,
   previewTrainingParticipants,
   publishTrainingSession,
@@ -38,6 +43,7 @@ import {
   replaceTrainingRoster,
   saveTrainingDraft,
   submitTrainingSolution,
+  updateTrainingHint,
   validateTrainingStructure,
 } from './training-engine.service'
 
@@ -74,7 +80,12 @@ trainingEngineRouter.post('/training-sessions/participant-preview', authenticate
 }))
 
 trainingEngineRouter.get('/training-sessions/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.getWorkspace, await getTrainingWorkspace(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
+  try {
+    const workspace = await getTrainingWorkspace(req.user!.userId, req.params.id)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    trainingMetrics.recordWorkspaceQueries(1)
+    sendContractData(res, TrainingContracts.getWorkspace, workspace)
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/design', authenticate, asyncHandler(async (req: AuthRequest, res) => {
@@ -118,20 +129,58 @@ trainingEngineRouter.post('/training-sessions/:id/join', authenticate, asyncHand
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/commands', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.executeCommand, await executeTrainingCommand(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.executeCommand, req.body))) } catch (error) { return sendError(error, res) }
+  try {
+    const result = await executeTrainingCommand(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.executeCommand, req.body))
+    trainingMetrics.recordCommand(true)
+    const status = result && 'session' in result ? result.session.status : result?.status
+    if (status) trainingMetrics.observeSession(req.params.id, status)
+    sendContractData(res, TrainingContracts.executeCommand, result)
+  } catch (error) {
+    trainingMetrics.recordCommand(false)
+    return sendError(error, res)
+  }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/stage-transitions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const body = parseContractBody(TrainingContracts.transitionStage, req.body)
-    sendContractData(res, TrainingContracts.transitionStage, await executeStageTransition(req.user!.userId, req.params.id, body))
+    const workspace = await executeStageTransition(req.user!.userId, req.params.id, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.transitionStage, workspace)
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/end', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.endStage, req.body)
+    const workspace = await endTrainingStage(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.endStage, workspace)
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/clone', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.cloneStage, req.body)
+    sendContractData(res, TrainingContracts.cloneStage, await cloneTrainingStage(req.user!.userId, req.params.id, req.params.stageId, body))
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/move-participant', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.moveStageParticipant, req.body)
+    const workspace = await moveTrainingStageParticipant(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.moveStageParticipant, workspace)
   } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/group-changes', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const body = parseContractBody(TrainingContracts.changeStageGroup, req.body)
-    sendContractData(res, TrainingContracts.changeStageGroup, await changeTrainingStageGroup(req.user!.userId, req.params.id, req.params.stageId, body))
+    const workspace = await changeTrainingStageGroup(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.changeStageGroup, workspace)
   } catch (error) { return sendError(error, res) }
 }))
 
@@ -150,12 +199,12 @@ trainingEngineRouter.post('/training-sessions/:id/heartbeat', authenticate, asyn
   try { sendContractData(res, TrainingContracts.heartbeat, await recordHeartbeat(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.heartbeat, req.body))) } catch (error) { return sendError(error, res) }
 }))
 
-trainingEngineRouter.get('/training-sessions/:id/drafts/:problemId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.getDraft, await getTrainingDraft(req.user!.userId, req.params.id, req.params.problemId)) } catch (error) { return sendError(error, res) }
+trainingEngineRouter.get('/training-sessions/:id/drafts/:stageProblemId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.getDraft, await getTrainingDraft(req.user!.userId, req.params.id, req.params.stageProblemId)) } catch (error) { return sendError(error, res) }
 }))
 
-trainingEngineRouter.put('/training-sessions/:id/drafts/:problemId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.saveDraft, await saveTrainingDraft(req.user!.userId, req.params.id, req.params.problemId, parseContractBody(TrainingContracts.saveDraft, req.body))) } catch (error) { return sendError(error, res) }
+trainingEngineRouter.put('/training-sessions/:id/drafts/:stageProblemId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.saveDraft, await saveTrainingDraft(req.user!.userId, req.params.id, req.params.stageProblemId, parseContractBody(TrainingContracts.saveDraft, req.body))) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/submit', authenticate, asyncHandler(async (req: AuthRequest, res) => {
@@ -164,6 +213,14 @@ trainingEngineRouter.post('/training-sessions/:id/submit', authenticate, asyncHa
 
 trainingEngineRouter.post('/training-sessions/:id/hints', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try { sendContractData(res, TrainingContracts.createHint, await createTrainingHint(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.createHint, req.body)), 201) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.patch('/training-sessions/:id/hints/:hintId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.updateHint, await updateTrainingHint(req.user!.userId, req.params.id, req.params.hintId, parseContractBody(TrainingContracts.updateHint, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.delete('/training-sessions/:id/hints/:hintId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.deleteHint, await deleteTrainingHint(req.user!.userId, req.params.id, req.params.hintId)) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/problems/:stageProblemId/hints', authenticate, asyncHandler(async (req: AuthRequest, res) => {
@@ -201,6 +258,7 @@ trainingEngineRouter.get('/training-sessions/:id/events', authenticate, asyncHan
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
+  trainingMetrics.openSseConnection()
   res.write(`event: ready\ndata: ${JSON.stringify({ cursor })}\n\n`)
   let closed = false, busy = false
   const poll = async () => {
@@ -218,5 +276,11 @@ trainingEngineRouter.get('/training-sessions/:id/events', authenticate, asyncHan
   }
   const pollTimer = setInterval(() => void poll(), 1000)
   const heartbeatTimer = setInterval(() => res.write(': heartbeat\n\n'), 20_000)
-  req.once('close', () => { closed = true; clearInterval(pollTimer); clearInterval(heartbeatTimer) })
+  req.once('close', () => {
+    if (closed) return
+    closed = true
+    trainingMetrics.closeSseConnection()
+    clearInterval(pollTimer)
+    clearInterval(heartbeatTimer)
+  })
 }))

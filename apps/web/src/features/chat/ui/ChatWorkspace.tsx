@@ -196,8 +196,11 @@ export default function ChatWorkspace() {
         const stored = JSON.parse(localStorage.getItem(`chat-recent-stickers:${user?.userId || 'anonymous'}`) || '[]')
         if (Array.isArray(stored)) setRecentStickerIds(stored.filter(id => typeof id === 'string' && valid.has(id)).slice(0, 24))
       } catch { setRecentStickerIds([]) }
-    }).catch(() => setStickerPacks([]))
-  }, [user?.userId])
+    }).catch(error => {
+      setStickerPacks([])
+      toast.error(error instanceof Error ? error.message : '表情包加载失败')
+    })
+  }, [toast, user?.userId])
   useEffect(() => {
     if (!selectedId) { setMessages([]); setHasMoreBefore(false); return }
     const controller = new AbortController()

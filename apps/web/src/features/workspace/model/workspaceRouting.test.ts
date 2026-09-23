@@ -9,6 +9,7 @@ describe('组织路由能力', () => {
     expect(resourceHref('contest', organization, 18)).toBe('/org/org_1/contests/18')
     expect(resourceHref('submission', organization, 9)).toBe('/org/org_1/submissions/9')
     expect(listHref('homework', organization)).toBe('/org/org_1/homeworks')
+    expect(listHref('training', organization)).toBe('/org/org_1/training-sessions')
     expect(notificationTeamHref('organization', 'org_1', 'team:team_1')).toBe('/org/org_1/teams/team_1')
   })
   it('缺少组织上下文时拒绝生成资源地址', () => {
@@ -20,6 +21,7 @@ describe('组织路由能力', () => {
     const personal = { workspace: 'personal' as const, accountRole: 'user' }
     expect(resourceHref('team', personal, 'team_1')).toBe('/personal/teams/team_1')
     expect(listHref('contest', personal)).toBe('/personal/contests')
+    expect(listHref('training', personal)).toBe('/personal/training-sessions')
     expect(notificationTeamHref('personal', undefined, 'team:team_1')).toBe('/personal/teams/team_1')
     expect(notificationTeamHref('platform', undefined, 'team:team_1')).toBeNull()
     expect(resolveNotificationHref('organization', 'org_1', '/account/notifications')).toBe('/account/notifications')
@@ -34,5 +36,6 @@ describe('组织路由能力', () => {
     }
     expect(workspaceHref(personal, 'knowledge')).toBe('/personal/knowledge')
     expect(workspaceHref(campus, 'knowledge')).toBe('/org/org_1/knowledge')
+    expect(workspaceHref({ ...campus, availableModules: ['submissions'] }, 'submissions')).toBe('/org/org_1/submissions')
   })
 })

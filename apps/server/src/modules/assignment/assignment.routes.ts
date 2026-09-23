@@ -7,6 +7,7 @@ import { parseContractBody, parseContractQuery, sendContractData, sendContractEr
 import {
   AssignmentError,
   adjustAssignmentScore,
+  assertAssignmentOrganizationContext,
   createAssignmentCorrection,
   createAssignmentFeedback,
   createAssignment,
@@ -38,14 +39,35 @@ function sendError(error: unknown, res: Response) {
 assignmentRouter.use('/assignments', authenticate)
 
 assignmentRouter.get('/assignments', asyncHandler(async (req: AuthRequest, res) => {
-  try { return res.json({ success: true, data: await listAssignments(req.user!.userId, req.query) }) }
+  try {
+    const organizationId = req.user!.organizationId
+    if (organizationId && req.query.organizationId && String(req.query.organizationId) !== organizationId) {
+      return res.status(403).json({ success: false, code: 'ORGANIZATION_CONTEXT_REQUIRED', message: '不能在当前学校上下文查看其他学校的作业' })
+    }
+    const query = organizationId ? { ...req.query, organizationId } : req.query
+    return res.json({ success: true, data: await listAssignments(req.user!.userId, query) })
+  }
   catch (error) { return sendError(error, res) }
 }))
 
 assignmentRouter.post('/assignments', asyncHandler(async (req: AuthRequest, res) => {
-  try { return res.status(201).json({ success: true, data: await createAssignment(req.user!.userId, req.body) }) }
+  try {
+    const organizationId = req.user!.organizationId
+    if (organizationId && req.body?.organizationId && String(req.body.organizationId) !== organizationId) {
+      return res.status(403).json({ success: false, code: 'ORGANIZATION_CONTEXT_REQUIRED', message: '不能在当前学校上下文为其他学校创建作业' })
+    }
+    const body = organizationId ? { ...req.body, organizationId } : req.body
+    return res.status(201).json({ success: true, data: await createAssignment(req.user!.userId, body) })
+  }
   catch (error) { return sendError(error, res) }
 }))
+
+assignmentRouter.use('/assignments/:id', asyncHandler(async (req: AuthRequest, res, next) => {
+  const organizationId = req.user!.organizationId
+  if (!organizationId) return next()
+  await assertAssignmentOrganizationContext(req.params.id, organizationId)
+  next()
+}, '校验作业组织上下文失败'))
 
 assignmentRouter.get('/assignments/:id', asyncHandler(async (req: AuthRequest, res) => {
   try { return res.json({ success: true, data: await getAssignment(req.user!.userId, req.params.id) }) }

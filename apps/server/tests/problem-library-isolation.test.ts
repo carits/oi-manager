@@ -211,6 +211,60 @@ describe('学校私有题库隔离', () => {
     expect(otherSchoolCopy.body.data.problem.organizationId).toBe(schoolB.school.organizationId)
   })
 
+  it('同外部题号的平台题与校内副本不会混用提交记录', async () => {
+    const externalId = `IDENTITY-${crypto.randomUUID()}`
+    const platformProblem = await createAuthenticatedRequest(app, platformAdminToken)
+      .post('/api/problems')
+      .send({
+        title: '提交身份平台原题',
+        status: 'published',
+        ojBindings: [{ platform: 'codeforces', problemId: externalId }],
+      })
+    expect(platformProblem.status).toBe(201)
+
+    const copied = await schoolARequest(ownerAToken)
+      .post(`/api/problems/${platformProblem.body.data.id}/copy-to-school`)
+    expect(copied.status).toBe(201)
+    const schoolProblemId = copied.body.data.problem.id as string
+    expect((await schoolARequest(ownerAToken).put(`/api/problems/${schoolProblemId}`).send({ status: 'published' })).status).toBe(200)
+
+    const common = {
+      userId: ownerA.user.id,
+      oj: 'codeforces',
+      problemId: externalId,
+      language: 'cpp17',
+      code: 'int main(){}',
+      codeLength: 12,
+      submitMethod: 'local',
+      submitScope: 'problem',
+      workspaceScope: 'campus',
+      organizationId: schoolA.school.organizationId,
+    }
+    const platformSubmission = await prisma.submission.create({
+      data: { ...common, problemInternalId: platformProblem.body.data.id },
+    })
+    const schoolSubmission = await prisma.submission.create({
+      data: { ...common, problemInternalId: schoolProblemId },
+    })
+    const ambiguousLegacySubmission = await prisma.submission.create({
+      data: { ...common, problemInternalId: null, testSetRevisionId: null },
+    })
+
+    const platformHistory = await schoolARequest(ownerAToken)
+      .get(`/api/problems/${platformProblem.body.data.id}/submissions?pageSize=100`)
+    const schoolHistory = await schoolARequest(ownerAToken)
+      .get(`/api/problems/${schoolProblemId}/submissions?pageSize=100`)
+
+    expect(platformHistory.status).toBe(200)
+    expect(schoolHistory.status).toBe(200)
+    expect(platformHistory.body.data.submissions.map((item: any) => item.id)).toContain(platformSubmission.id)
+    expect(platformHistory.body.data.submissions.map((item: any) => item.id)).not.toContain(schoolSubmission.id)
+    expect(schoolHistory.body.data.submissions.map((item: any) => item.id)).toContain(schoolSubmission.id)
+    expect(schoolHistory.body.data.submissions.map((item: any) => item.id)).not.toContain(platformSubmission.id)
+    expect(platformHistory.body.data.submissions.map((item: any) => item.id)).not.toContain(ambiguousLegacySubmission.id)
+    expect(schoolHistory.body.data.submissions.map((item: any) => item.id)).not.toContain(ambiguousLegacySubmission.id)
+  })
+
   it('平台题库按 Carits 与其他来源在数据库查询层分组', async () => {
     const client = createAuthenticatedRequest(app, platformAdminToken)
     const carits = await client.post('/api/problems').send({

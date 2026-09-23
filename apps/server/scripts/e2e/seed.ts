@@ -395,7 +395,7 @@ async function main() {
     await prisma.trainingSession.create({ data: {
       id: ids.trainingSession, title: 'E2E 教练训练', description: '阶段控制与草稿测试', sessionType: 'ACM', status: 'SCHEDULED',
       organizationId: ids.organization, createdBy: ids.principal, scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000), rankingMode: 'PROGRESS_ONLY', peerVisibility: 'PROGRESS',
-      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, kind: 'TRAINING', audienceMode: 'ALL', lifecycle: 'PENDING', endPolicy: 'MANUAL', accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, testSetRevisionId: 'e2e-testset-revision', alias: 'A', orderIndex: 0 } } } },
+      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, kind: 'TRAINING', audienceMode: 'ALL', lifecycle: 'PENDING', endPolicy: 'MANUAL', accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, testSetRevisionId: 'e2e-testset-revision', alias: 'A', orderIndex: 0, titleSnapshot: 'E2E A Plus B', statementsSnapshot: [{ type: 'statement', format: 'markdown', language: 'zh-CN', content: '# E2E A Plus B\n\nRead two integers and print their sum.', fileUrl: null }] } } } },
       Participants: { create: { id: 'e2e-training-participant', userId: ids.campusStudent, currentStageId: 'e2e-training-stage' } },
     } })
     await prisma.trainingSessionStageProblemPlan.create({ data: {

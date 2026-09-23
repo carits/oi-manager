@@ -25,13 +25,32 @@ export async function listOwnProblemSubmissions(
 ) {
   const problem = await findAccessibleProblem(user, problemId, 'view')
   if (!problem) return null
+  const duplicateExternalIdentityCount = await prisma.problem.count({
+    where: {
+      id: { not: problem.id },
+      platform: problem.platform,
+      problemId: problem.problemId,
+      OR: [
+        { libraryScope: 'platform' },
+        ...(user.organizationId ? [{ libraryScope: 'school', organizationId: user.organizationId }] : []),
+      ],
+    },
+  })
   const where = {
-    oj: problem.platform,
-    problemId: problem.problemId,
     userId: user.userId,
     workspaceScope: getResourceScope(user),
     organizationId: user.organizationId || null,
     submitScope: 'problem',
+    OR: [
+      { problemInternalId: problem.id },
+      { problemInternalId: null, TestSetRevision: { is: { problemId: problem.id } } },
+      ...(duplicateExternalIdentityCount === 0 ? [{
+        problemInternalId: null,
+        testSetRevisionId: null,
+        oj: problem.platform,
+        problemId: problem.problemId,
+      }] : []),
+    ],
   }
   const [total, submissions] = await Promise.all([
     prisma.submission.count({ where }),

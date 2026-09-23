@@ -222,16 +222,15 @@ export class TeamRepository {
   }
 
   /**
-   * 根据用户ID查找成员关系
-   * 注意：userId 是 teacher.id 或 student.id，不是 user.userId
+   * 根据规范 User.id 查找成员关系；校园作用域必须可选地绑定到当前 organizationId。
    */
-  async findMembersByUser(userId: string, userType?: MemberType, status?: MemberStatus, scope?: TeamScope) {
+  async findMembersByUser(userId: string, userType?: MemberType, status?: MemberStatus, scope?: TeamScope, organizationId?: string) {
     return prisma.teamMember.findMany({
       where: {
         userId,
         ...(userType && { userType }),
         ...(status && { status }),
-        ...(scope && { Team: { scope } })
+        ...((scope || organizationId) && { Team: { ...(scope ? { scope } : {}), ...(organizationId ? { organizationId } : {}) } })
       },
       orderBy: { joinedAt: 'desc' }
     })
@@ -284,14 +283,15 @@ export class TeamRepository {
     userId: string,
     userType: MemberType,
     status: MemberStatus = 'active',
-    scope?: TeamScope
+    scope?: TeamScope,
+    organizationId?: string
   ) {
     const memberships = await prisma.teamMember.findMany({
       where: {
         userId,
         userType,
         status,
-        ...(scope && { Team: { scope } })
+        ...((scope || organizationId) && { Team: { ...(scope ? { scope } : {}), ...(organizationId ? { organizationId } : {}) } })
       },
       select: { teamId: true }
     })
@@ -302,14 +302,14 @@ export class TeamRepository {
    * 查找用户收到的待处理邀请
    * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
-  async findUserPendingInvites(userId: string, userType: MemberType, scope?: TeamScope) {
+  async findUserPendingInvites(userId: string, userType: MemberType, scope?: TeamScope, organizationId?: string) {
     return prisma.teamMember.findMany({
       where: {
         userId,
         userType,
         status: 'pending',
         invitedBy: { not: null },
-        ...(scope && { Team: { scope } })
+        ...((scope || organizationId) && { Team: { ...(scope ? { scope } : {}), ...(organizationId ? { organizationId } : {}) } })
       },
       orderBy: { joinedAt: 'desc' }
     })
@@ -318,14 +318,14 @@ export class TeamRepository {
   /**
    * 查找用户作为管理员的团队
    */
-  async findUserAdminTeams(userId: string, userType: MemberType, scope?: TeamScope) {
+  async findUserAdminTeams(userId: string, userType: MemberType, scope?: TeamScope, organizationId?: string) {
     return prisma.teamMember.findMany({
       where: {
         userId,
         userType,
         role: 'admin',
         status: 'active',
-        ...(scope && { Team: { scope } })
+        ...((scope || organizationId) && { Team: { ...(scope ? { scope } : {}), ...(organizationId ? { organizationId } : {}) } })
       },
       orderBy: { joinedAt: 'desc' }
     })
@@ -334,14 +334,14 @@ export class TeamRepository {
   /**
    * 查找用户作为普通成员的团队
    */
-  async findUserMemberTeams(userId: string, userType: MemberType, scope?: TeamScope) {
+  async findUserMemberTeams(userId: string, userType: MemberType, scope?: TeamScope, organizationId?: string) {
     return prisma.teamMember.findMany({
       where: {
         userId,
         userType,
         role: 'member',
         status: 'active',
-        ...(scope && { Team: { scope } })
+        ...((scope || organizationId) && { Team: { ...(scope ? { scope } : {}), ...(organizationId ? { organizationId } : {}) } })
       },
       orderBy: { joinedAt: 'desc' }
     })
@@ -377,7 +377,7 @@ export class TeamRepository {
    * 查找用户收到的普通成员邀请（role=member, status=pending, invitedBy不为空）
    * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
-  async findUserMemberInvites(userId: string, userType: MemberType, scope?: TeamScope) {
+  async findUserMemberInvites(userId: string, userType: MemberType, scope?: TeamScope, organizationId?: string) {
     return prisma.teamMember.findMany({
       where: {
         userId,
@@ -385,7 +385,7 @@ export class TeamRepository {
         role: 'member',
         status: 'pending',
         invitedBy: { not: null },
-        ...(scope && { Team: { scope } })
+        ...((scope || organizationId) && { Team: { ...(scope ? { scope } : {}), ...(organizationId ? { organizationId } : {}) } })
       },
       orderBy: { joinedAt: 'desc' }
     })

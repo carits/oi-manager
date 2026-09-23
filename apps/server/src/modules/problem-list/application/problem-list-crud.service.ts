@@ -38,12 +38,21 @@ export async function listProblemLists(
   const memberType = getMembershipType(user)
   const tab = typeof query.tab === 'string' ? query.tab : 'all'
   const keyword = typeof query.keyword === 'string' ? query.keyword : ''
-  const where: any = { scope }
+  const where: any = {
+    scope,
+    ...(scope === 'campus'
+      ? { organizationId: user.organizationId || '__missing_organization__' }
+      : { organizationId: null }),
+  }
   const teamId = typeof query.teamId === 'string' && query.teamId ? query.teamId : null
   if (teamId) {
-    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { scope: true } })
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { scope: true, organizationId: true } })
     const member = await prisma.teamMember.findFirst({ where: { teamId, userId, status: 'active' }, select: { id: true } })
-    if (!team || team.scope !== scope || (!member && (user.accountRole) !== 'super_admin')) fail(403, '无权限查看该团队题单')
+    if (!team
+      || team.scope !== scope
+      || (scope === 'campus' && (!user.organizationId || team.organizationId !== user.organizationId))
+      || (scope === 'personal' && team.organizationId !== null)
+      || (!member && (user.accountRole) !== 'super_admin')) fail(403, '无权限查看该团队题单')
     where.TeamProblemList = { some: { teamId } }
   }
 
@@ -161,6 +170,8 @@ export async function getProblemListDetail(user: AuthUser, id: string) {
     },
   })
   if (!list || list.scope !== getResourceScope(user)) fail(404, '题单不存在')
+  if (list.scope === 'campus' && (!user.organizationId || list.organizationId !== user.organizationId)) fail(404, '题单不存在')
+  if (list.scope === 'personal' && list.organizationId !== null) fail(404, '题单不存在')
   const permission = await getProblemListPermission(id, user)
   if (!permission) fail(403, '无权限查看')
   const studentView = getMembershipType(user) === 'student' && !isPersonalContext(user)
@@ -210,7 +221,9 @@ export async function deleteProblemList(user: AuthUser, id: string) {
   }
   const list = await prisma.problemList.findUnique({ where: { id } })
   if (!list) fail(404, '题单不存在')
-  if (list.ownerId !== user.userId) fail(403, '只有创建者可以删除题单')
+  const permission = await getProblemListPermission(id, user)
+  if (!permission) fail(404, '题单不存在')
+  if (permission !== 'admin' || list.ownerId !== user.userId) fail(403, '无权限删除')
   const [schoolLink, teamLink] = await Promise.all([
     prisma.schoolProblemList.findFirst({ where: { problemListId: id }, select: { id: true } }),
     prisma.teamProblemList.findFirst({ where: { problemListId: id }, select: { id: true } }),

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import { Check, ChevronDown, Plus, Search, School, ShieldCheck, UserRound } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
@@ -23,13 +24,19 @@ export function WorkspaceSwitcher() {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
   const rootRef = useRef<HTMLDivElement>(null)
   const { requestNavigation } = useNavigationGuard()
+  const toast = useToast()
   const currentOrganization = resolveNavigationContext(pathname, user).organizationId
   const current = currentOrganization ? workspaces.find(item => item.organizationId === currentOrganization) : workspaces.find(item => item.type === 'personal')
   const visible = useMemo(() => workspaces.filter(item => !query || ((item.organizationName || '') + ' ' + (item.relationLabel || '')).toLocaleLowerCase().includes(query.toLocaleLowerCase())), [query, workspaces])
 
   useEffect(() => {
-    void listWorkspaces().then(result => setWorkspaces(result.workspaces)).catch(() => setWorkspaces([]))
-  }, [user?.userId])
+    void listWorkspaces()
+      .then(result => setWorkspaces(result.workspaces))
+      .catch(error => {
+        setWorkspaces([])
+        toast.error(error instanceof Error ? error.message : '身份列表加载失败')
+      })
+  }, [toast, user?.userId])
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -47,9 +54,9 @@ export function WorkspaceSwitcher() {
   }, [])
 
   const select = (workspace: WorkspaceSummary) => {
-    const module = workspaceModule(pathname)
+    const targetModule = workspaceModule(pathname)
     setOpen(false)
-    requestNavigation(workspaceHref(workspace, module), { hard: true })
+    requestNavigation(workspaceHref(workspace, targetModule), { hard: true })
   }
 
   if (isGlobalAdmin) return null

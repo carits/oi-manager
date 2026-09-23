@@ -1,9 +1,49 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-20
+last_verified: 2026-09-22
 source_of_truth: Git history
 ---
+
+## 2026-09-23 — Training Engine 最终验收与提交并发收口
+
+- 修复训练工作台保存草稿与 SSE 刷新/自动保存并发时使用同一 revision 导致的 409：草稿保存现在按队列串行执行，并按题目维护最新 revision；提交前保存不再因并发刷新丢失。
+- 补齐训练工作台执行命令的联合响应契约、可空训练规则字段和分组换组后的当前参与者上下文返回，保持阶段、分组和报告数据在 Server、Contract、Web 三层一致。
+- 完成隔离 PostgreSQL `e2e` schema 的 Playwright 阶段驱动验收 A–F：创建/发布/提交/报告、多阶段推进、立即换组、提前结束、30→60→100 部分分和当前阶段 Focus 全部通过（14/14）。
+- 完成 Contracts、Shared、Prisma、Server、Web 构建；训练一致性检查、库存盘点、性能基准和 API/权限/架构门禁结果随本轮发布记录保存。
+
+## 2026-09-22 — Training Engine P0 完整收口补充
+
+- 创建训练新增“自定义多阶段”入口：创建弹窗即可一次建立 1～30 个阶段，每个阶段独立选择“全班统一 / 分组训练”，分组阶段可先建立组骨架；产品界面统一使用“阶段”中文术语。
+- 发布训练只进入 `SCHEDULED`，`TrainingSession.currentStageId` 与 Participant mirror 均保持空；只有真正执行 start 后才进入第一个阶段，进一步固定 Session currentStageId 的唯一真相语义。
+- 新增显式阶段 API：`/stages/:stageId/end`、`/clone`、`/move-participant`，均复用现有领域逻辑；阶段复制只复制 Definition，Runtime Snapshot、Progress、运行时间与终态全部重置。
+- GROUPED 阶段在启动事务中 fail-fast 校验全部 active participant 的本阶段 Assignment；缺失或跨阶段 Group 会拒绝启动。
+- Runtime Command 改为 Dispatcher + 独立 Handler 文件：暂停/恢复、Focus、Overlay、个人解锁/跳过、卡题解除和 Hint 不再堆在主 `training-engine.service.ts` 巨型条件链。
+- canonical Training Event 已接入生命周期与课堂干预，并新增事件回归测试；发布、开始、暂停、恢复、消息、个人解锁均能产生显式领域事件。
+- 新增“提交后草稿仍保留”“发布不提前进入阶段”“显式阶段 API”“分组启动校验”等 Server 回归用例。
+- 本批仍未宣称真实 CI、数据库迁移、consistency、benchmark 与 Playwright 已通过；这些必须以可实际执行的 runner / PostgreSQL 环境结果为准。
+
+## 2026-09-22 — Training Engine Stage 语义最终收口
+
+- Stage 持久生命周期统一为 `PENDING / RUNNING / ENDED / SKIPPED`；原 `COMPLETED / ENDED_EARLY` 迁为 `ENDED`，结构化 `endReason` 与教师文字 `endNote` 分离，历史数据迁移保留原含义。
+- `TrainingSession.currentStageId` 成为唯一 Stage 真相；Participant 的 currentStage 只保留兼容镜像。ENDED/ARCHIVED 后 Runtime Command 统一 fail-closed，Focus 退出 ProblemProgress 持久状态。
+- 新增统一 Requirement resolver，以 `REQUIRED / SATISFIED / BYPASSED / RETIRED` 同时驱动 Workspace、Coach Dashboard、Scheduler Completion、Peer Progress 与 Report；教师 SKIP 明确作为顺序训练 prerequisite bypass。
+- 修复普通未提升 WA 错误解除 STUCK；立即换组保留旧 Progress 并把退出新组要求的题标记为 RETIRED。
+- 保留 usability hardening 已完成的权限批量求值、题面脱敏、Hint Definition 冻结、TEAM 命令目标和报告导出；同步补充生命周期、Skip、STUCK、换组 Requirement 与终态命令回归测试。
+- 本变更尚未部署；数据库迁移演练、Server 集成测试与 UI E2E 仍以 PR 验证结果为发布前置条件。
+
+## 2026-09-22 — Full-project usability hardening 收口
+
+- Training Workspace 权限求值改为批量内存求值：一次加载 Participant、Override 与 Progress，避免每个 StageProblem 重复加载 Session/Progress 的 N+1。
+- 修复训练在 `SCHEDULED` 与 `PAUSED` 状态下因权限早退导致未来 Stage、顺序锁定或教师控制题目元数据可能提前可见的问题；未开放题继续在 API 边界脱敏。
+- 修复教练 Runtime Command 的 TEAM 目标死功能：客户端直接使用当前 Session 的 `teamId`，服务端继续规范化并校验目标。
+- 训练过程报告新增学员明细 CSV 与完整 JSON 导出，便于课堂结束后分析与留档。
+- `TrainingDetailPage` 的补作业创建失败反馈改用站内 Toast，去掉原生 `alert()`。
+- 对 72 个 Server route 文件完成静态 `:param` 与 `req.params` 一致性扫描；除已修复的 Training design-problem 参数错配外未发现同类问题。
+- 删除 17 个已经废弃、一次性、依赖旧 School/Teacher/Student/Admin 模型或直接写业务数据库的维护/造数/迁移脚本；保留带阻塞条件、快照/dry-run/事务对账的当前受控迁移工具、E2E seed/reset 和只读审计/运维工具。
+- 修正文档治理：`CLAUDE.md` 不再把不存在的 `migrate-organization-*.ts` 当成当前迁移入口；旧组织迁移说明改为历史归档，当前事实源指向 Prisma migration 与 Schema。
+- 新增 Training Server 回归用例，锁定暂停/预发布未来题脱敏与 TEAM 目标规范化语义。
+- 本批**没有实际执行测试、数据库迁移、迁移演练或部署**；这些验证项按本轮约束保留为显式未完成事项，不计入“已验证”。
 
 ## 2026-09-20 — Contest 与 Judge 双模型兼容退役
 ## 2026-09-20 — 内部兼容债务最终收口
