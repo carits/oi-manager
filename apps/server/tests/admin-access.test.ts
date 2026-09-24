@@ -59,35 +59,64 @@ describe('administrator entry without User.schoolId', () => {
           { id: secondUserId, username: 'submitter_' + secondUserId.slice(0, 8), passwordHash: 'test', role: 'user', status: 'active' },
         ],
       })
-      const visibleSubmission = await prisma.submission.create({
-        data: {
-          userId: firstUserId,
-          oj: 'carits',
-          problemId: 'ADMIN-VISIBLE',
-          language: 'cpp',
-          code: 'int main(){}',
-          codeLength: 12,
-          submitMethod: 'standard',
-          result: 'accepted',
-          submitScope: 'problem',
-          workspaceScope: 'personal',
-          isGlobalVisible: true,
-        },
+      async function createSubmissionWithRun(options: {
+        userId: string
+        problemId: string
+        result: string
+        score: number | null
+        status: 'FINALIZED' | 'QUEUED'
+        workspaceScope: 'personal' | 'campus'
+        isGlobalVisible: boolean
+      }) {
+        const submission = await prisma.submission.create({
+          data: {
+            userId: options.userId,
+            oj: 'carits',
+            problemId: options.problemId,
+            language: 'cpp',
+            code: 'int main(){}',
+            codeLength: 12,
+            submitMethod: 'standard',
+            submitScope: 'problem',
+            workspaceScope: options.workspaceScope,
+            isGlobalVisible: options.isGlobalVisible,
+          },
+        })
+        const run = await prisma.judgeRun.create({
+          data: {
+            id: crypto.randomUUID(),
+            submissionId: submission.id,
+            runNumber: 1,
+            runType: 'NORMAL',
+            status: options.status,
+            result: options.result,
+            score: options.score,
+            finalizedAt: options.status === 'FINALIZED' ? new Date() : null,
+          },
+        })
+        return prisma.submission.update({
+          where: { id: submission.id },
+          data: { currentJudgeRunId: run.id },
+        })
+      }
+
+      const visibleSubmission = await createSubmissionWithRun({
+        userId: firstUserId,
+        problemId: 'ADMIN-VISIBLE',
+        result: 'accepted',
+        score: 100,
+        status: 'FINALIZED',
+        workspaceScope: 'personal',
+        isGlobalVisible: true,
       })
-      const hiddenSubmission = await prisma.submission.create({
-        data: {
-          userId: secondUserId,
-          oj: 'carits',
-          problemId: 'ADMIN-HIDDEN',
-          language: 'cpp',
-          code: 'int main(){}',
-          codeLength: 12,
-          submitMethod: 'standard',
-          result: 'judging',
-          submitScope: 'problem',
-          workspaceScope: 'campus',
-          isGlobalVisible: false,
-        },
+      const hiddenSubmission = await createSubmissionWithRun({
+        userId: secondUserId,
+        problemId: 'ADMIN-HIDDEN',
+        result: 'judging',
+        score: null,
+        status: 'QUEUED',
+        workspaceScope: 'campus',
+        isGlobalVisible: false,
       })
       const token = jwt.sign(
         { userId: admin.id, username: admin.username, accountRole: role, sessionVersion: 1, workspaceMode: 'work' },

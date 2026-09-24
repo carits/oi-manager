@@ -18,48 +18,18 @@ import styles from './TrainingEngine.module.css'
 import { trainingSessionTypeLabel, trainingStatusLabel } from '@/lib/humanPresentation'
 import { StudentPicker } from '@/features/organization-account'
 import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
-import { createTrainingSession, deleteTrainingTemplate, joinTrainingSession, listManagedTrainingTeams, listTrainingSessions, listTrainingTemplates, previewTrainingParticipants, publishTraining } from '../api/trainingSessionApi'
+import { createTrainingSession, joinTrainingSession, listManagedTrainingTeams, listTrainingSessions, previewTrainingParticipants, publishTraining } from '../api/trainingSessionApi'
 
-type Template = { key: string; name: string; description: string; sessionType: string; source: 'builtin' | 'personal' | 'organization' | 'team'; stages: Array<Record<string, unknown>> }
 type Session = { id: string; title: string; description?: string; status: string; sessionType: string; problemCount?: number; dueAt?: string | null; statusRevision?: number; canJoin?: boolean; teamId?: string | null; teamName?: string | null; _count: { Stages: number; Participants: number } }
 type SessionListPayload = { items: Session[]; statusCounts: Record<ListFilter, number>; pagination: { page: number; pageSize: number; total: number; totalPages: number } }
 type Team = { id: string; name: string; owner?: { id?: string }; members?: Array<{ userId: string; role: string }> }
 type TeamPayload = Team[] | { items?: Team[]; data?: Team[]; totalPages?: number }
 type Problem = { id: string; platform: string; problemId: string; title: string; difficulty?: string | null }
-type CreateMode = 'quick' | 'custom' | 'template'
+type CreateMode = 'quick' | 'custom'
 type ParticipantTarget = 'team' | 'organization_students' | 'custom_students'
-type CustomStageDraft = { name: string; audienceMode: 'ALL' | 'GROUPED'; groups: string[] }
+type CustomStageDraft = { name: string; audienceMode: 'ALL' | 'GROUPED' }
 type ListFilter = 'active' | 'upcoming' | 'completed' | 'draft'
-type CoachFieldsProps = {
-  organizationId?: string
-  teamId?: string
-  teams: Team[]
-  selectedTeamId: string
-  setSelectedTeamId: (value: string) => void
-  participantTarget: ParticipantTarget
-  setParticipantTarget: (value: ParticipantTarget) => void
-  selectedStudentIds: string[]
-  setSelectedStudentIds: (value: string[]) => void
-  canUseSchoolWide: boolean
-  title: string
-  setTitle: (value: string) => void
-  description: string
-  setDescription: (value: string) => void
-  scheduledStartAt: string
-  setScheduledStartAt: (value: string) => void
-  templateKey: string
-  setTemplateKey: (value: string) => void
-  templates: Template[]
-  rankingMode: string
-  setRankingMode: (value: string) => void
-  peerVisibility: string
-  setPeerVisibility: (value: string) => void
-  joinMode: string
-  setJoinMode: (value: string) => void
-  allowHints: boolean
-  setAllowHints: (value: boolean) => void
-  onDeleteTemplate: (template: Template) => void
-}
+
 
 const statusVariant = (status: string) => status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : status === 'ENDED' || status === 'ARCHIVED' ? 'neutral' : 'info'
 const normalizeTeams = (payload?: TeamPayload) => Array.isArray(payload) ? payload : payload?.items || payload?.data || []
@@ -85,10 +55,10 @@ async function loadAllManagedTeams(organizationId?: string) {
 export function TrainingSessionListPage({ organizationId, teamId }: { organizationId?: string; teamId?: string }) {
   const router = useRouter(), searchParams = useSearchParams(), toast = useToast(), { user } = useAuth()
   const canViewTrainingManagement = Boolean(organizationId && (user?.organizationRole === 'teacher' || user?.organizationRole === 'school_principal'))
-  const [sessions, setSessions] = useState<Session[]>([]), [templates, setTemplates] = useState<Template[]>([]), [teams, setTeams] = useState<Team[]>([])
+  const [sessions, setSessions] = useState<Session[]>([]), [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [open, setOpen] = useState(false)
   const [mode, setMode] = useState<CreateMode>('quick'), [simpleStep, setSimpleStep] = useState(0)
-  const [title, setTitle] = useState(''), [description, setDescription] = useState(''), [templateKey, setTemplateKey] = useState('simple-practice')
+  const [title, setTitle] = useState(''), [description, setDescription] = useState('')
   const [scheduledStartAt, setScheduledStartAt] = useState(() => localDateTime(new Date())), [dueAt, setDueAt] = useState(() => localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)))
   const [selectedTeamId, setSelectedTeamId] = useState(teamId || '')
   const [participantTarget, setParticipantTarget] = useState<ParticipantTarget>(organizationId ? 'team' : 'team')
@@ -98,7 +68,8 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   const [allowHints, setAllowHints] = useState(true)
   const [completionMode, setCompletionMode] = useState<'all' | 'count'>('all'), [requiredCount, setRequiredCount] = useState(1)
   const [selectedProblems, setSelectedProblems] = useState<Problem[]>([])
-  const [customStages, setCustomStages] = useState<CustomStageDraft[]>([{ name: '阶段 1', audienceMode: 'ALL', groups: [] }])
+  const [customStages, setCustomStages] = useState<CustomStageDraft[]>([{ name: '阶段 1', audienceMode: 'ALL' }])
+  const [trainingGroups, setTrainingGroups] = useState<string[]>(['基础组', '提高组'])
   const [listFilter, setListFilter] = useState<ListFilter>('active'), [listQuery, setListQuery] = useState(''), [listTeamId, setListTeamId] = useState(() => teamId || searchParams.get('teamId') || '')
   const [listPage, setListPage] = useState(1), [listTotal, setListTotal] = useState(0), [listTotalPages, setListTotalPages] = useState(1)
   const [statusCounts, setStatusCounts] = useState<Record<ListFilter, number>>({ active: 0, upcoming: 0, completed: 0, draft: 0 })
@@ -111,9 +82,8 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     if (listQuery.trim()) listParams.set('keyword', listQuery.trim())
     if (organizationId && listTeamId) listParams.set('filterTeamId', listTeamId)
     try {
-      const [listResult, templateResult, teamResult] = await Promise.allSettled([
+      const [listResult, teamResult] = await Promise.allSettled([
         listTrainingSessions(Object.fromEntries(listParams.entries())),
-        listTrainingTemplates({ organizationId, teamId }),
         teamId ? Promise.resolve({ success: true, data: [] as Team[], status: 200, message: undefined })
           : organizationId && canViewTrainingManagement
             ? loadAllManagedTeams(organizationId)
@@ -139,11 +109,6 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
         toast.error(listResult.reason instanceof Error ? listResult.reason.message : '训练列表加载失败')
       }
 
-      if (templateResult.status === 'fulfilled') {
-        setTemplates(templateResult.value || [])
-      } else {
-        toast.error(templateResult.reason instanceof Error ? templateResult.reason.message : '训练模板加载失败')
-      }
 
       if (teamResult.status === 'fulfilled' && teamResult.value.success) {
         const manageable = normalizeTeams(teamResult.value.data)
@@ -160,7 +125,6 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   }, [canViewTrainingManagement, listFilter, listPage, listQuery, listTeamId, organizationId, scopeQuery, teamId, toast])
   useEffect(() => { const timer = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timer) }, [load])
 
-  const chosenTemplate = useMemo(() => templates.find(item => item.key === templateKey), [templateKey, templates])
   const targetTeamId = teamId || selectedTeamId
   const useTeamScope = !organizationId || participantTarget === 'team'
   const scopeReady = useTeamScope ? Boolean(targetTeamId) : participantTarget === 'custom_students' ? selectedStudentIds.length > 0 : user?.organizationRole === 'school_principal'
@@ -176,7 +140,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     })
   }, [mode, open, organizationId, participantTarget, scopeReady, selectedStudentIds, simpleStep, targetTeamId, toast, useTeamScope])
   const resetDialog = () => {
-    setSimpleStep(0); setTitle(''); setDescription(''); setSelectedProblems([]); setCustomStages([{ name: '阶段 1', audienceMode: 'ALL', groups: [] }]); setCompletionMode('all'); setRequiredCount(1); setSelectedStudentIds([]); setParticipantTarget('team'); setParticipantPreview(null); setSchoolWideConfirmed(false)
+    setSimpleStep(0); setTitle(''); setDescription(''); setSelectedProblems([]); setCustomStages([{ name: '阶段 1', audienceMode: 'ALL' }]); setTrainingGroups(['基础组', '提高组']); setCompletionMode('all'); setRequiredCount(1); setSelectedStudentIds([]); setParticipantTarget('team'); setParticipantPreview(null); setSchoolWideConfirmed(false)
     setScheduledStartAt(localDateTime(new Date())); setDueAt(localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)))
   }
   const closeDialog = () => { if (!creating) { setOpen(false); resetDialog() } }
@@ -207,33 +171,13 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
         accessScope: 'CURRENT_STAGE',
         submissionMode: 'ENABLED',
         problems: [],
-        groups: stage.audienceMode === 'GROUPED'
-          ? stage.groups.map((groupName, groupIndex) => ({
-              clientKey: `create-${index}-group-${groupIndex}`,
-              name: groupName.trim() || `分组 ${groupIndex + 1}`,
-              accessPolicy: 'ALL_AT_ONCE',
-              submissionMode: 'ENABLED',
-              participantIds: [],
-              problems: [],
-            }))
-          : [],
+        groups: stage.audienceMode === 'GROUPED' ? trainingGroups.map((groupName, groupIndex) => ({ clientKey: 'create-group-' + groupIndex, name: groupName.trim() || '分组 ' + (groupIndex + 1), accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', participantIds: [], problems: [] })) : [],
       })),
     })
     setCreating(false)
     if (!response.ok || !response.data) return toast.error(response.ok ? '创建训练失败' : response.error.message)
     toast.success('训练草稿已创建，可自由新增多个阶段后再发布')
     setOpen(false)
-    router.push(`${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${response.data.id}/design`)
-  }
-
-  const createTemplateDraft = async () => {
-    if (!title.trim() || !chosenTemplate || !scopeReady) return
-    setCreating(true)
-    const stages = chosenTemplate.stages.map(stage => ({ ...stage, problems: [] }))
-    const response = await createTrainingSession({ title, description, templateKey, sessionType: chosenTemplate.sessionType as 'OI' | 'ACM' | 'GENERAL', organizationId: useTeamScope ? undefined : organizationId, teamId: useTeamScope ? targetTeamId : undefined, participantUserIds: participantTarget === 'custom_students' ? selectedStudentIds : undefined, scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : null, rankingMode: rankingMode as 'PROGRESS_ONLY', peerVisibility: peerVisibility as 'PROGRESS', joinMode: joinMode as 'CURRENT_STAGE', allowHints, settings: { participantTarget }, stages: stages as never })
-    setCreating(false)
-    if (!response.ok || !response.data) return toast.error(response.ok ? '创建训练失败' : response.error.message)
-    toast.success('训练草稿已创建，请继续编排阶段与题目'); setOpen(false)
     router.push(`${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${response.data.id}/design`)
   }
 
@@ -260,14 +204,6 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   }
 
   const canCreateTraining = canViewTrainingManagement || Boolean(!organizationId && (teamId || teams.length))
-  const removeTemplate = async (template: Template) => {
-    if (!template.key.startsWith('database:') || !window.confirm(`确认停用模板“${template.name}”？已创建的训练不会受影响。`)) return
-    const response = await deleteTrainingTemplate(template.key.slice('database:'.length))
-    if (!response.ok) return toast.error(response.error.message || '停用模板失败')
-    if (templateKey === template.key) setTemplateKey('simple-practice')
-    toast.success('模板已停用')
-    await load()
-  }
   const managerView = canViewTrainingManagement || Boolean(!organizationId && (teamId || teams.length))
   useEffect(() => { if (!managerView && listFilter === 'draft') setListFilter('active') }, [listFilter, managerView])
   const countFor = (filter: ListFilter) => statusCounts[filter] || 0
@@ -303,6 +239,11 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   }
 
   const simpleSteps = ['基本信息', '选择题目', '学员范围', '检查并发布']
+  const dialogFooter = mode === 'quick'
+    ? <> <Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button>{simpleStep > 0 && <Button variant="secondary" onClick={() => setSimpleStep(step => step - 1)} disabled={creating}>上一步</Button>}{simpleStep < 3 ? <Button onClick={() => setSimpleStep(step => step + 1)} disabled={!simpleValid}>下一步</Button> : <Button onClick={() => void createSimpleTraining()} loading={creating} disabled={!simpleValid || previewLoading}>确认并发布</Button>} </>
+    : mode === 'custom'
+      ? <> <Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createCustomDraft()} loading={creating} disabled={!title.trim() || !scopeReady || !customStages.length}>创建并编排多个阶段</Button> </>
+      : null
   return <PageFrame className={styles.trainingListFrame}><div className={styles.stack}>
     <PageHeader title="训练" description={managerView ? '布置和管理学生练习。' : '查看老师安排的训练并继续练习。'} actions={canCreateTraining ? <Button icon={<Plus size={17} />} onClick={() => setOpen(true)}>创建训练</Button> : undefined} />
     <div className={styles.listControls}>
@@ -314,28 +255,24 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
       {listTotalPages > 1 && <div className={styles.pagination}><span>共 {listTotal} 个 · 第 {listPage}/{listTotalPages} 页</span><div className={styles.actions}><Button size="sm" variant="secondary" disabled={listPage <= 1 || loading} onClick={() => setListPage(page => page - 1)}>上一页</Button><Button size="sm" variant="secondary" disabled={listPage >= listTotalPages || loading} onClick={() => setListPage(page => page + 1)}>下一页</Button></div></div>}
     </Section>
 
-    <FormDialog isOpen={open} onClose={closeDialog} title="创建训练" description={mode === 'quick' ? '快速创建只适合“单阶段·全班统一”，会直接发布；需要多阶段或分组训练请使用“自定义多阶段”。' : mode === 'custom' ? '自定义多阶段会先创建草稿，你可以自由新增、排序和配置多个阶段后再发布。' : '模板只生成可编辑的阶段骨架。'} size="wide" loading={creating} dirty={Boolean(title || selectedProblems.length)} footer={mode === 'quick'
-      ? <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button>{simpleStep > 0 && <Button variant="secondary" onClick={() => setSimpleStep(step => step - 1)} disabled={creating}>上一步</Button>}{simpleStep < 3 ? <Button onClick={() => setSimpleStep(step => step + 1)} disabled={!simpleValid}>下一步</Button> : <Button onClick={() => void createSimpleTraining()} loading={creating} disabled={!simpleValid || previewLoading}>确认并发布</Button>}</>
-      : mode === 'custom'
-        ? <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createCustomDraft()} loading={creating} disabled={!title.trim() || !scopeReady || !customStages.length}>创建并编排多个阶段</Button></>
-        : <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createTemplateDraft()} loading={creating} disabled={!title.trim() || !chosenTemplate || !scopeReady}>创建并编排</Button></>}>
+    <FormDialog isOpen={open} onClose={closeDialog} title="创建训练" description={mode === 'quick' ? '快速创建只适合“单阶段·全班统一”，会直接发布；需要多阶段或分组训练请使用“自定义多阶段”。' : '自定义多阶段会先创建草稿，你可以自由新增、排序和配置多个阶段后再发布。'} size="wide" loading={creating} dirty={Boolean(title || selectedProblems.length)} footer={dialogFooter}>
       <div className={styles.stack}>
         <div className={styles.creationModeGrid} role="radiogroup" aria-label="选择创建方式">
           {[
             { value: 'quick' as const, title: '快速训练', description: '单阶段、全班统一，适合日常刷题。' },
             { value: 'custom' as const, title: '多阶段训练', description: '先搭建课堂骨架，再进入全屏设计器配置阶段。' },
-            { value: 'template' as const, title: '从模板创建', description: '从已有阶段结构开始，创建后仍可继续修改。' },
           ].map(item => <button type="button" key={item.value} className={`${styles.creationModeCard} ${mode === item.value ? styles.creationModeCardActive : ''}`} aria-pressed={mode === item.value} onClick={() => setMode(item.value)}>
             <strong>{item.title}</strong><span>{item.description}</span><small>{mode === item.value ? '已选择' : '选择此方式'}</small>
           </button>)}
         </div>
-        {mode === 'quick' ? <>
+        {mode === 'quick' && <>
           <div className={styles.designSteps}>{simpleSteps.map((label, index) => index === simpleStep ? <strong key={label}>{index + 1}. {label}</strong> : <span key={label}>{index + 1}. {label}</span>)}</div>
           {simpleStep === 0 && <div className={styles.stack}><label className={styles.field}>训练名称<Input autoFocus value={title} maxLength={200} onChange={event => setTitle(event.target.value)} /></label><label className={styles.field}>训练说明（可选）<Textarea rows={3} value={description} onChange={event => setDescription(event.target.value)} /></label><div className={styles.grid}><label className={styles.field}>开始时间<Input type="datetime-local" value={scheduledStartAt} onChange={event => setScheduledStartAt(event.target.value)} /></label><label className={styles.field}>截止时间<Input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /><small>到期后系统自动结束训练。</small></label></div></div>}
           {simpleStep === 1 && <div className={styles.stack}><QuickProblemInput existingProblemIds={selectedProblems.map(item => item.id)} onResolved={(problems: SelectedCanonicalProblem[]) => setSelectedProblems(current => [...current, ...problems.map(problem => ({ id: problem.id, platform: problem.platform, problemId: problem.problemCode, title: problem.title, difficulty: problem.difficulty }))])} /><p className={styles.muted}>已添加 {selectedProblems.length} 道题；发布时自动固定各题当前正式版本。</p>{selectedProblems.length > 0 && <div className={styles.actions}>{selectedProblems.map(problem => <Button size="sm" variant="secondary" key={problem.id} onClick={() => setSelectedProblems(current => current.filter(item => item.id !== problem.id))}>移除 {problem.problemId}</Button>)}</div>}</div>}
           {simpleStep === 2 && <div className={styles.stack}>{organizationId ? <><label className={styles.field}>训练对象<Select value={participantTarget} onChange={event => { setParticipantTarget(event.target.value as ParticipantTarget); setSchoolWideConfirmed(false) }}><option value="team">团队（推荐）</option><option value="custom_students">自定义学生</option>{user?.organizationRole === 'school_principal' && <option value="organization_students">全校学生</option>}</Select></label>{participantTarget === 'team' && <label className={styles.field}>学员团队<Select value={selectedTeamId} onChange={event => setSelectedTeamId(event.target.value)}><option value="">请选择可管理团队</option>{teams.map(team => <option value={team.id} key={team.id}>{team.name}</option>)}</Select></label>}{participantTarget === 'custom_students' && <StudentPicker organizationId={organizationId} teams={teams} selectedIds={selectedStudentIds} onChange={setSelectedStudentIds} />}{participantTarget === 'organization_students' && <div className={styles.card}><strong>全校学生</strong><span>仅包含当前学校的有效学生，不会加入教师或负责人。</span><small className={styles.muted}>下一步会由服务器计算真实人数并要求再次确认。</small></div>}</> : !teamId && <label className={styles.field}>学员团队<Select value={selectedTeamId} onChange={event => setSelectedTeamId(event.target.value)}><option value="">请选择可管理团队</option>{teams.map(team => <option value={team.id} key={team.id}>{team.name}</option>)}</Select></label>}<div className={styles.card}><strong>参与范围</strong><span>{useTeamScope ? '所选团队中的学生' : participantTarget === 'custom_students' ? `已选择 ${selectedStudentIds.length} 名学生` : '当前学校的全部有效学生'}</span><small className={styles.muted}>发布时固定符合条件的学生名单。</small></div><label className={styles.field}>完成要求<Select value={completionMode} onChange={event => setCompletionMode(event.target.value as 'all' | 'count')}><option value="all">完成全部题目</option><option value="count">至少完成指定题数</option></Select></label>{completionMode === 'count' && <label className={styles.field}>至少完成<Input type="number" min={1} max={Math.max(1, selectedProblems.length)} value={requiredCount} onChange={event => setRequiredCount(Number(event.target.value))} /><small>最多 {selectedProblems.length} 道题。</small></label>}</div>}
           {simpleStep === 3 && <div className={styles.stack}>{previewLoading ? <p className={styles.loadingCopy}>正在确认训练对象…</p> : participantPreview ? <><div className={styles.publishChecklist}><p><strong>{title}</strong><span>训练名称</span></p><p><strong>{participantPreview.targetName} · {participantPreview.participantCount} 人</strong><span>训练对象</span></p><p><strong>{selectedProblems.length} 道</strong><span>训练题目</span></p><p><strong>{completionMode === 'all' ? '全部完成' : `至少 ${Math.min(requiredCount, selectedProblems.length)} 道`}</strong><span>完成要求</span></p><p><strong>{new Date(scheduledStartAt).toLocaleString()}</strong><span>开始时间</span></p><p><strong>{new Date(dueAt).toLocaleString()}</strong><span>截止时间</span></p></div>{participantTarget === 'organization_students' && <div className={styles.message}><strong>这是全校范围发布</strong><p>将向当前学校 {participantPreview.participantCount} 名有效学生发布训练。</p><Checkbox label={`我确认向全校 ${participantPreview.participantCount} 名学生发布`} checked={schoolWideConfirmed} onChange={event => setSchoolWideConfirmed(event.target.checked)} /></div>}</> : <p className={styles.message}>无法确认训练对象，请返回上一步检查范围。</p>}</div>}
-        </> : mode === 'custom' ? <div className={styles.stack}>
+        </>}
+        {mode === 'custom' && <div className={styles.stack}>
           <div className={styles.message}><strong>先创建草稿，再自由编排多个阶段</strong><p>创建后会进入训练设计器。你可以从阶段 1 开始，继续新增、复制、删除和排序未来阶段；确认完整后再统一发布。</p></div>
           {organizationId && <label className={styles.field}>训练对象<Select value={participantTarget} onChange={event => setParticipantTarget(event.target.value as ParticipantTarget)}><option value="team">团队（推荐）</option><option value="custom_students">自定义学生</option>{user?.organizationRole === 'school_principal' && <option value="organization_students">全校学生</option>}</Select></label>}
           {(!organizationId && !teamId || organizationId && participantTarget === 'team') && <label className={styles.field}>团队范围<Select value={selectedTeamId} onChange={event => setSelectedTeamId(event.target.value)}><option value="">请选择可管理团队</option>{teams.map(team => <option value={team.id} key={team.id}>{team.name}</option>)}</Select></label>}
@@ -347,6 +284,15 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
           <div className={styles.card}>
             <strong>阶段编排</strong>
             <p>现在就可以先建立多个阶段骨架。创建后进入设计器继续为每个阶段配置题目、分组、时长和规则。</p>
+            <div className={styles.card}>
+              <strong>训练分组</strong>
+              <p>分组属于整场训练；分组阶段沿用这些组别，学员归属可在设计器中继续调整。</p>
+              {trainingGroups.map((groupName, groupIndex) => <div className={styles.actions} key={groupIndex}>
+                <Input aria-label={'训练分组 ' + (groupIndex + 1)} value={groupName} maxLength={100} placeholder={'分组 ' + (groupIndex + 1)} onChange={event => setTrainingGroups(current => current.map((name, currentIndex) => currentIndex === groupIndex ? event.target.value : name))} />
+                <Button size="sm" variant="ghost" disabled={trainingGroups.length <= 1} onClick={() => setTrainingGroups(current => current.filter((_, currentIndex) => currentIndex !== groupIndex))}>删除分组</Button>
+              </div>)}
+              <Button size="sm" variant="outline" onClick={() => setTrainingGroups(current => [...current, '分组 ' + (current.length + 1)])}>新增分组</Button>
+            </div>
             <div className={styles.stack}>
               {customStages.map((stage, index) => <article className={styles.card} key={index}>
                 <div className={styles.actions}>
@@ -370,7 +316,6 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
                         setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
                           ...item,
                           audienceMode,
-                          groups: audienceMode === 'GROUPED' && !item.groups.length ? ['基础组', '提高组'] : item.groups,
                         } : item))
                       }}
                     >
@@ -387,87 +332,21 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
                     删除阶段
                   </Button>
                 </div>
-                {stage.audienceMode === 'GROUPED' && <div className={styles.stack}>
-                  <strong>阶段分组</strong>
-                  <small className={styles.muted}>这里只先建立分组骨架；具体学生归属可在进入设计器后按阶段配置。</small>
-                  {stage.groups.map((groupName, groupIndex) => <div className={styles.actions} key={groupIndex}>
-                    <Input
-                      aria-label={`阶段 ${index + 1} 分组 ${groupIndex + 1}`}
-                      value={groupName}
-                      maxLength={100}
-                      placeholder={`分组 ${groupIndex + 1}`}
-                      onChange={event => setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
-                        ...item,
-                        groups: item.groups.map((name, currentGroupIndex) => currentGroupIndex === groupIndex ? event.target.value : name),
-                      } : item))}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={stage.groups.length === 1}
-                      onClick={() => setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
-                        ...item,
-                        groups: item.groups.filter((_, currentGroupIndex) => currentGroupIndex !== groupIndex),
-                      } : item))}
-                    >
-                      删除分组
-                    </Button>
-                  </div>)}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
-                      ...item,
-                      groups: [...item.groups, `分组 ${item.groups.length + 1}`],
-                    } : item))}
-                  >
-                    新增分组
-                  </Button>
-                </div>}
               </article>)}
               <Button
                 size="sm"
                 variant="outline"
                 icon={<Plus size={14} />}
                 disabled={customStages.length >= 30}
-                onClick={() => setCustomStages(current => [...current, { name: `阶段 ${current.length + 1}`, audienceMode: 'ALL', groups: [] }])}
+                onClick={() => setCustomStages(current => [...current, { name: `阶段 ${current.length + 1}`, audienceMode: 'ALL' }])}
               >
                 新增阶段
               </Button>
               <small className={styles.muted}>当前 {customStages.length}/30 个阶段；每个阶段可以独立选择“全班统一”或“分组训练”。</small>
             </div>
           </div>
-        </div> : <CoachFields organizationId={organizationId} teamId={teamId} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} participantTarget={participantTarget} setParticipantTarget={setParticipantTarget} selectedStudentIds={selectedStudentIds} setSelectedStudentIds={setSelectedStudentIds} canUseSchoolWide={user?.organizationRole === 'school_principal'} title={title} setTitle={setTitle} description={description} setDescription={setDescription} scheduledStartAt={scheduledStartAt} setScheduledStartAt={setScheduledStartAt} templateKey={templateKey} setTemplateKey={setTemplateKey} templates={templates} rankingMode={rankingMode} setRankingMode={setRankingMode} peerVisibility={peerVisibility} setPeerVisibility={setPeerVisibility} joinMode={joinMode} setJoinMode={setJoinMode} allowHints={allowHints} setAllowHints={setAllowHints} onDeleteTemplate={template => void removeTemplate(template)} />}
+        </div>}
       </div>
     </FormDialog>
   </div></PageFrame>
-}
-
-function CoachFields(props: CoachFieldsProps) {
-  return <div className={styles.stack}>
-    {props.organizationId && <label className={styles.field}>训练对象<Select value={props.participantTarget} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setParticipantTarget(event.target.value as ParticipantTarget)}><option value="team">团队（推荐）</option><option value="custom_students">自定义学生</option>{props.canUseSchoolWide && <option value="organization_students">全校学生</option>}</Select></label>}
-    {(!props.organizationId && !props.teamId || props.organizationId && props.participantTarget === 'team') && <label className={styles.field}>团队范围<Select value={props.selectedTeamId} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setSelectedTeamId(event.target.value)}><option value="">请选择可管理团队</option>{props.teams.map((team: Team) => <option value={team.id} key={team.id}>{team.name}</option>)}</Select></label>}
-    {props.organizationId && props.participantTarget === 'custom_students' && <StudentPicker organizationId={props.organizationId} teams={props.teams} selectedIds={props.selectedStudentIds} onChange={props.setSelectedStudentIds} />}
-    {props.organizationId && props.participantTarget === 'organization_students' && <p className={styles.muted}>将面向全校有效学生发布，不包含教师和负责人。</p>}
-    <label className={styles.field}>训练名称<Input value={props.title} maxLength={200} onChange={(event: React.ChangeEvent<HTMLInputElement>) => props.setTitle(event.target.value)} /></label>
-    <label className={styles.field}>训练说明<Textarea rows={3} value={props.description} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => props.setDescription(event.target.value)} /></label>
-    <label className={styles.field}>计划开始（可选）<Input type="datetime-local" value={props.scheduledStartAt} onChange={(event: React.ChangeEvent<HTMLInputElement>) => props.setScheduledStartAt(event.target.value)} /></label>
-    <fieldset className={styles.definitionFieldset}>
-      <legend className={styles.field}>选择阶段模板</legend>
-      <div className={styles.templateGrid} role="radiogroup" aria-label="阶段模板">
-        {props.templates.map((item: Template) => <button type="button" className={`${styles.card} ${styles.template}`} data-selected={props.templateKey === item.key} aria-pressed={props.templateKey === item.key} key={item.key} onClick={() => props.setTemplateKey(item.key)}>
-          <strong>{item.name}</strong><span>{item.description}</span><small>{item.stages.length} 个阶段 · {item.stages.some(stage => Array.isArray(stage.groups) && stage.groups.length > 0) ? '含分组' : '全班统一'} · {item.source === 'builtin' ? '内置模板' : item.source === 'organization' ? '学校共享' : item.source === 'team' ? '团队共享' : '我的模板'}</small>
-        </button>)}
-      </div>
-      <small className={styles.muted}>只导入阶段、分组和规则骨架，题目会在设计器中显式分配。</small>
-    </fieldset>
-    {props.templates.find(item => item.key === props.templateKey)?.source !== 'builtin' && <Button type="button" variant="ghost" onClick={() => { const template = props.templates.find(item => item.key === props.templateKey); if (template) props.onDeleteTemplate(template) }}>停用当前自定义模板</Button>}
-    <details className={styles.assignmentPolicy}>
-      <summary>高级设置</summary>
-      <div className={styles.stack}>
-        <div className={styles.grid}><label className={styles.field}>训练展示<Select value={props.rankingMode} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setRankingMode(event.target.value)}><option value="OFF">不显示榜单</option><option value="PROGRESS_ONLY">只显示完成进度</option><option value="SCORE">显示训练分数</option><option value="ACM_RANKING">显示 ACM 排名</option></Select></label><label className={styles.field}>同学状态<Select value={props.peerVisibility} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setPeerVisibility(event.target.value)}><option value="NONE">不可见</option><option value="PROGRESS">仅进度</option><option value="FULL">完整状态</option></Select></label><label className={styles.field}>迟到加入<Select value={props.joinMode} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setJoinMode(event.target.value)}><option value="CURRENT_STAGE">加入当前阶段</option><option value="TEACHER_ASSIGN">由教练分配</option></Select></label></div>
-        <div className={styles.stack}><Checkbox label="允许提示" checked={props.allowHints} onChange={(event: React.ChangeEvent<HTMLInputElement>) => props.setAllowHints(event.target.checked)} /><small className={styles.muted}>题解和阶段内讨论尚未接入学生训练工作台，因此不提供无效配置项。</small></div>
-      </div>
-    </details>
-  </div>
 }

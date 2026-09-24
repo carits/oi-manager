@@ -20,7 +20,6 @@ import { useUnsavedChanges } from "@/components/navigation/UnsavedChangesProvide
 import {
   getTrainingDesign,
   getTrainingDesignProblem,
-  createTrainingTemplate,
   publishTraining,
   saveTrainingDesign,
   validateTrainingDesign,
@@ -63,10 +62,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const [pendingRemovalConfirm, setPendingRemovalConfirm] = useState(false),
     [problemTarget, setProblemTarget] = useState<"current" | "multiple">("current"),
     [targetStages, setTargetStages] = useState<string[]>([]);
-  const [templateOpen, setTemplateOpen] = useState(false),
-    [templateName, setTemplateName] = useState(""),
-    [templateScope, setTemplateScope] = useState<"personal" | "organization" | "team">("personal"),
-    [templateSaving, setTemplateSaving] = useState(false);
   const runtimePath = pathname.replace(/\/design$/, "");
   const copyRequestHandled = useRef(false);
 
@@ -340,17 +335,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     toast.success("训练已发布，结构已永久冻结");
     router.push(runtimePath);
   };
-  const saveAsTemplate = async () => {
-    if (!templateName.trim()) return;
-    setTemplateSaving(true);
-    const response = await createTrainingTemplate(sessionId, { name: templateName.trim(), scope: templateScope });
-    setTemplateSaving(false);
-    if (!response.ok) return toast.error(response.error.message || "保存模板失败");
-    toast.success("训练模板已保存，可在创建训练时直接使用");
-    setTemplateOpen(false);
-    setTemplateName("");
-  };
-
   const flowPreview = useMemo(
     () =>
       stages
@@ -409,10 +393,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               <Button variant="secondary" onClick={() => void validate()}>
                 发布检查
               </Button>
-              <Button variant="outline" disabled={dirty} title={dirty ? "请先保存当前编排" : undefined} onClick={() => { setTemplateName(`${title || design.session.title}模板`); setTemplateScope(design.session.organizationId ? "organization" : design.session.teamId ? "team" : "personal"); setTemplateOpen(true); }}>
-                保存为模板
-              </Button>
-              <Button
+             <Button
                 onClick={() => void save()}
                 loading={saving}
                 disabled={!dirty}
@@ -632,26 +613,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           danger
           loading={saving}
         />
-        <FormDialog
-          isOpen={templateOpen}
-          onClose={() => setTemplateOpen(false)}
-          onSubmit={() => void saveAsTemplate()}
-          title="保存阶段模板"
-          description="模板只保存阶段、分组和训练规则骨架，不复制题目、学员、提交或运行进度。"
-          submitText="保存模板"
-          submitDisabled={!templateName.trim()}
-          loading={templateSaving}
-          dirty={Boolean(templateName)}
-        >
-          <div className={styles.stack}>
-            <label className={styles.field}>模板名称<Input autoFocus maxLength={100} value={templateName} onChange={event => setTemplateName(event.target.value)} /></label>
-            <label className={styles.field}>可用范围<Select value={templateScope} onChange={event => setTemplateScope(event.target.value as "personal" | "organization" | "team")}>
-              <option value="personal">仅我可用</option>
-              {design.session.organizationId && <option value="organization">当前学校管理员可用</option>}
-              {design.session.teamId && <option value="team">当前团队管理员可用</option>}
-            </Select></label>
-          </div>
-        </FormDialog>
+
       </div>
     </PageFrame>
   );
