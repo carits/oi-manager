@@ -98,7 +98,7 @@ export type ProblemPage = {
 export type SourceGroup = 'school' | 'carits' | 'external'
 
 export const stageKinds = [
-  ['TRAINING', '训练'],
+  ['TRAINING', '练习'],
   ['TEACHING', '统一讲解'],
   ['REVIEW', '复盘'],
 ] as const
