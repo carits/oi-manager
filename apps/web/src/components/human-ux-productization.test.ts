@@ -6,9 +6,9 @@ const read = (path: string) => fs.readFileSync(new URL(path, import.meta.url), '
 describe('human UX productization contract', () => {
   it('uses a simple training flow and keeps coach controls optional', () => {
     const source = read('../features/training-session/ui/TrainingSessionListPage.tsx')
-    expect(source).toContain('快速创建（单阶段·全班统一）')
-    expect(source).toContain('使用阶段模板')
-    expect(source).toContain('<QuickProblemInput')
+    expect(source).toContain('快速训练')
+    expect(source).toContain('从模板创建')
+    expect(source).toContain('creationModeGrid')
     expect(source).toContain('requiredProblemCount')
     expect(source).toContain('trainingStatusLabel(item.status)')
     expect(source).toContain('trainingSessionTypeLabel(item.sessionType)')

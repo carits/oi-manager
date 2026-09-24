@@ -320,7 +320,15 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
         ? <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createCustomDraft()} loading={creating} disabled={!title.trim() || !scopeReady || !customStages.length}>创建并编排多个阶段</Button></>
         : <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createTemplateDraft()} loading={creating} disabled={!title.trim() || !chosenTemplate || !scopeReady}>创建并编排</Button></>}>
       <div className={styles.stack}>
-        <Tabs label="创建起点" value={mode} onChange={value => setMode(value as CreateMode)} items={[{ value: 'quick', label: '快速创建（单阶段·全班统一）' }, { value: 'custom', label: '自定义多阶段' }, { value: 'template', label: '使用阶段模板' }]} />
+        <div className={styles.creationModeGrid} role="radiogroup" aria-label="选择创建方式">
+          {[
+            { value: 'quick' as const, title: '快速训练', description: '单阶段、全班统一，适合日常刷题。' },
+            { value: 'custom' as const, title: '多阶段训练', description: '先搭建课堂骨架，再进入全屏设计器配置阶段。' },
+            { value: 'template' as const, title: '从模板创建', description: '从已有阶段结构开始，创建后仍可继续修改。' },
+          ].map(item => <button type="button" key={item.value} className={`${styles.creationModeCard} ${mode === item.value ? styles.creationModeCardActive : ''}`} aria-pressed={mode === item.value} onClick={() => setMode(item.value)}>
+            <strong>{item.title}</strong><span>{item.description}</span><small>{mode === item.value ? '已选择' : '选择此方式'}</small>
+          </button>)}
+        </div>
         {mode === 'quick' ? <>
           <div className={styles.designSteps}>{simpleSteps.map((label, index) => index === simpleStep ? <strong key={label}>{index + 1}. {label}</strong> : <span key={label}>{index + 1}. {label}</span>)}</div>
           {simpleStep === 0 && <div className={styles.stack}><label className={styles.field}>训练名称<Input autoFocus value={title} maxLength={200} onChange={event => setTitle(event.target.value)} /></label><label className={styles.field}>训练说明（可选）<Textarea rows={3} value={description} onChange={event => setDescription(event.target.value)} /></label><div className={styles.grid}><label className={styles.field}>开始时间<Input type="datetime-local" value={scheduledStartAt} onChange={event => setScheduledStartAt(event.target.value)} /></label><label className={styles.field}>截止时间<Input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /><small>到期后系统自动结束训练。</small></label></div></div>}
@@ -444,9 +452,22 @@ function CoachFields(props: CoachFieldsProps) {
     <label className={styles.field}>训练名称<Input value={props.title} maxLength={200} onChange={(event: React.ChangeEvent<HTMLInputElement>) => props.setTitle(event.target.value)} /></label>
     <label className={styles.field}>训练说明<Textarea rows={3} value={props.description} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => props.setDescription(event.target.value)} /></label>
     <label className={styles.field}>计划开始（可选）<Input type="datetime-local" value={props.scheduledStartAt} onChange={(event: React.ChangeEvent<HTMLInputElement>) => props.setScheduledStartAt(event.target.value)} /></label>
-    <label className={styles.field}>训练模板<Select value={props.templateKey} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setTemplateKey(event.target.value)}>{props.templates.map((item: Template) => <option value={item.key} key={item.key}>{item.name} · {item.source === 'builtin' ? '内置' : item.source === 'organization' ? '学校共享' : item.source === 'team' ? '团队共享' : '我的模板'} · {item.description}</option>)}</Select><small>只导入阶段、分组和规则骨架，题目会在设计器中显式分配。</small></label>
+    <fieldset className={styles.definitionFieldset}>
+      <legend className={styles.field}>选择阶段模板</legend>
+      <div className={styles.templateGrid} role="radiogroup" aria-label="阶段模板">
+        {props.templates.map((item: Template) => <button type="button" className={`${styles.card} ${styles.template}`} data-selected={props.templateKey === item.key} aria-pressed={props.templateKey === item.key} key={item.key} onClick={() => props.setTemplateKey(item.key)}>
+          <strong>{item.name}</strong><span>{item.description}</span><small>{item.stages.length} 个阶段 · {item.stages.some(stage => Array.isArray(stage.groups) && stage.groups.length > 0) ? '含分组' : '全班统一'} · {item.source === 'builtin' ? '内置模板' : item.source === 'organization' ? '学校共享' : item.source === 'team' ? '团队共享' : '我的模板'}</small>
+        </button>)}
+      </div>
+      <small className={styles.muted}>只导入阶段、分组和规则骨架，题目会在设计器中显式分配。</small>
+    </fieldset>
     {props.templates.find(item => item.key === props.templateKey)?.source !== 'builtin' && <Button type="button" variant="ghost" onClick={() => { const template = props.templates.find(item => item.key === props.templateKey); if (template) props.onDeleteTemplate(template) }}>停用当前自定义模板</Button>}
-    <div className={styles.grid}><label className={styles.field}>训练展示<Select value={props.rankingMode} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setRankingMode(event.target.value)}><option value="OFF">不显示榜单</option><option value="PROGRESS_ONLY">只显示完成进度</option><option value="SCORE">显示训练分数</option><option value="ACM_RANKING">显示 ACM 排名</option></Select></label><label className={styles.field}>同学状态<Select value={props.peerVisibility} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setPeerVisibility(event.target.value)}><option value="NONE">不可见</option><option value="PROGRESS">仅进度</option><option value="FULL">完整状态</option></Select></label><label className={styles.field}>迟到加入<Select value={props.joinMode} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setJoinMode(event.target.value)}><option value="CURRENT_STAGE">加入当前阶段</option><option value="TEACHER_ASSIGN">由教练分配</option></Select></label></div>
-    <div className={styles.stack}><Checkbox label="允许提示" checked={props.allowHints} onChange={(event: React.ChangeEvent<HTMLInputElement>) => props.setAllowHints(event.target.checked)} /><small className={styles.muted}>题解和阶段内讨论尚未接入学生训练工作台，因此不提供无效配置项。</small></div>
+    <details className={styles.assignmentPolicy}>
+      <summary>高级设置</summary>
+      <div className={styles.stack}>
+        <div className={styles.grid}><label className={styles.field}>训练展示<Select value={props.rankingMode} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setRankingMode(event.target.value)}><option value="OFF">不显示榜单</option><option value="PROGRESS_ONLY">只显示完成进度</option><option value="SCORE">显示训练分数</option><option value="ACM_RANKING">显示 ACM 排名</option></Select></label><label className={styles.field}>同学状态<Select value={props.peerVisibility} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setPeerVisibility(event.target.value)}><option value="NONE">不可见</option><option value="PROGRESS">仅进度</option><option value="FULL">完整状态</option></Select></label><label className={styles.field}>迟到加入<Select value={props.joinMode} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => props.setJoinMode(event.target.value)}><option value="CURRENT_STAGE">加入当前阶段</option><option value="TEACHER_ASSIGN">由教练分配</option></Select></label></div>
+        <div className={styles.stack}><Checkbox label="允许提示" checked={props.allowHints} onChange={(event: React.ChangeEvent<HTMLInputElement>) => props.setAllowHints(event.target.checked)} /><small className={styles.muted}>题解和阶段内讨论尚未接入学生训练工作台，因此不提供无效配置项。</small></div>
+      </div>
+    </details>
   </div>
 }
