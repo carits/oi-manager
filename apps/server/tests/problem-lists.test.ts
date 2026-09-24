@@ -150,6 +150,45 @@ describe('题单权限模块', () => {
         })
       expect(response.status).toBe(404)
     })
+
+
+    it('不能把另一学校题单挂到当前学校团队', async () => {
+      const schoolB = await createTestSchoolWithPrincipal('团队题单第二校园')
+      const membershipId = crypto.randomUUID()
+      await prisma.organizationMembership.create({
+        data: {
+          id: membershipId,
+          organizationId: schoolB.school.organizationId!,
+          userId: ownerUser.user.id,
+          memberRole: 'teacher',
+          relationType: 'employee',
+          status: 'active',
+          joinedAt: new Date(),
+          RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+        },
+      })
+      await prisma.organizationTeacherProfile.create({
+        data: { id: crypto.randomUUID(), membershipId, name: '跨校团队题单教师', status: 'active' },
+      })
+      const listB = await createTestProblemList({
+        ownerId: ownerUser.user.id,
+        organizationId: schoolB.school.organizationId!,
+      })
+      const teamA = await createTestTeam({
+        organizationId: schoolData.school.organizationId!,
+        ownerId: ownerUser.user.id,
+        ownerType: 'teacher',
+      })
+      const token = generateTokenFromUser(ownerUser.user)
+      const response = await createAuthenticatedRequest(app, token, { organizationId: schoolData.school.organizationId! })
+        .post(`/api/teams/${teamA.id}/problem-lists`)
+        .send({ problemListId: listB.list.id })
+
+      expect(response.status).toBe(404)
+      expect(await prisma.teamProblemList.findUnique({
+        where: { teamId_problemListId: { teamId: teamA.id, problemListId: listB.list.id } },
+      })).toBeNull()
+    })
   })
 
   // ====== CRUD 权限 ======

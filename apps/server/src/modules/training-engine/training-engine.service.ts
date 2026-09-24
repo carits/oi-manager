@@ -267,6 +267,82 @@ async function assertScopeManagement(userId: string, input: { organizationId?: s
   return { organizationId, teamId }
 }
 
+
+type TrainingRequestIdentity = {
+  accountRole?: string | null
+  organizationId?: string | null
+}
+
+function isGlobalTrainingRequest(identity: TrainingRequestIdentity) {
+  return identity.accountRole === 'platform_admin' || identity.accountRole === 'super_admin'
+}
+
+export async function assertTrainingScopeContextForUser(
+  identity: TrainingRequestIdentity,
+  scope: { organizationId?: string | null; teamId?: string | null },
+) {
+  if (isGlobalTrainingRequest(identity)) return
+  const organizationId = scope.organizationId ? String(scope.organizationId) : null
+  const teamId = scope.teamId ? String(scope.teamId) : null
+  if (organizationId && identity.organizationId !== organizationId) {
+    throw new TrainingEngineError(403, 'TRAINING_SCOPE_CONTEXT_MISMATCH', '训练范围不属于当前学校上下文')
+  }
+  if (!teamId) return
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { scope: true, organizationId: true },
+  })
+  if (!team) throw new TrainingEngineError(404, 'TRAINING_TEAM_NOT_FOUND', '训练团队不存在')
+  if (team.scope === 'campus') {
+    if (!identity.organizationId || team.organizationId !== identity.organizationId) {
+      throw new TrainingEngineError(403, 'TRAINING_SCOPE_CONTEXT_MISMATCH', '训练团队不属于当前学校上下文')
+    }
+  } else if (identity.organizationId) {
+    throw new TrainingEngineError(403, 'TRAINING_SCOPE_CONTEXT_MISMATCH', '个人团队不能在学校上下文使用')
+  }
+}
+
+export async function assertTrainingSessionContextForUser(identity: TrainingRequestIdentity, sessionId: string) {
+  if (isGlobalTrainingRequest(identity)) return
+  const session = await prisma.trainingSession.findUnique({
+    where: { id: sessionId },
+    select: {
+      organizationId: true,
+      Team: { select: { scope: true, organizationId: true } },
+    },
+  })
+  if (!session) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
+  if (session.organizationId && session.organizationId !== identity.organizationId) {
+    throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
+  }
+  if (session.Team) {
+    if (session.Team.scope === 'campus') {
+      if (!identity.organizationId || session.Team.organizationId !== identity.organizationId) {
+        throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
+      }
+    } else if (identity.organizationId) {
+      throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
+    }
+  }
+}
+
+export async function assertTrainingTemplateContextForUser(identity: TrainingRequestIdentity, templateId: string) {
+  if (isGlobalTrainingRequest(identity)) return
+  const template = await prisma.trainingSessionTemplate.findUnique({
+    where: { id: templateId },
+    select: { organizationId: true, teamId: true },
+  })
+  if (!template) throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
+  try {
+    await assertTrainingScopeContextForUser(identity, template)
+  } catch (error) {
+    if (error instanceof TrainingEngineError && ['TRAINING_SCOPE_CONTEXT_MISMATCH', 'TRAINING_TEAM_NOT_FOUND'].includes(error.code)) {
+      throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
+    }
+    throw error
+  }
+}
+
 export async function listTrainingSessionTemplates(userId: string, query: any) {
   const organizationId = query?.organizationId ? String(query.organizationId) : null
   const teamId = query?.teamId ? String(query.teamId) : null
@@ -962,10 +1038,13 @@ export async function joinTrainingSession(userId: string, sessionId: string) {
   return prisma.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId } }, update: { status: 'active', currentStageId: stageId }, create: { sessionId, userId, currentStageId: stageId } })
 }
 
-export async function listTrainingSessions(userId: string, query: any) {
+export async function listTrainingSessions(userId: string, query: any, activeOrganizationId?: string | null) {
   const role = await globalRole(userId)
   if (!role || role.status !== 'active') throw new TrainingEngineError(401, 'UNAUTHENTICATED', '请先登录')
-  const teamId = query?.teamId ? String(query.teamId) : null, organizationId = query?.organizationId ? String(query.organizationId) : null
+  const teamId = query?.teamId ? String(query.teamId) : null
+  const requestedOrganizationId = query?.organizationId ? String(query.organizationId) : null
+  const organizationId = requestedOrganizationId || (!teamId && activeOrganizationId ? activeOrganizationId : null)
+  const personalWorkspace = !teamId && !organizationId && activeOrganizationId === null
   if (teamId && !await isTeamMember(userId, teamId)) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练范围不存在')
   if (organizationId && !await isOrganizationMember(userId, organizationId)) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练范围不存在')
   const scopeManager = role.role === 'super_admin' || Boolean(teamId && await isTeamAdmin(userId, teamId)) || Boolean(organizationId && await isOrganizationContestAdmin(userId, organizationId))
@@ -980,7 +1059,9 @@ export async function listTrainingSessions(userId: string, query: any) {
               ? { Team: { organizationId }, OR: [{ createdBy: userId }, { Team: { TeamMember: { some: { userId, status: 'active', role: { in: ['owner', 'admin'] } } } } }] }
               : { Team: { organizationId, TeamMember: { some: { userId, status: 'active' } } } },
         ] }
-      : {}
+      : personalWorkspace
+        ? { organizationId: null, Team: { scope: 'personal', organizationId: null } }
+        : {}
   const visibilityWhere: Prisma.TrainingSessionWhereInput = scopeManager
     ? {}
     : { OR: [{ createdBy: userId }, { Participants: { some: { userId, status: 'active' } } }, ...((teamId || organizationId) ? [{ status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] as any } }] : [])] }

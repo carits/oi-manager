@@ -178,6 +178,10 @@ describe('feature slice contracts', () => {
         endPolicy: 'MANUAL',
         accessPolicy: 'SEQUENTIAL',
         submissionMode: 'ENABLED',
+        plannedDurationSeconds: null,
+        defaultTargetScore: null,
+        completionThreshold: null,
+        minDurationSeconds: null,
         Problems: [],
         Groups: [],
       }],
@@ -196,6 +200,10 @@ describe('feature slice contracts', () => {
         endPolicy: 'MANUAL',
         accessPolicy: 'SEQUENTIAL',
         submissionMode: 'ENABLED',
+        plannedDurationSeconds: null,
+        defaultTargetScore: null,
+        completionThreshold: null,
+        minDurationSeconds: null,
         problems: [],
         groups: [],
       }],
@@ -211,8 +219,8 @@ describe('feature slice contracts', () => {
       stageId: 'stage-2',
       suggestions: [{ participantId: 'participant-1', user: { id: 'user-1', username: 'alice' }, groupId: 'group-1', groupName: '基础巩固', reason: '上一阶段完成 1 题；按可解释的蛇形均衡顺序建议分组' }],
     }).success).toBe(true)
-    expect(TrainingProblemTimePolicySchema.safeParse({ mode: 'HARD', limitSeconds: 600 }).success).toBe(true)
-    expect(TrainingProblemTimePolicySchema.safeParse({ mode: 'HARD' }).success).toBe(false)
+    expect(TrainingProblemTimePolicySchema.safeParse({ mode: 'FORCE_SWITCH', limitSeconds: 600 }).success).toBe(true)
+    expect(TrainingProblemTimePolicySchema.safeParse({ mode: 'FORCE_SWITCH' }).success).toBe(false)
     expect(TrainingStuckPolicySchema.safeParse({ minActiveSeconds: 600, minAttempts: 3, noImprovementSeconds: 300 }).success).toBe(true)
     expect(TrainingTemplateSchema.safeParse({
       key: 'database:template-1', name: '分层课堂', sessionType: 'GENERAL', description: '', source: 'organization',

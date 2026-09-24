@@ -388,7 +388,7 @@ teamImportRouter.get('/teams', authenticate, async (req: Request, res: Response)
       })
     }
 
-    const teams = await service.getUserTeams(teacherId)
+    const teams = await service.getUserTeams(teacherId, user.organizationId)
 
     res.json({
       success: true,
@@ -464,11 +464,15 @@ teamImportRouter.post('/start', authenticate, async (req: Request, res: Response
       })
     }
 
-    // 转换 createTeam 为 'yes' 或 'no'
-    let createTeamValue: 'yes' | 'no' = 'yes'
+    // 旧通用 batch 流程只能创建新的内部团队；不创建团队会生成无法 confirm 的悬空批次。
     if (createTeam === false || createTeam === 'no') {
-      createTeamValue = 'no'
+      return res.status(422).json({
+        success: false,
+        code: 'TEAM_IMPORT_TARGET_REQUIRED',
+        message: '该兼容导入流程必须创建内部团队；VJudge/洛谷导入请使用对应的平台专用导入入口',
+      })
     }
+    const createTeamValue: 'yes' = 'yes'
 
     const result = await service.createBatch({
       operatorId: teacherId,
@@ -500,6 +504,10 @@ teamImportRouter.post('/start', authenticate, async (req: Request, res: Response
  */
 teamImportRouter.get('/:batchId/preview', authenticate, async (req: Request, res: Response) => {
   try {
+    const user = req.user
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
+      return res.status(403).json({ success: false, message: '只有教师可以使用此功能' })
+    }
     const { batchId } = req.params
 
     if (!batchId) {
@@ -509,7 +517,7 @@ teamImportRouter.get('/:batchId/preview', authenticate, async (req: Request, res
       })
     }
 
-    const preview = await service.previewBatch(batchId)
+    const preview = await service.previewBatch(batchId, user)
 
     res.json({
       success: true,
@@ -571,6 +579,7 @@ teamImportRouter.post('/:batchId/confirm', authenticate, async (req: Request, re
       data: result,
     })
   } catch (err) {
+    if (sendKnownTeamImportError(res, err)) return
     console.error('[TeamImport] Confirm error:', err)
     res.status(500).json({
       success: false,
@@ -585,6 +594,10 @@ teamImportRouter.post('/:batchId/confirm', authenticate, async (req: Request, re
  */
 teamImportRouter.get('/:batchId/result', authenticate, async (req: Request, res: Response) => {
   try {
+    const user = req.user
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
+      return res.status(403).json({ success: false, message: '只有教师可以使用此功能' })
+    }
     const { batchId } = req.params
 
     if (!batchId) {
@@ -594,7 +607,7 @@ teamImportRouter.get('/:batchId/result', authenticate, async (req: Request, res:
       })
     }
 
-    const result = await service.getImportResult(batchId)
+    const result = await service.getImportResult(batchId, user)
 
     res.json({
       success: true,
@@ -616,6 +629,10 @@ teamImportRouter.get('/:batchId/result', authenticate, async (req: Request, res:
  */
 teamImportRouter.get('/history/:teamId', authenticate, async (req: Request, res: Response) => {
   try {
+    const user = req.user
+    if (!user || !user.organizationId || !await canUseTeamImport(user.userId, user.organizationId)) {
+      return res.status(403).json({ success: false, message: '只有教师可以使用此功能' })
+    }
     const { teamId } = req.params
 
     if (!teamId) {
@@ -625,7 +642,7 @@ teamImportRouter.get('/history/:teamId', authenticate, async (req: Request, res:
       })
     }
 
-    const history = await service.getImportHistory(teamId)
+    const history = await service.getImportHistory(teamId, user)
 
     res.json({
       success: true,

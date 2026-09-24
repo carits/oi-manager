@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import TeacherHome from '@/components/organization-pages/teacher/page'
 import StudentHome from '@/components/organization-pages/student/page'
@@ -20,7 +20,6 @@ import StudentRankingsPage from '@/components/organization-pages/student/rating/
 import { TrainingSessionListPage } from '@/features/training-session/TrainingSessionListPage'
 import { SubmissionList } from '@/features/submission'
 import { useAuth } from '@/features/auth'
-import { listWorkspaces } from '@/features/workspace'
 import { BlogDiscovery } from '@/features/blog'
 import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
 
@@ -31,37 +30,13 @@ const legacyModules = new Set(['carits', 'contributions', 'students', 'teachers'
 export default function OrgPage() {
   const { module, organizationId } = useParams<{ module: string; organizationId: string }>()
   const router = useRouter()
-  const { user, activateOrganization } = useAuth()
-  const [workspaceRole, setWorkspaceRole] = useState<'school_principal' | 'teacher' | 'student' | null>(null)
-  const [ready, setReady] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setReady(false)
-    setLoadError(null)
-    void listWorkspaces().then(result => {
-      const workspace = result.workspaces.find(item => item.organizationId === organizationId)
-      if (workspace?.type === 'organization') {
-        activateOrganization(workspace)
-        setWorkspaceRole(workspace.memberRole as 'school_principal' | 'teacher' | 'student')
-      } else if (user?.organizationId === organizationId && user.organizationRole) {
-        setWorkspaceRole(user.organizationRole)
-      } else {
-        setLoadError('当前账号没有该校园的有效成员关系')
-      }
-      setReady(true)
-    }).catch(() => {
-      if (user?.organizationId === organizationId && user.organizationRole) setWorkspaceRole(user.organizationRole)
-      else setLoadError('校园工作区暂时无法加载，请刷新后重试')
-      setReady(true)
-    })
-  }, [activateOrganization, organizationId, user?.organizationId, user?.organizationRole])
-
-  const student = (workspaceRole || user?.organizationRole) === 'student'
+  const { user, status } = useAuth()
+  const contextMatches = user?.organizationId === organizationId && Boolean(user.organizationRole)
+  const workspaceRole = contextMatches ? user.organizationRole : null
+  const student = workspaceRole === 'student'
   const studentModuleAllowed = !student || studentModules.has(module)
 
   useEffect(() => {
-    if (!ready) return
     const legacyTarget: Record<string, string> = {
       carits: '/org/' + organizationId + '/management?tab=wallet',
       contributions: '/org/' + organizationId + '/rankings?tab=contribution',
@@ -70,10 +45,11 @@ export default function OrgPage() {
       wallet: '/org/' + organizationId + '/management?tab=wallet',
     }
     if (legacyTarget[module]) router.replace(legacyTarget[module])
-  }, [module, organizationId, ready, router])
+  }, [module, organizationId, router])
 
-  if (!ready || legacyModules.has(module)) return null
-  if (loadError && !workspaceRole) return <ContextualRecovery status="403" title="无法打开这所学校" description={loadError} />
+  if (legacyModules.has(module)) return <ContextualRecovery status="404" title="页面正在迁移" description="正在为你打开新的位置，请稍候。" />
+  if (status === 'degraded') return <ContextualRecovery status="error" title="校园工作区暂时无法加载" description="校园身份服务暂时不可用，请刷新后重试。" />
+  if (!contextMatches) return <ContextualRecovery status="403" title="无法打开这所学校" description="当前账号没有该校园的有效成员关系。" />
   if (!knownModules.has(module)) return <ContextualRecovery status="404" title="这里没有这个学校页面" description="链接可能已经失效，或功能位置发生了变化。" />
   if (!studentModuleAllowed) return <ContextualRecovery status="403" title="无法访问该页面" description="你当前以学生身份进入这所学校，此功能仅教师或学校负责人可以使用。" />
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />

@@ -40,7 +40,13 @@ export async function listTeamProblemLists(user: AuthUser, teamId: string) {
     if (!member) fail(403, '无权限查看该团队题单')
   }
   const items = await prisma.teamProblemList.findMany({
-    where: { teamId, ProblemList: { scope: team.scope } },
+    where: {
+      teamId,
+      ProblemList: {
+        scope: team.scope,
+        organizationId: team.scope === 'campus' ? team.organizationId : null,
+      },
+    },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     include: {
       ProblemList: {
@@ -103,9 +109,13 @@ export async function addTeamProblemList(user: AuthUser, teamId: string, problem
   if (!teamRole) fail(403, '只有团队管理员或教师成员可添加题单')
   const [list, team] = await Promise.all([
     prisma.problemList.findUnique({ where: { id: problemListId } }),
-    prisma.team.findUnique({ where: { id: teamId }, select: { scope: true } }),
+    prisma.team.findUnique({ where: { id: teamId }, select: { scope: true, organizationId: true } }),
   ])
-  if (!list || !team || list.scope !== team.scope) fail(404, '题单不存在')
+  if (!list
+    || !team
+    || list.scope !== team.scope
+    || (team.scope === 'campus' && (!team.organizationId || list.organizationId !== team.organizationId))
+    || (team.scope === 'personal' && list.organizationId !== null)) fail(404, '题单不存在')
   if (list.ownerId !== user.userId) fail(403, '只能添加自己是 owner 的题单')
   if (await prisma.teamProblemList.findUnique({ where: { teamId_problemListId: { teamId, problemListId } } })) {
     fail(409, '该题单已在团队题单库中')
