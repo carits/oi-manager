@@ -47,7 +47,7 @@ export default function OrgPage() {
     if (legacyTarget[module]) router.replace(legacyTarget[module])
   }, [module, organizationId, router])
 
-  if (legacyModules.has(module)) return null
+  if (legacyModules.has(module)) return <ContextualRecovery status="404" title="页面正在迁移" description="正在为你打开新的位置，请稍候。" />
   if (status === 'degraded') return <ContextualRecovery status="error" title="校园工作区暂时无法加载" description="校园身份服务暂时不可用，请刷新后重试。" />
   if (!contextMatches) return <ContextualRecovery status="403" title="无法打开这所学校" description="当前账号没有该校园的有效成员关系。" />
   if (!knownModules.has(module)) return <ContextualRecovery status="404" title="这里没有这个学校页面" description="链接可能已经失效，或功能位置发生了变化。" />
