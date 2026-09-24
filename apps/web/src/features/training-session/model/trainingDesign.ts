@@ -12,7 +12,8 @@ export type UnlockCondition = {
   value?: number
 }
 export type UnlockPolicy = { mode: 'ANY' | 'ALL'; conditions: UnlockCondition[] }
-export type ProblemTimePolicy = { mode: 'NONE' } | { mode: 'SOFT' | 'HARD' | 'SWITCH_REQUIRED'; limitSeconds: number }
+export type ProblemTimeAction = 'REMIND' | 'RECOMMEND_SWITCH' | 'LOCK_SUBMISSION' | 'FORCE_SWITCH'
+export type ProblemTimePolicy = { mode: 'NONE' } | { mode: ProblemTimeAction; action?: ProblemTimeAction; limitSeconds: number }
 export type StuckPolicy = { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }
 export type Assignment = {
   id?: string
@@ -23,7 +24,7 @@ export type Assignment = {
   alias?: string | null
   unlockPolicy?: UnlockPolicy | null
   targetScore?: number | null
-  scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>
+  scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }> | null
   timePolicy?: ProblemTimePolicy | null
   stuckPolicy?: StuckPolicy | null
   strategyIntervalSeconds?: number | null
@@ -50,9 +51,10 @@ export type Stage = {
   description?: string | null
   kind: 'TRAINING' | 'TEACHING' | 'REVIEW'
   audienceMode: 'ALL' | 'GROUPED'
-  lifecycle?: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'ENDED_EARLY' | 'SKIPPED'
+  lifecycle?: 'PENDING' | 'RUNNING' | 'ENDED' | 'SKIPPED'
   endPolicy: 'MANUAL' | 'TIME' | 'COMPLETION' | 'HYBRID'
   accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
+  accessScope: 'CURRENT_STAGE' | 'PREVIOUS_AND_CURRENT' | 'SESSION_ALL'
   submissionMode: 'ENABLED' | 'DISABLED'
   plannedDurationSeconds?: number | null
   defaultTargetScore?: number | null

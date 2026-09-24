@@ -60,7 +60,6 @@ export default defineConfig({
       JWT_SECRET: runtimeSecrets.jwtSecret,
       JUDGE_TOKEN: runtimeSecrets.judgeToken,
       DISABLE_BACKGROUND_JOBS: 'true',
-      ENABLE_MAINTENANCE_API: 'false',
       STORAGE_ROOT: path.join(resultsDir, 'storage'),
       TESTDATA_DIR: path.join(rootDir, 'test-results', 'testdata'),
       BACKEND_URL: 'ws://127.0.0.1:3612',

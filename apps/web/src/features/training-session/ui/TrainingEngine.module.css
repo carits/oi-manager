@@ -1,4 +1,5 @@
 .stack { display: grid; gap: var(--space-4); }
+.definitionFieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .trainingListFrame { max-width: 1240px; margin: 0 auto; }
 .listControls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
 .listFilters { display: flex; align-items: center; gap: var(--space-2); }

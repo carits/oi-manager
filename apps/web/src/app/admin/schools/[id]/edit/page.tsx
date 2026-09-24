@@ -422,7 +422,7 @@ export default function EditSchoolPage() {
                         取消
                       </Button>
                     </div>
-                    <p className={unifiedStyles.u24}>保存后将自动为该老师分配"负责人"角色，并绑定至本校</p>
+                    <p className={unifiedStyles.u24}>保存后将自动为该老师分配“负责人”角色，并绑定至本校</p>
                   </div>
                 ) : (
                   <div className={unifiedStyles.u25}>

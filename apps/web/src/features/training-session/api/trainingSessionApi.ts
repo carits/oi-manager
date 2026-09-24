@@ -95,7 +95,7 @@ export const updateTrainingHint = (sessionId: string, hintId: string, body: Endp
   apiClient.mutateContract(TrainingContracts.updateHint, `${sessionPath(sessionId)}/hints/${encodeURIComponent(hintId)}`, body)
 
 export const deleteTrainingHint = (sessionId: string, hintId: string) =>
-  apiClient.mutateContract(TrainingContracts.deleteHint, `${sessionPath(sessionId)}/hints/${encodeURIComponent(hintId)}`)
+  apiClient.mutateContract(TrainingContracts.deleteHint, `${sessionPath(sessionId)}/hints/${encodeURIComponent(hintId)}`, undefined)
 
 export const listTrainingHints = (sessionId: string, stageProblemId: string) =>
   apiClient.queryContract(TrainingContracts.listHints, `${sessionPath(sessionId)}/problems/${encodeURIComponent(stageProblemId)}/hints`)

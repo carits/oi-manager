@@ -3,11 +3,11 @@ import { AssignmentContracts } from '@oi-manager/contracts'
 import type { AuthRequest } from '../../middleware/auth'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { prisma } from '../../prisma'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import {
   AssignmentError,
   adjustAssignmentScore,
+  assertAssignmentOrganizationContext,
   createAssignmentCorrection,
   createAssignmentFeedback,
   createAssignment,
@@ -37,20 +37,14 @@ function sendError(error: unknown, res: Response) {
 }
 
 assignmentRouter.use('/assignments', authenticate)
-assignmentRouter.use('/assignments', asyncHandler(async (req: AuthRequest, res, next) => {
-  if (!req.user!.organizationId) {
-    return res.status(403).json({ success: false, code: 'ORGANIZATION_CONTEXT_REQUIRED', message: '作业仅在学校工作区可用' })
-  }
-  next()
-}))
 
 assignmentRouter.get('/assignments', asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const organizationId = req.user!.organizationId!
-    if (req.query.organizationId && String(req.query.organizationId) !== organizationId) {
+    const organizationId = req.user!.organizationId
+    if (organizationId && req.query.organizationId && String(req.query.organizationId) !== organizationId) {
       return res.status(403).json({ success: false, code: 'ORGANIZATION_CONTEXT_REQUIRED', message: '不能在当前学校上下文查看其他学校的作业' })
     }
-    const query = { ...req.query, organizationId }
+    const query = organizationId ? { ...req.query, organizationId } : req.query
     return res.json({ success: true, data: await listAssignments(req.user!.userId, query) })
   }
   catch (error) { return sendError(error, res) }
@@ -58,26 +52,20 @@ assignmentRouter.get('/assignments', asyncHandler(async (req: AuthRequest, res) 
 
 assignmentRouter.post('/assignments', asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const organizationId = req.user!.organizationId!
-    if (req.body?.organizationId && String(req.body.organizationId) !== organizationId) {
+    const organizationId = req.user!.organizationId
+    if (organizationId && req.body?.organizationId && String(req.body.organizationId) !== organizationId) {
       return res.status(403).json({ success: false, code: 'ORGANIZATION_CONTEXT_REQUIRED', message: '不能在当前学校上下文为其他学校创建作业' })
     }
-    const body = { ...req.body, organizationId }
+    const body = organizationId ? { ...req.body, organizationId } : req.body
     return res.status(201).json({ success: true, data: await createAssignment(req.user!.userId, body) })
   }
   catch (error) { return sendError(error, res) }
 }))
 
 assignmentRouter.use('/assignments/:id', asyncHandler(async (req: AuthRequest, res, next) => {
-  const organizationId = req.user!.organizationId!
-  const assignment = await prisma.assignment.findUnique({
-    where: { id: req.params.id },
-    select: { organizationId: true },
-  })
-  if (!assignment) return res.status(404).json({ success: false, code: 'ASSIGNMENT_NOT_FOUND', message: '作业不存在' })
-  if (assignment.organizationId !== organizationId) {
-    return res.status(404).json({ success: false, code: 'ASSIGNMENT_NOT_FOUND', message: '作业不存在' })
-  }
+  const organizationId = req.user!.organizationId
+  if (!organizationId) return next()
+  await assertAssignmentOrganizationContext(req.params.id, organizationId)
   next()
 }, '校验作业组织上下文失败'))
 

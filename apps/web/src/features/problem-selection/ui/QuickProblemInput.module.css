@@ -5,8 +5,8 @@
 .summary { margin: 0; color: var(--text-secondary); font-size: 13px; }
 .results { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-secondary); }
-.result[data-status='resolved'] { border-color: var(--success-color, #3a8f55); }
-.result[data-status='not_found'], .result[data-status='revision_unavailable'] { border-color: var(--warning-color, #b87800); }
+.result[data-status='resolved'] { border-color: var(--success); }
+.result[data-status='not_found'], .result[data-status='revision_unavailable'] { border-color: var(--warning); }
 .message { color: var(--text-secondary); font-size: 13px; text-align: right; }
 @media (max-width: 720px) {
   .fields { grid-template-columns: 1fr; }

@@ -17,6 +17,8 @@ export interface FixtureIds {
   team: string
   personalTeam: string
   problem: string
+  secondProblem: string
+  thirdProblem: string
   personalProblem: string
   problemList: string
   personalProblemList: string

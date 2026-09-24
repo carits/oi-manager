@@ -4,9 +4,12 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { TrainingContracts } from '@oi-manager/contracts'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
-import { prisma } from '../../prisma'
+import { trainingMetrics } from './training-metrics'
 import {
   TrainingEngineError,
+  assertTrainingScopeContextForUser,
+  assertTrainingSessionContextForUser,
+  assertTrainingTemplateContextForUser,
   archiveTrainingSession,
   createTrainingSessionTemplate,
   createTrainingHint,
@@ -14,6 +17,8 @@ import {
   createTrainingSession,
   deleteTrainingSessionTemplate,
   changeTrainingStageGroup,
+  cloneTrainingStage,
+  endTrainingStage,
   executeStageTransition,
   executeTrainingCommand,
   extendTrainingStageTime,
@@ -31,6 +36,7 @@ import {
   listTrainingEvents,
   listTrainingSessionTemplates,
   listTrainingSessions,
+  moveTrainingStageParticipant,
   openTrainingHint,
   previewTrainingParticipants,
   publishTrainingSession,
@@ -52,76 +58,20 @@ function sendError(error: unknown, res: Response) {
   throw error
 }
 
-
 function isGlobalTrainingAdmin(user: NonNullable<AuthRequest['user']>) {
   return user.accountRole === 'platform_admin' || user.accountRole === 'super_admin'
 }
 
 async function assertTrainingScopeContext(req: AuthRequest, scope: { organizationId?: string | null; teamId?: string | null }) {
-  const user = req.user!
-  if (isGlobalTrainingAdmin(user)) return
-
-  const organizationId = scope.organizationId ? String(scope.organizationId) : null
-  const teamId = scope.teamId ? String(scope.teamId) : null
-
-  if (organizationId && user.organizationId !== organizationId) {
-    throw new TrainingEngineError(403, 'TRAINING_SCOPE_CONTEXT_MISMATCH', '训练范围不属于当前学校上下文')
-  }
-  if (!teamId) return
-
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { scope: true, organizationId: true },
-  })
-  if (!team) throw new TrainingEngineError(404, 'TRAINING_TEAM_NOT_FOUND', '训练团队不存在')
-  if (team.scope === 'campus') {
-    if (!user.organizationId || team.organizationId !== user.organizationId) {
-      throw new TrainingEngineError(403, 'TRAINING_SCOPE_CONTEXT_MISMATCH', '训练团队不属于当前学校上下文')
-    }
-  } else if (user.organizationId) {
-    throw new TrainingEngineError(403, 'TRAINING_SCOPE_CONTEXT_MISMATCH', '个人团队不能在学校上下文使用')
-  }
+  await assertTrainingScopeContextForUser(req.user!, scope)
 }
 
 async function assertTrainingSessionContext(req: AuthRequest, sessionId: string) {
-  if (isGlobalTrainingAdmin(req.user!)) return
-  const session = await prisma.trainingSession.findUnique({
-    where: { id: sessionId },
-    select: {
-      organizationId: true,
-      Team: { select: { scope: true, organizationId: true } },
-    },
-  })
-  if (!session) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
-  if (session.organizationId && session.organizationId !== req.user!.organizationId) {
-    throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
-  }
-  if (session.Team) {
-    if (session.Team.scope === 'campus') {
-      if (!req.user!.organizationId || session.Team.organizationId !== req.user!.organizationId) {
-        throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
-      }
-    } else if (req.user!.organizationId) {
-      throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
-    }
-  }
+  await assertTrainingSessionContextForUser(req.user!, sessionId)
 }
 
 async function assertTrainingTemplateContext(req: AuthRequest, templateId: string) {
-  if (isGlobalTrainingAdmin(req.user!)) return
-  const template = await prisma.trainingSessionTemplate.findUnique({
-    where: { id: templateId },
-    select: { organizationId: true, teamId: true },
-  })
-  if (!template) throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
-  try {
-    await assertTrainingScopeContext(req, template)
-  } catch (error) {
-    if (error instanceof TrainingEngineError && ['TRAINING_SCOPE_CONTEXT_MISMATCH', 'TRAINING_TEAM_NOT_FOUND'].includes(error.code)) {
-      throw new TrainingEngineError(404, 'TRAINING_TEMPLATE_NOT_FOUND', '训练模板不存在')
-    }
-    throw error
-  }
+  await assertTrainingTemplateContextForUser(req.user!, templateId)
 }
 
 trainingEngineRouter.get('/training-session-templates', authenticate, asyncHandler(async (req: AuthRequest, res) => {
@@ -178,7 +128,12 @@ trainingEngineRouter.use('/training-sessions/:id', authenticate, asyncHandler(as
 }, '校验训练场次组织上下文失败'))
 
 trainingEngineRouter.get('/training-sessions/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.getWorkspace, await getTrainingWorkspace(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
+  try {
+    const workspace = await getTrainingWorkspace(req.user!.userId, req.params.id)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    trainingMetrics.recordWorkspaceQueries(1)
+    sendContractData(res, TrainingContracts.getWorkspace, workspace)
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/design', authenticate, asyncHandler(async (req: AuthRequest, res) => {
@@ -222,20 +177,58 @@ trainingEngineRouter.post('/training-sessions/:id/join', authenticate, asyncHand
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/commands', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.executeCommand, await executeTrainingCommand(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.executeCommand, req.body))) } catch (error) { return sendError(error, res) }
+  try {
+    const result = await executeTrainingCommand(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.executeCommand, req.body))
+    trainingMetrics.recordCommand(true)
+    const status = result && 'session' in result ? result.session.status : result?.status
+    if (status) trainingMetrics.observeSession(req.params.id, status)
+    sendContractData(res, TrainingContracts.executeCommand, result)
+  } catch (error) {
+    trainingMetrics.recordCommand(false)
+    return sendError(error, res)
+  }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/stage-transitions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const body = parseContractBody(TrainingContracts.transitionStage, req.body)
-    sendContractData(res, TrainingContracts.transitionStage, await executeStageTransition(req.user!.userId, req.params.id, body))
+    const workspace = await executeStageTransition(req.user!.userId, req.params.id, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.transitionStage, workspace)
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/end', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.endStage, req.body)
+    const workspace = await endTrainingStage(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.endStage, workspace)
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/clone', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.cloneStage, req.body)
+    sendContractData(res, TrainingContracts.cloneStage, await cloneTrainingStage(req.user!.userId, req.params.id, req.params.stageId, body))
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/move-participant', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.moveStageParticipant, req.body)
+    const workspace = await moveTrainingStageParticipant(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.moveStageParticipant, workspace)
   } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/group-changes', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const body = parseContractBody(TrainingContracts.changeStageGroup, req.body)
-    sendContractData(res, TrainingContracts.changeStageGroup, await changeTrainingStageGroup(req.user!.userId, req.params.id, req.params.stageId, body))
+    const workspace = await changeTrainingStageGroup(req.user!.userId, req.params.id, req.params.stageId, body)
+    trainingMetrics.observeSession(req.params.id, workspace.session.status)
+    sendContractData(res, TrainingContracts.changeStageGroup, workspace)
   } catch (error) { return sendError(error, res) }
 }))
 
@@ -313,6 +306,7 @@ trainingEngineRouter.get('/training-sessions/:id/events', authenticate, asyncHan
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
+  trainingMetrics.openSseConnection()
   res.write(`event: ready\ndata: ${JSON.stringify({ cursor })}\n\n`)
   let closed = false, busy = false
   const poll = async () => {
@@ -330,5 +324,11 @@ trainingEngineRouter.get('/training-sessions/:id/events', authenticate, asyncHan
   }
   const pollTimer = setInterval(() => void poll(), 1000)
   const heartbeatTimer = setInterval(() => res.write(': heartbeat\n\n'), 20_000)
-  req.once('close', () => { closed = true; clearInterval(pollTimer); clearInterval(heartbeatTimer) })
+  req.once('close', () => {
+    if (closed) return
+    closed = true
+    trainingMetrics.closeSseConnection()
+    clearInterval(pollTimer)
+    clearInterval(heartbeatTimer)
+  })
 }))

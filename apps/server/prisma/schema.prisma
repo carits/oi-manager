@@ -3807,9 +3807,18 @@ enum TrainingEngineStageAudienceMode {
 enum TrainingEngineStageLifecycle {
   PENDING
   RUNNING
-  COMPLETED
-  ENDED_EARLY
+  ENDED
   SKIPPED
+}
+
+enum TrainingEngineStageEndReason {
+  TIME_REACHED
+  COMPLETION_REACHED
+  HYBRID_REACHED
+  TEACHER_ENDED
+  TEACHER_ENDED_EARLY
+  SESSION_ENDED
+  SYSTEM_ENDED
 }
 
 enum TrainingEngineStageEndPolicy {
@@ -3854,7 +3863,6 @@ enum TrainingEngineProgressStatus {
   COMPLETED
   SKIPPED
   PAUSED
-  FOCUS_OVERRIDE
 }
 
 enum TrainingEngineRankingMode {
@@ -3908,8 +3916,6 @@ model TrainingSession {
   defaultSubmissionMode TrainingEngineSubmissionMode    @default(ENABLED)
   pauseMode             TrainingEnginePauseMode?
   allowHints            Boolean                         @default(true)
-  allowSolution         Boolean                         @default(false)
-  allowDiscussion       Boolean                         @default(false)
   rankingMode           TrainingEngineRankingMode       @default(PROGRESS_ONLY)
   peerVisibility        TrainingEnginePeerVisibility    @default(PROGRESS)
   joinMode              TrainingEngineJoinMode          @default(CURRENT_STAGE)
@@ -3953,7 +3959,8 @@ model TrainingSessionStage {
   runningSince           DateTime?
   activeElapsedSeconds   Int                                         @default(0)
   endedBy                String?
-  endReason              String?                                     @db.Text
+  endReason              TrainingEngineStageEndReason?
+  endNote                String?                                     @db.Text
   definitionRevision     Int                                         @default(0)
   rules                  Json?
   startedAt              DateTime?

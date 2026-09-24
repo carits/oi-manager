@@ -29,7 +29,7 @@ export default defineConfig({
       NODE_ENV: 'test', APP_ENV: 'development', COOKIE_SECURE: 'false', E2E_BUILD: 'true',
       PORT: '3512', DATABASE_URL: databaseUrl,
       JWT_SECRET: runtimeSecrets.jwtSecret, JUDGE_TOKEN: runtimeSecrets.judgeToken,
-      DISABLE_BACKGROUND_JOBS: 'true', ENABLE_MAINTENANCE_API: 'false',
+      DISABLE_BACKGROUND_JOBS: 'true',
       STORAGE_ROOT: path.join(resultsDir, 'fault-storage'), TESTDATA_DIR: path.join(resultsDir, 'testdata'),
       BACKEND_URL: 'ws://127.0.0.1:3512', SANDBOX_HOST: 'http://127.0.0.1:15052',
       STRESS_GO_JUDGE_PORT: '15053', STRESS_SANDBOX_PROXY_PORT: '15052',

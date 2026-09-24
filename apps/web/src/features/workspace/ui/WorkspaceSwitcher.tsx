@@ -54,9 +54,9 @@ export function WorkspaceSwitcher() {
   }, [])
 
   const select = (workspace: WorkspaceSummary) => {
-    const module = workspaceModule(pathname)
+    const targetModule = workspaceModule(pathname)
     setOpen(false)
-    requestNavigation(workspaceHref(workspace, module), { hard: true })
+    requestNavigation(workspaceHref(workspace, targetModule), { hard: true })
   }
 
   if (isGlobalAdmin) return null

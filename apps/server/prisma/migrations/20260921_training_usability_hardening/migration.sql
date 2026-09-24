@@ -61,7 +61,7 @@ ALTER TABLE "TrainingSessionStageProblem"
 -- A zero-match draft is orphaned; a multi-match draft is ambiguous because the
 -- old schema did not store which Stage owned it. Both cases require explicit
 -- operator reconciliation instead of guessing or deleting data.
-DO $
+DO $$
 BEGIN
   IF EXISTS (
     SELECT 1
@@ -77,7 +77,7 @@ BEGIN
     RAISE EXCEPTION
       '20260921_training_usability_hardening blocked: legacy draft has zero or multiple StageProblem matches';
   END IF;
-END $;
+END $$;
 
 ALTER TABLE "TrainingSessionProblemDraft"
   ADD COLUMN "stageProblemId" TEXT;
