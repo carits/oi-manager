@@ -146,6 +146,7 @@ authRouter.get('/me', authenticate, async (req, res) => {
         email: user.email,
         bio: user.bio,
         organizationId: result.organizationId || undefined,
+        organizationName: result.organizationName || undefined,
         organizationMembershipId: membership?.id,
         organizationRole: result.organizationRole || undefined,
         workspaceMode: result.isGlobalAdmin ? 'work' : (payload.workspaceMode === 'personal' ? 'personal' : 'work'),

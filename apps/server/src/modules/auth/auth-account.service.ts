@@ -190,6 +190,7 @@ export async function loadCurrentAccount(
     membership,
     organizationRole,
     organizationId,
+    organizationName: contextOrganization?.organizationName,
     profile,
     isGlobalAdmin,
   }
