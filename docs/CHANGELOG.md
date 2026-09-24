@@ -1895,3 +1895,10 @@ source_of_truth: Git history
 - Judge、Web、Server 构建及文档检查通过；部署状态以本次提交后的健康检查为准。
 
 - 2026-08-18: Added Lemon SPJ checker support, secure checker file storage APIs, and subset contest configuration.
+
+## 2026-09-24 — 工作区进入性能与 SSR 身份上下文收口
+
+- 组织页面不再在首屏等待 /api/workspaces 发现列表，直接消费 /api/auth/me 的组织上下文；无权访问与身份服务降级分别显示 403/503 恢复状态。
+- WorkspaceSwitcher 改为打开时懒加载，SSR 已知组织标题立即可见，避免切换器的 mount-time 请求阻塞工作区进入。
+- Server authenticate 建立请求级账号与组织授权快照，/api/auth/me 复用该快照，避免同一请求重复读取 User/Membership；JWT、权限和 API 契约保持不变。
+- 补充组织工作区 SSR 上下文架构说明，并通过 Web/Server 类型检查与定向回归测试。

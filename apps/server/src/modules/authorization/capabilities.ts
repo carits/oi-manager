@@ -66,6 +66,31 @@ export interface OrganizationAuthorization {
   accountRole: string
   roleKeys: ReadonlySet<string>
   capabilities: ReadonlySet<OrganizationCapability>
+  memberRole?: string
+  organizationRole?: string | null
+  organizationId?: string
+  organizationName?: string
+  profile?: {
+    id: string
+    name: string
+    avatar: string | null
+    rating?: number | null
+    enrollmentYear?: number | null
+    organizationRole?: string | null
+    title?: string | null
+  } | null
+}
+
+export interface AuthorizationAccountSnapshot {
+  id: string
+  username: string
+  role: string
+  status: string
+  sessionVersion: number
+  avatar: string | null
+  phone: string | null
+  email: string | null
+  bio: string | null
 }
 
 const ORGANIZATION_CAPABILITY_KEYS = new Set<OrganizationCapability>([
@@ -93,8 +118,14 @@ type AuthorizationClient = {
 function authorizationFromMembership(accountRole: string, membership: {
   id: string
   userId: string
+  organizationId?: string
+  memberRole?: string
+  organizationRole?: string | null
   RoleAssignments: Array<{ roleKey: string }>
   CapabilityGrants: Array<{ capabilityKey: string }>
+  Organization?: { name: string } | null
+  StudentProfile?: { id: string; name: string; avatar: string | null; rating: number | null; enrollmentYear: number | null } | null
+  TeacherProfile?: { id: string; name: string; avatar: string | null; title: string | null } | null
 }): OrganizationAuthorization {
   const roleKeys = new Set(membership.RoleAssignments.map(item => item.roleKey))
   const capabilities = capabilitiesFromRoles([...roleKeys])
@@ -103,25 +134,46 @@ function authorizationFromMembership(accountRole: string, membership: {
       capabilities.add(grant.capabilityKey as OrganizationCapability)
     }
   }
-  return { userId: membership.userId, membershipId: membership.id, accountRole, roleKeys, capabilities }
+  const organizationRole = organizationRoleFromRoleKeys([...roleKeys])
+  const profile = membership.memberRole === 'student' && membership.StudentProfile
+    ? { ...membership.StudentProfile }
+    : membership.memberRole !== 'student' && membership.TeacherProfile
+      ? { ...membership.TeacherProfile, organizationRole }
+      : null
+  return {
+    userId: membership.userId,
+    membershipId: membership.id,
+    accountRole,
+    roleKeys,
+    capabilities,
+    memberRole: membership.memberRole,\n    organizationRole,
+    organizationId: membership.organizationId,
+    organizationName: membership.Organization?.name,
+    profile,
+  }
 }
 
 export async function resolveOrganizationAuthorization(
   userId: string,
   organizationId: string,
   client: AuthorizationClient = prisma as AuthorizationClient,
+  accountOverride?: Pick<AuthorizationAccountSnapshot, 'role' | 'status'>,
 ): Promise<OrganizationAuthorization | null> {
   const [account, membership] = await Promise.all([
-    client.user.findUnique({ where: { id: userId }, select: { role: true, status: true } }),
+    accountOverride ? Promise.resolve(accountOverride) : client.user.findUnique({ where: { id: userId }, select: { role: true, status: true } }),
     client.organizationMembership.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
       select: {
         id: true,
         userId: true,
+        organizationId: true,
+        memberRole: true,
         status: true,
         RoleAssignments: { select: { roleKey: true } },
         CapabilityGrants: { select: { capabilityKey: true } },
-        Organization: { select: { status: true, School: { select: { directoryStatus: true } } } },
+        StudentProfile: { select: { id: true, name: true, avatar: true, rating: true, enrollmentYear: true } },
+        TeacherProfile: { select: { id: true, name: true, avatar: true, title: true } },
+        Organization: { select: { name: true, status: true, School: { select: { directoryStatus: true } } } },
       },
     }),
   ])

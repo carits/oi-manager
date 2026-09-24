@@ -133,7 +133,7 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
 authRouter.get('/me', authenticate, async (req, res) => {
   try {
     const payload = (req as any).user as JwtPayload
-    const result = await loadCurrentAccount(payload.userId, payload.organizationId)
+    const result = await loadCurrentAccount(payload.userId, payload.organizationId, (req as any).authContext)
     if (result.status === 'missing') return res.status(404).json({ success: false, message: '用户不存在' })
     if (result.status === 'disabled') return res.status(401).json({ success: false, message: '该账号已被禁用' })
     const { user, membership } = result

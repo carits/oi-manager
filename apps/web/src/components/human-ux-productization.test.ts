@@ -62,6 +62,18 @@ describe('human UX productization contract', () => {
     expect(designer).toContain('copyStageAsDraft')
   })
 
+  it('does not block organization entry on workspace discovery', () => {
+    const orgPage = read('../app/org/[organizationId]/[module]/page.tsx')
+    const switcher = read('../features/workspace/ui/WorkspaceSwitcher.tsx')
+    expect(orgPage).not.toContain('listWorkspaces')
+    expect(orgPage).not.toContain('setReady')
+    expect(orgPage).not.toContain('if (!ready')
+    expect(orgPage).toContain('user?.organizationId === organizationId')
+    expect(switcher).toContain('const openSwitcher = async () =>')
+    expect(switcher).toContain('if (loaded || loading) return')
+    expect(switcher).toContain('void openSwitcher()')
+  })
+
   it('keeps the sidebar account footer account-only and uses human workspace roles', () => {
     const shell = read('./AppShell.tsx')
     const switcher = read('../features/workspace/ui/WorkspaceSwitcher.tsx')
