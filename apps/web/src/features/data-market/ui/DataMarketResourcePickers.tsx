@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Select } from '@/components/ui/FormControls'
+import { useToast } from '@/components/ui/Toast'
 import { activityStatusLabel } from '@/lib/humanPresentation'
 import { listWorkspaces } from '@/features/workspace'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
@@ -20,14 +21,15 @@ export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, 
   const [problems, setProblems] = useState<Problem[]>([])
   const [revisions, setRevisions] = useState<Revision[]>([])
   const [quality, setQuality] = useState<Quality | null>(null)
+  const toast = useToast()
 
   useEffect(() => {
-    void listDataMarketProblems().then(setProblems).catch(() => setProblems([]))
+    void listDataMarketProblems().then(setProblems).catch(error => { setProblems([]); toast.error(error instanceof Error ? error.message : '题目列表加载失败') })
   }, [])
   useEffect(() => {
     setRevisions([]); setQuality(null)
     if (!problemId) return
-    void listDataMarketRevisions(problemId).then(setRevisions).catch(() => setRevisions([]))
+    void listDataMarketRevisions(problemId).then(setRevisions).catch(error => { setRevisions([]); toast.error(error instanceof Error ? error.message : '测试数据版本加载失败') })
   }, [problemId])
   useEffect(() => {
     setQuality(null); onQualityChange?.('')
@@ -35,10 +37,10 @@ export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, 
     void getDataMarketQuality(problemId, revisionId).then(snapshot => {
       setQuality(snapshot)
       if (snapshot?.qualityStatus === 'READY' && snapshot.criticalIssueCount === 0) onQualityChange?.(snapshot.id)
-    }).catch(() => setQuality(null))
+    }).catch(error => { setQuality(null); toast.error(error instanceof Error ? error.message : '质量证书加载失败') })
   // Callback identity must not retrigger resource loading.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [problemId, requireQuality, revisionId])
+  }, [problemId, requireQuality, revisionId, toast])
 
   return <>
     <label>题目
@@ -68,16 +70,17 @@ export function LicenseScopePicker({ license, organizationId, contestId, onOrgan
 }) {
   const [organizations, setOrganizations] = useState<WorkspaceSummary[]>([])
   const [contests, setContests] = useState<Contest[]>([])
+  const toast = useToast()
   useEffect(() => {
     if (license === 'PERSONAL') return
-    void listWorkspaces().then(result => setOrganizations(result.workspaces.filter(item => item.type === 'organization'))).catch(() => setOrganizations([]))
-  }, [license])
+    void listWorkspaces().then(result => setOrganizations(result.workspaces.filter(item => item.type === 'organization'))).catch(error => { setOrganizations([]); toast.error(error instanceof Error ? error.message : '学校列表加载失败') })
+  }, [license, toast])
   useEffect(() => {
     setContests([]); onContestChange('')
     if (license !== 'CONTEST' || !organizationId) return
-    void listDataMarketContests(organizationId).then(setContests).catch(() => setContests([]))
+    void listDataMarketContests(organizationId).then(setContests).catch(error => { setContests([]); toast.error(error instanceof Error ? error.message : '比赛列表加载失败') })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [license, organizationId])
+  }, [license, organizationId, toast])
 
   if (license === 'PERSONAL') return null
   return <>

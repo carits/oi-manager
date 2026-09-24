@@ -47,13 +47,14 @@ describe('shared submission editor product contract', () => {
     expect(editor).not.toContain('outputFilename')
   })
 
-  it('keeps Training Engine submission IO beside the shared editor and clears both drafts after success', () => {
+  it('keeps Training Engine submission IO beside the shared editor and preserves iterative drafts after submission', () => {
     expect(trainingEngine).toContain('<SubmissionCodeEditor')
     expect(trainingEngine).toContain('<SubmissionIoFields')
     expect(trainingEngine).toContain('inputFilename: submissionIo.inputFilename')
     expect(trainingEngine).toContain('outputFilename: submissionIo.outputFilename')
-    expect(trainingEngine).toContain('clearSubmissionDraft(editorDraftKey, language)')
-    expect(trainingEngine).toContain("code: '', language, inputFilename: null, outputFilename: null")
+    expect(trainingEngine).toContain('A submission is a checkpoint, not the end of the editing session.')
+    expect(trainingEngine).toContain('代码已保留，可继续修改')
+    expect(trainingEngine).not.toContain('clearSubmissionDraft(editorDraftKey, language)')
     expect(trainingEngine).toContain('切换后会保存当前语言草稿')
   })
 })

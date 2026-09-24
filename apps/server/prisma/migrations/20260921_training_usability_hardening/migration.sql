@@ -1,3 +1,17 @@
+-- Fail closed before any destructive rewrite. Runtime-active sessions must be
+-- ended/archived or handled explicitly before changing join semantics.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "TrainingSession"
+    WHERE "status" IN ('SCHEDULED', 'RUNNING', 'PAUSED')
+  ) THEN
+    RAISE EXCEPTION
+      '20260921_training_usability_hardening blocked: active TrainingSession rows exist';
+  END IF;
+END $$;
+
 -- Retire the per-participant FROM_BEGINNING timeline. Existing sessions join the
 -- global classroom Stage after this migration.
 UPDATE "TrainingSession"
@@ -42,8 +56,29 @@ WHERE p."id" = sp."problemId";
 ALTER TABLE "TrainingSessionStageProblem"
   ALTER COLUMN "titleSnapshot" SET NOT NULL;
 
--- Draft identity is StageProblem, not Problem. This prevents a repeated problem
--- in two classroom stages from silently sharing and overwriting one draft.
+-- Draft identity is StageProblem, not Problem. Before adding the new identity,
+-- require every legacy draft to have exactly one possible StageProblem target.
+-- A zero-match draft is orphaned; a multi-match draft is ambiguous because the
+-- old schema did not store which Stage owned it. Both cases require explicit
+-- operator reconciliation instead of guessing or deleting data.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "TrainingSessionProblemDraft" AS d
+    LEFT JOIN "TrainingSessionStage" AS st
+      ON st."sessionId" = d."sessionId"
+    LEFT JOIN "TrainingSessionStageProblem" AS sp
+      ON sp."stageId" = st."id"
+     AND sp."problemId" = d."problemId"
+    GROUP BY d."id"
+    HAVING COUNT(sp."id") <> 1
+  ) THEN
+    RAISE EXCEPTION
+      '20260921_training_usability_hardening blocked: legacy draft has zero or multiple StageProblem matches';
+  END IF;
+END $$;
+
 ALTER TABLE "TrainingSessionProblemDraft"
   ADD COLUMN "stageProblemId" TEXT;
 
@@ -54,15 +89,10 @@ SET "stageProblemId" = (
   JOIN "TrainingSessionStage" AS st ON st."id" = sp."stageId"
   WHERE st."sessionId" = d."sessionId"
     AND sp."problemId" = d."problemId"
-  ORDER BY st."orderIndex" ASC, sp."orderIndex" ASC
-  LIMIT 1
 );
 
--- A draft without a matching StageProblem could never be used by the
--- stage-driven workspace. Do not preserve an orphan under a false identity.
-DELETE FROM "TrainingSessionProblemDraft"
-WHERE "stageProblemId" IS NULL;
-
+-- No row is deleted by this migration. The preflight above guarantees a unique
+-- target; NOT NULL below is an additional fail-closed invariant.
 DROP INDEX IF EXISTS "TrainingSessionProblemDraft_sessionId_userId_problemId_key";
 ALTER TABLE "TrainingSessionProblemDraft"
   DROP COLUMN "problemId",

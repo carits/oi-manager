@@ -9,6 +9,37 @@ import { organizationRoleFromRoleKeys } from '../authorization/capabilities'
 
 export type WorkspaceMode = 'work' | 'personal'
 
+export interface CurrentAccountContext {
+  account: {
+    id: string
+    username: string
+    role: string
+    status: string
+    sessionVersion: number
+    avatar: string | null
+    phone: string | null
+    email: string | null
+    bio: string | null
+  }
+  organization?: {
+    organizationId?: string
+    membershipId: string
+    memberRole?: string
+    organizationRole?: string | null
+    organizationName?: string
+    profile?: {
+      id: string
+      name: string
+      avatar: string | null
+      rating?: number | null
+      enrollmentYear?: number | null
+      organizationRole?: string | null
+      title?: string | null
+    } | null
+  }
+}
+
+
 export type LoginAccountResult =
   | { ok: false; message: string }
   | {
@@ -112,26 +143,41 @@ export async function registerPersonalAccount(username: string, password: string
 export async function loadCurrentAccount(
   userId: string,
   requestedOrganizationId?: string,
+  context?: CurrentAccountContext,
 ) {
-  const user = await prisma.user.findUnique({ where: { id: userId } })
+  const user = context?.account || await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return { status: 'missing' as const }
   if (user.status === 'disabled') return { status: 'disabled' as const }
+
   const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(user.role)
-  const membership = isGlobalAdmin || !requestedOrganizationId ? null
-    : await prisma.organizationMembership.findFirst({
-        where: { organizationId: requestedOrganizationId, userId, status: 'active' },
-        include: { StudentProfile: true, TeacherProfile: true, RoleAssignments: { select: { roleKey: true } } },
-      })
+  const contextOrganization = context?.organization && requestedOrganizationId
+    && (!context.organization.organizationId || context.organization.organizationId === requestedOrganizationId)
+    ? context.organization
+    : undefined
+  const membership = contextOrganization
+    ? {
+        id: contextOrganization.membershipId,
+        organizationId: contextOrganization.organizationId || requestedOrganizationId,
+        memberRole: contextOrganization.memberRole,
+        StudentProfile: null,
+        TeacherProfile: null,
+      }
+    : isGlobalAdmin || !requestedOrganizationId ? null
+      : await prisma.organizationMembership.findFirst({
+          where: { organizationId: requestedOrganizationId, userId, status: 'active' },
+          include: { StudentProfile: true, TeacherProfile: true, RoleAssignments: { select: { roleKey: true } } },
+        })
   const organizationId = membership?.organizationId
-  const organizationRole = membership ? organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey)) : null
-  let profile: any = null
-  if (membership?.memberRole === 'student' && membership.StudentProfile) {
+  const organizationRole = contextOrganization?.organizationRole
+    || (membership && 'RoleAssignments' in membership ? organizationRoleFromRoleKeys(membership.RoleAssignments.map(item => item.roleKey)) : null)
+  let profile: any = contextOrganization?.profile || null
+  if (!profile && membership && 'StudentProfile' in membership && membership.memberRole === 'student' && membership.StudentProfile) {
     profile = {
       id: membership.StudentProfile.id, name: membership.StudentProfile.name,
       avatar: membership.StudentProfile.avatar, rating: membership.StudentProfile.rating,
       enrollmentYear: membership.StudentProfile.enrollmentYear,
     }
-  } else if (membership && membership.memberRole !== 'student' && membership.TeacherProfile) {
+  } else if (!profile && membership && 'TeacherProfile' in membership && membership.memberRole !== 'student' && membership.TeacherProfile) {
     profile = {
       id: membership.TeacherProfile.id, name: membership.TeacherProfile.name,
       avatar: membership.TeacherProfile.avatar, organizationRole,
@@ -144,6 +190,7 @@ export async function loadCurrentAccount(
     membership,
     organizationRole,
     organizationId,
+    organizationName: contextOrganization?.organizationName,
     profile,
     isGlobalAdmin,
   }

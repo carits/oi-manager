@@ -190,6 +190,42 @@ describe('rating domain HTTP and persistence', () => {
     expect(accounts.reduce((sum, account) => sum + account.rating - 1500, 0)).toBe(0)
   })
 
+  it('binds contest rating management routes to the active organization context', async () => {
+    const contest = await createFinishedContest({ title: 'Rating context guarded contest' })
+    const otherSchool = (await createTestSchoolWithPrincipal(`Rating route context ${crypto.randomUUID()}`)).school
+    const membershipId = crypto.randomUUID()
+    await prisma.organizationMembership.create({
+      data: {
+        id: membershipId,
+        organizationId: otherSchool.organizationId!,
+        userId: manager.user.id,
+        memberRole: 'teacher',
+        relationType: 'employee',
+        status: 'active',
+        joinedAt: new Date(),
+        RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+      },
+    })
+    await prisma.organizationTeacherProfile.create({
+      data: { id: crypto.randomUUID(), membershipId, name: '跨校 Rating 比赛管理员', status: 'active' },
+    })
+
+    const wrongConfig = await createAuthenticatedRequest(app, managerToken)
+      .get(`/api/trainings/${contest.id}/rating-config`)
+      .set('X-OI-Organization-ID', otherSchool.organizationId!)
+    expect(wrongConfig.status).toBe(404)
+
+    const wrongFinalize = await createAuthenticatedRequest(app, managerToken)
+      .post(`/api/trainings/${contest.id}/finalize`)
+      .set('X-OI-Organization-ID', otherSchool.organizationId!)
+    expect(wrongFinalize.status).toBe(404)
+
+    const correctConfig = await createAuthenticatedRequest(app, managerToken)
+      .get(`/api/trainings/${contest.id}/rating-config`)
+      .set('X-OI-Organization-ID', organizationId)
+    expect(correctConfig.status).toBe(200)
+  })
+
   it('freezes config after the contest starts and rejects ordinary users from global rating', async () => {
     const future = await createContestRuntimeFixture({ data: { title: 'Future contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: manager.user.id } })
     const global = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).set('X-OI-Organization-ID', organizationId).send({ scope: 'GLOBAL', expectedRevision: 0 })

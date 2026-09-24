@@ -95,3 +95,16 @@ pending 数分离。`/api/workspaces` 动态读取有效 Membership，新组织�
 - 不物理删除仍被提交、比赛、训练、题单、团队或审计引用的组织数据。
 
 详细状态机见 [组织申请、邀请与成员关系](../ORGANIZATION_JOIN.md)，鉴权边界见 [认证与权限](../AUTHORIZATION.md)。
+
+## 工作区进入与 SSR 上下文（2026-09-24）
+
+组织身份是请求上下文，不写入账号身份。/org/:organizationId/* 的服务端布局必须把 URL 中的 organizationId 传给 getServerSession，由服务端以 X-OI-Organization-ID 调用 /api/auth/me，从而在 SSR 阶段解析当前成员关系和组织角色。页面不得在首屏渲染前等待 /api/workspaces 发现列表，也不得把账号角色 user 当作组织角色授权。
+
+WorkspaceSwitcher 只在用户主动打开切换器时懒加载组织列表；当前组织标题优先使用 SSR 返回的组织上下文。组织访问被拒绝返回 403，身份服务不可用返回 503/degraded，均由页面显示明确恢复提示。该约束保证个人 → 组织、组织 A → 组织 B 和组织 → 个人切换不因额外发现请求阻塞。
+
+## 2026-09-24 — 工作区进入性能与 SSR 身份上下文收口
+
+- 组织页面不再在首屏等待 /api/workspaces 发现列表，直接消费 /api/auth/me 的组织上下文；无权访问与身份服务降级分别显示 403/503 恢复状态。
+- WorkspaceSwitcher 改为打开时懒加载，SSR 已知组织标题立即可见，避免切换器的 mount-time 请求阻塞工作区进入。
+- Server authenticate 建立请求级账号与组织授权快照，/api/auth/me 复用该快照，避免同一请求重复读取 User/Membership；JWT、权限和 API 契约保持不变。
+- 补充组织工作区 SSR 上下文架构说明，并通过 Web/Server 类型检查与定向回归测试。

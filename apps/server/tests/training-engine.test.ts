@@ -1274,6 +1274,92 @@ describe('Stage-driven Training Engine', () => {
     })).toMatchObject({ effectiveMode: 'IMMEDIATE', reason: 'Runtime command group move' })
   })
 
+  it('binds Training Engine list, create, direct-id and templates to the active organization context', async () => {
+    const otherSchool = await createTestUser({ organization: { role: 'teacher' } })
+    const otherOrganizationId = otherSchool.organization!.organizationId
+    const membershipId = crypto.randomUUID()
+    await prisma.organizationMembership.create({
+      data: {
+        id: membershipId,
+        organizationId: otherOrganizationId,
+        userId: coach.user.id,
+        memberRole: 'teacher',
+        relationType: 'employee',
+        status: 'active',
+        joinedAt: new Date(),
+        RoleAssignments: { create: { id: crypto.randomUUID(), roleKey: 'teacher', source: 'test_fixture' } },
+      },
+    })
+    await prisma.organizationTeacherProfile.create({
+      data: { id: crypto.randomUUID(), membershipId, name: '跨校训练教师', status: 'active' },
+    })
+    const studentB = await createTestUser({ organization: { role: 'student', organizationId: otherOrganizationId } })
+    const token = generateTokenFromUser(coach.user)
+    const currentOrganizationId = coach.organization!.organizationId
+
+    const personalCreated = await createSession()
+    const requestB = createAuthenticatedRequest(app, token, { organizationId: otherOrganizationId })
+    const createdB = await requestB.post('/api/training-sessions').send({
+      title: '学校B训练',
+      organizationId: otherOrganizationId,
+      participantUserIds: [studentB.user.id],
+      settings: { participantTarget: 'custom_students' },
+      stages: [{
+        name: '训练', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL',
+        accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED',
+        problems: [{ problemId: problem.id }],
+      }],
+    })
+    expect(createdB.status).toBe(201)
+    const sessionId = createdB.body.data.id as string
+
+    const personalList = await createAuthenticatedRequest(app, token).get('/api/training-sessions?page=1&pageSize=100')
+    expect(personalList.status).toBe(200)
+    expect(personalList.body.data.items.map((item: any) => item.id)).toContain(personalCreated.id)
+    expect(personalList.body.data.items.map((item: any) => item.id)).not.toContain(sessionId)
+
+    const implicitBList = await requestB.get('/api/training-sessions?page=1&pageSize=100')
+    expect(implicitBList.status).toBe(200)
+    expect(implicitBList.body.data.items.map((item: any) => item.id)).toContain(sessionId)
+    expect(implicitBList.body.data.items.map((item: any) => item.id)).not.toContain(personalCreated.id)
+
+    const requestA = createAuthenticatedRequest(app, token, { organizationId: currentOrganizationId })
+    const crossList = await requestA.get(`/api/training-sessions?organizationId=${otherOrganizationId}`)
+    expect(crossList.status).toBe(403)
+    expect(crossList.body.code).toBe('TRAINING_SCOPE_CONTEXT_MISMATCH')
+
+    const crossCreate = await requestA.post('/api/training-sessions').send({
+      title: '不应创建到学校B',
+      organizationId: otherOrganizationId,
+      participantUserIds: [studentB.user.id],
+      settings: { participantTarget: 'custom_students' },
+      stages: [{
+        name: '训练', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL',
+        accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED',
+        problems: [{ problemId: problem.id }],
+      }],
+    })
+    expect(crossCreate.status).toBe(403)
+
+    const crossDirect = await requestA.get(`/api/training-sessions/${sessionId}`)
+    expect(crossDirect.status).toBe(404)
+
+    const correctDirect = await requestB.get(`/api/training-sessions/${sessionId}`)
+    expect(correctDirect.status).toBe(200)
+
+    const savedTemplate = await requestB
+      .post(`/api/training-sessions/${sessionId}/templates`)
+      .send({ name: '学校B训练模板', scope: 'organization' })
+    expect(savedTemplate.status).toBe(201)
+    const templateId = String(savedTemplate.body.data.key).replace('database:', '')
+
+    const crossDeleteTemplate = await requestA.delete(`/api/training-session-templates/${templateId}`)
+    expect(crossDeleteTemplate.status).toBe(404)
+
+    const correctDeleteTemplate = await requestB.delete(`/api/training-session-templates/${templateId}`)
+    expect(correctDeleteTemplate.status).toBe(200)
+  })
+
   it('loads design problem metadata through the declared :problemId route parameter', async () => {
     const created = await createSession()
     const response = await createAuthenticatedRequest(app, generateTokenFromUser(coach.user))

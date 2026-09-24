@@ -84,6 +84,76 @@ describe('file storage security', () => {
     expect(inactive.status).toBe(403)
   })
 
+  it('supports canonical organization contest files without requiring a team and isolates active organization context', async () => {
+    const schoolA = await createTestSchool({ name: 'Contest File School A' })
+    const schoolB = await createTestSchool({ name: 'Contest File School B' })
+    const manager = await createTestUser({ organization: { role: 'school_principal', organizationId: schoolA.organizationId! } })
+    const contest = await prisma.contest.create({
+      data: {
+        id: crypto.randomUUID(),
+        createdBy: manager.user.id,
+        organizationId: schoolA.organizationId!,
+        title: 'Organization Contest Files',
+        contestDate: new Date(),
+        startAt: new Date(Date.now() + 60_000),
+        endAt: new Date(Date.now() + 120_000),
+        scope: 'campus',
+        status: 'upcoming',
+        type: 'contest',
+      },
+    })
+
+    const local = await request(app)
+      .get(`/api/files/by-owner/contest/${contest.id}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
+      .set('x-oi-organization-id', schoolA.organizationId!)
+    expect(local.status).toBe(200)
+
+    const privateFile = await prisma.file.create({
+      data: {
+        id: crypto.randomUUID(),
+        relativePath: 'private/contest',
+        fileName: 'contest-note.txt',
+        originalName: 'contest-note.txt',
+        mimeType: 'text/plain',
+        fileSize: 4,
+        isPublic: false,
+        accessLevel: 'private',
+        ownerType: 'contest',
+        ownerId: contest.id,
+        category: 'attachment',
+        status: 'active',
+      },
+    })
+    const metadata = await request(app)
+      .get(`/api/files/${privateFile.id}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
+      .set('x-oi-organization-id', schoolA.organizationId!)
+    expect(metadata.status).toBe(200)
+
+    await prisma.organizationMembership.create({
+      data: {
+        id: crypto.randomUUID(),
+        organizationId: schoolB.organizationId!,
+        userId: manager.user.id,
+        memberRole: 'school_principal',
+        relationType: 'employee',
+        status: 'active',
+        joinedAt: new Date(),
+      },
+    })
+    const crossOrganization = await request(app)
+      .get(`/api/files/by-owner/contest/${contest.id}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
+      .set('x-oi-organization-id', schoolB.organizationId!)
+    expect(crossOrganization.status).toBe(403)
+    const crossMetadata = await request(app)
+      .get(`/api/files/${privateFile.id}`)
+      .set('Cookie', `oi_session=${tokenFor(manager)}`)
+      .set('x-oi-organization-id', schoolB.organizationId!)
+    expect(crossMetadata.status).toBe(404)
+  })
+
   it('does not let global administrators browse arbitrary user files', async () => {
     const owner = await createTestUser({ organization: { role: 'student' } })
     const admin = await createTestUser({ accountRole: 'platform_admin' })

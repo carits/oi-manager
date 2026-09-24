@@ -16,6 +16,12 @@
 .problemPicker { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2); display: grid; gap: var(--space-1); }
 .template { cursor: pointer; text-align: left; }
 .template[data-selected='true'] { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+.creationModeGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.creationModeCard { display: grid; gap: var(--space-2); min-height: 150px; padding: var(--space-4); text-align: left; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text-primary); cursor: pointer; }
+.creationModeCard:hover, .creationModeCard:focus-visible { border-color: var(--primary); }
+.creationModeCardActive { border-color: var(--primary); background: var(--primary-light); box-shadow: 0 0 0 2px var(--primary-light); }
+.creationModeCard span, .creationModeCard small, .template span, .template small { color: var(--text-muted); }
+.templateGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-3); }
 .workspace { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr) minmax(250px, 340px); gap: var(--space-4); align-items: start; }
 .rail { display: grid; gap: var(--space-2); position: sticky; top: var(--space-4); }
 .stage { display: grid; gap: var(--space-2); }
@@ -80,4 +86,4 @@
 .publishChecklist span { font-size: 1.2rem; font-weight: 700; }
 @media (max-width: 1180px) { .designWorkspace { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); } .designColumn:last-child { grid-column: 1 / -1; } }
 @media (max-width: 1000px) { .workspace { grid-template-columns: 220px minmax(0, 1fr); } .coach { grid-column: 1 / -1; } .designSteps { grid-template-columns: 1fr; } .designSteps > * { text-align: left; border-right: 0; border-bottom: 1px solid var(--border); } .basicGrid { grid-template-columns: 1fr; } }
-@media (max-width: 720px) { .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } }
+@media (max-width: 720px) { .creationModeGrid { grid-template-columns: 1fr; } .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } }
