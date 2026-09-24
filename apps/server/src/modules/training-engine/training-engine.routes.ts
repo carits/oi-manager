@@ -7,6 +7,9 @@ import { parseContractBody, parseContractQuery, sendContractData, sendContractEr
 import { trainingMetrics } from './training-metrics'
 import {
   TrainingEngineError,
+  assertTrainingScopeContextForUser,
+  assertTrainingSessionContextForUser,
+  assertTrainingTemplateContextForUser,
   archiveTrainingSession,
   createTrainingSessionTemplate,
   createTrainingHint,
@@ -55,29 +58,74 @@ function sendError(error: unknown, res: Response) {
   throw error
 }
 
+function isGlobalTrainingAdmin(user: NonNullable<AuthRequest['user']>) {
+  return user.accountRole === 'platform_admin' || user.accountRole === 'super_admin'
+}
+
+async function assertTrainingScopeContext(req: AuthRequest, scope: { organizationId?: string | null; teamId?: string | null }) {
+  await assertTrainingScopeContextForUser(req.user!, scope)
+}
+
+async function assertTrainingSessionContext(req: AuthRequest, sessionId: string) {
+  await assertTrainingSessionContextForUser(req.user!, sessionId)
+}
+
+async function assertTrainingTemplateContext(req: AuthRequest, templateId: string) {
+  await assertTrainingTemplateContextForUser(req.user!, templateId)
+}
+
 trainingEngineRouter.get('/training-session-templates', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.listTemplates, await listTrainingSessionTemplates(req.user!.userId, parseContractQuery(TrainingContracts.listTemplates, req.query))) } catch (error) { return sendError(error, res) }
+  try {
+    const query = parseContractQuery(TrainingContracts.listTemplates, req.query)
+    await assertTrainingScopeContext(req, query)
+    sendContractData(res, TrainingContracts.listTemplates, await listTrainingSessionTemplates(req.user!.userId, query))
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.delete('/training-session-templates/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.deleteTemplate, await deleteTrainingSessionTemplate(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
+  try {
+    await assertTrainingTemplateContext(req, req.params.id)
+    sendContractData(res, TrainingContracts.deleteTemplate, await deleteTrainingSessionTemplate(req.user!.userId, req.params.id))
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.listSessions, await listTrainingSessions(req.user!.userId, parseContractQuery(TrainingContracts.listSessions, req.query))) } catch (error) { return sendError(error, res) }
+  try {
+    const query = parseContractQuery(TrainingContracts.listSessions, req.query)
+    await assertTrainingScopeContext(req, query)
+    const activeOrganizationId = isGlobalTrainingAdmin(req.user!) ? undefined : req.user!.organizationId || null
+    sendContractData(res, TrainingContracts.listSessions, await listTrainingSessions(req.user!.userId, query, activeOrganizationId))
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.createSession, await createTrainingSession(req.user!.userId, parseContractBody(TrainingContracts.createSession, req.body)), 201) } catch (error) { return sendError(error, res) }
+  try {
+    const body = parseContractBody(TrainingContracts.createSession, req.body)
+    await assertTrainingScopeContext(req, body)
+    sendContractData(res, TrainingContracts.createSession, await createTrainingSession(req.user!.userId, body), 201)
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/templates', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.createTemplate, await createTrainingSessionTemplate(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.createTemplate, req.body)), 201) } catch (error) { return sendError(error, res) }
+  try {
+    await assertTrainingSessionContext(req, req.params.id)
+    sendContractData(res, TrainingContracts.createTemplate, await createTrainingSessionTemplate(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.createTemplate, req.body)), 201)
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/participant-preview', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.previewParticipants, await previewTrainingParticipants(req.user!.userId, parseContractBody(TrainingContracts.previewParticipants, req.body))) } catch (error) { return sendError(error, res) }
+  try {
+    const body = parseContractBody(TrainingContracts.previewParticipants, req.body)
+    await assertTrainingScopeContext(req, body)
+    sendContractData(res, TrainingContracts.previewParticipants, await previewTrainingParticipants(req.user!.userId, body))
+  } catch (error) { return sendError(error, res) }
 }))
+
+trainingEngineRouter.use('/training-sessions/:id', authenticate, asyncHandler(async (request, _res, next) => {
+  const req = request as AuthRequest
+  await assertTrainingSessionContext(req, req.params.id)
+  next()
+}, '校验训练场次组织上下文失败'))
 
 trainingEngineRouter.get('/training-sessions/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {

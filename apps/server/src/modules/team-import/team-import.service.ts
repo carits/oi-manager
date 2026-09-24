@@ -61,13 +61,14 @@ export class TeamImportService {
   /**
    * 获取用户管理的团队列表
    */
-  async getUserTeams(teacherId: string) {
+  async getUserTeams(teacherId: string, organizationId: string) {
     const adminMembers = await prisma.teamMember.findMany({
       where: {
         userId: teacherId,
         userType: 'teacher',
         role: { in: ['owner', 'admin'] },
         status: 'active',
+        Team: { scope: 'campus', organizationId },
       },
       include: {
         Team: {
@@ -194,6 +195,7 @@ export class TeamImportService {
       data: {
         id: crypto.randomUUID(),
         teamId: teamId || null,
+        organizationId: params.organizationId,
         operatorId: params.operatorId,
         platform: params.platform,
         rawInput: params.rawData,
@@ -286,7 +288,7 @@ export class TeamImportService {
   /**
    * 获取预览数据
    */
-  async previewBatch(batchId: string): Promise<PreviewResponse> {
+  async previewBatch(batchId: string, user: any): Promise<PreviewResponse> {
     const batch = await prisma.teamMemberImportBatch.findUnique({
       where: { id: batchId },
       include: {
@@ -298,7 +300,8 @@ export class TeamImportService {
       },
     })
 
-    if (!batch) {
+    const batchOrganizationId = batch?.organizationId || batch?.Team?.organizationId || null
+    if (!batch || !user?.organizationId || !batchOrganizationId || batchOrganizationId !== user.organizationId) {
       throw new Error('导入批次不存在')
     }
 
@@ -377,7 +380,7 @@ export class TeamImportService {
       where: { id: params.batchId },
     })
 
-    if (!batch) {
+    if (!batch || !user?.organizationId || !batch.organizationId || batch.organizationId !== user.organizationId) {
       throw new Error('导入批次不存在')
     }
 
@@ -546,12 +549,12 @@ export class TeamImportService {
   /**
    * 获取导入结果
    */
-  async getImportResult(batchId: string): Promise<ImportResult & { batch: any }> {
+  async getImportResult(batchId: string, user: any): Promise<ImportResult & { batch: any }> {
     const batch = await prisma.teamMemberImportBatch.findUnique({
       where: { id: batchId },
     })
 
-    if (!batch) {
+    if (!batch || !user?.organizationId || !batch.organizationId || batch.organizationId !== user.organizationId) {
       throw new Error('导入批次不存在')
     }
 
@@ -591,9 +594,13 @@ export class TeamImportService {
   /**
    * 获取团队的导入历史
    */
-  async getImportHistory(teamId: string) {
+  async getImportHistory(teamId: string, user: any) {
+    const team = await teamService.assertTeamScope(teamId, user)
+    if (!team.organizationId || !user?.organizationId || team.organizationId !== user.organizationId) {
+      throw new Error('团队不存在')
+    }
     return prisma.teamMemberImportBatch.findMany({
-      where: { teamId },
+      where: { teamId, organizationId: user.organizationId },
       orderBy: { createdAt: 'desc' },
       take: 10,
     })
