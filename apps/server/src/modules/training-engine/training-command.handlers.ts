@@ -103,12 +103,25 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     }
   }
 
+  const problemInActiveUnit = async (stageProblemId: string) => {
+    if (current.groupingModelVersion >= 2) {
+      let groupIds: string[] | undefined
+      if (targetType === 'GROUP' && targetId) groupIds = [targetId]
+      if (targetType === 'USER' && targetId) {
+        const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } }, select: { groupId: true } })
+        groupIds = participant?.groupId ? [participant.groupId] : []
+      }
+      const units = await tx.trainingSessionStageGroup.findMany({ where: { groupId: groupIds ? { in: groupIds } : { not: null }, status: { in: ['RUNNING', 'PAUSED'] } }, include: { ProblemPlans: { select: { stageProblemId: true } } } })
+      return units.some(unit => unit.ProblemPlans.some(plan => plan.stageProblemId === stageProblemId))
+    }
+    return Boolean(session.currentStageId && session.Stages.find((stage: any) => stage.id === session.currentStageId)?.Problems.some((problem: any) => problem.id === stageProblemId))
+  }
+
   const focusProblem = async () => {
     if (current.status !== 'RUNNING') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有进行中的训练可以聚焦题目')
     const stageProblemId = String(payload.stageProblemId || '')
     if (
-      !session.currentStageId
-      || !session.Stages.find((stage: any) => stage.id === session.currentStageId)?.Problems.some((problem: any) => problem.id === stageProblemId)
+      !(await problemInActiveUnit(stageProblemId))
     ) {
       throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能聚焦当前阶段的题目')
     }
@@ -175,8 +188,7 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     if (
       type === 'LOCK_PROBLEM'
       && (
-        !session.currentStageId
-        || !session.Stages.find((stage: any) => stage.id === session.currentStageId)?.Problems.some((problem: any) => problem.id === String(payload.stageProblemId))
+        !(await problemInActiveUnit(String(payload.stageProblemId)))
       )
     ) {
       throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能锁定当前阶段的题目')
@@ -206,8 +218,7 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
       type === 'UNLOCK_PROBLEM'
       && payload.stageProblemId
       && (
-        !session.currentStageId
-        || !session.Stages.find((stage: any) => stage.id === session.currentStageId)?.Problems.some((problem: any) => problem.id === String(payload.stageProblemId))
+        !(await problemInActiveUnit(String(payload.stageProblemId)))
       )
     ) {
       throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能解锁当前阶段的题目')
@@ -240,8 +251,7 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     if (
       payload.stageProblemId
       && (
-        !session.currentStageId
-        || !session.Stages.find((stage: any) => stage.id === session.currentStageId)?.Problems.some((problem: any) => problem.id === String(payload.stageProblemId))
+        !(await problemInActiveUnit(String(payload.stageProblemId)))
       )
     ) {
       throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '个人干预只能作用于当前阶段的题目')
@@ -287,8 +297,7 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     const stageProblemId = String(payload.stageProblemId || '')
     if (
       !stageProblemId
-      || !session.currentStageId
-      || !session.Stages.find((stage: any) => stage.id === session.currentStageId)?.Problems.some((problem: any) => problem.id === stageProblemId)
+      || !(await problemInActiveUnit(stageProblemId))
     ) {
       throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE', '只能清除当前阶段题目的卡题状态')
     }
