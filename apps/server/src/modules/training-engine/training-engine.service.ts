@@ -1284,7 +1284,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   if (input.action === 'skip_pending') {
     const stage = current.Stages.find(item => item.id === input.stageId)
     if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '只能跳过尚未开始的阶段')
-    await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endNote: input.reason } })
+    await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'SKIPPED', endedAt: at, endNote: input.reason } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_SKIPPED, 'ALL', null, { stageId: stage.id, reason: input.reason, ...eventMeta })
     trainingMetrics.recordStageTransition()
@@ -1310,7 +1310,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
           : 'TEACHER_ENDED'
   )
 
-  await tx.trainingSessionStage.update({ where: { id: running.id }, data: { lifecycle: 'ENDED', activeElapsedSeconds: { increment }, runningSince: null, endedAt: at, endedBy: input.actorUserId, endReason, endNote: input.reason } })
+  await tx.trainingSessionStage.update({ where: { id: running.id }, data: { lifecycle: 'ENDED', activeElapsedSeconds: { increment }, runningSince: null, endedAt: at, endReason, endNote: input.reason } })
   await appendEvent(tx, input.sessionId, TrainingEventTypes.STAGE_ENDED, 'ALL', null, {
     stageId: running.id,
     outcome,
@@ -1319,7 +1319,7 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
     ...eventMeta,
   })
   if (shouldEnd) {
-    await tx.trainingSessionStage.updateMany({ where: { sessionId: input.sessionId, lifecycle: 'PENDING' }, data: { lifecycle: 'SKIPPED', endedAt: at, endedBy: input.actorUserId, endNote: input.reason || '整场训练已结束' } })
+    await tx.trainingSessionStage.updateMany({ where: { sessionId: input.sessionId, lifecycle: 'PENDING' }, data: { lifecycle: 'SKIPPED', endedAt: at, endNote: input.reason || '整场训练已结束' } })
     await tx.trainingSessionOverlay.updateMany({ where: { sessionId: input.sessionId, status: 'active' }, data: { status: 'ended', endedAt: at } })
     await tx.trainingSession.update({ where: { id: input.sessionId }, data: { status: 'ENDED', endedAt: at, runningSince: null, pausedAt: null, pauseMode: null, activeElapsedSeconds: { increment: increment }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
     await appendEvent(tx, input.sessionId, TrainingEventTypes.SESSION_ENDED, 'ALL', null, { stageId: running.id, outcome, endReason, reason: input.reason, ...eventMeta })
@@ -1338,8 +1338,64 @@ async function applyStageTransition(tx: Prisma.TransactionClient, input: {
   return 'advanced' as const
 }
 
+async function applyV2StageTransition(tx: Prisma.TransactionClient, sessionId: string, input: { action: StageTransitionAction; stageId: string; outcome?: 'completed' | 'ended_early'; actorUserId: string | null; reason?: string | null }) {
+  const session = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId }, include: { Stages: { orderBy: { orderIndex: 'asc' } }, Groups: { where: { status: 'active' }, orderBy: { orderIndex: 'asc' }, include: { StageGroups: { select: { id: true, stageId: true, status: true } } } } } })
+  const stage = session.Stages.find(item => item.id === input.stageId)
+  if (!stage) throw new TrainingEngineError(404, 'TRAINING_STAGE_NOT_FOUND', '阶段不存在')
+  const now = new Date()
+  if (input.action === 'skip_pending') {
+    const pending = await tx.trainingSessionStageGroup.findMany({ where: { stageId: stage.id, status: 'PENDING' }, select: { id: true } })
+    if (stage.lifecycle !== 'PENDING' && pending.length === 0) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '只能跳过尚未开始的阶段')
+    if (pending.length) await tx.trainingSessionStageGroup.updateMany({ where: { id: { in: pending.map(item => item.id) } }, data: { status: 'SKIPPED', endedAt: now, endReason: input.reason || 'SKIPPED' } })
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+    return
+  }
+  if (input.action === 'start') {
+    if (session.status !== 'SCHEDULED') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有已发布训练可以开始')
+    const firstPending = stage.orderIndex === Math.min(...session.Stages.map(item => item.orderIndex))
+    if (!firstPending) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_INVALID', '只能启动时间轴中的第一个阶段')
+    for (const group of session.Groups) await applyGroupRuntimeAction(tx, sessionId, group.id, 'start', input.actorUserId || 'system', input.reason || undefined)
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { status: 'RUNNING', startedAt: session.startedAt || now, runningSince: now, pausedAt: null, pauseMode: null, currentStageId: null, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+    await appendEvent(tx, sessionId, TrainingEventTypes.SESSION_STARTED, 'ALL', null, { stageId: stage.id, v2: true })
+    return
+  }
+  const activeUnits = await tx.trainingSessionStageGroup.findMany({ where: { stageId: stage.id, status: { in: ['RUNNING', 'PAUSED'] } }, select: { id: true, status: true, runningSince: true } })
+  if (!activeUnits.length) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '当前阶段没有运行中的训练组')
+  if (input.action === 'end_session') {
+    for (const unit of activeUnits) {
+      const elapsed = unit.status === 'RUNNING' && unit.runningSince ? Math.max(0, Math.floor((now.getTime() - unit.runningSince.getTime()) / 1000)) : 0
+      await tx.trainingSessionStageGroup.update({ where: { id: unit.id }, data: { status: 'ENDED', runningSince: null, activeElapsedSeconds: { increment: elapsed }, endedAt: now, endReason: input.reason || (input.outcome === 'ended_early' ? 'TEACHER_ENDED_EARLY' : 'SESSION_ENDED') } })
+    }
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { status: 'ENDED', endedAt: now, runningSince: null, pausedAt: null, pauseMode: null, currentStageId: null, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+    await appendEvent(tx, sessionId, TrainingEventTypes.SESSION_ENDED, 'ALL', null, { stageId: stage.id, v2: true, reason: input.reason || null })
+    return
+  }
+  for (const unit of activeUnits) {
+    const group = session.Groups.find(candidate => candidate.StageGroups?.some((item: any) => item.id === unit.id))
+    if (group) await applyGroupRuntimeAction(tx, sessionId, group.id, 'advance', input.actorUserId || 'system', input.reason || undefined)
+  }
+  await tx.trainingSession.update({ where: { id: sessionId }, data: { status: session.status === 'PAUSED' ? 'PAUSED' : 'RUNNING', currentStageId: null, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+  await appendEvent(tx, sessionId, TrainingEventTypes.STAGE_ADVANCED, 'ALL', null, { stageId: stage.id, v2: true, reason: input.reason || null })
+}
+
 export async function executeStageTransition(userId: string, sessionId: string, body: any) {
   const session = await assertManage(userId, sessionId)
+  if (session.groupingModelVersion >= 2) {
+    const expectedRevision = Number(body?.expectedRevision)
+    if (!Number.isInteger(expectedRevision) || expectedRevision !== session.statusRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+    const action = String(body?.action || '').toLowerCase() as StageTransitionAction
+    if (!['start', 'advance', 'skip_pending', 'end_session'].includes(action)) throw new TrainingEngineError(422, 'INVALID_TRAINING_STAGE_TRANSITION', '不支持的阶段转换')
+    const reason = body?.reason ? boundedText(body.reason, 2000, '转换原因', 1) : null
+    const outcome = String(body?.outcome || 'completed').toLowerCase() as 'completed' | 'ended_early'
+    if ((action === 'skip_pending' || outcome === 'ended_early') && !reason) throw new TrainingEngineError(422, 'TRAINING_STAGE_REASON_REQUIRED', '提前结束或跳过阶段必须填写原因')
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
+      const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId }, select: { statusRevision: true } })
+      if (current.statusRevision !== expectedRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+      await applyV2StageTransition(tx, sessionId, { action, stageId: String(body?.stageId || ''), outcome, actorUserId: userId, reason })
+    })
+    return getTrainingWorkspace(userId, sessionId)
+  }
   const expectedRevision = Number(body?.expectedRevision)
   if (expectedRevision !== session.statusRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
   const action = String(body?.action || '').toLowerCase()
@@ -2557,8 +2613,46 @@ export async function processDueTrainingSessions(now = new Date()) {
       })
     } catch { /* another worker or command won the state transition */ }
   }
-  const running = await prisma.trainingSession.findMany({ where: { status: 'RUNNING', currentStageId: { not: null } }, include: { Stages: { orderBy: { orderIndex: 'asc' }, include: { Problems: { include: { Plans: true } }, ParticipantAssignments: true } }, Participants: { where: { status: 'active' }, include: { Progress: true } } }, take: 100 })
+  const running = await prisma.trainingSession.findMany({ where: { status: 'RUNNING', OR: [{ currentStageId: { not: null } }, { groupingModelVersion: { gte: 2 } }] }, include: { Stages: { orderBy: { orderIndex: 'asc' }, include: { Problems: { include: { Plans: true } }, ParticipantAssignments: true } }, Groups: { where: { status: 'active' }, include: { StageGroups: { include: { Stage: { select: { id: true, orderIndex: true, endPolicy: true } } } } } }, Participants: { where: { status: 'active' }, include: { Progress: true } } }, take: 100 })
   for (const session of running) {
+    if (session.groupingModelVersion >= 2) {
+      const sessionSettings = parseJsonObject(session.settings)
+      const dueAt = sessionSettings.dueAt ? new Date(String(sessionSettings.dueAt)) : null
+      const activeUnits = session.Groups.flatMap((group: any) => group.StageGroups.filter((unit: any) => ['RUNNING', 'PAUSED'].includes(unit.status)).map((unit: any) => ({ groupId: group.id, unit })))
+      if (dueAt && Number.isFinite(dueAt.getTime()) && dueAt <= now) {
+        const first = activeUnits[0]
+        if (first) {
+          try {
+            await prisma.$transaction(async tx => {
+              await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${session.id}`}, 0)) IS NULL AS locked`
+              const current = await tx.trainingSession.findUnique({ where: { id: session.id }, select: { status: true } })
+              if (!current || current.status !== 'RUNNING') return
+              await applyV2StageTransition(tx, session.id, { action: 'end_session', stageId: first.unit.stageId, outcome: 'ended_early', actorUserId: null, reason: '到达训练截止时间' })
+              ended++
+            })
+          } catch { /* another worker or coach ended the session */ }
+        }
+        continue
+      }
+      for (const item of activeUnits) {
+        const unit = item.unit
+        if (unit.status !== 'RUNNING' || unit.runningSince == null || unit.Stage?.endPolicy === 'MANUAL') continue
+        const elapsed = Number(unit.activeElapsedSeconds || 0) + Math.max(0, Math.floor((now.getTime() - new Date(unit.runningSince).getTime()) / 1000))
+        const limit = Number(unit.effectiveDurationSeconds || unit.plannedDurationSeconds || 0)
+        if (!limit || elapsed < limit) continue
+        try {
+          await prisma.$transaction(async tx => {
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${session.id}`}, 0)) IS NULL AS locked`
+            const current = await tx.trainingSession.findUnique({ where: { id: session.id }, select: { status: true } })
+            if (!current || current.status !== 'RUNNING') return
+            await applyGroupRuntimeAction(tx, session.id, item.groupId, 'advance', 'system', 'TIME_REACHED')
+            await tx.trainingSession.update({ where: { id: session.id }, data: { statusRevision: { increment: 1 } } })
+            advanced++
+          })
+        } catch { /* another worker or coach advanced the group */ }
+      }
+      continue
+    }
     const sessionSettings = parseJsonObject(session.settings)
     const dueAt = sessionSettings.dueAt ? new Date(String(sessionSettings.dueAt)) : null
     if (dueAt && Number.isFinite(dueAt.getTime()) && dueAt <= now) {
@@ -2623,22 +2717,29 @@ export async function recordStrategyDecision(userId: string, sessionId: string, 
 
 export async function getCoachDashboard(userId: string, sessionId: string) {
   const session = await assertManage(userId, sessionId)
-  const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, include: { User: { select: { id: true, username: true, avatar: true } }, StageAssignments: { where: { stageId: session.currentStageId ?? '__no-current-stage__' }, select: { groupId: true } }, Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } } } })
+  const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, include: { User: { select: { id: true, username: true, avatar: true } }, Group: { include: { StageGroups: { include: { Stage: true, ProblemPlans: true } } } }, StageAssignments: { where: { stageId: session.currentStageId ?? '__no-current-stage__' }, select: { groupId: true } }, Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } } } })
   const now = Date.now()
   const currentStage = session.Stages.find(stage => stage.id === session.currentStageId)
   const participantRows = participants.map(item => {
-    const requirements = currentStage ? resolveParticipantStageRequirements(currentStage, item.id, item.Progress) : []
+    const activeUnit = session.groupingModelVersion >= 2 ? item.Group?.StageGroups.find((unit: any) => ['RUNNING', 'PAUSED'].includes(unit.status)) : null
+    const effectiveStage = activeUnit ? session.Stages.find(stage => stage.id === activeUnit.stageId) : currentStage
+    const requirements = session.groupingModelVersion >= 2 && activeUnit
+      ? activeUnit.ProblemPlans.map((plan: any) => {
+          const progress = item.Progress.find(entry => entry.stageProblemId === plan.stageProblemId)
+          return { stageProblemId: plan.stageProblemId, state: progress?.status === 'COMPLETED' ? 'SATISFIED' : progress?.status === 'SKIPPED' ? 'BYPASSED' : 'REQUIRED', progress }
+        })
+      : effectiveStage ? resolveParticipantStageRequirements(effectiveStage, item.id, item.Progress) : []
     const activeRequirements = requirements.filter(requirement => requirement.state !== 'RETIRED')
     const satisfiedCount = activeRequirements.filter(requirement => ['SATISFIED', 'BYPASSED'].includes(requirement.state)).length
-    const requiredCount = currentStage ? Math.min(Number(parseJsonObject(currentStage.rules).requiredProblemCount || activeRequirements.length), activeRequirements.length) : 0
+    const requiredCount = effectiveStage ? Math.min(Number(parseJsonObject(effectiveStage.rules).requiredProblemCount || activeRequirements.length), activeRequirements.length) : activeRequirements.length
     const currentProblemIds = new Set(activeRequirements.map(requirement => requirement.stageProblemId))
     const currentProgress = item.Progress.filter(progress => currentProblemIds.has(progress.stageProblemId))
     return {
       id: item.id,
       user: item.User,
-      currentStageId: session.currentStageId,
+      currentStageId: activeUnit?.stageId || session.currentStageId,
       currentProblemId: item.currentProblemId,
-      currentGroupId: item.StageAssignments[0]?.groupId || null,
+      currentGroupId: item.groupId || item.StageAssignments[0]?.groupId || null,
       activeSeconds: item.activeSeconds,
       online: Boolean(item.lastHeartbeatAt && now - item.lastHeartbeatAt.getTime() < 90_000),
       requiredCount,
