@@ -90,20 +90,54 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     if (!result) return toast.error('分组建议生成失败')
     setSuggestions({ stageId, items: result.suggestions as GroupSuggestion[] })
   }
-  const applySuggestions = () => {
-    const preview = suggestions
-    if (!preview) return
-    onStagesChange?.(current => current.map(stage => stage.id !== preview.stageId ? stage : {
-      ...stage,
-      Groups: stage.Groups.map(group => ({ ...group, participantIds: preview.items.filter(item => item.groupId === group.id).map(item => item.user.id) })),
+
+  const groupedStages = stages.filter(stage => stage.audienceMode === 'GROUPED')
+  const groupSource = groupedStages[0]
+  const trainingGroups = groupSource?.Groups || []
+  const groupsFrozen = groupedStages.some(stage => Boolean(stage.lifecycle && stage.lifecycle !== 'PENDING'))
+  const updateAllGroupedStages = (update: (groups: Stage['Groups']) => Stage['Groups']) => {
+    onStagesChange?.(current => current.map(stage => stage.audienceMode === 'GROUPED' ? { ...stage, Groups: update(stage.Groups || []) } : stage))
+  }
+  const renameTrainingGroup = (groupKey: string, name: string) => {
+    updateAllGroupedStages(groups => groups.map(group => group.clientKey === groupKey ? { ...group, name } : group))
+  }
+  const addTrainingGroup = () => {
+    const index = trainingGroups.length + 1
+    const clientKey = 'group-' + Date.now() + '-' + index
+    const group = { clientKey, name: '分组 ' + index, accessPolicy: 'ALL_AT_ONCE' as const, submissionMode: 'ENABLED' as const, participantIds: [], Problems: [] }
+    updateAllGroupedStages(groups => [...groups, group])
+  }
+  const removeTrainingGroup = (groupKey: string) => {
+    updateAllGroupedStages(groups => groups.filter(group => group.clientKey !== groupKey))
+  }
+  const assignParticipant = (groupKey: string, participantId: string, checked: boolean) => {
+    updateAllGroupedStages(groups => groups.map(group => {
+      if (checked) return { ...group, participantIds: group.clientKey === groupKey ? [...new Set([...group.participantIds, participantId])] : group.participantIds.filter(id => id !== participantId) }
+      return group.clientKey === groupKey ? { ...group, participantIds: group.participantIds.filter(id => id !== participantId) } : group
     }))
+  }
+  const applySuggestions = () => {
+    if (!rawSuggestions) return
+    const preview = rawSuggestions
+    updateAllGroupedStages(groups => groups.map(group => ({
+      ...group,
+      participantIds: preview.items
+        .filter(item => group.id === item.groupId || group.clientKey === item.groupId)
+        .map(item => item.user.id),
+    })))
     toast.success('分组建议已写入本地草稿，请检查后保存')
     setSuggestions(undefined)
   }
 
-  if (mode === 'roster') return <div className={styles.stack}><Section title="基础学员名单" description="这里只决定谁参加训练；每个阶段的分组在下方独立配置。" actions={<Button onClick={() => void saveRoster()} loading={saving} disabled={!roster}>保存名单</Button>}>
-    {loading && !roster ? <p className={styles.muted}>正在加载学员…</p> : !roster ? <Empty title="暂无可配置名单" /> : <div className={styles.rosterList}>{roster.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div>}
-  </Section>{stages.filter(stage => stage.audienceMode === 'GROUPED').map(stage => { const frozen = Boolean(stage.lifecycle && stage.lifecycle !== 'PENDING'); const stageSuggestions = suggestions?.stageId === stage.id ? suggestions.items : []; return <Section key={stage.clientKey} title={`${stage.name} · 阶段分组`} description={frozen ? '该阶段已开始，分组定义只读；现场换组请前往运行工作台。' : '每名学员在这个阶段只能属于一个组；系统只生成可解释建议，必须由教师确认。'} actions={!frozen && stage.id ? <Button variant="secondary" loading={suggestionLoading} onClick={() => void previewSuggestions(stage.id!)}>生成分组建议</Button> : undefined}><div className={styles.stack}>{Boolean(stageSuggestions.length) && <div className={styles.card}><strong>建议预览（尚未应用）</strong>{stageSuggestions.map(item => <p key={item.participantId}><b>{item.user.username}</b> → {item.groupName}<small className={styles.muted}>{item.reason}</small></p>)}<div className={styles.actions}><Button onClick={applySuggestions}>确认应用建议</Button><Button variant="ghost" onClick={() => setSuggestions(undefined)}>取消</Button></div></div>}<div className={styles.grid}>{stage.Groups.map(group => <article className={styles.card} key={group.clientKey}><strong>{group.name}</strong><p className={styles.muted}>{group.Problems.length} 道题 · {group.participantIds.length} 名学员</p><div className={styles.rosterList}>{roster?.candidates.filter(candidate => candidate.selected).map(candidate => <Checkbox key={candidate.userId} label={candidate.displayName} description={candidate.username} checked={group.participantIds.includes(candidate.userId)} disabled={frozen} onChange={event => onStagesChange?.(current => current.map(item => item.clientKey !== stage.clientKey ? item : { ...item, Groups: item.Groups.map(currentGroup => ({ ...currentGroup, participantIds: currentGroup.clientKey === group.clientKey && event.target.checked ? [...new Set([...currentGroup.participantIds, candidate.userId])] : currentGroup.participantIds.filter(id => id !== candidate.userId) })) }))} />)}</div></article>)}</div></div></Section> })}</div>
+  if (mode === 'roster') return <div className={styles.stack}>
+    <Section title="基础学员名单" description="这里固定整场训练的参加学生。训练分组在下面统一配置；新增学生默认未分组。" actions={<Button onClick={() => void saveRoster()} loading={saving} disabled={!roster}>保存名单</Button>}>
+      {loading && !roster ? <p className={styles.muted}>正在加载学员…</p> : !roster ? <Empty title="暂无可配置名单" /> : <div className={styles.rosterList}>{roster.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={item.username + ' · ' + item.role} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div>}
+    </Section>
+    {!groupSource ? <Section title="训练分组" description="当前所有阶段均为全体训练；如需分组，请先在“阶段与顺序”中将阶段设为按训练分组。"><Empty title="暂未启用训练分组" description="分组属于整场训练，而不是某一个阶段。" /></Section> : <Section title="训练分组" description={groupsFrozen ? '已有阶段开始运行，训练分组定义只读；现场换组请前往运行工作台。' : '分组属于整场训练，所有按训练分组的阶段共享同一套学生分配。每名学生最多属于一个组。'} actions={<div className={styles.actions}><Button variant="secondary" onClick={addTrainingGroup} disabled={groupsFrozen}>新增分组</Button>{groupSource.id && <Button variant="secondary" loading={suggestionLoading} onClick={() => void previewSuggestions(groupSource.id!)} disabled={groupsFrozen}>生成分组建议</Button>}</div>}>
+      {Boolean(rawSuggestions?.items.length) && <div className={styles.card}><strong>建议预览（尚未应用）</strong>{rawSuggestions?.items.map(item => <p key={item.participantId}><b>{item.user.username}</b> → {item.groupName}<small className={styles.muted}>{item.reason}</small></p>)}<div className={styles.actions}><Button onClick={applySuggestions}>确认应用建议</Button><Button variant="ghost" onClick={() => setSuggestions(undefined)}>取消</Button></div></div>}
+      {!trainingGroups.length ? <Empty title="还没有训练分组" description="新增分组后，学生可以按组获得不同题目。" /> : <div className={styles.grid}>{trainingGroups.map(group => <article className={styles.card} key={group.clientKey}><div className={styles.actions}><Input aria-label={group.name + '名称'} value={group.name} disabled={groupsFrozen} onChange={event => renameTrainingGroup(group.clientKey, event.target.value)} /><Button size="sm" variant="ghost" onClick={() => removeTrainingGroup(group.clientKey)} disabled={groupsFrozen}>删除</Button></div><p className={styles.muted}>{group.Problems.length} 道题 · {group.participantIds.length} 名学员</p><div className={styles.rosterList}>{roster?.candidates.filter(candidate => candidate.selected).map(candidate => <Checkbox key={candidate.userId} label={candidate.displayName} description={candidate.username} checked={group.participantIds.includes(candidate.userId)} disabled={groupsFrozen} onChange={event => assignParticipant(group.clientKey, candidate.userId, event.target.checked)} />)}</div></article>)}</div>}
+    </Section>}
+  </div>
 
   const selectedAssignment = assignments.find(item => item.assignmentId === selectedAssignmentId)
   const hintsFrozen = Boolean(selectedAssignment && selectedAssignment.stageLifecycle !== 'PENDING')

@@ -69,7 +69,6 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   const [completionMode, setCompletionMode] = useState<'all' | 'count'>('all'), [requiredCount, setRequiredCount] = useState(1)
   const [selectedProblems, setSelectedProblems] = useState<Problem[]>([])
   const [customStages, setCustomStages] = useState<CustomStageDraft[]>([{ name: '阶段 1', audienceMode: 'ALL' }])
-  const [trainingGroups, setTrainingGroups] = useState<string[]>(['基础组', '提高组'])
   const [listFilter, setListFilter] = useState<ListFilter>('active'), [listQuery, setListQuery] = useState(''), [listTeamId, setListTeamId] = useState(() => teamId || searchParams.get('teamId') || '')
   const [listPage, setListPage] = useState(1), [listTotal, setListTotal] = useState(0), [listTotalPages, setListTotalPages] = useState(1)
   const [statusCounts, setStatusCounts] = useState<Record<ListFilter, number>>({ active: 0, upcoming: 0, completed: 0, draft: 0 })
@@ -140,7 +139,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     })
   }, [mode, open, organizationId, participantTarget, scopeReady, selectedStudentIds, simpleStep, targetTeamId, toast, useTeamScope])
   const resetDialog = () => {
-    setSimpleStep(0); setTitle(''); setDescription(''); setSelectedProblems([]); setCustomStages([{ name: '阶段 1', audienceMode: 'ALL' }]); setTrainingGroups(['基础组', '提高组']); setCompletionMode('all'); setRequiredCount(1); setSelectedStudentIds([]); setParticipantTarget('team'); setParticipantPreview(null); setSchoolWideConfirmed(false)
+    setSimpleStep(0); setTitle(''); setDescription(''); setSelectedProblems([]); setCustomStages([{ name: '阶段 1', audienceMode: 'ALL' }]); setCompletionMode('all'); setRequiredCount(1); setSelectedStudentIds([]); setParticipantTarget('team'); setParticipantPreview(null); setSchoolWideConfirmed(false)
     setScheduledStartAt(localDateTime(new Date())); setDueAt(localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)))
   }
   const closeDialog = () => { if (!creating) { setOpen(false); resetDialog() } }
@@ -171,7 +170,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
         accessScope: 'CURRENT_STAGE',
         submissionMode: 'ENABLED',
         problems: [],
-        groups: stage.audienceMode === 'GROUPED' ? trainingGroups.map((groupName, groupIndex) => ({ clientKey: 'create-group-' + groupIndex, name: groupName.trim() || '分组 ' + (groupIndex + 1), accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', participantIds: [], problems: [] })) : [],
+        groups: [],
       })),
     })
     setCreating(false)
@@ -255,7 +254,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
       {listTotalPages > 1 && <div className={styles.pagination}><span>共 {listTotal} 个 · 第 {listPage}/{listTotalPages} 页</span><div className={styles.actions}><Button size="sm" variant="secondary" disabled={listPage <= 1 || loading} onClick={() => setListPage(page => page - 1)}>上一页</Button><Button size="sm" variant="secondary" disabled={listPage >= listTotalPages || loading} onClick={() => setListPage(page => page + 1)}>下一页</Button></div></div>}
     </Section>
 
-    <FormDialog isOpen={open} onClose={closeDialog} title="创建训练" description={mode === 'quick' ? '快速创建只适合“单阶段·全班统一”，会直接发布；需要多阶段或分组训练请使用“自定义多阶段”。' : '自定义多阶段会先创建草稿，你可以自由新增、排序和配置多个阶段后再发布。'} size="wide" loading={creating} dirty={Boolean(title || selectedProblems.length)} footer={dialogFooter}>
+    <FormDialog isOpen={open} onClose={closeDialog} title="创建训练" description={mode === 'quick' ? '快速创建只适合“单阶段·全班统一”，会直接发布；需要多阶段或分组训练请使用“自定义多阶段”。' : '多阶段训练先固定学员并创建阶段骨架，创建后在独立设计器中统一配置训练分组和阶段规则。'} size="wide" loading={creating} dirty={Boolean(title || selectedProblems.length)} footer={dialogFooter}>
       <div className={styles.stack}>
         <div className={styles.creationModeGrid} role="radiogroup" aria-label="选择创建方式">
           {[
@@ -284,14 +283,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
           <div className={styles.card}>
             <strong>阶段编排</strong>
             <p>现在就可以先建立多个阶段骨架。创建后进入设计器继续为每个阶段配置题目、分组、时长和规则。</p>
-            <div className={styles.card}>
-              <strong>训练分组</strong>
-              <p>分组属于整场训练；分组阶段沿用这些组别，学员归属可在设计器中继续调整。</p>
-              {trainingGroups.map((groupName, groupIndex) => <div className={styles.actions} key={groupIndex}>
-                <Input aria-label={'训练分组 ' + (groupIndex + 1)} value={groupName} maxLength={100} placeholder={'分组 ' + (groupIndex + 1)} onChange={event => setTrainingGroups(current => current.map((name, currentIndex) => currentIndex === groupIndex ? event.target.value : name))} />
-                <Button size="sm" variant="ghost" disabled={trainingGroups.length <= 1} onClick={() => setTrainingGroups(current => current.filter((_, currentIndex) => currentIndex !== groupIndex))}>删除分组</Button>
-              </div>)}
-              <Button size="sm" variant="outline" onClick={() => setTrainingGroups(current => [...current, '分组 ' + (current.length + 1)])}>新增分组</Button>
+            <p className={styles.muted}>训练分组属于整场训练，创建后请在独立设计器的“学员与训练分组”面板统一配置，避免同一组被重复配置到多个阶段。</p>
             </div>
             <div className={styles.stack}>
               {customStages.map((stage, index) => <article className={styles.card} key={index}>
@@ -305,23 +297,6 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
                       placeholder={`阶段 ${index + 1}`}
                       onChange={event => setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? { ...item, name: event.target.value } : item))}
                     />
-                  </label>
-                  <label className={styles.field}>
-                    参与方式
-                    <Select
-                      aria-label={`阶段 ${index + 1} 参与方式`}
-                      value={stage.audienceMode}
-                      onChange={event => {
-                        const audienceMode = event.target.value as 'ALL' | 'GROUPED'
-                        setCustomStages(current => current.map((item, currentIndex) => currentIndex === index ? {
-                          ...item,
-                          audienceMode,
-                        } : item))
-                      }}
-                    >
-                      <option value="ALL">全班统一</option>
-                      <option value="GROUPED">分组训练</option>
-                    </Select>
                   </label>
                   <Button
                     size="sm"
@@ -342,9 +317,8 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
               >
                 新增阶段
               </Button>
-              <small className={styles.muted}>当前 {customStages.length}/30 个阶段；每个阶段可以独立选择“全班统一”或“分组训练”。</small>
+              <small className={styles.muted}>当前 {customStages.length}/30 个阶段；阶段参与方式和统一训练分组将在设计器中配置。</small>
             </div>
-          </div>
         </div>}
       </div>
     </FormDialog>

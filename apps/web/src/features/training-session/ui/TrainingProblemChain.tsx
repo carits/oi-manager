@@ -124,12 +124,14 @@ export function TrainingProblemChain({
                       onUpdateStage(activeStage.clientKey, (stage) => ({
                         ...stage,
                         audienceMode: event.target.value as Stage["audienceMode"],
-                        Groups: event.target.value === "GROUPED" && !stage.Groups.length ? [{ clientKey: `group-${Date.now()}`, name: "分组 1", accessPolicy: stage.accessPolicy, submissionMode: stage.submissionMode, participantIds: [], Problems: [] }] : stage.Groups,
+                        Groups: event.target.value === "GROUPED" && !stage.Groups.length
+                          ? (stages.find(item => item.audienceMode === "GROUPED" && item.Groups.length)?.Groups || [{ clientKey: `group-${Date.now()}`, name: "分组 1", accessPolicy: stage.accessPolicy, submissionMode: stage.submissionMode, participantIds: [], Problems: [] }]).map(group => ({ ...group, Problems: [] }))
+                          : stage.Groups,
                       }))
                     }
                   >
                     <option value="ALL">全班统一</option>
-                    <option value="GROUPED">阶段内分组</option>
+                    <option value="GROUPED">按训练分组</option>
                   </Select>
                 </label>
                 <label className={styles.field}>
@@ -197,42 +199,9 @@ export function TrainingProblemChain({
                 )}
               </div>
               {activeStage.audienceMode === "GROUPED" && <div className={styles.assignmentPolicy}>
-                <strong>阶段分组</strong>
-                <p>每个阶段的分组、学员和题目链彼此独立；先选择要编辑的分组。</p>
-                <label className={styles.field}>当前编辑分组<Select value={activeGroup?.clientKey || ""} onChange={event => setActiveGroupKey(event.target.value)}>{activeStage.Groups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></label>
-                {activeStage.Groups.map((group, index) => {
-                  const rules = (group.rules && typeof group.rules === "object" ? group.rules : {}) as Record<string, unknown>;
-                  const timePolicy = (rules.timePolicy && typeof rules.timePolicy === "object" ? rules.timePolicy : { mode: "NONE" }) as Record<string, unknown>;
-                  const stuckPolicy = (rules.stuckPolicy && typeof rules.stuckPolicy === "object" ? rules.stuckPolicy : {}) as Record<string, unknown>;
-                  const updateRules = (patch: Record<string, unknown>) => onUpdateStage(activeStage.clientKey, stage => ({
-                    ...stage,
-                    Groups: stage.Groups.map(item => item.clientKey === group.clientKey ? { ...item, rules: { ...(item.rules || {}), ...patch } } : item),
-                  }));
-                  return <article className={styles.card} key={group.clientKey}>
-                    <div className={styles.actions}>
-                      <label className={styles.field}>分组 {index + 1}<Input value={group.name} onChange={(event) => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Groups: stage.Groups.map(item => item.clientKey === group.clientKey ? { ...item, name: event.target.value } : item) }))} /></label>
-                      <Button iconOnly aria-label={`删除${group.name}`} variant="text" disabled={activeStage.Groups.length === 1} onClick={() => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Groups: stage.Groups.filter(item => item.clientKey !== group.clientKey) }))}><Trash2 size={14} /></Button>
-                    </div>
-                    <details className={styles.assignmentPolicy}>
-                      <summary>组级规则覆盖</summary>
-                      <div className={styles.compactGrid}>
-                        <label className={styles.field}>题目开放<Select value={group.accessPolicy} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Groups: stage.Groups.map(item => item.clientKey === group.clientKey ? { ...item, accessPolicy: event.target.value as typeof item.accessPolicy } : item) }))}><option value="ALL_AT_ONCE">全部开放</option><option value="SEQUENTIAL">顺序开放</option><option value="TEACHER_CONTROLLED">教师控制</option></Select></label>
-                        <label className={styles.field}>提交策略<Select value={group.submissionMode} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Groups: stage.Groups.map(item => item.clientKey === group.clientKey ? { ...item, submissionMode: event.target.value as typeof item.submissionMode } : item) }))}><option value="ENABLED">允许提交</option><option value="DISABLED">禁止提交</option></Select></label>
-                        <label className={styles.field}>单题时间动作<Select value={String(timePolicy.action || timePolicy.mode || "NONE")} onChange={event => {
-                          const mode = event.target.value;
-                          updateRules({ timePolicy: mode === "NONE" ? { mode: "NONE" } : { mode, action: mode, limitSeconds: Number(timePolicy.limitSeconds || 900) } });
-                        }}><option value="NONE">继承/不限时</option><option value="REMIND">到时提醒</option><option value="RECOMMEND_SWITCH">建议切题</option><option value="LOCK_SUBMISSION">禁止继续提交</option><option value="FORCE_SWITCH">必须切题</option></Select></label>
-                        {String(timePolicy.action || timePolicy.mode || "NONE") !== "NONE" && <label className={styles.field}>组级时限（分钟）<Input type="number" min={1} value={Math.round(Number(timePolicy.limitSeconds || 900) / 60)} onChange={event => {
-                          const mode = String(timePolicy.action || timePolicy.mode || "REMIND");
-                          updateRules({ timePolicy: { mode, action: mode, limitSeconds: Math.max(60, Number(event.target.value || 1) * 60) } });
-                        }} /></label>}
-                        <label className={styles.field}>卡题最少活跃（分钟）<Input type="number" min={1} value={Math.round(Number(stuckPolicy.minActiveSeconds || 1800) / 60)} onChange={event => updateRules({ stuckPolicy: { ...stuckPolicy, minActiveSeconds: Math.max(60, Number(event.target.value || 1) * 60), minAttempts: Number(stuckPolicy.minAttempts || 3), noImprovementSeconds: Number(stuckPolicy.noImprovementSeconds || 900) } })} /></label>
-                        <label className={styles.field}>卡题最少提交<Input type="number" min={1} value={Number(stuckPolicy.minAttempts || 3)} onChange={event => updateRules({ stuckPolicy: { ...stuckPolicy, minActiveSeconds: Number(stuckPolicy.minActiveSeconds || 1800), minAttempts: Math.max(1, Number(event.target.value || 1)), noImprovementSeconds: Number(stuckPolicy.noImprovementSeconds || 900) } })} /></label>
-                      </div>
-                    </details>
-                  </article>;
-                })}
-                <Button size="sm" variant="outline" onClick={() => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Groups: [...stage.Groups, { clientKey: `group-${Date.now()}`, name: `分组 ${stage.Groups.length + 1}`, accessPolicy: stage.accessPolicy, submissionMode: stage.submissionMode, participantIds: [], Problems: [] }] }))}>新增分组</Button>
+                <strong>按训练分组安排题目</strong>
+                <p>分组成员、名称和建议统一在“学员与训练分组”面板维护；这里仅选择要为哪个训练分组安排题目。</p>
+                <label className={styles.field}>当前训练分组<Select value={activeGroup?.clientKey || ""} onChange={event => setActiveGroupKey(event.target.value)}>{activeStage.Groups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></label>
               </div>}
               {activeStage.kind === "TRAINING" && (
                 <label className={styles.field}>
