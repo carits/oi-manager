@@ -38,7 +38,7 @@ export function useTrainingDetail(
   const recordSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const overviewResource = useResource<TrainingOverview>(
-    `/api/trainings/${trainingId}/overview`,
+    `/api/contests/${trainingId}/overview`,
     {
       sessionKey,
       keepPreviousData: false,
@@ -89,7 +89,7 @@ export function useTrainingDetail(
 
   const problemDetailResource = useResource<ProblemDetail>(
     selectedProblemId && training && activeTab === 'problems'
-      ? `/api/trainings/${trainingId}/problems/${selectedProblemId}/detail`
+      ? `/api/contests/${trainingId}/problems/${selectedProblemId}/detail`
       : null,
     {
       sessionKey,
@@ -154,7 +154,7 @@ export function useTrainingDetail(
       try {
         setNoteSaving(true)
         const result = await apiClient.mutate(
-          `/api/trainings/${trainingId}/problems/${selectedProblemId}/note`,
+          `/api/contests/${trainingId}/problems/${selectedProblemId}/note`,
           'PUT',
           { content: noteContent },
         )
@@ -176,7 +176,7 @@ export function useTrainingDetail(
     if (!training || training.type !== 'contest' || recordLoaded) return
     const loadRecord = async () => {
       try {
-      const data = await apiClient.query<{ content: string }>(`/api/trainings/${trainingId}/record`)
+      const data = await apiClient.query<{ content: string }>(`/api/contests/${trainingId}/record`)
       const content = data.content || ''
       lastSavedRecordContentRef.current = content
       setRecordContent(content)
@@ -198,7 +198,7 @@ export function useTrainingDetail(
       try {
         setRecordSaving(true)
         const result = await apiClient.mutate(
-          `/api/trainings/${trainingId}/record`,
+          `/api/contests/${trainingId}/record`,
           'PUT',
           { content: recordContent },
         )
@@ -223,7 +223,7 @@ export function useTrainingDetail(
 
     if (hasUnsavedNote) {
       void apiClient.mutate(
-        `/api/trainings/${trainingId}/problems/${previousProblemId}/note`,
+        `/api/contests/${trainingId}/problems/${previousProblemId}/note`,
         'PUT',
         { content: noteContent },
       )
@@ -244,7 +244,7 @@ export function useTrainingDetail(
     if (!pid) return
     try {
       setNoteSaving(true)
-      await apiClient.put(`/api/trainings/${trainingId}/problems/${pid}/note`, { content })
+      await apiClient.put(`/api/contests/${trainingId}/problems/${pid}/note`, { content })
       setNoteLastSaved(new Date())
     } catch (error) {
       console.error('Failed to save note:', error)
@@ -262,7 +262,7 @@ export function useTrainingDetail(
     try {
       setRecordSaving(true)
       const result = await apiClient.mutate(
-        `/api/trainings/${trainingId}/record`,
+        `/api/contests/${trainingId}/record`,
         'PUT',
         { content: recordContent },
       )

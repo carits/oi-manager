@@ -1,7 +1,7 @@
 /**
  * ICPC 训练真实提交测试脚本
  *
- * 通过 POST /api/trainings/:id/submit 真实提交代码到 go-judge 评测
+ * 通过 POST /api/contests/:id/submit 真实提交代码到 go-judge 评测
  */
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
@@ -41,7 +41,7 @@ async function submitCode(
   language: string = 'cpp',
 ): Promise<{ ok: boolean; submissionId?: number; error?: string }> {
   try {
-    const res = await fetch(`http://localhost:3002/api/trainings/${TRAINING_ID}/submit`, {
+    const res = await fetch(`http://localhost:3002/api/contests/${TRAINING_ID}/submit`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ trainingProblemId, language, code, submitMethod: 'robot' }),
@@ -217,7 +217,7 @@ async function main() {
   // 验证排名
   const student0 = students[0]
   const token = makeToken(student0.userId, student0.studentId)
-  const rankRes = await fetch(`http://localhost:3002/api/trainings/${TRAINING_ID}/ranking`, {
+  const rankRes = await fetch(`http://localhost:3002/api/contests/${TRAINING_ID}/ranking`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   const rankData = await rankRes.json()

@@ -1,33 +1,27 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import logger from '../../lib/logger'
-import { contestActivityInclude, contestAsActivity } from './contest-activity-projection'
+import { contestInclude, contestAsView } from './contest-view'
 
 async function findContestByPublicId(publicId: number) {
   return prisma.contest.findUnique({
     where: { publicId },
-    include: contestActivityInclude,
+    include: contestInclude,
   })
-}
-
-async function findOrdinaryTraining(publicId: number, include: Prisma.TrainingInclude = {}) {
-  const training = await prisma.training.findUnique({ where: { id: publicId }, include })
-  if (!training || training.type === 'contest') return null
-  return training
 }
 
 export async function findContestForRating(publicId: number) {
   const contest = await findContestByPublicId(publicId)
   if (!contest) return null
-  return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+  return { contest, activity: contestAsView(contest), source: 'contest' as const }
 }
 
 export async function listPlatformContests() {
   const contests = await prisma.contest.findMany({
     where: { scope: 'platform', teamId: null, organizationId: null },
-    include: contestActivityInclude,
+    include: contestInclude,
   })
-  return contests.map(contestAsActivity)
+  return contests.map(contestAsView)
 }
 
 export async function listContestsForMaintenance(input: {
@@ -44,19 +38,19 @@ export async function listContestsForMaintenance(input: {
       ...(input.titlePrefix !== undefined && { title: { startsWith: input.titlePrefix } }),
       ...(input.scope !== undefined && { scope: input.scope }),
     },
-    include: contestActivityInclude,
+    include: contestInclude,
     orderBy: { publicId: 'asc' },
   })
-  return contests.map(contestAsActivity)
+  return contests.map(contestAsView)
 }
 
 export async function listTeamContests(teamId: string, scope: string) {
   const contests = await prisma.contest.findMany({
     where: { teamId, scope },
-    include: contestActivityInclude,
+    include: contestInclude,
     orderBy: { startAt: 'desc' },
   })
-  return contests.map(contestAsActivity)
+  return contests.map(contestAsView)
 }
 
 export async function listFinishedContestPublicIds() {
@@ -79,12 +73,12 @@ export async function findContestForLicense(publicId: number) {
   const contest = await prisma.contest.findUnique({
     where: { publicId },
     include: {
-      ...contestActivityInclude,
+      ...contestInclude,
       Team: { include: { TeamMember: true } },
     },
   })
   if (!contest) return null
-  return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+  return { contest, activity: contestAsView(contest), source: 'contest' as const }
 }
 
 export async function listContestPublicIdsForLicenseScopes(input: {
@@ -121,30 +115,20 @@ export async function listContestsForDashboard(input: {
   if (!scopes.length) return []
   const contests = await prisma.contest.findMany({
     where: { OR: scopes },
-    include: contestActivityInclude,
+    include: contestInclude,
   })
-  return contests.map(contestAsActivity)
+  return contests.map(contestAsView)
 }
 
 export async function findActivityForRanking(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  if (contest) return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
-  const activity = await findOrdinaryTraining(publicId, {
-    TrainingProblem: {
-      orderBy: { orderIndex: 'asc' },
-      select: {
-        id: true, problemId: true, alias: true, points: true, orderIndex: true,
-        Problem: { select: { problemId: true } },
-      },
-    },
-  })
-  return activity ? { contest: null, activity, source: 'training' as const } : null
+  return contest ? { contest, activity: contestAsView(contest), source: 'contest' as const } : null
 }
 
 export async function findContestForBlogReview(publicId: number) {
   const contest = await findContestByPublicId(publicId)
   if (!contest) return null
-  return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
+  return { contest, activity: contestAsView(contest), source: 'contest' as const }
 }
 
 export async function listDueRatedContests(now = new Date(), limit = 20) {
@@ -193,48 +177,20 @@ export async function findCanonicalContestSubmissionIdentity(
 
 export async function findActivityForSubmission(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  if (contest) return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
-  const activity = await findOrdinaryTraining(publicId)
-  return activity ? { contest: null, activity, source: 'training' as const } : null
+  return contest ? { contest, activity: contestAsView(contest), source: 'contest' as const } : null
 }
 
 export async function findActivityForAccess(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  if (contest) return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
-  const activity = await findOrdinaryTraining(publicId, {
-    Team: { select: { organizationId: true, scope: true } },
-  })
-  return activity ? { contest: null, activity, source: 'training' as const } : null
+  return contest ? { contest, activity: contestAsView(contest), source: 'contest' as const } : null
 }
 
 export async function findActivityForDetail(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  if (contest) return contestAsActivity(contest)
-  const activity = await findOrdinaryTraining(publicId, {
-    _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
-  })
-  return activity ? { ...activity, RatingConfig: null } : null
+  return contest ? contestAsView(contest) : null
 }
 
 export async function findActivityForOverview(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  if (contest) return { contest, activity: contestAsActivity(contest), source: 'contest' as const }
-  const activity = await findOrdinaryTraining(publicId, {
-    _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
-    TrainingProblem: {
-      include: {
-        Problem: {
-          select: {
-            id: true, title: true, platform: true, problemId: true, difficulty: true,
-            timeLimit: true, memoryLimit: true,
-            _count: { select: { ProblemAttachment: true } },
-          },
-        },
-        TrainingSolution: { select: { id: true, visible: true } },
-        _count: { select: { TrainingAttachment: true } },
-      },
-      orderBy: { orderIndex: 'asc' },
-    },
-  })
-  return activity ? { contest: null, activity, source: 'training' as const } : null
+  return contest ? { contest, activity: contestAsView(contest), source: 'contest' as const } : null
 }

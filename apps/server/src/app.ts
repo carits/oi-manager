@@ -44,7 +44,7 @@ import { ratingDomainRouter } from './modules/rating/rating-domain.routes'
 import { solutionContributionRouter, solutionReviewRouter, solutionRouter } from './modules/solution/solution.routes'
 import { healthRouter } from './modules/system/health.routes'
 import { trainingEngineRouter } from './modules/training-engine/training-engine.routes'
-import { retiredTrainingRouter } from './modules/training/training-legacy-retired.routes'
+import { contestRouter } from './modules/contest/contest.routes'
 import { teamImportRouter } from './modules/team-import/team-import.routes'
 import { getCorsOptions } from './config/cors'
 import { isProduction } from './config/env'
@@ -109,7 +109,7 @@ export function createApplication(options: ApplicationOptions = {}) {
   app.use('/api/oj-accounts', authenticate, ojAccountsRouter)
   app.use('/api/submit', submitRouter)
   app.use('/api', testdataRouter)
-  app.use('/api', retiredTrainingRouter)
+  app.use('/api', contestRouter)
   app.use('/api', trainingEngineRouter)
   app.use('/api', assignmentRouter)
   app.use('/api/admin/data', authenticate, adminDataRouter)

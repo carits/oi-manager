@@ -63,7 +63,7 @@ export function TrainingRankingSubmissionsModal({
     setError(null)
     try {
       const params = new URLSearchParams({ page: '1', pageSize: '50', userId, problemId: trainingProblemId })
-      const data = await apiClient.query<{ submissions: RankingSubmission[] }>(`/api/trainings/${trainingId}/submissions?${params.toString()}`)
+      const data = await apiClient.query<{ submissions: RankingSubmission[] }>(`/api/contests/${trainingId}/submissions?${params.toString()}`)
       setSubmissions(data.submissions)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '提交记录获取失败')

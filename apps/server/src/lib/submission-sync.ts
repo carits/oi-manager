@@ -4,7 +4,6 @@ import crypto from 'crypto'
  *
  * 核心规则：
  * - submitScope='problem'：题库提交 AC → 更新 Problem AC 状态
- * - submitScope='training'：训练提交 AC → 更新 TrainingUserProblemStatus + 同步题库 AC
  * - submitScope='contest'：比赛提交 AC → 更新 ContestUserProblemStatus + **不**同步题库 AC（比赛结束后才同步）
  */
 
@@ -43,7 +42,7 @@ export async function syncProblemAC(
         userId,
         problemId: problemInternalId,
         AND: [currentJudgeAcceptedWhere()],
-        submitScope: { in: ['problem', 'training'] },
+        submitScope: { in: ['problem', 'training_engine', 'assignment'] },
         id: currentSubmissionId ? { not: currentSubmissionId } : undefined,
       },
       select: { id: true },
@@ -69,77 +68,6 @@ export async function syncProblemAC(
     logger.error('Failed to sync problem AC', {
       userId,
       problemId: problemInternalId,
-      error: String(error),
-    })
-  }
-}
-
-/**
- * 同步训练题目状态
- *
- * 更新 TrainingUserProblemStatus：
- * - 首次 AC：记录 bestScore/bestResult/acAt
- * - 非首次但更好：更新 bestScore/bestResult
- * - 每次提交：attemptCount + 1
- */
-export async function syncTrainingProblemStatus(
-  userId: string,
-  trainingId: number,
-  trainingProblemId: string,
-  result: string | null,
-  score: number | null
-): Promise<void> {
-  try {
-    const isAc = isAcceptedResult(result)
-
-    // 使用 upsert 处理并发安全
-    await prisma.trainingUserProblemStatus.upsert({
-      where: {
-        trainingId_userId_trainingProblemId: {
-          trainingId,
-          userId,
-          trainingProblemId,
-        },
-      },
-      create: {
-        id: crypto.randomUUID(),
-        trainingId,
-        userId,
-        trainingProblemId,
-        bestScore: score,
-        bestResult: result,
-        attemptCount: 1,
-        acAt: isAc ? new Date() : null,
-      },
-      update: {
-        attemptCount: { increment: 1 },
-        ...(isAc
-          ? {
-              bestResult: result,
-              acAt: new Date(),
-              ...(score != null ? { bestScore: score } : {}),
-            }
-          : score != null
-            ? {
-                // 非 AC 但分数更高也更新
-                bestScore: score,
-              }
-            : {}),
-      },
-    })
-
-    logger.info('Training problem status synced', {
-      userId,
-      trainingId,
-      trainingProblemId,
-      result,
-      isAc,
-    })
-  } catch (error) {
-    logger.error('Failed to sync training problem status', {
-      userId,
-      trainingId,
-      trainingProblemId,
       error: String(error),
     })
   }
@@ -219,7 +147,6 @@ export async function syncContestProblemStatus(
  *
  * 根据 submitScope 决定同步策略：
  * - submitScope='problem' → syncProblemAC
- * - submitScope='training' → syncTrainingProblemStatus + syncProblemAC（训练 AC 同步题库）
  * - submitScope='contest' → syncContestProblemStatus + **不**同步题库 AC（比赛结束后才同步）
  */
 export async function onSubmissionJudged(submission: {
@@ -229,8 +156,6 @@ export async function onSubmissionJudged(submission: {
   result: string | null
   score: number | null
   submitScope: string
-  trainingId: number | null
-  trainingProblemId: string | null
   canonicalContestId?: string | null
   canonicalContestProblemId?: string | null
   trainingSessionId?: string | null
@@ -249,20 +174,6 @@ export async function onSubmissionJudged(submission: {
 
   if (submitScope === 'problem') {
     // 题库提交：同步题库 AC
-    if (isAcceptedResult(submission.result)) {
-      await syncProblemAC(submission.userId, submission.problemId, submission.id)
-    }
-  } else if (submitScope === 'training') {
-    // 训练提交：更新训练状态 + 同步题库 AC
-    if (submission.trainingId && submission.trainingProblemId) {
-      await syncTrainingProblemStatus(
-        submission.userId,
-        submission.trainingId,
-        submission.trainingProblemId,
-        submission.result,
-        submission.score,
-      )
-    }
     if (isAcceptedResult(submission.result)) {
       await syncProblemAC(submission.userId, submission.problemId, submission.id)
     }

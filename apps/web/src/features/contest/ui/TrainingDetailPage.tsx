@@ -123,7 +123,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const loadRejudgeUsers = useCallback(async () => {
     setRejudgeUsersLoading(true)
     try {
-      const data = await apiClient.query<{ users: Array<{ id: string; username: string; displayName?: string }> }>('/api/trainings/' + trainingId + '/submission-users')
+      const data = await apiClient.query<{ users: Array<{ id: string; username: string; displayName?: string }> }>('/api/contests/' + trainingId + '/submission-users')
       setRejudgeUsers(data.users)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '重判用户列表加载失败')
@@ -175,11 +175,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     solutionType?: string; solutionPdfUrl?: string; fileUrl?: string | null;
     format?: string; snapshotId?: string
   }>>(
-    activeTab === 'solutions' ? `/api/trainings/${trainingId}/solutions` : null,
+    activeTab === 'solutions' ? `/api/contests/${trainingId}/solutions` : null,
     { dedupingInterval: 30000, isEmpty: () => false, sessionKey },
   )
   const attachmentsResource = useResource<Record<string, Attachment[]>>(
-    activeTab === 'attachments' ? `/api/trainings/${trainingId}/attachments` : null,
+    activeTab === 'attachments' ? `/api/contests/${trainingId}/attachments` : null,
     { dedupingInterval: 30000, isEmpty: () => false, sessionKey },
   )
 
@@ -660,7 +660,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
               onClick={async () => {
                 setMakeupLoading(true)
                 try {
-                  const res = await apiClient.post(`/api/trainings/${trainingId}/create-makeup-homework`, {
+                  const res = await apiClient.post(`/api/contests/${trainingId}/create-makeup-homework`, {
                     title: makeupTitle,
                     startTime: makeupStartTime ? new Date(makeupStartTime).toISOString() : undefined,
                     endTime: new Date(makeupEndTime).toISOString(),

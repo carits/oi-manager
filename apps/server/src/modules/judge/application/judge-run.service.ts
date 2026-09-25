@@ -21,7 +21,7 @@ export interface CreateQueuedSubmissionOptions {
 export interface ClaimedSubmissionLifecycle {
   submissionId: number
   problemInternalId: string
-  trainingProblemId: string | null
+  trainingStageProblemId: string | null
   testSetRevisionId: string | null
   judgeConfigSnapshot: string | null
   code: string
@@ -50,7 +50,7 @@ export interface JudgeResultProjection {
 interface RejudgeRequest {
   submissionIds: number[]
   requestedBy: string
-  trainingId?: number | null
+  contestId?: string | null
   scopeType: string
   scopePayload?: Prisma.InputJsonValue | null
 }
@@ -195,7 +195,7 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
       select: {
         id: true,
         problemInternalId: true,
-        trainingProblemId: true,
+        trainingStageProblemId: true,
         testSetRevisionId: true,
         judgeConfigSnapshot: true,
         code: true,
@@ -207,7 +207,7 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
     return {
       submissionId: submission.id,
       problemInternalId: submission.problemInternalId,
-      trainingProblemId: submission.trainingProblemId,
+      trainingStageProblemId: submission.trainingStageProblemId,
       testSetRevisionId: submission.testSetRevisionId,
       judgeConfigSnapshot: submission.CurrentJudgeRun?.judgeConfigSnapshot || submission.judgeConfigSnapshot || null,
       code: submission.code,
@@ -319,12 +319,10 @@ export async function finalizeOwnedJudgeAttempt(input: {
         userId: true,
         problemId: true,
         submitScope: true,
-        trainingId: true,
-        trainingProblemId: true,
+        trainingStageProblemId: true,
         canonicalContestId: true,
         canonicalContestProblemId: true,
         trainingSessionId: true,
-        trainingStageProblemId: true,
         assignmentId: true,
         assignmentProblemId: true,
         assignmentRecipientId: true,
@@ -485,7 +483,7 @@ export async function createRejudgeBatch(input: RejudgeRequest) {
     await tx.rejudgeBatch.create({
       data: {
         id: batchId,
-        trainingId: input.trainingId || null,
+        contestId: input.contestId || null,
         scopeType: input.scopeType,
         scopePayload: input.scopePayload ?? undefined,
         status: 'QUEUING',
@@ -510,8 +508,8 @@ export async function createRejudgeBatch(input: RejudgeRequest) {
         completedAt: new Date(),
       },
     })
-    if (input.trainingId && queuedCount > 0) {
-      await holdContestFinalizationForRejudgeTx(tx, input.trainingId)
+    if (input.contestId && queuedCount > 0) {
+      await holdContestFinalizationForRejudgeTx(tx, input.contestId)
     }
     return { batch, queuedCount, skippedCount }
   })

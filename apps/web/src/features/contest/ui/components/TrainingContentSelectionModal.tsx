@@ -64,7 +64,7 @@ export function TrainingContentSelectionModal({
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState<{ title: string; content: string | null; fileUrl: string | null } | null>(null)
 
-  const base = `/api/trainings/${trainingId}/problems/${trainingProblemId}`
+  const base = `/api/contests/${trainingId}/problems/${trainingProblemId}`
   const load = useCallback(async () => {
     if (!isOpen || !trainingProblemId) return
     setLoading(true)

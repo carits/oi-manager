@@ -19,7 +19,7 @@ import {
 import type { StorageType, AccessLevel, FileCategory, OwnerType } from '../config/storage'
 import type { JwtPayload } from '@oi-manager/shared'
 import { canViewProblem } from '../modules/problem/problem.access'
-import { canAccessTraining } from '../modules/training/training.helpers'
+import { canAccessContest } from '../modules/contest/contest.helpers'
 import { resolveStoragePath, validateMimeForExtension, validateUploadedFileContent } from './file-security'
 
 // ==================== 类型定义 ====================
@@ -438,7 +438,7 @@ class FileService {
             return false
           }
         }
-        return canAccessTraining(user.userId, {
+        return canAccessContest(user.userId, {
           teamId: contest.teamId,
           organizationId: resourceOrganizationId,
           scope: contest.scope,

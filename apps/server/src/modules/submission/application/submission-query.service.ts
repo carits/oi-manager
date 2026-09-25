@@ -2,14 +2,14 @@ import { prisma } from '../../../prisma'
 import yaml from 'js-yaml'
 import { resolveJudgePresentationConfig } from '../../../lib/judge-mode'
 import {
-  canAccessTraining,
+  canAccessContest,
   canManageTraining,
   requireTrainingStarted,
-} from '../../training/training.helpers'
+} from '../../contest/contest.helpers'
 import {
   getTrainingRuntimeStatus,
   shouldHideTrainingProblemSource,
-} from '../../training/training.visibility'
+} from '../../contest/contest.visibility'
 import {
   CURRENT_JUDGE_RUN_SELECT,
   currentJudgeResultWhere,
@@ -210,7 +210,7 @@ async function requireVisibleSubmission(
   } | null = null
   let hasContestManagerAccess = false
   const activityPublicId = expectedTrainingId
-    ?? submission.trainingId
+    ?? submission.trainingSessionId
     ?? submission.CanonicalContest?.publicId
     ?? null
   if (activityPublicId !== null) {
@@ -219,7 +219,7 @@ async function requireVisibleSubmission(
     if (expectedTrainingId !== undefined) {
       if (activity.source === 'contest') {
         if (submission.canonicalContestId !== activity.contest.id) throw notFound()
-      } else if (submission.trainingId !== activity.activity.id) {
+      } else if (submission.trainingSessionId !== activity.activity.id) {
         throw notFound()
       }
     }
@@ -240,7 +240,7 @@ async function requireVisibleSubmission(
     hasContestManagerAccess = context.isGlobalAdmin || await canManageTraining(context.userId, training)
 
     if (!hasContestManagerAccess) {
-      if (!await canAccessTraining(context.userId, training)) {
+      if (!await canAccessContest(context.userId, training)) {
         throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看该提交记录')
       }
       const notStarted = await requireTrainingStarted(training, context.userId)
@@ -289,7 +289,7 @@ export async function getSubmissionDetail(
   let problemJudgeConfig: string | null = null
   let problemAlias: string | null = null
   let problemOrderIndex: number | null = null
-  let trainingProblemId: string | null = submission.trainingProblemId || null
+  let trainingProblemId: string | null = submission.canonicalContestProblemId || null
   let contestFormat: string | null = null
   let sourcePlatform: string | null = submission.oj || null
   let sourceProblemId: string | null = submission.problemId || null
@@ -343,45 +343,8 @@ export async function getSubmissionDetail(
       sourcePlatform = contestProblem.ojName || contestProblem.CanonicalProblem?.platform || sourcePlatform
       sourceProblemId = contestProblem.problemId || contestProblem.CanonicalProblem?.problemId || sourceProblemId
     }
-  } else if (submission.trainingId && access.training) {
-    contestFormat = access.training.format || null
-    const trainingProblem = submission.trainingProblemId
-      ? await prisma.trainingProblem.findFirst({
-          where: { id: submission.trainingProblemId, trainingId: submission.trainingId },
-          select: {
-            id: true,
-            alias: true,
-            orderIndex: true,
-            titleSnapshot: true,
-            judgeConfigSnapshot: true,
-            sourcePlatformSnapshot: true,
-            sourceProblemIdSnapshot: true,
-            Problem: { select: { judgeConfig: true, title: true, platform: true, problemId: true } },
-          },
-        })
-      : await prisma.trainingProblem.findFirst({
-          where: { trainingId: submission.trainingId, Problem: { problemId: submission.problemId } },
-          select: {
-            id: true,
-            alias: true,
-            orderIndex: true,
-            titleSnapshot: true,
-            judgeConfigSnapshot: true,
-            sourcePlatformSnapshot: true,
-            sourceProblemIdSnapshot: true,
-            Problem: { select: { judgeConfig: true, title: true, platform: true, problemId: true } },
-          },
-        })
-    if (trainingProblem) {
-      trainingProblemId = trainingProblem.id
-      problemAlias = trainingProblem.alias
-      problemOrderIndex = trainingProblem.orderIndex
-      problemJudgeConfig = trainingProblem.judgeConfigSnapshot || trainingProblem.Problem.judgeConfig || problemJudgeConfig
-      problemTitle = trainingProblem.titleSnapshot || trainingProblem.Problem.title || problemTitle
-      sourcePlatform = trainingProblem.sourcePlatformSnapshot || trainingProblem.Problem.platform || sourcePlatform
-      sourceProblemId = trainingProblem.sourceProblemIdSnapshot || trainingProblem.Problem.problemId || sourceProblemId
-    }
   }
+
 
   const judgePresentation = resolveJudgePresentationConfig(problemJudgeConfig)
   let judgeConfig: any = {}
@@ -437,7 +400,7 @@ export async function getSubmissionDetail(
     errorMessage: hideOiDetail ? null : submission.errorMessage,
     judgeMode: judgePresentation.mode,
     judgeConfig: problemJudgeConfig ? { mode: judgePresentation.mode } : undefined,
-    trainingId: access.training?.id ?? submission.trainingId,
+    trainingId: access.training?.id ?? submission.trainingSessionId,
     trainingProblemId,
     problemAlias,
     problemOrderIndex,

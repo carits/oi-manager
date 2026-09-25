@@ -23,7 +23,7 @@ export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trai
 
   useEffect(() => {
     let active = true
-    apiClient.get<Preview>(`/api/trainings/${trainingId}/problems/${trainingProblemId}/test-set-update`)
+    apiClient.get<Preview>(`/api/contests/${trainingId}/problems/${trainingProblemId}/test-set-update`)
       .then(result => { if (active && result.success && result.data) setPreview(result.data) })
     return () => { active = false }
   }, [trainingId, trainingProblemId])
@@ -40,7 +40,7 @@ export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trai
     setSyncing(true)
     try {
       const result = await apiClient.post<{ currentRevision: number; currentRevisionId: string }>(
-        `/api/trainings/${trainingId}/problems/${trainingProblemId}/test-set-update`,
+        `/api/contests/${trainingId}/problems/${trainingProblemId}/test-set-update`,
         { revisionId: preview.latestRevisionId },
       )
       if (!result.success) return toast.error(result.message || '测试版本更新失败')

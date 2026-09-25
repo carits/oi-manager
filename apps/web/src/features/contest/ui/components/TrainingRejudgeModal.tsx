@@ -67,7 +67,7 @@ export function TrainingRejudgeModal({
       if (scope !== 'all') params.set('trainingProblemId', problemId)
       if (scope === 'user_problem') params.set('userId', userId)
       try {
-        const data = await apiClient.query<{ matchedCount: number; inProgressCount: number }>(`/api/trainings/${trainingId}/rejudge/preview?${params.toString()}`)
+        const data = await apiClient.query<{ matchedCount: number; inProgressCount: number }>(`/api/contests/${trainingId}/rejudge/preview?${params.toString()}`)
         if (!cancelled) setPreview(data)
       } catch (error) {
         if (!cancelled) setPreviewError(error instanceof Error ? error.message : '无法获取预计数量，请重试')
@@ -90,7 +90,7 @@ export function TrainingRejudgeModal({
     setSubmitting(true)
     setMessage(null)
     const selectedScope = scope === 'all' ? { type: 'all' } : scope === 'problem' ? { type: 'problem', trainingProblemId: problemId } : { type: 'user_problem', trainingProblemId: problemId, userId }
-    const result = await apiClient.mutate<{ resetCount: number; skippedCount: number }>(`/api/trainings/${trainingId}/rejudge`, 'POST', { scope: selectedScope })
+    const result = await apiClient.mutate<{ resetCount: number; skippedCount: number }>(`/api/contests/${trainingId}/rejudge`, 'POST', { scope: selectedScope })
     setSubmitting(false)
     if (!result.ok) {
       setMessage({ type: 'error', text: result.error.message })

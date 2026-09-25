@@ -185,13 +185,13 @@ async function ensureProblems(teacherSession) {
 }
 
 async function ensureContests(teacherSession, team, problems) {
-  const current = items(await request('/teams/' + team.id + '/trainings?type=contest', { session: teacherSession }))
+  const current = items(await request('/teams/' + team.id + '/contests?type=contest', { session: teacherSession }))
   const now = Date.now()
   const result = []
   for (const spec of contests) {
     let contest = current.find(item => item.title === spec.title)
     if (!contest) {
-      contest = await request('/teams/' + team.id + '/trainings', {
+      contest = await request('/teams/' + team.id + '/contests', {
         token: teacherSession,
         method: 'POST',
         body: {

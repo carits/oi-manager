@@ -299,7 +299,7 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
-  "apps/server/src/modules/training/training.routes.ts": {
+  "apps/server/src/modules/training/contest.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,

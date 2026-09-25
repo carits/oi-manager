@@ -161,7 +161,7 @@ describe('external-source local judging', () => {
     await prisma.problem.update({ where: { id: problem.id }, data: { judgeConfig: null } })
 
     const response = await request(app)
-      .post(`/api/trainings/${training.id}/submit`)
+      .post(`/api/contests/${training.id}/submit`)
       .set('Cookie', `oi_session=${token}`)
       .send({
         trainingProblemId: trainingProblem.id,

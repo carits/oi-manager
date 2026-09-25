@@ -1,5 +1,5 @@
 import { prisma } from '../../../prisma'
-import { getComputedTrainingStatus, sortTrainingListForDisplay } from '../../training/training.helpers'
+import { getComputedTrainingStatus, sortTrainingListForDisplay } from '../../contest/contest.helpers'
 import {
   CURRENT_JUDGE_RUN_SELECT,
   projectSubmissionJudgeResult,
@@ -24,7 +24,7 @@ function formatTraining(training: any, source: 'team' | 'school' | 'platform') {
     format: training.format,
     teamId: training.teamId,
     organizationId: training.organizationId,
-    problemCount: training._count.TrainingProblem,
+    problemCount: training._count.ContestProblem,
     source,
     createdAt: training.createdAt,
   }
@@ -51,12 +51,25 @@ async function currentTeamIds(actor: DashboardActor) {
 export async function listMyHomeworks(actor: DashboardActor) {
   const teamIds = await currentTeamIds(actor)
   if (teamIds.length === 0) return []
-  const trainings = await prisma.training.findMany({
-    where: { teamId: { in: teamIds }, type: 'homework', scope: 'campus' },
-    orderBy: { startTime: 'desc' },
-    include: { _count: { select: { TrainingProblem: true } } },
+  const assignments = await prisma.assignment.findMany({
+    where: { teamId: { in: teamIds }, status: { notIn: ['DRAFT', 'CANCELLED', 'ARCHIVED'] } },
+    orderBy: { openAt: 'desc' },
+    include: { _count: { select: { Problems: true } } },
   })
-  return trainings.map(training => formatTraining(training, 'team'))
+  return assignments.map(assignment => ({
+    id: assignment.id,
+    title: assignment.title,
+    description: assignment.description,
+    startTime: assignment.openAt,
+    endTime: assignment.dueAt,
+    status: assignment.status.toLowerCase(),
+    format: 'assignment',
+    teamId: assignment.teamId,
+    organizationId: assignment.organizationId,
+    problemCount: assignment._count.Problems,
+    source: 'team' as const,
+    createdAt: assignment.createdAt,
+  }))
 }
 
 export async function listMyContests(actor: DashboardActor) {

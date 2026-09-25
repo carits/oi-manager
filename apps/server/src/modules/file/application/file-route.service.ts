@@ -2,7 +2,7 @@ import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../../prisma'
 import { fileService } from '../../../lib/storage'
 import { canModifyProblem, canViewProblem } from '../../problem/problem.access'
-import { canAccessTraining, canManageTraining } from '../../training/training.helpers'
+import { canAccessContest, canManageTraining } from '../../contest/contest.helpers'
 import type { FileCategory, OwnerType } from '../../../config/storage'
 
 const UPLOAD_CATEGORIES = new Set<FileCategory>(['pdf', 'attachment', 'avatar', 'image', 'testdata'])
@@ -84,7 +84,7 @@ async function hasOwnerPermission(user: JwtPayload, ownerType: OwnerType, ownerI
       }
       return action === 'modify'
         ? canManageTraining(user.userId, activity)
-        : canAccessTraining(user.userId, activity)
+        : canAccessContest(user.userId, activity)
     }
     case 'team':
       return hasTeamPermission(user, ownerId, action === 'modify')

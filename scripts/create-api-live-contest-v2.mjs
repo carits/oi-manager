@@ -113,21 +113,21 @@ async function ensureProblems(teacherSession) {
   return output
 }
 async function ensureContests(teacherSession, team, problems) {
-  const current = list(await request('/teams/' + team.id + '/trainings?type=contest', { session: teacherSession })); const output=[]; const now=Date.now()
+  const current = list(await request('/teams/' + team.id + '/contests?type=contest', { session: teacherSession })); const output=[]; const now=Date.now()
   for (const spec of contests) {
     let contest=current.find(item=>item.title===spec.title)
     if (!contest) {
-      contest=await request('/teams/'+team.id+'/trainings',{token:teacherSession,method:'POST',body:{title:spec.title,description:'赛时演示 V2：真实评测、部分分、错误提交和固定时间线。',format:spec.format,type:'contest',startTime:new Date(now+86400000).toISOString(),endTime:new Date(now+259200000).toISOString(),problemIdVisible:true,solutionVisible:true}})
-      for (const [index,problem] of problems.entries()) await request('/trainings/'+contest.id+'/problems',{token:teacherSession,method:'POST',body:{problemId:problem.id,alias:String.fromCharCode(65+index),points:100}})
+      contest=await request('/teams/'+team.id+'/contests',{token:teacherSession,method:'POST',body:{title:spec.title,description:'赛时演示 V2：真实评测、部分分、错误提交和固定时间线。',format:spec.format,type:'contest',startTime:new Date(now+86400000).toISOString(),endTime:new Date(now+259200000).toISOString(),problemIdVisible:true,solutionVisible:true}})
+      for (const [index,problem] of problems.entries()) await request('/contests/'+contest.id+'/problems',{token:teacherSession,method:'POST',body:{problemId:problem.id,alias:String.fromCharCode(65+index),points:100}})
     }
-    output.push({ ...spec, ...(await request('/trainings/'+contest.id,{token:teacherSession})) })
+    output.push({ ...spec, ...(await request('/contests/'+contest.id,{token:teacherSession})) })
   }
   return output
 }
 async function waitForJudge(teacherSession, contests) {
   const deadline=Date.now()+720000
   while (Date.now()<deadline) {
-    const pending=await Promise.all(contests.map(async contest=>list((await request('/trainings/'+contest.id+'/submissions?page=1&pageSize=200',{token:teacherSession})).submissions).some(item=>item.result==='queuing'||item.result==='judging')))
+    const pending=await Promise.all(contests.map(async contest=>list((await request('/contests/'+contest.id+'/submissions?page=1&pageSize=200',{token:teacherSession})).submissions).some(item=>item.result==='queuing'||item.result==='judging')))
     if (!pending.some(Boolean)) return
     await new Promise(resolve=>setTimeout(resolve,3000))
   }
@@ -144,7 +144,7 @@ async function main() {
   const events=await request('/admin/demo-scenario/v2/events',{token:adminSession,method:'POST',headers})
   const active=all.filter(contest=>contest.state!=='未开始')
   await waitForJudge(teacherSession,active)
-  for (const contest of all.filter(contest=>contest.state==='已结束')) await request('/trainings/'+contest.id+'/finish',{token:teacherSession,method:'POST'})
+  for (const contest of all.filter(contest=>contest.state==='已结束')) await request('/contests/'+contest.id+'/finish',{token:teacherSession,method:'POST'})
   console.log(JSON.stringify({success:true,teamId:team.id,events,users:members.map(member=>member.username),contests:all.map(contest=>({id:contest.id,title:contest.title,state:contest.state}))},null,2))
 }
 main().catch(error=>{console.error(error.stack||error.message);process.exitCode=1})

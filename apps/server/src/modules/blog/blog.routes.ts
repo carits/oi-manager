@@ -146,7 +146,7 @@ blogRouter.post('/platform/blog-tags', authenticate, endpoint(req => createBlogT
 blogRouter.get('/blog-tags/:tagId/blogs', authenticate, endpoint(req => listTagBlogs(req.user, req.params.tagId, req.query)))
 
 blogRouter.get('/problems/:problemId/blogs', authenticate, endpoint(req => listProblemBlogs(req.user, req.params.problemId, req.query)))
-blogRouter.get('/trainings/:trainingId/blogs', authenticate, endpoint(req => {
+blogRouter.get('/contests/:trainingId/blogs', authenticate, endpoint(req => {
   if (!/^\d+$/.test(req.params.trainingId)) throw new BlogDomainError(422, 'BLOG_CONTEST_ID_INVALID', '比赛 ID 无效')
   return listContestBlogs(req.user, Number(req.params.trainingId), req.query)
 }))

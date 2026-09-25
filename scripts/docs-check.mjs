@@ -217,7 +217,7 @@ const routerPrefixes = {
   ojAccountsRouter: '/api/oj-accounts',
   submitRouter: '/api/submit',
   testdataRouter: '/api',
-  trainingsRouter: '/api',
+  contestRouter: '/api',
   trainingEngineRouter: '/api',
   assignmentRouter: '/api',
   dataMarketRouter: '/api',

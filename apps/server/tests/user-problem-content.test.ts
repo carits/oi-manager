@@ -115,17 +115,17 @@ describe('VJudge 式多题面版本与活动快照', () => {
     const tp = await prisma.trainingProblem.create({ data: {
       id: crypto.randomUUID(), trainingId: training.id, problemId: problem.id, alias: 'A', orderIndex: 0,
     } })
-    const first = await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [{
+    const first = await client.put(`/api/contests/${training.id}/statement-management`).send({ selections: [{
       trainingProblemId: tp.id, visibleOptionKeys: [`user:${versionId}`], defaultOptionKey: `user:${versionId}`,
     }] })
     expect(first.status).toBe(200)
 
     await client.put(`/api/problems/${problem.id}/statement-versions/${versionId}/content`).send({ content: '活动第二版' })
-    const matrix = await client.get(`/api/trainings/${training.id}/statement-management`)
+    const matrix = await client.get(`/api/contests/${training.id}/statement-management`)
     const canonical = matrix.body.data.problems[0].options.find((item: any) => item.sourceType === 'canonical')
     expect(canonical).toBeTruthy()
     expect(canonical.name).toBe('官方中文')
-    const second = await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [{
+    const second = await client.put(`/api/contests/${training.id}/statement-management`).send({ selections: [{
       trainingProblemId: tp.id,
       visibleOptionKeys: [`user:${versionId}`, canonical.key],
       defaultOptionKey: `user:${versionId}`,
@@ -148,7 +148,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
     const tp = await prisma.trainingProblem.create({ data: {
       id: crypto.randomUUID(), trainingId: training.id, problemId: problem.id, alias: 'A', orderIndex: 0,
     } })
-    const matrix = await client.get(`/api/trainings/${training.id}/statement-management`)
+    const matrix = await client.get(`/api/contests/${training.id}/statement-management`)
     const item = matrix.body.data.problems[0]
     const canonical = item.options.find((option: any) => option.sourceType === 'canonical')
     const selection = {
@@ -157,8 +157,8 @@ describe('VJudge 式多题面版本与活动快照', () => {
       defaultOptionKey: canonical.key,
       expectedSelectionRevision: item.selectionRevision,
     }
-    expect((await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [selection] })).status).toBe(200)
-    const stale = await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [selection] })
+    expect((await client.put(`/api/contests/${training.id}/statement-management`).send({ selections: [selection] })).status).toBe(200)
+    const stale = await client.put(`/api/contests/${training.id}/statement-management`).send({ selections: [selection] })
     expect(stale.status).toBe(409)
     expect(stale.body.code).toBe('STATEMENT_SELECTION_STALE')
   })
@@ -175,19 +175,19 @@ describe('VJudge 式多题面版本与活动快照', () => {
     const tp = await prisma.trainingProblem.create({ data: {
       id: crypto.randomUUID(), trainingId: training.id, problemId: problem.id, alias: 'A', orderIndex: 0,
     } })
-    const matrix = await client.get(`/api/trainings/${training.id}/statement-management`)
+    const matrix = await client.get(`/api/contests/${training.id}/statement-management`)
     const canonical = matrix.body.data.problems[0].options.find((item: any) => item.sourceType === 'canonical')
-    await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [{
+    await client.put(`/api/contests/${training.id}/statement-management`).send({ selections: [{
       trainingProblemId: tp.id, visibleOptionKeys: [canonical.key], defaultOptionKey: canonical.key,
     }] })
     const before = await prisma.trainingProblemStatementSet.findFirstOrThrow({
       where: { trainingProblemId: tp.id }, orderBy: { revision: 'desc' }, include: { Snapshot: true },
     })
     const oldSnapshot = before.Snapshot[0]
-    const forbidden = await participantClient.put(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '越权内容' })
+    const forbidden = await participantClient.put(`/api/contests/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '越权内容' })
     expect(forbidden.status).toBe(403)
 
-    const edited = await client.put(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '活动专属题面' })
+    const edited = await client.put(`/api/contests/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '活动专属题面' })
     expect(edited.status).toBe(200)
     expect(edited.body.data.revision).toBe(before.revision + 1)
     const after = await prisma.trainingProblemStatementSet.findFirstOrThrow({
@@ -199,13 +199,13 @@ describe('VJudge 式多题面版本与活动快照', () => {
     expect((await prisma.problem.findUniqueOrThrow({ where: { id: problem.id } })).description).toBe('原始官方题面')
     expect((await prisma.trainingProblemStatementSnapshot.findUniqueOrThrow({ where: { id: oldSnapshot.id } })).content).toBe('原始官方题面')
 
-    const stale = await client.put(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '陈旧覆盖' })
+    const stale = await client.put(`/api/contests/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '陈旧覆盖' })
     expect(stale.status).toBe(409)
     expect(stale.body.code).toBe('CONTENT_SNAPSHOT_STALE')
-    expect((await client.post(`/api/trainings/${training.id}/problems/${tp.id}/statement-versions`).send({ name: '禁止创建' })).status).toBe(404)
-    expect((await client.put(`/api/trainings/${training.id}/problems/${tp.id}/my-content/statement`).send({ content: '禁止写入' })).status).toBe(404)
-    expect((await client.put(`/api/trainings/${training.id}/problems/${tp.id}/my-content/statement/shares`).send({ shareKeys: ['platform'] })).status).toBe(404)
-    expect((await client.delete(`/api/trainings/${training.id}/problems/${tp.id}/my-content/statement`)).status).toBe(404)
+    expect((await client.post(`/api/contests/${training.id}/problems/${tp.id}/statement-versions`).send({ name: '禁止创建' })).status).toBe(404)
+    expect((await client.put(`/api/contests/${training.id}/problems/${tp.id}/my-content/statement`).send({ content: '禁止写入' })).status).toBe(404)
+    expect((await client.put(`/api/contests/${training.id}/problems/${tp.id}/my-content/statement/shares`).send({ shareKeys: ['platform'] })).status).toBe(404)
+    expect((await client.delete(`/api/contests/${training.id}/problems/${tp.id}/my-content/statement`)).status).toBe(404)
   })
 
   it('管理员编辑活动题解会追加 revision 并保留旧快照', async () => {
@@ -222,7 +222,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
       sourceType: 'canonical', format: 'markdown', language: 'zh', content: '旧题解',
       selectedBy: author.user.id,
     } })
-    const edited = await client.put(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/solution/${old.id}`).send({ content: '活动新题解' })
+    const edited = await client.put(`/api/contests/${training.id}/problems/${tp.id}/content-snapshots/solution/${old.id}`).send({ content: '活动新题解' })
     expect(edited.status).toBe(200)
     expect(edited.body.data.revision).toBe(2)
     const snapshots = await prisma.trainingProblemContentSnapshot.findMany({
@@ -231,10 +231,10 @@ describe('VJudge 式多题面版本与活动快照', () => {
     expect(snapshots.map(item => [item.revision, item.content, item.sourceType])).toEqual([
       [1, '旧题解', 'canonical'], [2, '活动新题解', 'training'],
     ])
-    const options = await client.get(`/api/trainings/${training.id}/problems/${tp.id}/content-options`)
+    const options = await client.get(`/api/contests/${training.id}/problems/${tp.id}/content-options`)
     expect(options.status).toBe(200)
     expect(options.body.data.currentSelection.solutionOptionKey).toBe(`snapshot:${edited.body.data.snapshotId}`)
-    const preview = await client.get(`/api/trainings/${training.id}/problems/${tp.id}/content-options/${encodeURIComponent(`snapshot:${edited.body.data.snapshotId}`)}/preview`)
+    const preview = await client.get(`/api/contests/${training.id}/problems/${tp.id}/content-options/${encodeURIComponent(`snapshot:${edited.body.data.snapshotId}`)}/preview`)
     expect(preview.status).toBe(200)
     expect(preview.body.data.content).toBe('活动新题解')
   })
@@ -260,7 +260,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
       format: 'pdf', snapshotFileId: originalFile.id, fileName: 'original.pdf', isDefault: true, orderIndex: 0,
     } })
     const response = await request(app)
-      .post(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}/pdf`)
+      .post(`/api/contests/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}/pdf`)
       .set('Cookie', `oi_session=${token}`)
       .attach('file', Buffer.from('%PDF-1.4\nreplacement'), { filename: 'replacement.pdf', contentType: 'application/pdf' })
     expect(response.status).toBe(200)

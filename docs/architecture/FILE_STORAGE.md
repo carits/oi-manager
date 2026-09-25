@@ -51,7 +51,7 @@ STORAGE_ROOT/
 - 头像等真正公开文件可通过 `/uploads/public` 或兼容路径 `/public` 访问。
 - 题目图片、PDF、附件和测试数据全部为私有文件，不生成可匿名访问的 `/public` URL。
 - 教师通过 `/api/files/:id/download` 按题库作用域鉴权。学生必须使用
-  `/api/trainings/:id/problems/:problemId/files/:fileId` 或
+  `/api/contests/:id/problems/:problemId/files/:fileId` 或
   `/api/problem-lists/:id/entries/:entryId/files/:fileId` 教学上下文通道，同时校验教学资源、题目条目和文件引用。
 - 直接访问跨校文件、未授权学校题文件或私有静态路径统一返回 `404`。
 - 文件元数据保存在 `File`，题目附件和题面还有对应业务模型。

@@ -15,7 +15,7 @@ test('activity statement selection and editing preserve immutable revisions', as
   const student = await loginAs(request, 'campusStudent')
   const principalHeaders = headers(principal.cookie)
   const studentHeaders = headers(student.cookie)
-  const managementUrl = `/api/trainings/${ids.contest}/statement-management`
+  const managementUrl = `/api/contests/${ids.contest}/statement-management`
 
   const matrixResponse = await request.get(managementUrl, { headers: principalHeaders })
   expect(matrixResponse.status()).toBe(200)
@@ -48,7 +48,7 @@ test('activity statement selection and editing preserve immutable revisions', as
   expect((await selected.json()).data).toMatchObject({ changedCount: 3 })
 
   const target = matrix.problems[0]
-  const versionsUrl = `/api/trainings/${ids.contest}/problems/${target.trainingProblemId}/statement-versions`
+  const versionsUrl = `/api/contests/${ids.contest}/problems/${target.trainingProblemId}/statement-versions`
   const participantView = await request.get(versionsUrl, { headers: studentHeaders })
   expect(participantView.status()).toBe(200)
   const before = (await participantView.json()).data
@@ -57,7 +57,7 @@ test('activity statement selection and editing preserve immutable revisions', as
   expect(before.statements[0].isDefault).toBe(true)
   const oldSnapshotId = before.statements[0].id as string
 
-  const editUrl = `/api/trainings/${ids.contest}/problems/${target.trainingProblemId}/content-snapshots/statement/${oldSnapshotId}`
+  const editUrl = `/api/contests/${ids.contest}/problems/${target.trainingProblemId}/content-snapshots/statement/${oldSnapshotId}`
   const forbiddenEdit = await request.put(editUrl, {
     headers: studentHeaders,
     data: { content: 'student must not change activity snapshots' },
@@ -93,7 +93,7 @@ test('activity statement selection and editing preserve immutable revisions', as
   expect(revisions).toEqual([2, 1, 1])
 
   const removedCreation = await request.post(
-    `/api/trainings/${ids.contest}/problems/${target.trainingProblemId}/statement-versions`,
+    `/api/contests/${ids.contest}/problems/${target.trainingProblemId}/statement-versions`,
     { headers: principalHeaders, data: { name: 'forbidden activity creation' } },
   )
   expect(removedCreation.status()).toBe(404)

@@ -27,11 +27,12 @@ export function normalizeDemoSubmission(sourceId: string, createdAt: Date) {
 }
 
 export function findDemoTrainingProblems(trainingId: number) {
-  return prisma.trainingProblem.findMany({
-    where: { trainingId },
-    include: { Problem: { select: { id: true, platform: true, problemId: true } } },
-    orderBy: { orderIndex: 'asc' },
-  })
+  return prisma.contest.findUnique({ where: { publicId: trainingId }, select: { id: true } }).then(contest =>
+    contest ? prisma.contestProblem.findMany({
+      where: { contestId: contest.id },
+      include: { CanonicalProblem: { select: { id: true, platform: true, problemId: true } } },
+      orderBy: { orderIndex: 'asc' },
+    }).then(rows => rows.map(row => ({ ...row, Problem: row.CanonicalProblem }))) : [])
 }
 
 export async function demoSubmissionExists(sourceId: string) {

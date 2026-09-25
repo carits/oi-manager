@@ -187,7 +187,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
   const trainingIds: number[] = []
   const trainingProblemIds: string[] = []
   for (const suffix of ['manual-update', 'frozen']) {
-    const create = await request.post('/api/teams/e2e-team/trainings', {
+    const create = await request.post('/api/teams/e2e-team/contests', {
       headers: principalHeaders,
       data: {
         title: `Restore audit ${suffix}`,
@@ -204,7 +204,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
     const trainingId = Number(createBody.data.id)
     trainingIds.push(trainingId)
 
-    const add = await request.post(`/api/trainings/${trainingId}/problems`, {
+    const add = await request.post(`/api/contests/${trainingId}/problems`, {
       headers: principalHeaders,
       data: { problemId: 'e2e-problem', alias: 'A', points: 100 },
     })
@@ -284,7 +284,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
   expect(pinnedBeforeUpdate.every(item => item.testSetRevisionId === baseRevisionId)).toBe(true)
 
   const preview = await request.get(
-    `/api/trainings/${trainingIds[0]}/problems/${trainingProblemIds[0]}/test-set-update`,
+    `/api/contests/${trainingIds[0]}/problems/${trainingProblemIds[0]}/test-set-update`,
     { headers: principalHeaders },
   )
   const previewBody = await preview.json()
@@ -292,17 +292,17 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
   expect(previewBody.data).toMatchObject({ pending: true, frozen: false })
 
   const update = await request.post(
-    `/api/trainings/${trainingIds[0]}/problems/${trainingProblemIds[0]}/test-set-update`,
+    `/api/contests/${trainingIds[0]}/problems/${trainingProblemIds[0]}/test-set-update`,
     { headers: principalHeaders, data: {} },
   )
   const updateBody = await update.json()
   expect(update.status(), JSON.stringify(updateBody)).toBe(200)
   expect(updateBody.data.currentRevisionId).toBe(problem.latestTestSetRevisionId)
 
-  const start = await request.post(`/api/trainings/${trainingIds[1]}/start`, { headers: principalHeaders })
+  const start = await request.post(`/api/contests/${trainingIds[1]}/start`, { headers: principalHeaders })
   expect(start.status()).toBe(200)
   const frozenUpdate = await request.post(
-    `/api/trainings/${trainingIds[1]}/problems/${trainingProblemIds[1]}/test-set-update`,
+    `/api/contests/${trainingIds[1]}/problems/${trainingProblemIds[1]}/test-set-update`,
     { headers: principalHeaders, data: {} },
   )
   const frozenBody = await frozenUpdate.json()

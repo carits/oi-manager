@@ -41,7 +41,7 @@ export function TrainingContentSnapshotEditorModal({ isOpen, trainingId, snapsho
   const save = async () => {
     if (!snapshot) return
     setSaving(true)
-    const base = `/api/trainings/${trainingId}/problems/${snapshot.trainingProblemId}/content-snapshots/${snapshot.kind}/${snapshot.snapshotId}`
+    const base = `/api/contests/${trainingId}/problems/${snapshot.trainingProblemId}/content-snapshots/${snapshot.kind}/${snapshot.snapshotId}`
     if (snapshot.format === 'pdf' && !file) {
       toast.error('请选择新的 PDF 文件')
       setSaving(false)

@@ -78,10 +78,10 @@ async function login() {
 }
 
 async function listSubmissions(contestId) {
-  const first = await request(`/api/trainings/${contestId}/submissions?page=1&pageSize=100`)
+  const first = await request(`/api/contests/${contestId}/submissions?page=1&pageSize=100`)
   const rows = [...(first.submissions || [])]
   for (let page = 2; page <= Number(first.totalPages || 1); page += 1) {
-    const next = await request(`/api/trainings/${contestId}/submissions?page=${page}&pageSize=100`)
+    const next = await request(`/api/contests/${contestId}/submissions?page=${page}&pageSize=100`)
     rows.push(...(next.submissions || []))
   }
   return rows
@@ -114,7 +114,7 @@ function caseMetrics(cases) {
 
 async function collectDetails(contest, rows, observedCompletionMs) {
   return mapLimit(rows, 8, async row => {
-    const detail = await request(`/api/trainings/${contest.id}/submissions/${row.id}`)
+    const detail = await request(`/api/contests/${contest.id}/submissions/${row.id}`)
     const codeHash = detail.code == null ? null : crypto.createHash('sha256').update(detail.code).digest('hex')
     return {
       contestId: contest.id,
@@ -195,7 +195,7 @@ function summarizeRound(round, elapsedMs, rejudge, records) {
 }
 
 await login()
-const contestInfo = await Promise.all(contests.map(async contest => ({ ...contest, data: await request(`/api/trainings/${contest.id}`) })))
+const contestInfo = await Promise.all(contests.map(async contest => ({ ...contest, data: await request(`/api/contests/${contest.id}`) })))
 if (process.env.BENCHMARK_INSPECT_ONLY === '1') {
   const lists = await Promise.all(contests.map(async contest => ({ contest, rows: await listSubmissions(contest.id) })))
   const records = (await Promise.all(lists.map(item => collectDetails(item.contest, item.rows, new Map())))).flat()
@@ -209,7 +209,7 @@ if (process.env.BENCHMARK_DRY_RUN === '1') {
     contestId: contest.id,
     mode: contest.mode,
     submissions: (await listSubmissions(contest.id)).length,
-    rejudge: await request(`/api/trainings/${contest.id}/rejudge/preview?scopeType=all`),
+    rejudge: await request(`/api/contests/${contest.id}/rejudge/preview?scopeType=all`),
   })))
   console.log(JSON.stringify({ contests: contestInfo.map(item => ({ id: item.id, mode: item.mode, title: item.data.title })), preview }, null, 2))
   process.exit(0)
@@ -231,7 +231,7 @@ for (let round = 1; round <= rounds; round += 1) {
   const expectedIds = new Map(before.flatMap(item => item.rows.map(row => [row.id, item.contest.mode])))
   const observedCompletionMs = new Map()
   const startedAt = Date.now()
-  const rejudgeResults = await Promise.all(contests.map(contest => request(`/api/trainings/${contest.id}/rejudge`, {
+  const rejudgeResults = await Promise.all(contests.map(contest => request(`/api/contests/${contest.id}/rejudge`, {
     method: 'POST',
     body: JSON.stringify({ scope: { type: 'all' } }),
   })))

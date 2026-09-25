@@ -1,7 +1,6 @@
-import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../../../prisma'
-import { createRejudgeBatch, rejudgeSubmissionWithRun } from '../../judge/application/judge-run.service'
+import { createRejudgeBatch } from '../../judge/application/judge-run.service'
 import { currentJudgeCompletedWhere } from '../../judge/application/judge-read-projection'
 import { listFinishedContestIds } from '../../contest/contest-query.facade'
 
@@ -31,24 +30,6 @@ export async function rejudgeAllLocalSubmissions(requestedBy: string) {
   }
 }
 
-export async function repairLegacyCaritsSubmissions(requestedBy: string) {
-  const legacy = await prisma.submission.findMany({
-    where: { oj: 'carits', problemInternalId: null, trainingProblemId: { not: null } },
-    select: { id: true, trainingProblemId: true },
-  })
-  const ids = [...new Set(legacy.map(item => item.trainingProblemId).filter((id): id is string => Boolean(id)))]
-  const trainingProblems = await prisma.trainingProblem.findMany({ where: { id: { in: ids } }, select: { id: true, problemId: true } })
-  const problemIds = new Map(trainingProblems.map(item => [item.id, item.problemId]))
-  let requeued = 0
-  for (const submission of legacy) {
-    const problemInternalId = submission.trainingProblemId ? problemIds.get(submission.trainingProblemId) : undefined
-    if (!problemInternalId) continue
-    await prisma.submission.update({ where: { id: submission.id }, data: { problemInternalId, submitMethod: 'local' } })
-    if (await rejudgeSubmissionWithRun(submission.id, requestedBy)) requeued++
-  }
-  return { found: legacy.length, requeued, message: `已修复并重新加入 ${requeued} 条旧 Carits 提交` }
-}
-
 export async function getSubmissionMaintenanceStats() {
   const byResultPromise = prisma.$queryRaw<Array<{ result: string; count: number }>>`
     SELECT
@@ -70,7 +51,7 @@ export async function getSubmissionMaintenanceStats() {
     prisma.submission.count(),
     prisma.submission.count({ where: { oj: 'carits' } }),
     prisma.submission.count({ where: { oj: 'carits', ojRemoteId: null } }),
-    prisma.submission.count({ where: { submitScope: { in: ['training', 'contest'] } } }),
+    prisma.submission.count({ where: { submitScope: 'contest' } }),
     byResultPromise,
   ])
   return { total, carits, caritsNoRemoteId, trainingSubmissions, byResult }
@@ -100,13 +81,6 @@ export async function fixHduMemory(defaultKB: unknown) {
 
 }
 
-export async function cleanTrainingSubmissions(trainingId: unknown) {
-  const id = Number(trainingId)
-  if (!Number.isInteger(id) || id <= 0) throw new AdminDataError(400, '缺少 trainingId')
-  const result = await prisma.submission.deleteMany({ where: { submitScope: 'training', trainingId: id } })
-  return { deleted: result.count, message: `已删除 ${result.count} 条提交` }
-}
-
 export async function resetUserPassword(userId: unknown, newPassword: unknown) {
   if (typeof userId !== 'string' || typeof newPassword !== 'string' || !userId || !newPassword) {
     throw new AdminDataError(400, '缺少 userId 或 newPassword')
@@ -120,46 +94,15 @@ export async function resetUserPassword(userId: unknown, newPassword: unknown) {
   return { userId: user.id, username: user.username, message: '密码已重置' }
 }
 
-export async function backfillTrainingParticipants(trainingId: unknown) {
-  const parsedId = trainingId === undefined || trainingId === null || trainingId === '' ? undefined : Number(trainingId)
-  if (parsedId !== undefined && (!Number.isInteger(parsedId) || parsedId <= 0)) throw new AdminDataError(400, 'trainingId 无效')
-  const trainings = await prisma.training.findMany({
-    where: { type: { not: 'contest' }, ...(parsedId ? { id: parsedId } : {}) },
-    select: { id: true, teamId: true, title: true },
-  })
-  if (!trainings.length) throw new AdminDataError(404, '没有找到训练')
-  let totalCreated = 0
-  const details: Array<{ trainingId: number; title: string; created: number }> = []
-  for (const training of trainings) {
-    if (!training.teamId) {
-      details.push({ trainingId: training.id, title: training.title, created: 0 })
-      continue
-    }
-    const members = await prisma.teamMember.findMany({ where: { teamId: training.teamId, userType: 'student', status: 'active' }, select: { userId: true } })
-    if (!members.length) {
-      details.push({ trainingId: training.id, title: training.title, created: 0 })
-      continue
-    }
-    const result = await prisma.trainingParticipant.createMany({
-      data: members.map(member => ({ id: crypto.randomUUID(), trainingId: training.id, userId: member.userId, userType: 'student' })),
-      skipDuplicates: true,
-    })
-    totalCreated += result.count
-    details.push({ trainingId: training.id, title: training.title, created: result.count })
-  }
-  return { totalTrainings: trainings.length, totalCreated, details }
-}
-
 export async function fixSubmissionVisibility() {
-  const trainingResult = await prisma.submission.updateMany({ where: { submitScope: 'training', isGlobalVisible: false }, data: { isGlobalVisible: true } })
   const contestIds = await listFinishedContestIds()
   const contestResult = contestIds.length ? await prisma.submission.updateMany({
     where: { submitScope: 'contest', isGlobalVisible: false, canonicalContestId: { in: contestIds } },
     data: { isGlobalVisible: true },
   }) : { count: 0 }
   return {
-    trainingUpdated: trainingResult.count, contestUpdated: contestResult.count,
-    totalUpdated: trainingResult.count + contestResult.count,
-    message: `已修复 ${trainingResult.count} 条训练提交，${contestResult.count} 条比赛提交`,
+    contestUpdated: contestResult.count,
+    totalUpdated: contestResult.count,
+    message: `已修复 ${contestResult.count} 条比赛提交`,
   }
 }

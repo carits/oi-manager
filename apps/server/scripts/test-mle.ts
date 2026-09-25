@@ -79,7 +79,7 @@ int main() {
   // 提交 MLE 代码
   console.log('提交 MLE 测试代码...')
 
-  const response = await fetch(`${API_URL}/api/trainings/4/submit`, {
+  const response = await fetch(`${API_URL}/api/contests/4/submit`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

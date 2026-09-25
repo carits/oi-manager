@@ -28,19 +28,19 @@ test('contest rejudge is scoped, skips active work and excludes archives', async
   const student = await loginAs(request, 'campusStudent')
   const principalHeaders = organizationHeaders(principal.cookie)
   const studentHeaders = organizationHeaders(student.cookie)
-  const previewUrl = `/api/trainings/${ids.contest}/rejudge/preview?scopeType=problem&trainingProblemId=${problemId}`
+  const previewUrl = `/api/contests/${ids.contest}/rejudge/preview?scopeType=problem&trainingProblemId=${problemId}`
 
   const before = await request.get(previewUrl, { headers: principalHeaders })
   expect(before.status()).toBe(200)
   expect((await before.json()).data).toEqual({ matchedCount: 3, inProgressCount: 0 })
 
-  const forbidden = await request.post(`/api/trainings/${ids.contest}/rejudge`, {
+  const forbidden = await request.post(`/api/contests/${ids.contest}/rejudge`, {
     headers: studentHeaders,
     data: { scope: { type: 'problem', trainingProblemId: problemId } },
   })
   expect(forbidden.status()).toBe(403)
 
-  const rejudge = await request.post(`/api/trainings/${ids.contest}/rejudge`, {
+  const rejudge = await request.post(`/api/contests/${ids.contest}/rejudge`, {
     headers: principalHeaders,
     data: { scope: { type: 'problem', trainingProblemId: problemId } },
   })
@@ -51,14 +51,14 @@ test('contest rejudge is scoped, skips active work and excludes archives', async
   expect(after.status()).toBe(200)
   expect((await after.json()).data).toEqual({ matchedCount: 0, inProgressCount: 3 })
 
-  const repeated = await request.post(`/api/trainings/${ids.contest}/rejudge`, {
+  const repeated = await request.post(`/api/contests/${ids.contest}/rejudge`, {
     headers: principalHeaders,
     data: { scope: { type: 'problem', trainingProblemId: problemId } },
   })
   expect(repeated.status()).toBe(200)
   expect((await repeated.json()).data).toMatchObject({ resetCount: 0, skippedCount: 3 })
 
-  const records = await request.get(`/api/trainings/${ids.contest}/submissions?problemId=${problemId}&pageSize=50`, {
+  const records = await request.get(`/api/contests/${ids.contest}/submissions?problemId=${problemId}&pageSize=50`, {
     headers: principalHeaders,
   })
   expect(records.status()).toBe(200)
@@ -71,7 +71,7 @@ test('contest rejudge is scoped, skips active work and excludes archives', async
   ])
   expect(submissions.find(item => item.oj === 'codeforces')?.result).toBe('accepted')
 
-  const otherProblem = await request.get(`/api/trainings/${ids.contest}/submissions?problemId=e2e-contest-problem&pageSize=50`, {
+  const otherProblem = await request.get(`/api/contests/${ids.contest}/submissions?problemId=e2e-contest-problem&pageSize=50`, {
     headers: principalHeaders,
   })
   expect(otherProblem.status()).toBe(200)
@@ -133,11 +133,11 @@ test('contest rejudge is scoped, skips active work and excludes archives', async
     },
   })
 
-  const concurrentRejudges = Array.from({ length: 20 }, () => request.post(`/api/trainings/${ids.contest}/rejudge`, {
+  const concurrentRejudges = Array.from({ length: 20 }, () => request.post(`/api/contests/${ids.contest}/rejudge`, {
     headers: principalHeaders,
     data: { scope: { type: 'problem', trainingProblemId: problemId } },
   }))
-  const normalSubmit = request.post(`/api/trainings/${ids.contest}/submit`, {
+  const normalSubmit = request.post(`/api/contests/${ids.contest}/submit`, {
     headers: {
       ...studentHeaders,
       'Idempotency-Key': `rejudge-race-${Date.now()}`,
@@ -184,7 +184,7 @@ test('contest rejudge is scoped, skips active work and excludes archives', async
   }
   const [claimed, racingRejudge] = await Promise.all([
     persistOwnedSubmissionResult(resultPayload, 'rejudge-race-judge'),
-    request.post(`/api/trainings/${ids.contest}/rejudge`, {
+    request.post(`/api/contests/${ids.contest}/rejudge`, {
       headers: principalHeaders,
       data: { scope: { type: 'problem', trainingProblemId: problemId } },
     }),

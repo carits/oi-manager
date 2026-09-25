@@ -142,13 +142,7 @@ class JudgeConsumer {
         where: { id: claimed.problemInternalId },
         select: { judgeConfig: true, latestTestSetRevisionId: true },
       })
-      const trainingProblem = claimed.trainingProblemId
-        ? await prisma.trainingProblem.findUnique({
-            where: { id: claimed.trainingProblemId },
-            select: { judgeConfigSnapshot: true, testSetRevisionId: true },
-          })
-        : null
-      const revisionId = claimed.testSetRevisionId || trainingProblem?.testSetRevisionId || problem?.latestTestSetRevisionId
+      const revisionId = claimed.testSetRevisionId || problem?.latestTestSetRevisionId
       const revision = revisionId
         ? await prisma.problemTestSetRevision.findFirst({
             where: { id: revisionId, problemId: claimed.problemInternalId },
@@ -156,7 +150,7 @@ class JudgeConsumer {
           })
         : null
       const testdataRoot = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
-      const config = yaml.load(claimed.judgeConfigSnapshot || revision?.judgeConfig || trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}') as any
+      const config = yaml.load(claimed.judgeConfigSnapshot || revision?.judgeConfig || problem?.judgeConfig || '{}') as any
       const io = resolveSubmissionIoSnapshot(claimed, config)
       return {
         taskType: 'submission' as const,

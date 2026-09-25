@@ -35,7 +35,7 @@ export function useTrainingSubmissions(
         totalPages: number
         total: number
       }>(
-        `/api/trainings/${trainingId}/submissions?${params.toString()}`,
+        `/api/contests/${trainingId}/submissions?${params.toString()}`,
         { signal },
       )
 

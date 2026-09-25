@@ -642,7 +642,7 @@ describe('训练提交隔离', () => {
 
     for (const path of [
       `/api/submissions/${trainingSubmission.id}`,
-      `/api/trainings/${training.id}/submissions/${trainingSubmission.id}`,
+      `/api/contests/${training.id}/submissions/${trainingSubmission.id}`,
     ]) {
       const res = await organizationRequest(studentToken, schoolData.school.organizationId!).get(path)
       expect(res.status, `${path}: ${JSON.stringify(res.body)}`).toBe(200)
@@ -664,7 +664,7 @@ describe('训练提交隔离', () => {
 
   it('TI2: 训练提交可以通过训练端点访问', async () => {
     const res = await organizationRequest(studentToken, schoolData.school.organizationId!)
-      .get(`/api/trainings/${training.id}/submissions`)
+      .get(`/api/contests/${training.id}/submissions`)
 
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
@@ -702,13 +702,13 @@ describe('训练提交隔离', () => {
     })
 
     const listRes = await organizationRequest(ownerToken, schoolData.school.organizationId!)
-      .get(`/api/trainings/${training.id}/submissions`)
+      .get(`/api/contests/${training.id}/submissions`)
     expect(listRes.status, JSON.stringify(listRes.body)).toBe(200)
     const listItem = listRes.body.data.submissions.find((item: any) => item.id === submission.id)
     expect(listItem).toMatchObject({ result: 'ole', trainingProblemId: trainingProblem.id })
 
     const detailRes = await organizationRequest(ownerToken, schoolData.school.organizationId!)
-      .get(`/api/trainings/${training.id}/submissions/${submission.id}`)
+      .get(`/api/contests/${training.id}/submissions/${submission.id}`)
     expect(detailRes.status).toBe(200)
     expect(detailRes.body.data).toMatchObject({
       result: 'ole',
@@ -749,7 +749,7 @@ describe('训练提交隔离', () => {
     })
 
     const acceptedList = await organizationRequest(ownerToken, schoolData.school.organizationId!)
-      .get(`/api/trainings/${training.id}/submissions?result=accepted`)
+      .get(`/api/contests/${training.id}/submissions?result=accepted`)
     expect(acceptedList.status, JSON.stringify(acceptedList.body)).toBe(200)
     expect(acceptedList.body.data.submissions).toContainEqual(expect.objectContaining({
       id: trainingSubmission.id,
@@ -760,12 +760,12 @@ describe('训练提交隔离', () => {
     }))
 
     const compatibilityFilter = await organizationRequest(ownerToken, schoolData.school.organizationId!)
-      .get(`/api/trainings/${training.id}/submissions?result=wa`)
+      .get(`/api/contests/${training.id}/submissions?result=wa`)
     expect(compatibilityFilter.status).toBe(200)
     expect(compatibilityFilter.body.data.submissions.some((item: any) => item.id === trainingSubmission.id)).toBe(false)
 
     const detail = await organizationRequest(ownerToken, schoolData.school.organizationId!)
-      .get(`/api/trainings/${training.id}/submissions/${trainingSubmission.id}`)
+      .get(`/api/contests/${training.id}/submissions/${trainingSubmission.id}`)
     expect(detail.status, JSON.stringify(detail.body)).toBe(200)
     expect(detail.body.data).toMatchObject({
       result: 'accepted',
@@ -779,7 +779,7 @@ describe('训练提交隔离', () => {
     })
 
     const ranking = await organizationRequest(ownerToken, schoolData.school.organizationId!)
-      .get(`/api/trainings/${training.id}/ranking`)
+      .get(`/api/contests/${training.id}/ranking`)
     expect(ranking.status, JSON.stringify(ranking.body)).toBe(200)
     const studentRow = ranking.body.data.ranking.find((item: any) => item.userId === studentUser.user.id)
     expect(studentRow).toMatchObject({ totalScore: 100 })

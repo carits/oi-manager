@@ -4,6 +4,6 @@ import apiClient from '@/lib/apiClient'
 export function getContestRating(trainingId: number): Promise<ContestRatingData> {
   return apiClient.queryContract(
     ContestRatingContracts.detail,
-    `/api/trainings/${trainingId}/rating`,
+    `/api/contests/${trainingId}/rating`,
   )
 }

@@ -46,7 +46,7 @@ export function TrainingStatementManagementPage({ trainingId, backPath }: { trai
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
-    const response = await apiClient.get<Payload>(`/api/trainings/${trainingId}/statement-management`)
+    const response = await apiClient.get<Payload>(`/api/contests/${trainingId}/statement-management`)
     if (!response.success || !response.data) {
       const message = response.message || '加载题面管理失败'
       if (response.status === 403 && backPath) {
@@ -100,7 +100,7 @@ export function TrainingStatementManagementPage({ trainingId, backPath }: { trai
       if (!state?.keys.length || !state.keys.includes(state.defaultKey)) return toast.error(`${problem.alias || problem.orderIndex + 1} 题必须选择题面并指定默认版本`)
     }
     setSaving(true)
-    const response = await apiClient.put(`/api/trainings/${trainingId}/statement-management`, {
+    const response = await apiClient.put(`/api/contests/${trainingId}/statement-management`, {
       selections: data.problems.map(problem => ({
         trainingProblemId: problem.trainingProblemId,
         visibleOptionKeys: selection[problem.trainingProblemId].keys,

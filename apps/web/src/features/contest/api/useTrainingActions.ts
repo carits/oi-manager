@@ -46,7 +46,7 @@ export function useTrainingActions(
     try {
       submitKeyRef.current ||= createClientUUID()
       const result = await apiClient.mutate<{ submissionId?: number }>(
-        `/api/trainings/${trainingId}/submit`,
+        `/api/contests/${trainingId}/submit`,
         'POST',
         {
           trainingProblemId: selectedProblemId,
@@ -87,7 +87,7 @@ export function useTrainingActions(
     if (!training) return false
     setDeleting(true)
     try {
-      const res = await apiClient.delete(`/api/trainings/${training.id}`)
+      const res = await apiClient.delete(`/api/contests/${training.id}`)
       if (res.success) {
         toast.success('训练已删除')
         const listKind = training.type === 'homework' ? 'homework' : training.type === 'contest' ? 'contest' : 'training'

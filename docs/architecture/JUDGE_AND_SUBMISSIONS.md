@@ -51,7 +51,7 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 隐藏状态立即停止。401/403/404 等永久失败同样停止，页面只提供关闭或返回，不显示无意义的重试；
 网络、超时、限流和 5xx 临时错误保留局部重试，并显示可供排障的请求编号。
 
-全局 `/api/submissions/:id` 与活动 `/api/trainings/:id/submissions/:submissionId` 委托同一个详情策略。
+全局 `/api/submissions/:id` 与活动 `/api/contests/:id/submissions/:submissionId` 委托同一个详情策略。
 训练/比赛提交即使从全局端点访问，也必须重新验证活动成员、开始时间、本人/管理权限、题目身份隐藏和
 OI 赛中脱敏，不能通过切换 URL 绕过活动规则。OI 隐藏响应固定为 `hidden=true`、
 `displayResult=pending`，真实 result、score、资源指标、测试点、Subtask、错误和远端 ID全部置空。

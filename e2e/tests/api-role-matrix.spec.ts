@@ -19,7 +19,7 @@ const selectedRole = process.env.API_MATRIX_ROLE as AuthRole | undefined
 const roles = selectedRole && allRoles.includes(selectedRole) ? [selectedRole] : allRoles
 
 function genericGetId(routePath: string, fixture: FixtureIds): string {
-  if (routePath.startsWith('/api/trainings/')) return fixture.contest
+  if (routePath.startsWith('/api/contests/')) return fixture.contest
   if (routePath.startsWith('/api/submissions/')) return fixture.submission
   if (routePath.startsWith('/api/problems/')) return fixture.problem
   if (routePath.startsWith('/api/teams/')) return fixture.team

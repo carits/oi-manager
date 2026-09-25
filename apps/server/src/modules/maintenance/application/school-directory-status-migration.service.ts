@@ -14,21 +14,20 @@ async function loadState(db: Db) {
 }
 
 async function referenceTotals(db: Db, organizationIds: string[]) {
-  if (!organizationIds.length) return { memberships: 0, studentProfiles: 0, teacherProfiles: 0, teams: 0, trainings: 0, problemLists: 0, problems: 0, submissions: 0, joinApplications: 0, invitations: 0 }
+  if (!organizationIds.length) return { memberships: 0, studentProfiles: 0, teacherProfiles: 0, teams: 0, problemLists: 0, problems: 0, submissions: 0, joinApplications: 0, invitations: 0 }
   const membershipWhere = { organizationId: { in: organizationIds } }
-  const [memberships, studentProfiles, teacherProfiles, teams, trainings, problemLists, problems, submissions, joinApplications, invitations] = await Promise.all([
+  const [memberships, studentProfiles, teacherProfiles, teams, problemLists, problems, submissions, joinApplications, invitations] = await Promise.all([
     db.organizationMembership.count({ where: membershipWhere }),
     db.organizationStudentProfile.count({ where: { Membership: membershipWhere } }),
     db.organizationTeacherProfile.count({ where: { Membership: membershipWhere } }),
     db.team.count({ where: { organizationId: { in: organizationIds } } }),
-    db.training.count({ where: { organizationId: { in: organizationIds } } }),
     db.problemList.count({ where: { organizationId: { in: organizationIds } } }),
     db.problem.count({ where: { organizationId: { in: organizationIds } } }),
     db.submission.count({ where: { organizationId: { in: organizationIds } } }),
     db.organizationJoinApplication.count({ where: { organizationId: { in: organizationIds } } }),
     db.organizationInvitation.count({ where: { organizationId: { in: organizationIds } } }),
   ])
-  return { memberships, studentProfiles, teacherProfiles, teams, trainings, problemLists, problems, submissions, joinApplications, invitations }
+  return { memberships, studentProfiles, teacherProfiles, teams, problemLists, problems, submissions, joinApplications, invitations }
 }
 
 function collisionReport(rows: Awaited<ReturnType<typeof loadState>>) {

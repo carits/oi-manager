@@ -125,63 +125,57 @@ export async function repairActivityRevisionPins(input: {
   }
 
   return prisma.$transaction(async tx => {
-    const training = await tx.training.findUnique({ where: { id: input.trainingId }, select: { id: true, title: true } })
-    if (!training) throw new ActivityRevisionRepairError(404, 'TRAINING_NOT_FOUND', '活动不存在')
+    const training = await tx.contest.findUnique({ where: { publicId: input.trainingId }, select: { id: true, publicId: true, title: true } })
+    if (!training) throw new ActivityRevisionRepairError(404, 'CONTEST_NOT_FOUND', '比赛不存在')
     const results = []
 
     for (const update of input.updates) {
-      const item = await tx.trainingProblem.findFirst({
-        where: { id: update.trainingProblemId, trainingId: input.trainingId },
+      const item = await tx.contestProblem.findFirst({
+        where: { id: update.trainingProblemId, contestId: training.id },
         select: {
           id: true,
           alias: true,
-          problemId: true,
+          canonicalProblemId: true,
           testSetRevisionId: true,
-          Problem: { select: { title: true, latestTestSetRevisionId: true } },
+          CanonicalProblem: { select: { title: true, latestTestSetRevisionId: true } },
         },
       })
       if (!item) throw new ActivityRevisionRepairError(404, 'TRAINING_PROBLEM_NOT_FOUND', `活动题 ${update.trainingProblemId} 不存在`)
       if (item.testSetRevisionId !== update.expectedCurrentRevisionId) {
-        throw new ActivityRevisionRepairError(409, 'ACTIVITY_REVISION_STALE', `${item.alias || item.Problem.title} 当前版本已变化，请重新检查`)
+        throw new ActivityRevisionRepairError(409, 'ACTIVITY_REVISION_STALE', `${item.alias || item.CanonicalProblem?.title || item.id} 当前版本已变化，请重新检查`)
       }
-      if (item.Problem.latestTestSetRevisionId !== update.targetRevisionId) {
-        throw new ActivityRevisionRepairError(409, 'TARGET_NOT_LATEST_REVISION', `${item.alias || item.Problem.title} 目标不是题库最新版`)
+      if (item.CanonicalProblem?.latestTestSetRevisionId !== update.targetRevisionId) {
+        throw new ActivityRevisionRepairError(409, 'TARGET_NOT_LATEST_REVISION', `${item.alias || item.CanonicalProblem?.title || item.id} 目标不是题库最新版`)
       }
 
       const [current, target] = await Promise.all([
-        tx.problemTestSetRevision.findFirst({ where: { id: update.expectedCurrentRevisionId, problemId: item.problemId }, include: revisionInclude }),
-        tx.problemTestSetRevision.findFirst({ where: { id: update.targetRevisionId, problemId: item.problemId }, include: revisionInclude }),
+        tx.problemTestSetRevision.findFirst({ where: { id: update.expectedCurrentRevisionId, problemId: item.canonicalProblemId! }, include: revisionInclude }),
+        tx.problemTestSetRevision.findFirst({ where: { id: update.targetRevisionId, problemId: item.canonicalProblemId! }, include: revisionInclude }),
       ])
-      if (!current || !target) throw new ActivityRevisionRepairError(404, 'REVISION_NOT_FOUND', `${item.alias || item.Problem.title} 的测试版本不存在`)
+      if (!current || !target) throw new ActivityRevisionRepairError(404, 'REVISION_NOT_FOUND', `${item.alias || item.CanonicalProblem?.title || item.id} 的测试版本不存在`)
       if (!isAllowedRepairSuccessor(current, target)) {
-        throw new ActivityRevisionRepairError(409, 'UNSAFE_REVISION_REPAIR', `${item.alias || item.Problem.title} 仅允许修复到同模式的直接人工或历史迁移后继版本`)
+        throw new ActivityRevisionRepairError(409, 'UNSAFE_REVISION_REPAIR', `${item.alias || item.CanonicalProblem?.title || item.id} 仅允许修复到同模式的直接人工或历史迁移后继版本`)
       }
       if (!sameValue(revisionDataLayout(current), revisionDataLayout(target))) {
-        throw new ActivityRevisionRepairError(409, 'TESTDATA_LAYOUT_CHANGED', `${item.alias || item.Problem.title} 的测试数据布局发生变化，不能原位修复`)
+        throw new ActivityRevisionRepairError(409, 'TESTDATA_LAYOUT_CHANGED', `${item.alias || item.CanonicalProblem?.title || item.id} 的测试数据布局发生变化，不能原位修复`)
       }
       if (!sameValue(nonScoringJudgeConfig(current.judgeConfig), nonScoringJudgeConfig(target.judgeConfig))) {
-        throw new ActivityRevisionRepairError(409, 'NON_SCORING_CONFIG_CHANGED', `${item.alias || item.Problem.title} 存在非计分配置变化，不能原位修复`)
+        throw new ActivityRevisionRepairError(409, 'NON_SCORING_CONFIG_CHANGED', `${item.alias || item.CanonicalProblem?.title || item.id} 存在非计分配置变化，不能原位修复`)
       }
 
-      const submissionWhere = { trainingId: input.trainingId, trainingProblemId: item.id }
+      const submissionWhere = { canonicalContestId: training.id, canonicalContestProblemId: item.id }
       const [submissionCount, inProgressCount] = await Promise.all([
         tx.submission.count({ where: submissionWhere }),
         tx.submission.count({ where: { ...submissionWhere, AND: [currentJudgeInProgressWhere()] } }),
       ])
       if (inProgressCount > 0) {
-        throw new ActivityRevisionRepairError(409, 'REVISION_REPAIR_IN_PROGRESS', `${item.alias || item.Problem.title} 仍有 ${inProgressCount} 条提交正在排队或评测`)
+        throw new ActivityRevisionRepairError(409, 'REVISION_REPAIR_IN_PROGRESS', `${item.alias || item.CanonicalProblem?.title || item.id} 仍有 ${inProgressCount} 条提交正在排队或评测`)
       }
 
       if (input.apply) {
-        await tx.trainingProblem.update({
+        await tx.contestProblem.update({
           where: { id: item.id },
-          data: {
-            testSetRevisionId: target.id,
-            judgeConfigSnapshot: target.judgeConfig,
-            testGraphRevisionSnapshot: target.revisionNumber,
-            snapshotCreatedAt: new Date(),
-            dataVersion: '2',
-          },
+          data: { testSetRevisionId: target.id, updatedAt: new Date() },
         })
         await tx.submission.updateMany({
           where: submissionWhere,
@@ -191,7 +185,7 @@ export async function repairActivityRevisionPins(input: {
       results.push({
         trainingProblemId: item.id,
         alias: item.alias,
-        problemTitle: item.Problem.title,
+        problemTitle: item.CanonicalProblem?.title || item.id,
         previousRevisionId: current.id,
         previousRevision: current.revisionNumber,
         targetRevisionId: target.id,
@@ -200,6 +194,6 @@ export async function repairActivityRevisionPins(input: {
         applied: input.apply,
       })
     }
-    return { trainingId: training.id, trainingTitle: training.title, applied: input.apply, results }
+    return { trainingId: training.publicId, trainingTitle: training.title, applied: input.apply, results }
   }, { isolationLevel: 'Serializable' })
 }

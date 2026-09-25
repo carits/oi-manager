@@ -1,7 +1,7 @@
 import { RatingTrack } from '@prisma/client'
 import { parsePagination, paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
-import { isOrganizationMember } from '../../training/training.helpers'
+import { isOrganizationMember } from '../../contest/contest.helpers'
 import { ContestRatingError } from './contest-rating.service'
 
 function track(value: unknown): RatingTrack {

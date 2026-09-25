@@ -18,7 +18,7 @@ export function TeamActivityOverview({ teamId, workspaceBase }: { teamId: string
   useEffect(() => {
     let active = true
     void Promise.all([
-      apiClient.get<LegacyActivity[]>(`/api/teams/${teamId}/trainings?type=contest`),
+      apiClient.get<LegacyActivity[]>(`/api/teams/${teamId}/contests?type=contest`),
       apiClient.get<CoachSession[]>(`/api/training-sessions?teamId=${encodeURIComponent(teamId)}`),
       apiClient.get<ProblemListItem[]>(`/api/teams/${teamId}/problem-lists`),
     ]).then(([contests, trainings, lists]) => {

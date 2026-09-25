@@ -64,7 +64,7 @@ describe('补题作业使用独立 Assignment', () => {
   it('团队管理员创建带固定 Revision 的独立补题作业草稿', async () => {
     for (const token of [ownerToken, adminToken]) {
       const response = await createAuthenticatedRequest(app, token)
-        .post(`/api/trainings/${finishedTraining.id}/create-makeup-homework`)
+        .post(`/api/contests/${finishedTraining.id}/create-makeup-homework`)
         .send({ title: '补题草稿', endTime: new Date(Date.now() + 86_400_000).toISOString() })
       expect(response.status).toBe(200)
       expect(response.body.data.type).toBe('assignment')
@@ -81,7 +81,7 @@ describe('补题作业使用独立 Assignment', () => {
   it('学生和非团队管理员不能创建补题作业', async () => {
     for (const token of [studentToken, outsiderToken]) {
       const response = await createAuthenticatedRequest(app, token)
-        .post(`/api/trainings/${finishedTraining.id}/create-makeup-homework`)
+        .post(`/api/contests/${finishedTraining.id}/create-makeup-homework`)
         .send({ endTime: new Date(Date.now() + 86_400_000).toISOString() })
       expect(response.status).toBe(403)
     }
@@ -89,15 +89,15 @@ describe('补题作业使用独立 Assignment', () => {
 
   it('仅允许已结束活动且要求合法时间范围', async () => {
     const active = await createAuthenticatedRequest(app, ownerToken)
-      .post(`/api/trainings/${ongoingTraining.id}/create-makeup-homework`)
+      .post(`/api/contests/${ongoingTraining.id}/create-makeup-homework`)
       .send({ endTime: new Date(Date.now() + 86_400_000).toISOString() })
     expect(active.status).toBe(400)
     expect(active.body.code).toBe('TRAINING_NOT_FINISHED')
     const missing = await createAuthenticatedRequest(app, ownerToken)
-      .post(`/api/trainings/${finishedTraining.id}/create-makeup-homework`).send({})
+      .post(`/api/contests/${finishedTraining.id}/create-makeup-homework`).send({})
     expect(missing.status).toBe(400)
     const invalid = await createAuthenticatedRequest(app, ownerToken)
-      .post(`/api/trainings/${finishedTraining.id}/create-makeup-homework`)
+      .post(`/api/contests/${finishedTraining.id}/create-makeup-homework`)
       .send({ startTime: new Date(Date.now() + 86_400_000).toISOString(), endTime: new Date().toISOString() })
     expect(invalid.status).toBe(400)
   })

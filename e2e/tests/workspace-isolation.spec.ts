@@ -55,7 +55,7 @@ test.describe('workspace isolation API isolation @smoke', () => {
 
     for (const path of [
       `/api/teams/${ids.personalTeam}/problem-lists`,
-      `/api/teams/${ids.personalTeam}/trainings`,
+      `/api/teams/${ids.personalTeam}/contests`,
       `/api/teams/${ids.personalTeam}/admins`,
       `/api/teams/${ids.personalTeam}/pending-invites`,
       `/api/teams/${ids.personalTeam}/join-requests`,

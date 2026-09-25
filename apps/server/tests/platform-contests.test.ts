@@ -40,7 +40,7 @@ describe('platform contest lifecycle', () => {
     expect(aggregate).toMatchObject({ title: body.title, scope: 'platform', format: 'ioi', countRating: false, teamId: null, organizationId: null })
 
     const configured = await request(app)
-      .put(`/api/trainings/${aggregate.publicId}/rating-config`)
+      .put(`/api/contests/${aggregate.publicId}/rating-config`)
       .set('Cookie', `oi_session=${tokenFor(manager)}`)
       .send({ scope: 'GLOBAL', expectedRevision: 1, weight: 1, globalMinParticipants: 2, organizationMinParticipants: 2 })
     expect(configured.status).toBe(200)
@@ -64,7 +64,7 @@ describe('platform contest lifecycle', () => {
     const [directory, personal, detail] = await Promise.all([
       request(app).get('/api/platform-contests').set('Cookie', `oi_session=${tokenFor(participant)}`),
       request(app).get('/api/me/contests').set('Cookie', `oi_session=${tokenFor(participant)}`),
-      request(app).get(`/api/trainings/${created.body.data.id}`).set('Cookie', `oi_session=${tokenFor(participant)}`),
+      request(app).get(`/api/contests/${created.body.data.id}`).set('Cookie', `oi_session=${tokenFor(participant)}`),
     ])
     expect(directory.status).toBe(200)
     expect(directory.body.data).toEqual(expect.arrayContaining([expect.objectContaining({ id: created.body.data.id, scope: 'platform' })]))

@@ -28,40 +28,35 @@ export function schoolStateHash(rows: Array<{ id: string; name: string; nameKey:
 }
 
 export async function getSchoolReferenceSummary(organizationId: string, tx: Prisma.TransactionClient | typeof prisma = prisma) {
-  const organization = await tx.organization.findUnique({
-    where: { id: organizationId },
-    select: {
-      _count: { select: {
-        Membership: true, Team: true, Training: true, ProblemList: true,
-        Problem: true, Submission: true, JoinApplications: true, Invitations: true,
-      } },
-    },
-  })
-  return organization?._count || {
-    Membership: 0, Team: 0, Training: 0, ProblemList: 0,
-    Problem: 0, Submission: 0, JoinApplications: 0, Invitations: 0,
+  const [Membership, Team, Contest, TrainingSession, Assignment, ProblemList, Problem, Submission, JoinApplications, Invitations] = await Promise.all([
+    tx.organizationMembership.count({ where: { organizationId } }),
+    tx.team.count({ where: { organizationId } }),
+    tx.contest.count({ where: { organizationId } }),
+    tx.trainingSession.count({ where: { organizationId } }),
+    tx.assignment.count({ where: { organizationId } }),
+    tx.problemList.count({ where: { organizationId } }),
+    tx.problem.count({ where: { organizationId } }),
+    tx.submission.count({ where: { organizationId } }),
+    tx.organizationJoinApplication.count({ where: { organizationId } }),
+    tx.organizationInvitation.count({ where: { organizationId } }),
+  ])
+  return {
+    Membership,
+    Team,
+    Training: Contest + TrainingSession + Assignment,
+    ProblemList,
+    Problem,
+    Submission,
+    JoinApplications,
+    Invitations,
   }
 }
 
 export async function getSchoolReferenceSummaries(organizationIds: string[]) {
-  const empty = () => ({ Membership: 0, Team: 0, Training: 0, ProblemList: 0, Problem: 0, Submission: 0, JoinApplications: 0, Invitations: 0 })
-  const summaries = new Map(organizationIds.map(id => [id, empty()]))
-  if (!organizationIds.length) return summaries
-  const [memberships, teams, trainings, problemLists, problems, submissions, applications, invitations] = await Promise.all([
-    prisma.organizationMembership.groupBy({ by: ['organizationId'], where: { organizationId: { in: organizationIds } }, _count: { _all: true } }),
-    prisma.team.groupBy({ by: ['organizationId'], where: { organizationId: { in: organizationIds } }, _count: { _all: true } }),
-    prisma.training.groupBy({ by: ['organizationId'], where: { organizationId: { in: organizationIds } }, _count: { _all: true } }),
-    prisma.problemList.groupBy({ by: ['organizationId'], where: { organizationId: { in: organizationIds } }, _count: { _all: true } }),
-    prisma.problem.groupBy({ by: ['organizationId'], where: { organizationId: { in: organizationIds } }, _count: { _all: true } }),
-    prisma.submission.groupBy({ by: ['organizationId'], where: { organizationId: { in: organizationIds } }, _count: { _all: true } }),
-    prisma.organizationJoinApplication.groupBy({ by: ['organizationId'], where: { organizationId: { in: organizationIds } }, _count: { _all: true } }),
-    prisma.organizationInvitation.groupBy({ by: ['organizationId'], where: { organizationId: { in: organizationIds } }, _count: { _all: true } }),
-  ])
-  const assign = (rows: Array<{ organizationId: string | null; _count: { _all: number } }>, key: keyof ReturnType<typeof empty>) => rows.forEach(row => {
-    if (row.organizationId && summaries.has(row.organizationId)) summaries.get(row.organizationId)![key] = row._count._all
-  })
-  assign(memberships, 'Membership'); assign(teams, 'Team'); assign(trainings, 'Training'); assign(problemLists, 'ProblemList')
-  assign(problems, 'Problem'); assign(submissions, 'Submission'); assign(applications, 'JoinApplications'); assign(invitations, 'Invitations')
+  const summaries = new Map<string, Awaited<ReturnType<typeof getSchoolReferenceSummary>>>()
+  for (const organizationId of organizationIds) {
+    summaries.set(organizationId, await getSchoolReferenceSummary(organizationId))
+  }
   return summaries
 }
 

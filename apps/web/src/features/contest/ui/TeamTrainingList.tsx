@@ -26,7 +26,7 @@ export default function TeamTrainingList({ teamId, schoolId, organizationId, bas
   const { sessionKey } = useAuth(); const [showCreateModal, setShowCreateModal] = useState(false)
   const endpoint = organizationId
     ? '/api/organizations/' + organizationId + '/members/activities/contests'
-    : '/api/teams/' + teamId + '/trainings?type=' + mode
+    : '/api/teams/' + teamId + '/contests?type=' + mode
   const resource = useResource<Training[]>(endpoint, { sessionKey, isEmpty: data => data.length === 0, dedupingInterval: 30000, refreshInterval: 30000 })
   const trainings = resource.data ?? (resource.state.state === 'error' ? resource.state.previousData : undefined) ?? []
   const label = typeLabel(mode)

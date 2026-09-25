@@ -5,7 +5,7 @@
  * 后端兜底，不依赖前端隐藏。
  */
 
-import type { Training, User } from '@prisma/client'
+import type { User } from '@prisma/client'
 
 /**
  * 提交记录基础类型（从 Prisma 查询结果）
@@ -28,17 +28,17 @@ export interface SubmissionRecord {
   code: string
   submittedAt: Date
   submitScope: string
-  trainingId: number | null
-  trainingProblemId: string | null
-  contestId: number | null
-  contestProblemId: string | null
+  trainingSessionId: string | null
+  trainingStageProblemId: string | null
+  canonicalContestId: string | null
+  canonicalContestProblemId: string | null
   isGlobalVisible: boolean
 }
 
 /**
  * 训练信息（用于 OI 赛制判断）
  */
-export interface TrainingInfo {
+export interface ContestInfo {
   id: number
   format: string // 'oi' | 'ioi' | 'icpc'
   type: string   // 'training' | 'contest'
@@ -54,7 +54,7 @@ export interface SubmissionViewOptions {
   submission: SubmissionRecord
   viewerId: string
   viewerRole: string
-  training?: TrainingInfo | null
+  training?: ContestInfo | null
 }
 
 /**
@@ -70,10 +70,10 @@ export interface SubmissionViewResult {
   codeLength: number
   submittedAt: Date
   submitScope: string
-  trainingId: number | null
-  trainingProblemId: string | null
-  contestId: number | null
-  contestProblemId: string | null
+  trainingSessionId: string | null
+  trainingStageProblemId: string | null
+  canonicalContestId: string | null
+  canonicalContestProblemId: string | null
 
   // 可见性依赖字段（可能 null）
   result: string | null
@@ -95,7 +95,7 @@ export interface SubmissionViewResult {
  * 获取训练运行时状态
  */
 export function getTrainingRuntimeStatus(
-  training: TrainingInfo
+  training: ContestInfo
 ): 'upcoming' | 'ongoing' | 'finished' {
   const now = new Date()
   if (now < training.startTime) return 'upcoming'
@@ -111,7 +111,7 @@ export function getTrainingRuntimeStatus(
  * - 比赛结束后：所有人都能看到真实结果
  */
 export function shouldHideOiResults(
-  training: TrainingInfo | null | undefined,
+  training: ContestInfo | null | undefined,
   viewerRole: string
 ): boolean {
   if (!training) return false
@@ -163,10 +163,10 @@ export function getSubmissionView(
     codeLength: submission.codeLength,
     submittedAt: submission.submittedAt,
     submitScope: submission.submitScope,
-    trainingId: submission.trainingId,
-    trainingProblemId: submission.trainingProblemId,
-    contestId: submission.contestId,
-    contestProblemId: submission.contestProblemId,
+    trainingSessionId: submission.trainingSessionId,
+    trainingStageProblemId: submission.trainingStageProblemId,
+    canonicalContestId: submission.canonicalContestId,
+    canonicalContestProblemId: submission.canonicalContestProblemId,
     result: submission.result,
     score: submission.score ?? null,
     timeUsed: submission.timeUsed,
@@ -257,16 +257,16 @@ export function getSubmissionViews(
   submissions: SubmissionRecord[],
   viewerId: string,
   viewerRole: string,
-  trainingMap: Map<number, TrainingInfo>
+  trainingMap: Map<string, ContestInfo>
 ): SubmissionViewResult[] {
   return submissions.map((submission) => {
-    let training: TrainingInfo | undefined
+    let training: ContestInfo | undefined
 
     // 根据 submitScope 获取对应的训练信息
-    if (submission.submitScope === 'training' && submission.trainingId) {
-      training = trainingMap.get(submission.trainingId)
-    } else if (submission.submitScope === 'contest' && submission.trainingId) {
-      training = trainingMap.get(submission.trainingId)
+    if (submission.submitScope === 'training' && submission.trainingSessionId) {
+      training = trainingMap.get(submission.trainingSessionId)
+    } else if (submission.submitScope === 'contest' && submission.trainingSessionId) {
+      training = trainingMap.get(submission.trainingSessionId)
     }
 
     return getSubmissionView({
@@ -295,10 +295,10 @@ export function sanitizeSubmissionForOi(
     codeLength: submission.codeLength,
     submittedAt: submission.submittedAt,
     submitScope: submission.submitScope,
-    trainingId: submission.trainingId,
-    trainingProblemId: submission.trainingProblemId,
-    contestId: submission.contestId,
-    contestProblemId: submission.contestProblemId,
+    trainingSessionId: submission.trainingSessionId,
+    trainingStageProblemId: submission.trainingStageProblemId,
+    canonicalContestId: submission.canonicalContestId,
+    canonicalContestProblemId: submission.canonicalContestProblemId,
     result: null,
     score: null,
     timeUsed: null,

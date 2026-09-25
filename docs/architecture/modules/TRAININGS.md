@@ -169,20 +169,20 @@ pnpm training:benchmark
 - 已新增针对上述语义的 Server/E2E 回归用例定义；**本轮未实际执行这些测试**。
 - 历史数据迁移仍需单独演练：旧 `problemId` 草稿映射到重复出现的 StageProblem 时存在语义歧义；历史题面快照回填只能代表 migration-time reconstruction，不能追溯迁移前已丢失的旧题面版本。
 
-## 运行时入口与迁移边界
+## 运行时入口与领域边界
 
-当前运行时只使用 Stage 驱动的训练接口。新的写入入口为：
+比赛与阶段训练已经在 HTTP 边界完全拆分：
 
-- /api/training-sessions
-- /api/training-session-templates
+- Contest 只使用 `/api/contests/*`；题目、提交、排名、记录、题解、附件、重测、Hack 同步和补题均在该命名空间。
+- Training Engine V2 只使用 `/api/training-sessions/*` 和 `/api/training-session-templates`。
+- `/api/trainings/*` 已被删除，不提供 410、重定向、双读或兼容代理。
+- 团队比赛的列表和创建使用 `/api/teams/:teamId/contests`。
 
-旧的 /api/trainings 接口已经停用，集合路径和所有嵌套路径统一返回 HTTP 410，并返回错误码 TRAINING_LEGACY_API_RETIRED；不会再猜测跳转到新地址。
-
-旧训练模型仅由一次性迁移服务读取，用于生成 TrainingSession、Stage、Assignment、ProblemPlan 和历史引用。迁移不重新评测、不伪造提交、不双写旧接口。迁移完成前保留旧模型及其迁移引用，以便审计与对账；运行时读写不再依赖旧路由。
+Training Engine V2 的旧 V1 Session 数据已在 2026-09-25 清理；运行时快照旧表已删除。新训练只使用稳定 Group 与 Stage × Group 运行矩阵。
 
 ## Training Engine V2（Stage 驱动统一模型）
 
 TrainingSession 表示一堂课，Stage 是不可回滚的时间轴；普通训练只是一个 Stage，模板只生成可编辑骨架，不形成第二套产品模式。新版本使用稳定的 TrainingSessionGroup，并以 TrainingSessionStageGroup 表示 Stage × Group 的独立运行单元。学员通过 TrainingSessionParticipant.groupId 绑定当前稳定分组；每个单元独立记录状态、有效时长、结束原因和题目计划。Stage 开始时冻结定义，运行中的定义不可修改；需要重复训练时复制为新的未来 Stage。
 
-Stage 的教学用途、分组范围、开放策略、完成规则、提示规则和时间规则分别表达，不能继续扩展单一 StageMode 枚举。换组只改变当前或未来 Stage 的分组分配，不删除 Progress、提交或历史要求；运行期命令不能替换题目或改变训练规则。旧 groupingModelVersion=1 训练保持兼容读取，新建训练使用 V2 矩阵。
+Stage 的教学用途、分组范围、开放策略、完成规则、提示规则和时间规则分别表达，不能继续扩展单一 StageMode 枚举。换组只改变当前或未来 Stage 的分组分配，不删除 Progress、提交或历史要求；运行期命令不能替换题目或改变训练规则。当前仅支持 V2 矩阵；不存在 V1 兼容读取或旧数据保留。
 

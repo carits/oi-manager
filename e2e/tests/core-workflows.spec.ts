@@ -268,7 +268,7 @@ test.describe('core role workflows @smoke', () => {
     for (const format of ['oi', 'ioi'] as const) {
       const context = await browser.newContext({ storageState: accounts.principal.storageState })
       const page = await context.newPage()
-      await page.route(`**/api/trainings/${ids.contest}/ranking`, route => route.fulfill({
+      await page.route(`**/api/contests/${ids.contest}/ranking`, route => route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ success: true, data: { format, ...scoreRanking } }),
@@ -357,7 +357,7 @@ test.describe('published work and ranking contracts', () => {
   test('finished contest creates a makeup homework with ranking intact', async ({ request }) => {
     const teacher = await loginAs(request, 'principal')
     const response = await request.post(
-      `/api/trainings/${ids.contest}/create-makeup-homework`,
+      `/api/contests/${ids.contest}/create-makeup-homework`,
       {
         headers: { ...sessionCookie(teacher), ...organizationHeaders },
         data: {
@@ -373,7 +373,7 @@ test.describe('published work and ranking contracts', () => {
     expect(body.data.type).toBe('assignment')
     expect(String(body.data.sourceTrainingId)).toBe(ids.contest)
 
-    const rankingResponse = await request.get(`/api/trainings/${ids.contest}/ranking`, {
+    const rankingResponse = await request.get(`/api/contests/${ids.contest}/ranking`, {
       headers: { ...sessionCookie(teacher), ...organizationHeaders },
     })
     expect(rankingResponse.status()).toBe(200)

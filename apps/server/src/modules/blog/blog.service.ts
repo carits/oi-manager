@@ -237,7 +237,7 @@ type ResolvedReference = {
   problemId?: string
   problemRevisionId?: string
   solutionVersionId?: string
-  trainingId?: number
+  contestId?: number
   standingSnapshotId?: string
   ratingChangeId?: string
   submissionSnapshotId?: string
@@ -317,11 +317,11 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
       referenceType: input.type,
       referenceId: contest.id,
       referenceVersionId: snapshot.id,
-      trainingId: contest.publicId,
+      contestId: String(contest.publicId),
       standingSnapshotId: snapshot.id,
       accessMode,
       snapshotData: {
-        kind: 'contest-standing', trainingId: contest.publicId, contestId: contest.id, title: contest.title,
+        kind: 'contest-standing', contestId: contest.publicId, title: contest.title,
         organizationId: contest.organizationId,
         format: contest.format, standingRevision: snapshot.revision, scoringMode: snapshot.scoringMode,
         rank: entry.rank, score: entry.totalScore === null ? null : Number(entry.totalScore),
@@ -375,14 +375,14 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
     referenceId: change.id,
     referenceVersionId: change.batchId,
     ratingChangeId: change.id,
-    trainingId: contest.publicId,
+    contestId: contest.publicId,
     accessMode,
     snapshotData: {
       kind: 'rating-change', ratingChangeId: change.id, batchId: change.batchId,
       scope: pool.scopeType, organizationId: pool.organizationId, track: pool.track,
       ratingBefore: change.ratingBefore, appliedDelta: change.appliedDelta, ratingAfter: change.ratingAfter,
       rank: change.rank, fieldSize: change.fieldSize,
-      contest: { id: contest.publicId, contestId: contest.id, title: contest.title },
+      contest: { id: contest.publicId, contestId: String(contest.id), title: contest.title },
     },
   }
 }
@@ -1157,8 +1157,8 @@ export function listProblemBlogs(user: JwtPayload, problemId: string, query: any
   return discoveryRows(user, { problemId }, query)
 }
 
-export function listContestBlogs(user: JwtPayload, trainingId: number, query: any) {
-  return discoveryRows(user, { trainingId }, query)
+export function listContestBlogs(user: JwtPayload, contestId: string | number, query: any) {
+  return discoveryRows(user, { contestId: String(contestId) }, query)
 }
 
 export async function listSolutionBlogs(user: JwtPayload, solutionId: string, query: any) {
@@ -1362,8 +1362,8 @@ export async function listTagBlogs(user: JwtPayload, tagId: string, query: any) 
   return { tag, items: visible.slice(skip, skip + pageSize).map(post => postDto(post, false)), page, pageSize, total: visible.length, totalPages: Math.ceil(visible.length / pageSize) }
 }
 
-export async function createBlogFromContest(user: JwtPayload, trainingId: number) {
-  const resolved = await findContestForBlogReview(trainingId)
+export async function createBlogFromContest(user: JwtPayload, contestId: number) {
+  const resolved = await findContestForBlogReview(contestId)
   const training = resolved?.activity
   if (!training?.finalizedStandingId) fail(409, 'BLOG_CONTEST_NOT_FINALIZED', '比赛尚未生成固定榜单，不能创建复盘')
   await prisma.$transaction(tx => resolveReference(tx, user, {

@@ -192,7 +192,7 @@ describe('organization contest contract', () => {
 
       const wrongContext = await organizationRequest(
         'get',
-        `/api/trainings/${contest.id}`,
+        `/api/contests/${contest.id}`,
         token,
         schoolB.organizationId!,
       )
@@ -200,7 +200,7 @@ describe('organization contest contract', () => {
 
       const correctContext = await organizationRequest(
         'get',
-        `/api/trainings/${contest.id}`,
+        `/api/contests/${contest.id}`,
         token,
         schoolA.organizationId!,
       )
@@ -265,11 +265,11 @@ describe('organization contest contract', () => {
         result: 'accepted',
       })
 
-      const studentResponse = await organizationRequest('get', `/api/trainings/${contest.id}/submissions`, tokenFor(student), schoolA.organizationId!)
+      const studentResponse = await organizationRequest('get', `/api/contests/${contest.id}/submissions`, tokenFor(student), schoolA.organizationId!)
       expect(studentResponse.status).toBe(200)
       expect(studentResponse.body.data.submissions[0].result).toBe('submitted')
 
-      const managerResponse = await organizationRequest('get', `/api/trainings/${contest.id}/submissions`, tokenFor(teacher), schoolA.organizationId!)
+      const managerResponse = await organizationRequest('get', `/api/contests/${contest.id}/submissions`, tokenFor(teacher), schoolA.organizationId!)
       expect(managerResponse.status).toBe(200)
       expect(managerResponse.body.data.submissions[0].result).toBe('accepted')
     })

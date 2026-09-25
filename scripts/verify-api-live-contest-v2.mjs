@@ -23,7 +23,7 @@ function rows(value) { return value?.submissions || value?.ranking || value?.dat
 async function main() {
   const teacher = await session(teacherName, teacherPassword)
   const student = await session(studentName, studentPassword)
-  const trainings = await call('/teams/live_contest_v2_team/trainings?type=contest', { session: teacher })
+  const trainings = await call('/teams/live_contest_v2_team/contests?type=contest', { session: teacher })
   const v2 = rows(trainings).filter(item => item.title.startsWith('赛时演示 V2'))
   if (v2.length !== 9) throw new Error('Expected 9 V2 contests, got ' + v2.length)
   const report = []

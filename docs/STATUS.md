@@ -1,3 +1,8 @@
+## 2026-09-25 Contest / Training V2 边界收口
+
+- Contest 外部 API 已统一为 `/api/contests/*`；Training Engine V2 保持 `/api/training-sessions/*`，两者无路由兼容层。
+- 旧 TrainingSession V1 数据与运行快照已清理，数据库当前 TrainingSession/Stage/Participant/StageGroup 均为 0，等待通过 V2 创建新训练。
+
 ---
 status: current
 audience: development, operations

@@ -231,9 +231,9 @@ async function purchaseScope(user: JwtPayload, licenseType: DataLicenseType, bod
     }
     return { buyerOrganizationId: organizationId, contestId: null, payer: { ownerType: 'ORGANIZATION' as const, organizationId } }
   }
-  const contestId = Number(body?.contestId)
-  if (!Number.isInteger(contestId) || contestId <= 0) policyFail(422, 'DATA_LICENSE_SCOPE_REQUIRED', '比赛许可证必须指定有效的 contestId')
-  const resolved = await findContestForLicense(contestId)
+  const contestId = String(body?.contestId ?? String())
+  if (!/^\d+$/.test(contestId)) policyFail(422, 'DATA_LICENSE_SCOPE_REQUIRED', '比赛许可证必须指定有效的 contestId')
+  const resolved = await findContestForLicense(Number(contestId))
   const contest = resolved?.activity || null
   const teamManager = contest?.Team?.TeamMember.some((member: any) => member.userId === user.userId && member.status === 'active' && ['owner', 'admin'].includes(member.role))
   const organizationManager = contest?.organizationId
@@ -317,21 +317,21 @@ async function accessibleScopeIds(user: JwtPayload) {
   const organizationIds = authorizations
     .filter(item => item.capabilities.has('contest.manage'))
     .map(item => item.organizationId)
-  const contests = await listContestPublicIdsForLicenseScopes({
+  const contests = (await listContestPublicIdsForLicenseScopes({
     organizationIds,
     teamIds: teamMemberships.map(item => item.teamId),
-  })
+  })).map(String)
   return { organizations: organizationIds, contests }
 }
 
-function entitlementVisible(user: JwtPayload, entitlement: DataEntitlement, scopes: { organizations: string[]; contests: number[] }) {
+function entitlementVisible(user: JwtPayload, entitlement: DataEntitlement, scopes: { organizations: string[]; contests: string[] }) {
   if (isPlatformManager(user.accountRole)) return true
   if (entitlement.licenseType === 'PERSONAL') return entitlement.buyerUserId === user.userId
   if (entitlement.licenseType === 'ORGANIZATION') return Boolean(entitlement.buyerOrganizationId && scopes.organizations.includes(entitlement.buyerOrganizationId))
   return Boolean(entitlement.contestId && scopes.contests.includes(entitlement.contestId))
 }
 
-function entitlementVisibilityWhere(user: JwtPayload, scopes: { organizations: string[]; contests: number[] }) {
+function entitlementVisibilityWhere(user: JwtPayload, scopes: { organizations: string[]; contests: string[] }) {
   return isPlatformManager(user.accountRole) ? {} : { OR: [
     { licenseType: 'PERSONAL' as const, buyerUserId: user.userId },
     { licenseType: 'ORGANIZATION' as const, buyerOrganizationId: { in: scopes.organizations } },

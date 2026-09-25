@@ -150,7 +150,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       const loadTraining = async () => {
         setLoading(true)
         try {
-          const infoRes = await apiClient.get<TrainingFormInfo>(`/api/trainings/${trainingId}`)
+          const infoRes = await apiClient.get<TrainingFormInfo>(`/api/contests/${trainingId}`)
           if (infoRes.success && infoRes.data) {
             const t = infoRes.data
             setTitle(t.title)
@@ -166,7 +166,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             setOriginalStartTimeStr(startStr)
           }
           if (mode === 'contest') {
-            const ratingRes = await apiClient.get<TrainingRatingConfig>(`/api/trainings/${trainingId}/rating-config`)
+            const ratingRes = await apiClient.get<TrainingRatingConfig>(`/api/contests/${trainingId}/rating-config`)
             if (ratingRes.success && ratingRes.data) {
               const config = ratingRes.data
               setRatingScope(config.scope || 'NONE')
@@ -179,14 +179,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             }
           }
 
-          const problemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/trainings/${trainingId}/problems`)
+          const problemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/contests/${trainingId}/problems`)
           if (problemsRes.success && problemsRes.data) {
             const rows: ProblemRow[] = await Promise.all(problemsRes.data.map(async (p) => {
               const optionsRes = await apiClient.get<{
                 statement: ContentOption[]
                 solution: ContentOption[]
                 currentSelection: { statementOptionKey: string | null; solutionOptionKey: string | null }
-              }>(`/api/trainings/${trainingId}/problems/${p.id}/content-options`)
+              }>(`/api/contests/${trainingId}/problems/${p.id}/content-options`)
               const options = optionsRes.success ? optionsRes.data : null
               return {
                 id: `existing-${p.id}`,
@@ -374,7 +374,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       if (isEdit && trainingId) {
         // === 编辑模式 ===
         // 1. Update training info
-        const updateRes = await apiClient.put(`/api/trainings/${trainingId}`, {
+        const updateRes = await apiClient.put(`/api/contests/${trainingId}`, {
           title, description, format,
           problemIdVisible, solutionVisible, includeAdminInRanking,
           ...(startTime !== originalStartTimeStr && {
@@ -388,7 +388,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         }
 
         if (mode === 'contest' && !ratingLocked) {
-          const ratingRes = await apiClient.put(`/api/trainings/${trainingId}/rating-config`, {
+          const ratingRes = await apiClient.put(`/api/contests/${trainingId}/rating-config`, {
             scope: ratingScope,
             weight: Number(ratingWeight),
             organizationMinParticipants: Number(organizationRatingMinimum),
@@ -400,18 +400,18 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
         // 2. Remove deleted existing problems
         const existingIds = problemRows.filter(r => r.existing).map(r => r.trainingProblemId)
-        const originalProblemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/trainings/${trainingId}/problems`)
+        const originalProblemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/contests/${trainingId}/problems`)
         if (originalProblemsRes.success && originalProblemsRes.data) {
           for (const orig of originalProblemsRes.data) {
             if (!existingIds.includes(orig.id)) {
-              await apiClient.delete(`/api/trainings/${trainingId}/problems/${orig.id}`)
+              await apiClient.delete(`/api/contests/${trainingId}/problems/${orig.id}`)
             }
           }
         }
 
         // 3. Update existing problems (alias, points and immutable content snapshots)
         for (const row of problemRows.filter(r => r.existing)) {
-          await apiClient.put(`/api/trainings/${trainingId}/problems/${row.trainingProblemId}`, {
+          await apiClient.put(`/api/contests/${trainingId}/problems/${row.trainingProblemId}`, {
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
           })
@@ -420,7 +420,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             row.solutionOptionKey !== row.originalSolutionOptionKey
           if (selectionChanged && row.statementOptionKey && row.solutionOptionKey) {
             const selectionRes = await apiClient.put(
-              `/api/trainings/${trainingId}/problems/${row.trainingProblemId}/content-selection`,
+              `/api/contests/${trainingId}/problems/${row.trainingProblemId}/content-selection`,
               {
                 statementOptionKey: row.statementOptionKey,
                 solutionOptionKey: row.solutionOptionKey,
@@ -434,7 +434,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         const newRows = problemRows.filter(r => !r.existing && r.resolved?.found)
         const newTrainingProblemIds: string[] = []
         for (const row of newRows) {
-          const createRes = await apiClient.post<IdResponse>(`/api/trainings/${trainingId}/problems`, {
+          const createRes = await apiClient.post<IdResponse>(`/api/contests/${trainingId}/problems`, {
             problemId: row.resolved!.problemId,
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
@@ -451,7 +451,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         const allIdsInOrder = [...existingIdsInOrder, ...newTrainingProblemIds]
         const orders = allIdsInOrder.map((id, i) => ({ id, orderIndex: i }))
         if (orders.length > 0) {
-          await apiClient.put(`/api/trainings/${trainingId}/problems/reorder`, { orders })
+          await apiClient.put(`/api/contests/${trainingId}/problems/reorder`, { orders })
         }
 
         toast.success(`${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}更新成功`)
@@ -459,7 +459,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         const createUrl = organizationId
           ? '/api/organizations/' + organizationId + '/members/activities/contests'
           : teamId
-            ? '/api/teams/' + teamId + '/trainings'
+            ? '/api/teams/' + teamId + '/contests'
             : '/api/platform-contests'
         const res = await apiClient.post<IdResponse>(createUrl, {
           title, description, format, type: mode,
@@ -476,11 +476,11 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         createdTrainingId = String(newTrainingId)
 
         if (mode === 'contest') {
-          const currentConfig = await apiClient.get(`/api/trainings/${newTrainingId}/rating-config`)
+          const currentConfig = await apiClient.get(`/api/contests/${newTrainingId}/rating-config`)
           if (!currentConfig.success || !currentConfig.data) {
             throw new Error(currentConfig.message || '比赛已创建，但无法读取 Rating 配置')
           }
-          const ratingRes = await apiClient.put(`/api/trainings/${newTrainingId}/rating-config`, {
+          const ratingRes = await apiClient.put(`/api/contests/${newTrainingId}/rating-config`, {
             scope: ratingScope,
             weight: Number(ratingWeight),
             organizationMinParticipants: Number(organizationRatingMinimum),
@@ -492,7 +492,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
         const resolvedRows = problemRows.filter(r => r.resolved?.found)
         for (const row of resolvedRows) {
-          await apiClient.post(`/api/trainings/${newTrainingId}/problems`, {
+          await apiClient.post(`/api/contests/${newTrainingId}/problems`, {
             problemId: row.resolved!.problemId,
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
@@ -504,12 +504,12 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         // 创建后也 reorder（确保顺序正确）
         if (resolvedRows.length > 0) {
           // 获取刚创建的题目以拿到 ID
-          const problemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/trainings/${newTrainingId}/problems`)
+          const problemsRes = await apiClient.get<ExistingTrainingProblem[]>(`/api/contests/${newTrainingId}/problems`)
           if (problemsRes.success && problemsRes.data) {
             const createdProblems = problemsRes.data
             const orders = createdProblems.map((p, i) => ({ id: p.id, orderIndex: i }))
             if (orders.length > 0) {
-              await apiClient.put(`/api/trainings/${newTrainingId}/problems/reorder`, { orders })
+              await apiClient.put(`/api/contests/${newTrainingId}/problems/reorder`, { orders })
             }
           }
         }

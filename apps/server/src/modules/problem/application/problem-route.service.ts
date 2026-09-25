@@ -140,13 +140,6 @@ export async function migrateProblemTestGraph(problemId: string, userId: string)
     if (!migrated.ok) return { ok: false as const, code: 'TEST_GRAPH_MIGRATION_BLOCKED', issues: migrated.issues }
   }
   await ensureInitialTestSetRevision(problemId, userId)
-  const current = await prisma.problem.findUnique({ where: { id: problemId }, select: { testGraphRevision: true } })
-  if (current?.testGraphRevision) {
-    await prisma.trainingProblem.updateMany({
-      where: { problemId, testGraphRevisionSnapshot: null },
-      data: { testGraphRevisionSnapshot: current.testGraphRevision },
-    })
-  }
   return { ok: true as const, alreadyMigrated: inspection.alreadyMigrated, workspace: await loadTestGraphWorkspace(problemId) }
 }
 

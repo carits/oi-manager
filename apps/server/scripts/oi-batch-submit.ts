@@ -72,13 +72,13 @@ async function login(username: string): Promise<string> {
 }
 
 async function getTrainingProblems(token: string): Promise<any[]> {
-  const res = await apiRequest('GET', `/api/trainings/${TRAINING_ID}/problems`, token)
+  const res = await apiRequest('GET', `/api/contests/${TRAINING_ID}/problems`, token)
   if (!res.success) throw new Error(`Get problems failed: ${res.message}`)
   return res.data
 }
 
 async function submitCode(token: string, trainingProblemId: string, code: string): Promise<any> {
-  return apiRequest('POST', `/api/trainings/${TRAINING_ID}/submit`, token, {
+  return apiRequest('POST', `/api/contests/${TRAINING_ID}/submit`, token, {
     trainingProblemId,
     language: 'cpp',
     code,

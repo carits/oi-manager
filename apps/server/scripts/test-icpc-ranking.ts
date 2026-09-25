@@ -39,7 +39,7 @@ async function test() {
     { expiresIn: '7d' }
   )
 
-  const res = await fetch('http://localhost:3002/api/trainings/4/ranking', {
+  const res = await fetch('http://localhost:3002/api/contests/4/ranking', {
     headers: { Authorization: 'Bearer ' + token }
   })
 

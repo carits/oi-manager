@@ -2,14 +2,11 @@ import { Router } from 'express'
 import { authenticate } from '../middleware/auth'
 import {
   AdminDataError,
-  backfillTrainingParticipants,
-  cleanTrainingSubmissions,
   fixCaritsRemoteIds,
   fixHduMemory,
   fixSubmissionVisibility,
   getSubmissionMaintenanceStats,
   rejudgeAllLocalSubmissions,
-  repairLegacyCaritsSubmissions,
   resetUserPassword,
 } from '../modules/admin-data/application/admin-data.service'
 
@@ -37,11 +34,8 @@ function endpoint(handler: (req: any) => Promise<unknown>) {
 const rejudgeAll = endpoint(req => rejudgeAllLocalSubmissions(req.user.userId))
 adminDataRouter.post('/rejudge-all-local', rejudgeAll)
 adminDataRouter.post('/rejudge-all-carits', rejudgeAll)
-adminDataRouter.post('/rejudge-legacy-carits', endpoint(req => repairLegacyCaritsSubmissions(req.user.userId)))
 adminDataRouter.get('/submission-stats', endpoint(() => getSubmissionMaintenanceStats()))
 adminDataRouter.post('/fix-carits-remote-id', endpoint(() => fixCaritsRemoteIds()))
 adminDataRouter.post('/fix-hdu-memory', endpoint(req => fixHduMemory(req.body?.defaultKB)))
-adminDataRouter.post('/clean-training-submissions', endpoint(req => cleanTrainingSubmissions(req.body?.trainingId)))
 adminDataRouter.post('/reset-user-password', endpoint(req => resetUserPassword(req.body?.userId, req.body?.newPassword)))
-adminDataRouter.post('/backfill-training-participants', endpoint(req => backfillTrainingParticipants(req.body?.trainingId)))
 adminDataRouter.post('/fix-submission-visibility', endpoint(() => fixSubmissionVisibility()))

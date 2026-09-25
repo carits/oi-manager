@@ -133,14 +133,14 @@ async function ensureProblems(teacherSession) {
 }
 
 async function ensureContests(teacherSession, team, problems) {
-  const current = list(await request('/teams/' + team.id + '/trainings?type=contest', { session: teacherSession }))
+  const current = list(await request('/teams/' + team.id + '/contests?type=contest', { session: teacherSession }))
   const now = Date.now()
   const result = []
   for (const format of ['oi', 'ioi', 'icpc']) {
     const title = '赛时演示 V3 ' + format.toUpperCase() + ' 20 小时赛'
     let contest = current.find(item => item.title === title)
     if (!contest) {
-      contest = await request('/teams/' + team.id + '/trainings', { session: teacherSession, method: 'POST', body: {
+      contest = await request('/teams/' + team.id + '/contests', { session: teacherSession, method: 'POST', body: {
         title,
         description: '赛时演示 V3：8 题、8 人、复杂提交时间线，覆盖 AC、WA、部分分与赛制可见性。',
         format,

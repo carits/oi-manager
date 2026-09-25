@@ -41,7 +41,7 @@ async function createContest(
   format: 'icpc' | 'oi' | 'ioi',
 ) {
   const now = Date.now()
-  const created = await request.post(`/api/teams/${ids.team}/trainings`, {
+  const created = await request.post(`/api/teams/${ids.team}/contests`, {
     headers: workHeaders(principal),
     data: {
       title: `E2E ${format.toUpperCase()} Full Flow ${now}`,
@@ -58,7 +58,7 @@ async function createContest(
   expect(created.status()).toBe(200)
   const trainingId = String((await created.json()).data.id)
 
-  const added = await request.post(`/api/trainings/${trainingId}/problems`, {
+  const added = await request.post(`/api/contests/${trainingId}/problems`, {
     headers: workHeaders(principal),
     data: { problemId: ids.problem, alias: 'A', points: 100 },
   })
@@ -68,7 +68,7 @@ async function createContest(
 }
 
 async function startContest(request: APIRequestContext, principal: AuthSession, trainingId: string) {
-  const response = await request.post(`/api/trainings/${trainingId}/start`, {
+  const response = await request.post(`/api/contests/${trainingId}/start`, {
     headers: workHeaders(principal),
   })
   expect(response.status()).toBe(200)
@@ -80,7 +80,7 @@ async function submitCode(
   contest: { trainingId: string; trainingProblemId: string },
   code: string,
 ) {
-  const response = await request.post(`/api/trainings/${contest.trainingId}/submit`, {
+  const response = await request.post(`/api/contests/${contest.trainingId}/submit`, {
     headers: {
       ...workHeaders(student),
       'Idempotency-Key': `format-flow-${contest.trainingId}-${Date.now()}-${Math.random()}`,
@@ -177,7 +177,7 @@ async function waitForResult(
   expected: string,
 ) {
   await expect.poll(async () => {
-    const response = await request.get(`/api/trainings/${trainingId}/submissions/${submissionId}`, {
+    const response = await request.get(`/api/contests/${trainingId}/submissions/${submissionId}`, {
       headers: workHeaders(principal),
     })
     if (!response.ok()) return `http-${response.status()}`
@@ -221,26 +221,26 @@ test('ICPC, OI and IOI complete submission, ranking, detail and finish flows', a
 
     const studentHeaders = workHeaders(student)
     const principalHeaders = workHeaders(principal)
-    const icpcRank = await (await request.get(`/api/trainings/${icpc.trainingId}/ranking`, { headers: studentHeaders })).json()
+    const icpcRank = await (await request.get(`/api/contests/${icpc.trainingId}/ranking`, { headers: studentHeaders })).json()
     const icpcRow = icpcRank.data.ranking.find((row: any) => row.userId === student.userId)
     expect(icpcRank.data.format).toBe('icpc')
     expect(icpcRow).toMatchObject({ solvedCount: 1, totalPenalty: 20 })
     expect(icpcRow.problems[icpc.trainingProblemId]).toMatchObject({ solved: true, attempts: 2 })
 
-    const ioiRank = await (await request.get(`/api/trainings/${ioi.trainingId}/ranking`, { headers: studentHeaders })).json()
+    const ioiRank = await (await request.get(`/api/contests/${ioi.trainingId}/ranking`, { headers: studentHeaders })).json()
     expect(ioiRank.data.format).toBe('ioi')
     expect(ioiRank.data.ranking.find((row: any) => row.userId === student.userId).totalScore).toBe(40)
 
-    const oiHiddenRank = await (await request.get(`/api/trainings/${oi.trainingId}/ranking`, { headers: studentHeaders })).json()
+    const oiHiddenRank = await (await request.get(`/api/contests/${oi.trainingId}/ranking`, { headers: studentHeaders })).json()
     expect(oiHiddenRank.data).toMatchObject({ format: 'oi', hidden: true, ranking: [] })
-    const oiAdminRank = await (await request.get(`/api/trainings/${oi.trainingId}/ranking`, { headers: principalHeaders })).json()
+    const oiAdminRank = await (await request.get(`/api/contests/${oi.trainingId}/ranking`, { headers: principalHeaders })).json()
     expect(oiAdminRank.data.ranking.find((row: any) => row.userId === student.userId).totalScore).toBe(40)
-    const oiHiddenList = await (await request.get(`/api/trainings/${oi.trainingId}/submissions`, { headers: studentHeaders })).json()
+    const oiHiddenList = await (await request.get(`/api/contests/${oi.trainingId}/submissions`, { headers: studentHeaders })).json()
     expect(oiHiddenList.data.submissions[0]).toMatchObject({ result: 'submitted', score: null, timeUsed: null, memoryUsed: null })
 
-    const icpcDetail = await (await request.get(`/api/trainings/${icpc.trainingId}/submissions/${icpcAccepted}`, { headers: studentHeaders })).json()
+    const icpcDetail = await (await request.get(`/api/contests/${icpc.trainingId}/submissions/${icpcAccepted}`, { headers: studentHeaders })).json()
     expect(icpcDetail.data).toMatchObject({ judgeMode: 'acm', result: 'accepted', score: 100 })
-    const ioiDetail = await (await request.get(`/api/trainings/${ioi.trainingId}/submissions/${ioiPartial}`, { headers: studentHeaders })).json()
+    const ioiDetail = await (await request.get(`/api/contests/${ioi.trainingId}/submissions/${ioiPartial}`, { headers: studentHeaders })).json()
     expect(ioiDetail.data).toMatchObject({ judgeMode: 'oi', result: 'wa', score: 40 })
     expect(ioiDetail.data.subtasks[0]).toMatchObject({ id: 1, type: 'sum', score: 40 })
 
@@ -256,14 +256,14 @@ test('ICPC, OI and IOI complete submission, ranking, detail and finish flows', a
     await expect(studentPage.getByText('排名暂不可见')).toBeVisible()
 
     for (const contest of contests) {
-      const finished = await request.post(`/api/trainings/${contest.trainingId}/finish`, { headers: principalHeaders })
+      const finished = await request.post(`/api/contests/${contest.trainingId}/finish`, { headers: principalHeaders })
       expect(finished.status()).toBe(200)
     }
 
-    const oiVisibleRank = await (await request.get(`/api/trainings/${oi.trainingId}/ranking`, { headers: studentHeaders })).json()
+    const oiVisibleRank = await (await request.get(`/api/contests/${oi.trainingId}/ranking`, { headers: studentHeaders })).json()
     expect(oiVisibleRank.data.hidden).toBeFalsy()
     expect(oiVisibleRank.data.ranking.find((row: any) => row.userId === student.userId).totalScore).toBe(40)
-    const oiVisibleDetail = await (await request.get(`/api/trainings/${oi.trainingId}/submissions/${oiPartial}`, { headers: studentHeaders })).json()
+    const oiVisibleDetail = await (await request.get(`/api/contests/${oi.trainingId}/submissions/${oiPartial}`, { headers: studentHeaders })).json()
     expect(oiVisibleDetail.data).toMatchObject({ judgeMode: 'oi', result: 'wa', score: 40 })
     expect(oiVisibleDetail.data.cases).toHaveLength(1)
 
@@ -274,7 +274,7 @@ test('ICPC, OI and IOI complete submission, ranking, detail and finish flows', a
   } finally {
     if (!restoredAcm) await setJudgeMode(request, platformAdmin, 'acm').catch(() => {})
     for (const contest of contests.reverse()) {
-      await request.delete(`/api/trainings/${contest.trainingId}`, { headers: workHeaders(principal) }).catch(() => {})
+      await request.delete(`/api/contests/${contest.trainingId}`, { headers: workHeaders(principal) }).catch(() => {})
     }
   }
 })

@@ -11,7 +11,7 @@ export function useTrainingRank(
 ) {
   const resource = useResource<TrainingRankingData>(
     activeTab === 'ranking'
-      ? `/api/trainings/${trainingId}/ranking`
+      ? `/api/contests/${trainingId}/ranking`
       : null,
     {
       dedupingInterval: 5000,

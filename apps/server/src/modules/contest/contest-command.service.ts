@@ -6,7 +6,7 @@ import {
   lockContestRatingConfigTx,
   trackForFormat,
 } from '../rating/application/contest-rating.service'
-import { contestAsActivity, contestProblemAsActivity } from './contest-activity-projection'
+import { contestAsView, contestProblemAsView } from './contest-view'
 
 export interface CreateContestInput {
   teamId: string | null
@@ -135,7 +135,7 @@ export async function createContestTx(
       createdBy: input.createdBy,
     },
   })
-  return contestAsActivity(await findContest(tx, contest.publicId))
+  return contestAsView(await findContest(tx, contest.publicId))
 }
 
 export async function deleteContestTx(
@@ -199,7 +199,7 @@ export async function createContestProblemTx(
     },
     include: { CanonicalProblem: true, ContestResource: true },
   })
-  return { conflict: null, problem: contestProblemAsActivity(created, publicId) }
+  return { conflict: null, problem: contestProblemAsView(created, publicId) }
 }
 
 export async function reorderContestProblemsTx(
@@ -254,7 +254,7 @@ export async function updateContestProblemTx(
     },
     include: { CanonicalProblem: true, ContestResource: true },
   })
-  return { conflict: null, problem: contestProblemAsActivity(problem, publicId) }
+  return { conflict: null, problem: contestProblemAsView(problem, publicId) }
 }
 
 export async function deleteContestProblemTx(
@@ -284,7 +284,7 @@ export async function updateContestTx(
   }
   const startTime = contest.startAt || contest.contestDate
   const endTime = contest.endAt || contest.contestDate
-  const activity = contestAsActivity(contest)
+  const activity = contestAsView(contest)
   if (contest.status !== input.expected.status
     || contest.format !== input.expected.format
     || startTime.getTime() !== input.expected.startTime.getTime()
@@ -327,7 +327,7 @@ export async function updateContestTx(
       updatedAt: new Date(),
     },
   })
-  return { conflict: null, activity: contestAsActivity(await findContest(tx, publicId)) }
+  return { conflict: null, activity: contestAsView(await findContest(tx, publicId)) }
 }
 
 export async function transitionContestLifecycleTx(
@@ -341,7 +341,7 @@ export async function transitionContestLifecycleTx(
     reportMissingContest(publicId, 'lifecycle')
     return null
   }
-  const activity = contestAsActivity(contest)
+  const activity = contestAsView(contest)
   if (contest.status !== input.expectedStatus) {
     return { changed: false, visibleSubmissionCount: 0, activity }
   }
@@ -374,7 +374,7 @@ export async function transitionContestLifecycleTx(
   return {
     changed: true,
     visibleSubmissionCount,
-    activity: contestAsActivity(await findContest(tx, publicId)),
+    activity: contestAsView(await findContest(tx, publicId)),
   }
 }
 
@@ -406,7 +406,7 @@ export async function prepareDemoContestsTx(
     })
   }
   const refreshed = []
-  for (const publicId of ids) refreshed.push(contestAsActivity(await findContest(tx, publicId)))
+  for (const publicId of ids) refreshed.push(contestAsView(await findContest(tx, publicId)))
   return refreshed
 }
 

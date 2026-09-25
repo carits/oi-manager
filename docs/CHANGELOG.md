@@ -1,3 +1,8 @@
+## 2026-09-25
+
+- Contest 与 Training Engine V2 的 HTTP 边界彻底拆分：比赛详情链路统一为 `/api/contests/*`，团队比赛统一为 `/api/teams/:teamId/contests`；删除 `/api/trainings/*` retired catch-all 和旧团队训练页面，不提供兼容路由。
+- 清理 381 条旧 TrainingSession V1 数据及全部级联运行数据，删除旧 `TrainingSessionStageRuntimeSnapshot` 表；V2 无旧数据双读。
+
 ---
 status: current
 audience: development, operations

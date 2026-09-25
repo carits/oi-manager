@@ -113,22 +113,37 @@ async function memberTeamIds(actor: OrganizationActor) {
 
 export async function listOrganizationActivities(actor: OrganizationActor, type: 'homework' | 'contest') {
   const teamIds = await memberTeamIds(actor)
-  const trainings = type === 'contest'
-    ? await listContestsForDashboard({
+  if (type === 'contest') {
+    const contests = await listContestsForDashboard({
       teamIds,
       resourceScope: 'campus',
       organizationId: actor.organizationId,
     })
-    : teamIds.length ? await prisma.training.findMany({
-      where: { organizationId: actor.organizationId, teamId: { in: teamIds }, type }, orderBy: { startTime: 'desc' },
-      include: { _count: { select: { TrainingProblem: true } } },
-    }) : []
-  return trainings.map(training => ({
-    id: training.id, title: training.title, description: training.description,
-    startTime: training.startTime, endTime: training.endTime, status: activityStatus(training.startTime, training.endTime),
-    format: training.format, teamId: training.teamId, problemCount: training._count.TrainingProblem,
-    ...(type === 'contest' ? { source: training.teamId ? 'team' : 'school' } : {}), createdAt: training.createdAt,
-  })).sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
+    return contests.map(contest => ({
+      id: contest.id, title: contest.title, description: contest.description,
+      startTime: contest.startTime, endTime: contest.endTime,
+      status: activityStatus(contest.startTime, contest.endTime),
+      format: contest.format, teamId: contest.teamId,
+      problemCount: contest._count.ContestProblem,
+      source: contest.teamId ? 'team' : 'school', createdAt: contest.createdAt,
+    })).sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
+  }
+  if (!teamIds.length) return []
+  const assignments = await prisma.assignment.findMany({
+    where: {
+      organizationId: actor.organizationId,
+      teamId: { in: teamIds },
+      status: { notIn: ['DRAFT', 'CANCELLED', 'ARCHIVED'] },
+    },
+    orderBy: { openAt: 'desc' },
+    include: { _count: { select: { Problems: true } } },
+  })
+  return assignments.map(assignment => ({
+    id: assignment.id, title: assignment.title, description: assignment.description,
+    startTime: assignment.openAt, endTime: assignment.dueAt,
+    status: assignment.status.toLowerCase(), format: 'assignment', teamId: assignment.teamId,
+    problemCount: assignment._count.Problems, createdAt: assignment.createdAt,
+  }))
 }
 
 export async function createOrganizationContest(actor: OrganizationActor, body: any) {

@@ -100,7 +100,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('IOI-A1: 学生赛中可以查看排名', async () => {
       const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${ioiContest.id}/ranking`)
+        .get(`/api/contests/${ioiContest.id}/ranking`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -110,7 +110,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('IOI-A2: 学生赛中可以查看提交结果', async () => {
       const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${ioiContest.id}/submissions`)
+        .get(`/api/contests/${ioiContest.id}/submissions`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -143,7 +143,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('ICPC-A1: 学生赛中可以查看排名', async () => {
       const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${icpcContest.id}/ranking`)
+        .get(`/api/contests/${icpcContest.id}/ranking`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -153,7 +153,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('ICPC-A2: 排名按 AC 数降序 + 罚时升序', async () => {
       const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${icpcContest.id}/ranking`)
+        .get(`/api/contests/${icpcContest.id}/ranking`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -196,7 +196,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('OI-A1: 学生赛中看不到排名', async () => {
       const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${oiContest.id}/ranking`)
+        .get(`/api/contests/${oiContest.id}/ranking`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -207,7 +207,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('OI-A2: 管理员赛中可以看到排名', async () => {
       const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${oiContest.id}/ranking`)
+        .get(`/api/contests/${oiContest.id}/ranking`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -217,7 +217,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('OI-C1: 学生赛中看不到原题号', async () => {
       const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${oiContest.id}/problems`)
+        .get(`/api/contests/${oiContest.id}/problems`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -248,7 +248,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('OI-POST-A1: 赛后学生可以查看排名', async () => {
       const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${finishedOiContest.id}/ranking`)
+        .get(`/api/contests/${finishedOiContest.id}/ranking`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -258,7 +258,7 @@ describe('比赛赛制可见性测试', () => {
 
     it('OI-POST-A2: 赛后学生可以查看提交结果', async () => {
       const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-        .get(`/api/trainings/${finishedOiContest.id}/submissions`)
+        .get(`/api/contests/${finishedOiContest.id}/submissions`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -339,7 +339,7 @@ describe('比赛创建权限测试', () => {
 
   it('CA1: owner 可以创建比赛', async () => {
     const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: '新比赛',
         format: 'oi',
@@ -355,7 +355,7 @@ describe('比赛创建权限测试', () => {
 
   it('CA2: admin 可以创建比赛', async () => {
     const res = await createOrganizationRequest(adminToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: 'Admin 创建的比赛',
         format: 'ioi',
@@ -370,7 +370,7 @@ describe('比赛创建权限测试', () => {
 
   it('CA3: member 不能创建比赛', async () => {
     const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: 'Member 创建的比赛',
         format: 'oi',
@@ -384,7 +384,7 @@ describe('比赛创建权限测试', () => {
 
   it('CA4: 学生不能创建比赛', async () => {
     const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: '学生创建的比赛',
         format: 'oi',
@@ -416,7 +416,7 @@ describe('比赛类型区分测试', () => {
 
   it('CT1: 创建训练（type=training）', async () => {
     const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: '日常训练',
         format: 'ioi',
@@ -432,7 +432,7 @@ describe('比赛类型区分测试', () => {
 
   it('CT2: 创建比赛（type=contest）', async () => {
     const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: '模拟赛',
         format: 'oi',
@@ -477,7 +477,7 @@ describe('比赛类型区分测试', () => {
 
     // 筛选比赛
     const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .get(`/api/teams/${team.id}/trainings?type=contest`)
+      .get(`/api/teams/${team.id}/contests?type=contest`)
 
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
@@ -490,7 +490,7 @@ describe('比赛类型区分测试', () => {
 
   it('CT4: 比赛开始和结束通过统一命令同步聚合、Rating 锁和终态', async () => {
     const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: '生命周期比赛',
         format: 'oi',
@@ -503,7 +503,7 @@ describe('比赛类型区分测试', () => {
     const contestId = created.body.data.id as number
 
     const started = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/trainings/${contestId}/start`)
+      .post(`/api/contests/${contestId}/start`)
     expect(started.status).toBe(200)
     expect(started.body.data.status).toBe('ongoing')
     expect(started.body.data.title).toBe('生命周期比赛')
@@ -516,7 +516,7 @@ describe('比赛类型区分测试', () => {
     expect(afterStart.RatingConfig?.lockedAt).not.toBeNull()
 
     const finished = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/trainings/${contestId}/finish`)
+      .post(`/api/contests/${contestId}/finish`)
     expect(finished.status).toBe(200)
     expect(finished.body.data.status).toBe('finished')
     expect(finished.body.data.finalizationStatus).toBe('JUDGING')
@@ -531,7 +531,7 @@ describe('比赛类型区分测试', () => {
 
   it('CT5: 比赛基本信息、赛制和结束时间通过统一命令同步', async () => {
     const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: '待编辑比赛',
         format: 'oi',
@@ -544,14 +544,14 @@ describe('比赛类型区分测试', () => {
     const contestId = created.body.data.id as number
     const renamedEndTime = new Date(Date.now() + 86400000 * 3)
     const updated = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .put(`/api/trainings/${contestId}`)
+      .put(`/api/contests/${contestId}`)
       .send({ title: '已编辑比赛', format: 'ioi' })
     expect(updated.status).toBe(200)
     expect(updated.body.data.title).toBe('已编辑比赛')
     expect(updated.body.data.format).toBe('ioi')
 
     const extended = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .put(`/api/trainings/${contestId}/end-time`)
+      .put(`/api/contests/${contestId}/end-time`)
       .send({ endTime: renamedEndTime.toISOString() })
     expect(extended.status).toBe(200)
 
@@ -567,7 +567,7 @@ describe('比赛类型区分测试', () => {
 
   it('CT6: 删除未终结比赛会同时删除聚合和兼容运行时', async () => {
     const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: '待删除比赛',
         format: 'oi',
@@ -583,7 +583,7 @@ describe('比赛类型区分测试', () => {
     })
 
     const deleted = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .delete(`/api/trainings/${contestId}`)
+      .delete(`/api/contests/${contestId}`)
     expect(deleted.status).toBe(200)
     expect(await prisma.training.findUnique({ where: { id: contestId } })).toBeNull()
     expect(await prisma.contest.findUnique({ where: { id: aggregateBefore.id } })).toBeNull()
@@ -591,7 +591,7 @@ describe('比赛类型区分测试', () => {
 
   it('CT7: 比赛题目的增改排序删除只通过统一命令同步', async () => {
     const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
-      .post(`/api/teams/${team.id}/trainings`)
+      .post(`/api/teams/${team.id}/contests`)
       .send({
         title: '题目命令比赛',
         format: 'oi',

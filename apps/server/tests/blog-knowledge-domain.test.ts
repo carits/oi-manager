@@ -397,7 +397,7 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(snapshots[2]).toMatchObject({ ratingBefore: 1500, appliedDelta: 20, ratingAfter: 1520 })
     expect(JSON.stringify(snapshots)).not.toContain(author.user.username)
 
-    const byContest = await client(reader).get(`/api/trainings/${training.id}/blogs`)
+    const byContest = await client(reader).get(`/api/contests/${training.id}/blogs`)
     const bySolution = await client(reader).get(`/api/solutions/${solutionId}/related-blogs`)
     expect(byContest.body.data.items.map((item: any) => item.id)).toContain(postId)
     expect(bySolution.body.data.items.map((item: any) => item.id)).toContain(postId)

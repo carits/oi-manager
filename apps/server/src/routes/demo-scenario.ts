@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { authenticate, getAccountRole, isAdmin, type AuthRequest } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
-import { createQueuedTrainingSubmission } from '../modules/training/training.submission.service'
+import { createQueuedContestSubmission } from '../modules/contest/contest.submission.service'
 import {
   countDemoSubmissions,
   demoSubmissionExists,
@@ -136,7 +136,7 @@ demoScenarioRouter.post('/v2/events', authenticate, asyncHandler(async (req: Aut
       const sourceId = 'demo-v2:'+training.id+':'+eventKey(event,index)
       if (await demoSubmissionExists(sourceId)) { existing++; continue }
       const trainingProblem = aliases.get(event.alias); if (!trainingProblem) throw new Error(training.title+' 缺少题目 '+event.alias)
-      await createQueuedTrainingSubmission({userId:users[event.user].id,training,trainingProblem,language:'cpp',code:event.kind==='full'?full[event.alias]:event.kind==='partial'?partial[event.alias]:wrong,submitMethod:'demo_scenario',createdAt:new Date(training.startTime.getTime()+event.minute*60000),sourceId})
+      await createQueuedContestSubmission({userId:users[event.user].id,training,trainingProblem,language:'cpp',code:event.kind==='full'?full[event.alias]:event.kind==='partial'?partial[event.alias]:wrong,submitMethod:'demo_scenario',createdAt:new Date(training.startTime.getTime()+event.minute*60000),sourceId})
       created++
     }
   }
@@ -187,7 +187,7 @@ demoScenarioRouter.post('/v3/events', authenticate, asyncHandler(async (req: Aut
       const trainingProblem = aliases.get(event.alias)
       if (!trainingProblem) throw new Error(training.title + ' 缺少题目 ' + event.alias)
       const code = event.kind === 'full' ? v3Full[event.alias] : event.kind === 'partial' ? v3Partial[event.alias] : wrong
-      await createQueuedTrainingSubmission({
+      await createQueuedContestSubmission({
         userId: users[event.user].id,
         training,
         trainingProblem,

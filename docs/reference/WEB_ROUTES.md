@@ -74,8 +74,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/teams/[id]` | 见页面权限布局 | 当前页面 |
 | `/personal/teams/[id]/contests/[cid]` | 见页面权限布局 | 当前页面 |
 | `/personal/teams/[id]/contests/[cid]/statements` | 活动管理员 | 团队比赛题面矩阵管理 |
-| `/personal/teams/[id]/trainings/[tid]` | 见页面权限布局 | 当前页面 |
-| `/personal/teams/[id]/trainings/[tid]/statements` | 活动管理员 | 团队训练题面矩阵管理 |
+| `/personal/teams/[id]/contests/[cid]` | 见页面权限布局 | 当前页面 |
+| `/personal/teams/[id]/contests/[cid]/statements` | 活动管理员 | 团队训练题面矩阵管理 |
 | `/personal/training-sessions` | 已登录账号 | 独立教练训练列表 |
 | `/personal/training-sessions/[id]` | 教练或训练学员 | 冻结 Stage 摘要、当前要求/历史进度、提交和 Runtime Intervention 工作台 |
 | `/personal/training-sessions/[id]/design` | 团队管理员 | 尚未开始 Stage 的用途、规则、Stage 分组、题号添加和固定 Revision 设计器 |

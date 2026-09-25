@@ -65,7 +65,7 @@ DRAFT → SCHEDULED → OPEN → OVERDUE → CLOSED → REVIEWING
 
 ## API 与 Web
 
-主要接口为 `/api/assignments`，以及 `/:id` 下的 `workspace`、`problems`、`roster`、`validate`、`publish`、`submit`、`progress`、`corrections`、`feedback`、`score-adjustments`、`progress/:progressId/manual-completion` 和状态转换接口。题单通过 `POST /api/problem-lists/:id/create-assignment` 创建草稿；活动补题兼容路由仍使用 `POST /api/trainings/:id/create-makeup-homework`，但返回的也是 Assignment 身份。
+主要接口为 `/api/assignments`，以及 `/:id` 下的 `workspace`、`problems`、`roster`、`validate`、`publish`、`submit`、`progress`、`corrections`、`feedback`、`score-adjustments`、`progress/:progressId/manual-completion` 和状态转换接口。题单通过 `POST /api/problem-lists/:id/create-assignment` 创建草稿；活动补题兼容路由仍使用 `POST /api/contests/:id/create-makeup-homework`，但返回的也是 Assignment 身份。
 
 组织端 `/org/:organizationId/homeworks` 使用独立作业列表。列表按进行中、草稿、已结束和全部由服务端分组筛选、计数并分页；学生默认进入进行中，当前无任务时可显式进入历史作业。教师在草稿工作台分别保存发布时间、开放/截止/关闭时间、评分策略、固定题目版本和学生名单，运行发布检查后冻结；每道题可显式配置类别、作业满分、目标分、权重和完成策略。学生在同一路径查看题目并提交；发布后教师看到服务端成绩矩阵。所有写接口都重新执行资源级权限、状态和 Revision 校验，前端隐藏按钮不是授权边界。
 

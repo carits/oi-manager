@@ -73,7 +73,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     try {
       const [response, participationResponse] = await Promise.all([
         getContestRating(Number(trainingId)),
-        apiClient.get<RatingParticipationPayload>(`/api/trainings/${trainingId}/rating-participation`),
+        apiClient.get<RatingParticipationPayload>(`/api/contests/${trainingId}/rating-participation`),
       ])
       setData(response)
       if (participationResponse.success && participationResponse.data) {
@@ -96,7 +96,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     setError('')
     try {
       const suffix = kind === 'finalize' ? 'finalize' : 'rating/rebuild'
-      const response = await apiClient.post<RatingPayload>(`/api/trainings/${trainingId}/${suffix}`, {})
+      const response = await apiClient.post<RatingPayload>(`/api/contests/${trainingId}/${suffix}`, {})
       if (!response.success || !response.data) throw new Error(response.message || 'Rating 操作失败')
       setData(response.data)
       await onChanged()
@@ -111,7 +111,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     setParticipationSaving(true)
     setError('')
     try {
-      const response = await apiClient.put<RatingParticipationPayload>(`/api/trainings/${trainingId}/rating-participation`, {
+      const response = await apiClient.put<RatingParticipationPayload>(`/api/contests/${trainingId}/rating-participation`, {
         organizationId: selectedOrganizationId || null,
       })
       if (!response.success || !response.data) throw new Error(response.message || '保存参赛组织失败')
