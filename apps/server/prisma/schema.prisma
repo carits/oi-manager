@@ -3975,7 +3975,6 @@ model TrainingSessionStage {
   ProblemPlans           TrainingSessionStageProblemPlan[]
   Groups                 TrainingSessionStageGroup[]
   ParticipantAssignments TrainingSessionStageParticipantAssignment[]
-  RuntimeSnapshot        TrainingSessionStageRuntimeSnapshot?
   TimeAdjustments        TrainingSessionStageTimeAdjustment[]
   GroupChanges           TrainingSessionStageGroupChange[]
 
@@ -4193,18 +4192,6 @@ model TrainingSessionStageGroupChange {
 
   @@index([sessionId, stageId, requestedAt])
   @@index([participantId, requestedAt])
-}
-
-model TrainingSessionStageRuntimeSnapshot {
-  id                 String               @id @default(uuid())
-  stageId            String               @unique
-  definitionRevision Int
-  projection         Json
-  projectionHash     String
-  createdAt          DateTime             @default(now())
-  Stage              TrainingSessionStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
-
-  @@index([projectionHash])
 }
 
 model TrainingSessionStageTimeAdjustment {

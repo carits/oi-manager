@@ -216,7 +216,6 @@ export async function loadSession(id: string) {
       Problems: { orderBy: { orderIndex: 'asc' }, include: { Problem: { select: { id: true, platform: true, problemId: true, title: true, difficulty: true, timeLimit: true, memoryLimit: true } }, TestSetRevision: { select: { id: true, revisionNumber: true, mode: true, judgeConfigHash: true } }, Plans: { orderBy: { orderIndex: 'asc' } } } },
       Groups: { orderBy: { orderIndex: 'asc' }, include: { ProblemPlans: { orderBy: { orderIndex: 'asc' } }, LegacyAssignments: { include: { Participant: { select: { userId: true } } } }, TrainingGroup: true } },
       ParticipantAssignments: { include: { Participant: { select: { userId: true } } } },
-      RuntimeSnapshot: true,
       TimeAdjustments: { orderBy: { createdAt: 'asc' } },
     } },
     Groups: { orderBy: { orderIndex: 'asc' }, include: {
@@ -906,10 +905,10 @@ export async function replaceTrainingStructure(userId: string, sessionId: string
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
     const claimed = await tx.trainingSession.updateMany({ where: { id: sessionId, statusRevision: expectedRevision, status: session.status }, data: { statusRevision: { increment: 1 }, title: body?.title ? boundedText(body.title, 200, '训练名称', 1) : session.title, description: body?.description === undefined ? session.description : body.description ? boundedText(body.description, 5000, '训练说明') : null } })
     if (!claimed.count) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练已被其他管理员修改，请刷新')
-    const existingStages = await tx.trainingSessionStage.findMany({ where: { sessionId }, include: { Problems: { include: { _count: { select: { Hints: true } } } }, RuntimeSnapshot: true, _count: { select: { ParticipantAssignments: true, Groups: true, ProblemPlans: true } } } })
+    const existingStages = await tx.trainingSessionStage.findMany({ where: { sessionId }, include: { Problems: { include: { _count: { select: { Hints: true } } } }, _count: { select: { ParticipantAssignments: true, Groups: true, ProblemPlans: true } } } })
     const stageById = new Map(existingStages.map(stage => [stage.id, stage]))
     for (const stage of stages) if (stage.id && !stageById.has(stage.id)) throw new TrainingEngineError(422, 'TRAINING_STAGE_NOT_FOUND', '阶段不属于当前训练')
-    const frozenStages = existingStages.filter(stage => stage.lifecycle !== 'PENDING' || stage.RuntimeSnapshot)
+    const frozenStages = existingStages.filter(stage => stage.lifecycle !== 'PENDING')
     const requested = new Set(requestedStageIds)
     const missingFrozen = frozenStages.filter(stage => !requested.has(stage.id))
     if (missingFrozen.length) throw new TrainingEngineError(409, 'TRAINING_STAGE_FROZEN', '运行中或已结束的阶段必须保留，不能删除或回滚')
@@ -930,7 +929,7 @@ export async function replaceTrainingStructure(userId: string, sessionId: string
     for (const entry of hydrated) {
       const requestedStageId = entry.stage.id && stageById.has(entry.stage.id) ? entry.stage.id : null
       const existing = requestedStageId ? stageById.get(requestedStageId)! : null
-      if (existing && (existing.lifecycle !== 'PENDING' || existing.RuntimeSnapshot)) {
+      if (existing && existing.lifecycle !== 'PENDING') {
         if (existing.orderIndex !== entry.stageIndex) throw new TrainingEngineError(409, 'TRAINING_STAGE_FROZEN', `阶段「${existing.name}」已经开始，不能重新排序`)
         keepStageIds.push(existing.id)
         continue
@@ -1191,22 +1190,12 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
-async function createStageSnapshot(tx: Prisma.TransactionClient, stageId: string) {
-  const stage = await tx.trainingSessionStage.findUniqueOrThrow({ where: { id: stageId }, include: {
-    Problems: { orderBy: { orderIndex: 'asc' }, include: { Plans: { orderBy: { orderIndex: 'asc' } }, TestSetRevision: { select: { id: true, revisionNumber: true, judgeConfigHash: true, mode: true } } } },
-    Groups: { orderBy: { orderIndex: 'asc' }, include: { LegacyAssignments: { orderBy: { participantId: 'asc' } }, ProblemPlans: { orderBy: { orderIndex: 'asc' } } } },
-  } })
-  const projection = {
-    stage: { id: stage.id, name: stage.name, description: stage.description, orderIndex: stage.orderIndex, kind: stage.kind, audienceMode: stage.audienceMode, endPolicy: stage.endPolicy, accessPolicy: stage.accessPolicy, submissionMode: stage.submissionMode, plannedDurationSeconds: stage.plannedDurationSeconds, defaultTargetScore: stage.defaultTargetScore, completionThreshold: stage.completionThreshold, minDurationSeconds: stage.minDurationSeconds, rules: stage.rules, definitionRevision: stage.definitionRevision },
-    groups: stage.Groups.map(group => ({ id: group.id, name: group.name, orderIndex: group.orderIndex, accessPolicy: group.accessPolicy, submissionMode: group.submissionMode, rules: group.rules, assignments: group.LegacyAssignments.map(item => ({ participantId: item.participantId })), plans: group.ProblemPlans.map(plan => ({ ...plan, createdAt: undefined, updatedAt: undefined })) })),
-    problems: stage.Problems.map(problem => ({ id: problem.id, problemId: problem.problemId, testSetRevisionId: problem.testSetRevisionId, revisionNumber: problem.TestSetRevision.revisionNumber, judgeConfigHash: problem.TestSetRevision.judgeConfigHash, mode: problem.TestSetRevision.mode, alias: problem.alias, titleSnapshot: problem.titleSnapshot, statementsSnapshot: problem.statementsSnapshot, plans: problem.Plans.map(plan => ({ ...plan, createdAt: undefined, updatedAt: undefined })) })),
-  }
-  const projectionHash = crypto.createHash('sha256').update(stableJson(projection)).digest('hex')
-  return tx.trainingSessionStageRuntimeSnapshot.create({ data: { stageId, definitionRevision: stage.definitionRevision, projection: asJson(projection)!, projectionHash } })
+async function createStageSnapshot(_tx: Prisma.TransactionClient, _stageId: string) {
+  // V2 freezes stage definitions in the StageGroup runtime rows; no legacy snapshot table is used.
+  return null
 }
-
 async function startStage(tx: Prisma.TransactionClient, sessionId: string, stageId: string, at: Date, running = true) {
-  const stage = await tx.trainingSessionStage.findFirst({ where: { id: stageId, sessionId }, include: { RuntimeSnapshot: true } })
+  const stage = await tx.trainingSessionStage.findFirst({ where: { id: stageId, sessionId },  })
   if (!stage || stage.lifecycle !== 'PENDING') throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_PENDING', '目标阶段不是待开始状态')
 
   // Apply deferred next-Stage moves before validating GROUPED assignments.
@@ -1235,7 +1224,6 @@ async function startStage(tx: Prisma.TransactionClient, sessionId: string, stage
     }
   }
 
-  if (!stage.RuntimeSnapshot) await createStageSnapshot(tx, stage.id)
   await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'RUNNING', startedAt: at, runningSince: running ? at : null, endedAt: null, endedBy: null, endReason: null, endNote: null } })
   await tx.trainingSession.update({ where: { id: sessionId }, data: { currentStageId: stage.id } })
   await tx.trainingSessionParticipant.updateMany({ where: { sessionId, status: 'active' }, data: { currentStageId: stage.id, currentProblemId: null } })
@@ -2829,8 +2817,7 @@ export async function getTrainingReport(userId: string, sessionId: string) {
   const now = new Date()
 
   const timeline = session.Stages.map(stage => {
-    const snapshot = parseJsonObject(stage.RuntimeSnapshot?.projection)
-    const snapshotStage = parseJsonObject(snapshot.stage)
+    const snapshotStage = stage as any
     const runtimeExtensionSeconds = stage.TimeAdjustments.reduce((sum, item) => sum + item.seconds, 0)
     const actualDurationSeconds = stage.activeElapsedSeconds + (stage.lifecycle === 'RUNNING' ? activeStageIncrement(stage, now) : 0)
     const plannedDurationSeconds = Number.isInteger(snapshotStage.plannedDurationSeconds)
@@ -2851,7 +2838,7 @@ export async function getTrainingReport(userId: string, sessionId: string) {
       endedAt: stage.endedAt,
       endReason: stage.endReason,
       endNote: stage.endNote,
-      snapshotHash: stage.RuntimeSnapshot?.projectionHash || null,
+      snapshotHash: null,
     }
   })
 
@@ -2914,8 +2901,7 @@ export async function getTrainingReport(userId: string, sessionId: string) {
   })
 
   const groupSummaries = manager ? session.Stages.flatMap(stage => {
-    const snapshot = parseJsonObject(stage.RuntimeSnapshot?.projection)
-    const snapshotGroups = Array.isArray(snapshot.groups) ? snapshot.groups.map(item => parseJsonObject(item)) : []
+    const snapshotGroups: any[] = []
     return stage.Groups.map(group => {
       const initial = snapshotGroups.find(item => String(item.id || '') === group.id)
       return {
