@@ -13,7 +13,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 206 |
+| Prisma models | 208 |
 | Prisma enums | 78 |
 | Legacy route adapters | 18 |
 | Module route adapters | 54 |
@@ -276,6 +276,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingSession`
 - `TrainingSessionCommand`
 - `TrainingSessionEvent`
+- `TrainingSessionGroup`
+- `TrainingSessionGroupChange`
 - `TrainingSessionHint`
 - `TrainingSessionHintAccess`
 - `TrainingSessionOverlay`

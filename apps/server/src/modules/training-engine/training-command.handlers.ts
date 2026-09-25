@@ -60,7 +60,19 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
         increment: Math.max(0, Math.floor((at.getTime() - current.runningSince.getTime()) / 1000)),
       }
     }
-    if (current.currentStageId) {
+    if (current.groupingModelVersion >= 2) {
+      const runningUnits = await tx.trainingSessionStageGroup.findMany({
+        where: { Stage: { sessionId }, status: 'RUNNING', runningSince: { not: null } },
+        select: { id: true, runningSince: true },
+      })
+      for (const unit of runningUnits) await tx.trainingSessionStageGroup.update({
+        where: { id: unit.id },
+        data: {
+          activeElapsedSeconds: { increment: unit.runningSince ? Math.max(0, Math.floor((at.getTime() - unit.runningSince.getTime()) / 1000)) : 0 },
+          runningSince: null,
+        },
+      })
+    } else if (current.currentStageId) {
       const stage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId } })
       if (stage?.lifecycle === 'RUNNING') {
         await tx.trainingSessionStage.update({
@@ -78,7 +90,12 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     update.pausedAt = null
     update.runningSince = new Date()
     update.pauseMode = null
-    if (current.currentStageId) {
+    if (current.groupingModelVersion >= 2) {
+      await tx.trainingSessionStageGroup.updateMany({
+        where: { Stage: { sessionId }, status: 'RUNNING', runningSince: null },
+        data: { runningSince: new Date() },
+      })
+    } else if (current.currentStageId) {
       const stage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId } })
       if (stage?.lifecycle === 'RUNNING') {
         await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { runningSince: new Date() } })

@@ -39,14 +39,39 @@ export const TrainingStructureGroupInputSchema = z.object({
 })
 export const TrainingStructureStageInputSchema = z.object({
   id: z.string().optional(), clientKey: z.string().min(1), name: z.string().min(1).max(200), description: z.string().max(5000).nullable().optional(),
-  kind: TrainingStageKindSchema, audienceMode: TrainingStageAudienceModeSchema, lifecycle: TrainingStageLifecycleSchema.optional(),
+  kind: TrainingStageKindSchema, audienceMode: TrainingStageAudienceModeSchema.default('ALL'), lifecycle: TrainingStageLifecycleSchema.optional(),
   endPolicy: TrainingStageEndPolicySchema, accessPolicy: TrainingStageAccessPolicySchema, accessScope: TrainingAccessScopeSchema.default('CURRENT_STAGE'), submissionMode: z.enum(['ENABLED', 'DISABLED']),
   plannedDurationSeconds: NullableNumber, defaultTargetScore: NullableNumber, completionThreshold: NullableNumber, minDurationSeconds: NullableNumber,
   rules: JsonObjectSchema.optional(), problems: z.array(TrainingStructureProblemInputSchema).default([]), groups: z.array(TrainingStructureGroupInputSchema).default([]),
 })
+export const TrainingGroupingGroupInputSchema = z.object({
+  id: z.string().optional(), clientKey: z.string().min(1), name: z.string().min(1).max(100),
+  participantIds: z.array(z.string()).default([]),
+})
+export const TrainingGroupingInputSchema = z.object({
+  groups: z.array(TrainingGroupingGroupInputSchema).min(1).max(50),
+})
+export const TrainingGroupingGroupSchema = TrainingGroupingGroupInputSchema.extend({
+  orderIndex: z.number().int().nonnegative().optional(), status: z.string().optional(),
+})
+export const TrainingGroupingSchema = z.object({
+  modelVersion: z.number().int().positive(),
+  groups: z.array(TrainingGroupingGroupSchema),
+  memberships: z.array(z.object({ participantId: z.string(), userId: z.string(), groupId: z.string(), groupName: z.string() })),
+})
+export const TrainingModeSchema = z.enum(['PRACTICE', 'EXAM', 'GUIDED', 'REVIEW'])
+export const TrainingStageGroupPlanInputSchema = z.object({
+  id: z.string().optional(), clientKey: z.string().min(1), stageId: z.string().min(1), groupId: z.string().min(1),
+  trainingMode: TrainingModeSchema, completionPolicy: JsonObjectSchema.nullable().optional(),
+  transitionPolicy: z.enum(['WAIT_FOR_TEACHER', 'AUTO_ADVANCE']).default('WAIT_FOR_TEACHER'),
+  problemIds: z.array(z.string()).max(100).default([]), rules: JsonObjectSchema.nullable().optional(),
+})
+export const TrainingStageGroupPlanSchema = TrainingStageGroupPlanInputSchema.extend({
+  id: z.string(), stageName: z.string(), groupName: z.string(),
+})
 export const TrainingStructureInputSchema = z.object({
   expectedRevision: z.number().int().nonnegative(), title: z.string().min(1).max(200), description: z.string().max(5000).nullable(),
-  confirmDependentRemoval: z.boolean().optional(), stages: z.array(TrainingStructureStageInputSchema).min(1).max(30),
+  grouping: TrainingGroupingInputSchema.optional(), confirmDependentRemoval: z.boolean().optional(), stages: z.array(TrainingStructureStageInputSchema).min(1).max(30),
 })
 
 export const TrainingDesignProblemSchema = TrainingStructureProblemInputSchema.partial({ clientKey: true }).extend({
@@ -61,10 +86,18 @@ export const TrainingDesignStageSchema = TrainingStructureStageInputSchema.omit(
   endedAt: DateTimeWireSchema.nullable().optional(), endReason: TrainingStageEndReasonSchema.nullable().optional(), endNote: z.string().nullable().optional(), effectiveDurationSeconds: z.number().int().nullable().optional(),
   Problems: z.array(TrainingDesignProblemSchema), Groups: z.array(TrainingDesignGroupSchema),
 })
+export const TrainingDesignStageGroupSchema = z.object({
+  id: z.string(), stageId: z.string(), groupId: z.string().nullable().optional(), mode: TrainingModeSchema,
+  status: z.enum(['PENDING', 'RUNNING', 'PAUSED', 'ENDED', 'SKIPPED']),
+  plannedDurationSeconds: z.number().int().nullable().optional(),
+  activeElapsedSeconds: z.number().int().optional(), startedAt: DateTimeWireSchema.nullable().optional(),
+  runningSince: DateTimeWireSchema.nullable().optional(), endedAt: DateTimeWireSchema.nullable().optional(),
+  endReason: z.string().nullable().optional(), problemIds: z.array(z.string()).default([]),
+})
 export const TrainingDesignSchema = z.object({
   editable: z.boolean(), statusRevision: z.number().int().nonnegative(),
   session: z.object({ id: z.string(), title: z.string(), description: z.string().nullable().optional(), status: z.string(), sessionType: z.string(), organizationId: z.string().nullable().optional(), teamId: z.string().nullable().optional(), scheduledStartAt: DateTimeWireSchema.nullable().optional() }).passthrough(),
-  stages: z.array(TrainingDesignStageSchema), issues: z.array(TrainingIssueSchema),
+  stages: z.array(TrainingDesignStageSchema), grouping: TrainingGroupingSchema.optional(), stageGroupPlans: z.array(TrainingStageGroupPlanSchema).optional(), stageGroups: z.array(TrainingDesignStageGroupSchema).optional(), issues: z.array(TrainingIssueSchema),
 })
 export const TrainingDesignProblemLookupSchema = z.object({
   id: z.string(), platform: z.string(), problemId: z.string(), title: z.string(), difficulty: z.string().nullable().optional(),
@@ -75,6 +108,40 @@ export const TrainingStructureValidationSchema = z.object({ valid: z.boolean(), 
 export const TrainingStageTransitionInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), action: z.enum(['start', 'advance', 'skip_pending', 'end_session']), stageId: z.string().min(1), outcome: z.enum(['completed', 'ended_early']).optional(), nextStageId: z.string().optional(), reason: z.string().max(2000).optional() })
 export const TrainingStageGroupChangeInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), participantId: z.string().min(1), toGroupId: z.string().min(1), effectiveMode: z.enum(['immediate', 'next_stage']), targetStageId: z.string().optional(), reason: z.string().min(1).max(2000) })
 export const TrainingStageTimeExtensionInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), seconds: z.number().int().min(60).max(86400), reason: z.string().min(1).max(2000) })
+export const TrainingStageGroupMatrixInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  plans: z.array(TrainingStageGroupPlanInputSchema).max(1500),
+})
+export const TrainingGroupingReplaceInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  groups: z.array(TrainingGroupingGroupInputSchema).min(1).max(50),
+})
+export const TrainingGroupingChangeInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(), participantId: z.string().min(1),
+  toGroupId: z.string().min(1), reason: z.string().min(1).max(2000),
+})
+export const TrainingGroupRuntimeActionInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  action: z.enum(['start', 'advance', 'pause', 'resume']),
+  groupId: z.string().min(1),
+  reason: z.string().max(2000).optional(),
+})
+export const TrainingGroupRuntimeBatchInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  action: z.enum(['start_all', 'advance_all', 'pause_all', 'resume_all']),
+  reason: z.string().max(2000).optional(),
+})
+export const TrainingGroupSplitInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(), sourceGroupId: z.string().min(1),
+  name: z.string().min(1).max(100), participantIds: z.array(z.string().min(1)).min(1).max(5000),
+  reason: z.string().min(1).max(2000),
+})
+export const TrainingGroupMergeInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(), sourceGroupId: z.string().min(1),
+  targetGroupId: z.string().min(1), reason: z.string().min(1).max(2000),
+})
+
+
 export const TrainingStageEndInputSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   outcome: z.enum(['completed', 'ended_early']).default('completed'),
@@ -269,6 +336,7 @@ export const TrainingReportSchema = z.object({
 })
 
 export const TrainingSessionSummarySchema = z.object({
+  groupingModelVersion: z.number().int().optional(),
   id: z.string(), title: z.string(), description: z.string().nullable().optional(), status: z.string(), sessionType: z.string(),
   statusRevision: z.number().int().optional(), problemCount: z.number().int().optional(), dueAt: DateTimeWireSchema.nullable().optional(), canJoin: z.boolean().optional(),
   teamId: z.string().nullable().optional(), teamName: z.string().nullable().optional(),
@@ -292,6 +360,7 @@ export const TrainingSessionCreateInputSchema = z.object({
   organizationId: z.string().optional(), teamId: z.string().optional(), participantUserIds: z.array(z.string()).max(5000).optional(), scheduledStartAt: DateTimeWireSchema.nullable().optional(),
   rankingMode: z.enum(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING']).optional(), peerVisibility: z.enum(['NONE', 'PROGRESS', 'SCORE', 'FULL']).optional(), joinMode: z.enum(['CURRENT_STAGE', 'TEACHER_ASSIGN']).optional(),
   allowHints: z.boolean().optional(),
+  grouping: TrainingGroupingInputSchema.optional(),
   defaultAccessPolicy: TrainingStageAccessPolicySchema.optional(), defaultSubmissionMode: z.enum(['ENABLED', 'DISABLED']).optional(),
   settings: JsonObjectSchema.optional(), stages: z.array(TrainingSessionCreateStageInputSchema).min(1).max(30).optional(),
 })
@@ -332,6 +401,14 @@ export const TrainingContracts = {
   extendStageTime: defineApiEndpoint({ key: 'training.stage.time.extend', method: 'POST', scope: 'organization', body: TrainingStageTimeExtensionInputSchema, data: TrainingWorkspaceSchema }),
   getWorkspace: defineApiEndpoint({ key: 'training.workspace', method: 'GET', scope: 'organization', data: TrainingWorkspaceSchema }),
   getRoster: defineApiEndpoint({ key: 'training.roster.get', method: 'GET', scope: 'organization', data: TrainingRosterSchema }),
+  getGrouping: defineApiEndpoint({ key: 'training.grouping.get', method: 'GET', scope: 'organization', data: TrainingGroupingSchema }),
+  replaceGrouping: defineApiEndpoint({ key: 'training.grouping.replace', method: 'PUT', scope: 'organization', body: TrainingGroupingReplaceInputSchema, data: TrainingGroupingSchema }),
+  replaceStageGroupMatrix: defineApiEndpoint({ key: 'training.stage-group-matrix.replace', method: 'PUT', scope: 'organization', body: TrainingStageGroupMatrixInputSchema, data: TrainingDesignSchema }),
+  changeGrouping: defineApiEndpoint({ key: 'training.grouping.change', method: 'POST', scope: 'organization', body: TrainingGroupingChangeInputSchema, data: TrainingGroupingSchema }),
+  groupRuntimeAction: defineApiEndpoint({ key: 'training.group-runtime.action', method: 'POST', scope: 'organization', body: TrainingGroupRuntimeActionInputSchema, data: TrainingWorkspaceSchema }),
+  groupRuntimeBatch: defineApiEndpoint({ key: 'training.group-runtime.batch', method: 'POST', scope: 'organization', body: TrainingGroupRuntimeBatchInputSchema, data: TrainingWorkspaceSchema }),
+  splitGroup: defineApiEndpoint({ key: 'training.group.split', method: 'POST', scope: 'organization', body: TrainingGroupSplitInputSchema, data: TrainingWorkspaceSchema }),
+  mergeGroup: defineApiEndpoint({ key: 'training.group.merge', method: 'POST', scope: 'organization', body: TrainingGroupMergeInputSchema, data: TrainingWorkspaceSchema }),
   replaceRoster: defineApiEndpoint({ key: 'training.roster.replace', method: 'PUT', scope: 'organization', body: TrainingRosterInputSchema, data: TrainingWorkspaceSchema }),
   getCoachDashboard: defineApiEndpoint({ key: 'training.coach-dashboard', method: 'GET', scope: 'organization', data: TrainingCoachDashboardSchema }),
   getReport: defineApiEndpoint({ key: 'training.report', method: 'GET', scope: 'organization', data: TrainingReportSchema }),

@@ -26,6 +26,8 @@ import {
   listTrainingHints,
   openTrainingHint,
   recordTrainingStrategy,
+  runTrainingGroupAction,
+  runTrainingGroupBatch,
   saveTrainingRoster,
   saveTrainingDraft,
   sendTrainingHeartbeat,
@@ -63,7 +65,8 @@ type StrategyState = {
   scorePolicy?: { type?: string; targets?: number[]; completionScore?: number }
   lastDecision?: { decision: string; createdAt: string } | null
 }
-type Workspace = { session: { id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; currentStageId?: string; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentStageId?: string; currentGroupId?: string | null; requiredCount?: number; completedCount?: number }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string }>; strategy: Record<string, StrategyState> }
+type V2StageGroupRuntime = { id: string; stageId: string; status: string; runningSince?: string | null; activeElapsedSeconds?: number; effectiveDurationSeconds?: number | null; startedAt?: string | null; endedAt?: string | null; endReason?: string | null }; type V2RuntimeGroup = { id: string; name: string; orderIndex: number; status: string; Participants?: Array<{ id?: string; userId?: string }>; StageGroups?: V2StageGroupRuntime[] }
+type Workspace = { session: { groupingModelVersion?: number; Groups?: V2RuntimeGroup[]; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; currentStageId?: string; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentStageId?: string; currentGroupId?: string | null; requiredCount?: number; completedCount?: number }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string }>; strategy: Record<string, StrategyState> }
 type Dashboard = { participants: Array<{ id: string; user: { id: string; username: string }; online: boolean; currentProblemId?: string; currentGroupId?: string | null; requiredCount: number; completedCount: number; completed: boolean; progress: Array<{ status: string }> }>; summary: { total: number; working: number; stuck: number; completed: number } }
 type Roster = { revision: number; candidates: Array<{ userId: string; username: string; displayName: string; role: string; selected: boolean }> }
 type Hint = { id: string; level: number; title?: string; content?: string; opened: boolean; globallyOpenedAt?: string }
@@ -241,6 +244,22 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       setCommandBusy(false)
     }
   }
+  const runGroupAction = async (action: 'start' | 'advance' | 'pause' | 'resume', groupId: string) => {
+    if (!data) return
+    setCommandBusy(true)
+    const response = await runTrainingGroupAction(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, action, groupId })
+    setCommandBusy(false)
+    if (!response.ok) return toast.error(response.error.message || '分组运行操作失败')
+    await load()
+  }
+  const runGroupBatch = async (action: 'start_all' | 'advance_all' | 'pause_all' | 'resume_all') => {
+    if (!data) return
+    setCommandBusy(true)
+    const response = await runTrainingGroupBatch(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, action })
+    setCommandBusy(false)
+    if (!response.ok) return toast.error(response.error.message || '批量分组操作失败')
+    await load()
+  }
   const transitionStage = async (action: 'start' | 'advance' | 'skip_pending' | 'end_session', stageId: string, extra: Record<string, unknown> = {}) => {
     if (!data) return false
     setCommandBusy(true)
@@ -333,7 +352,9 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   if (!data) return <PageFrame width="workbench"><PageHeader title="训练工作台" description="正在准备训练状态…" /></PageFrame>
   const status = data.session.status
   const activeStrategy = selectedId ? data.strategy[selectedId] : undefined
-  const currentStage = data.session.Stages.find(stage => stage.id === data.session.currentStageId)
+  const participantRuntimeGroup = data.participant?.currentGroupId ? (data.session.Groups || []).find(group => group.id === data.participant?.currentGroupId) : undefined
+  const participantActiveUnit = participantRuntimeGroup?.StageGroups?.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status))
+  const currentStage = data.session.Stages.find(stage => stage.id === (participantActiveUnit?.stageId || data.session.currentStageId))
   const pendingStages = data.session.Stages.filter(stage => stage.lifecycle === 'PENDING')
   const nextPendingStage = pendingStages.find(stage => !currentStage || stage.id === currentStage.id || data.session.Stages.indexOf(stage) > data.session.Stages.indexOf(currentStage))
   const futureGroupedStages = pendingStages.filter(stage => stage.audienceMode === 'GROUPED')
@@ -372,6 +393,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   })
   return <PageFrame width="workbench"><div className={styles.stack}>
     <PageHeader title={data.session.title} description={data.session.description || '训练工作台'} actions={<div className={styles.actions}><StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge></div>} />
+    {data.manager && data.session.groupingModelVersion === 2 && <Section title="各组运行进度" description="各训练组可以独立位于不同 Stage；全部推进只是批量便利操作。" actions={<div className={styles.actions}><Button variant="secondary" disabled={commandBusy} onClick={() => void runGroupBatch('start_all')}>开始未启动组</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void runGroupBatch('advance_all')}>推进所有可推进组</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void runGroupBatch('pause_all')}>全部暂停</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void runGroupBatch('resume_all')}>全部恢复</Button></div>}>
+      <div className={styles.grid}>{(data.session.Groups || []).filter(group => group.status === 'active').map(group => {
+        const runtime = group.StageGroups?.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status)) || group.StageGroups?.slice(-1)[0]
+        const stage = data.session.Stages.find(item => item.id === runtime?.stageId)
+        const runtimeStatus = runtime?.status || 'PENDING'
+        return <article className={styles.card} key={group.id}><div className={styles.actions}><strong>{group.name}</strong><StatusBadge variant={runtimeStatus === 'RUNNING' ? 'success' : runtimeStatus === 'PAUSED' ? 'warning' : 'neutral'}>{runtimeStatus}</StatusBadge></div><p>{stage ? stage.name : runtimeStatus === 'ENDED' ? '已完成全部阶段' : '尚未开始'} · {group.Participants?.length || 0} 人</p><p className={styles.muted}>有效训练 {formatDuration(runtime?.activeElapsedSeconds || 0)}</p><div className={styles.actions}>{!runtime?.stageId && runtimeStatus !== 'ENDED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('start', group.id)}>开始</Button>}{runtimeStatus === 'RUNNING' && <><Button size="sm" variant="secondary" disabled={commandBusy} onClick={() => void runGroupAction('advance', group.id)}>进入下一阶段</Button><Button size="sm" variant="ghost" disabled={commandBusy} onClick={() => void runGroupAction('pause', group.id)}>暂停</Button></>}{runtimeStatus === 'PAUSED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('resume', group.id)}>恢复</Button>}</div></article>
+      })}</div>
+    </Section>}
     {currentStage && <Section title={`当前阶段 · ${currentStage.name}`} description={currentStage.description || (data.manager ? '当前课堂阶段的实时状态' : '完成当前要求后等待教师进入下一阶段')}>
       <div className={styles.summary}>
         <div className={styles.metric}><strong>{formatDuration(currentStageElapsed)}</strong>已进行</div>

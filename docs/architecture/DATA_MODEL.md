@@ -81,3 +81,11 @@ erDiagram
 - 正式版本、账本分录、消息、审计、举报证据和发布版本均按追加或不可变方式保存。
 - 用户控制的源码、压缩包、消息、AI 请求、Candidate 和 Judge 输出均有服务端硬上限；前端禁用状态不是安全边界。
 - PostgreSQL `FOR UPDATE SKIP LOCKED` 用于队列领取；测试环境不得以 SQLite 代替并发语义。
+
+## Training Engine V2 数据关系补充
+
+V2 的核心关系为 TrainingSession → TrainingSessionStage → TrainingSessionStageGroup（稳定 Group 与 Stage 的交叉单元）→ TrainingSessionStageProblem/ProblemPlan。TrainingSessionGroup 是整场训练的稳定分组，TrainingSessionParticipant.groupId 表示当前归属；StageGroup 保存该阶段的运行状态、计划时长、完成阈值和独立题目计划。迁移和换组不重建已有 Progress 或 Submission。
+
+
+
+Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`, `TrainingSessionStageParticipantAssignment`, `TrainingSessionStageProblemPlan`, and `TrainingSessionStageTimeAdjustment`.

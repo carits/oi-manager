@@ -21,6 +21,21 @@ export const validateTrainingDesign = (sessionId: string, body: TrainingStructur
     body,
   )
 
+export const saveTrainingStageGroupMatrix = (sessionId: string, body: EndpointBody<typeof TrainingContracts.replaceStageGroupMatrix>) =>
+  apiClient.mutateContract(TrainingContracts.replaceStageGroupMatrix, `${sessionPath(sessionId)}/stage-group-matrix`, body)
+
+export const runTrainingGroupAction = (sessionId: string, body: EndpointBody<typeof TrainingContracts.groupRuntimeAction>) =>
+  apiClient.mutateContract(TrainingContracts.groupRuntimeAction, `${sessionPath(sessionId)}/group-runtime/actions`, body)
+
+export const runTrainingGroupBatch = (sessionId: string, body: EndpointBody<typeof TrainingContracts.groupRuntimeBatch>) =>
+  apiClient.mutateContract(TrainingContracts.groupRuntimeBatch, `${sessionPath(sessionId)}/group-runtime/batch`, body)
+
+export const splitTrainingGroup = (sessionId: string, body: EndpointBody<typeof TrainingContracts.splitGroup>) =>
+  apiClient.mutateContract(TrainingContracts.splitGroup, `${sessionPath(sessionId)}/groups/split`, body)
+
+export const mergeTrainingGroup = (sessionId: string, body: EndpointBody<typeof TrainingContracts.mergeGroup>) =>
+  apiClient.mutateContract(TrainingContracts.mergeGroup, `${sessionPath(sessionId)}/groups/merge`, body)
+
 export const saveTrainingDesign = (sessionId: string, body: TrainingStructureInput) =>
   apiClient.mutateContract(
     TrainingContracts.replaceStructure,

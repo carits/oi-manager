@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/Toast";
 import { TrainingDesignAuxiliary } from "./TrainingDesignAuxiliary";
 import { TrainingStageTimeline } from "./TrainingStageTimeline";
 import { TrainingProblemChain } from "./TrainingProblemChain";
+import { TrainingStageGroupMatrix } from "./TrainingStageGroupMatrix";
 import styles from "./TrainingEngine.module.css";
 import { useUnsavedChanges } from "@/components/navigation/UnsavedChangesProvider";
 import {
@@ -24,7 +25,7 @@ import {
   saveTrainingDesign,
   validateTrainingDesign,
 } from "../api/trainingSessionApi";
-import type { Assignment, Design, DesignProblem, Issue, Stage } from "../model/trainingDesign";
+import type { Assignment, Design, DesignProblem, Issue, Stage, TrainingGrouping } from "../model/trainingDesign";
 import { createTrainingDesignDraft, moveItem, newTrainingDesignKey, normalizeAssignments, normalizeProblemOrder } from "../model/trainingDesign";
 import { QuickProblemInput, type SelectedCanonicalProblem } from "@/features/problem-selection";
 
@@ -46,7 +47,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     searchParams = useSearchParams(),
     toast = useToast();
   const [design, setDesign] = useState<Design | null>(null),
-    [stages, setStages] = useState<Stage[]>([]);
+    [stages, setStages] = useState<Stage[]>([]),
+    [grouping, setGrouping] = useState<TrainingGrouping | undefined>();
   const [activeStep, setActiveStep] = useState(2);
   const [title, setTitle] = useState(""),
     [description, setDescription] = useState(""),
@@ -78,6 +80,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       if (copied) loadedStages = [...loadedStages, copied];
       setDesign(data);
       setStages(loadedStages);
+      setGrouping(data.grouping);
       setTitle(data.session.title);
       setDescription(data.session.description || "");
       setIssues(data.issues || []);
@@ -233,13 +236,14 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     title,
     description,
     confirmDependentRemoval,
+    grouping: grouping ? { groups: grouping.groups.map(group => ({ id: group.id, clientKey: group.clientKey, name: group.name, participantIds: group.participantIds })) } : undefined,
     stages: stages.map((stage) => ({
       id: stage.id,
       clientKey: stage.clientKey,
       name: stage.name,
       description: stage.description,
       kind: stage.kind,
-      audienceMode: stage.audienceMode,
+      audienceMode: stage.audienceMode ?? "ALL",
       endPolicy: stage.endPolicy,
       accessPolicy: stage.accessPolicy,
       accessScope: stage.accessScope,
@@ -481,6 +485,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         )}
 
         {activeStep === 2 && (
+          <>
           <div className={styles.designWorkspace}>
             <TrainingStageTimeline
               stages={stages}
@@ -544,7 +549,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               </div>
             </section>
           </div>
-        )}
+          {design?.grouping && <TrainingStageGroupMatrix sessionId={sessionId} revision={design.statusRevision} stages={stages} grouping={grouping} plans={design.stageGroupPlans || []} onSaved={load} />}
+        </>)}
 
         {activeStep === 3 && (
           <TrainingDesignAuxiliary
@@ -552,6 +558,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             mode="roster"
             stages={stages}
             onStagesChange={replaceStages}
+            grouping={grouping}
+            onGroupingChange={setGrouping}
             onChanged={load}
           />
         )}

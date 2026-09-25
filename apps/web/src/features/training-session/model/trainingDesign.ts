@@ -50,7 +50,8 @@ export type Stage = {
   name: string
   description?: string | null
   kind: 'TRAINING' | 'TEACHING' | 'REVIEW'
-  audienceMode: 'ALL' | 'GROUPED'
+  /** @deprecated V2 derives assignment from StageGroup; retained only for legacy sessions. */
+  audienceMode?: 'ALL' | 'GROUPED'
   lifecycle?: 'PENDING' | 'RUNNING' | 'ENDED' | 'SKIPPED'
   endPolicy: 'MANUAL' | 'TIME' | 'COMPLETION' | 'HYBRID'
   accessPolicy: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'
@@ -63,6 +64,7 @@ export type Stage = {
   rules?: Record<string, unknown> | null
   Problems: Assignment[]
   Groups: StageGroup[]
+  stageGroups?: StageGroupPlan[]
 }
 export type Issue = {
   path: string
@@ -70,6 +72,8 @@ export type Issue = {
   message: string
   severity: 'error' | 'warning'
 }
+export type StageGroupPlan = { id: string; clientKey: string; stageId: string; stageName: string; groupId: string; groupName: string; trainingMode: 'PRACTICE' | 'EXAM' | 'GUIDED' | 'REVIEW'; completionPolicy?: Record<string, unknown> | null; transitionPolicy: 'WAIT_FOR_TEACHER' | 'AUTO_ADVANCE'; problemIds: string[]; rules?: Record<string, unknown> | null; status?: 'PENDING' | 'RUNNING' | 'PAUSED' | 'ENDED' | 'SKIPPED'; startedAt?: string | null; runningSince?: string | null; activeElapsedSeconds?: number; endedAt?: string | null; endReason?: string | null }
+export type TrainingGrouping = { modelVersion: number; groups: Array<{ id?: string; clientKey: string; name: string; orderIndex?: number; status?: string; participantIds: string[] }>; memberships: Array<{ participantId: string; userId: string; groupId: string; groupName: string }> }
 export type Design = {
   editable: boolean
   statusRevision: number
@@ -83,6 +87,8 @@ export type Design = {
     teamId?: string | null
   }
   stages: Stage[]
+  grouping?: TrainingGrouping
+  stageGroupPlans?: StageGroupPlan[]
   issues: Issue[]
 }
 export type DesignProblem = ProblemSummary & {

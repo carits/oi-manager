@@ -20,6 +20,10 @@ import {
   cloneTrainingStage,
   endTrainingStage,
   executeStageTransition,
+  executeTrainingGroupRuntimeAction,
+  executeTrainingGroupRuntimeBatch,
+  splitTrainingGroup,
+  mergeTrainingGroup,
   executeTrainingCommand,
   extendTrainingStageTime,
   getTrainingDesign,
@@ -30,6 +34,10 @@ import {
   getTrainingStageGroupSuggestions,
   getTrainingPeerProgress,
   getTrainingRoster,
+  getTrainingGrouping,
+  replaceTrainingGrouping,
+  replaceTrainingStageGroupMatrix,
+  changeTrainingGrouping,
   getTrainingWorkspace,
   joinTrainingSession,
   listAvailableHints,
@@ -168,6 +176,22 @@ trainingEngineRouter.get('/training-sessions/:id/roster', authenticate, asyncHan
   try { sendContractData(res, TrainingContracts.getRoster, await getTrainingRoster(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
 }))
 
+trainingEngineRouter.get('/training-sessions/:id/grouping', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.getGrouping, await getTrainingGrouping(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.put('/training-sessions/:id/grouping', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.replaceGrouping, await replaceTrainingGrouping(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.replaceGrouping, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/grouping/change', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.changeGrouping, await changeTrainingGrouping(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.changeGrouping, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.put('/training-sessions/:id/stage-group-matrix', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.replaceStageGroupMatrix, await replaceTrainingStageGroupMatrix(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.replaceStageGroupMatrix, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
 trainingEngineRouter.post('/training-sessions/:id/archive', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try { const body = parseContractBody(TrainingContracts.archiveSession, req.body); sendContractData(res, TrainingContracts.archiveSession, await archiveTrainingSession(req.user!.userId, req.params.id, body.expectedRevision)) } catch (error) { return sendError(error, res) }
 }))
@@ -187,6 +211,22 @@ trainingEngineRouter.post('/training-sessions/:id/commands', authenticate, async
     trainingMetrics.recordCommand(false)
     return sendError(error, res)
   }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/group-runtime/actions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.groupRuntimeAction, await executeTrainingGroupRuntimeAction(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.groupRuntimeAction, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/group-runtime/batch', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.groupRuntimeBatch, await executeTrainingGroupRuntimeBatch(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.groupRuntimeBatch, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/groups/split', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.splitGroup, await splitTrainingGroup(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.splitGroup, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/groups/merge', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.mergeGroup, await mergeTrainingGroup(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.mergeGroup, req.body))) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/stage-transitions', authenticate, asyncHandler(async (req: AuthRequest, res) => {

@@ -1902,3 +1902,9 @@ source_of_truth: Git history
 - WorkspaceSwitcher 改为打开时懒加载，SSR 已知组织标题立即可见，避免切换器的 mount-time 请求阻塞工作区进入。
 - Server authenticate 建立请求级账号与组织授权快照，/api/auth/me 复用该快照，避免同一请求重复读取 User/Membership；JWT、权限和 API 契约保持不变。
 - 补充组织工作区 SSR 上下文架构说明，并通过 Web/Server 类型检查与定向回归测试。
+
+## 2026-09-25
+
+- Training Engine V2：收口为 Stage 驱动统一模型，新增 Stage × stable Group 运行单元、CAS 阶段转换、分组拆分/合并和未来阶段编辑。
+- 删除空的训练分组原型表，保留 legacy groupingModelVersion=1 读取兼容；补充设计器、运行工作台和文档说明。
+

@@ -9,14 +9,14 @@ import { Empty } from '@/components/ui/Empty'
 import { StatusBadge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { createTrainingHint, deleteTrainingHint, getTrainingGroupSuggestions, getTrainingRoster, listTrainingHints, saveTrainingRoster, updateTrainingHint } from '../api/trainingSessionApi'
-import type { Assignment, Stage } from '../model/trainingDesign'
+import type { Assignment, Stage, TrainingGrouping } from '../model/trainingDesign'
 import styles from './TrainingEngine.module.css'
 
 type Roster = { revision: number; candidates: Array<{ userId: string; username: string; displayName: string; role: string; selected: boolean }> }
 type Hint = { id: string; level: number; title?: string; content?: string; openMode?: string; triggerSeconds?: number; triggerAttempts?: number; triggerScore?: number }
 type GroupSuggestion = { participantId: string; user: { id: string; username: string }; groupId: string; groupName: string; reason: string }
 
-export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChange, onChanged }: { sessionId: string; mode: 'roster' | 'hints'; stages: Stage[]; onStagesChange?: (updater: (current: Stage[]) => Stage[]) => void; onChanged: () => Promise<void> }) {
+export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChange, grouping, onGroupingChange, onChanged }: { sessionId: string; mode: 'roster' | 'hints'; stages: Stage[]; onStagesChange?: (updater: (current: Stage[]) => Stage[]) => void; grouping?: TrainingGrouping; onGroupingChange?: (value: TrainingGrouping) => void; onChanged: () => Promise<void> }) {
   const toast = useToast()
   const [roster, setRoster] = useState<Roster>(), [loading, setLoading] = useState(false), [saving, setSaving] = useState(false)
   const assignments = useMemo(() => stages.flatMap(stage => [...stage.Problems, ...(stage.Groups || []).flatMap(group => group.Problems)].filter(problem => problem.assignmentId).map(problem => ({ ...problem, stageName: stage.name, stageLifecycle: stage.lifecycle || 'PENDING' }))), [stages])
@@ -91,40 +91,30 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     setSuggestions({ stageId, items: result.suggestions as GroupSuggestion[] })
   }
 
-  const groupedStages = stages.filter(stage => stage.audienceMode === 'GROUPED')
+  const groupedStages = stages
   const groupSource = groupedStages[0]
-  const trainingGroups = groupSource?.Groups || []
+  const trainingGroups = (grouping?.groups || []).map(group => ({ ...group, Problems: [] as Assignment[], accessPolicy: 'ALL_AT_ONCE' as const, submissionMode: 'ENABLED' as const }))
   const groupsFrozen = groupedStages.some(stage => Boolean(stage.lifecycle && stage.lifecycle !== 'PENDING'))
-  const updateAllGroupedStages = (update: (groups: Stage['Groups']) => Stage['Groups']) => {
-    onStagesChange?.(current => current.map(stage => stage.audienceMode === 'GROUPED' ? { ...stage, Groups: update(stage.Groups || []) } : stage))
+  const updateAllGroupedStages = (update: (groups: typeof trainingGroups) => typeof trainingGroups) => {
+    if (!grouping || !onGroupingChange) return
+    onGroupingChange({ ...grouping, groups: update(trainingGroups).map(group => ({ id: group.id, clientKey: group.clientKey, name: group.name, orderIndex: group.orderIndex, status: group.status, participantIds: group.participantIds })), memberships: grouping.memberships })
   }
-  const renameTrainingGroup = (groupKey: string, name: string) => {
-    updateAllGroupedStages(groups => groups.map(group => group.clientKey === groupKey ? { ...group, name } : group))
-  }
+  const renameTrainingGroup = (groupKey: string, name: string) => updateAllGroupedStages(groups => groups.map(group => group.clientKey === groupKey ? { ...group, name } : group))
   const addTrainingGroup = () => {
     const index = trainingGroups.length + 1
     const clientKey = 'group-' + Date.now() + '-' + index
-    const group = { clientKey, name: '分组 ' + index, accessPolicy: 'ALL_AT_ONCE' as const, submissionMode: 'ENABLED' as const, participantIds: [], Problems: [] }
-    updateAllGroupedStages(groups => [...groups, group])
+    updateAllGroupedStages(groups => [...groups, { clientKey, name: '分组 ' + index, accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', participantIds: [], Problems: [] }])
   }
-  const removeTrainingGroup = (groupKey: string) => {
-    updateAllGroupedStages(groups => groups.filter(group => group.clientKey !== groupKey))
-  }
+  const removeTrainingGroup = (groupKey: string) => updateAllGroupedStages(groups => groups.filter(group => group.clientKey !== groupKey))
   const assignParticipant = (groupKey: string, participantId: string, checked: boolean) => {
-    updateAllGroupedStages(groups => groups.map(group => {
-      if (checked) return { ...group, participantIds: group.clientKey === groupKey ? [...new Set([...group.participantIds, participantId])] : group.participantIds.filter(id => id !== participantId) }
-      return group.clientKey === groupKey ? { ...group, participantIds: group.participantIds.filter(id => id !== participantId) } : group
-    }))
+    updateAllGroupedStages(groups => groups.map(group => checked
+      ? { ...group, participantIds: group.clientKey === groupKey ? [...new Set([...group.participantIds, participantId])] : group.participantIds.filter(id => id !== participantId) }
+      : group.clientKey === groupKey ? { ...group, participantIds: group.participantIds.filter(id => id !== participantId) } : group))
   }
   const applySuggestions = () => {
     if (!rawSuggestions) return
     const preview = rawSuggestions
-    updateAllGroupedStages(groups => groups.map(group => ({
-      ...group,
-      participantIds: preview.items
-        .filter(item => group.id === item.groupId || group.clientKey === item.groupId)
-        .map(item => item.user.id),
-    })))
+    updateAllGroupedStages(groups => groups.map(group => ({ ...group, participantIds: preview.items.filter(item => group.id === item.groupId || group.clientKey === item.groupId).map(item => item.user.id) })))
     toast.success('分组建议已写入本地草稿，请检查后保存')
     setSuggestions(undefined)
   }

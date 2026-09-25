@@ -33,6 +33,8 @@ type PermissionProblem = {
 
 type PermissionGroup = {
   id: string
+  groupId?: string | null
+  status?: string
   accessPolicy?: unknown
   submissionMode?: unknown
   rules?: unknown
@@ -48,7 +50,7 @@ type PermissionStage = {
   endPolicy?: unknown
   defaultTargetScore?: unknown
   rules?: unknown
-  ParticipantAssignments: Array<{ participantId: string; groupId: string | null }>
+  ParticipantAssignments: Array<{ participantId: string; groupId: string | null; legacyStageGroupId?: string | null }>
   Groups: PermissionGroup[]
   Problems: PermissionProblem[]
 }
@@ -191,9 +193,11 @@ export function resolveTrainingPermissionLoaded(
   }
 
   const assignment = stage.ParticipantAssignments.find(item => item.participantId === participant.id)
-  const plan = stageProblem.Plans.find(item => item.groupId === (stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null))
+  const stableStageGroup = participant.currentGroupId ? stage.Groups.find(item => item.groupId === participant.currentGroupId) : null
+  const legacyStageGroupId = assignment?.legacyStageGroupId ?? assignment?.groupId ?? null
+  const plan = stageProblem.Plans.find(item => item.groupId === (stableStageGroup?.id || (stage.audienceMode === 'GROUPED' ? legacyStageGroupId : null)))
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
-  const group = assignment?.groupId ? stage.Groups.find(item => item.id === assignment.groupId) : null
+  const group = stableStageGroup || (legacyStageGroupId ? stage.Groups.find(item => item.id === legacyStageGroupId) : null)
   const submissionDisabled = overlays.some(item => item.type === 'DISABLE_SUBMISSION')
   const runtimeOverride = {
     ...(submissionOverride ? { submissionPolicy: 'ENABLED' } : submissionDisabled ? { submissionPolicy: 'DISABLED' } : {}),
@@ -207,9 +211,9 @@ export function resolveTrainingPermissionLoaded(
   }
 
   if (accessPolicy === 'SEQUENTIAL' && !unlocked) {
-    const groupId = stage.audienceMode === 'GROUPED' ? assignment?.groupId || null : null
+    const stageGroupId = stableStageGroup?.id || (stage.audienceMode === 'GROUPED' ? legacyStageGroupId : null)
     const ordered = stage.Problems.flatMap(problem => problem.Plans.map(item => ({ ...item, problem })))
-      .filter(item => item.groupId === groupId)
+      .filter(item => item.groupId === stageGroupId)
       .sort((a, b) => a.orderIndex - b.orderIndex)
     const index = ordered.findIndex(item => item.stageProblemId === stageProblemId)
     if (index > 0) {

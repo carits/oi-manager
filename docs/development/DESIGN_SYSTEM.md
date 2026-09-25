@@ -331,3 +331,8 @@ CSS Module、焦点 Token 与错误契约迁移；后续变更由静态门禁直
 历史批量样式改造记录保存在
 [前端风格重构归档](../archive/plans/frontend-style-refactor.md)，其中的数量是历史快照，
 不是当前合规证明。
+
+## Training Engine V2 交互
+
+Stage 状态、独立分组和时间调整使用统一 StatusBadge、DetailDialog 与确认表单。运行中修改未来 Stage 必须展示影响摘要；已结束 Stage 显示“如需再次训练，请复制为新阶段”，不提供回滚按钮。
+

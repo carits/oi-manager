@@ -49,3 +49,8 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 ## 历史
 
 - [2026-09 及此前状态流水](archive/history/STATUS-2026-09.md)
+
+### Training Engine V2
+
+已完成 Stage × stable Group 统一模型迁移、StageGroup 独立运行、分组拆分/合并 API、设计器与运行工作台兼容收口。原型 StageGroupPlan/GroupMembership/RuntimeState 表为空并已在迁移中删除；生产数据校验显示 prototype 表 0、V2 结构重复 0、当前 legacy session 不受影响。
+

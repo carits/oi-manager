@@ -3897,6 +3897,7 @@ model TrainingSession {
   title                 String
   description           String?                         @db.Text
   sessionType           TrainingEngineSessionType       @default(GENERAL)
+  groupingModelVersion  Int                             @default(1)
   status                TrainingEngineSessionStatus     @default(DRAFT)
   organizationId        String?
   teamId                String?
@@ -3925,6 +3926,8 @@ model TrainingSession {
   Organization          Organization?                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   Team                  Team?                           @relation(fields: [teamId], references: [id], onDelete: Restrict)
   Stages                TrainingSessionStage[]
+  Groups                TrainingSessionGroup[]
+  GroupChanges          TrainingSessionGroupChange[]
   Participants          TrainingSessionParticipant[]
   Commands              TrainingSessionCommand[]
   Overlays              TrainingSessionOverlay[]
@@ -4021,6 +4024,7 @@ model TrainingSessionParticipant {
   id                String                                      @id @default(uuid())
   sessionId         String
   userId            String
+  groupId           String?
   status            String                                      @default("active")
   currentStageId    String?
   currentProblemId  String?
@@ -4033,54 +4037,114 @@ model TrainingSessionParticipant {
   updatedAt         DateTime                                    @updatedAt
   Session           TrainingSession                             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   User              User                                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  Group             TrainingSessionGroup?                       @relation(fields: [groupId], references: [id], onDelete: Restrict)
   Progress          TrainingSessionProblemProgress[]
   HintAccess        TrainingSessionHintAccess[]
   ScoreEvents       TrainingSessionScoreEvent[]
   StrategyDecisions TrainingSessionStrategyDecision[]
   StageAssignments  TrainingSessionStageParticipantAssignment[]
   StageGroupChanges TrainingSessionStageGroupChange[]
+  GroupChanges      TrainingSessionGroupChange[]
 
   @@unique([sessionId, userId])
   @@index([userId, status])
+  @@index([sessionId, groupId])
   @@index([sessionId, currentStageId])
 }
 
-model TrainingSessionStageGroup {
-  id             String                                      @id @default(uuid())
-  stageId        String
-  name           String
-  orderIndex     Int                                         @default(0)
-  accessPolicy   TrainingEngineStageAccessPolicy             @default(ALL_AT_ONCE)
-  submissionMode TrainingEngineSubmissionMode                @default(ENABLED)
-  rules          Json?
-  createdAt      DateTime                                    @default(now())
-  updatedAt      DateTime                                    @updatedAt
-  Stage          TrainingSessionStage                        @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  ProblemPlans   TrainingSessionStageProblemPlan[]
-  Assignments    TrainingSessionStageParticipantAssignment[]
-  ChangesFrom    TrainingSessionStageGroupChange[]           @relation("TrainingStageGroupChangeFrom")
-  ChangesTo      TrainingSessionStageGroupChange[]           @relation("TrainingStageGroupChangeTo")
+model TrainingSessionGroup {
+  id          String   @id @default(uuid())
+  sessionId   String
+  name        String
+  orderIndex  Int      @default(0)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Session     TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  Participants TrainingSessionParticipant[]
+  StageAssignments TrainingSessionStageParticipantAssignment[]
+  StageGroups TrainingSessionStageGroup[]
+  ChangesFrom TrainingSessionGroupChange[] @relation("TrainingGroupChangeFrom")
+  ChangesTo   TrainingSessionGroupChange[] @relation("TrainingGroupChangeTo")
 
+  @@unique([sessionId, name])
+  @@unique([sessionId, orderIndex])
+  @@index([sessionId, status])
+}
+
+model TrainingSessionGroupChange {
+  id            String @id @default(uuid())
+  sessionId     String
+  participantId String
+  fromGroupId   String?
+  toGroupId     String
+  reason        String @db.Text
+  changedBy     String
+  createdAt     DateTime @default(now())
+  effectiveAt   DateTime @default(now())
+  Session       TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  Participant   TrainingSessionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  FromGroup     TrainingSessionGroup? @relation("TrainingGroupChangeFrom", fields: [fromGroupId], references: [id], onDelete: SetNull)
+  ToGroup       TrainingSessionGroup @relation("TrainingGroupChangeTo", fields: [toGroupId], references: [id], onDelete: Restrict)
+  @@index([sessionId, createdAt])
+  @@index([participantId, createdAt])
+}
+
+model TrainingSessionStageGroup {
+  id                     String                                      @id @default(uuid())
+  stageId                String
+  groupId                String?
+  name                   String?
+  orderIndex             Int                                         @default(0)
+  mode                   String                                      @default("PRACTICE")
+  accessPolicy           TrainingEngineStageAccessPolicy             @default(ALL_AT_ONCE)
+  submissionMode         TrainingEngineSubmissionMode                @default(ENABLED)
+  plannedDurationSeconds Int?
+  completionThreshold    Int?
+  minDurationSeconds     Int?
+  completionPolicy       Json?
+  transitionPolicy       String                                      @default("WAIT_FOR_TEACHER")
+  status                 String                                      @default("PENDING")
+  startedAt              DateTime?
+  runningSince           DateTime?
+  activeElapsedSeconds   Int                                         @default(0)
+  endedAt                DateTime?
+  endReason              String?
+  rules                  Json?
+  createdAt              DateTime                                    @default(now())
+  updatedAt              DateTime                                    @updatedAt
+  Stage                  TrainingSessionStage                        @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  TrainingGroup          TrainingSessionGroup?                       @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  ProblemPlans           TrainingSessionStageProblemPlan[]
+  LegacyAssignments      TrainingSessionStageParticipantAssignment[] @relation("LegacyStageGroupAssignment")
+  ChangesFrom            TrainingSessionStageGroupChange[]           @relation("TrainingStageGroupChangeFrom")
+  ChangesTo              TrainingSessionStageGroupChange[]           @relation("TrainingStageGroupChangeTo")
+
+  @@unique([stageId, groupId])
   @@unique([stageId, name])
   @@unique([stageId, orderIndex])
-  @@index([stageId])
+  @@index([stageId, status])
+  @@index([groupId, status])
 }
 
 model TrainingSessionStageParticipantAssignment {
-  id            String                     @id @default(uuid())
-  stageId       String
-  participantId String
-  groupId       String?
-  assignedAt    DateTime                   @default(now())
-  assignedBy    String?
-  source        String                     @default("manual")
-  Stage         TrainingSessionStage       @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  Participant   TrainingSessionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  Group         TrainingSessionStageGroup? @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  id                 String                     @id @default(uuid())
+  stageId            String
+  participantId      String
+  groupId            String?
+  legacyStageGroupId String?
+  assignedAt         DateTime                   @default(now())
+  assignedBy         String?
+  source             String                     @default("manual")
+  Stage              TrainingSessionStage       @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  Participant        TrainingSessionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  Group              TrainingSessionGroup?      @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  LegacyStageGroup   TrainingSessionStageGroup? @relation("LegacyStageGroupAssignment", fields: [legacyStageGroupId], references: [id], onDelete: Restrict)
 
   @@unique([stageId, participantId])
   @@index([participantId, stageId])
   @@index([groupId])
+  @@index([legacyStageGroupId])
 }
 
 model TrainingSessionStageProblemPlan {

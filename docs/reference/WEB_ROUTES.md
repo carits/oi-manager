@@ -104,3 +104,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/profile/teacher/[id]` | 见页面权限布局 | 当前页面 |
 | `/profile/user/[id]` | 见页面权限布局 | 当前页面 |
 | `/super_admin` | 见页面权限布局 | 当前页面 |
+
+## Training Engine V2 路由职责
+
+`/org/:organizationId/training-sessions/:id/design` 与 `/personal/training-sessions/:id/design` 只负责 DRAFT 设计和发布检查；`/training-sessions/:id` 负责 SCHEDULED/RUNNING/PAUSED/ENDED 运行控制。运行工作台展示当前 StageGroup 的要求、独立计时、换组和干预，不把旧的上一阶段回滚作为入口。
+

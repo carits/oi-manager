@@ -617,3 +617,29 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/blog-tags` | 在本人命名空间创建或复用 NFKC 规范化唯一标签 |
 | `POST` | `/api/platform/blog-tags` | 超管或平台管理员创建或复用受控系统标签 |
 | `GET` | `/api/blog-tags/:tagId/blogs` | 通过标签反向查询当前读者可见的已发布博客 |
+
+## Training Engine V2 API
+
+设计器使用 `/training-sessions/:id/design`、`/structure/validate` 与 `/structure`；运行期使用 `/stage-transitions`、`/stages/:stageId/group-changes`、`/stages/:stageId/time-extensions`，并可通过 `/groups/split` 与 `/groups/merge` 管理稳定分组。所有 JSON 请求/响应经过 Training Contracts 校验；Stage 转换采用 statusRevision CAS，已开始 Stage 不允许回滚。
+
+
+
+Training grouping endpoints (V2/legacy compatibility):
+
+- `GET /api/training-sessions/:id/grouping`
+- `PUT /api/training-sessions/:id/grouping`
+- `POST /api/training-sessions/:id/grouping/change`
+- `PUT /api/training-sessions/:id/stage-group-matrix`
+- `POST /api/training-sessions/:id/group-runtime/actions`
+- `POST /api/training-sessions/:id/group-runtime/batch`
+- `POST /api/training-sessions/:id/groups/split`
+- `POST /api/training-sessions/:id/groups/merge`
+
+| `GET` | `/api/training-sessions/:id/grouping` | 读取训练分组结构 |
+| `PUT` | `/api/training-sessions/:id/grouping` | 保存训练分组结构 |
+| `POST` | `/api/training-sessions/:id/grouping/change` | 变更学员分组 |
+| `PUT` | `/api/training-sessions/:id/stage-group-matrix` | 保存 StageGroup 题目矩阵 |
+| `POST` | `/api/training-sessions/:id/group-runtime/actions` | 执行分组运行控制 |
+| `POST` | `/api/training-sessions/:id/group-runtime/batch` | 批量执行分组运行控制 |
+| `POST` | `/api/training-sessions/:id/groups/split` | 拆分稳定分组 |
+| `POST` | `/api/training-sessions/:id/groups/merge` | 合并稳定分组 |

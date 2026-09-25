@@ -87,16 +87,30 @@ async function scanTrainingEngineConsistency(): Promise<ConsistencyIssue[]> {
 
   const assignments = await prisma.trainingSessionStageParticipantAssignment.findMany({
     where: { groupId: { not: null } },
-    select: { id: true, stageId: true, participantId: true, groupId: true, Group: { select: { stageId: true } } },
+    select: {
+      id: true,
+      stageId: true,
+      participantId: true,
+      groupId: true,
+      Stage: { select: { sessionId: true } },
+      Group: { select: { sessionId: true } },
+    },
   })
   for (const assignment of assignments) {
-    if (!assignment.Group || assignment.Group.stageId === assignment.stageId) continue
+    // Groups are session-scoped. Stage membership is represented by the
+    // assignment's own stageId and no longer lives on the group record.
+    if (!assignment.Group || assignment.Group.sessionId === assignment.Stage.sessionId) continue
     issues.push({
       code: 'STAGE_ASSIGNMENT_CROSS_STAGE_GROUP',
       stageId: assignment.stageId,
       participantId: assignment.participantId,
-      message: 'StageAssignment 指向其他 Stage 的 Group',
-      detail: { assignmentId: assignment.id, groupId: assignment.groupId, groupStageId: assignment.Group.stageId },
+      message: 'StageAssignment points to a group from another session',
+      detail: {
+        assignmentId: assignment.id,
+        groupId: assignment.groupId,
+        assignmentSessionId: assignment.Stage.sessionId,
+        groupSessionId: assignment.Group.sessionId,
+      },
     })
   }
 

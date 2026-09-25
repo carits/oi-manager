@@ -71,3 +71,8 @@ pnpm --filter server exec vitest run tests/security-boundaries.test.ts
 - OI 30→60→100 目标及 Subtask 投影必须同时固定到 Submission/JudgeRun；暂停不累计 Stage 时间，延时不得改写计划时间。
 
 全页面和业务闭环由[UI E2E](UI_E2E.md)覆盖。
+
+## Training Engine V2 测试矩阵
+
+测试必须覆盖 StageGroup 独立运行、学员 immediate/next-stage 换组、Stage 转换 CAS、暂停不累计时间、延时独立记录、Split/Merge 约束、固定 TestSet Revision 以及 legacy V1 读取兼容。
+

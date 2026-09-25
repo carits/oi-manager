@@ -177,3 +177,8 @@ SWR/Hooks 的 key 包含接口、查询参数和 `sessionKey=role:userId:workspa
 
 当前验收重点是 `1440×900` 和 `1280×720` 桌面端。固定格式控件使用明确的
 grid、min/max、aspect-ratio 或稳定按钮尺寸，避免动态内容导致布局跳动。
+
+## Training Engine V2 前端约定
+
+设计器以 Stage 时间线、StageGroup 矩阵和题目计划为核心；UI 使用课堂语言解释规则，复杂的 Subtask/ANY-ALL 配置放入高级设置。Training Feature API 是唯一 JSON 访问入口，组件不直接调用 apiClient。
+

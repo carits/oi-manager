@@ -223,3 +223,14 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `UserPlatformBinding` | 以 Prisma schema 为准 |
 | `UserStatusLog` | 以 Prisma schema 为准 |
 | `carits_sequence` | 以 Prisma schema 为准 |
+
+## Training Engine V2 表约束
+
+新增/收口后的 StageGroup 使用 `(stageId, groupId)` 唯一约束；V2 学员使用 `TrainingSessionParticipant.groupId`，旧 `currentStageId` 与旧 Stage assignment 字段仅供 legacy 记录兼容。每个 StageGroup 可独立 RUNNING/PAUSED/ENDED，题目计划通过 `groupId` 关联，不再使用原型 StageGroupPlan、GroupMembership 或 RuntimeState 表。
+
+
+
+Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`, `TrainingSessionStageParticipantAssignment`, `TrainingSessionStageProblemPlan`, and `TrainingSessionStageTimeAdjustment`.
+
+| `TrainingSessionGroup` | V2 stable session group |
+| `TrainingSessionGroupChange` | V2 participant group change audit |
