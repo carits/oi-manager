@@ -8,6 +8,8 @@ export type RequirementProgress = {
 export type RequirementStage = {
   id: string
   audienceMode: string
+  groupingModelVersion?: number
+  Groups?: Array<{ id: string; groupId?: string | null; status?: string; ProblemPlans?: Array<{ stageProblemId: string }> }>
   ParticipantAssignments: Array<{ participantId: string; groupId: string | null }>
   Problems: Array<{
     id: string
@@ -16,6 +18,7 @@ export type RequirementStage = {
 }
 
 export type RequirementSession = {
+  groupingModelVersion?: number
   Stages: RequirementStage[]
 }
 
@@ -59,6 +62,30 @@ export function resolveParticipantSessionRequirements(
   participantId: string,
   progressRows: RequirementProgress[] = [],
 ) {
+  if (session.groupingModelVersion && session.groupingModelVersion >= 2) {
+    return session.Stages.flatMap(stage => {
+      const assignment = stage.ParticipantAssignments.find(item => item.participantId === participantId)
+      const stableGroupId = assignment?.groupId || null
+      const activeUnit = stableGroupId
+        ? stage.Groups?.find(unit => unit.groupId === stableGroupId && ['RUNNING', 'PAUSED'].includes(String(unit.status)))
+        : undefined
+      const requiredIds = new Set((activeUnit?.ProblemPlans || []).map(plan => plan.stageProblemId))
+      const stageProblemIds = new Set(stage.Problems.map(problem => problem.id))
+      const progressById = new Map(progressRows.filter(progress => stageProblemIds.has(progress.stageProblemId)).map(progress => [progress.stageProblemId, progress] as const))
+      const visibleIds = new Set([...requiredIds, ...progressById.keys()])
+      return [...visibleIds].map(stageProblemId => {
+        const progress = progressById.get(stageProblemId)
+        const state: TrainingRequirementState = !requiredIds.has(stageProblemId)
+          ? 'RETIRED'
+          : progress?.status === 'SKIPPED'
+            ? 'BYPASSED'
+            : progress?.status === 'COMPLETED'
+              ? 'SATISFIED'
+              : 'REQUIRED'
+        return { stageProblemId, state, progress, stageId: stage.id }
+      })
+    })
+  }
   return session.Stages.flatMap(stage =>
     resolveParticipantStageRequirements(stage, participantId, progressRows)
       .map(requirement => ({ ...requirement, stageId: stage.id })),
