@@ -10,6 +10,7 @@ type EditorViewType = import('@codemirror/view').EditorView
 export interface SubmissionCodeEditorProps {
   value: string
   onChange: (value: string) => void
+  onLocalDraftRestore?: (value: string) => void
   language: string
   draftKey: string
   readOnly?: boolean
@@ -26,6 +27,16 @@ function storageKey(draftKey: string, language: string) {
   return `submission-draft:v1:${draftKey}:${language}`
 }
 
+export function persistSubmissionDraft(draftKey: string, language: string, value: string) {
+  if (typeof window === 'undefined') return
+  try {
+    if (value) window.localStorage.setItem(storageKey(draftKey, language), value)
+    else window.localStorage.removeItem(storageKey(draftKey, language))
+  } catch {
+    // Browser storage is a best-effort safety net.
+  }
+}
+
 export function clearSubmissionDraft(draftKey: string, language: string) {
   if (typeof window === 'undefined') return
   try {
@@ -38,6 +49,7 @@ export function clearSubmissionDraft(draftKey: string, language: string) {
 export function SubmissionCodeEditor({
   value,
   onChange,
+  onLocalDraftRestore,
   language,
   draftKey,
   readOnly = false,
@@ -52,18 +64,21 @@ export function SubmissionCodeEditor({
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorViewType | null>(null)
   const onChangeRef = useRef(onChange)
+  const onLocalDraftRestoreRef = useRef(onLocalDraftRestore)
   const activeDraftKey = useRef<string | null>(null)
   const valueRef = useRef(value)
+  const applyingExternalValue = useRef(false)
   const [fallback, setFallback] = useState(false)
 
   valueRef.current = value
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
+  useEffect(() => { onLocalDraftRestoreRef.current = onLocalDraftRestore }, [onLocalDraftRestore])
   useEffect(() => {
     const nextKey = storageKey(draftKey, language)
     try {
       const nextValue = transitionSubmissionDraft(window.localStorage, activeDraftKey.current, nextKey, valueRef.current)
       activeDraftKey.current = nextKey
-      if (nextValue !== valueRef.current) onChangeRef.current(nextValue)
+      if (nextValue !== valueRef.current) (onLocalDraftRestoreRef.current || onChangeRef.current)(nextValue)
     } catch {
       activeDraftKey.current = nextKey
     }
@@ -114,14 +129,17 @@ export function SubmissionCodeEditor({
             EditorState.readOnly.of(readOnly),
             EditorView.contentAttributes.of(contentAttributes),
             keymap.of([...autocomplete.closeBracketsKeymap, ...commands.defaultKeymap, ...commands.historyKeymap, ...(commands.indentWithTab ? [commands.indentWithTab] : []), ...search.searchKeymap]),
-            EditorView.updateListener.of(update => { if (update.docChanged) onChangeRef.current(update.state.doc.toString()) }),
+            EditorView.updateListener.of(update => { if (update.docChanged && !applyingExternalValue.current) onChangeRef.current(update.state.doc.toString()) }),
           ],
         })
         const mountedView = new EditorView({ state, parent: host.current })
         view.current = mountedView
         const latestValue = valueRef.current
-        if (mountedView.state.doc.toString() !== latestValue)
-          mountedView.dispatch({ changes: { from: 0, to: mountedView.state.doc.length, insert: latestValue } })
+        if (mountedView.state.doc.toString() !== latestValue) {
+          applyingExternalValue.current = true
+          try { mountedView.dispatch({ changes: { from: 0, to: mountedView.state.doc.length, insert: latestValue } }) }
+          finally { applyingExternalValue.current = false }
+        }
       } catch {
         if (!cancelled) setFallback(true)
       }
@@ -133,7 +151,9 @@ export function SubmissionCodeEditor({
   useEffect(() => {
     const current = view.current
     if (!current || current.state.doc.toString() === value) return
-    current.dispatch({ changes: { from: 0, to: current.state.doc.length, insert: value } })
+    applyingExternalValue.current = true
+    try { current.dispatch({ changes: { from: 0, to: current.state.doc.length, insert: value } }) }
+    finally { applyingExternalValue.current = false }
   }, [value])
 
   const heightClass = minHeight >= 420 ? styles.height420 : minHeight >= 360 ? styles.height360 : styles.height300

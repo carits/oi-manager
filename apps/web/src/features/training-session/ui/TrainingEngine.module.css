@@ -35,6 +35,11 @@
 .timeline { display: grid; gap: var(--space-2); }
 .timelineItem { border-left: 3px solid var(--border); padding-left: var(--space-3); }
 .message { padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
+.draftConflict { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
+.draftConflict p { margin: 0; }
+.draftCompare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.draftCompare > div { min-width: 0; display: grid; gap: var(--space-2); }
+.draftCompare pre { max-height: 220px; margin: 0; padding: var(--space-2); overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-family: var(--font-mono); }
 .peerGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-2); }
 .peerCard { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .peerCard strong { flex: 1; }
@@ -83,7 +88,7 @@
 .publishChecklist span { font-size: 1.2rem; font-weight: 700; }
 @media (max-width: 1180px) { .designWorkspace { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); } .designColumn:last-child { grid-column: 1 / -1; } }
 @media (max-width: 1000px) { .workspace { grid-template-columns: 220px minmax(0, 1fr); } .coach { grid-column: 1 / -1; } .designSteps { grid-template-columns: 1fr; } .designSteps > * { text-align: left; border-right: 0; border-bottom: 1px solid var(--border); } .basicGrid { grid-template-columns: 1fr; } }
-@media (max-width: 720px) { .creationModeGrid { grid-template-columns: 1fr; } .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } }
+@media (max-width: 720px) { .draftCompare { grid-template-columns: 1fr; } .creationModeGrid { grid-template-columns: 1fr; } .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } }
 
 .matrixTable { display: grid; grid-template-columns: minmax(140px, .65fr) repeat(var(--training-stage-count, 3), minmax(180px, 1fr)); gap: 1px; overflow-x: auto; border: 1px solid var(--border); background: var(--border); }
 .matrixRow { display: contents; }

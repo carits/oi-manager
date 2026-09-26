@@ -1,4 +1,4 @@
-export { SubmissionCodeEditor, clearSubmissionDraft } from './ui/SubmissionCodeEditor'
+export { SubmissionCodeEditor, clearSubmissionDraft, persistSubmissionDraft } from './ui/SubmissionCodeEditor'
 export { SubmissionIoFields } from './ui/SubmissionIoFields'
 export type { SubmissionIoValue } from './ui/SubmissionIoFields'
 export { SubmissionDetailModal } from './ui/SubmissionDetailModal'

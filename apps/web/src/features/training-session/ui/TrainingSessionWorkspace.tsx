@@ -12,7 +12,7 @@ import { ConfirmDialog, DetailDialog, FormDialog } from '@/components/ui/Dialogs
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
-import { SubmissionCodeEditor, SubmissionIoFields, type SubmissionIoValue } from '@/features/submission'
+import { persistSubmissionDraft, SubmissionCodeEditor, SubmissionIoFields, type SubmissionIoValue } from '@/features/submission'
 import {
   changeTrainingStageGroup,
   extendTrainingStageTime,
@@ -37,6 +37,7 @@ import {
 } from '../api/trainingSessionApi'
 import { testDataVersion, trainingStatusLabel } from '@/lib/humanPresentation'
 import { csvCell, saveBlobDownload } from '@/lib/download'
+import { arbitrateTrainingDraft, type TrainingDraftSnapshot } from '../model/trainingDraftArbitration'
 import styles from './TrainingEngine.module.css'
 
 type GroupBatchAction = 'start_all' | 'advance_all' | 'pause_all' | 'resume_all'
@@ -119,7 +120,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const { user } = useAuth()
   const [data, setData] = useState<Workspace>(), [dashboard, setDashboard] = useState<Dashboard>(), [peerProgress, setPeerProgress] = useState<PeerProgress>()
   const [selectedId, setSelectedId] = useState<string>(), [code, setCode] = useState(''), [language, setLanguage] = useState('cpp17'), [draftRevision, setDraftRevision] = useState<number>()
-  const [draftState, setDraftState] = useState<'loading' | 'dirty' | 'saving' | 'saved' | 'error'>('loading')
+  const [draftState, setDraftState] = useState<'loading' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'>('loading')
+  const [draftConflict, setDraftConflict] = useState<{ local: TrainingDraftSnapshot; remote: TrainingDraftSnapshot }>()
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
   const [loadError, setLoadError] = useState('')
   const [lastSyncedAt, setLastSyncedAt] = useState<number>()
@@ -145,6 +147,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const languageRef = useRef('cpp17')
   const submissionIoRef = useRef<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const draftDirtyRef = useRef(false)
+  const remoteDraftRef = useRef<TrainingDraftSnapshot>()
   const draftLoadVersion = useRef(0)
   const workspaceLoadVersion = useRef(0)
   const commandInFlight = useRef(false), statusRevisionRef = useRef<number>(), hintLoadVersion = useRef(0)
@@ -209,6 +212,57 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setSubmissionIo(nextIo)
     markDraftDirty()
   }, [markDraftDirty])
+  const applyDraftSnapshot = useCallback((snapshot: TrainingDraftSnapshot, dirty: boolean) => {
+    codeRef.current = snapshot.code
+    languageRef.current = snapshot.language
+    submissionIoRef.current = { inputFilename: snapshot.inputFilename, outputFilename: snapshot.outputFilename }
+    setCode(snapshot.code)
+    setLanguage(snapshot.language)
+    setSubmissionIo({ inputFilename: snapshot.inputFilename, outputFilename: snapshot.outputFilename })
+    draftDirtyRef.current = dirty
+    setDraftState(dirty ? 'dirty' : 'saved')
+  }, [])
+  const handleLocalDraftRestore = useCallback((nextCode: string) => {
+    const local: TrainingDraftSnapshot = {
+      code: nextCode,
+      language: languageRef.current,
+      inputFilename: submissionIoRef.current.inputFilename,
+      outputFilename: submissionIoRef.current.outputFilename,
+    }
+    codeRef.current = nextCode
+    setCode(nextCode)
+    draftDirtyRef.current = true
+    const remote = remoteDraftRef.current
+    const resolution = remote ? arbitrateTrainingDraft(local, remote, true) : undefined
+    if (resolution?.type === 'conflict') {
+      setDraftConflict({ local: resolution.local, remote: resolution.remote })
+      setDraftState('conflict')
+    } else {
+      setDraftState('dirty')
+    }
+  }, [])
+  const keepLocalDraft = useCallback(() => {
+    if (!draftConflict) return
+    applyDraftSnapshot(draftConflict.local, true)
+    setDraftConflict(undefined)
+  }, [applyDraftSnapshot, draftConflict])
+  const useRemoteDraft = useCallback(() => {
+    if (!draftConflict) return
+    persistSubmissionDraft(editorDraftKey, draftConflict.remote.language, draftConflict.remote.code)
+    applyDraftSnapshot(draftConflict.remote, false)
+    setDraftConflict(undefined)
+  }, [applyDraftSnapshot, draftConflict, editorDraftKey])
+  const downloadDraftConflict = useCallback(() => {
+    if (!draftConflict || !problem) return
+    const payload = JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      sessionId,
+      stageProblemId: problem.id,
+      local: draftConflict.local,
+      cloud: draftConflict.remote,
+    }, null, 2)
+    saveBlobDownload(new Blob([payload], { type: 'application/json;charset=utf-8' }), `training-draft-conflict-${problem.id}.json`)
+  }, [draftConflict, problem, sessionId])
   const loadHints = useCallback(async (id?: string) => {
     const version = ++hintLoadVersion.current
     if (!id) { setHints([]); return }
@@ -225,6 +279,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     const version = ++draftLoadVersion.current
     let cancelled = false
     setDraftState('loading')
+    setDraftConflict(undefined)
+    remoteDraftRef.current = undefined
     setCode('')
     setLanguage('cpp17')
     setDraftRevision(undefined)
@@ -234,19 +290,28 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       try {
         const draft = await getTrainingDraft(sessionId, problem.id) as TrainingDraft | null
         if (cancelled || version !== draftLoadVersion.current) return
-        const nextCode = draft?.code || ''
-        const nextLanguage = draft?.language || 'cpp17'
-        const nextIo = { inputFilename: draft?.inputFilename || null, outputFilename: draft?.outputFilename || null }
-        codeRef.current = nextCode
-        languageRef.current = nextLanguage
-        submissionIoRef.current = nextIo
-        setCode(nextCode)
-        setLanguage(nextLanguage)
+        const remote: TrainingDraftSnapshot = {
+          code: draft?.code || '',
+          language: draft?.language || 'cpp17',
+          inputFilename: draft?.inputFilename || null,
+          outputFilename: draft?.outputFilename || null,
+        }
+        const local: TrainingDraftSnapshot = {
+          code: codeRef.current,
+          language: languageRef.current,
+          inputFilename: submissionIoRef.current.inputFilename,
+          outputFilename: submissionIoRef.current.outputFilename,
+        }
         setDraftRevision(draft?.revision)
         draftRevisionRef.current[problem.id] = draft?.revision
-        setSubmissionIo(nextIo)
-        draftDirtyRef.current = false
-        setDraftState('saved')
+        remoteDraftRef.current = remote
+        const resolution = arbitrateTrainingDraft(local, remote, draftDirtyRef.current)
+        if (resolution.type === 'conflict') {
+          setDraftConflict({ local: resolution.local, remote: resolution.remote })
+          setDraftState('conflict')
+        } else {
+          applyDraftSnapshot(resolution.draft, false)
+        }
       } catch (error) {
         if (cancelled || version !== draftLoadVersion.current) return
         setDraftState('error')
@@ -255,7 +320,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     })()
     void loadHints(problem.id)
     return () => { cancelled = true }
-  }, [loadHints, problem?.id, sessionId, toast])
+  }, [applyDraftSnapshot, loadHints, problem?.id, sessionId, toast])
   const saveDraft = useCallback(async (quiet = false) => {
     const targetProblem = problemRef.current
     if (!targetProblem) return false
@@ -617,12 +682,21 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。">
           <div className={styles.stack}>
             <label className={styles.field}>语言<Select value={language} disabled={!data.permissions[problem.id]?.canEdit} onChange={event => { if (!code || window.confirm('将保留当前代码并切换语言。是否继续？')) handleLanguageChange(event.target.value) }}><option value="cpp17">C++17</option><option value="python3">Python3</option><option value="c">C</option></Select></label>
-            <label className={styles.field} htmlFor="training-source-editor">代码草稿<SubmissionCodeEditor id="training-source-editor" value={code} onChange={handleCodeChange} language={language} draftKey={editorDraftKey} readOnly={!data.permissions[problem.id]?.canEdit} minHeight={420} aria-describedby="training-draft-status" /></label>
+            <label className={styles.field} htmlFor="training-source-editor">代码草稿<SubmissionCodeEditor id="training-source-editor" value={code} onChange={handleCodeChange} onLocalDraftRestore={handleLocalDraftRestore} language={language} draftKey={editorDraftKey} readOnly={!data.permissions[problem.id]?.canEdit} minHeight={420} aria-describedby="training-draft-status" /></label>
             <SubmissionIoFields value={submissionIo} onChange={handleSubmissionIoChange} disabled={!data.permissions[problem.id]?.canEdit} />
             <p id="training-draft-status" className={styles.muted} aria-live="polite">
-              {draftState === 'loading' ? '正在读取草稿…' : draftState === 'saving' ? '正在保存草稿…' : draftState === 'dirty' ? '有尚未同步到服务器的修改' : draftState === 'error' ? '草稿同步失败，本机副本仍保留；请重试保存' : `草稿已同步${draftRevision ? ` · 版本 ${draftRevision}` : ''}`}
+              {draftState === 'loading' ? '正在读取草稿…' : draftState === 'saving' ? '正在保存草稿…' : draftState === 'dirty' ? '有尚未同步到服务器的修改' : draftState === 'conflict' ? '检测到本地草稿与云端草稿不一致；当前编辑器保留本地内容。' : draftState === 'error' ? '草稿同步失败，本机副本仍保留；请重试保存' : `草稿已同步${draftRevision ? ` · 版本 ${draftRevision}` : ''}`}
             </p>
-            <div className={styles.actions}><Button variant="secondary" loading={saving} disabled={!data.permissions[problem.id]?.canEdit} onClick={() => void saveDraft()}>保存草稿</Button><Button loading={submitting} disabled={!data.permissions[problem.id]?.canSubmit || !code.trim()} onClick={() => void submit()}>提交评测</Button></div>
+            {draftConflict && <section className={styles.draftConflict} role="alert" aria-label="草稿版本冲突">
+              <strong>发现两个不同的草稿版本</strong>
+              <p>为避免覆盖，当前编辑器继续保留本地内容。请比较后选择保留本地版本或改用云端版本；也可以先下载两个版本。</p>
+              <div className={styles.draftCompare}>
+                <div><strong>本地草稿</strong><pre>{draftConflict.local.code || '（空草稿）'}</pre></div>
+                <div><strong>云端草稿{draftRevision ? ` · 版本 ${draftRevision}` : ''}</strong><pre>{draftConflict.remote.code || '（空草稿）'}</pre></div>
+              </div>
+              <div className={styles.actions}><Button onClick={keepLocalDraft}>保留本地草稿</Button><Button variant="secondary" onClick={useRemoteDraft}>使用云端草稿</Button><Button variant="ghost" onClick={downloadDraftConflict}>下载冲突副本</Button></div>
+            </section>}
+            <div className={styles.actions}><Button variant="secondary" loading={saving} disabled={!data.permissions[problem.id]?.canEdit || draftState === 'conflict'} onClick={() => void saveDraft()}>保存草稿</Button><Button loading={submitting} disabled={!data.permissions[problem.id]?.canSubmit || !code.trim() || draftState === 'conflict'} onClick={() => void submit()}>提交评测</Button></div>
             {!data.permissions[problem.id]?.canSubmit && <p className={styles.muted}>当前不可提交：{data.permissions[problem.id]?.reason}</p>}
           </div>
         </Section>
