@@ -58,5 +58,15 @@
     "featureSymbol": "downloadProblemTestdata",
     "serverBoundary": "apps/server/src/routes/testdata.ts",
     "serverSymbol": "resolveTestdataDownload"
+  },
+  {
+    "key": "contest.content-pdf.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/contests/:contestId/problems/:contestProblemId/content/:kind/pdf",
+    "featureApi": "apps/web/src/features/contest/api/contestApi.ts",
+    "featureSymbol": "uploadContestContentPdf",
+    "serverBoundary": "apps/server/src/modules/contest/contest.content.routes.ts",
+    "serverSymbol": "contestContentPdfUpload"
   }
 ]

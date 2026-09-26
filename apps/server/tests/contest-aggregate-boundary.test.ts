@@ -17,6 +17,9 @@ describe('Contest aggregate write boundary', () => {
     expect(ContestContracts.rejudge.body.safeParse({ scope: { type: 'problem', contestProblemId: 'cp-1' } }).success).toBe(true)
     expect(ContestContracts.rejudge.body.safeParse({ scope: { type: 'user_problem', contestProblemId: 'cp-1' } }).success).toBe(false)
     expect(ContestContracts.submissions.query.safeParse({ page: 1, pageSize: 201 }).success).toBe(false)
+    expect(ContestContracts.updateContentSelection.body.safeParse({ statementOptionKey: 'canonical:s1', solutionOptionKey: 'none' }).success).toBe(true)
+    expect(ContestContracts.saveStatementManagement.body.safeParse({ selections: [] }).success).toBe(true)
+    expect(ContestContracts.testSetUpdate.body.safeParse({ revisionId: 'revision-1' }).success).toBe(true)
   })
 
   it('keeps runtime contest projection writes inside contest or maintenance modules', () => {

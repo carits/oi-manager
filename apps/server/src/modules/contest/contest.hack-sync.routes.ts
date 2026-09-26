@@ -1,5 +1,7 @@
 import { Router } from 'express'
+import { ContestContracts } from '@oi-manager/contracts'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import { authenticate } from '../../middleware/auth'
 import { parseContestId } from './contest.helpers'
 import {
@@ -11,6 +13,7 @@ import {
 export const contestHackSyncRouter = Router()
 
 function sendTestSetUpdateError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return
   if (!(error instanceof ContestTestSetUpdateError)) throw error
   return res.status(error.statusCode).json({
     success: false,
@@ -27,7 +30,7 @@ contestHackSyncRouter.get('/contests/:id/problems/:contestProblemId/test-set-upd
       req.params.contestProblemId,
       req.user!.userId,
     )
-    return res.json({ success: true, data })
+    return sendContractData(res, ContestContracts.testSetUpdatePreview, data)
   } catch (error) {
     return sendTestSetUpdateError(error, res)
   }
@@ -35,24 +38,21 @@ contestHackSyncRouter.get('/contests/:id/problems/:contestProblemId/test-set-upd
 
 contestHackSyncRouter.post('/contests/:id/problems/:contestProblemId/test-set-update', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ContestContracts.testSetUpdate, req.body)
     const result = await updateContestTestSetRevision({
       contestId: parseContestId(req.params.id),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
-      revisionId: typeof req.body?.revisionId === 'string' ? req.body.revisionId : undefined,
+      revisionId: body.revisionId,
     })
     if (!result.updated) {
-      return res.json({ success: true, data: { updated: false, ...result.state }, message: result.message })
+      return sendContractData(res, ContestContracts.testSetUpdate, { updated: false, ...result.state })
     }
-    return res.json({
-      success: true,
-      data: {
-        updated: true,
-        previousRevisionId: result.previousRevisionId,
-        currentRevisionId: result.currentRevisionId,
-        currentRevision: result.currentRevision,
-      },
-      message: result.message,
+    return sendContractData(res, ContestContracts.testSetUpdate, {
+      updated: true,
+      previousRevisionId: result.previousRevisionId,
+      currentRevisionId: result.currentRevisionId,
+      currentRevision: result.currentRevision,
     })
   } catch (error) {
     return sendTestSetUpdateError(error, res)

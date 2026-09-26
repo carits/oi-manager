@@ -70,6 +70,86 @@ export const ContestRejudgeScopeSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('user_problem'), contestProblemId: z.string().min(1), userId: z.string().min(1) }),
 ])
 
+export const ContestContentOptionSchema = z.object({
+  key: z.string(),
+  kind: z.enum(['statement', 'solution']).optional(),
+  sourceType: z.enum(['canonical', 'user', 'training', 'none']),
+  title: z.string().nullable(),
+  format: z.string(),
+  language: z.string().nullable(),
+  authorUsername: z.string().nullable(),
+  fileName: z.string().nullable(),
+  previewText: z.string().nullable(),
+  shareKeys: z.array(z.string()).optional(),
+})
+
+export const ContestContentOptionsSchema = z.object({
+  statement: z.array(ContestContentOptionSchema),
+  solution: z.array(ContestContentOptionSchema),
+  currentSelection: z.object({
+    statementOptionKey: z.string().nullable(),
+    solutionOptionKey: z.string().nullable(),
+    statementRevision: z.number().int().nullable(),
+    solutionRevision: z.number().int().nullable(),
+  }),
+})
+
+export const ContestContentPreviewSchema = ContestContentOptionSchema.extend({
+  content: z.string().nullable(),
+  fileUrl: z.string().nullable(),
+})
+
+export const ContestStatementOptionSchema = z.object({
+  key: z.string(),
+  groupKey: z.string(),
+  name: z.string(),
+  authorUsername: z.string(),
+  language: z.string().nullable(),
+  format: z.string(),
+  visibility: z.string(),
+  unavailable: z.boolean(),
+  sourceType: z.string().optional(),
+})
+
+export const ContestStatementManagementSchema = z.object({
+  contest: z.object({ id: z.string(), title: z.string(), type: z.literal('contest') }),
+  problems: z.array(z.object({
+    contestProblemId: z.string(),
+    alias: z.string().nullable(),
+    orderIndex: z.number().int().nonnegative(),
+    title: z.string(),
+    options: z.array(ContestStatementOptionSchema),
+    selected: z.array(z.object({ key: z.string(), isDefault: z.boolean(), orderIndex: z.number().int().nonnegative() })),
+  })),
+})
+
+export const ContestTestSetUpdatePreviewSchema = z.object({
+  contestProblemId: z.string(),
+  problemId: z.string(),
+  problemTitle: z.string(),
+  currentRevisionId: z.string().nullable(),
+  currentRevision: z.number().int().nullable(),
+  latestRevisionId: z.string().nullable(),
+  latestRevision: z.number().int().nullable(),
+  pending: z.boolean(),
+  frozen: z.boolean(),
+  frozenReason: z.string().nullable(),
+  submissionCount: z.number().int().nonnegative(),
+})
+
+export const ContestTestSetUpdateResultSchema = z.object({
+  updated: z.boolean(),
+  currentRevisionId: z.string().nullable(),
+  currentRevision: z.number().int().nullable(),
+  previousRevisionId: z.string().nullable().optional(),
+  latestRevisionId: z.string().nullable().optional(),
+  latestRevision: z.number().int().nullable().optional(),
+  pending: z.boolean().optional(),
+  frozen: z.boolean().optional(),
+  frozenReason: z.string().nullable().optional(),
+  submissionCount: z.number().int().nonnegative().optional(),
+})
+
 export const ContestTeamSummarySchema = z.object({
   id: z.number().int().positive(), title: z.string(), description: z.string().nullable().optional(),
   format: z.string().nullable().optional(), startTime: DateTimeWireSchema, endTime: DateTimeWireSchema,
@@ -109,6 +189,47 @@ export const ContestContracts = {
       message: z.string(),
     }),
   }),
+  contentOptions: defineApiEndpoint({
+    key: 'contest.content.options', method: 'GET', scope: 'context', data: ContestContentOptionsSchema,
+  }),
+  contentPreview: defineApiEndpoint({
+    key: 'contest.content.preview', method: 'GET', scope: 'context', data: ContestContentPreviewSchema,
+  }),
+  updateContentSelection: defineApiEndpoint({
+    key: 'contest.content.selection.update', method: 'PUT', scope: 'context',
+    body: z.object({ statementOptionKey: z.string().min(1), solutionOptionKey: z.string().min(1) }),
+    data: z.object({ updated: z.array(z.enum(['statement', 'solution'])) }),
+  }),
+  updateContentMarkdown: defineApiEndpoint({
+    key: 'contest.content.markdown.update', method: 'PUT', scope: 'context',
+    body: z.object({ content: z.string() }),
+    data: z.object({
+      id: z.string(), kind: z.enum(['statement', 'solution']), format: z.literal('markdown'), content: z.string(),
+    }),
+  }),
+  statementManagement: defineApiEndpoint({
+    key: 'contest.statement-management.get', method: 'GET', scope: 'context', data: ContestStatementManagementSchema,
+  }),
+  saveStatementManagement: defineApiEndpoint({
+    key: 'contest.statement-management.save', method: 'PUT', scope: 'context',
+    body: z.object({ selections: z.array(z.object({
+      contestProblemId: z.string().min(1),
+      visibleOptionKeys: z.array(z.string().min(1)).min(1),
+      defaultOptionKey: z.string().min(1),
+      expectedSelectionRevision: z.number().int().nonnegative().optional(),
+    })) }),
+    data: z.object({
+      changedCount: z.number().int().nonnegative(),
+      changed: z.array(z.object({ contestProblemId: z.string() })),
+    }),
+  }),
+  testSetUpdatePreview: defineApiEndpoint({
+    key: 'contest.test-set-update.preview', method: 'GET', scope: 'context', data: ContestTestSetUpdatePreviewSchema,
+  }),
+  testSetUpdate: defineApiEndpoint({
+    key: 'contest.test-set-update.apply', method: 'POST', scope: 'context',
+    body: z.object({ revisionId: z.string().optional() }), data: ContestTestSetUpdateResultSchema,
+  }),
   createMakeupHomework: defineApiEndpoint({
     key: 'contest.makeup-homework.create', method: 'POST', scope: 'context',
     body: ContestMakeupHomeworkInputSchema, data: ContestMakeupHomeworkSchema,
@@ -116,6 +237,10 @@ export const ContestContracts = {
 } as const
 
 export type ContestSubmissionUser = z.infer<typeof ContestSubmissionUserSchema>
+export type ContestContentOption = z.infer<typeof ContestContentOptionSchema>
+export type ContestContentOptions = z.infer<typeof ContestContentOptionsSchema>
+export type ContestStatementManagement = z.infer<typeof ContestStatementManagementSchema>
+export type ContestTestSetUpdatePreview = z.infer<typeof ContestTestSetUpdatePreviewSchema>
 export type ContestSubmissionListItem = z.infer<typeof ContestSubmissionListItemSchema>
 export type ContestSubmissionListQuery = z.infer<typeof ContestSubmissionListQuerySchema>
 export type ContestRejudgeScope = z.infer<typeof ContestRejudgeScopeSchema>

@@ -5,31 +5,14 @@ import unifiedStyles from './ContestStatementManagementPage.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { useRouter } from 'next/navigation'
-import apiClient from '@/lib/apiClient'
+import type { ContestStatementManagement } from '@oi-manager/contracts'
+import { getContestStatementManagement, saveContestStatementManagement } from '../api/contestApi'
 import { useToast } from '@/components/ui/Toast'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 
-interface Option {
-  key: string
-  groupKey: string
-  name: string
-  authorUsername: string
-  language: string | null
-  format: string
-  visibility: string
-  unavailable: boolean
-}
-interface Problem {
-  contestProblemId: string
-  alias: string | null
-  orderIndex: number
-  title: string
-  selectionRevision: number
-  options: Option[]
-  selected: Array<{ key: string; isDefault: boolean; orderIndex: number }>
-}
-interface Payload { contest: { id: number; title: string; type: string }; problems: Problem[] }
+type Option = ContestStatementManagement['problems'][number]['options'][number]
+type Payload = ContestStatementManagement
 
 export function ContestStatementManagementPage({ contestId, backPath }: { contestId: string; backPath?: string }) {
   const router = useRouter()
@@ -46,24 +29,19 @@ export function ContestStatementManagementPage({ contestId, backPath }: { contes
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
-    const response = await apiClient.get<Payload>(`/api/contests/${contestId}/statement-management`)
-    if (!response.success || !response.data) {
-      const message = response.message || '加载题面管理失败'
-      if (response.status === 403 && backPath) {
-        toastRef.current.error(message)
-        router.replace(backPath)
-      } else {
-        setLoadError(message)
-      }
-    }
-    else {
-      setData(response.data)
-      setSelection(Object.fromEntries(response.data.problems.map(problem => [problem.contestProblemId, {
+    try {
+      const response = await getContestStatementManagement(contestId)
+      setData(response)
+      setSelection(Object.fromEntries(response.problems.map(problem => [problem.contestProblemId, {
         keys: [...problem.selected].sort((a, b) => a.orderIndex - b.orderIndex).map(item => item.key),
         defaultKey: problem.selected.find(item => item.isDefault)?.key || problem.selected[0]?.key || '',
       }])))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '加载题面管理失败'
+      setLoadError(message)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [backPath, router, contestId])
   useEffect(() => { void load() }, [load])
 
@@ -100,16 +78,15 @@ export function ContestStatementManagementPage({ contestId, backPath }: { contes
       if (!state?.keys.length || !state.keys.includes(state.defaultKey)) return toast.error(`${problem.alias || problem.orderIndex + 1} 题必须选择题面并指定默认版本`)
     }
     setSaving(true)
-    const response = await apiClient.put(`/api/contests/${contestId}/statement-management`, {
+    const response = await saveContestStatementManagement(contestId, {
       selections: data.problems.map(problem => ({
         contestProblemId: problem.contestProblemId,
         visibleOptionKeys: selection[problem.contestProblemId].keys,
         defaultOptionKey: selection[problem.contestProblemId].defaultKey,
-        expectedSelectionRevision: problem.selectionRevision,
       })),
     })
-    if (response.success) { toast.success('活动题面配置已保存'); await load() }
-    else toast.error(response.message || '保存失败')
+    if (response.ok) { toast.success('活动题面配置已保存'); await load() }
+    else toast.error(response.error.message || '保存失败')
     setSaving(false)
   }
 

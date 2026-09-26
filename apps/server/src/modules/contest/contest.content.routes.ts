@@ -1,6 +1,8 @@
 import { Router } from 'express'
+import { ContestContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import { parseContestId } from './contest.helpers'
 import {
   downloadContestContentOption,
@@ -22,6 +24,7 @@ import {
 export const contestContentRouter = Router()
 
 function sendContentError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return
   if (!(error instanceof ContestContentError)) throw error
   return res.status(error.statusCode).json({
     success: false,
@@ -51,14 +54,15 @@ contestContentRouter.get('/contests/:id/problems/:contestProblemId/my-content', 
 
 contestContentRouter.put('/contests/:id/problems/:contestProblemId/content/:kind', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ContestContracts.updateContentMarkdown, req.body)
     const data = await editContestContentMarkdown({
       contestId: parseContestId(req.params.id),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
       kind: parseContentKind(req.params.kind),
-      content: String(req.body?.content || ''),
+      content: body.content,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ContestContracts.updateContentMarkdown, data)
   } catch (error) {
     return sendContentError(error, res)
   }
@@ -88,7 +92,7 @@ contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-optio
       req.params.contestProblemId,
       req.user!.userId,
     )
-    return res.json({ success: true, data })
+    return sendContractData(res, ContestContracts.contentOptions, data)
   } catch (error) {
     return sendContentError(error, res)
   }
@@ -102,14 +106,11 @@ contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-optio
       req.user!.userId,
       req.params.optionKey,
     )
-    return res.json({
-      success: true,
-      data: {
-        ...data,
-        fileUrl: data.hasFile
-          ? `/api/contests/${req.params.id}/problems/${req.params.contestProblemId}/content-options/${encodeURIComponent(data.key)}/file`
-          : null,
-      },
+    return sendContractData(res, ContestContracts.contentPreview, {
+      ...data,
+      fileUrl: data.hasFile
+        ? `/api/contests/${req.params.id}/problems/${req.params.contestProblemId}/content-options/${encodeURIComponent(data.key)}/file`
+        : null,
     })
   } catch (error) {
     return sendContentError(error, res)
@@ -132,14 +133,15 @@ contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-optio
 
 contestContentRouter.put('/contests/:id/problems/:contestProblemId/content-selection', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ContestContracts.updateContentSelection, req.body)
     const data = await updateContestContentSelection({
       contestId: parseContestId(req.params.id),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
-      statementOptionKey: String(req.body?.statementOptionKey || ''),
-      solutionOptionKey: String(req.body?.solutionOptionKey || 'none'),
+      statementOptionKey: body.statementOptionKey,
+      solutionOptionKey: body.solutionOptionKey,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ContestContracts.updateContentSelection, data)
   } catch (error) {
     return sendContentError(error, res)
   }

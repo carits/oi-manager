@@ -2,29 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import apiClient from '@/lib/apiClient'
+import type { ContestTestSetUpdatePreview } from '@oi-manager/contracts'
+import { applyContestTestSetUpdate, previewContestTestSetUpdate } from '../../api/contestApi'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ContestHackSyncAction.module.css'
 
-type Preview = {
-  pending: boolean
-  frozen: boolean
-  frozenReason?: string | null
-  currentRevisionId: string | null
-  currentRevision: number | null
-  latestRevisionId: string | null
-  latestRevision: number | null
-}
-
 export function ContestHackSyncAction({ contestId, contestProblemId }: { contestId: string; contestProblemId: string }) {
   const toast = useToast()
-  const [preview, setPreview] = useState<Preview | null>(null)
+  const [preview, setPreview] = useState<ContestTestSetUpdatePreview | null>(null)
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
     let active = true
-    apiClient.get<Preview>(`/api/contests/${contestId}/problems/${contestProblemId}/test-set-update`)
-      .then(result => { if (active && result.success && result.data) setPreview(result.data) })
+    previewContestTestSetUpdate(contestId, contestProblemId)
+      .then(result => { if (active) setPreview(result) })
+      .catch(() => undefined)
     return () => { active = false }
   }, [contestId, contestProblemId])
 
@@ -39,17 +31,14 @@ export function ContestHackSyncAction({ contestId, contestProblemId }: { contest
   const updateRevision = async () => {
     setSyncing(true)
     try {
-      const result = await apiClient.post<{ currentRevision: number; currentRevisionId: string }>(
-        `/api/contests/${contestId}/problems/${contestProblemId}/test-set-update`,
-        { revisionId: preview.latestRevisionId },
-      )
-      if (!result.success) return toast.error(result.message || '测试版本更新失败')
-      toast.success(result.message || '活动已固定到题库最新测试版本')
+      const result = await applyContestTestSetUpdate(contestId, contestProblemId, preview.latestRevisionId || undefined)
+      if (!result.ok) return toast.error(result.error.message || '测试版本更新失败')
+      toast.success('活动已固定到题库最新测试版本')
       setPreview(current => current ? {
         ...current,
         pending: false,
-        currentRevision: result.data?.currentRevision ?? current.latestRevision,
-        currentRevisionId: result.data?.currentRevisionId ?? current.latestRevisionId,
+        currentRevision: result.data.currentRevision ?? current.latestRevision,
+        currentRevisionId: result.data.currentRevisionId ?? current.latestRevisionId,
       } : current)
     } finally { setSyncing(false) }
   }

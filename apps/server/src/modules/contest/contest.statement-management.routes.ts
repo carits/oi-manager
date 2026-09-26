@@ -1,6 +1,8 @@
 import { Router } from 'express'
+import { ContestContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import { parseContestId } from './contest.helpers'
 import {
   downloadContestStatementFile,
@@ -13,6 +15,7 @@ import {
 export const contestStatementManagementRouter = Router()
 
 function sendStatementError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return
   if (!(error instanceof ContestStatementManagementError)) throw error
   return res.status(error.statusCode).json({
     success: false,
@@ -33,7 +36,7 @@ contestStatementManagementRouter.get('/contests/:id/statement-management', authe
       parseContestId(req.params.id),
       req.user!.userId,
     )
-    return res.json({ success: true, data })
+    return sendContractData(res, ContestContracts.statementManagement, data)
   } catch (error) {
     return sendStatementError(error, res)
   }
@@ -41,12 +44,13 @@ contestStatementManagementRouter.get('/contests/:id/statement-management', authe
 
 contestStatementManagementRouter.put('/contests/:id/statement-management', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ContestContracts.saveStatementManagement, req.body)
     const data = await saveContestStatementManagement({
       contestId: parseContestId(req.params.id),
       userId: req.user!.userId,
-      selections: req.body?.selections,
+      selections: body.selections,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ContestContracts.saveStatementManagement, data)
   } catch (error) {
     return sendStatementError(error, res)
   }

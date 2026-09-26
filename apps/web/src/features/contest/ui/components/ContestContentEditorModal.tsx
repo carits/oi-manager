@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import unifiedStyles from './ContestContentEditorModal.unified.module.css'
 import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
-import apiClient from '@/lib/apiClient'
+import { updateContestContentMarkdown, uploadContestContentPdf } from '../../api/contestApi'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
 import { useToast } from '@/components/ui/Toast'
@@ -41,19 +41,19 @@ export function ContestContentEditorModal({ isOpen, contestId, value, onClose, o
     if (!value) return
     setSaving(true)
     try {
-      const base = `/api/contests/${contestId}/problems/${value.contestProblemId}/content/${value.kind}`
       if (value.format === 'pdf' && !file) {
         toast.error('请选择新的 PDF 文件')
         return
       }
       const response = value.format === 'pdf'
-        ? await (async () => {
-          const body = new FormData()
-          body.append('file', file!)
-          return apiClient.postFile(base + '/pdf', body, { timeout: 30000 })
-        })()
-        : await apiClient.put(base, { content })
-      if (!response.success) {
+        ? await uploadContestContentPdf(contestId, value.contestProblemId, value.kind, file!)
+        : await updateContestContentMarkdown(contestId, value.contestProblemId, value.kind, content)
+      if ('ok' in response) {
+        if (!response.ok) {
+          toast.error(response.error.message || '保存失败')
+          return
+        }
+      } else if (!response.success) {
         toast.error(response.message || '保存失败')
         return
       }

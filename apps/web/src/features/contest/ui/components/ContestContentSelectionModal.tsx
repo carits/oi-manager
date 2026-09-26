@@ -2,34 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import unifiedStyles from './ContestContentSelectionModal.unified.module.css'
-import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Select } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
-import apiClient from '@/lib/apiClient'
+import type { ContestContentOption, ContestContentOptions } from '@oi-manager/contracts'
+import { getContestContentOptions, previewContestContentOption, updateContestContentSelection } from '../../api/contestApi'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
-
-interface ContentOption {
-  key: string
-  sourceType: 'canonical' | 'user' | 'contest' | 'none'
-  title: string | null
-  format: string
-  language: string | null
-  authorUsername: string | null
-  fileName: string | null
-  previewText: string | null
-}
-
-interface ContentOptionsResponse {
-  statement: ContentOption[]
-  solution: ContentOption[]
-  currentSelection: {
-    statementOptionKey: string | null
-    solutionOptionKey: string | null
-    statementRevision: number | null
-    solutionRevision: number | null
-  }
-}
 
 interface Props {
   isOpen: boolean
@@ -40,7 +19,7 @@ interface Props {
   onSaved: () => Promise<void> | void
 }
 
-function optionLabel(option: ContentOption) {
+function optionLabel(option: ContestContentOption) {
   if (option.sourceType === 'none') return '不提供题解'
   const source = option.sourceType === 'canonical' ? '官方' : `用户 · ${option.authorUsername || '匿名'}`
   const title = option.title || option.fileName || '未命名版本'
@@ -57,28 +36,28 @@ export function ContestContentSelectionModal({
   onSaved,
 }: Props) {
   const toast = useToast()
-  const [data, setData] = useState<ContentOptionsResponse | null>(null)
+  const [data, setData] = useState<ContestContentOptions | null>(null)
   const [statementKey, setStatementKey] = useState('')
   const [solutionKey, setSolutionKey] = useState('none')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState<{ title: string; content: string | null; fileUrl: string | null } | null>(null)
 
-  const base = `/api/contests/${contestId}/problems/${contestProblemId}`
   const load = useCallback(async () => {
     if (!isOpen || !contestProblemId) return
     setLoading(true)
     setPreview(null)
-    const response = await apiClient.get<ContentOptionsResponse>(`${base}/content-options`)
-    if (response.success && response.data) {
-      setData(response.data)
-      setStatementKey(response.data.currentSelection.statementOptionKey || response.data.statement[0]?.key || '')
-      setSolutionKey(response.data.currentSelection.solutionOptionKey || 'none')
-    } else {
-      toast.error(response.message || '加载内容版本失败')
+    try {
+      const response = await getContestContentOptions(contestId, contestProblemId)
+      setData(response)
+      setStatementKey(response.currentSelection.statementOptionKey || response.statement[0]?.key || '')
+      setSolutionKey(response.currentSelection.solutionOptionKey || 'none')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '加载内容版本失败')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-  }, [base, isOpen, contestProblemId, toast])
+  }, [isOpen, contestId, contestProblemId, toast])
 
   useEffect(() => { void load() }, [load])
 
@@ -90,33 +69,36 @@ export function ContestContentSelectionModal({
       setPreview({ title: '题解预览', content: '当前选择不提供题解。', fileUrl: null })
       return
     }
-    const response = await apiClient.get<ContentOption & { content: string | null; fileUrl: string | null }>(
-      `${base}/content-options/${encodeURIComponent(key)}/preview`,
-    )
-    if (!response.success || !response.data) {
-      toast.error(response.message || '预览失败')
-      return
+    try {
+      const response = await previewContestContentOption(contestId, contestProblemId, key)
+      setPreview({
+        title: `${kind === 'statement' ? '题面' : '题解'}预览 · ${optionLabel(response)}`,
+        content: response.content,
+        fileUrl: response.fileUrl,
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '预览失败')
     }
-    setPreview({
-      title: `${kind === 'statement' ? '题面' : '题解'}预览 · ${optionLabel(response.data)}`,
-      content: response.data.content,
-      fileUrl: response.data.fileUrl,
-    })
   }
 
   const save = async () => {
     if (!statementKey) return
     setSaving(true)
-    const response = await apiClient.put(`${base}/content-selection`, {
-      statementOptionKey: statementKey,
-      solutionOptionKey: solutionKey,
-    })
-    if (response.success) {
-      toast.success('活动内容版本已更新，旧快照已保留')
+    try {
+      const response = await updateContestContentSelection(contestId, contestProblemId, {
+        statementOptionKey: statementKey,
+        solutionOptionKey: solutionKey,
+      })
+      if (!response.ok) {
+        toast.error(response.error.message || '保存失败')
+        return
+      }
+      toast.success('活动内容版本已更新')
       await onSaved()
       onClose()
-    } else toast.error(response.message || '保存失败')
-    setSaving(false)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
