@@ -2,8 +2,8 @@ import { Router, type Response } from 'express'
 import { ContestRatingContracts, RatingAccountContracts, RatingLeaderboardContracts } from '@oi-manager/contracts'
 import { authenticate, isPersonalContext, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { parseTrainingId } from '../contest/contest.helpers'
-import { trainingMatchesWorkspaceScope } from '../contest/application/contest-scope.service'
+import { parseContestId } from '../contest/contest.helpers'
+import { contestMatchesWorkspaceScope } from '../contest/application/contest-scope.service'
 import { ContestRatingError, finalizeContestRating, getContestRating, getContestRatingConfig, getRatingParticipation, rebuildContestRating, setFinalSubmission, updateContestRatingConfig, updateRatingParticipantDisposition, updateRatingParticipation } from './application/contest-rating.service'
 import { getMyRatingAccounts, getRatingHistory, getRatingLeaderboard } from './application/rating-query.service'
 import { parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
@@ -38,22 +38,22 @@ ratingDomainRouter.get('/ratings/users/:userId/history', authenticate, endpoint(
 }))
 
 ratingDomainRouter.use('/contests/:id', authenticate, asyncHandler(async (req: AuthRequest, res, next) => {
-  const trainingId = parseTrainingId(req.params.id)
-  if (!await trainingMatchesWorkspaceScope(trainingId, req.user!)) {
+  const contestId = parseContestId(req.params.id)
+  if (!await contestMatchesWorkspaceScope(contestId, req.user!)) {
     return res.status(404).json({ success: false, code: 'CONTEST_NOT_FOUND', message: '比赛不存在' })
   }
   next()
 }))
 
-ratingDomainRouter.get('/contests/:id/rating-config', endpoint(async (req, res) => res.json({ success: true, data: await getContestRatingConfig(parseTrainingId(req.params.id), req.user!.userId) })))
-ratingDomainRouter.put('/contests/:id/rating-config', endpoint(async (req, res) => res.json({ success: true, data: await updateContestRatingConfig(parseTrainingId(req.params.id), req.user!.userId, req.body) })))
-ratingDomainRouter.get('/contests/:id/rating-participation', endpoint(async (req, res) => res.json({ success: true, data: await getRatingParticipation(parseTrainingId(req.params.id), req.user!.userId) })))
-ratingDomainRouter.put('/contests/:id/rating-participation', endpoint(async (req, res) => res.json({ success: true, data: await updateRatingParticipation(parseTrainingId(req.params.id), req.user!.userId, req.body) })))
-ratingDomainRouter.get('/contests/:id/rating', endpoint(async (req, res) => sendContractData(res, ContestRatingContracts.detail, await getContestRating(parseTrainingId(req.params.id), req.user!.userId))))
-ratingDomainRouter.post('/contests/:id/finalize', endpoint(async (req, res) => res.json({ success: true, data: await finalizeContestRating(parseTrainingId(req.params.id), req.user!.userId) })))
-ratingDomainRouter.post('/contests/:id/rating/rebuild', endpoint(async (req, res) => res.json({ success: true, data: await rebuildContestRating(parseTrainingId(req.params.id), req.user!.userId) })))
-ratingDomainRouter.post('/contests/:id/problems/:trainingProblemId/final-submission/:submissionId', endpoint(async (req, res) => res.json({ success: true, data: await setFinalSubmission(parseTrainingId(req.params.id), req.params.trainingProblemId, Number(req.params.submissionId), req.user!.userId) })))
+ratingDomainRouter.get('/contests/:id/rating-config', endpoint(async (req, res) => res.json({ success: true, data: await getContestRatingConfig(parseContestId(req.params.id), req.user!.userId) })))
+ratingDomainRouter.put('/contests/:id/rating-config', endpoint(async (req, res) => res.json({ success: true, data: await updateContestRatingConfig(parseContestId(req.params.id), req.user!.userId, req.body) })))
+ratingDomainRouter.get('/contests/:id/rating-participation', endpoint(async (req, res) => res.json({ success: true, data: await getRatingParticipation(parseContestId(req.params.id), req.user!.userId) })))
+ratingDomainRouter.put('/contests/:id/rating-participation', endpoint(async (req, res) => res.json({ success: true, data: await updateRatingParticipation(parseContestId(req.params.id), req.user!.userId, req.body) })))
+ratingDomainRouter.get('/contests/:id/rating', endpoint(async (req, res) => sendContractData(res, ContestRatingContracts.detail, await getContestRating(parseContestId(req.params.id), req.user!.userId))))
+ratingDomainRouter.post('/contests/:id/finalize', endpoint(async (req, res) => res.json({ success: true, data: await finalizeContestRating(parseContestId(req.params.id), req.user!.userId) })))
+ratingDomainRouter.post('/contests/:id/rating/rebuild', endpoint(async (req, res) => res.json({ success: true, data: await rebuildContestRating(parseContestId(req.params.id), req.user!.userId) })))
+ratingDomainRouter.post('/contests/:id/problems/:contestProblemId/final-submission/:submissionId', endpoint(async (req, res) => res.json({ success: true, data: await setFinalSubmission(parseContestId(req.params.id), req.params.contestProblemId, Number(req.params.submissionId), req.user!.userId) })))
 
 ratingDomainRouter.patch('/contests/:id/rating-participants/:userId', endpoint(async (req, res) => {
-  res.json({ success: true, data: await updateRatingParticipantDisposition(parseTrainingId(req.params.id), req.params.userId, req.user!.userId, req.body) })
+  res.json({ success: true, data: await updateRatingParticipantDisposition(parseContestId(req.params.id), req.params.userId, req.user!.userId, req.body) })
 }))

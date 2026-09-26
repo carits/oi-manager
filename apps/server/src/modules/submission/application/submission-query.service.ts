@@ -3,12 +3,12 @@ import yaml from 'js-yaml'
 import { resolveJudgePresentationConfig } from '../../../lib/judge-mode'
 import {
   canAccessContest,
-  canManageTraining,
-  requireTrainingStarted,
+  canManageContest,
+  requireContestStarted,
 } from '../../contest/contest.helpers'
 import {
-  getTrainingRuntimeStatus,
-  shouldHideTrainingProblemSource,
+  getContestRuntimeStatus,
+  shouldHideContestProblemSource,
 } from '../../contest/contest.visibility'
 import {
   CURRENT_JUDGE_RUN_SELECT,
@@ -16,7 +16,7 @@ import {
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
 import { resolveSubmissionIoSnapshot, submissionIoDto } from '../../judge/domain/submission-io'
-import { findActivityForSubmission } from '../../contest/contest-query.facade'
+import { findContestForSubmission } from '../../contest/contest-query.facade'
 import { organizationRoleFromRoleKeys } from '../../authorization/capabilities'
 
 export interface SubmissionQueryContext {
@@ -209,21 +209,14 @@ async function requireVisibleSubmission(
     scope: string
   } | null = null
   let hasContestManagerAccess = false
-  const activityPublicId = expectedTrainingId
-    ?? submission.trainingSessionId
-    ?? submission.CanonicalContest?.publicId
-    ?? null
+  const activityPublicId = expectedTrainingId ?? submission.CanonicalContest?.publicId ?? null
   if (activityPublicId !== null) {
-    const activity = await findActivityForSubmission(activityPublicId)
+    const activity = await findContestForSubmission(activityPublicId)
     if (!activity) throw notFound()
-    if (expectedTrainingId !== undefined) {
-      if (activity.source === 'contest') {
-        if (submission.canonicalContestId !== activity.contest.id) throw notFound()
-      } else if (submission.trainingSessionId !== activity.activity.id) {
-        throw notFound()
-      }
+    if (expectedTrainingId !== undefined && submission.canonicalContestId !== activity.canonical.id) {
+      throw notFound()
     }
-    training = activity.activity
+    training = activity.contest
 
     if (!context.isGlobalAdmin && training.scope !== 'platform') {
       if (training.scope !== context.workspaceScope) throw notFound()
@@ -237,13 +230,13 @@ async function requireVisibleSubmission(
       }
     }
 
-    hasContestManagerAccess = context.isGlobalAdmin || await canManageTraining(context.userId, training)
+    hasContestManagerAccess = context.isGlobalAdmin || await canManageContest(context.userId, training)
 
     if (!hasContestManagerAccess) {
       if (!await canAccessContest(context.userId, training)) {
         throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看该提交记录')
       }
-      const notStarted = await requireTrainingStarted(training, context.userId)
+      const notStarted = await requireContestStarted(training, context.userId)
       if (notStarted) {
         throw new SubmissionQueryError(403, 'TRAINING_NOT_STARTED', notStarted)
       }
@@ -353,11 +346,11 @@ export async function getSubmissionDetail(
   const hideOiDetail = Boolean(
     access.training
     && access.training.format === 'oi'
-    && getTrainingRuntimeStatus(access.training) !== 'finished'
+    && getContestRuntimeStatus(access.training) !== 'finished'
     && !access.hasContestManagerAccess,
   )
   const hideProblemIdentity = access.training
-    ? shouldHideTrainingProblemSource(access.training, access.hasContestManagerAccess)
+    ? shouldHideContestProblemSource(access.training, access.hasContestManagerAccess)
     : false
   const isActivitySubmission = Boolean(access.training)
   const canViewCode = !isActivitySubmission

@@ -1,15 +1,15 @@
 'use client'
 
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
-import unifiedStyles from './TrainingProblemDetail.unified.module.css'
+import unifiedStyles from './ContestProblemDetail.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { LoadError } from '@/components/ui/LoadError'
 import type { ResourceState } from '@/lib/resource'
-import type { TrainingInfo, TrainingProblem, ProblemDetail } from '../../model/types'
-import { trainingProblemCode, trainingProblemTitle } from '../problem-label'
-import { TrainingHackSyncAction } from './TrainingHackSyncAction'
+import type { ContestInfo, ContestProblem, ProblemDetail } from '../../model/types'
+import { contestProblemCode, contestProblemTitle } from '../problem-label'
+import { ContestHackSyncAction } from './ContestHackSyncAction'
 
 const STATEMENT_LANGUAGE_LABELS: Record<string, string> = {
   zh: '中文',
@@ -23,8 +23,8 @@ function getPdfUrl(fileUrl: string): string | null {
   return fileUrl
 }
 
-interface TrainingProblemDetailProps {
-  problems: TrainingProblem[]
+interface ContestProblemDetailProps {
+  problems: ContestProblem[]
   selectedProblemId: string | null
   setSelectedProblemId: (id: string) => void
   problemDetail: ProblemDetail | null
@@ -32,7 +32,7 @@ interface TrainingProblemDetailProps {
   retryProblemDetail: () => Promise<void>
   selectedStatementId: string | null
   setSelectedStatementId: (id: string | null) => void
-  training: TrainingInfo
+  contest: ContestInfo
   noteContent: string
   setNoteContent: (v: string) => void
   noteSaving: boolean
@@ -56,7 +56,7 @@ interface TrainingProblemDetailProps {
   saveRecordNow: () => Promise<void>
 }
 
-export function TrainingProblemDetail({
+export function ContestProblemDetail({
   problems,
   selectedProblemId,
   setSelectedProblemId,
@@ -65,7 +65,7 @@ export function TrainingProblemDetail({
   retryProblemDetail,
   selectedStatementId,
   setSelectedStatementId,
-  training,
+  contest,
   noteContent,
   setNoteContent,
   noteSaving,
@@ -87,10 +87,10 @@ export function TrainingProblemDetail({
   onGoToAttachments,
   saveNoteNow,
   saveRecordNow,
-}: TrainingProblemDetailProps) {
+}: ContestProblemDetailProps) {
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
-  const hideProblemIdentity = !training.isAdmin
-    && !training.problemIdVisible
+  const hideProblemIdentity = !contest.isAdmin
+    && !contest.problemIdVisible
     && trainingStatus !== 'finished'
 
   // ========== 题面内容渲染（两种布局共用） ==========
@@ -130,7 +130,7 @@ export function TrainingProblemDetail({
     if (!currentStatement) {
       return <div className={unifiedStyles.u3}>暂无题面</div>
     }
-    const editAction = training.isAdmin ? (
+    const editAction = contest.isAdmin ? (
       <div className={unifiedStyles.u4}>
         <Button variant="ghost" onClick={() => onEditStatement(currentStatement)} className={unifiedStyles.u5}>编辑题面</Button>
       </div>
@@ -164,7 +164,7 @@ export function TrainingProblemDetail({
         {visibleStatements.map(statement => (
           <Button variant="ghost" key={statement.id} onClick={() => {
             setSelectedStatementId(statement.id)
-            if (selectedProblemId) localStorage.setItem(`training-stmt-pref-${training.id}-${selectedProblemId}`, statement.id)
+            if (selectedProblemId) localStorage.setItem(`contest-stmt-pref-${contest.id}-${selectedProblemId}`, statement.id)
           }} className={unifiedStyles.statementButton} aria-selected={selectedStatementId === statement.id}>
             <strong className={unifiedStyles.u12}>{statement.name || (statement.language ? STATEMENT_LANGUAGE_LABELS[statement.language] || statement.language : '题面')}</strong>
             <span className={unifiedStyles.u13}>{statement.authorUsername || 'System'} · {statement.isDefault ? '默认 · ' : ''}{statement.language || '未知'}</span>
@@ -184,7 +184,7 @@ export function TrainingProblemDetail({
           onClick={() => setSelectedProblemId(p.id)}
           className={`${unifiedStyles.problemButton} ${compact ? unifiedStyles.problemButtonCompact : ''}`} aria-selected={selectedProblemId === p.id}
         >
-          {trainingProblemCode(p.orderIndex)}
+          {contestProblemCode(p.orderIndex)}
         </Button>
       ))}
       {problems.length === 0 && (
@@ -199,7 +199,7 @@ export function TrainingProblemDetail({
     if (!problemDetail) return null
     return (
       <div className={unifiedStyles.u16}>
-        <span className={unifiedStyles.u17}>{problemDetail.alias || problemDetail.problemTitle || trainingProblemTitle(selectedProblem || { orderIndex: problemDetail.orderIndex })}</span>
+        <span className={unifiedStyles.u17}>{problemDetail.alias || problemDetail.problemTitle || contestProblemTitle(selectedProblem || { orderIndex: problemDetail.orderIndex })}</span>
         {problemDetail.points != null && <span>分值: {problemDetail.points}</span>}
         {problemDetail.timeLimit && <span>时间: {problemDetail.timeLimit}ms</span>}
         {problemDetail.memoryLimit && <span>内存: {problemDetail.memoryLimit}MB</span>}
@@ -208,7 +208,7 @@ export function TrainingProblemDetail({
             {problemDetail.difficulty}
           </span>
         )}
-        {training.isAdmin && problemDetail.problemTitle && (
+        {contest.isAdmin && problemDetail.problemTitle && (
           <>
             <div className={unifiedStyles.u18} />
             <span className={unifiedStyles.u19}>{problemDetail.platformProblemId}</span>
@@ -223,7 +223,7 @@ export function TrainingProblemDetail({
   // ========== 编辑器内容渲染 ==========
 
   const renderEditorContent = () => {
-    if (training.type === 'contest') {
+    if (contest.type === 'contest') {
       // 比赛记录编辑器
       return (
         <div className={unifiedStyles.u21}>
@@ -325,8 +325,8 @@ B 题：...
   // ========== 保存按钮渲染 ==========
 
   const renderSaveButton = () => {
-    const handleSave = training.type === 'contest' ? saveRecordNow : saveNoteNow
-    const isSaving = training.type === 'contest' ? recordSaving : noteSaving
+    const handleSave = contest.type === 'contest' ? saveRecordNow : saveNoteNow
+    const isSaving = contest.type === 'contest' ? recordSaving : noteSaving
     return (
       <Button variant="primary" size="sm"
         onClick={handleSave}
@@ -340,7 +340,7 @@ B 题：...
   // ========== 保存状态渲染 ==========
 
   const renderSaveStatus = () => {
-    if (training.type === 'contest') {
+    if (contest.type === 'contest') {
       return (
         <>
           {recordSaving && <span className={unifiedStyles.u24}>保存中...</span>}
@@ -362,7 +362,7 @@ B 题：...
   // ========== 模式切换按钮渲染 ==========
 
   const renderModeButtons = () => {
-    if (training.type === 'contest') {
+    if (contest.type === 'contest') {
       return (
         <>
           <Button variant="ghost" onClick={() => setRecordEditMode('edit')} className={unifiedStyles.modeButton} aria-pressed={recordEditMode === 'edit'}>编辑</Button>
@@ -391,10 +391,10 @@ B 题：...
       >
         ▶ 提交代码
       </Button>
-      {selectedProblem && training.isAdmin && (
-        <TrainingHackSyncAction trainingId={training.id} trainingProblemId={selectedProblem.id} />
+      {selectedProblem && contest.isAdmin && (
+        <ContestHackSyncAction contestId={contest.id} contestProblemId={selectedProblem.id} />
       )}
-      {selectedProblem && training.isAdmin && (
+      {selectedProblem && contest.isAdmin && (
         <Button variant="ghost"
           onClick={onManageContentClick}
           className={unifiedStyles.u28}
@@ -404,10 +404,10 @@ B 题：...
       )}
       {trainingStatus === 'upcoming' && (
         <div className={unifiedStyles.u29}>
-          {training.type === 'contest' ? '比赛未开始' : '训练未开始'}
+          {contest.type === 'contest' ? '比赛未开始' : '训练未开始'}
         </div>
       )}
-      {(selectedProblem?.attachmentCount ?? 0) > 0 && (trainingStatus !== 'upcoming' || training.isAdmin) && (
+      {(selectedProblem?.attachmentCount ?? 0) > 0 && (trainingStatus !== 'upcoming' || contest.isAdmin) && (
         <Button variant="ghost"
           onClick={onGoToAttachments}
           className={unifiedStyles.u30}
@@ -441,8 +441,8 @@ B 题：...
         {/* 右侧：编辑器面板 */}
         <div className={unifiedStyles.u32}>
           <div className={unifiedStyles.u36}>
-            <span>{training.type === 'contest' ? '比赛记录' : '训练记录'}</span>
-            <span>{training.type === 'contest' ? '比赛记录' : '思路记录'}</span>
+            <span>{contest.type === 'contest' ? '比赛记录' : '训练记录'}</span>
+            <span>{contest.type === 'contest' ? '比赛记录' : '思路记录'}</span>
             <div className={unifiedStyles.u37} />
             {renderSaveButton()}
             {renderSaveStatus()}
@@ -494,12 +494,12 @@ B 题：...
       {/* 右侧：操作按钮 */}
       <div className={unifiedStyles.u48}>
         <div className={unifiedStyles.u27}>
-          {(trainingStatus !== 'upcoming' || training.isAdmin) && (
+          {(trainingStatus !== 'upcoming' || contest.isAdmin) && (
             <Button variant="ghost"
               onClick={() => setEditModeActive(true)}
               className={unifiedStyles.u49}
             >
-              {training.type === 'contest' ? '比赛记录' : '写思路'}
+              {contest.type === 'contest' ? '比赛记录' : '写思路'}
             </Button>
           )}
           {renderActionButtons()}

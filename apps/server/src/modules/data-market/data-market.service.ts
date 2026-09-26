@@ -234,7 +234,7 @@ async function purchaseScope(user: JwtPayload, licenseType: DataLicenseType, bod
   const contestId = String(body?.contestId ?? String())
   if (!/^\d+$/.test(contestId)) policyFail(422, 'DATA_LICENSE_SCOPE_REQUIRED', '比赛许可证必须指定有效的 contestId')
   const resolved = await findContestForLicense(Number(contestId))
-  const contest = resolved?.activity || null
+  const contest = resolved?.contest || null
   const teamManager = contest?.Team?.TeamMember.some((member: any) => member.userId === user.userId && member.status === 'active' && ['owner', 'admin'].includes(member.role))
   const organizationManager = contest?.organizationId
     ? await hasOrganizationCapability(user.userId, contest.organizationId, 'contest.manage')

@@ -4,17 +4,17 @@ import apiClient from '@/lib/apiClient'
 import { createClientUUID } from '@/lib/uuid'
 import { saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
-import type { TrainingInfo, TrainingProblem, Attachment } from '../model/types'
+import type { ContestInfo, ContestProblem, Attachment } from '../model/types'
 import { listHref } from '@/features/workspace'
 import type { SubmissionIoValue } from '@/features/submission'
 
-export function useTrainingActions(
-  trainingId: string,
-  training: TrainingInfo | null,
+export function useContestActions(
+  contestId: string,
+  contest: ContestInfo | null,
   basePath: string,
   teamId: string | null | undefined,
   selectedProblemId: string | null,
-  problems: TrainingProblem[],
+  problems: ContestProblem[],
   activeTab: string,
   legacyIoSuggestion?: SubmissionIoValue | null,
 ) {
@@ -46,10 +46,10 @@ export function useTrainingActions(
     try {
       submitKeyRef.current ||= createClientUUID()
       const result = await apiClient.mutate<{ submissionId?: number }>(
-        `/api/contests/${trainingId}/submit`,
+        `/api/contests/${contestId}/submit`,
         'POST',
         {
-          trainingProblemId: selectedProblemId,
+          contestProblemId: selectedProblemId,
           language: submitLanguage,
           code: submitCode,
           submitMethod: 'local',
@@ -81,16 +81,16 @@ export function useTrainingActions(
     } finally {
       setSubmitting(false)
     }
-  }, [selectedProblemId, submitCode, submitLanguage, submissionIo, legacyIoSuggestion, trainingId, toast])
+  }, [selectedProblemId, submitCode, submitLanguage, submissionIo, legacyIoSuggestion, contestId, toast])
 
   const handleDelete = useCallback(async () => {
-    if (!training) return false
+    if (!contest) return false
     setDeleting(true)
     try {
-      const res = await apiClient.delete(`/api/contests/${training.id}`)
+      const res = await apiClient.delete(`/api/contests/${contest.id}`)
       if (res.success) {
         toast.success('训练已删除')
-        const listKind = training.type === 'homework' ? 'homework' : training.type === 'contest' ? 'contest' : 'training'
+        const listKind = contest.type === 'homework' ? 'homework' : contest.type === 'contest' ? 'contest' : 'contest'
         const currentPath = window.location.pathname
         const organizationId = currentPath.match(/^\/org\/([^/]+)/)?.[1]
         const workspace = currentPath.startsWith('/personal/')
@@ -111,7 +111,7 @@ export function useTrainingActions(
     } finally {
       setDeleting(false)
     }
-  }, [training, basePath, teamId, router, toast])
+  }, [contest, basePath, teamId, router, toast])
 
   const handleDownloadAttachment = useCallback(async (attachment: Attachment) => {
     try {

@@ -2,16 +2,16 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import apiClient from '@/lib/apiClient'
 import { useResource } from '@/hooks/useResource'
 import type { ResourceState } from '@/lib/resource'
-import type { TrainingInfo, TrainingProblem, ProblemDetail, ProblemListEntry } from '../model/types'
+import type { ContestInfo, ContestProblem, ProblemDetail, ProblemListEntry } from '../model/types'
 
-interface TrainingOverview {
-  training: TrainingInfo
-  problems: TrainingProblem[]
+interface ContestOverview {
+  contest: ContestInfo
+  problems: ContestProblem[]
   problemStatus: ProblemListEntry[]
 }
 
-export function useTrainingDetail(
-  trainingId: string,
+export function useContestDetail(
+  contestId: string,
   activeTab: string,
   sessionKey: string | null,
 ) {
@@ -37,8 +37,8 @@ export function useTrainingDetail(
   const [recordLastSaved, setRecordLastSaved] = useState<Date | null>(null)
   const recordSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const overviewResource = useResource<TrainingOverview>(
-    `/api/contests/${trainingId}/overview`,
+  const overviewResource = useResource<ContestOverview>(
+    `/api/contests/${contestId}/overview`,
     {
       sessionKey,
       keepPreviousData: false,
@@ -51,7 +51,7 @@ export function useTrainingDetail(
     (overviewResource.state.state === 'error'
       ? overviewResource.state.previousData
       : undefined)
-  const training = overview?.training ?? null
+  const contest = overview?.contest ?? null
   const problems = overview?.problems ?? []
   const loading = overviewResource.state.state === 'pending'
   const error =
@@ -88,8 +88,8 @@ export function useTrainingDetail(
   }, [problems])
 
   const problemDetailResource = useResource<ProblemDetail>(
-    selectedProblemId && training && activeTab === 'problems'
-      ? `/api/contests/${trainingId}/problems/${selectedProblemId}/detail`
+    selectedProblemId && contest && activeTab === 'problems'
+      ? `/api/contests/${contestId}/problems/${selectedProblemId}/detail`
       : null,
     {
       sessionKey,
@@ -117,7 +117,7 @@ export function useTrainingDetail(
 
     const visibleStatements = problemDetail.statements || []
     if (visibleStatements.length > 0) {
-      const savedKey = localStorage.getItem(`training-stmt-pref-${trainingId}-${selectedProblemId}`)
+      const savedKey = localStorage.getItem(`contest-stmt-pref-${contestId}-${selectedProblemId}`)
       const savedStatement = savedKey
         ? visibleStatements.find(statement => statement.id === savedKey)
         : null
@@ -154,7 +154,7 @@ export function useTrainingDetail(
       try {
         setNoteSaving(true)
         const result = await apiClient.mutate(
-          `/api/contests/${trainingId}/problems/${selectedProblemId}/note`,
+          `/api/contests/${contestId}/problems/${selectedProblemId}/note`,
           'PUT',
           { content: noteContent },
         )
@@ -169,14 +169,14 @@ export function useTrainingDetail(
     }, 2000)
 
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [noteContent, selectedProblemId, trainingId])
+  }, [noteContent, selectedProblemId, contestId])
 
-  // Load contest record when training is contest type
+  // Load contest record when contest is contest type
   useEffect(() => {
-    if (!training || training.type !== 'contest' || recordLoaded) return
+    if (!contest || contest.type !== 'contest' || recordLoaded) return
     const loadRecord = async () => {
       try {
-      const data = await apiClient.query<{ content: string }>(`/api/contests/${trainingId}/record`)
+      const data = await apiClient.query<{ content: string }>(`/api/contests/${contestId}/record`)
       const content = data.content || ''
       lastSavedRecordContentRef.current = content
       setRecordContent(content)
@@ -187,7 +187,7 @@ export function useTrainingDetail(
       }
     }
     loadRecord()
-  }, [training, trainingId, recordLoaded])
+  }, [contest, contestId, recordLoaded])
 
   // Auto-save contest record
   useEffect(() => {
@@ -198,7 +198,7 @@ export function useTrainingDetail(
       try {
         setRecordSaving(true)
         const result = await apiClient.mutate(
-          `/api/contests/${trainingId}/record`,
+          `/api/contests/${contestId}/record`,
           'PUT',
           { content: recordContent },
         )
@@ -212,7 +212,7 @@ export function useTrainingDetail(
       }
     }, 2000)
     return () => { if (recordSaveTimerRef.current) clearTimeout(recordSaveTimerRef.current) }
-  }, [recordContent, trainingId, recordLoaded])
+  }, [recordContent, contestId, recordLoaded])
 
   const setSelectedProblemId = useCallback((nextProblemId: string | null) => {
     const previousProblemId = selectedProblemId
@@ -223,7 +223,7 @@ export function useTrainingDetail(
 
     if (hasUnsavedNote) {
       void apiClient.mutate(
-        `/api/contests/${trainingId}/problems/${previousProblemId}/note`,
+        `/api/contests/${contestId}/problems/${previousProblemId}/note`,
         'PUT',
         { content: noteContent },
       )
@@ -231,7 +231,7 @@ export function useTrainingDetail(
 
     loadedNoteProblemIdRef.current = null
     setSelectedProblemIdState(nextProblemId)
-  }, [noteContent, selectedProblemId, trainingId])
+  }, [noteContent, selectedProblemId, contestId])
 
   // Manual save note (immediately save without waiting for debounce)
   const saveNoteNow = useCallback(async () => {
@@ -244,14 +244,14 @@ export function useTrainingDetail(
     if (!pid) return
     try {
       setNoteSaving(true)
-      await apiClient.put(`/api/contests/${trainingId}/problems/${pid}/note`, { content })
+      await apiClient.put(`/api/contests/${contestId}/problems/${pid}/note`, { content })
       setNoteLastSaved(new Date())
     } catch (error) {
       console.error('Failed to save note:', error)
     } finally {
       setNoteSaving(false)
     }
-  }, [selectedProblemId, noteContent, trainingId])
+  }, [selectedProblemId, noteContent, contestId])
 
   // Manual save contest record
   const saveRecordNow = useCallback(async () => {
@@ -262,7 +262,7 @@ export function useTrainingDetail(
     try {
       setRecordSaving(true)
       const result = await apiClient.mutate(
-        `/api/contests/${trainingId}/record`,
+        `/api/contests/${contestId}/record`,
         'PUT',
         { content: recordContent },
       )
@@ -274,10 +274,10 @@ export function useTrainingDetail(
     } finally {
       setRecordSaving(false)
     }
-  }, [recordContent, trainingId])
+  }, [recordContent, contestId])
 
   return {
-    training,
+    contest,
     problems,
     selectedProblemId, setSelectedProblemId,
     problemDetail,

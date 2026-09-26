@@ -3,14 +3,14 @@ import {
   CURRENT_JUDGE_RUN_SELECT,
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
-import { findActivityForAccess } from '../../contest/contest-query.facade'
+import { findContestForAccess } from '../../contest/contest-query.facade'
 import {
-  contestProblemAsView,
+  toContestProblemView,
   contestProblemInclude,
 } from '../../contest/contest-view'
 
 export async function findContestForProblemAccess(id: number, _includeTeam = false) {
-  return (await findActivityForAccess(id))?.activity || null
+  return (await findContestForAccess(id))?.contest || null
 }
 
 async function findCanonicalContest(publicId: number) {
@@ -28,7 +28,7 @@ export async function listContestProblems(contestId: number) {
     include: contestProblemInclude,
     orderBy: { orderIndex: 'asc' },
   })
-  return problems.map(problem => contestProblemAsView(problem, contest.publicId))
+  return problems.map(problem => toContestProblemView(problem, contest.publicId))
 }
 
 export async function getContestProblemStatusData(contestId: number, userId: string, submitScope: string) {
@@ -47,7 +47,7 @@ export async function getContestProblemStatusData(contestId: number, userId: str
     }),
   ])
   return {
-    problems: rows.map(problem => contestProblemAsView(problem, contest.publicId)),
+    problems: rows.map(problem => toContestProblemView(problem, contest.publicId)),
     submissions: submissions.map(projectSubmissionJudgeResult),
   }
 }
@@ -65,7 +65,7 @@ export async function getContestProblemDetailData(
       include: contestProblemInclude,
     })
     if (!row || row.contestId !== contest.id) return null
-    const contestProblem = contestProblemAsView(row, contest.publicId)
+    const contestProblem = toContestProblemView(row, contest.publicId)
     const note = row.canonicalProblemId
       ? await prisma.problemNote.findUnique({
           where: { problemId_userId_userType: { problemId: row.canonicalProblemId, userId, userType } },

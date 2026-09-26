@@ -93,7 +93,7 @@ describe('human UX productization contract', () => {
     expect(source).toContain('<TeamActivityOverview')
     expect(source).toContain('<TeamMemberList')
     expect(source).not.toContain('TeamProblemListsTab')
-    expect(source).not.toContain('TeamTrainingList')
+    expect(source).not.toContain('TeamContestList')
   })
 
   it('shows a teacher task inbox before secondary statistics', () => {
@@ -202,7 +202,7 @@ describe('human UX productization contract', () => {
   })
 
   it('keeps archive import out of activity submission guidance', () => {
-    const source = read('../features/contest/ui/TrainingDetailPage.tsx')
+    const source = read('../features/contest/ui/ContestDetailPage.tsx')
     expect(source).toContain('提交结果只计入当前活动')
     expect(source).not.toContain('远程提交记录可在题目页同步归档')
   })

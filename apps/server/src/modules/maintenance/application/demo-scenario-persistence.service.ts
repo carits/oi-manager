@@ -26,13 +26,23 @@ export function normalizeDemoSubmission(sourceId: string, createdAt: Date) {
   return prisma.submission.updateMany({ where: { sourceId }, data: { createdAt, updatedAt: new Date() } })
 }
 
-export function findDemoTrainingProblems(trainingId: number) {
-  return prisma.contest.findUnique({ where: { publicId: trainingId }, select: { id: true } }).then(contest =>
-    contest ? prisma.contestProblem.findMany({
-      where: { contestId: contest.id },
-      include: { CanonicalProblem: { select: { id: true, platform: true, problemId: true } } },
-      orderBy: { orderIndex: 'asc' },
-    }).then(rows => rows.map(row => ({ ...row, Problem: row.CanonicalProblem }))) : [])
+export async function findDemoContestProblems(contestPublicId: number) {
+  const contest = await prisma.contest.findUnique({ where: { publicId: contestPublicId }, select: { id: true } })
+  if (!contest) return []
+  const rows = await prisma.contestProblem.findMany({
+    where: { contestId: contest.id, canonicalProblemId: { not: null } },
+    include: {
+      TestSetRevision: { select: { judgeConfigHash: true } },
+      CanonicalProblem: {
+        select: {
+          id: true, platform: true, problemId: true, latestTestSetRevisionId: true,
+          LatestTestSetRevision: { select: { judgeConfigHash: true } },
+        },
+      },
+    },
+    orderBy: { orderIndex: 'asc' },
+  })
+  return rows.flatMap(row => row.CanonicalProblem ? [{ ...row, Problem: row.CanonicalProblem }] : [])
 }
 
 export async function demoSubmissionExists(sourceId: string) {

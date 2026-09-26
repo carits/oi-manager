@@ -59,10 +59,10 @@ async function main() {
     required('problem list', prisma.problemList.findUnique({ where: { id: 'e2e-problem-list' } })),
     required('personal problem list', prisma.problemList.findFirst({ where: { scope: 'personal' } })),
     required('assignment', prisma.assignment.findUnique({ where: { id: 'e2e-assignment' } })),
-    required('contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'campus' }, orderBy: { id: 'asc' } })),
-    required('personal contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'personal' }, orderBy: { id: 'asc' } })),
+    required('contest', prisma.contest.findFirst({ where: { type: 'contest', scope: 'campus' }, orderBy: { id: 'asc' } })),
+    required('personal contest', prisma.contest.findFirst({ where: { type: 'contest', scope: 'personal' }, orderBy: { id: 'asc' } })),
     required('submission', prisma.submission.findFirst({
-      where: { userId: 'e2e-campus-student', submitScope: 'training', CurrentJudgeRun: { is: { result: 'accepted' } } },
+      where: { userId: 'e2e-campus-student', submitScope: 'assignment', CurrentJudgeRun: { is: { result: 'accepted' } } },
       orderBy: { createdAt: 'asc' },
     })),
     required('personal submission', prisma.submission.findFirst({

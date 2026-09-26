@@ -23,7 +23,6 @@ async function main() {
     prisma.trainingSessionProblemProgress.count(),
     prisma.trainingSessionEvent.count(),
     prisma.trainingSessionTemplate.count(),
-    prisma.training.count(),
     prisma.trainingSession.groupBy({ by: ['status'], _count: { _all: true }, orderBy: { status: 'asc' } }),
     prisma.trainingSessionStage.groupBy({ by: ['lifecycle'], _count: { _all: true }, orderBy: { lifecycle: 'asc' } }),
     prisma.$queryRaw<Array<{ tableName: string; sizeBytes: bigint }>>`

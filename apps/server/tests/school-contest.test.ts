@@ -2,16 +2,15 @@ import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import {
-  canAccessTraining,
-  canManageTraining,
+  canAccessContest,
+  canManageContest,
   isOrganizationContestAdmin,
   isOrganizationMember,
-} from '../src/modules/training/training.helpers'
+} from '../src/modules/contest/contest.helpers'
 import { createTestApp } from './helpers/testRequest'
 import { generateTestToken } from './helpers/testToken'
 import { createTestSchoolContest, createTestSubmission } from './helpers/school-contest-helpers'
 import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from './helpers/testUser'
-import { ensureCanonicalContestFixtureTx, syncCanonicalContestProblemFixtureTx } from './helpers/contest-fixture'
 
 const app = createTestApp()
 
@@ -234,12 +233,12 @@ describe('organization contest contract', () => {
 
     it('uses organizationId as the only organization training ownership key', async () => {
       const training = { teamId: null, organizationId: schoolA.organizationId! }
-      expect(await canAccessTraining(student.user.id, training)).toBe(true)
-      expect(await canAccessTraining(remoteTeacher.user.id, training)).toBe(false)
-      expect(await canAccessTraining(student.user.id, { teamId: null, organizationId: null })).toBe(false)
-      expect(await canManageTraining(principal.user.id, { ...training, createdBy: teacher.user.id })).toBe(true)
-      expect(await canManageTraining(teacher.user.id, { ...training, createdBy: teacher.user.id })).toBe(true)
-      expect(await canManageTraining(otherTeacher.user.id, { ...training, createdBy: teacher.user.id })).toBe(false)
+      expect(await canAccessContest(student.user.id, training)).toBe(true)
+      expect(await canAccessContest(remoteTeacher.user.id, training)).toBe(false)
+      expect(await canAccessContest(student.user.id, { teamId: null, organizationId: null })).toBe(false)
+      expect(await canManageContest(principal.user.id, { ...training, createdBy: teacher.user.id })).toBe(true)
+      expect(await canManageContest(teacher.user.id, { ...training, createdBy: teacher.user.id })).toBe(true)
+      expect(await canManageContest(otherTeacher.user.id, { ...training, createdBy: teacher.user.id })).toBe(false)
     })
   })
 
@@ -253,23 +252,41 @@ describe('organization contest contract', () => {
           status: 'published', publishedAt: new Date(),
         },
       })
-      const trainingProblem = await prisma.trainingProblem.create({
-        data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 1, points: 100 },
+      const contestProblem = await prisma.contestProblem.create({
+        data: {
+          id: crypto.randomUUID(),
+          contestId: contest.id,
+          canonicalProblemId: problem.id,
+          alias: 'A',
+          orderIndex: 1,
+          points: 100,
+          title: problem.title,
+          ojName: problem.platform,
+          problemId: problem.problemId,
+        },
       })
-      await prisma.$transaction(tx => syncCanonicalContestProblemFixtureTx(tx, trainingProblem.id))
+      await prisma.contestParticipant.create({
+        data: {
+          id: crypto.randomUUID(),
+          contestId: contest.id,
+          userId: student.user.id,
+          userType: 'student',
+          organizationIdSnapshot: schoolA.organizationId,
+        },
+      })
       await createTestSubmission({
         userId: student.user.id,
-        trainingId: contest.id,
+        contestId: contest.id,
         problemId: problem.problemId,
-        trainingProblemId: trainingProblem.id,
+        contestProblemId: contestProblem.id,
         result: 'accepted',
       })
 
-      const studentResponse = await organizationRequest('get', `/api/contests/${contest.id}/submissions`, tokenFor(student), schoolA.organizationId!)
+      const studentResponse = await organizationRequest('get', `/api/contests/${contest.publicId}/submissions`, tokenFor(student), schoolA.organizationId!)
       expect(studentResponse.status).toBe(200)
       expect(studentResponse.body.data.submissions[0].result).toBe('submitted')
 
-      const managerResponse = await organizationRequest('get', `/api/contests/${contest.id}/submissions`, tokenFor(teacher), schoolA.organizationId!)
+      const managerResponse = await organizationRequest('get', `/api/contests/${contest.publicId}/submissions`, tokenFor(teacher), schoolA.organizationId!)
       expect(managerResponse.status).toBe(200)
       expect(managerResponse.body.data.submissions[0].result).toBe('accepted')
     })

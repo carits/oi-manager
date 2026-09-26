@@ -5,7 +5,7 @@ import { createQueuedContestSubmission } from '../modules/contest/contest.submis
 import {
   countDemoSubmissions,
   demoSubmissionExists,
-  findDemoTrainingProblems,
+  findDemoContestProblems,
   findDemoTrainings,
   findDemoTrainingsByIds,
   findDemoUsers,
@@ -129,14 +129,14 @@ demoScenarioRouter.post('/v2/events', authenticate, asyncHandler(async (req: Aut
   if (!allowed(req,res)) return
   const { users, trainings } = await resources(); let created=0, existing=0
   for (const training of trainings.filter(item => item.title.endsWith('进行中') || item.title.endsWith('已结束'))) {
-    const problems = await findDemoTrainingProblems(training.id)
+    const problems = await findDemoContestProblems(training.id)
     if (problems.length !== 5) throw new Error(training.title+' 题目配置不完整')
     const aliases = new Map(problems.map(problem => [problem.alias!,problem]))
     for (const [index,event] of (training.format === 'icpc' ? icpcEvents : scoreEvents).entries()) {
       const sourceId = 'demo-v2:'+training.id+':'+eventKey(event,index)
       if (await demoSubmissionExists(sourceId)) { existing++; continue }
       const trainingProblem = aliases.get(event.alias); if (!trainingProblem) throw new Error(training.title+' 缺少题目 '+event.alias)
-      await createQueuedContestSubmission({userId:users[event.user].id,training,trainingProblem,language:'cpp',code:event.kind==='full'?full[event.alias]:event.kind==='partial'?partial[event.alias]:wrong,submitMethod:'demo_scenario',createdAt:new Date(training.startTime.getTime()+event.minute*60000),sourceId})
+      await createQueuedContestSubmission({userId:users[event.user].id,contest: training,contestProblem: trainingProblem,language:'cpp',code:event.kind==='full'?full[event.alias]:event.kind==='partial'?partial[event.alias]:wrong,submitMethod:'demo_scenario',createdAt:new Date(training.startTime.getTime()+event.minute*60000),sourceId})
       created++
     }
   }
@@ -178,7 +178,7 @@ demoScenarioRouter.post('/v3/events', authenticate, asyncHandler(async (req: Aut
   let created = 0
   let existing = 0
   for (const training of trainings) {
-    const problems = await findDemoTrainingProblems(training.id)
+    const problems = await findDemoContestProblems(training.id)
     if (problems.length !== 8) throw new Error(training.title + ' 题目配置不完整')
     const aliases = new Map(problems.map(problem => [problem.alias!, problem]))
     for (const event of events) {
@@ -189,8 +189,8 @@ demoScenarioRouter.post('/v3/events', authenticate, asyncHandler(async (req: Aut
       const code = event.kind === 'full' ? v3Full[event.alias] : event.kind === 'partial' ? v3Partial[event.alias] : wrong
       await createQueuedContestSubmission({
         userId: users[event.user].id,
-        training,
-        trainingProblem,
+        contest: training,
+        contestProblem: trainingProblem,
         language: 'cpp',
         code,
         submitMethod: 'demo_scenario',

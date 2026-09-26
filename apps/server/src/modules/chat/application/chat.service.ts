@@ -33,7 +33,7 @@ function decodeConversationCursor(value: unknown): ConversationCursor | undefine
   if (typeof value !== 'string' || value.length > 512) fail(422, 'CHAT_INVALID_CURSOR', '会话游标无效')
   try {
     const parsed = JSON.parse(Buffer.from(value as string, 'base64url').toString('utf8'))
-    if (!parsed || typeof parsed.id !== 'string' || typeof parsed.activityAt !== 'string' || !Number.isFinite(Date.parse(parsed.activityAt))) throw new Error('invalid')
+    if (!parsed || typeof parsed.id !== 'string' || typeof parsed.contestAt !== 'string' || !Number.isFinite(Date.parse(parsed.contestAt))) throw new Error('invalid')
     return parsed
   } catch {
     fail(422, 'CHAT_INVALID_CURSOR', '会话游标无效')

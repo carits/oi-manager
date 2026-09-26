@@ -1,32 +1,31 @@
 'use client'
 
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
-import unifiedStyles from './TrainingSolutionPanel.unified.module.css'
+import unifiedStyles from './ContestSolutionPanel.unified.module.css'
 import { Button } from '@/components/ui/Button'
-import type { TrainingInfo, TrainingProblem } from '../../model/types'
-import { trainingProblemCode, trainingProblemSectionTitle } from '../problem-label'
+import type { ContestInfo, ContestProblem } from '../../model/types'
+import { contestProblemCode, contestProblemSectionTitle } from '../problem-label'
 
 interface SolutionData {
   content: string
   visible: boolean
-  source?: 'training' | 'problem'
+  source?: 'contest' | 'problem'
   solutionType?: string
   solutionPdfUrl?: string
   fileUrl?: string | null
   format?: string
-  snapshotId?: string
 }
 
-interface TrainingSolutionPanelProps {
-  training: TrainingInfo
-  problems: TrainingProblem[]
+interface ContestSolutionPanelProps {
+  contest: ContestInfo
+  problems: ContestProblem[]
   allSolutions: Record<string, SolutionData>
-  onEditSolution?: (problem: TrainingProblem, solution: SolutionData) => void
+  onEditSolution?: (problem: ContestProblem, solution: SolutionData) => void
 }
 
-export function TrainingSolutionPanel({ training, problems, allSolutions, onEditSolution }: TrainingSolutionPanelProps) {
-  const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
-  const hideSolution = !training.solutionVisible && !trainingFinished && !training.isAdmin
+export function ContestSolutionPanel({ contest, problems, allSolutions, onEditSolution }: ContestSolutionPanelProps) {
+  const trainingFinished = contest.status === 'finished' || new Date() > new Date(contest.endTime)
+  const hideSolution = !contest.solutionVisible && !trainingFinished && !contest.isAdmin
 
   return (
     <div className={unifiedStyles.u1}>
@@ -46,14 +45,14 @@ export function TrainingSolutionPanel({ training, problems, allSolutions, onEdit
               <div key={p.id} className={unifiedStyles.u3}>
                 <div className={unifiedStyles.u4}>
                   <div className={unifiedStyles.u5}>
-                  <span className={unifiedStyles.u6}>{`${trainingProblemCode(p.orderIndex)}. ${p.alias || trainingProblemSectionTitle(p)}`}</span>
+                  <span className={unifiedStyles.u6}>{`${contestProblemCode(p.orderIndex)}. ${p.alias || contestProblemSectionTitle(p)}`}</span>
                   {sol?.source === 'problem' && (
                     <span className={unifiedStyles.u7}>
                       原题目题解
                     </span>
                   )}
                   </div>
-                  {training.isAdmin && sol.snapshotId && onEditSolution && <Button variant="ghost" onClick={() => onEditSolution(p, sol)} className={unifiedStyles.u8}>编辑题解</Button>}
+                  {contest.isAdmin && onEditSolution && <Button variant="ghost" onClick={() => onEditSolution(p, sol)} className={unifiedStyles.u8}>编辑题解</Button>}
                 </div>
                 <div>
                   {hasPdfSolution ? (

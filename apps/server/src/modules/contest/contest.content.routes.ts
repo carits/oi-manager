@@ -4,7 +4,7 @@ import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContestId } from './contest.helpers'
 import {
   downloadContestContentOption,
-  downloadContestContentSnapshot,
+  downloadContestContentFile,
   editContestContentMarkdown,
   getContestContentOptions,
   getContestMyContent,
@@ -49,14 +49,13 @@ contestContentRouter.get('/contests/:id/problems/:contestProblemId/my-content', 
   }
 }))
 
-contestContentRouter.put('/contests/:id/problems/:contestProblemId/content-snapshots/:kind/:snapshotId', authenticate, asyncHandler(async (req, res) => {
+contestContentRouter.put('/contests/:id/problems/:contestProblemId/content/:kind', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await editContestContentMarkdown({
       contestId: parseContestId(req.params.id),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
       kind: parseContentKind(req.params.kind),
-      snapshotId: req.params.snapshotId,
       content: String(req.body?.content || ''),
     })
     return res.json({ success: true, data })
@@ -65,14 +64,13 @@ contestContentRouter.put('/contests/:id/problems/:contestProblemId/content-snaps
   }
 }))
 
-contestContentRouter.post('/contests/:id/problems/:contestProblemId/content-snapshots/:kind/:snapshotId/pdf', authenticate, contestContentPdfUpload.single('file'), asyncHandler(async (req, res) => {
+contestContentRouter.post('/contests/:id/problems/:contestProblemId/content/:kind/pdf', authenticate, contestContentPdfUpload.single('file'), asyncHandler(async (req, res) => {
   try {
     const data = await replaceContestContentPdf({
       contestId: parseContestId(req.params.id),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
       kind: parseContentKind(req.params.kind),
-      snapshotId: req.params.snapshotId,
       file: req.file,
     })
     return res.json({ success: true, data })
@@ -147,9 +145,9 @@ contestContentRouter.put('/contests/:id/problems/:contestProblemId/content-selec
   }
 }))
 
-contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-snapshot/:kind/file', authenticate, asyncHandler(async (req, res) => {
+contestContentRouter.get('/contests/:id/problems/:contestProblemId/content/:kind/file', authenticate, asyncHandler(async (req, res) => {
   try {
-    const file = await downloadContestContentSnapshot({
+    const file = await downloadContestContentFile({
       contestId: parseContestId(req.params.id),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,

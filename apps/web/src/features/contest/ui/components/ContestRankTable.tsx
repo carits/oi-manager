@@ -1,13 +1,13 @@
 'use client'
 
 import { type CSSProperties, useMemo, useState } from 'react'
-import collisionStyles from './TrainingRankTable.collision.module.css'
-import unifiedStyles from './TrainingRankTable.unified.module.css'
+import collisionStyles from './ContestRankTable.collision.module.css'
+import unifiedStyles from './ContestRankTable.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { Search } from 'lucide-react'
 import { UserIdentityLink } from '@/features/user-profile'
-import styles from '../TrainingWorkspace.module.css'
+import styles from '../ContestWorkspace.module.css'
 
 interface RankProblem {
   id: string
@@ -42,7 +42,7 @@ interface RankingRow {
   ratingChanges?: RankingRatingChange[]
 }
 
-interface TrainingRankingData {
+interface ContestRankingData {
   hidden?: boolean
   format?: RankingFormat
   ranking?: RankingRow[]
@@ -156,8 +156,8 @@ function rankingColumnWidths(format: RankingFormat, problemCount: number) {
   }
 }
 
-interface TrainingRankTableProps {
-  rankingData: TrainingRankingData | null
+interface ContestRankTableProps {
+  rankingData: ContestRankingData | null
   currentUserId?: string
   canViewOtherSubmissions?: boolean
   onOpenSubmissions?: (context: RankingSubmissionContext) => void
@@ -167,11 +167,11 @@ export interface RankingSubmissionContext {
   userId: string
   userName?: string
   username?: string
-  trainingProblemId: string
+  contestProblemId: string
   problemAlias: string
 }
 
-export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubmissions = false, onOpenSubmissions }: TrainingRankTableProps) {
+export function ContestRankTable({ rankingData, currentUserId, canViewOtherSubmissions = false, onOpenSubmissions }: ContestRankTableProps) {
   const [query, setQuery] = useState('')
   const ranking = rankingData?.ranking || []
   const problems: RankProblem[] = rankingData?.problems || []
@@ -227,16 +227,16 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
       <div className={styles.rankToolbar}>
         <div className={styles.rankSearch}>
           <Search size={16} aria-hidden="true" />
-          <label className="sr-only" htmlFor="training-ranking-search">搜索参赛者</label>
+          <label className="sr-only" htmlFor="contest-ranking-search">搜索参赛者</label>
           <Input
-            id="training-ranking-search"
+            id="contest-ranking-search"
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="搜索姓名或用户名"
           />
         </div>
       </div>
-      <div className={styles.scroll} data-testid="training-ranking-scroll">
+      <div className={styles.scroll} data-testid="contest-ranking-scroll">
         <TableRoot
           aria-label="比赛排名"
           className={`${styles.table} ${styles.rankTable}`}
@@ -306,7 +306,7 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
                       const score = problemResult?.score ?? 0
                       const maxScore = problem.points ?? 100
                       const canOpen = Boolean(onOpenSubmissions && problemResult?.submitted && (canViewOtherSubmissions || row.userId === currentUserId))
-                      const open = () => { if (canOpen) onOpenSubmissions?.({ userId: row.userId, userName: row.name, username: row.username, trainingProblemId: problem.id, problemAlias: problemLabel(problem) }) }
+                      const open = () => { if (canOpen) onOpenSubmissions?.({ userId: row.userId, userName: row.name, username: row.username, contestProblemId: problem.id, problemAlias: problemLabel(problem) }) }
                       return (
                         <TableCell
                           aria-label={canOpen ? `${problemLabel(problem)}：${score} 分，满分 ${maxScore} 分，点击查看提交记录` : `${problemLabel(problem)}：${score} 分，满分 ${maxScore} 分`}
@@ -333,7 +333,7 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
                       const problemResult = row.problems[problem.id]
                       const presentation = describeICPCResult(problemLabel(problem), problemResult)
                       const canOpen = Boolean(onOpenSubmissions && problemResult?.submitted && (canViewOtherSubmissions || row.userId === currentUserId))
-                      const open = () => { if (canOpen) onOpenSubmissions?.({ userId: row.userId, userName: row.name, username: row.username, trainingProblemId: problem.id, problemAlias: problemLabel(problem) }) }
+                      const open = () => { if (canOpen) onOpenSubmissions?.({ userId: row.userId, userName: row.name, username: row.username, contestProblemId: problem.id, problemAlias: problemLabel(problem) }) }
                       return (
                         <TableCell
                           aria-label={canOpen ? `${presentation.description}，点击查看提交记录` : presentation.description}

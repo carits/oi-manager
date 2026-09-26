@@ -1,7 +1,7 @@
 'use client'
 
-import { TrainingDetailPage } from '@/features/contest/TrainingDetailPage'
+import { ContestDetailPage } from '@/features/contest/ContestDetailPage'
 
 export default function PersonalContestDetailPage() {
-  return <TrainingDetailPage basePath="/personal" />
+  return <ContestDetailPage basePath="/personal" />
 }

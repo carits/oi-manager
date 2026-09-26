@@ -1,5 +1,5 @@
-import { TrainingDetailPage } from '@/features/contest/TrainingDetailPage'
+import { ContestDetailPage } from '@/features/contest/ContestDetailPage'
 
 export default function PlatformAdminContestDetailPage() {
-  return <TrainingDetailPage basePath="/platform-admin" />
+  return <ContestDetailPage basePath="/platform-admin" />
 }

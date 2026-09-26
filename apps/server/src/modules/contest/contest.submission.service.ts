@@ -1,12 +1,12 @@
 import { prisma } from '../../prisma'
 import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
 import { lockRatingParticipantTx } from '../rating/application/contest-rating.service'
-import { findCanonicalContestSubmissionIdentity } from '../contest/contest-query.facade'
 
 export interface QueuedContestSubmissionInput {
   userId: string
   contest: {
     id: number
+    canonicalContestId: string
     scope: string
     type: string
     format: string
@@ -35,11 +35,9 @@ export async function createQueuedContestSubmission(input: QueuedContestSubmissi
   // visible in the personal account history while the Contest itself retains
   // the explicit `platform` ownership scope.
   const workspaceScope = input.contest.scope === 'platform' ? 'personal' : input.contest.scope
-  const canonicalContestIdentity = input.contest.type === 'contest'
-    ? await findCanonicalContestSubmissionIdentity(input.contest.id, input.contestProblem.id)
-    : null
-  if (input.contest.type === 'contest' && !canonicalContestIdentity) {
-    throw new Error('Contest submission cannot be queued before its canonical identity is available')
+  const canonicalContestIdentity = {
+    canonicalContestId: input.contest.canonicalContestId,
+    canonicalContestProblemId: input.contestProblem.id,
   }
   const submission = await createQueuedSubmissionWithRun({
       userId: input.userId,
@@ -54,21 +52,19 @@ export async function createQueuedContestSubmission(input: QueuedContestSubmissi
       codeLength: Buffer.byteLength(input.code, 'utf8'),
             submitMethod: input.submitMethod,
       problemInternalId: input.contestProblem.Problem.id,
-      submitScope: input.contest.type === 'contest' ? 'contest' : 'contest',
+      submitScope: 'contest',
       testSetRevisionId: input.contestProblem.testSetRevisionId || input.contestProblem.Problem.latestTestSetRevisionId || null,
       judgeConfigHash: input.contestProblem.TestSetRevision?.judgeConfigHash || input.contestProblem.Problem.LatestTestSetRevision?.judgeConfigHash || null,
       inputFilename: input.inputFilename || null,
       outputFilename: input.outputFilename || null,
       ioAdapterVersion: input.ioAdapterVersion ?? 1,
-      ...(canonicalContestIdentity || {}),
-      isGlobalVisible: input.contest.type === 'contest' ? false : true,
+      ...canonicalContestIdentity,
+      isGlobalVisible: false,
       ...(input.createdAt ? { createdAt: input.createdAt, updatedAt: input.createdAt } : {}),
       ...(input.sourceId ? { sourceId: input.sourceId, submitSource: 'demo_scenario' } : {}),
   }, {
     requestedBy: input.userId,
-    afterSubmissionCreated: input.contest.type === 'contest'
-      ? (tx, created) => lockRatingParticipantTx(tx, input.contest, input.userId, created.createdAt)
-      : undefined,
+    afterSubmissionCreated: (tx, created) => lockRatingParticipantTx(tx, input.contest, input.userId, created.createdAt),
   })
   if (input.contestProblem.Problem.platform === 'carits') {
     return prisma.submission.update({ where: { id: submission.id }, data: { ojRemoteId: submission.id.toString() } })

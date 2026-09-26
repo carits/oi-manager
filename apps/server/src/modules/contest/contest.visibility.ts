@@ -5,7 +5,7 @@
  * 核心原则：真实 result 和展示 result 分开，数据库保留真实值，API 返回时脱敏
  */
 
-import { findActivityForAccess } from '../contest/contest-query.facade'
+import { findContestForAccess } from '../contest/contest-query.facade'
 import { canManageContest } from './contest.helpers'
 
 /** 训练运行时状态（不依赖数据库 status） */
@@ -105,7 +105,7 @@ export function getContestRuntimeStatus(contest: ContestForVisibility): ContestR
  * 判断用户是否为训练管理员
  */
 export async function isContestAdmin(userId: string, contestId: number): Promise<boolean> {
-  const contest = (await findActivityForAccess(contestId))?.activity || null
+  const contest = (await findContestForAccess(contestId))?.contest || null
   if (!contest) return false
   return canManageContest(userId, contest)
 }

@@ -1,17 +1,17 @@
 import { useResource } from '@/hooks/useResource'
 import type { ComponentProps } from 'react'
-import type { TrainingRankTable } from '../ui/components/TrainingRankTable'
+import type { ContestRankTable } from '../ui/components/ContestRankTable'
 
-type TrainingRankingData = ComponentProps<typeof TrainingRankTable>['rankingData']
+type ContestRankingData = ComponentProps<typeof ContestRankTable>['rankingData']
 
-export function useTrainingRank(
-  trainingId: string,
+export function useContestRank(
+  contestId: string,
   activeTab: string,
   sessionKey: string | null,
 ) {
-  const resource = useResource<TrainingRankingData>(
+  const resource = useResource<ContestRankingData>(
     activeTab === 'ranking'
-      ? `/api/contests/${trainingId}/ranking`
+      ? `/api/contests/${contestId}/ranking`
       : null,
     {
       dedupingInterval: 5000,

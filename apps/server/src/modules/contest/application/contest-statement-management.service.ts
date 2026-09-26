@@ -2,7 +2,7 @@ import { prisma } from '../../../prisma'
 import { fileService } from '../../../lib/storage'
 import { canAccessContest, canManageContest, requireContestStarted } from '../contest.helpers'
 import { activityOrganizationId, listContentOptions, type ContentOption } from '../../problem/problem.content.service'
-import { findActivityForAccess } from '../../contest/contest-query.facade'
+import { findContestForAccess } from '../../contest/contest-query.facade'
 
 export class ContestStatementManagementError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) { super(message) }
@@ -11,10 +11,10 @@ function fail(statusCode: number, code: string, message: string): never { throw 
 const managedFileId = (url: string | null | undefined) => url?.match(/\/api\/files\/([^/?#]+)\/(?:download|public)/)?.[1] || null
 
 async function loadContest(contestId: number) {
-  const access = await findActivityForAccess(contestId)
+  const access = await findContestForAccess(contestId)
   if (!access) return null
   const contest = await prisma.contest.findUnique({
-    where: { id: access.contest.id },
+    where: { id: access.canonical.id },
     include: {
       Team: { select: { organizationId: true } },
       ContestProblem: {
@@ -23,7 +23,7 @@ async function loadContest(contestId: number) {
       },
     },
   })
-  return contest ? { activity: access.activity, contest } : null
+  return contest ? { view: access.contest, contest } : null
 }
 
 function livePublicOption(option: ContentOption, managerId: string) {
@@ -51,7 +51,7 @@ async function optionsForProblem(problemId: string, managerId: string, organizat
 async function requireManagedContest(contestId: number, userId: string) {
   const loaded = await loadContest(contestId)
   if (!loaded) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
-  if (!await canManageContest(userId, loaded.activity)) fail(403, 'CONTEST_STATEMENT_MANAGE_DENIED', '无权管理比赛题面')
+  if (!await canManageContest(userId, loaded.view)) fail(403, 'CONTEST_STATEMENT_MANAGE_DENIED', '无权管理比赛题面')
   return loaded
 }
 
@@ -69,7 +69,7 @@ function currentKey(problem: any, options: ContentOption[]) {
 
 export async function getContestStatementManagement(contestId: number, userId: string) {
   const loaded = await requireManagedContest(contestId, userId)
-  const organizationId = await activityOrganizationId(loaded.activity)
+  const organizationId = await activityOrganizationId(loaded.view)
   const problems = []
   for (const problem of loaded.contest.ContestProblem) {
     if (!problem.canonicalProblemId || !problem.CanonicalProblem) continue
@@ -77,14 +77,14 @@ export async function getContestStatementManagement(contestId: number, userId: s
     const selectedKey = currentKey(problem, raw)
     problems.push({
       contestProblemId: problem.id, alias: problem.alias, orderIndex: problem.orderIndex,
-      title: problem.title || problem.CanonicalProblem.title, selectionRevision: 0,
+      title: problem.title || problem.CanonicalProblem.title,
       options, selected: selectedKey ? [{ key: selectedKey, isDefault: true, orderIndex: 0 }] : [],
     })
   }
-  return { contest: { id: loaded.activity.id, title: loaded.activity.title, type: 'contest' }, problems }
+  return { contest: { id: loaded.contest.id, title: loaded.contest.title, type: 'contest' }, problems }
 }
 
-type StatementSelection = { contestProblemId?: unknown; visibleOptionKeys?: unknown; defaultOptionKey?: unknown; expectedSelectionRevision?: unknown }
+type StatementSelection = { contestProblemId?: unknown; visibleOptionKeys?: unknown; defaultOptionKey?: unknown }
 
 async function replaceStatementPdf(contestId: string, contestProblemId: string, option: ContentOption, selectedBy: string) {
   if (!option.fileId) fail(400, 'STATEMENT_OPTION_UNAVAILABLE', '所选 PDF 题面不存在')
@@ -115,7 +115,7 @@ export async function saveContestStatementManagement(input: { contestId: number;
   const loaded = await requireManagedContest(input.contestId, input.userId)
   const selections: StatementSelection[] = Array.isArray(input.selections) ? input.selections : []
   if (selections.length !== loaded.contest.ContestProblem.length) fail(400, 'STATEMENT_SELECTION_INCOMPLETE', '必须提交比赛中全部题目的题面选择')
-  const organizationId = await activityOrganizationId(loaded.activity)
+  const organizationId = await activityOrganizationId(loaded.view)
   const changed = []
   for (const problem of loaded.contest.ContestProblem) {
     if (!problem.canonicalProblemId) fail(422, 'CANONICAL_PROBLEM_REQUIRED', '比赛题目缺少规范题目身份')
@@ -141,29 +141,28 @@ export async function saveContestStatementManagement(input: { contestId: number;
         return id ? fileService.softDelete(id).catch(() => undefined) : Promise.resolve()
       }))
     }
-    changed.push({ contestProblemId: problem.id, revision: null })
+    changed.push({ contestProblemId: problem.id })
   }
-  return { changedCount: changed.length, revisions: changed }
+  return { changedCount: changed.length, changed }
 }
 
 async function requireAccessibleProblem(contestId: number, contestProblemId: string, userId: string, hideUnauthorized = false) {
   const loaded = await loadContest(contestId)
   const problem = loaded?.contest.ContestProblem.find(item => item.id === contestProblemId)
   if (!loaded || !problem) fail(404, 'CONTEST_PROBLEM_NOT_FOUND', hideUnauthorized ? '文件不存在' : '比赛题目不存在')
-  if (!await canAccessContest(userId, loaded.activity)) fail(hideUnauthorized ? 404 : 403, 'CONTEST_STATEMENT_FORBIDDEN', hideUnauthorized ? '文件不存在' : '无权限')
-  const notStarted = await requireContestStarted(loaded.activity, userId)
+  if (!await canAccessContest(userId, loaded.view)) fail(hideUnauthorized ? 404 : 403, 'CONTEST_STATEMENT_FORBIDDEN', hideUnauthorized ? '文件不存在' : '无权限')
+  const notStarted = await requireContestStarted(loaded.view, userId)
   if (notStarted) fail(403, 'CONTEST_NOT_STARTED', notStarted)
   return { loaded, problem }
 }
 
-export async function getContestStatementVersions(contestId: number, contestProblemId: string, userId: string) {
+export async function getContestStatements(contestId: number, contestProblemId: string, userId: string) {
   const { loaded, problem } = await requireAccessibleProblem(contestId, contestProblemId, userId)
-  const isManager = await canManageContest(userId, loaded.activity)
+  const isManager = await canManageContest(userId, loaded.view)
   const resource = problem.ContestResource.find(item => item.fileType === 'statement')
   const hasFile = problem.statementType === 'pdf' && Boolean(managedFileId(resource?.fileUrl))
-  if (problem.statementType === 'none') return { selectionRevision: 0, statements: [] }
+  if (problem.statementType === 'none') return { statements: [] }
   return {
-    selectionRevision: 0,
     statements: [{
       id: problem.id, name: problem.title || problem.CanonicalProblem?.title || '比赛题面',
       title: problem.title || problem.CanonicalProblem?.title || null, language: 'zh',
@@ -173,9 +172,8 @@ export async function getContestStatementVersions(contestId: number, contestProb
   }
 }
 
-export async function downloadContestStatementVersion(input: { contestId: number; contestProblemId: string; snapshotId: string; userId: string }) {
+export async function downloadContestStatementFile(input: { contestId: number; contestProblemId: string; userId: string }) {
   const { problem } = await requireAccessibleProblem(input.contestId, input.contestProblemId, input.userId, true)
-  if (input.snapshotId !== problem.id) fail(404, 'STATEMENT_PDF_NOT_FOUND', 'PDF 不存在')
   const resource = problem.ContestResource.find(item => item.fileType === 'statement')
   const fileId = managedFileId(resource?.fileUrl)
   if (!fileId) fail(404, 'STATEMENT_PDF_NOT_FOUND', 'PDF 不存在')

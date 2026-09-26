@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import unifiedStyles from './TrainingContentSelectionModal.unified.module.css'
+import unifiedStyles from './ContestContentSelectionModal.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/Toast'
 
 interface ContentOption {
   key: string
-  sourceType: 'canonical' | 'user' | 'training' | 'none'
+  sourceType: 'canonical' | 'user' | 'contest' | 'none'
   title: string | null
   format: string
   language: string | null
@@ -34,8 +34,8 @@ interface ContentOptionsResponse {
 interface Props {
   isOpen: boolean
   onClose: () => void
-  trainingId: string
-  trainingProblemId: string
+  contestId: string
+  contestProblemId: string
   problemLabel: string
   onSaved: () => Promise<void> | void
 }
@@ -48,11 +48,11 @@ function optionLabel(option: ContentOption) {
   return `${source}｜${title}${meta ? `（${meta}）` : ''}`
 }
 
-export function TrainingContentSelectionModal({
+export function ContestContentSelectionModal({
   isOpen,
   onClose,
-  trainingId,
-  trainingProblemId,
+  contestId,
+  contestProblemId,
   problemLabel,
   onSaved,
 }: Props) {
@@ -64,9 +64,9 @@ export function TrainingContentSelectionModal({
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState<{ title: string; content: string | null; fileUrl: string | null } | null>(null)
 
-  const base = `/api/contests/${trainingId}/problems/${trainingProblemId}`
+  const base = `/api/contests/${contestId}/problems/${contestProblemId}`
   const load = useCallback(async () => {
-    if (!isOpen || !trainingProblemId) return
+    if (!isOpen || !contestProblemId) return
     setLoading(true)
     setPreview(null)
     const response = await apiClient.get<ContentOptionsResponse>(`${base}/content-options`)
@@ -78,7 +78,7 @@ export function TrainingContentSelectionModal({
       toast.error(response.message || '加载内容版本失败')
     }
     setLoading(false)
-  }, [base, isOpen, trainingProblemId, toast])
+  }, [base, isOpen, contestProblemId, toast])
 
   useEffect(() => { void load() }, [load])
 

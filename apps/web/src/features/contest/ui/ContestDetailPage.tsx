@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import unifiedStyles from './TrainingDetailPage.unified.module.css'
+import unifiedStyles from './ContestDetailPage.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -18,15 +18,15 @@ import type { Attachment, TabType } from '../model/types'
 import { typeLabel, formatLabel as formatLabelFn } from '../model/types'
 import { listHref, resourceHref } from '@/features/workspace'
 
-import { useTrainingDetail } from '../api/useTrainingDetail'
-import { useTrainingRank } from '../api/useTrainingRank'
-import { useTrainingSubmissions } from '../api/useTrainingSubmissions'
-import { useTrainingActions } from '../api/useTrainingActions'
+import { useContestDetail } from '../api/useContestDetail'
+import { useContestRank } from '../api/useContestRank'
+import { useContestSubmissions } from '../api/useContestSubmissions'
+import { useContestActions } from '../api/useContestActions'
 
-import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
-import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
-import { TrainingContentSelectionModal } from './components/TrainingContentSelectionModal'
-import { TrainingContentSnapshotEditorModal, type EditableActivitySnapshot } from './components/TrainingContentSnapshotEditorModal'
+import { ContestRejudgeModal } from './components/ContestRejudgeModal'
+import { ContestRankingSubmissionsModal } from './components/ContestRankingSubmissionsModal'
+import { ContestContentSelectionModal } from './components/ContestContentSelectionModal'
+import { ContestContentEditorModal, type EditableContestContent } from './components/ContestContentEditorModal'
 import { TrainingRatingPanel } from '@/features/contest-rating'
 import { Bell, BookOpenCheck, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -36,50 +36,50 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Tabs } from '@/components/ui/Tabs'
 import { SubmissionIoFields, SubmissionCodeEditor, clearSubmissionDraft } from '@/features/submission'
-import styles from './TrainingDetail.module.css'
+import styles from './ContestDetail.module.css'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 
-const TrainingProblemDetail = dynamic(
-  () => import('./components/TrainingProblemDetail').then(module => module.TrainingProblemDetail),
+const ContestProblemDetail = dynamic(
+  () => import('./components/ContestProblemDetail').then(module => module.ContestProblemDetail),
   { loading: () => <SkeletonRegion rows={8} /> },
 )
-const TrainingRankTable = dynamic(
-  () => import('./components/TrainingRankTable').then(module => module.TrainingRankTable),
+const ContestRankTable = dynamic(
+  () => import('./components/ContestRankTable').then(module => module.ContestRankTable),
   { loading: () => <SkeletonRegion rows={6} /> },
 )
-const TrainingSubmissionPanel = dynamic(
-  () => import('./components/TrainingSubmissionPanel').then(module => module.TrainingSubmissionPanel),
+const ContestSubmissionPanel = dynamic(
+  () => import('./components/ContestSubmissionPanel').then(module => module.ContestSubmissionPanel),
   { loading: () => <SkeletonRegion rows={6} /> },
 )
-const TrainingSolutionPanel = dynamic(
-  () => import('./components/TrainingSolutionPanel').then(module => module.TrainingSolutionPanel),
+const ContestSolutionPanel = dynamic(
+  () => import('./components/ContestSolutionPanel').then(module => module.ContestSolutionPanel),
   { loading: () => <SkeletonRegion rows={5} /> },
 )
-const TrainingAttachmentPanel = dynamic(
-  () => import('./components/TrainingAttachmentPanel').then(module => module.TrainingAttachmentPanel),
+const ContestAttachmentPanel = dynamic(
+  () => import('./components/ContestAttachmentPanel').then(module => module.ContestAttachmentPanel),
   { loading: () => <SkeletonRegion rows={4} /> },
 )
 const SubmissionDetailModal = dynamic(
   () => import('@/features/submission').then(module => module.SubmissionDetailModal),
 )
-const TrainingFormModal = dynamic(
-  () => import('./TrainingFormModal').then(module => module.TrainingFormModal),
+const ContestFormModal = dynamic(
+  () => import('./ContestFormModal').then(module => module.ContestFormModal),
 )
 
-interface TrainingDetailPageProps {
+interface ContestDetailPageProps {
   basePath: string
   teamIdOverride?: string
-  trainingIdOverride?: string
+  contestIdOverride?: string
 }
 
-export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverride }: TrainingDetailPageProps) {
+export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride }: ContestDetailPageProps) {
   const params = useParams()
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
   const toast = useToast()
-  const trainingId = trainingIdOverride || (params.tid || params.cid || params.id) as string
+  const contestId = contestIdOverride || (params.tid || params.cid || params.id) as string
   const isTeamScopedPath = pathname.includes('/teams/') || pathname.includes('/team/')
   const teamId = teamIdOverride || (isTeamScopedPath ? (params.id as string) : undefined)
   const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
@@ -109,28 +109,28 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const [makeupLoading, setMakeupLoading] = useState(false)
   const [showRejudgeModal, setShowRejudgeModal] = useState(false)
   const [showContentSelectionModal, setShowContentSelectionModal] = useState(false)
-  const [editingContentSnapshot, setEditingContentSnapshot] = useState<EditableActivitySnapshot | null>(null)
+  const [editingContestContent, setEditingContestContent] = useState<EditableContestContent | null>(null)
   const [rejudgeUsers, setRejudgeUsers] = useState<Array<{ id: string; username: string; displayName?: string }>>([])
   const [rejudgeUsersLoading, setRejudgeUsersLoading] = useState(false)
   const [rankingSubmissionContext, setRankingSubmissionContext] = useState<{
     userId: string
     userName?: string
     username?: string
-    trainingProblemId: string
+    contestProblemId: string
     problemAlias: string
   } | null>(null)
 
   const loadRejudgeUsers = useCallback(async () => {
     setRejudgeUsersLoading(true)
     try {
-      const data = await apiClient.query<{ users: Array<{ id: string; username: string; displayName?: string }> }>('/api/contests/' + trainingId + '/submission-users')
+      const data = await apiClient.query<{ users: Array<{ id: string; username: string; displayName?: string }> }>('/api/contests/' + contestId + '/submission-users')
       setRejudgeUsers(data.users)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '重判用户列表加载失败')
     } finally {
       setRejudgeUsersLoading(false)
     }
-  }, [toast, trainingId])
+  }, [toast, contestId])
 
   useEffect(() => {
     const nextTab = searchParams.get('tab') as TabType | null
@@ -145,7 +145,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   }
 
   const {
-    training, problems, selectedProblemId, setSelectedProblemId,
+    contest, problems, selectedProblemId, setSelectedProblemId,
     problemDetail, problemDetailState, retryProblemDetail,
     loading, error, refresh, refreshError,
     selectedStatementId, setSelectedStatementId,
@@ -157,34 +157,34 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     recordLastSaved,
     recordEditMode, setRecordEditMode,
     saveNoteNow, saveRecordNow,
-  } = useTrainingDetail(trainingId, activeTab, sessionKey)
+  } = useContestDetail(contestId, activeTab, sessionKey)
 
-  const canViewRanking = training ? training.type !== 'homework' || training.isAdmin : !pathname.includes('/homeworks/')
+  const canViewRanking = contest ? contest.type !== 'homework' || contest.isAdmin : !pathname.includes('/homeworks/')
   const rankingTab = canViewRanking ? activeTab : 'problems'
-  const { rankingData, rankingState, refreshRanking } = useTrainingRank(trainingId, rankingTab, sessionKey)
+  const { rankingData, rankingState, refreshRanking } = useContestRank(contestId, rankingTab, sessionKey)
 
-  const sub = useTrainingSubmissions(trainingId, activeTab)
+  const sub = useContestSubmissions(contestId, activeTab)
 
-  const actions = useTrainingActions(
-    trainingId, training, basePath, teamId,
+  const actions = useContestActions(
+    contestId, contest, basePath, teamId,
     selectedProblemId, problems, activeTab, problemDetail?.legacyIoSuggestion,
   )
 
   const solutionsResource = useResource<Record<string, {
-    content: string; visible: boolean; source?: 'training' | 'problem';
+    content: string; visible: boolean; source?: 'contest' | 'problem';
     solutionType?: string; solutionPdfUrl?: string; fileUrl?: string | null;
     format?: string; snapshotId?: string
   }>>(
-    activeTab === 'solutions' ? `/api/contests/${trainingId}/solutions` : null,
+    activeTab === 'solutions' ? `/api/contests/${contestId}/solutions` : null,
     { dedupingInterval: 30000, isEmpty: () => false, sessionKey },
   )
   const attachmentsResource = useResource<Record<string, Attachment[]>>(
-    activeTab === 'attachments' ? `/api/contests/${trainingId}/attachments` : null,
+    activeTab === 'attachments' ? `/api/contests/${contestId}/attachments` : null,
     { dedupingInterval: 30000, isEmpty: () => false, sessionKey },
   )
 
-  const isUpcoming = training?.status === 'upcoming'
-  const hideContent = isUpcoming && !training.isAdmin
+  const isUpcoming = contest?.status === 'upcoming'
+  const hideContent = isUpcoming && !contest.isAdmin
   const tabItems = [
     { value: 'problems' as const, label: '题目' },
     { value: 'submissions' as const, label: '提交记录' },
@@ -194,29 +194,29 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
 
   useEffect(() => {
-    if (training && !canViewRanking && activeTab === 'ranking') {
+    if (contest && !canViewRanking && activeTab === 'ranking') {
       const next = new URLSearchParams(searchParams.toString())
       next.delete('tab')
       setActiveTab('problems')
       router.replace(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false })
     }
-  }, [activeTab, canViewRanking, pathname, router, searchParams, training])
+  }, [activeTab, canViewRanking, pathname, router, searchParams, contest])
 
   // Countdown timer + status boundary detection
   useEffect(() => {
-    if (!training) return
-    const start = new Date(training.startTime)
-    const end = new Date(training.endTime)
+    if (!contest) return
+    const start = new Date(contest.startTime)
+    const end = new Date(contest.endTime)
     let refreshed = false
 
     const update = () => {
       const now = new Date()
       // Detect status boundary: time crossed but frontend state is stale
       if (!refreshed) {
-        if (training.status === 'upcoming' && now >= start) {
+        if (contest.status === 'upcoming' && now >= start) {
           refresh()
           refreshed = true
-        } else if (training.status === 'ongoing' && now > end) {
+        } else if (contest.status === 'ongoing' && now > end) {
           refresh()
           refreshed = true
         }
@@ -240,14 +240,14 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     update()
     const timer = setInterval(update, 1000)
     return () => clearInterval(timer)
-  }, [training, refresh])
+  }, [contest, refresh])
 
-  useUnsavedChanges(`training-detail:${trainingId}`, noteSaving || recordSaving)
+  useUnsavedChanges(`contest-detail:${contestId}`, noteSaving || recordSaving)
 
   // Wire submit code → set detail submission id
   const handleSubmitCode = async () => {
     const submissionId = await actions.handleSubmitCode()
-    if (submissionId && selectedProblem) clearSubmissionDraft(`${user?.userId || 'account'}:training:${trainingId}:${selectedProblem.id}`, actions.submitLanguage)
+    if (submissionId && selectedProblem) clearSubmissionDraft(`${user?.userId || 'account'}:contest:${contestId}:${selectedProblem.id}`, actions.submitLanguage)
     if (submissionId != null) {
       if (activeTab === 'submissions') {
         sub.setSubmissionsPage(1)
@@ -277,11 +277,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
   if (loading) {
     return (
-      <PageFrame width="workbench"><PageHeader title={initialTitle} breadcrumbs={[{ label: typeLabel(pathname.includes('/homeworks/') ? 'homework' : pathname.includes('/contests/') ? 'contest' : 'training'), href: initialListHref }, { label: '详情' }]} /><div className={styles.tabBar}><Tabs label="详情分区" value="problems" onChange={() => undefined} items={initialTabs} /></div><SkeletonRegion rows={8} label="内容正在准备" /></PageFrame>
+      <PageFrame width="workbench"><PageHeader title={initialTitle} breadcrumbs={[{ label: typeLabel(pathname.includes('/homeworks/') ? 'homework' : pathname.includes('/contests/') ? 'contest' : 'contest'), href: initialListHref }, { label: '详情' }]} /><div className={styles.tabBar}><Tabs label="详情分区" value="problems" onChange={() => undefined} items={initialTabs} /></div><SkeletonRegion rows={8} label="内容正在准备" /></PageFrame>
     )
   }
 
-  if (error || !training) {
+  if (error || !contest) {
     return (
       <PageFrame><PageHeader title={initialTitle} breadcrumbs={[{ label: '活动', href: initialListHref }, { label: '详情' }]} /><LoadError message={error || '内容不存在'} onRetry={refresh} onBack={() => router.back()} /></PageFrame>
     )
@@ -289,25 +289,25 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
   // ========== Derived ==========
 
-  const fmtLabel = formatLabelFn(training.format)
-  const tl = typeLabel(training.type)
+  const fmtLabel = formatLabelFn(contest.format)
+  const tl = typeLabel(contest.type)
   const backTab =
-    training.type === 'contest' ? 'mock' :
-    training.type === 'homework' ? 'homeworks' :
-    'training'
+    contest.type === 'contest' ? 'mock' :
+    contest.type === 'homework' ? 'homeworks' :
+    'contest'
   const backUrl = teamId
     ? `${basePath}/${teamId}?tab=${backTab}`
-    : training.type === 'homework'
+    : contest.type === 'homework'
       ? listHref('homework', navigationContext)
-      : training.type === 'contest'
+      : contest.type === 'contest'
         ? listHref('contest', navigationContext)
-        : `${basePath}?tab=training`
+        : `${basePath}?tab=contest`
   const statusColors: Record<string, { bg: string; color: string }> = {
     upcoming: { bg: 'var(--info-light)', color: 'var(--info-text)' },
     ongoing: { bg: 'var(--success-light)', color: 'var(--success-text)' },
     finished: { bg: 'var(--bg-muted)', color: 'var(--text-secondary)' },
   }
-  const sc = statusColors[training.status] || statusColors.upcoming
+  const sc = statusColors[contest.status] || statusColors.upcoming
 
   // ========== Render ==========
 
@@ -315,25 +315,25 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     <div className={styles.page}>
       <div className={styles.headerArea}>
         <div className={styles.hero}>
-          <div className={styles.eyebrow}><span>{tl}工作台</span>{training.sourceTrainingId && <StatusBadge variant="info">补题练习</StatusBadge>}<StatusBadge variant={training.status === 'ongoing' ? 'success' : training.status === 'upcoming' ? 'info' : 'neutral'}>{training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}</StatusBadge></div>
+          <div className={styles.eyebrow}><span>{tl}工作台</span>{contest.sourceContestId && <StatusBadge variant="info">补题练习</StatusBadge>}<StatusBadge variant={contest.status === 'ongoing' ? 'success' : contest.status === 'upcoming' ? 'info' : 'neutral'}>{contest.status === 'upcoming' ? '未开始' : contest.status === 'ongoing' ? '进行中' : '已结束'}</StatusBadge></div>
           <PageHeader
-            title={training.title}
-            breadcrumbs={[{ label: tl, href: backUrl }, { label: training.title }]}
-            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" icon={<BookOpenCheck size={16} />} onClick={() => router.push(`${pathname.replace(/\/$/, '')}/statements`)}>题面选择</Button>}{training.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{training.isAdmin && training.status === 'finished' && training.organizationId && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
+            title={contest.title}
+            breadcrumbs={[{ label: tl, href: backUrl }, { label: contest.title }]}
+            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{contest.isAdmin && <Button variant="outline" icon={<BookOpenCheck size={16} />} onClick={() => router.push(`${pathname.replace(/\/$/, '')}/statements`)}>题面选择</Button>}{contest.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{contest.isAdmin && contest.status === 'finished' && contest.organizationId && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${contest.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{contest.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{contest.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
           />
           <div className={styles.stats}>
             <div className={styles.stat}><span className={styles.statLabel}>赛制</span><span className={styles.statValue}>{fmtLabel}</span></div>
-            <div className={styles.stat}><span className={styles.statLabel}>题目</span><span className={styles.statValue}>{training.problemCount} 题</span></div>
-            <div className={styles.stat}><span className={styles.statLabel}>比赛状态</span><span className={`${styles.statValue} ${training.status === 'ongoing' ? styles.statValueLive : ''}`}>{training.status === 'upcoming' ? '等待开始' : training.status === 'ongoing' ? '正在进行' : '比赛结束'}</span></div>
-            <div className={styles.stat}><span className={styles.statLabel}>时间范围</span><span className={styles.statValue}>{new Date(training.startTime).toLocaleString('zh-CN')} 至 {new Date(training.endTime).toLocaleString('zh-CN')}</span></div>
+            <div className={styles.stat}><span className={styles.statLabel}>题目</span><span className={styles.statValue}>{contest.problemCount} 题</span></div>
+            <div className={styles.stat}><span className={styles.statLabel}>比赛状态</span><span className={`${styles.statValue} ${contest.status === 'ongoing' ? styles.statValueLive : ''}`}>{contest.status === 'upcoming' ? '等待开始' : contest.status === 'ongoing' ? '正在进行' : '比赛结束'}</span></div>
+            <div className={styles.stat}><span className={styles.statLabel}>时间范围</span><span className={styles.statValue}>{new Date(contest.startTime).toLocaleString('zh-CN')} 至 {new Date(contest.endTime).toLocaleString('zh-CN')}</span></div>
           </div>
         </div>
       </div>
 
       {/* Announcement */}
-      {training.description && (
+      {contest.description && (
         <div className={styles.announcement}>
-          <div className={styles.announcementContent}><Bell size={18} aria-hidden="true" /><p className={styles.announcementText} data-expanded={announcementExpanded}><strong>公告：</strong>{training.description}</p></div>
+          <div className={styles.announcementContent}><Bell size={18} aria-hidden="true" /><p className={styles.announcementText} data-expanded={announcementExpanded}><strong>公告：</strong>{contest.description}</p></div>
           <Button variant="text" size="sm" onClick={() => setAnnouncementExpanded(value => !value)}>{announcementExpanded ? '收起' : '展开'}</Button>
         </div>
       )}
@@ -356,7 +356,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             <div className={styles.lockedInner}><LockKeyhole size={36} aria-hidden="true" />
             <h2 className={unifiedStyles.u1}>{tl}尚未开始</h2>
             <p className={unifiedStyles.u2}>
-              开始时间：{new Date(training.startTime).toLocaleString('zh-CN')}
+              开始时间：{new Date(contest.startTime).toLocaleString('zh-CN')}
             </p>
             <p className={unifiedStyles.u3}>
               请等待管理员开启{tl}后再查看内容
@@ -366,7 +366,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         ) : (
         <>
         {activeTab === 'problems' && (
-          <TrainingProblemDetail
+          <ContestProblemDetail
             problems={problems}
             selectedProblemId={selectedProblemId}
             setSelectedProblemId={setSelectedProblemId}
@@ -375,7 +375,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             retryProblemDetail={retryProblemDetail}
             selectedStatementId={selectedStatementId}
             setSelectedStatementId={setSelectedStatementId}
-            training={training}
+            contest={contest}
             noteContent={noteContent}
             setNoteContent={setNoteContent}
             noteSaving={noteSaving}
@@ -390,11 +390,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             recordLastSaved={recordLastSaved}
             recordEditMode={recordEditMode}
             setRecordEditMode={setRecordEditMode}
-            trainingStatus={training.status as 'upcoming' | 'ongoing' | 'finished'}
+            trainingStatus={contest.status as 'upcoming' | 'ongoing' | 'finished'}
             onSubmitClick={() => actions.setShowSubmitModal(true)}
             onManageContentClick={() => setShowContentSelectionModal(true)}
-            onEditStatement={statement => selectedProblem && setEditingContentSnapshot({
-              kind: 'statement', trainingProblemId: selectedProblem.id, snapshotId: statement.id,
+            onEditStatement={statement => selectedProblem && setEditingContestContent({
+              kind: 'statement', contestProblemId: selectedProblem.id,
               label: statement.name || selectedProblem.alias || '当前题面', format: statement.format,
               content: statement.content, fileUrl: statement.fileUrl,
             })}
@@ -405,8 +405,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         )}
 
         {activeTab === 'submissions' && (
-          <TrainingSubmissionPanel
-            training={training}
+          <ContestSubmissionPanel
+            contest={contest}
             problems={problems}
             submissions={sub.submissions}
             submissionsPage={sub.submissionsPage}
@@ -432,12 +432,12 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         {activeTab === 'solutions' && (
           <AsyncRegion state={solutionsResource.state} onRetry={solutionsResource.retry}>
             {(allSolutions) => (
-              <TrainingSolutionPanel
-                training={training}
+              <ContestSolutionPanel
+                contest={contest}
                 problems={problems}
                 allSolutions={allSolutions}
-                onEditSolution={(problem, solution) => solution.snapshotId && setEditingContentSnapshot({
-                  kind: 'solution', trainingProblemId: problem.id, snapshotId: solution.snapshotId,
+                onEditSolution={(problem, solution) => setEditingContestContent({
+                  kind: 'solution', contestProblemId: problem.id,
                   label: problem.alias || problem.problemTitle || '当前题解',
                   format: solution.format || solution.solutionType || 'markdown', content: solution.content,
                   fileUrl: solution.fileUrl || solution.solutionPdfUrl || null,
@@ -450,7 +450,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         {activeTab === 'attachments' && (
           <AsyncRegion state={attachmentsResource.state} onRetry={attachmentsResource.retry}>
             {(allAttachments) => (
-              <TrainingAttachmentPanel
+              <ContestAttachmentPanel
                 problems={problems}
                 allAttachments={allAttachments}
                 onDownload={actions.handleDownloadAttachment}
@@ -461,19 +461,19 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
         {activeTab === 'ranking' && canViewRanking && (
           <div className={styles.rankingStack}>
-            {training.type === 'contest' && (
+            {contest.type === 'contest' && (
               <TrainingRatingPanel
-                trainingId={trainingId}
-                training={training}
+                trainingId={contestId}
+                training={contest}
                 onChanged={async () => { await refresh(); refreshRanking() }}
               />
             )}
             <AsyncRegion state={rankingState} onRetry={refreshRanking}>
               {(data) => (
-                <TrainingRankTable
+                <ContestRankTable
                   rankingData={data}
                   currentUserId={user?.userId}
-                  canViewOtherSubmissions={training.isAdmin}
+                  canViewOtherSubmissions={contest.isAdmin}
                   onOpenSubmissions={setRankingSubmissionContext}
                 />
               )}
@@ -485,49 +485,47 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
       </div>
 
       {selectedProblem && (
-        <TrainingContentSelectionModal
+        <ContestContentSelectionModal
           isOpen={showContentSelectionModal}
           onClose={() => setShowContentSelectionModal(false)}
-          trainingId={trainingId}
-          trainingProblemId={selectedProblem.id}
+          contestId={contestId}
+          contestProblemId={selectedProblem.id}
           problemLabel={`${selectedProblem.alias || ''}${selectedProblem.problemTitle ? ` · ${selectedProblem.problemTitle}` : ''}` || '当前题目'}
           onSaved={async () => { await retryProblemDetail(); refresh() }}
         />
       )}
 
-      <TrainingContentSnapshotEditorModal
-        isOpen={editingContentSnapshot !== null}
-        trainingId={trainingId}
-        snapshot={editingContentSnapshot}
-        onClose={() => setEditingContentSnapshot(null)}
-        onSaved={async (result, kind) => {
-          if (kind === 'statement') {
-            setSelectedStatementId(result.snapshotId)
-            await retryProblemDetail()
-          } else await solutionsResource.retry()
+      <ContestContentEditorModal
+        isOpen={editingContestContent !== null}
+        contestId={contestId}
+        value={editingContestContent}
+        onClose={() => setEditingContestContent(null)}
+        onSaved={async kind => {
+          if (kind === 'statement') await retryProblemDetail()
+          else await solutionsResource.retry()
         }}
       />
 
-      <TrainingRejudgeModal
+      <ContestRejudgeModal
         isOpen={showRejudgeModal}
         onClose={() => setShowRejudgeModal(false)}
-        trainingTitle={training.title}
-        trainingId={trainingId}
+        trainingTitle={contest.title}
+        contestId={contestId}
         problems={problems}
         users={rejudgeUsers}
         usersLoading={rejudgeUsersLoading}
         onLoadUsers={loadRejudgeUsers}
         onSuccess={async () => { await sub.retry(); refreshRanking(); refresh() }}
       />
-      <TrainingRankingSubmissionsModal
+      <ContestRankingSubmissionsModal
         isOpen={rankingSubmissionContext !== null}
         onClose={() => setRankingSubmissionContext(null)}
-        trainingId={trainingId}
-        training={training}
+        contestId={contestId}
+        contest={contest}
         userId={rankingSubmissionContext?.userId || ''}
         userName={rankingSubmissionContext?.userName}
         username={rankingSubmissionContext?.username}
-        trainingProblemId={rankingSubmissionContext?.trainingProblemId || ''}
+        contestProblemId={rankingSubmissionContext?.contestProblemId || ''}
         problemAlias={rankingSubmissionContext?.problemAlias || ''}
         onViewSubmission={id => sub.setDetailSubmissionId(id)}
       />
@@ -537,19 +535,19 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         onClose={() => sub.setDetailSubmissionId(null)}
         submissionId={sub.detailSubmissionId}
         viewRole={basePath.startsWith('/personal') ? 'student' : basePath.startsWith('/platform-admin') || basePath.startsWith('/admin') ? 'admin' : 'teacher'}
-        trainingId={parseInt(trainingId)}
-        trainingFormat={training.format}
+        trainingId={parseInt(contestId)}
+        trainingFormat={contest.format}
         submissionPathPrefix={pathname.match(/^\/(?:org\/[^/]+|personal|platform-admin|admin)/)?.[0] || (basePath.startsWith('/personal') ? '/personal' : basePath.startsWith('/platform-admin') ? '/platform-admin' : basePath.startsWith('/admin') ? '/admin' : undefined)}
       />
 
       {/* Submit Code Modal */}
-      {actions.showSubmitModal && training.status === 'ongoing' && (
+      {actions.showSubmitModal && contest.status === 'ongoing' && (
         <DetailDialog
           isOpen={true}
           onClose={() => actions.setShowSubmitModal(false)}
           title={(() => {
-            const trainingFinished = (training.status as string) === 'finished' || new Date() > new Date(training.endTime)
-            const hideProblemId = !training.problemIdVisible && !trainingFinished && !training.isAdmin
+            const trainingFinished = (contest.status as string) === 'finished' || new Date() > new Date(contest.endTime)
+            const hideProblemId = !contest.problemIdVisible && !trainingFinished && !contest.isAdmin
             const platformPrefix = selectedProblem?.platform ? (OJ_PLATFORM_LABEL_MAP[selectedProblem.platform] || selectedProblem.platform) + ' ' : ''
             const problemIdPart = hideProblemId ? '' : (selectedProblem?.platformProblemId || '')
             return `${platformPrefix}${problemIdPart} - ${selectedProblem?.alias || selectedProblem?.problemTitle || ''}`
@@ -572,7 +570,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             </Select>
           </div>
 
-          <SubmissionCodeEditor value={actions.submitCode} onChange={actions.setSubmitCode} language={actions.submitLanguage} draftKey={`${user?.userId || 'account'}:training:${trainingId}:${selectedProblem?.id || 'none'}`} minHeight={360} />
+          <SubmissionCodeEditor value={actions.submitCode} onChange={actions.setSubmitCode} language={actions.submitLanguage} draftKey={`${user?.userId || 'account'}:contest:${contestId}:${selectedProblem?.id || 'none'}`} minHeight={360} />
           <SubmissionIoFields value={actions.submissionIo} onChange={actions.setSubmissionIo} legacySuggested={Boolean(problemDetail?.legacyIoSuggestion)} />
 
           {/* Submit button */}
@@ -590,26 +588,26 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         </DetailDialog>
       )}
 
-      {/* Edit Training Modal */}
-      <TrainingFormModal
+      {/* Edit Contest Modal */}
+      <ContestFormModal
         isOpen={actions.showEditModal}
         onClose={() => actions.setShowEditModal(false)}
         teamId={teamId || undefined}
-        trainingId={trainingId}
-        mode={training.type === 'contest' ? 'contest' : training.type === 'homework' ? 'homework' : 'training'}
+        contestId={contestId}
+        mode={contest.type === 'contest' ? 'contest' : contest.type === 'homework' ? 'homework' : 'contest'}
         onSaved={() => {
           actions.setShowEditModal(false)
           refresh()
         }}
       />
 
-      {/* Delete Training Confirm */}
+      {/* Delete Contest Confirm */}
       <ConfirmModal
         isOpen={actions.showDeleteConfirm}
         onClose={() => actions.setShowDeleteConfirm(false)}
         onConfirm={actions.handleDelete}
         title={`删除${tl}`}
-        message={`确定要删除${tl}「${training.title}」吗？${tl}题目和题解将被删除，但已提交的评测记录会保留。`}
+        message={`确定要删除${tl}「${contest.title}」吗？${tl}题目和题解将被删除，但已提交的评测记录会保留。`}
         confirmText="确认删除"
         danger
         loading={actions.deleting}
@@ -660,7 +658,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
               onClick={async () => {
                 setMakeupLoading(true)
                 try {
-                  const res = await apiClient.post(`/api/contests/${trainingId}/create-makeup-homework`, {
+                  const res = await apiClient.post(`/api/contests/${contestId}/create-makeup-homework`, {
                     title: makeupTitle,
                     startTime: makeupStartTime ? new Date(makeupStartTime).toISOString() : undefined,
                     endTime: new Date(makeupEndTime).toISOString(),

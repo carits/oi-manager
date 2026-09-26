@@ -10,7 +10,7 @@ describe('contest and assignment productization regressions', () => {
   })
 
   it('uses a five-step contest wizard with number-only problem selection', () => {
-    const source = read('../features/contest/ui/TrainingFormModal.tsx')
+    const source = read('../features/contest/ui/ContestFormModal.tsx')
     expect(source).toContain("['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']")
     expect(source).toContain('比赛赛制')
     expect(source).toContain('Rating 范围')
@@ -23,7 +23,7 @@ describe('contest and assignment productization regressions', () => {
   })
 
   it('presents one problem workspace and keeps materials out of primary tabs', () => {
-    const source = read('../features/contest/ui/TrainingDetailPage.tsx')
+    const source = read('../features/contest/ui/ContestDetailPage.tsx')
     expect(source).toContain("{ value: 'problems' as const, label: '题目' }")
     expect(source).toContain("{ value: 'submissions' as const, label: '提交记录' }")
     expect(source).not.toContain("{ value: 'problemList' as const, label: '题目列表' }")

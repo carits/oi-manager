@@ -3,14 +3,14 @@ export interface PlatformLanguage {
   name: string
 }
 
-export interface TrainingInfo {
+export interface ContestInfo {
   id: string
   teamId: string | null
   organizationId?: string | null
   scope?: string
   title: string
   description: string | null
-  type: 'training' | 'contest' | 'homework'
+  type: 'contest' | 'contest' | 'homework'
   format: 'oi' | 'ioi' | 'icpc'
   startTime: string
   endTime: string
@@ -22,7 +22,7 @@ export interface TrainingInfo {
   includeAdminInRanking: boolean
   problemCount: number
   isAdmin: boolean
-  sourceTrainingId?: number | null
+  sourceContestId?: number | null
   finalizationStatus?: 'LIVE' | 'JUDGING' | 'FINALIZING' | 'FINALIZED' | 'HELD' | 'FAILED'
   finalizedStandingId?: string | null
   ratingConfig?: {
@@ -33,7 +33,7 @@ export interface TrainingInfo {
   } | null
 }
 
-export interface TrainingProblem {
+export interface ContestProblem {
   id: string
   problemSourceHidden?: boolean
   /** @deprecated compatibility with older API payloads */
@@ -93,7 +93,7 @@ export interface SubmissionRow {
   problemIdentityHidden?: boolean
   problemAlias?: string
   problemOrderIndex?: number
-  trainingProblemId?: string
+  contestProblemId?: string
   oj?: string
   language: string
   result: string | null

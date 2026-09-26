@@ -1,7 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
-import logger from '../../lib/logger'
-import { contestInclude, contestAsView } from './contest-view'
+import { contestInclude, toContestView } from './contest-view'
 
 async function findContestByPublicId(publicId: number) {
   return prisma.contest.findUnique({
@@ -13,7 +12,7 @@ async function findContestByPublicId(publicId: number) {
 export async function findContestForRating(publicId: number) {
   const contest = await findContestByPublicId(publicId)
   if (!contest) return null
-  return { contest, activity: contestAsView(contest), source: 'contest' as const }
+  return { canonical: contest, contest: toContestView(contest), source: 'contest' as const }
 }
 
 export async function listPlatformContests() {
@@ -21,7 +20,7 @@ export async function listPlatformContests() {
     where: { scope: 'platform', teamId: null, organizationId: null },
     include: contestInclude,
   })
-  return contests.map(contestAsView)
+  return contests.map(toContestView)
 }
 
 export async function listContestsForMaintenance(input: {
@@ -41,7 +40,7 @@ export async function listContestsForMaintenance(input: {
     include: contestInclude,
     orderBy: { publicId: 'asc' },
   })
-  return contests.map(contestAsView)
+  return contests.map(toContestView)
 }
 
 export async function listTeamContests(teamId: string, scope: string) {
@@ -50,7 +49,7 @@ export async function listTeamContests(teamId: string, scope: string) {
     include: contestInclude,
     orderBy: { startAt: 'desc' },
   })
-  return contests.map(contestAsView)
+  return contests.map(toContestView)
 }
 
 export async function listFinishedContestPublicIds() {
@@ -78,7 +77,7 @@ export async function findContestForLicense(publicId: number) {
     },
   })
   if (!contest) return null
-  return { contest, activity: contestAsView(contest), source: 'contest' as const }
+  return { canonical: contest, contest: toContestView(contest), source: 'contest' as const }
 }
 
 export async function listContestPublicIdsForLicenseScopes(input: {
@@ -117,18 +116,18 @@ export async function listContestsForDashboard(input: {
     where: { OR: scopes },
     include: contestInclude,
   })
-  return contests.map(contestAsView)
+  return contests.map(toContestView)
 }
 
-export async function findActivityForRanking(publicId: number) {
+export async function findContestForRanking(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  return contest ? { contest, activity: contestAsView(contest), source: 'contest' as const } : null
+  return contest ? { canonical: contest, contest: toContestView(contest), source: 'contest' as const } : null
 }
 
 export async function findContestForBlogReview(publicId: number) {
   const contest = await findContestByPublicId(publicId)
   if (!contest) return null
-  return { contest, activity: contestAsView(contest), source: 'contest' as const }
+  return { canonical: contest, contest: toContestView(contest), source: 'contest' as const }
 }
 
 export async function listDueRatedContests(now = new Date(), limit = 20) {
@@ -149,48 +148,22 @@ export async function listDueRatedContests(now = new Date(), limit = 20) {
   }])
 }
 
-export async function findCanonicalContestSubmissionIdentity(
-  publicId: number,
-  contestProblemId: string,
-) {
-  const contest = await prisma.contest.findUnique({
-    where: { publicId },
-    select: {
-      id: true,
-      ContestProblem: {
-        where: { id: contestProblemId },
-        select: { id: true },
-        take: 1,
-      },
-    },
-  })
-  const problem = contest?.ContestProblem[0]
-  if (!contest || !problem) {
-    logger.error('contest_submission_identity_missing', new Error('Contest submission identity is not mapped'), {
-      action: 'contest_query',
-      metadata: { publicId, contestProblemId },
-    })
-    return null
-  }
-  return { canonicalContestId: contest.id, canonicalContestProblemId: problem.id }
+export async function findContestForSubmission(publicId: number) {
+  const contest = await findContestByPublicId(publicId)
+  return contest ? { canonical: contest, contest: toContestView(contest), source: 'contest' as const } : null
 }
 
-export async function findActivityForSubmission(publicId: number) {
+export async function findContestForAccess(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  return contest ? { contest, activity: contestAsView(contest), source: 'contest' as const } : null
+  return contest ? { canonical: contest, contest: toContestView(contest), source: 'contest' as const } : null
 }
 
-export async function findActivityForAccess(publicId: number) {
+export async function findContestForDetail(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  return contest ? { contest, activity: contestAsView(contest), source: 'contest' as const } : null
+  return contest ? toContestView(contest) : null
 }
 
-export async function findActivityForDetail(publicId: number) {
+export async function findContestForOverview(publicId: number) {
   const contest = await findContestByPublicId(publicId)
-  return contest ? contestAsView(contest) : null
-}
-
-export async function findActivityForOverview(publicId: number) {
-  const contest = await findContestByPublicId(publicId)
-  return contest ? { contest, activity: contestAsView(contest), source: 'contest' as const } : null
+  return contest ? { canonical: contest, contest: toContestView(contest), source: 'contest' as const } : null
 }

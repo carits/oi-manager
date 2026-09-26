@@ -1,5 +1,5 @@
 import { prisma } from '../../../prisma'
-import { getComputedTrainingStatus, sortTrainingListForDisplay } from '../../contest/contest.helpers'
+import { getComputedContestStatus, sortContestListForDisplay } from '../../contest/contest.helpers'
 import {
   CURRENT_JUDGE_RUN_SELECT,
   projectSubmissionJudgeResult,
@@ -20,7 +20,7 @@ function formatTraining(training: any, source: 'team' | 'school' | 'platform') {
     description: training.description,
     startTime: training.startTime,
     endTime: training.endTime,
-    status: getComputedTrainingStatus(training),
+    status: getComputedContestStatus(training),
     format: training.format,
     teamId: training.teamId,
     organizationId: training.organizationId,
@@ -79,7 +79,7 @@ export async function listMyContests(actor: DashboardActor) {
     resourceScope: actor.resourceScope,
     organizationId: actor.organizationId,
   })
-  return sortTrainingListForDisplay(contests.map(training => formatTraining(
+  return sortContestListForDisplay(contests.map(training => formatTraining(
     training,
     training.teamId ? 'team' : training.scope === 'platform' ? 'platform' : 'school',
   )))

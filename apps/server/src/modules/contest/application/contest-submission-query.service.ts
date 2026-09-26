@@ -6,7 +6,7 @@ import {
   currentJudgeResultWhere,
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
-import { contestProblemAsView } from '../../contest/contest-view'
+import { toContestProblemView } from '../../contest/contest-view'
 
 export const localJudgeSubmissionWhere = () => ({
   problemInternalId: { not: null },
@@ -31,7 +31,7 @@ export async function loadContestProblemForSubmission(contestId: number, contest
       CanonicalProblem: { include: { LatestTestSetRevision: true } },
     },
   })
-  return row ? contestProblemAsView(row, contest.publicId) : null
+  return row ? toContestProblemView(row, contest.publicId) : null
 }
 
 export function countProblemTestdata(problemId: string) {
@@ -88,7 +88,6 @@ export async function queryContestSubmissions(params: {
     problemId: row.canonicalProblemId,
     alias: row.alias,
     orderIndex: row.orderIndex,
-    judgeConfigSnapshot: null,
     Problem: row.CanonicalProblem,
   })))
 
@@ -136,7 +135,7 @@ export async function loadContestSubmissionDetail(contestId: number, submissionI
       ],
     },
     include: { CanonicalProblem: { select: { platform: true, judgeConfig: true } } },
-  }).then(row => row ? { ...row, Problem: row.CanonicalProblem, judgeConfigSnapshot: null } : null)
+  }).then(row => row ? { ...row, Problem: row.CanonicalProblem } : null)
   const [contestProblem, submitter] = await Promise.all([
     contestProblemPromise,
     prisma.user.findUnique({ where: { id: projectedSubmission.userId }, select: { username: true } }),

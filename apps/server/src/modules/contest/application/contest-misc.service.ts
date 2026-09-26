@@ -14,8 +14,8 @@ import {
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
 import {
-  findActivityForAccess,
-  findActivityForOverview,
+  findContestForAccess,
+  findContestForOverview,
 } from '../../contest/contest-query.facade'
 
 export class ContestMiscError extends Error {
@@ -64,7 +64,7 @@ function rewriteContestFileUrls(contestId: number, contestProblemId: string, con
 }
 
 async function requireAccessibleContest(id: number, userId: string, hidden = false) {
-  const contest = (await findActivityForAccess(id))?.activity || null
+  const contest = (await findContestForAccess(id))?.contest || null
   if (!contest || !await canAccessContest(userId, contest)) {
     fail(hidden ? 404 : contest ? 403 : 404, hidden ? 'RESOURCE_NOT_FOUND' : contest ? 'TRAINING_ACCESS_DENIED' : 'TRAINING_NOT_FOUND', hidden ? '资源不存在' : contest ? '无权限' : '训练不存在')
   }
@@ -72,7 +72,7 @@ async function requireAccessibleContest(id: number, userId: string, hidden = fal
 }
 
 export async function getContestOverview(id: number, userId: string) {
-  const contest = (await findActivityForOverview(id))?.activity || null
+  const contest = (await findContestForOverview(id))?.contest || null
   if (!contest) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
   if (!await canAccessContest(userId, contest)) fail(403, 'TRAINING_ACCESS_DENIED', '无权查看该训练')
 

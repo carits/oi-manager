@@ -8,7 +8,6 @@ import { getCoachDashboard, getTrainingReport, listTrainingSessionTemplates, res
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestTeam, createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
-import { applyTrainingEngineMigration, inspectTrainingEngineMigration } from '../src/modules/maintenance/application/training-engine-migration.service'
 
 const app = createTestApp()
 const directories: string[] = []
@@ -641,148 +640,6 @@ describe('Stage-driven Training Engine', () => {
     expect(persisted[1]).toMatchObject({ id: futureStage.id, name: '允许修改的未来阶段新名称', lifecycle: 'PENDING' })
     expect(persisted[2]).toMatchObject({ name: '运行中新增的未来复盘阶段', lifecycle: 'PENDING' })
     expect((await prisma.trainingSession.findUniqueOrThrow({ where: { id: session.id }, select: { currentStageId: true } })).currentStageId).toBe(currentStage.id)
-  })
-
-  it('migrates scheduled, running and ended legacy trainings into valid Stage-driven sessions', async () => {
-    const createLegacy = async (
-      label: string,
-      status: 'upcoming' | 'ongoing' | 'finished',
-      startTime: Date,
-      endTime: Date,
-    ) => {
-      const legacy = await prisma.training.create({
-        data: {
-          teamId: team.id,
-          organizationId: null,
-          title: `旧训练-${label}`,
-          description: `旧训练迁移测试-${label}`,
-          format: 'ioi',
-          type: 'training',
-          scope: 'personal',
-          startTime,
-          endTime,
-          status,
-          createdBy: coach.user.id,
-          updatedAt: new Date(),
-        },
-      })
-      const trainingProblemId = crypto.randomUUID()
-      await prisma.trainingProblem.create({
-        data: {
-          id: trainingProblemId,
-          trainingId: legacy.id,
-          problemId: problem.id,
-          alias: 'A',
-          orderIndex: 0,
-          points: 100,
-        },
-      })
-      await prisma.trainingParticipant.create({
-        data: {
-          id: crypto.randomUUID(),
-          trainingId: legacy.id,
-          userId: student.user.id,
-          userType: 'student',
-          joinedAt: startTime,
-        },
-      })
-      await prisma.trainingUserProblemStatus.create({
-        data: {
-          id: crypto.randomUUID(),
-          trainingId: legacy.id,
-          userId: student.user.id,
-          trainingProblemId,
-          bestScore: status === 'upcoming' ? null : 100,
-          bestResult: status === 'upcoming' ? null : 'Accepted',
-          attemptCount: status === 'upcoming' ? 0 : 1,
-          acAt: status === 'upcoming' ? null : new Date(Math.max(startTime.getTime(), Date.now() - 60_000)),
-          updatedAt: new Date(),
-        },
-      })
-      return legacy
-    }
-
-    const now = Date.now()
-    const scheduledLegacy = await createLegacy(
-      '未开始',
-      'upcoming',
-      new Date(now + 3_600_000),
-      new Date(now + 7_200_000),
-    )
-    const runningLegacy = await createLegacy(
-      '进行中',
-      'ongoing',
-      new Date(now - 1_800_000),
-      new Date(now + 1_800_000),
-    )
-    const endedLegacy = await createLegacy(
-      '已结束',
-      'finished',
-      new Date(now - 7_200_000),
-      new Date(now - 3_600_000),
-    )
-
-    const legacyIds = [scheduledLegacy.id, runningLegacy.id, endedLegacy.id]
-    const inspection = await inspectTrainingEngineMigration()
-    expect(inspection.issues.filter(item => legacyIds.includes(item.trainingId))).toEqual([])
-    expect(inspection.migratable).toBeGreaterThanOrEqual(3)
-
-    const applied = await applyTrainingEngineMigration(inspection.reportHash)
-    expect(applied.blocked.filter(item => legacyIds.includes(item.trainingId))).toEqual([])
-    expect(applied.migrated).toBeGreaterThanOrEqual(3)
-
-    const migrated = await prisma.trainingSession.findMany({
-      where: { legacyTrainingId: { in: legacyIds } },
-      include: {
-        Stages: {
-          include: {
-            RuntimeSnapshot: true,
-            Problems: true,
-          },
-        },
-        Participants: true,
-      },
-      orderBy: { legacyTrainingId: 'asc' },
-    })
-    expect(migrated).toHaveLength(3)
-
-    const scheduled = migrated.find(item => item.legacyTrainingId === scheduledLegacy.id)!
-    const running = migrated.find(item => item.legacyTrainingId === runningLegacy.id)!
-    const ended = migrated.find(item => item.legacyTrainingId === endedLegacy.id)!
-
-    expect(scheduled).toMatchObject({ status: 'SCHEDULED', currentStageId: null })
-    expect(scheduled.Stages[0]).toMatchObject({ lifecycle: 'PENDING' })
-    expect(scheduled.Stages[0].RuntimeSnapshot).toBeNull()
-    expect(scheduled.Participants[0].currentStageId).toBeNull()
-
-    expect(running.status).toBe('RUNNING')
-    expect(running.currentStageId).toBe(running.Stages[0].id)
-    expect(running.Stages[0]).toMatchObject({ lifecycle: 'RUNNING' })
-    expect(running.Stages[0].RuntimeSnapshot).not.toBeNull()
-    expect(running.Participants[0].currentStageId).toBe(running.Stages[0].id)
-
-    expect(ended).toMatchObject({ status: 'ENDED', currentStageId: null })
-    expect(ended.Stages[0]).toMatchObject({ lifecycle: 'ENDED', endReason: 'SYSTEM_ENDED' })
-    expect(ended.Stages[0].RuntimeSnapshot).not.toBeNull()
-    expect(ended.Participants[0].currentStageId).toBeNull()
-    expect(ended.Stages[0].Problems[0].titleSnapshot).toBe('训练引擎题目')
-
-    const studentToken = generateTokenFromUser(student.user)
-    const workspace = await createAuthenticatedRequest(app, studentToken)
-      .get(`/api/training-sessions/${ended.id}`)
-    expect(workspace.status).toBe(200)
-    expect(workspace.body.data.session).toMatchObject({ id: ended.id, status: 'ENDED', currentStageId: null })
-
-    const report = await createAuthenticatedRequest(app, studentToken)
-      .get(`/api/training-sessions/${ended.id}/report`)
-    expect(report.status).toBe(200)
-    expect(report.body.data.sessionSummary).toMatchObject({ id: ended.id, status: 'ENDED', participantCount: 1 })
-    expect(report.body.data.participants).toHaveLength(1)
-    expect(report.body.data.participants[0].problems[0]).toMatchObject({
-      title: '训练引擎题目',
-      status: 'COMPLETED',
-      requirementState: 'SATISFIED',
-    })
   })
 
   it('limits participant reports to the requesting student while managers see the full roster', async () => {
@@ -1649,68 +1506,33 @@ describe('Stage-driven Training Engine', () => {
     expect(rejectedAfterEnd.status).toBe(409)
   })
 
-  it('keeps StageGroup assignments isolated across different Stages', async () => {
+  it('keeps V2 group assignments stable across different Stages', async () => {
     const secondProblem = await configuredProblem(coach.user.id)
     const token = generateTokenFromUser(coach.user)
     const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({
       title: '跨 Stage 分组隔离', teamId: team.id, participantUserIds: [student.user.id],
       settings: { participantTarget: 'custom_students' },
+      grouping: { groups: [
+        { clientKey: 'a', name: 'A组', participantIds: [student.user.id] },
+        { clientKey: 'b', name: 'B组', participantIds: [] },
+      ] },
       stages: [
-        {
-          name: 'Stage 1', kind: 'TRAINING', audienceMode: 'GROUPED', endPolicy: 'MANUAL',
-          accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [],
-          groups: [
-            { clientKey: 's1-a', name: 'A组', participantIds: [student.user.id], problems: [{ problemId: problem.id }] },
-            { clientKey: 's1-b', name: 'B组', participantIds: [], problems: [{ problemId: secondProblem.id }] },
-          ],
-        },
-        {
-          name: 'Stage 2', kind: 'TRAINING', audienceMode: 'GROUPED', endPolicy: 'MANUAL',
-          accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [],
-          groups: [
-            { clientKey: 's2-a', name: 'A组', participantIds: [], problems: [{ problemId: problem.id }] },
-            { clientKey: 's2-b', name: 'B组', participantIds: [student.user.id], problems: [{ problemId: secondProblem.id }] },
-          ],
-        },
+        { name: 'Stage 1', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }] },
+        { name: 'Stage 2', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [{ problemId: secondProblem.id }] },
       ],
     })
     expect(created.status).toBe(201)
     const session = await prisma.trainingSession.findUniqueOrThrow({
       where: { id: created.body.data.id },
-      include: {
-        Stages: { orderBy: { orderIndex: 'asc' }, include: { Groups: true, Problems: true } },
-        Participants: true,
-      },
+      include: { Stages: { orderBy: { orderIndex: 'asc' }, include: { Groups: true, Problems: true } }, Participants: true },
     })
     const participant = session.Participants[0]
     const [stage1, stage2] = session.Stages
-    const stage1A = stage1.Groups.find(group => group.name === 'A组')!
-    const stage2B = stage2.Groups.find(group => group.name === 'B组')!
+    const stage1Assignment = await prisma.trainingSessionStageParticipantAssignment.findUnique({ where: { stageId_participantId: { stageId: stage1.id, participantId: participant.id } }, select: { groupId: true } })
+    const stage2Assignment = await prisma.trainingSessionStageParticipantAssignment.findUnique({ where: { stageId_participantId: { stageId: stage2.id, participantId: participant.id } }, select: { groupId: true } })
+    expect(stage1Assignment?.groupId).toBeTruthy()
+    expect(stage2Assignment).toEqual(stage1Assignment)
 
-    expect(await prisma.trainingSessionStageParticipantAssignment.findUnique({
-      where: { stageId_participantId: { stageId: stage1.id, participantId: participant.id } },
-      select: { groupId: true },
-    })).toEqual({ groupId: stage1A.id })
-    expect(await prisma.trainingSessionStageParticipantAssignment.findUnique({
-      where: { stageId_participantId: { stageId: stage2.id, participantId: participant.id } },
-      select: { groupId: true },
-    })).toEqual({ groupId: stage2B.id })
-
-    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/publish`).send({ expectedRevision: 0 })).status).toBe(200)
-    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/stage-transitions`).send({ expectedRevision: 1, action: 'start', stageId: stage1.id })).status).toBe(200)
-    let workspace = await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/training-sessions/${session.id}`)
-    expect(workspace.status).toBe(200)
-    expect(workspace.body.data.participant.currentGroupId).toBe(stage1A.id)
-
-    expect((await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${session.id}/stage-transitions`).send({ expectedRevision: 2, action: 'advance', stageId: stage1.id, outcome: 'completed' })).status).toBe(200)
-    workspace = await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/training-sessions/${session.id}`)
-    expect(workspace.status).toBe(200)
-    expect(workspace.body.data.participant.currentGroupId).toBe(stage2B.id)
-
-    expect(await prisma.trainingSessionStageParticipantAssignment.findUnique({
-      where: { stageId_participantId: { stageId: stage1.id, participantId: participant.id } },
-      select: { groupId: true },
-    })).toEqual({ groupId: stage1A.id })
   })
 
   it('keeps historical STUCK and WORKING progress out of the current Stage dashboard', async () => {

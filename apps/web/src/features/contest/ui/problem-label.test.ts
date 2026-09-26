@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import {
-  trainingProblemCode,
-  trainingProblemSectionTitle,
-  trainingProblemTitle,
+  contestProblemCode,
+  contestProblemSectionTitle,
+  contestProblemTitle,
 } from './problem-label'
 
-describe('training problem labels', () => {
+describe('contest problem labels', () => {
   it('keeps a visible activity title', () => {
-    expect(trainingProblemTitle({ orderIndex: 0, problemTitle: 'Median' })).toBe('Median')
+    expect(contestProblemTitle({ orderIndex: 0, problemTitle: 'Median' })).toBe('Median')
   })
 
   it('uses a privacy-safe label when source identity is hidden', () => {
-    expect(trainingProblemTitle({ orderIndex: 0 })).toBe('题目 A')
-    expect(trainingProblemTitle({ orderIndex: 26 })).toBe('题目 AA')
-    expect(trainingProblemSectionTitle({ orderIndex: 1 })).toBe('题目')
+    expect(contestProblemTitle({ orderIndex: 0 })).toBe('题目 A')
+    expect(contestProblemTitle({ orderIndex: 26 })).toBe('题目 AA')
+    expect(contestProblemSectionTitle({ orderIndex: 1 })).toBe('题目')
   })
 
   it('normalizes invalid order indexes', () => {
-    expect(trainingProblemCode(undefined)).toBe('A')
-    expect(trainingProblemCode(-1)).toBe('A')
+    expect(contestProblemCode(undefined)).toBe('A')
+    expect(contestProblemCode(-1)).toBe('A')
   })
 })

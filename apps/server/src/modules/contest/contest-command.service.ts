@@ -6,7 +6,7 @@ import {
   lockContestRatingConfigTx,
   trackForFormat,
 } from '../rating/application/contest-rating.service'
-import { contestAsView, contestProblemAsView } from './contest-view'
+import { toContestView, toContestProblemView } from './contest-view'
 
 export interface CreateContestInput {
   teamId: string | null
@@ -65,10 +65,10 @@ type ContestProblemCreateInput = {
   alias?: string | null
   points?: number | null
   testSetRevisionId?: string | null
-  titleSnapshot?: string | null
-  statementSnapshot?: string | null
-  sourcePlatformSnapshot?: string | null
-  sourceProblemIdSnapshot?: string | null
+  title?: string | null
+  description?: string | null
+  sourcePlatform?: string | null
+  sourceProblemId?: string | null
 }
 
 async function lockContest(tx: Prisma.TransactionClient, publicId: number) {
@@ -135,7 +135,7 @@ export async function createContestTx(
       createdBy: input.createdBy,
     },
   })
-  return contestAsView(await findContest(tx, contest.publicId))
+  return toContestView(await findContest(tx, contest.publicId))
 }
 
 export async function deleteContestTx(
@@ -187,19 +187,19 @@ export async function createContestProblemTx(
       testSetRevisionId: data.testSetRevisionId || problem.latestTestSetRevisionId,
       orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
       alias: data.alias ?? null,
-      title: data.titleSnapshot || problem.title,
-      ojName: data.sourcePlatformSnapshot || problem.platform,
-      problemId: data.sourceProblemIdSnapshot || problem.problemId,
+      title: data.title || problem.title,
+      ojName: data.sourcePlatform || problem.platform,
+      problemId: data.sourceProblemId || problem.problemId,
       difficulty: problem.difficulty,
       points: data.points ?? null,
-      statementType: data.statementSnapshot ? 'snapshot' : 'none',
-      statementMarkdown: data.statementSnapshot || null,
+      statementType: data.description ? 'markdown' : 'none',
+      statementMarkdown: data.description || null,
       solutionVisible: contest.solutionVisible,
       updatedAt: new Date(),
     },
     include: { CanonicalProblem: true, ContestResource: true },
   })
-  return { conflict: null, problem: contestProblemAsView(created, publicId) }
+  return { conflict: null, problem: toContestProblemView(created, publicId) }
 }
 
 export async function reorderContestProblemsTx(
@@ -254,7 +254,7 @@ export async function updateContestProblemTx(
     },
     include: { CanonicalProblem: true, ContestResource: true },
   })
-  return { conflict: null, problem: contestProblemAsView(problem, publicId) }
+  return { conflict: null, problem: toContestProblemView(problem, publicId) }
 }
 
 export async function deleteContestProblemTx(
@@ -280,19 +280,19 @@ export async function updateContestTx(
   const contest = await findContest(tx, publicId)
   if (!contest) {
     reportMissingContest(publicId, 'metadata_update')
-    return { conflict: 'missing' as const, activity: null }
+    return { conflict: 'missing' as const, contest: null }
   }
   const startTime = contest.startAt || contest.contestDate
   const endTime = contest.endAt || contest.contestDate
-  const activity = contestAsView(contest)
+  const contestView = toContestView(contest)
   if (contest.status !== input.expected.status
     || contest.format !== input.expected.format
     || startTime.getTime() !== input.expected.startTime.getTime()
     || endTime.getTime() !== input.expected.endTime.getTime()) {
-    return { conflict: 'stale' as const, activity }
+    return { conflict: 'stale' as const, contest: contestView }
   }
   if (input.patch.format !== undefined && input.patch.format !== contest.format) {
-    if (contest.RatingConfig?.lockedAt) return { conflict: 'rating_locked' as const, activity }
+    if (contest.RatingConfig?.lockedAt) return { conflict: 'rating_locked' as const, contest: contestView }
     if (contest.RatingConfig) {
       const track = trackForFormat(input.patch.format)
       const scoringRules = defaultScoringRules(track)
@@ -327,7 +327,7 @@ export async function updateContestTx(
       updatedAt: new Date(),
     },
   })
-  return { conflict: null, activity: contestAsView(await findContest(tx, publicId)) }
+  return { conflict: null, contest: toContestView(await findContest(tx, publicId)) }
 }
 
 export async function transitionContestLifecycleTx(
@@ -341,9 +341,9 @@ export async function transitionContestLifecycleTx(
     reportMissingContest(publicId, 'lifecycle')
     return null
   }
-  const activity = contestAsView(contest)
+  const contestView = toContestView(contest)
   if (contest.status !== input.expectedStatus) {
-    return { changed: false, visibleSubmissionCount: 0, activity }
+    return { changed: false, visibleSubmissionCount: 0, contest: contestView }
   }
   const update = await tx.contest.updateMany({
     where: { id: contest.id, status: input.expectedStatus },
@@ -356,7 +356,7 @@ export async function transitionContestLifecycleTx(
       updatedAt: new Date(),
     },
   })
-  if (!update.count) return { changed: false, visibleSubmissionCount: 0, activity }
+  if (!update.count) return { changed: false, visibleSubmissionCount: 0, contest: contestView }
   if (input.targetStatus !== 'upcoming') {
     await lockContestRatingConfigTx(
       tx,
@@ -374,7 +374,7 @@ export async function transitionContestLifecycleTx(
   return {
     changed: true,
     visibleSubmissionCount,
-    activity: contestAsView(await findContest(tx, publicId)),
+    contest: toContestView(await findContest(tx, publicId)),
   }
 }
 
@@ -406,16 +406,18 @@ export async function prepareDemoContestsTx(
     })
   }
   const refreshed = []
-  for (const publicId of ids) refreshed.push(contestAsView(await findContest(tx, publicId)))
+  for (const publicId of ids) refreshed.push(toContestView(await findContest(tx, publicId)))
   return refreshed
 }
 
 export async function holdContestFinalizationForRejudgeTx(
   tx: Prisma.TransactionClient,
-  publicId: number,
+  contestId: string,
 ) {
-  await lockContest(tx, publicId)
-  const contest = await tx.contest.findUnique({ where: { publicId } })
+  const identity = await tx.contest.findUnique({ where: { id: contestId }, select: { publicId: true } })
+  if (!identity) return false
+  await lockContest(tx, identity.publicId)
+  const contest = await tx.contest.findUnique({ where: { id: contestId } })
   if (!contest || !contest.finalizedStandingId || contest.finalizationStatus !== 'FINALIZED') return false
   const updated = await tx.contest.updateMany({
     where: {

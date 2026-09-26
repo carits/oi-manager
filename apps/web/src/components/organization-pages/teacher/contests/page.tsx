@@ -5,7 +5,7 @@ import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { useAuth } from '@/features/auth'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { useResource } from '@/hooks/useResource'
-import { TeamTrainingList } from '@/features/contest/TeamTrainingList'
+import { TeamContestList } from '@/features/contest/TeamContestList'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -41,7 +41,7 @@ export default function TeacherContestsPage() {
       <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText='暂无可管理的比赛范围' skeletonRows={5}>
         {() => <>
           <Toolbar><ToolbarGroup><label htmlFor='contest-scope' className={styles.summary}>比赛范围</label><Select id='contest-scope' className={styles.scopeSelect} value={activeScope} onChange={event => setScope(event.target.value)}>{scopeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></ToolbarGroup><span className={styles.summary}>不同范围的数据彼此独立</span></Toolbar>
-          {scopeType === 'organization' && scopeId ? <TeamTrainingList organizationId={scopeId} basePath={pathPrefix} isAdmin mode='contest' /> : scopeType === 'team' && scopeId ? <TeamTrainingList teamId={scopeId} basePath={pathPrefix} isAdmin mode='contest' /> : null}
+          {scopeType === 'organization' && scopeId ? <TeamContestList organizationId={scopeId} basePath={pathPrefix} isAdmin mode='contest' /> : scopeType === 'team' && scopeId ? <TeamContestList teamId={scopeId} basePath={pathPrefix} isAdmin mode='contest' /> : null}
         </>}
       </AsyncRegion>
     </PageFrame>

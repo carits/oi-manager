@@ -14,8 +14,8 @@ import {
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 import {
-  findActivityForAccess,
-  findActivityForDetail,
+  findContestForAccess,
+  findContestForDetail,
   listTeamContests as listCanonicalTeamContests,
   listPlatformContests as listCanonicalPlatformContests,
 } from '../../contest/contest-query.facade'
@@ -179,7 +179,7 @@ export async function synchronizeContestStatus(contest: any, now: Date) {
       expectedStatus: contest.status,
       targetStatus: computedStatus as 'upcoming' | 'ongoing' | 'finished',
     })
-    return { status: result?.activity?.status || computedStatus, visibleCount: result?.visibleSubmissionCount || 0 }
+    return { status: result?.contest?.status || computedStatus, visibleCount: result?.visibleSubmissionCount || 0 }
   })
   if (synchronization.status === 'finished') logger.info('contest_submissions_visible', {
     action: 'contest', metadata: { contestId: contest.id, updatedCount: synchronization.visibleCount },
@@ -188,7 +188,7 @@ export async function synchronizeContestStatus(contest: any, now: Date) {
 }
 
 export async function getContestDetail(id: number, userId: string) {
-  const contest = await findActivityForDetail(id)
+  const contest = await findContestForDetail(id)
   if (!contest) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
   if (!await canAccessContest(userId, contest)) {
     fail(403, 'CONTEST_ACCESS_DENIED', '无权限查看该比赛')
@@ -228,7 +228,7 @@ export async function getContestDetail(id: number, userId: string) {
 }
 
 async function requireManagedContest(id: number, userId: string, deniedMessage: string) {
-  const contest = (await findActivityForAccess(id))?.activity
+  const contest = (await findContestForAccess(id))?.contest
   if (!contest) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
   if (!await canManageContest(userId, contest)) {
     fail(403, 'CONTEST_MANAGE_DENIED', deniedMessage)
@@ -280,7 +280,7 @@ export async function updateContest(id: number, userId: string, input: any) {
     })
     if (result.conflict === 'rating_locked') fail(409, 'RATING_CONFIG_FROZEN', '比赛开始后不能修改赛制或 Rating Track')
     if (result.conflict) fail(409, 'CONTEST_UPDATE_STALE', '比赛配置已被其他管理员修改，请刷新后重试')
-    return result.activity!
+    return result.contest!
   })
   logger.info('contest_updated', { action: 'contests', metadata: { contestId: id } })
   return updated
@@ -304,7 +304,7 @@ export async function updateContestEndTime(id: number, userId: string, endTime: 
       patch: { endTime: end },
     })
     if (result.conflict) fail(409, 'CONTEST_UPDATE_STALE', '比赛配置已被其他管理员修改，请刷新后重试')
-    return result.activity!
+    return result.contest!
   })
 }
 
@@ -325,7 +325,7 @@ export async function startContest(id: number, userId: string) {
       targetStatus: 'ongoing',
       startTime: now,
     })
-    return result?.activity || contest
+    return result?.contest || contest
   })
   logger.info('contest_started_early', { action: 'contests', metadata: { contestId: id, userId } })
   return { contest: started, message: '比赛已开始' }
@@ -346,14 +346,14 @@ export async function finishContest(id: number, userId: string) {
       targetStatus: 'finished',
       endTime: now,
     })
-    return result?.activity || contest
+    return result?.contest || contest
   })
   logger.info('contest_finished_early', { action: 'contests', metadata: { contestId: id, userId } })
   return { contest: finished, message: '比赛已结束' }
 }
 
 export async function deleteContest(id: number, userId: string) {
-  const contest = (await findActivityForAccess(id))?.activity
+  const contest = (await findContestForAccess(id))?.contest
   if (!contest) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
   const isAdmin = await canManageContest(userId, contest)
   if (contest.createdBy !== userId && !isAdmin) {
@@ -382,7 +382,7 @@ export async function createMakeupHomework(id: number, userId: string, input: an
     },
   })
   if (!contest) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
-  const activity = (await findActivityForAccess(id))?.activity
+  const activity = (await findContestForAccess(id))?.contest
   if (!activity || !await canManageContest(userId, activity)) fail(403, 'CONTEST_MANAGE_DENIED', '只有管理员可以创建补题作业')
   const now = new Date()
   const endAt = contest.endAt || contest.contestDate

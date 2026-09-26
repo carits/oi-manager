@@ -237,7 +237,7 @@ type ResolvedReference = {
   problemId?: string
   problemRevisionId?: string
   solutionVersionId?: string
-  contestId?: number
+  contestId?: string
   standingSnapshotId?: string
   ratingChangeId?: string
   submissionSnapshotId?: string
@@ -317,11 +317,11 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
       referenceType: input.type,
       referenceId: contest.id,
       referenceVersionId: snapshot.id,
-      contestId: String(contest.publicId),
+      contestId: contest.id,
       standingSnapshotId: snapshot.id,
       accessMode,
       snapshotData: {
-        kind: 'contest-standing', contestId: contest.publicId, title: contest.title,
+        kind: 'contest-standing', contestId: contest.id, publicId: contest.publicId, title: contest.title,
         organizationId: contest.organizationId,
         format: contest.format, standingRevision: snapshot.revision, scoringMode: snapshot.scoringMode,
         rank: entry.rank, score: entry.totalScore === null ? null : Number(entry.totalScore),
@@ -375,7 +375,7 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
     referenceId: change.id,
     referenceVersionId: change.batchId,
     ratingChangeId: change.id,
-    contestId: contest.publicId,
+    contestId: contest.id,
     accessMode,
     snapshotData: {
       kind: 'rating-change', ratingChangeId: change.id, batchId: change.batchId,
@@ -1364,7 +1364,7 @@ export async function listTagBlogs(user: JwtPayload, tagId: string, query: any) 
 
 export async function createBlogFromContest(user: JwtPayload, contestId: number) {
   const resolved = await findContestForBlogReview(contestId)
-  const training = resolved?.activity
+  const training = resolved?.contest
   if (!training?.finalizedStandingId) fail(409, 'BLOG_CONTEST_NOT_FINALIZED', '比赛尚未生成固定榜单，不能创建复盘')
   await prisma.$transaction(tx => resolveReference(tx, user, {
     type: 'CONTEST_STANDING',

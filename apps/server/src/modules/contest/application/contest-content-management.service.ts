@@ -9,7 +9,7 @@ import {
   type ContentKind,
   type ContentOption,
 } from '../../problem/problem.content.service'
-import { findActivityForAccess } from '../../contest/contest-query.facade'
+import { findContestForAccess } from '../../contest/contest-query.facade'
 
 export class ContestContentError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) { super(message) }
@@ -28,10 +28,10 @@ const managedFileId = (url: string | null | undefined) =>
   url?.match(/\/api\/files\/([^/?#]+)\/(?:download|public)/)?.[1] || null
 
 async function loadContext(contestId: number, contestProblemId: string) {
-  const access = await findActivityForAccess(contestId)
-  const contest = access?.activity || null
+  const access = await findContestForAccess(contestId)
+  const contest = access?.contest || null
   const row = access?.contest ? await prisma.contestProblem.findFirst({
-    where: { id: contestProblemId, contestId: access.contest.id },
+    where: { id: contestProblemId, contestId: access.canonical.id },
     include: { CanonicalProblem: true, ContestResource: { orderBy: { uploadedAt: 'desc' } } },
   }) : null
   if (!contest || !row?.canonicalProblemId) fail(404, 'CONTEST_PROBLEM_NOT_FOUND', '比赛题目不存在')
@@ -108,7 +108,7 @@ async function applyPdf(contestId: string, contestProblemId: string, kind: Conte
 }
 
 export async function editContestContentMarkdown(input: {
-  contestId: number; contestProblemId: string; userId: string; kind: ContentKind; snapshotId: string; content: string
+  contestId: number; contestProblemId: string; userId: string; kind: ContentKind; content: string
 }) {
   const loaded = await requireContext(input.contestId, input.contestProblemId, input.userId, true)
   await applyMarkdown(loaded.contestProblem.id, input.kind, input.content)
@@ -116,7 +116,7 @@ export async function editContestContentMarkdown(input: {
 }
 
 export async function replaceContestContentPdf(input: {
-  contestId: number; contestProblemId: string; userId: string; kind: ContentKind; snapshotId: string; file?: Express.Multer.File
+  contestId: number; contestProblemId: string; userId: string; kind: ContentKind; file?: Express.Multer.File
 }) {
   const loaded = await requireContext(input.contestId, input.contestProblemId, input.userId, true)
   if (!input.file) fail(400, 'PDF_REQUIRED', '请选择 PDF 文件')
@@ -216,10 +216,10 @@ export async function updateContestContentSelection(input: {
   if (!statement || !solution) fail(400, 'CONTENT_SELECTION_INVALID', '所选题面或题解不可用')
   await applyOption(loaded, 'statement', statement)
   await applyOption(loaded, 'solution', solution)
-  return { snapshots: [{ kind: 'statement', revision: null }, { kind: 'solution', revision: null }] }
+  return { updated: ['statement', 'solution'] as ContentKind[] }
 }
 
-export async function downloadContestContentSnapshot(input: {
+export async function downloadContestContentFile(input: {
   contestId: number; contestProblemId: string; userId: string; kind: ContentKind
 }) {
   const loaded = await requireContext(input.contestId, input.contestProblemId, input.userId)

@@ -7,9 +7,7 @@ import {
   TestSetRevisionConflict,
   ensureInitialTestSetRevision,
   ingestTestdataObject,
-  inspectTestSetRevisionMigration,
   loadRevisionSpec,
-  migrateProblemTestSetRevisions,
   publishTestSetRevision,
   resolveConfigSpec,
   transitionJudgeMode,
@@ -17,9 +15,9 @@ import {
 import { collectOrphanTestdataObjects } from '../src/lib/testdata-object-gc'
 import { createTestTeam, createTestUser } from './helpers/testUser'
 import {
-  previewTrainingTestSetUpdate,
-  updateTrainingTestSetRevision,
-} from '../src/modules/training/application/training-testset-update.service'
+  previewContestTestSetUpdate,
+  updateContestTestSetRevision,
+} from '../src/modules/contest/application/contest-testset-update.service'
 
 const root = path.join(process.cwd(), 'testdata')
 const createdDirectories: string[] = []
@@ -82,101 +80,47 @@ afterEach(async () => {
 })
 
 describe('immutable problem TestSet Revisions', () => {
-  it('updates only an unfrozen activity and reports the pinned revision state', async () => {
+  it('updates only an unfrozen contest and reports the pinned revision state', async () => {
     const { owner, problem, directory, config } = await fixture()
-    const manager = await createTestUser({ organization: { role: 'teacher' } })
-    const team = await createTestTeam({
-      organizationId: null,
-      ownerId: manager.user.id,
-      ownerType: 'user',
-      scope: 'personal',
-    })
+    const manager = await createTestUser({ accountRole: 'platform_admin' })
     const first = await ensureInitialTestSetRevision(problem.id, owner.user.id)
     await fs.promises.writeFile(path.join(directory, '1.in'), '7 8\n')
     const spec = await resolveConfigSpec(problem.id, config)
     const second = await publishTestSetRevision({
-      problemId: problem.id,
-      expectedLatestRevisionId: first!.id,
-      source: 'admin_edit',
-      createdBy: owner.user.id,
-      baseConfigText: config,
-      spec,
+      problemId: problem.id, expectedLatestRevisionId: first!.id, source: 'admin_edit',
+      createdBy: owner.user.id, baseConfigText: config, spec,
     })
-    const training = await prisma.training.create({ data: {
-      teamId: team.id,
-      organizationId: null,
-      scope: 'personal',
-      title: 'Revision update fixture',
-      format: 'icpc',
-      type: 'training',
-      startTime: new Date(Date.now() + 3600000),
-      endTime: new Date(Date.now() + 7200000),
-      status: 'upcoming',
-      createdBy: manager.user.id,
+    const contest = await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), title: 'Revision update fixture', contestDate: new Date(Date.now() + 3_600_000),
+      startAt: new Date(Date.now() + 3_600_000), endAt: new Date(Date.now() + 7_200_000),
+      status: 'upcoming', scope: 'platform', format: 'icpc', createdBy: manager.user.id,
     } })
-    const trainingProblem = await prisma.trainingProblem.create({ data: {
-      id: crypto.randomUUID(),
-      trainingId: training.id,
-      problemId: problem.id,
-      alias: 'A',
-      orderIndex: 0,
-      testSetRevisionId: first!.id,
-      judgeConfigSnapshot: first!.judgeConfig,
+    const contestProblem = await prisma.contestProblem.create({ data: {
+      id: crypto.randomUUID(), contestId: contest.id, canonicalProblemId: problem.id,
+      alias: 'A', orderIndex: 0, testSetRevisionId: first!.id,
     } })
-
-    const preview = await previewTrainingTestSetUpdate(training.id, trainingProblem.id, manager.user.id)
-    expect(preview).toMatchObject({
-      currentRevisionId: first!.id,
-      latestRevisionId: second!.id,
-      pending: true,
-      frozen: false,
-    })
-    const updated = await updateTrainingTestSetRevision({
-      trainingId: training.id,
-      trainingProblemId: trainingProblem.id,
-      userId: manager.user.id,
-      revisionId: second!.id,
+    const preview = await previewContestTestSetUpdate(contest.publicId, contestProblem.id, manager.user.id)
+    expect(preview).toMatchObject({ currentRevisionId: first!.id, latestRevisionId: second!.id, pending: true, frozen: false })
+    const updated = await updateContestTestSetRevision({
+      contestId: contest.publicId, contestProblemId: contestProblem.id,
+      userId: manager.user.id, revisionId: second!.id,
     })
     expect(updated).toMatchObject({ updated: true, currentRevisionId: second!.id })
-    expect((await prisma.trainingProblem.findUniqueOrThrow({ where: { id: trainingProblem.id } })).testSetRevisionId).toBe(second!.id)
+    expect((await prisma.contestProblem.findUniqueOrThrow({ where: { id: contestProblem.id } })).testSetRevisionId).toBe(second!.id)
 
-    const frozenTraining = await prisma.training.create({ data: {
-      teamId: team.id,
-      organizationId: null,
-      scope: 'personal',
-      title: 'Frozen revision fixture',
-      format: 'icpc',
-      type: 'training',
-      startTime: new Date(Date.now() - 3600000),
-      endTime: new Date(Date.now() + 3600000),
-      status: 'ongoing',
-      createdBy: manager.user.id,
+    const frozenContest = await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), title: 'Frozen revision fixture', contestDate: new Date(Date.now() - 3_600_000),
+      startAt: new Date(Date.now() - 3_600_000), endAt: new Date(Date.now() + 3_600_000),
+      status: 'ongoing', scope: 'platform', format: 'icpc', createdBy: manager.user.id,
     } })
-    const frozenProblem = await prisma.trainingProblem.create({ data: {
-      id: crypto.randomUUID(),
-      trainingId: frozenTraining.id,
-      problemId: problem.id,
-      alias: 'A',
-      orderIndex: 0,
-      testSetRevisionId: first!.id,
-      judgeConfigSnapshot: first!.judgeConfig,
+    const frozenProblem = await prisma.contestProblem.create({ data: {
+      id: crypto.randomUUID(), contestId: frozenContest.id, canonicalProblemId: problem.id,
+      alias: 'A', orderIndex: 0, testSetRevisionId: first!.id,
     } })
-    await expect(updateTrainingTestSetRevision({
-      trainingId: frozenTraining.id,
-      trainingProblemId: frozenProblem.id,
-      userId: manager.user.id,
-      revisionId: second!.id,
-    })).rejects.toMatchObject({
-      code: 'TEST_SET_REVISION_FROZEN',
-      statusCode: 409,
-    })
-  })
-
-  it('accepts checker metadata independently from ordinary testdata files', async () => {
-    const { problem } = await fixture()
-    const inspection = await inspectTestSetRevisionMigration()
-    expect(inspection.valid.some(item => item.problemId === problem.id)).toBe(true)
-    expect(inspection.invalid.some(item => item.problemId === problem.id)).toBe(false)
+    await expect(updateContestTestSetRevision({
+      contestId: frozenContest.publicId, contestProblemId: frozenProblem.id,
+      userId: manager.user.id, revisionId: second!.id,
+    })).rejects.toMatchObject({ code: 'TEST_SET_REVISION_FROZEN', statusCode: 409 })
   })
 
   it('pins case and checker bytes while later revisions use replacements', async () => {
@@ -281,8 +225,6 @@ describe('immutable problem TestSet Revisions', () => {
     })
     expect(second!.judgeConfigHash).toBe(first!.judgeConfigHash)
 
-    await migrateProblemTestSetRevisions(problem.id, owner.user.id)
-    await migrateProblemTestSetRevisions(problem.id, owner.user.id)
 
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: problem.id } })).toBe(2)
     expect((await prisma.problem.findUniqueOrThrow({ where: { id: problem.id } })).latestTestSetRevisionId).toBe(second!.id)

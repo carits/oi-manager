@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../../../prisma'
 import { findAccessibleProblem } from '../../problem/problem.access'
 import { ensureInitialTestSetRevision } from '../../problem/problem.testset-revision.service'
-import { populateSnapshotData } from '../contest.helpers'
+import { buildContestProblemData } from '../contest.helpers'
 import {
   createContestProblemTx,
   deleteContestProblemTx,
@@ -54,7 +54,7 @@ export async function addManagedContestProblem(params: {
       problemId,
       alias: params.alias || null,
       points: params.points || null,
-      ...populateSnapshotData(problem),
+      ...buildContestProblemData(problem),
     }))
     if (result.conflict || !result.problem) {
       throw new ContestProblemManagementError(404, 'CONTEST_NOT_FOUND', '比赛不存在')

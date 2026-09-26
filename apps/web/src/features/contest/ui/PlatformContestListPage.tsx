@@ -10,8 +10,8 @@ import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
-import { TrainingFormModal } from './TrainingFormModal'
-import styles from '@/components/TrainingIndex.module.css'
+import { ContestFormModal } from './ContestFormModal'
+import styles from '@/components/ContestIndex.module.css'
 
 interface PlatformContest {
   id: number
@@ -78,7 +78,7 @@ export function PlatformContestListPage({ basePath }: { basePath: '/admin' | '/p
           </div>
         )}
       </AsyncRegion>
-      <TrainingFormModal
+      <ContestFormModal
         isOpen={creating}
         onClose={() => setCreating(false)}
         onSaved={() => { setCreating(false); void resource.retry() }}

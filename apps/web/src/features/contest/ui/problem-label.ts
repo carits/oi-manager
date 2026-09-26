@@ -1,11 +1,11 @@
-export interface TrainingProblemLabelSource {
+export interface ContestProblemLabelSource {
   orderIndex?: number | null
   title?: string | null
   problemTitle?: string | null
   alias?: string | null
 }
 
-export function trainingProblemCode(orderIndex?: number | null): string {
+export function contestProblemCode(orderIndex?: number | null): string {
   let result = ''
   let index = Number.isInteger(orderIndex) && (orderIndex ?? 0) >= 0 ? orderIndex! : 0
   while (index >= 0) {
@@ -15,11 +15,11 @@ export function trainingProblemCode(orderIndex?: number | null): string {
   return result
 }
 
-export function trainingProblemTitle(problem: TrainingProblemLabelSource): string {
+export function contestProblemTitle(problem: ContestProblemLabelSource): string {
   const title = problem.title?.trim() || problem.problemTitle?.trim()
-  return title || `题目 ${trainingProblemCode(problem.orderIndex)}`
+  return title || `题目 ${contestProblemCode(problem.orderIndex)}`
 }
 
-export function trainingProblemSectionTitle(problem: TrainingProblemLabelSource): string {
+export function contestProblemSectionTitle(problem: ContestProblemLabelSource): string {
   return problem.title?.trim() || problem.problemTitle?.trim() || '题目'
 }

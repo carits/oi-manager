@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../prisma'
 import { canManageContest } from '../contest.helpers'
-import { findActivityForAccess } from '../../contest/contest-query.facade'
+import { findContestForAccess } from '../../contest/contest-query.facade'
 
 export class ContestTestSetUpdateError extends Error {
   constructor(
@@ -49,9 +49,9 @@ async function revisionState(client: any, item: any) {
 }
 
 async function requireManagedContext(contestId: number, contestProblemId: string, userId: string) {
-  const [item, access] = await Promise.all([loadContext(prisma, contestId, contestProblemId), findActivityForAccess(contestId)])
+  const [item, access] = await Promise.all([loadContext(prisma, contestId, contestProblemId), findContestForAccess(contestId)])
   if (!item || !access) fail(404, 'CONTEST_PROBLEM_NOT_FOUND', '比赛题目不存在')
-  if (!await canManageContest(userId, access.activity)) fail(403, 'CONTEST_MANAGE_DENIED', '无比赛管理权限')
+  if (!await canManageContest(userId, access.contest)) fail(403, 'CONTEST_MANAGE_DENIED', '无比赛管理权限')
   return item
 }
 
@@ -78,7 +78,7 @@ export async function updateContestTestSetRevision(params: {
   await requireManagedContext(params.contestId, params.contestProblemId, params.userId)
   return prisma.$transaction(async tx => {
     const item = await loadContext(tx, params.contestId, params.contestProblemId)
-    if (!item) fail(404, 'TRAINING_PROBLEM_NOT_FOUND', '活动题目不存在')
+    if (!item) fail(404, 'CONTEST_PROBLEM_NOT_FOUND', '比赛题目不存在')
     const state = await revisionState(tx, item)
     if (state.frozen) {
       fail(
@@ -97,7 +97,7 @@ export async function updateContestTestSetRevision(params: {
     })
     if (!revision) fail(404, 'TEST_SET_REVISION_NOT_FOUND', '测试版本不存在')
     if (revision.id === item.problem.testSetRevisionId) {
-      return { updated: false, state, message: '活动已经使用该测试版本' }
+      return { updated: false, state, message: '比赛已经使用该测试版本' }
     }
     await tx.contestProblem.update({
       where: { id: item.problem.id },
@@ -108,7 +108,7 @@ export async function updateContestTestSetRevision(params: {
       previousRevisionId: item.problem.testSetRevisionId,
       currentRevisionId: revision.id,
       currentRevision: revision.revisionNumber,
-      message: `活动已固定到测试版本 R${revision.revisionNumber}`,
+      message: `比赛已固定到测试版本 R${revision.revisionNumber}`,
     }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }

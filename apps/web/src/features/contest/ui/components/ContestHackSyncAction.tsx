@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
-import styles from './TrainingHackSyncAction.module.css'
+import styles from './ContestHackSyncAction.module.css'
 
 type Preview = {
   pending: boolean
@@ -16,17 +16,17 @@ type Preview = {
   latestRevision: number | null
 }
 
-export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trainingId: string; trainingProblemId: string }) {
+export function ContestHackSyncAction({ contestId, contestProblemId }: { contestId: string; contestProblemId: string }) {
   const toast = useToast()
   const [preview, setPreview] = useState<Preview | null>(null)
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
     let active = true
-    apiClient.get<Preview>(`/api/contests/${trainingId}/problems/${trainingProblemId}/test-set-update`)
+    apiClient.get<Preview>(`/api/contests/${contestId}/problems/${contestProblemId}/test-set-update`)
       .then(result => { if (active && result.success && result.data) setPreview(result.data) })
     return () => { active = false }
-  }, [trainingId, trainingProblemId])
+  }, [contestId, contestProblemId])
 
   if (!preview?.pending) return null
   if (preview.frozen) return (
@@ -40,7 +40,7 @@ export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trai
     setSyncing(true)
     try {
       const result = await apiClient.post<{ currentRevision: number; currentRevisionId: string }>(
-        `/api/contests/${trainingId}/problems/${trainingProblemId}/test-set-update`,
+        `/api/contests/${contestId}/problems/${contestProblemId}/test-set-update`,
         { revisionId: preview.latestRevisionId },
       )
       if (!result.success) return toast.error(result.message || '测试版本更新失败')

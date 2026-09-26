@@ -6,8 +6,8 @@ import { AlertTriangle, Check, ClipboardList, ListChecks, LoaderCircle, RotateCc
 import apiClient from '@/lib/apiClient'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
-import type { TrainingProblem } from '../../model/types'
-import styles from './TrainingRejudgeModal.module.css'
+import type { ContestProblem } from '../../model/types'
+import styles from './ContestRejudgeModal.module.css'
 
 type ScopeType = 'all' | 'problem' | 'user_problem'
 
@@ -17,21 +17,21 @@ export interface RejudgeUser {
   displayName?: string
 }
 
-interface TrainingRejudgeModalProps {
+interface ContestRejudgeModalProps {
   isOpen: boolean
   onClose: () => void
   trainingTitle: string
-  trainingId: string
-  problems: TrainingProblem[]
+  contestId: string
+  problems: ContestProblem[]
   users: RejudgeUser[]
   usersLoading?: boolean
   onLoadUsers: () => Promise<void>
   onSuccess: () => Promise<void>
 }
 
-export function TrainingRejudgeModal({
-  isOpen, onClose, trainingTitle, trainingId, problems, users, usersLoading = false, onLoadUsers, onSuccess,
-}: TrainingRejudgeModalProps) {
+export function ContestRejudgeModal({
+  isOpen, onClose, trainingTitle, contestId, problems, users, usersLoading = false, onLoadUsers, onSuccess,
+}: ContestRejudgeModalProps) {
   const [scope, setScope] = useState<ScopeType>('all')
   const [problemId, setProblemId] = useState('')
   const [userId, setUserId] = useState('')
@@ -64,10 +64,10 @@ export function TrainingRejudgeModal({
       setPreviewLoading(true)
       setPreviewError('')
       const params = new URLSearchParams({ scopeType: scope })
-      if (scope !== 'all') params.set('trainingProblemId', problemId)
+      if (scope !== 'all') params.set('contestProblemId', problemId)
       if (scope === 'user_problem') params.set('userId', userId)
       try {
-        const data = await apiClient.query<{ matchedCount: number; inProgressCount: number }>(`/api/contests/${trainingId}/rejudge/preview?${params.toString()}`)
+        const data = await apiClient.query<{ matchedCount: number; inProgressCount: number }>(`/api/contests/${contestId}/rejudge/preview?${params.toString()}`)
         if (!cancelled) setPreview(data)
       } catch (error) {
         if (!cancelled) setPreviewError(error instanceof Error ? error.message : '无法获取预计数量，请重试')
@@ -77,7 +77,7 @@ export function TrainingRejudgeModal({
     }
     void load()
     return () => { cancelled = true }
-  }, [isOpen, ready, scope, problemId, userId, trainingId])
+  }, [isOpen, ready, scope, problemId, userId, contestId])
 
   const scopeCards = useMemo(() => [
     { value: 'all' as const, icon: ClipboardList, title: '全部比赛', meta: '全部用户 · 全部题目', description: '重新评测本场比赛中的所有本地提交' },
@@ -89,8 +89,8 @@ export function TrainingRejudgeModal({
     if (!ready || !preview || preview.matchedCount === 0 || submitting) return
     setSubmitting(true)
     setMessage(null)
-    const selectedScope = scope === 'all' ? { type: 'all' } : scope === 'problem' ? { type: 'problem', trainingProblemId: problemId } : { type: 'user_problem', trainingProblemId: problemId, userId }
-    const result = await apiClient.mutate<{ resetCount: number; skippedCount: number }>(`/api/contests/${trainingId}/rejudge`, 'POST', { scope: selectedScope })
+    const selectedScope = scope === 'all' ? { type: 'all' } : scope === 'problem' ? { type: 'problem', contestProblemId: problemId } : { type: 'user_problem', contestProblemId: problemId, userId }
+    const result = await apiClient.mutate<{ resetCount: number; skippedCount: number }>(`/api/contests/${contestId}/rejudge`, 'POST', { scope: selectedScope })
     setSubmitting(false)
     if (!result.ok) {
       setMessage({ type: 'error', text: result.error.message })

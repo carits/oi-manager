@@ -3,93 +3,67 @@ import type { Prisma } from '@prisma/client'
 export const contestProblemInclude = {
   CanonicalProblem: {
     select: {
-      id: true,
-      title: true,
-      platform: true,
-      problemId: true,
-      difficulty: true,
-      timeLimit: true,
-      memoryLimit: true,
-      statementType: true,
-      description: true,
+      id: true, title: true, platform: true, problemId: true, difficulty: true,
+      timeLimit: true, memoryLimit: true, statementType: true, statementPdfUrl: true,
+      solutionType: true, solutionMarkdown: true, solutionPdfUrl: true,
+      description: true, judgeConfig: true, allowedLanguages: true,
       ProblemStatement: { where: { isVisible: true } },
       _count: { select: { ProblemAttachment: true } },
     },
   },
+  TestSetRevision: true,
   ContestResource: true,
 } satisfies Prisma.ContestProblemInclude
 
 export const contestInclude = {
   Team: true,
   RatingConfig: true,
-  ContestProblem: {
-    include: contestProblemInclude,
-    orderBy: { orderIndex: 'asc' },
-  },
-  _count: {
-    select: {
-      ContestProblem: true,
-      ContestParticipant: true,
-    },
-  },
+  ContestProblem: { include: contestProblemInclude, orderBy: { orderIndex: 'asc' } },
+  _count: { select: { ContestProblem: true, ContestParticipant: true } },
 } satisfies Prisma.ContestInclude
 
-export type ContestViewRecord = Prisma.ContestGetPayload<{
-  include: typeof contestInclude
-}>
+export type ContestViewRecord = Prisma.ContestGetPayload<{ include: typeof contestInclude }>
 
-export function contestProblemAsView(problem: any, publicContestId: number) {
+export function toContestProblemView(problem: any, publicContestId: number) {
   const canonical = problem.CanonicalProblem
-  const attachments = Array.isArray(problem.ContestResource)
-    ? problem.ContestResource.filter((resource: any) => resource.fileType !== 'solution')
-    : []
+  const resources = Array.isArray(problem.ContestResource) ? problem.ContestResource : []
+  const attachments = resources.filter((resource: any) => !['statement', 'solution'].includes(resource.fileType))
   return {
     id: problem.id,
     contestId: publicContestId,
-    problemId: problem.canonicalProblemId || canonical?.id || problem.problemId,
+    canonicalProblemId: problem.canonicalProblemId,
     alias: problem.alias,
     orderIndex: problem.orderIndex,
     points: problem.points,
-    createdAt: problem.createdAt,
-    dataVersion: null,
-    snapshotCreatedAt: problem.updatedAt,
-    statementSnapshot: problem.statementMarkdown,
-    titleSnapshot: problem.title,
-    statementsSnapshotJson: null,
-    timeLimitSnapshot: canonical?.timeLimit ?? null,
-    memoryLimitSnapshot: canonical?.memoryLimit ?? null,
-    judgeConfigSnapshot: null,
-    testGraphRevisionSnapshot: null,
+    title: problem.title || canonical?.title || null,
+    statementType: problem.statementType,
+    statementMarkdown: problem.statementMarkdown,
+    solutionType: problem.solutionType,
+    solutionMarkdown: problem.solutionMarkdown,
+    solutionVisible: problem.solutionVisible,
     testSetRevisionId: problem.testSetRevisionId,
-    allowedLanguagesSnapshot: null,
-    sourcePlatformSnapshot: problem.ojName || canonical?.platform || null,
-    sourceProblemIdSnapshot: problem.problemId || canonical?.problemId || null,
-    sourceUrlSnapshot: null,
-    Problem: canonical ? {
-      ...canonical,
-      title: problem.title || canonical.title,
-      platform: problem.ojName || canonical.platform,
-      problemId: problem.problemId || canonical.problemId,
-      difficulty: problem.difficulty || canonical.difficulty,
-    } : null,
+    sourcePlatform: problem.ojName || canonical?.platform || null,
+    sourceProblemId: problem.problemId || canonical?.problemId || null,
+    timeLimit: canonical?.timeLimit ?? null,
+    memoryLimit: canonical?.memoryLimit ?? null,
+    judgeConfig: problem.TestSetRevision?.judgeConfig || canonical?.judgeConfig || null,
+    allowedLanguages: canonical?.allowedLanguages || null,
+    createdAt: problem.createdAt,
+    updatedAt: problem.updatedAt,
+    Problem: canonical,
     TestSetRevision: problem.TestSetRevision || null,
+    ContestResource: resources,
     ContestSolution: problem.solutionMarkdown === null && problem.solutionType === 'none'
       ? null
-      : {
-          id: `contest-solution:${problem.id}`,
-          visible: problem.solutionVisible,
-          content: problem.solutionMarkdown || '',
-        },
-    ContentSnapshot: [],
-    StatementSet: [],
+      : { id: `contest-solution:${problem.id}`, visible: problem.solutionVisible, content: problem.solutionMarkdown || '' },
     ContestAttachment: attachments,
     _count: { ContestAttachment: attachments.length },
   }
 }
 
-export function contestAsView(contest: any) {
+export function toContestView(contest: any) {
   const problems = Array.isArray(contest.ContestProblem)
-    ? contest.ContestProblem.map((problem: any) => contestProblemAsView(problem, contest.publicId))
+    ? contest.ContestProblem.map((problem: any) => toContestProblemView(problem, contest.publicId))
     : undefined
   return {
     id: contest.publicId,

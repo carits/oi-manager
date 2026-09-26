@@ -1,9 +1,9 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { TrainingStatementManagementPage } from '@/features/contest/TrainingStatementManagementPage'
+import { ContestStatementManagementPage } from '@/features/contest/ContestStatementManagementPage'
 
 export default function PersonalContestStatementsPage() {
   const { id } = useParams<{ id: string }>()
-  return <TrainingStatementManagementPage trainingId={id} backPath={`/personal/contests/${id}`} />
+  return <ContestStatementManagementPage contestId={id} backPath={`/personal/contests/${id}`} />
 }

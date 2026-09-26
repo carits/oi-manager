@@ -11,7 +11,7 @@ import {
   getParticipantNames,
   requireContestStarted,
 } from '../contest.helpers'
-import { findActivityForRanking } from '../../contest/contest-query.facade'
+import { findContestForRanking } from '../../contest/contest-query.facade'
 import { resolveOrganizationAuthorizationsForOrganization } from '../../authorization/capabilities'
 
 export class ContestRankingError extends Error {
@@ -345,9 +345,9 @@ async function buildIcpcRanking(contest: any, excludedIds: string[]) {
 }
 
 export async function getContestRanking(contestId: number, userId: string) {
-  const resolved = await findActivityForRanking(contestId)
+  const resolved = await findContestForRanking(contestId)
   if (!resolved) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
-  const contest = resolved.activity
+  const contest = resolved.contest
   if (!await canAccessContest(userId, contest)) fail(403, 'TRAINING_ACCESS_DENIED', '无权限')
   const notStarted = await requireContestStarted(contest, userId)
   if (notStarted) fail(403, 'TRAINING_NOT_STARTED', notStarted)
@@ -368,5 +368,5 @@ export async function getContestRanking(contestId: number, userId: string) {
   const payload = contest.format === 'ioi' || contest.format === 'oi'
     ? await buildOiRanking(contest, excludedIds)
     : await buildIcpcRanking(contest, excludedIds)
-  return appendFinalizedRatingChanges(contest, resolved.contest?.id || null, payload)
+  return appendFinalizedRatingChanges(contest, resolved.canonical?.id || null, payload)
 }

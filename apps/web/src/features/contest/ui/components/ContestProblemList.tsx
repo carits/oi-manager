@@ -3,9 +3,9 @@
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { Button } from '@/components/ui/Button'
-import type { TrainingInfo, ProblemListEntry } from '../../model/types'
-import { trainingProblemCode, trainingProblemTitle } from '../problem-label'
-import styles from '../TrainingWorkspace.module.css'
+import type { ContestInfo, ProblemListEntry } from '../../model/types'
+import { contestProblemCode, contestProblemTitle } from '../problem-label'
+import styles from '../ContestWorkspace.module.css'
 
 const RESULT_LABEL_MAP: Record<string, string> = {
   accepted: 'Accepted', submitted: 'Submitted', queuing: 'Submitted', judging: 'Judging',
@@ -29,17 +29,17 @@ function scoreClass(score: number, max: number) {
   return styles.problemStatusMuted
 }
 
-function renderStatus(problem: ProblemListEntry, training: TrainingInfo) {
+function renderStatus(problem: ProblemListEntry, contest: ContestInfo) {
   if (!problem.hasSubmitted) return null
-  if (training.format === 'oi') {
-    if (training.runtimeStatus !== 'finished' && !training.isAdmin) {
+  if (contest.format === 'oi') {
+    if (contest.runtimeStatus !== 'finished' && !contest.isAdmin) {
       return <span className={`${styles.problemStatus} ${styles.problemStatusSubmitted}`}>Submitted</span>
     }
     const score = problem.bestScore ?? 0
     const max = problem.points ?? 100
     return <span className={`${styles.problemScore} ${scoreClass(score, max)}`}>{score} / {max}</span>
   }
-  if (training.format === 'ioi') {
+  if (contest.format === 'ioi') {
     const status = problem.displayStatus || problem.latestResult || problem.bestResult
     if (status === 'judging' || status === 'queuing') {
       return <span className={`${styles.problemStatus} ${styles.problemStatusSubmitted}`}>Judging</span>
@@ -58,21 +58,21 @@ function renderStatus(problem: ProblemListEntry, training: TrainingInfo) {
   return <span className={`${styles.problemStatus} ${tone}`}>{label}</span>
 }
 
-interface TrainingProblemListProps {
+interface ContestProblemListProps {
   problemListData: ProblemListEntry[]
-  training: TrainingInfo
+  contest: ContestInfo
   basePath: string
   onSelectProblem: (id: string) => void
   onSwitchToProblemsTab: () => void
 }
 
-export function TrainingProblemList({
+export function ContestProblemList({
   problemListData,
-  training,
+  contest,
   basePath,
   onSelectProblem,
   onSwitchToProblemsTab,
-}: TrainingProblemListProps) {
+}: ContestProblemListProps) {
   const openProblem = (id: string) => {
     onSelectProblem(id)
     onSwitchToProblemsTab()
@@ -107,12 +107,12 @@ export function TrainingProblemList({
               <TableRow><TableCell colSpan={sourceVisible ? 4 : 3} className={styles.empty}>暂无题目</TableCell></TableRow>
             )}
             {problemListData.map(problem => {
-              const title = trainingProblemTitle(problem)
+              const title = contestProblemTitle(problem)
               return (
                 <TableRow key={problem.id}>
-                  <TableCell className={styles.problemStatusColumn}>{renderStatus(problem, training)}</TableCell>
+                  <TableCell className={styles.problemStatusColumn}>{renderStatus(problem, contest)}</TableCell>
                   <TableCell className={styles.problemSequenceColumn}>
-                    <span className={styles.problemCode}>{trainingProblemCode(problem.orderIndex)}</span>
+                    <span className={styles.problemCode}>{contestProblemCode(problem.orderIndex)}</span>
                   </TableCell>
                   {sourceVisible && <TableCell className={styles.problemSourceColumn}>{renderSource(problem)}</TableCell>}
                   <TableCell className={styles.problemTitleCell}>

@@ -4,13 +4,13 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useAuth } from '@/features/auth'
 import { TeamDetailPage } from '@/features/team'
-import { TrainingDetailPage } from '@/features/contest/TrainingDetailPage'
+import { ContestDetailPage } from '@/features/contest/ContestDetailPage'
 import { ProblemDetail } from '@/features/problem/ProblemDetail'
 import { ProblemForm } from '@/features/problem/ProblemForm'
 import { ProblemNote } from '@/features/problem/ProblemNote'
 import { SubmissionDetailPage } from '@/features/submission'
 import { ProblemListDetailPage } from '@/features/problem/ProblemListDetailPage'
-import { TrainingStatementManagementPage } from '@/features/contest/TrainingStatementManagementPage'
+import { ContestStatementManagementPage } from '@/features/contest/ContestStatementManagementPage'
 import { TrainingSessionWorkspace } from '@/features/training-session/TrainingSessionWorkspace'
 import { TrainingSessionDesigner } from '@/features/training-session/TrainingSessionDesigner'
 import { AssignmentWorkspace } from '@/features/assignment'
@@ -35,19 +35,19 @@ export default function OrganizationResourcePage() {
     return <TeamDetailPage userType={userType} basePath={`${prefix}/teams`} requiredRole={['teacher', 'school_principal', 'student']} teamIdOverride={parts[0]} />
   }
   if (module === 'teams' && parts.length === 3 && ['trainings', 'homeworks'].includes(parts[1])) {
-    return <TrainingDetailPage basePath={`${prefix}/teams`} trainingIdOverride={parts[2]} />
+    return <ContestDetailPage basePath={`${prefix}/teams`} contestIdOverride={parts[2]} />
   }
   if (module === 'teams' && parts.length === 4 && ['trainings', 'homeworks'].includes(parts[1]) && parts[3] === 'statements') {
-    return <TrainingStatementManagementPage trainingId={parts[2]} backPath={`${prefix}/teams/${parts[0]}/${parts[1]}/${parts[2]}`} />
+    return <ContestStatementManagementPage contestId={parts[2]} backPath={`${prefix}/teams/${parts[0]}/${parts[1]}/${parts[2]}`} />
   }
   if ((module === 'contests' || module === 'homeworks') && parts.length === 2 && parts[1] === 'statements') {
-    return <TrainingStatementManagementPage trainingId={parts[0]} backPath={`${prefix}/${module}/${parts[0]}`} />
+    return <ContestStatementManagementPage contestId={parts[0]} backPath={`${prefix}/${module}/${parts[0]}`} />
   }
   if (module === 'homeworks' && parts.length === 1) {
     return <AssignmentWorkspace />
   }
   if (module === 'contests' && parts.length === 1) {
-    return <TrainingDetailPage basePath={prefix} trainingIdOverride={parts[0]} />
+    return <ContestDetailPage basePath={prefix} contestIdOverride={parts[0]} />
   }
   if (module === 'training-sessions' && parts.length === 1) return <TrainingSessionWorkspace sessionId={parts[0]} />
   if (module === 'training-sessions' && parts.length === 2 && parts[1] === 'design') return <TrainingSessionDesigner sessionId={parts[0]} />

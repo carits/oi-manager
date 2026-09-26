@@ -2,8 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import apiClient from '@/lib/apiClient'
 import type { SubmissionRow } from '../model/types'
 
-export function useTrainingSubmissions(
-  trainingId: string,
+export function useContestSubmissions(
+  contestId: string,
   activeTab: string,
 ) {
   const [filterProblemId, setFilterProblemId] = useState('')
@@ -35,7 +35,7 @@ export function useTrainingSubmissions(
         totalPages: number
         total: number
       }>(
-        `/api/contests/${trainingId}/submissions?${params.toString()}`,
+        `/api/contests/${contestId}/submissions?${params.toString()}`,
         { signal },
       )
 
@@ -48,7 +48,7 @@ export function useTrainingSubmissions(
       if (!signal?.aborted) setLoading(false)
     }
   }, [
-    trainingId,
+    contestId,
     submissionsPage,
     filterProblemId,
     filterUsername,

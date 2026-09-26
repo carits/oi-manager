@@ -144,7 +144,7 @@ export function sortContestListForDisplay<T extends ContestListSortItem>(items: 
 
 export type ContestAccessMode = 'team' | 'organization' | 'platform' | null
 
-/** 判断训练的访问模式（基于 teamId/organizationId） */
+/** 判断比赛的访问模式（基于 teamId/organizationId） */
 export function getContestAccessMode(contest: { teamId: string | null; organizationId: string | null; scope?: string }): ContestAccessMode {
   if (contest.teamId) return 'team'
   if (contest.organizationId) return 'organization'
@@ -152,7 +152,7 @@ export function getContestAccessMode(contest: { teamId: string | null; organizat
   return null
 }
 
-/** 检查用户是否有权限访问训练（统一入口） */
+/** 检查用户是否有权限访问比赛（统一入口） */
 export async function canAccessContest(
   userId: string,
   contest: { teamId: string | null; organizationId: string | null; scope?: string },
@@ -165,10 +165,10 @@ export async function canAccessContest(
   } else if (mode === 'platform') {
     return Boolean(await prisma.user.findFirst({ where: { id: userId, status: 'active' }, select: { id: true } }))
   }
-  return false // 无归属的训练拒绝访问
+  return false // 无归属的比赛拒绝访问
 }
 
-/** 检查用户是否有权限管理训练（统一入口） */
+/** 检查用户是否有权限管理比赛（统一入口） */
 export async function canManageContest(
   userId: string,
   contest: { teamId: string | null; organizationId: string | null; createdBy: string; scope?: string },
@@ -218,49 +218,32 @@ export async function getUserTypeForContest(userId: string, contestId: number): 
   return 'student'
 }
 
-/** 从 Problem 生成快照数据，供 ContestProblem 创建时使用 */
-export function populateSnapshotData(problem: {
+/** Build immutable contest-problem data from the selected canonical problem revision. */
+export function buildContestProblemData(problem: {
   title: string
   description: string | null
-  timeLimit: number | null
-  memoryLimit: number | null
-  judgeConfig: string | null
-  testGraphRevision?: number
   latestTestSetRevisionId?: string | null
-  LatestTestSetRevision?: { judgeConfig: string; revisionNumber: number } | null
-  allowedLanguages: string | null
   platform: string
   problemId: string
-  ProblemStatement?: { content: string | null; isVisible: boolean }[]
 }) {
-  const statements = problem.ProblemStatement?.filter(s => s.isVisible).map(s => s.content).filter((c): c is string => c !== null) || []
   return {
-    titleSnapshot: problem.title,
-    statementSnapshot: problem.description,
-    statementsSnapshotJson: statements.length > 0 ? JSON.stringify(statements) : null,
-    timeLimitSnapshot: problem.timeLimit,
-    memoryLimitSnapshot: problem.memoryLimit,
-    judgeConfigSnapshot: problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig,
-    testGraphRevisionSnapshot: problem.testGraphRevision ?? 0,
+    title: problem.title,
+    description: problem.description,
     testSetRevisionId: problem.latestTestSetRevisionId || null,
-    allowedLanguagesSnapshot: problem.allowedLanguages,
-    sourcePlatformSnapshot: problem.platform,
-    sourceProblemIdSnapshot: problem.problemId,
-    sourceUrlSnapshot: null,
-    snapshotCreatedAt: new Date(),
-    dataVersion: problem.latestTestSetRevisionId ? '2' : '1',
+    sourcePlatform: problem.platform,
+    sourceProblemId: problem.problemId,
   }
 }
 
-/** 解析训练 ID（数字） */
+/** 解析比赛公开 ID（数字） */
 export function parseContestId(raw: string): number {
-  if (!/^\d+$/.test(raw)) throw new Error('无效的训练 ID')
+  if (!/^\d+$/.test(raw)) throw new Error('无效的比赛 ID')
   const n = Number(raw)
-  if (!Number.isSafeInteger(n) || n <= 0) throw new Error('无效的训练 ID')
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Error('无效的比赛 ID')
   return n
 }
 
-/** 检查训练是否已开始（非管理员在 upcoming 时拒绝访问） */
+/** 检查比赛是否已开始（非管理员在 upcoming 时拒绝访问） */
 export async function requireContestStarted(
   contest: { id: number; status: string; startTime: Date; endTime: Date; teamId: string | null; organizationId: string | null; createdBy: string; scope?: string },
   userId: string,
@@ -274,7 +257,7 @@ export async function requireContestStarted(
   }
   if (status !== 'upcoming') return null
 
-  // 根据训练归属判断管理员权限
+  // 根据比赛归属判断管理员权限
   const mode = getContestAccessMode(contest)
   if (mode === 'team' && contest.teamId) {
     if (await isTeamAdmin(userId, contest.teamId)) return null
@@ -283,5 +266,5 @@ export async function requireContestStarted(
   } else if (mode === 'platform') {
     if (await canManageContest(userId, contest)) return null
   }
-  return '训练尚未开始'
+  return '比赛尚未开始'
 }

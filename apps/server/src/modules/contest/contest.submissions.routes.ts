@@ -84,7 +84,7 @@ contestSubmissionsRouter.post('/contests/:id/submit', authenticate, asyncHandler
     }
 
     const platform = contestProblem.Problem.platform
-    const judgeConfig = contestProblem.judgeConfigSnapshot || contestProblem.Problem.judgeConfig
+    const judgeConfig = contestProblem.judgeConfig || contestProblem.Problem.judgeConfig
     const testdataCount = await countProblemTestdata(contestProblem.Problem.id)
     if (!judgeConfig?.trim() || testdataCount === 0) {
       return res.status(409).json({

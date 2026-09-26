@@ -3,9 +3,9 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContestId } from './contest.helpers'
 import {
-  downloadContestStatementVersion,
+  downloadContestStatementFile,
   getContestStatementManagement,
-  getContestStatementVersions,
+  getContestStatements,
   saveContestStatementManagement,
   ContestStatementManagementError,
 } from './application/contest-statement-management.service'
@@ -52,9 +52,9 @@ contestStatementManagementRouter.put('/contests/:id/statement-management', authe
   }
 }))
 
-contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/statement-versions', authenticate, asyncHandler(async (req, res) => {
+contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/statements', authenticate, asyncHandler(async (req, res) => {
   try {
-    const data = await getContestStatementVersions(
+    const data = await getContestStatements(
       parseContestId(req.params.id),
       req.params.contestProblemId,
       req.user!.userId,
@@ -66,7 +66,7 @@ contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/s
         statements: data.statements.map(statement => ({
           ...statement,
           fileUrl: statement.hasFile
-            ? `/api/contests/${req.params.id}/problems/${req.params.contestProblemId}/statement-versions/${statement.id}/file`
+            ? `/api/contests/${req.params.id}/problems/${req.params.contestProblemId}/statement/file`
             : null,
         })),
       },
@@ -76,12 +76,11 @@ contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/s
   }
 }))
 
-contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/statement-versions/:snapshotId/file', authenticate, asyncHandler(async (req, res) => {
+contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/statement/file', authenticate, asyncHandler(async (req, res) => {
   try {
-    const file = await downloadContestStatementVersion({
+    const file = await downloadContestStatementFile({
       contestId: parseContestId(req.params.id),
       contestProblemId: req.params.contestProblemId,
-      snapshotId: req.params.snapshotId,
       userId: req.user!.userId,
     })
     return sendInlineFile(res, file)

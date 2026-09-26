@@ -1798,13 +1798,21 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
     Problem: { ...problem.Problem, title: problem.titleSnapshot },
     Statements: Array.isArray(problem.statementsSnapshot) ? problem.statementsSnapshot : [],
   })
+  const snapshotStage = (stage: any) => ({
+    ...stage,
+    Groups: stage.Groups.map((group: any) => ({
+      ...group,
+      name: group.name || group.TrainingGroup?.name || '全体学员',
+    })),
+    Problems: stage.Problems.map(snapshotProblem),
+  })
   const sessionView = manager ? {
     ...session,
-    Stages: session.Stages.map(stage => ({ ...stage, Problems: stage.Problems.map(snapshotProblem) })),
+    Stages: session.Stages.map(snapshotStage),
   } : {
     ...session,
     Stages: session.Stages.map(stage => ({
-      ...stage,
+      ...snapshotStage(stage),
       Problems: stage.Problems.map(problem => permissions[problem.id]?.canSeeMetadata ? snapshotProblem(problem) : {
         ...snapshotProblem(problem),
         alias: null,
@@ -1897,14 +1905,23 @@ async function ensureV2MatrixCompleteness(tx: Prisma.TransactionClient, sessionI
   const groups = await tx.trainingSessionGroup.findMany({ where: { sessionId, status: 'active' }, orderBy: { orderIndex: 'asc' } })
   for (const stage of stages) {
     const existing = stage.Groups.filter(item => item.groupId)
-    const source = existing[0]
+    const unlinked = stage.Groups.filter(item => !item.groupId).sort((left, right) => left.orderIndex - right.orderIndex)
+    const source = existing[0] || unlinked[0]
     const basePlans = source?.ProblemPlans.length ? source.ProblemPlans : stage.ProblemPlans.filter(item => item.groupId === null)
     for (const [index, group] of groups.entries()) {
       if (existing.some(item => item.groupId === group.id)) continue
+      const legacyStageGroup = unlinked[index]
+      if (legacyStageGroup) {
+        await tx.trainingSessionStageGroup.update({
+          where: { id: legacyStageGroup.id },
+          data: { groupId: group.id, name: group.name, orderIndex: index },
+        })
+        continue
+      }
       const stageGroup = await tx.trainingSessionStageGroup.create({ data: {
         stageId: stage.id,
         groupId: group.id,
-        name: null,
+        name: group.name,
         orderIndex: index,
         mode: source?.mode || (stage.kind === 'REVIEW' ? 'REVIEW' : 'PRACTICE'),
         accessPolicy: source?.accessPolicy || stage.accessPolicy,
@@ -1934,6 +1951,10 @@ async function ensureV2MatrixCompleteness(tx: Prisma.TransactionClient, sessionI
         if (!source && index === 0 && base.groupId === null) await tx.trainingSessionStageProblemPlan.update({ where: { id: base.id }, data })
         else await tx.trainingSessionStageProblemPlan.create({ data: { stageId: stage.id, stageProblemId: base.stageProblemId, ...data } })
       }
+    }
+    const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, select: { id: true, groupId: true } })
+    for (const participant of participants) {
+      if (participant.groupId) await tx.trainingSessionStageParticipantAssignment.updateMany({ where: { stageId: stage.id, participantId: participant.id }, data: { groupId: participant.groupId, legacyStageGroupId: null } })
     }
   }
 }
@@ -2176,13 +2197,14 @@ async function cloneStageGroupUnit(
   tx: Prisma.TransactionClient,
   source: any,
   targetGroupId: string,
+  targetGroupName: string,
   orderIndex: number,
   runtime: boolean,
 ) {
   const created = await tx.trainingSessionStageGroup.create({ data: {
     stageId: source.stageId,
     groupId: targetGroupId,
-    name: null,
+    name: targetGroupName,
     orderIndex,
     mode: source.mode,
     accessPolicy: source.accessPolicy,
@@ -2242,7 +2264,7 @@ export async function splitTrainingGroup(userId: string, sessionId: string, body
     const active = source.StageGroups.find(item => ['RUNNING', 'PAUSED'].includes(item.status))
     const future = source.StageGroups.filter(item => item.status === 'PENDING')
     for (const unit of source.StageGroups.filter(item => item === active || future.includes(item)).sort((a, b) => a.Stage.orderIndex - b.Stage.orderIndex)) {
-      await cloneStageGroupUnit(tx, unit, target.id, target.orderIndex, unit === active)
+      await cloneStageGroupUnit(tx, unit, target.id, target.name, target.orderIndex, unit === active)
     }
     await tx.trainingSessionParticipant.updateMany({ where: { id: { in: participantIds } }, data: { groupId: target.id, currentProblemId: null } })
     for (const participant of selected) {

@@ -350,7 +350,7 @@ contestProblemsRouter.get('/contests/:id/problems/:problemId/detail', authentica
     const detail = await getContestProblemDetailData(id, problemId, userId, userType)
     if (!detail) return res.status(403).json({ success: false, message: '题目不属于该训练' })
     const { contestProblem, note } = detail
-    const legacyIo = legacySubmissionIoSuggestion(yaml.load(contestProblem.judgeConfigSnapshot || '{}') as any)
+    const legacyIo = legacySubmissionIoSuggestion(yaml.load(contestProblem.judgeConfig || '{}') as any)
     const hideProblemIdentity = shouldHideContestProblemSource(contest, isAdmin)
     const problem = contestProblem.Problem
     const contestStatement = contestProblem.statementMarkdown ? [{
@@ -371,8 +371,8 @@ contestProblemsRouter.get('/contests/:id/problems/:problemId/detail', authentica
         problemSourceHidden: hideProblemIdentity,
         orderIndex: contestProblem.orderIndex,
         points: contestProblem.points,
-        timeLimit: contestProblem.timeLimitSnapshot ?? problem.timeLimit,
-        memoryLimit: contestProblem.memoryLimitSnapshot ?? problem.memoryLimit,
+        timeLimit: contestProblem.timeLimit ?? problem.timeLimit,
+        memoryLimit: contestProblem.memoryLimit ?? problem.memoryLimit,
         difficulty: problem.difficulty,
         description: defaultStatement?.content ?? problem.description,
         statementType: contestProblem.statementType !== 'none' ? contestProblem.statementType : problem.statementType,
@@ -387,11 +387,11 @@ contestProblemsRouter.get('/contests/:id/problems/:problemId/detail', authentica
         ...(isAdmin && defaultStatement?.authorUsername ? { authorUsername: defaultStatement.authorUsername } : {}),
         ...(!hideProblemIdentity && {
           alias: contestProblem.alias,
-          problemTitle: contestProblem.titleSnapshot || problem.title,
+          problemTitle: contestProblem.title || problem.title,
         }),
         // 管理员额外信息
         ...(isAdmin && {
-          problemTitle: contestProblem.titleSnapshot || problem.title,
+          problemTitle: contestProblem.title || problem.title,
           platform: problem.platform,
           platformProblemId: problem.problemId,
         }),
