@@ -56,6 +56,19 @@ export const BlogDiscoveryItemSchema = z.looseObject({
 
 export const BlogDiscoveryListSchema = paginatedDataSchema(BlogDiscoveryItemSchema)
 
+export const ProblemRelatedBlogSchema = z.looseObject({
+  id: z.string(),
+  type: BlogPostTypeSchema,
+  author: z.looseObject({ username: z.string() }),
+  currentVersion: z.looseObject({
+    version: z.number().int().positive(),
+    title: z.string(),
+    summary: z.string().nullable().optional(),
+    publishedAt: DateTimeWireSchema,
+  }),
+})
+export const ProblemRelatedBlogListSchema = paginatedDataSchema(ProblemRelatedBlogSchema)
+
 export const BlogDiscoveryDetailSchema = z.looseObject({
   id: z.string(),
   type: BlogPostTypeSchema,
@@ -97,10 +110,19 @@ export const BlogDiscoveryContracts = {
     scope: 'account',
     data: BlogDiscoveryDetailSchema,
   }),
+  relatedByProblem: defineApiEndpoint({
+    key: 'blog.related.problem',
+    method: 'GET',
+    scope: 'account',
+    query: PaginationQuerySchema,
+    data: ProblemRelatedBlogListSchema,
+  }),
 } as const
 
 export type BlogDiscoveryItem = z.infer<typeof BlogDiscoveryItemSchema>
 export type BlogDiscoveryList = z.infer<typeof BlogDiscoveryListSchema>
 export type BlogDiscoveryDetail = z.infer<typeof BlogDiscoveryDetailSchema>
+export type ProblemRelatedBlog = z.infer<typeof ProblemRelatedBlogSchema>
+export type ProblemRelatedBlogList = z.infer<typeof ProblemRelatedBlogListSchema>
 export type BlogPostType = z.infer<typeof BlogPostTypeSchema>
 export type BlogVisibility = z.infer<typeof BlogVisibilitySchema>

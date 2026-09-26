@@ -7,28 +7,26 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { StatusBadge } from '@/components/ui/Badge'
-import apiClient from '@/lib/apiClient'
-import { BLOG_TYPE_LABELS, type BlogPostType } from '../model/blog-contract'
+import type { ProblemRelatedBlog } from '@oi-manager/contracts'
+import { BLOG_TYPE_LABELS } from '../model/blog-contract'
+import { listProblemRelatedBlogs } from '../api/blogDiscoveryApi'
 import styles from './ProblemRelatedBlogs.module.css'
-
-type RelatedBlog = {
-  id: string
-  type: BlogPostType
-  author: { username: string }
-  currentVersion: { version: number; title: string; summary?: string | null; publishedAt: string }
-}
 
 export function ProblemRelatedBlogs({ problemId }: { problemId: string }) {
   const router = useRouter()
-  const [items, setItems] = useState<RelatedBlog[]>([])
+  const [items, setItems] = useState<ProblemRelatedBlog[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const load = useCallback(async () => {
     setLoading(true); setError('')
-    const result = await apiClient.get<{ items: RelatedBlog[] }>(`/api/problems/${problemId}/blogs?pageSize=50`, { accountScoped: true })
-    if (result.success && result.data) setItems(result.data.items)
-    else { setItems([]); setError(result.message || '关联文章加载失败') }
-    setLoading(false)
+    try {
+      setItems((await listProblemRelatedBlogs(problemId)).items)
+    } catch (loadError) {
+      setItems([])
+      setError(loadError instanceof Error ? loadError.message : '关联文章加载失败')
+    } finally {
+      setLoading(false)
+    }
   }, [problemId])
   useEffect(() => { void load() }, [load])
 

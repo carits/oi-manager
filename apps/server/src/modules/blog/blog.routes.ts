@@ -145,7 +145,16 @@ blogRouter.post('/blog-tags', authenticate, endpoint(req => createBlogTag(req.us
 blogRouter.post('/platform/blog-tags', authenticate, endpoint(req => createBlogTag(req.user, req.body, true), 201))
 blogRouter.get('/blog-tags/:tagId/blogs', authenticate, endpoint(req => listTagBlogs(req.user, req.params.tagId, req.query)))
 
-blogRouter.get('/problems/:problemId/blogs', authenticate, endpoint(req => listProblemBlogs(req.user, req.params.problemId, req.query)))
+blogRouter.get('/problems/:problemId/blogs', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  try {
+    const query = parseContractQuery(BlogDiscoveryContracts.relatedByProblem, req.query)
+    return sendContractData(res, BlogDiscoveryContracts.relatedByProblem, await listProblemBlogs(req.user!, req.params.problemId, query))
+  } catch (error) {
+    if (sendContractError(error, res)) return
+    if (error instanceof BlogDomainError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
+    throw error
+  }
+}))
 blogRouter.get('/contests/:trainingId/blogs', authenticate, endpoint(req => {
   if (!/^\d+$/.test(req.params.trainingId)) throw new BlogDomainError(422, 'BLOG_CONTEST_ID_INVALID', '比赛 ID 无效')
   return listContestBlogs(req.user, Number(req.params.trainingId), req.query)

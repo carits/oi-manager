@@ -3,6 +3,7 @@ import {
   type BlogDiscoveryDetail,
   type BlogDiscoveryList,
   type BlogPostType,
+  type ProblemRelatedBlogList,
 } from '@oi-manager/contracts'
 import { accountClient } from '@/lib/apiClient'
 
@@ -18,6 +19,15 @@ export function listBlogDiscovery(input: {
     if (value !== undefined && value !== '') params.set(key, String(value))
   }
   return accountClient.queryContract(BlogDiscoveryContracts.list, `/api/blog-discovery?${params}`)
+}
+
+export function listProblemRelatedBlogs(problemId: string, pageSize = 50): Promise<ProblemRelatedBlogList> {
+  const query = BlogDiscoveryContracts.relatedByProblem.query.parse({ page: 1, pageSize })
+  const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) })
+  return accountClient.queryContract(
+    BlogDiscoveryContracts.relatedByProblem,
+    `/api/problems/${encodeURIComponent(problemId)}/blogs?${params}`,
+  )
 }
 
 export function getBlogDiscovery(id: string): Promise<BlogDiscoveryDetail> {
