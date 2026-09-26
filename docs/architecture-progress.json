@@ -1,19 +1,19 @@
 {
   "schemaVersion": 2,
-  "contracts": 28,
+  "contracts": 29,
   "featureSlices": 27,
-  "contractedBoundaries": 132,
+  "contractedBoundaries": 171,
   "transport": {
     "legacy": {
       "files": 0,
       "calls": 0
     },
     "feature": {
-      "files": 35,
-      "calls": 179
+      "files": 13,
+      "calls": 115
     },
     "raw": {
-      "registered": 6
+      "registered": 7
     }
   },
   "contestCompatibility": {
@@ -102,18 +102,8 @@
       "layer": "feature"
     },
     {
-      "file": "apps/web/src/features/blog/ui/BlogWorkspace.tsx",
-      "calls": 11,
-      "layer": "feature"
-    },
-    {
       "file": "apps/web/src/features/problem/ui/JudgeProgramWizard.tsx",
       "calls": 11,
-      "layer": "feature"
-    },
-    {
-      "file": "apps/web/src/features/blog/ui/BlogCommunityPanel.tsx",
-      "calls": 10,
       "layer": "feature"
     },
     {
@@ -137,7 +127,7 @@
       "layer": "feature"
     },
     {
-      "file": "apps/web/src/features/blog/ui/BlogSeriesManager.tsx",
+      "file": "apps/web/src/features/problem/ui/UserProblemContentPanel.tsx",
       "calls": 5,
       "layer": "feature"
     }
@@ -152,5 +142,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-26T04:56:42.048Z"
+  "updatedAt": "2026-09-26T11:42:49.177Z"
 }
