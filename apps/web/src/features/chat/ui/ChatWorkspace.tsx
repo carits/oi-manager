@@ -110,13 +110,19 @@ export default function ChatWorkspace() {
   const [tab, setTab] = useState<Tab>('messages')
   const [scope, setScope] = useState<'active' | 'archived'>('active')
   const [conversations, setConversations] = useState<ChatConversation[]>([])
+  const [conversationsLoading, setConversationsLoading] = useState(true)
+  const [conversationsError, setConversationsError] = useState<string>()
   const [conversationCursor, setConversationCursor] = useState<string | null>(null)
   const [friends, setFriends] = useState<ChatFriend[]>([])
   const [requests, setRequests] = useState<ChatFriendRequest[]>([])
   const [blocks, setBlocks] = useState<ChatBlock[]>([])
+  const [relationsLoading, setRelationsLoading] = useState(true)
+  const [relationsError, setRelationsError] = useState<string>()
   const [selectedId, setSelectedId] = useState<string>()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [messagesLoading, setMessagesLoading] = useState(false)
+  const [messagesError, setMessagesError] = useState<string>()
+  const [messagesReloadKey, setMessagesReloadKey] = useState(0)
   const [hasMoreBefore, setHasMoreBefore] = useState(false)
   const [loadingBefore, setLoadingBefore] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
@@ -193,27 +199,37 @@ export default function ChatWorkspace() {
     element.style.height = `${Math.min(element.scrollHeight, 140)}px`
   }, [draft, selectedId])
 
-  const loadConversations = useCallback(async (nextScope = scope, append = false, cursor?: string | null) => {
+  const loadConversations = useCallback(async (nextScope: 'active' | 'archived', append = false, cursor?: string | null) => {
+    if (!append) setConversationsLoading(true)
+    setConversationsError(undefined)
     try {
       const page = await listChatConversations({ scope: nextScope, cursor })
       setConversations(current => append ? [...current, ...page.items.filter(item => !current.some(existing => existing.id === item.id))] : page.items)
       setConversationCursor(page.nextCursor || null)
-    } catch { /* retain the current list; the stream and focus refresh will retry */ }
-  }, [scope])
+    } catch {
+      setConversationsError('会话列表加载失败，请重试。')
+    } finally {
+      if (!append) setConversationsLoading(false)
+    }
+  }, [])
 
   const loadRelations = useCallback(async () => {
-    try {
-      const [nextFriends, nextRequests, nextBlocks, nextPrivacy] = await Promise.all([
-        listChatFriends(),
-        listChatFriendRequests(),
-        listChatBlocks(),
-        getChatPrivacy(),
-      ])
-      setFriends(nextFriends)
-      setRequests(nextRequests)
-      setBlocks(nextBlocks)
-      setPrivacy(nextPrivacy.allowExactUsernameDiscovery)
-    } catch { /* retain the current relation projection until the next refresh */ }
+    setRelationsLoading(true)
+    setRelationsError(undefined)
+    const results = await Promise.allSettled([
+      listChatFriends(),
+      listChatFriendRequests(),
+      listChatBlocks(),
+      getChatPrivacy(),
+    ])
+    if (results[0].status === 'fulfilled') setFriends(results[0].value)
+    if (results[1].status === 'fulfilled') setRequests(results[1].value)
+    if (results[2].status === 'fulfilled') setBlocks(results[2].value)
+    if (results[3].status === 'fulfilled') setPrivacy(results[3].value.allowExactUsernameDiscovery)
+    if (results.some(result => result.status === 'rejected')) {
+      setRelationsError('部分联系人数据加载失败，当前内容可能不是最新状态。')
+    }
+    setRelationsLoading(false)
   }, [])
 
   const markVisibleRead = useCallback(async (conversationId: string, throughSeq?: number) => {
@@ -224,7 +240,12 @@ export default function ChatWorkspace() {
     await refreshUnread()
   }, [refreshUnread])
 
-  useEffect(() => { void loadConversations(scope); void loadRelations() }, [loadConversations, loadRelations, scope])
+  useEffect(() => {
+    setConversations([])
+    setConversationCursor(null)
+    void loadConversations(scope)
+  }, [loadConversations, scope])
+  useEffect(() => { void loadRelations() }, [loadRelations])
   useEffect(() => {
     void listChatStickerPacks().then(packs => {
       setStickerPacks(packs)
@@ -239,7 +260,7 @@ export default function ChatWorkspace() {
     })
   }, [toast, user?.userId])
   useEffect(() => {
-    if (!selectedId) { messagesRef.current = []; setMessages([]); setHasMoreBefore(false); setMessagesLoading(false); return }
+    if (!selectedId) { messagesRef.current = []; setMessages([]); setHasMoreBefore(false); setMessagesLoading(false); setMessagesError(undefined); return }
     const controller = new AbortController()
     const version = ++loadVersion.current
     messagesRef.current = []
@@ -249,6 +270,7 @@ export default function ChatWorkspace() {
     setNewMessageCount(0)
     void (async () => {
       try {
+    setMessagesError(undefined)
         const page = await listChatMessages(selectedId, { pageSize: 50, signal: controller.signal })
         if (controller.signal.aborted || version !== loadVersion.current) return
         setMessages(page.items)
@@ -262,9 +284,10 @@ export default function ChatWorkspace() {
           toast.error('消息加载失败，请重试')
         }
       }
+          setMessagesError('消息加载失败，请重试。')
     })()
     return () => controller.abort()
-  }, [markVisibleRead, selectedId, toast])
+  }, [markVisibleRead, messagesReloadKey, selectedId, toast])
 
   const loadNewMessages = useCallback(async (conversationId: string) => {
     if (selectedRef.current !== conversationId) return
@@ -431,13 +454,14 @@ export default function ChatWorkspace() {
         : { title: '拉黑联系人？', message: '将解除联系人关系，并阻止搜索、联系申请和消息。解除拉黑不会自动恢复关系。', text: '确认拉黑' }
 
   return <PageFrame width="workbench">
-    <PageHeader title="联系人与私信" description="私聊属于平台账号空间，不随当前学校身份变化。" actions={<Switch label="允许完整用户名找到我" description="默认关闭；共享学校或团队成员不受此项影响。" checked={privacy} onChange={async checked => { const response = await updateChatPrivacy({ allowExactUsernameDiscovery: checked }); if (response.ok) setPrivacy(checked); else toast.error(response.error.message || '设置失败') }} />} />
+    <PageHeader title="联系人与私信" description="私聊属于平台账号空间，不随当前学校身份变化。" actions={<Switch label="允许完整用户名找到我" description="默认关闭；共享学校或团队成员不受此项影响。" checked={privacy} disabled={relationsLoading} onChange={async checked => { try { const response = await updateChatPrivacy({ allowExactUsernameDiscovery: checked }); if (response.ok) setPrivacy(checked); else toast.error(response.error.message || '设置失败') } catch { toast.error('设置保存失败，请稍后重试') } }} />} />
     <Tabs<Tab> value={tab} onChange={setTab} items={[{ value: 'messages', label: '消息' }, { value: 'contacts', label: '联系人', count: friends.length }, { value: 'requests', label: '联系申请', count: pending.length }, { value: 'blocks', label: '黑名单', count: blocks.length }]} />
 
     {tab === 'messages' && <div className={styles.workspace}>
       <aside className={`${styles.panel} ${selectedId ? styles.mobileHidden : ''}`} aria-label="会话列表">
         <div className={styles.panelHeader}><h2>{scope === 'active' ? '最近会话' : '归档会话'}</h2><Button variant="ghost" onClick={() => { setSelectedId(undefined); setScope(current => current === 'active' ? 'archived' : 'active') }}>{scope === 'active' ? '查看归档' : '返回最近'}</Button></div>
-        {conversations.length === 0 ? <Empty title={scope === 'active' ? '暂无会话' : '暂无归档会话'} description={scope === 'active' ? '从联系人列表选择联系人开始聊天。' : '归档后的会话会显示在这里。'} /> : conversations.map(item => <Button key={item.id} variant="ghost" className={`${styles.conversation} ${item.id === selectedId ? styles.active : ''}`} aria-pressed={item.id === selectedId} onClick={() => setSelectedId(item.id)}><UserAvatar avatar={item.other.avatar} username={item.other.username} decorative /><span className={styles.conversationBody}><span className={styles.conversationTop}><strong>{item.other.username}</strong><time>{formatConversationTime(item.lastMessageAt)}</time></span><span className={styles.conversationBottom}><span>{item.lastMessagePreview || '尚无消息'}</span>{item.unreadCount > 0 && <b aria-label={`${item.unreadCount} 条未读消息`}>{item.unreadCount}</b>}</span></span></Button>)}
+        {conversationsError && conversations.length > 0 && <div className={styles.actions} role="alert"><span>{conversationsError}</span><Button variant="ghost" onClick={() => void loadConversations(scope)}>重试</Button></div>}
+        {conversationsError && conversations.length === 0 ? <Empty title="会话加载失败" description={conversationsError} action={<Button onClick={() => void loadConversations(scope)}>重新加载</Button>} /> : conversationsLoading && conversations.length === 0 ? <div className={styles.chatEmpty} role="status">正在加载会话…</div> : conversations.length === 0 ? <Empty title={scope === 'active' ? '暂无会话' : '暂无归档会话'} description={scope === 'active' ? '从联系人列表选择联系人开始聊天。' : '归档后的会话会显示在这里。'} /> : conversations.map(item => <Button key={item.id} variant="ghost" className={`${styles.conversation} ${item.id === selectedId ? styles.active : ''}`} aria-pressed={item.id === selectedId} onClick={() => setSelectedId(item.id)}><UserAvatar avatar={item.other.avatar} username={item.other.username} decorative /><span className={styles.conversationBody}><span className={styles.conversationTop}><strong>{item.other.username}</strong><time>{formatConversationTime(item.lastMessageAt)}</time></span><span className={styles.conversationBottom}><span>{item.lastMessagePreview || '尚无消息'}</span>{item.unreadCount > 0 && <b aria-label={`${item.unreadCount} 条未读消息`}>{item.unreadCount}</b>}</span></span></Button>)}
         {conversationCursor && <Button variant="secondary" className={styles.loadMore} onClick={() => void loadConversations(scope, true, conversationCursor)}>加载更多会话</Button>}
       </aside>
       <section className={`${styles.chat} ${!selectedId ? styles.mobileHiddenDetail : ''}`}>
@@ -446,7 +470,7 @@ export default function ChatWorkspace() {
           <div className={styles.messageList} ref={messageListRef} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80; if (nearBottomRef.current) { setNewMessageCount(0); void markVisibleRead(selected.id, messagesRef.current.at(-1)?.seq) } }}>
             <div className={`${styles.messageFlow} ${messages.length === 0 ? styles.emptyFlow : ''}`}>
               {hasMoreBefore && <Button variant="ghost" loading={loadingBefore} onClick={() => void loadOlder()}>加载更早消息</Button>}
-              {messagesLoading ? <div className={styles.chatEmpty} role="status">正在加载消息…</div> : messages.length === 0 ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="还没有消息" description="发条消息开始交流。" /></div> : messageGroups.map(group => { const mine = group.senderUserId === user?.userId; return <section key={group.messages[0].id} className={`${styles.messageGroup} ${mine ? styles.mine : ''}`}>{!mine && <UserAvatar avatar={selected.other.avatar} username={selected.other.username} size="sm" decorative />}<div className={styles.groupMessages}>{group.messages.map(message => { const isSticker = message.type === 'sticker' && message.sticker; return <article key={message.id} className={`${styles.message} ${mine ? styles.mine : ''} ${isSticker ? styles.stickerMessage : ''}`}><div>{isSticker ? <StickerMessage sticker={message.sticker!} fallback={message.content} /> : message.content}</div><footer><time>{formatMessageTime(message.createdAt)}</time>{!mine && <Menu label="消息操作" side="top" trigger={<IconButton className={styles.messageAction} variant="ghost" aria-label="消息操作"><MoreHorizontal size={14} /></IconButton>} items={[...(isSticker ? [] : [{ key: 'copy', label: '复制', onSelect: () => { void copyText(message.content).then(() => toast.success('消息已复制')).catch(() => toast.error('当前浏览器无法复制')) } }]), { key: 'report', label: '举报', danger: true, onSelect: () => setReportMessage(message) }]} />}</footer></article>})}</div></section> })}
+              {messagesLoading ? <div className={styles.chatEmpty} role="status">正在加载消息…</div> : messagesError ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="消息加载失败" description={messagesError} action={<Button onClick={() => setMessagesReloadKey(value => value + 1)}>重新加载</Button>} /></div> : messages.length === 0 ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="还没有消息" description="发条消息开始交流。" /></div> : messageGroups.map(group => { const mine = group.senderUserId === user?.userId; return <section key={group.messages[0].id} className={`${styles.messageGroup} ${mine ? styles.mine : ''}`}>{!mine && <UserAvatar avatar={selected.other.avatar} username={selected.other.username} size="sm" decorative />}<div className={styles.groupMessages}>{group.messages.map(message => { const isSticker = message.type === 'sticker' && message.sticker; return <article key={message.id} className={`${styles.message} ${mine ? styles.mine : ''} ${isSticker ? styles.stickerMessage : ''}`}><div>{isSticker ? <StickerMessage sticker={message.sticker!} fallback={message.content} /> : message.content}</div><footer><time>{formatMessageTime(message.createdAt)}</time>{!mine && <Menu label="消息操作" side="top" trigger={<IconButton className={styles.messageAction} variant="ghost" aria-label="消息操作"><MoreHorizontal size={14} /></IconButton>} items={[...(isSticker ? [] : [{ key: 'copy', label: '复制', onSelect: () => { void copyText(message.content).then(() => toast.success('消息已复制')).catch(() => toast.error('当前浏览器无法复制')) } }]), { key: 'report', label: '举报', danger: true, onSelect: () => setReportMessage(message) }]} />}</footer></article>})}</div></section> })}
             </div>
             {newMessageCount > 0 && <Button className={styles.newMessages} onClick={() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight; setNewMessageCount(0) }}>↓ {newMessageCount} 条新消息</Button>}
           </div>
@@ -455,11 +479,17 @@ export default function ChatWorkspace() {
       </section>
     </div>}
 
-    {tab === 'contacts' && <section className={styles.stack}><div className={styles.search}><SearchField aria-label="搜索用户" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void search() }} placeholder="搜索共享成员，或输入完整用户名" /><Button onClick={() => void search()}>搜索</Button></div>{results.map(result => <article className={styles.row} key={result.id}><div className={styles.rowIdentity}><UserAvatar avatar={result.avatar} username={result.username} decorative /><div><strong>{result.username}</strong><span>@{result.username} · {result.discovery === 'shared' ? '共享学校或团队' : '完整用户名匹配'}</span></div></div><Button variant="secondary" onClick={() => setRequestTarget(result)}>添加联系人</Button></article>)}<h2>我的联系人</h2>{friends.length === 0 ? <Empty title="暂无联系人" description="搜索用户并发送联系申请。" /> : friends.map(friend => <article className={styles.row} key={friend.friendshipId}><div className={styles.rowIdentity}><UserAvatar avatar={friend.user.avatar} username={friend.user.username} decorative /><div><strong>{friend.user.username}</strong><span>@{friend.user.username} · 建立联系于 {new Date(friend.since).toLocaleDateString('zh-CN')}</span></div></div><div className={styles.actions}><Button onClick={() => void openFriend(friend)}>发消息</Button><Button variant="secondary" onClick={() => { setActionTarget(friend.user); setConfirmAction('remove') }}>移除联系人</Button><Button variant="danger" onClick={() => { setActionTarget(friend.user); setConfirmAction('block') }}>拉黑</Button></div></article>)}</section>}
+    {tab === 'contacts' && <section className={styles.stack}><div className={styles.search}><SearchField aria-label="搜索用户" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void search() }} placeholder="搜索共享成员，或输入完整用户名" /><Button onClick={() => void search()}>搜索</Button></div>{results.map(result => <article className={styles.row} key={result.id}><div className={styles.rowIdentity}><UserAvatar avatar={result.avatar} username={result.username} decorative /><div><strong>{result.username}</strong><span>@{result.username} · {result.discovery === 'shared' ? '共享学校或团队' : '完整用户名匹配'}</span></div></div><Button variant="secondary" onClick={() => setRequestTarget(result)}>添加联系人</Button></article>)}<h2>我的联系人</h2>
+      {relationsError && <div className={styles.actions} role="alert"><span>{relationsError}</span><Button variant="ghost" onClick={() => void loadRelations()}>重试</Button></div>}
+      {relationsLoading && friends.length === 0 ? <div role="status">正在加载联系人…</div> : friends.length === 0 ? <Empty title="暂无联系人" description="搜索用户并发送联系申请。" /> : friends.map(friend => <article className={styles.row} key={friend.friendshipId}><div className={styles.rowIdentity}><UserAvatar avatar={friend.user.avatar} username={friend.user.username} decorative /><div><strong>{friend.user.username}</strong><span>@{friend.user.username} · 建立联系于 {new Date(friend.since).toLocaleDateString('zh-CN')}</span></div></div><div className={styles.actions}><Button onClick={() => void openFriend(friend)}>发消息</Button><Button variant="secondary" onClick={() => { setActionTarget(friend.user); setConfirmAction('remove') }}>移除联系人</Button><Button variant="danger" onClick={() => { setActionTarget(friend.user); setConfirmAction('block') }}>拉黑</Button></div></article>)}</section>}
 
-    {tab === 'requests' && <section className={styles.stack}>{requests.length === 0 ? <Empty title="暂无联系申请" description="收到和发出的申请会显示在这里。" /> : requests.map(request => { const incoming = request.addresseeId === user?.userId; const peer = incoming ? request.Requester : request.Addressee; return <article className={styles.row} key={request.id}><div className={styles.rowIdentity}><UserAvatar avatar={peer.avatar} username={peer.username} decorative /><div><strong>{peer.username}</strong><span>@{peer.username} · {incoming ? '向你发送联系申请' : '你发送的联系申请'} · {request.status}</span>{request.message && <p>{request.message}</p>}</div></div>{request.status === 'pending' && <div className={styles.actions}>{incoming ? <><Button onClick={() => void actRequest(request, 'accept')}>接受</Button><Button variant="secondary" onClick={() => void actRequest(request, 'reject')}>拒绝</Button></> : <Button variant="secondary" onClick={() => void actRequest(request, 'cancel')}>撤销</Button>}</div>}</article> })}</section>}
+    {tab === 'requests' && <section className={styles.stack}>
+      {relationsError && <div className={styles.actions} role="alert"><span>{relationsError}</span><Button variant="ghost" onClick={() => void loadRelations()}>重试</Button></div>}
+      {relationsLoading && requests.length === 0 ? <div role="status">正在加载联系申请…</div> : requests.length === 0 ? <Empty title="暂无联系申请" description="收到和发出的申请会显示在这里。" /> : requests.map(request => { const incoming = request.addresseeId === user?.userId; const peer = incoming ? request.Requester : request.Addressee; return <article className={styles.row} key={request.id}><div className={styles.rowIdentity}><UserAvatar avatar={peer.avatar} username={peer.username} decorative /><div><strong>{peer.username}</strong><span>@{peer.username} · {incoming ? '向你发送联系申请' : '你发送的联系申请'} · {request.status}</span>{request.message && <p>{request.message}</p>}</div></div>{request.status === 'pending' && <div className={styles.actions}>{incoming ? <><Button onClick={() => void actRequest(request, 'accept')}>接受</Button><Button variant="secondary" onClick={() => void actRequest(request, 'reject')}>拒绝</Button></> : <Button variant="secondary" onClick={() => void actRequest(request, 'cancel')}>撤销</Button>}</div>}</article> })}</section>}
 
-    {tab === 'blocks' && <section className={styles.stack}>{blocks.length === 0 ? <Empty title="黑名单为空" description="被拉黑的用户不能向你发送联系申请或消息。" /> : blocks.map(block => <article className={styles.row} key={block.id}><div className={styles.rowIdentity}><UserAvatar avatar={block.Blocked.avatar} username={block.Blocked.username} decorative /><div><strong>{block.Blocked.username}</strong><span>@{block.Blocked.username}</span></div></div><Button variant="secondary" onClick={async () => { const result = await unblockChatUser(block.blockedId); if (!result.ok) toast.error(result.error.message); await loadRelations() }}>解除拉黑</Button></article>)}</section>}
+    {tab === 'blocks' && <section className={styles.stack}>
+      {relationsError && <div className={styles.actions} role="alert"><span>{relationsError}</span><Button variant="ghost" onClick={() => void loadRelations()}>重试</Button></div>}
+      {relationsLoading && blocks.length === 0 ? <div role="status">正在加载黑名单…</div> : blocks.length === 0 ? <Empty title="黑名单为空" description="被拉黑的用户不能向你发送联系申请或消息。" /> : blocks.map(block => <article className={styles.row} key={block.id}><div className={styles.rowIdentity}><UserAvatar avatar={block.Blocked.avatar} username={block.Blocked.username} decorative /><div><strong>{block.Blocked.username}</strong><span>@{block.Blocked.username}</span></div></div><Button variant="secondary" onClick={async () => { try { const result = await unblockChatUser(block.blockedId); if (!result.ok) toast.error(result.error.message); else toast.success('已解除拉黑') } catch { toast.error('解除拉黑失败，请稍后重试') } await loadRelations() }}>解除拉黑</Button></article>)}</section>}
 
     <FormDialog isOpen={Boolean(requestTarget)} onClose={() => setRequestTarget(undefined)} onSubmit={() => void sendRequest()} title={`添加 ${requestTarget?.username || ''} 为联系人`} submitText="发送申请" loading={busy} dirty={Boolean(requestMessage)}><label className={styles.field}>申请附言（可选）<Textarea value={requestMessage} maxLength={500} rows={4} onChange={event => setRequestMessage(event.target.value)} /></label></FormDialog>
     <FormDialog isOpen={Boolean(reportMessage)} onClose={() => setReportMessage(undefined)} onSubmit={() => void submitReport()} title="举报消息" description="平台管理员只能在举报审核中查看有限上下文，所有查看都会记录审计。" submitText="提交举报" danger loading={busy}><label className={styles.field}>举报原因<Input value={reportReason} maxLength={100} onChange={event => setReportReason(event.target.value)} /></label></FormDialog>
