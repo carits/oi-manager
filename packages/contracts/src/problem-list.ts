@@ -49,6 +49,7 @@ export const ProblemListContracts = {
   }),
 } as const
 
+export type ProblemListSummary = z.infer<typeof ProblemListSummarySchema>
 export type ProblemListQuery = z.infer<typeof ProblemListQuerySchema>
 export type ProblemListCreateInput = z.infer<typeof ProblemListCreateInputSchema>
 export type ProblemListCollection = z.infer<typeof ProblemListCollectionSchema>

@@ -39,6 +39,22 @@ export function listTeamProblemLists(teamId: string) {
   return apiClient.queryContract(TeamContracts.problemLists, `/api/teams/${encodeURIComponent(teamId)}/problem-lists`)
 }
 
+export function addTeamProblemList(teamId: string, problemListId: string) {
+  return apiClient.mutateContract(
+    TeamContracts.addProblemList,
+    `/api/teams/${encodeURIComponent(teamId)}/problem-lists`,
+    { problemListId },
+  )
+}
+
+export function removeTeamProblemList(teamId: string, itemId: string) {
+  return apiClient.mutateContract(
+    TeamContracts.removeProblemList,
+    `/api/teams/${encodeURIComponent(teamId)}/problem-lists/${encodeURIComponent(itemId)}`,
+    undefined,
+  )
+}
+
 export function getTeamDetail(teamId: string) {
   return apiClient.queryContract(TeamContracts.detail, `/api/teams/${encodeURIComponent(teamId)}`)
 }

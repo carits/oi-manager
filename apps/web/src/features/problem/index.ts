@@ -10,3 +10,5 @@ export const NewProblemListPage = dynamic(() => import('./ui/NewProblemListPage'
 export const PlatformProblemManagementPage = dynamic(() =>
   import('./ui/PlatformProblemManagementPage').then(module => module.PlatformProblemManagementPage)
 )
+
+export { listProblemLists } from './api/problemListApi'

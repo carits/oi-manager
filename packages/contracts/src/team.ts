@@ -114,9 +114,23 @@ export const TeamProblemListItemSchema = z.object({
     ownerType: z.string(), sectionCount: z.number().int().nonnegative(), entryCount: z.number().int().nonnegative(),
   }),
 })
+export type TeamProblemListItem = z.infer<typeof TeamProblemListItemSchema>
+
+const TeamProblemListLinkSchema = z.object({
+  id: z.string(),
+  teamId: z.string(),
+  problemListId: z.string(),
+}).passthrough()
 
 export const TeamContracts = {
   problemLists: defineApiEndpoint({ key: 'team.problem-lists', method: 'GET', scope: 'context', data: z.array(TeamProblemListItemSchema) }),
+  addProblemList: defineApiEndpoint({
+    key: 'team.problem-lists.add', method: 'POST', scope: 'context', data: TeamProblemListLinkSchema,
+    body: z.object({ problemListId: z.string().min(1) }),
+  }),
+  removeProblemList: defineApiEndpoint({
+    key: 'team.problem-lists.remove', method: 'DELETE', scope: 'context', data: z.object({ removed: z.literal(true) }),
+  }),
   checkId: defineApiEndpoint({
     key: 'team.checkId', method: 'GET', scope: 'context',
     query: z.object({ id: z.string().trim().min(1).max(50) }),

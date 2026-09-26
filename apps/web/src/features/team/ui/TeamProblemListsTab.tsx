@@ -6,44 +6,14 @@ import unifiedStyles from './TeamProblemListsTab.unified.module.css'
 import Link from 'next/link'
 import { useAuth } from '@/features/auth'
 import { usePathname } from 'next/navigation'
+import type { ProblemListSummary, TeamProblemListItem } from '@oi-manager/contracts'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
-import apiClient from '@/lib/apiClient'
+import { listProblemLists } from '@/features/problem'
+import { addTeamProblemList, listTeamProblemLists, removeTeamProblemList } from '../api/teamApi'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
-
-interface ProblemListInfo {
-  id: string
-  title: string
-  description: string | null
-  ownerId: string
-  ownerName: string
-  ownerType: string
-  sectionCount: number
-  entryCount: number
-}
-
-interface TeamProblemListItem {
-  id: string
-  problemListId: string
-  addedBy: string
-  addedByName: string
-  addedByRole: string
-  sortOrder: number
-  createdAt: string
-  problemList: ProblemListInfo
-}
-
-interface MyProblemList {
-  id: string
-  title: string
-  description: string | null
-}
-
-interface MyProblemListResponse {
-  lists: MyProblemList[]
-}
 
 interface TeamProblemListsTabProps {
   teamId: string
@@ -63,23 +33,20 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
   const [items, setItems] = useState<TeamProblemListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [myLists, setMyLists] = useState<MyProblemList[]>([])
+  const [myLists, setMyLists] = useState<ProblemListSummary[]>([])
   const [loadingMyLists, setLoadingMyLists] = useState(false)
   const [adding, setAdding] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<TeamProblemListItem | null>(null)
 
   const fetchItems = useCallback(async () => {
     try {
-      const result = await apiClient.get<TeamProblemListItem[]>(`/api/teams/${teamId}/problem-lists`)
-      if (result.success) {
-        setItems(result.data || [])
-      }
+      setItems(await listTeamProblemLists(teamId))
     } catch (error) {
-      console.error('Failed to fetch team problem lists:', error)
+      toast.error(error instanceof Error ? error.message : '团队题单加载失败')
     } finally {
       setLoading(false)
     }
-  }, [teamId])
+  }, [teamId, toast])
 
   useEffect(() => {
     fetchItems()
@@ -89,12 +56,10 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
     setShowAddModal(true)
     setLoadingMyLists(true)
     try {
-      const result = await apiClient.get<MyProblemListResponse>('/api/problem-lists?tab=mine')
-      if (result.success) {
-        setMyLists(result.data?.lists || [])
-      }
+      const result = await listProblemLists({ tab: 'mine', page: 1, pageSize: 100 })
+      setMyLists(result.lists)
     } catch (error) {
-      console.error('Failed to fetch my problem lists:', error)
+      toast.error(error instanceof Error ? error.message : '我的题单加载失败')
     } finally {
       setLoadingMyLists(false)
     }
@@ -105,14 +70,14 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
   const handleAdd = async (problemListId: string) => {
     setAdding(true)
     try {
-      const result = await apiClient.post(`/api/teams/${teamId}/problem-lists`, { problemListId })
-      if (result.success) {
-        toast.success('添加成功')
-        setShowAddModal(false)
-        fetchItems()
-      } else {
-        toast.error(result.message || '添加失败')
+      const result = await addTeamProblemList(teamId, problemListId)
+      if (!result.ok) {
+        toast.error(result.error.message || '添加失败')
+        return
       }
+      toast.success('添加成功')
+      setShowAddModal(false)
+      await fetchItems()
     } catch (error) {
       toast.error('添加失败')
     } finally {
@@ -123,14 +88,14 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
   const handleRemove = async () => {
     if (!removeTarget) return
     try {
-      const result = await apiClient.delete(`/api/teams/${teamId}/problem-lists/${removeTarget.id}`)
-      if (result.success) {
-        toast.success('已移除')
-        setRemoveTarget(null)
-        fetchItems()
-      } else {
-        toast.error(result.message || '移除失败')
+      const result = await removeTeamProblemList(teamId, removeTarget.id)
+      if (!result.ok) {
+        toast.error(result.error.message || '移除失败')
+        return
       }
+      toast.success('已移除')
+      setRemoveTarget(null)
+      await fetchItems()
     } catch (error) {
       toast.error('移除失败')
     }

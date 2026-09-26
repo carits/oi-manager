@@ -2,7 +2,7 @@ import { Router, type Response } from 'express'
 import { TeamContracts } from '@oi-manager/contracts'
 import { authenticate, type AuthRequest } from '../middleware/auth'
 import { asyncHandler, classifyClientError } from '../lib/asyncHandler'
-import { sendContractData, sendContractError } from '../lib/api-contract'
+import { parseContractBody, sendContractData, sendContractError } from '../lib/api-contract'
 import {
   addTeamProblemList,
   listTeamProblemLists,
@@ -39,10 +39,15 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, endpoint('获
 }))
 
 teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, endpoint('添加团队题单失败', async (req, res) => {
-  res.json({ success: true, data: await addTeamProblemList(req.user!, req.params.teamId, req.body.problemListId) })
+  const body = parseContractBody(TeamContracts.addProblemList, req.body)
+  return sendContractData(
+    res,
+    TeamContracts.addProblemList,
+    await addTeamProblemList(req.user!, req.params.teamId, body.problemListId),
+  )
 }))
 
 teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, endpoint('移除团队题单失败', async (req, res) => {
   await removeTeamProblemList(req.user!, req.params.teamId, req.params.id)
-  res.json({ success: true, message: '已移除' })
+  return sendContractData(res, TeamContracts.removeProblemList, { removed: true })
 }))

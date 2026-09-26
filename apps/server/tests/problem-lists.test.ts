@@ -159,7 +159,13 @@ describe('题单权限模块', () => {
         ownerType: 'teacher',
       })
       const request = organizationRequest(ownerToken)
-      expect((await request.post(`/api/teams/${team.id}/problem-lists`).send({ problemListId: testList.list.id })).status).toBe(200)
+      const created = await request.post(`/api/teams/${team.id}/problem-lists`).send({ problemListId: testList.list.id })
+      expect(created.status).toBe(200)
+      expect(created.body.data).toEqual(expect.objectContaining({
+        id: expect.any(String),
+        teamId: team.id,
+        problemListId: testList.list.id,
+      }))
 
       const response = await request.get(`/api/teams/${team.id}/problem-lists`)
       expect(response.status).toBe(200)
@@ -167,6 +173,10 @@ describe('题单权限模块', () => {
         problemListId: testList.list.id,
         problemList: expect.objectContaining({ id: testList.list.id, title: testList.list.title }),
       })]))
+
+      const removed = await request.delete(`/api/teams/${team.id}/problem-lists/${created.body.data.id}`)
+      expect(removed.status).toBe(200)
+      expect(removed.body.data).toEqual({ removed: true })
     })
 
     it('不能把另一学校题单挂到当前学校团队', async () => {
