@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Copy, Eye, Pencil, Plus, RotateCcw, Search } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
-import apiClient from '@/lib/apiClient'
+import { copyProblemToSchool } from '../api/problemEditorApi'
 import { OJ_PLATFORMS, OJ_PLATFORMS_NO_ALL, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
@@ -154,10 +154,7 @@ export function ProblemList({ role }: ProblemListProps) {
   const copyToSchool = async (problem: Problem) => {
     if (copyingId) return
     setCopyingId(problem.id)
-    const result = await apiClient.mutate<{ problem: { id: string }; skippedFiles: string[] }>(
-      `/api/problems/${problem.id}/copy-to-school`,
-      'POST',
-    )
+    const result = await copyProblemToSchool(problem.id)
     setCopyingId(null)
     if (result.ok) {
       if (result.data.skippedFiles.length > 0) {

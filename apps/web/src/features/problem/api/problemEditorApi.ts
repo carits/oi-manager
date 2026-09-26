@@ -11,6 +11,9 @@ const problemPath = (problemId: string) =>
 export const createProblem = (body: ProblemCreateInput) =>
   apiClient.mutateContract(ProblemContracts.create, '/api/problems', body)
 
+export const copyProblemToSchool = (problemId: string) =>
+  apiClient.mutateContract(ProblemContracts.copyToSchool, `${problemPath(problemId)}/copy-to-school`, undefined)
+
 export const getProblemEditorDetail = (problemId: string) =>
   apiClient.queryContract(ProblemContracts.getEditorDetail, problemPath(problemId))
 

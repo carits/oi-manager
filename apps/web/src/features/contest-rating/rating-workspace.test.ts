@@ -18,8 +18,9 @@ describe('contest Rating workspace contract', () => {
   it('keeps finalization and rebuild actions in the shared settlement panel', () => {
     const source = fs.readFileSync(new URL('./ui/TrainingRatingPanel.tsx', import.meta.url), 'utf8')
 
-    expect(source).toContain("kind === 'finalize' ? 'finalize' : 'rating/rebuild'")
-    expect(source).toContain('apiClient.post<RatingPayload>')
+    expect(source).toContain("kind === 'finalize'")
+    expect(source).toContain('finalizeContestRating')
+    expect(source).toContain('rebuildContestRating')
     expect(source).toContain('生成最终榜单并结算')
     expect(source).toContain('重放最终榜单与 Rating')
     expect(source).toContain('查看最终榜单与计算规则')
@@ -30,7 +31,8 @@ describe('contest Rating workspace contract', () => {
   it('requires a visible organization choice before multi-organization BOTH participation', () => {
     const source = fs.readFileSync(new URL('./ui/TrainingRatingPanel.tsx', import.meta.url), 'utf8')
 
-    expect(source).toContain('/rating-participation')
+    expect(source).toContain('getContestRatingParticipation')
+    expect(source).toContain('updateContestRatingParticipation')
     expect(source).toContain('requiresExplicitSelection')
     expect(source).toContain('aria-label="参赛学校"')
     expect(source).toContain('首次提交后固定')

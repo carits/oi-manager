@@ -62,6 +62,10 @@ export const ProblemEditorDetailSchema = z.object({
 }).passthrough();
 
 export const ProblemMutationResultSchema = z.object({ id: z.string() }).passthrough();
+export const ProblemSchoolCopyResultSchema = z.object({
+  problem: z.object({ id: z.string() }).passthrough(),
+  skippedFiles: z.array(z.string()),
+});
 
 export const ProblemAttachmentSchema = z.object({
   id: z.string(),
@@ -466,6 +470,12 @@ export const ProblemContracts = {
     scope: "context",
     body: ProblemCreateInputSchema,
     data: ProblemMutationResultSchema,
+  }),
+  copyToSchool: defineApiEndpoint({
+    key: "problem.copy-to-school",
+    method: "POST",
+    scope: "context",
+    data: ProblemSchoolCopyResultSchema,
   }),
   getEditorDetail: defineApiEndpoint({
     key: "problem.editor-detail.get",

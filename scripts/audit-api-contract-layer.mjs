@@ -24,7 +24,6 @@ const legacyTransportAllowances = {
 const legacyFeatureTransportAllowances = {
   'apps/web/src/features/training-session/ui/TrainingSessionWorkspace.tsx': 18,
   'apps/web/src/features/training-session/ui/TrainingSessionListPage.tsx': 10,
-  'apps/web/src/features/contest-rating/rating-workspace.test.ts': 1,
   'apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx': 3,
   'apps/web/src/features/blog/ui/BlogWorkspace.tsx': 11,
   'apps/web/src/features/blog/ui/BlogSeriesManager.tsx': 5,
@@ -38,7 +37,6 @@ const legacyFeatureTransportAllowances = {
   'apps/web/src/features/problem/ui/ProblemHackPanel.tsx': 8,
   'apps/web/src/features/problem/ui/UserProblemContentPanel.tsx': 5,
   'apps/web/src/features/problem/ui/ProblemListDetailPage.tsx': 18,
-  'apps/web/src/features/problem/ui/ProblemList.tsx': 1,
   'apps/web/src/features/problem/ui/StatementVersionWorkspace.tsx': 8,
   'apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx': 19,
   'apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx': 8,
@@ -251,6 +249,7 @@ const contractedBoundaries = [
   ['apps/web/src/features/problem/api/judgeProgramTemplateApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/ui/ProblemForm.tsx', 'getProblemEditorDetail'],
   ['apps/web/src/features/problem/ui/ProblemForm.tsx', 'updateProblem'],
+  ['apps/web/src/features/problem/ui/ProblemList.tsx', 'copyProblemToSchool'],
   ['apps/web/src/features/problem/ui/PlatformProblemManagementPage.tsx', 'listOjFetchJobs'],
   ['apps/web/src/features/problem/ui/PlatformProblemManagementPage.tsx', 'listPlatformManagedProblems'],
   ['apps/web/src/features/oj-account/api/ojAccountApi.ts', 'OjAccountContracts'],

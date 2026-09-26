@@ -55,7 +55,7 @@ problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
 problemCrudRouter.post('/:id/copy-to-school', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await copyProblemIntoSchool(req.user!, req.params.id)
-    return res.status(201).json({ success: true, data })
+    return sendContractData(res, ProblemContracts.copyToSchool, data, 201)
   } catch (error) {
     return sendProblemCrudError(error, res)
   }
