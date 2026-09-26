@@ -635,8 +635,12 @@ export async function submitAssignmentSolution(userId: string, assignmentId: str
   if (!problem) throw new AssignmentError(404, 'ASSIGNMENT_PROBLEM_NOT_FOUND', '作业题目不存在')
   const now = new Date()
   if (assignment.status === 'CANCELLED' || assignment.status === 'DRAFT' || now < assignment.openAt) throw new AssignmentError(409, 'ASSIGNMENT_NOT_OPEN', '作业尚未开放')
-  if (['CLOSED', 'REVIEWING', 'RELEASED', 'ARCHIVED'].includes(assignment.status) || now > recipient.closeAtEffective) throw new AssignmentError(409, 'ASSIGNMENT_CLOSED', '作业已关闭提交')
   const correction = await prisma.assignmentCorrection.findFirst({ where: { assignmentId, assignmentProblemId, recipientId: recipient.id, status: { in: ['NEEDS_CORRECTION', 'CORRECTING'] }, OR: [{ dueAt: null }, { dueAt: { gte: now } }] }, orderBy: { createdAt: 'desc' } })
+  if (correction) {
+    if (['RELEASED', 'ARCHIVED'].includes(assignment.status)) throw new AssignmentError(409, 'ASSIGNMENT_CLOSED', '成绩已发布，订正提交已关闭')
+  } else if (['CLOSED', 'REVIEWING', 'RELEASED', 'ARCHIVED'].includes(assignment.status) || now > recipient.closeAtEffective) {
+    throw new AssignmentError(409, 'ASSIGNMENT_CLOSED', '作业已关闭提交')
+  }
   const submissionPhase = correction ? 'CORRECTION' : now > recipient.dueAtEffective ? 'LATE' : 'ORIGINAL'
   if (submissionPhase === 'LATE' && assignment.latePolicy === 'DISALLOW') throw new AssignmentError(409, 'ASSIGNMENT_LATE_SUBMISSION_DISALLOWED', '本作业不允许迟交')
   const language = boundedText(body?.language, 30, '语言', 1)

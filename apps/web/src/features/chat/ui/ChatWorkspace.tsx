@@ -116,6 +116,7 @@ export default function ChatWorkspace() {
   const [blocks, setBlocks] = useState<ChatBlock[]>([])
   const [selectedId, setSelectedId] = useState<string>()
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messagesLoading, setMessagesLoading] = useState(false)
   const [hasMoreBefore, setHasMoreBefore] = useState(false)
   const [loadingBefore, setLoadingBefore] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
@@ -238,9 +239,13 @@ export default function ChatWorkspace() {
     })
   }, [toast, user?.userId])
   useEffect(() => {
-    if (!selectedId) { setMessages([]); setHasMoreBefore(false); return }
+    if (!selectedId) { messagesRef.current = []; setMessages([]); setHasMoreBefore(false); setMessagesLoading(false); return }
     const controller = new AbortController()
     const version = ++loadVersion.current
+    messagesRef.current = []
+    setMessages([])
+    setHasMoreBefore(false)
+    setMessagesLoading(true)
     setNewMessageCount(0)
     void (async () => {
       try {
@@ -248,10 +253,14 @@ export default function ChatWorkspace() {
         if (controller.signal.aborted || version !== loadVersion.current) return
         setMessages(page.items)
         setHasMoreBefore(page.page.hasMoreBefore)
+        setMessagesLoading(false)
         requestAnimationFrame(() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight })
         await markVisibleRead(selectedId, page.page.newestSeq)
       } catch {
-        if (!controller.signal.aborted && version === loadVersion.current) toast.error('消息加载失败，请重试')
+        if (!controller.signal.aborted && version === loadVersion.current) {
+          setMessagesLoading(false)
+          toast.error('消息加载失败，请重试')
+        }
       }
     })()
     return () => controller.abort()
@@ -437,7 +446,7 @@ export default function ChatWorkspace() {
           <div className={styles.messageList} ref={messageListRef} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80; if (nearBottomRef.current) { setNewMessageCount(0); void markVisibleRead(selected.id, messagesRef.current.at(-1)?.seq) } }}>
             <div className={`${styles.messageFlow} ${messages.length === 0 ? styles.emptyFlow : ''}`}>
               {hasMoreBefore && <Button variant="ghost" loading={loadingBefore} onClick={() => void loadOlder()}>加载更早消息</Button>}
-              {messages.length === 0 ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="还没有消息" description="发条消息开始交流。" /></div> : messageGroups.map(group => { const mine = group.senderUserId === user?.userId; return <section key={group.messages[0].id} className={`${styles.messageGroup} ${mine ? styles.mine : ''}`}>{!mine && <UserAvatar avatar={selected.other.avatar} username={selected.other.username} size="sm" decorative />}<div className={styles.groupMessages}>{group.messages.map(message => { const isSticker = message.type === 'sticker' && message.sticker; return <article key={message.id} className={`${styles.message} ${mine ? styles.mine : ''} ${isSticker ? styles.stickerMessage : ''}`}><div>{isSticker ? <StickerMessage sticker={message.sticker!} fallback={message.content} /> : message.content}</div><footer><time>{formatMessageTime(message.createdAt)}</time>{!mine && <Menu label="消息操作" side="top" trigger={<IconButton className={styles.messageAction} variant="ghost" aria-label="消息操作"><MoreHorizontal size={14} /></IconButton>} items={[...(isSticker ? [] : [{ key: 'copy', label: '复制', onSelect: () => { void copyText(message.content).then(() => toast.success('消息已复制')).catch(() => toast.error('当前浏览器无法复制')) } }]), { key: 'report', label: '举报', danger: true, onSelect: () => setReportMessage(message) }]} />}</footer></article>})}</div></section> })}
+              {messagesLoading ? <div className={styles.chatEmpty} role="status">正在加载消息…</div> : messages.length === 0 ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="还没有消息" description="发条消息开始交流。" /></div> : messageGroups.map(group => { const mine = group.senderUserId === user?.userId; return <section key={group.messages[0].id} className={`${styles.messageGroup} ${mine ? styles.mine : ''}`}>{!mine && <UserAvatar avatar={selected.other.avatar} username={selected.other.username} size="sm" decorative />}<div className={styles.groupMessages}>{group.messages.map(message => { const isSticker = message.type === 'sticker' && message.sticker; return <article key={message.id} className={`${styles.message} ${mine ? styles.mine : ''} ${isSticker ? styles.stickerMessage : ''}`}><div>{isSticker ? <StickerMessage sticker={message.sticker!} fallback={message.content} /> : message.content}</div><footer><time>{formatMessageTime(message.createdAt)}</time>{!mine && <Menu label="消息操作" side="top" trigger={<IconButton className={styles.messageAction} variant="ghost" aria-label="消息操作"><MoreHorizontal size={14} /></IconButton>} items={[...(isSticker ? [] : [{ key: 'copy', label: '复制', onSelect: () => { void copyText(message.content).then(() => toast.success('消息已复制')).catch(() => toast.error('当前浏览器无法复制')) } }]), { key: 'report', label: '举报', danger: true, onSelect: () => setReportMessage(message) }]} />}</footer></article>})}</div></section> })}
             </div>
             {newMessageCount > 0 && <Button className={styles.newMessages} onClick={() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight; setNewMessageCount(0) }}>↓ {newMessageCount} 条新消息</Button>}
           </div>
