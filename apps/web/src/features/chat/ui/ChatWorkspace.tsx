@@ -269,8 +269,8 @@ export default function ChatWorkspace() {
     setMessagesLoading(true)
     setNewMessageCount(0)
     void (async () => {
+      setMessagesError(undefined)
       try {
-    setMessagesError(undefined)
         const page = await listChatMessages(selectedId, { pageSize: 50, signal: controller.signal })
         if (controller.signal.aborted || version !== loadVersion.current) return
         setMessages(page.items)
@@ -281,10 +281,10 @@ export default function ChatWorkspace() {
       } catch {
         if (!controller.signal.aborted && version === loadVersion.current) {
           setMessagesLoading(false)
+          setMessagesError('消息加载失败，请重试。')
           toast.error('消息加载失败，请重试')
         }
       }
-          setMessagesError('消息加载失败，请重试。')
     })()
     return () => controller.abort()
   }, [markVisibleRead, messagesReloadKey, selectedId, toast])
