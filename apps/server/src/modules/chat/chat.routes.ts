@@ -110,10 +110,22 @@ chatRouter.get('/events', endpoint('建立聊天实时连接失败', async (req,
 }))
 
 chatReportAdminRouter.use(authenticate, authorize('super_admin', 'platform_admin'))
-chatReportAdminRouter.get('/', endpoint('获取聊天举报失败', async (req, res) => res.json({ success: true, data: await listReports(req.query) })))
-chatReportAdminRouter.get('/:id', endpoint('获取聊天举报详情失败', async (req, res) => res.json({ success: true, data: await getReport(req.user!.userId, req.params.id, req.query.reason) })))
-chatReportAdminRouter.post('/:id/resolve', endpoint('处理聊天举报失败', async (req, res) => res.json({ success: true, data: await reviewReport(req.user!.userId, req.params.id, 'resolved', req.body.note) })))
-chatReportAdminRouter.post('/:id/dismiss', endpoint('驳回聊天举报失败', async (req, res) => res.json({ success: true, data: await reviewReport(req.user!.userId, req.params.id, 'dismissed', req.body.note) })))
+chatReportAdminRouter.get('/', endpoint('获取聊天举报失败', async (req, res) => {
+  const query = parseContractQuery(ChatContracts.listReportsAdmin, req.query)
+  return sendContractData(res, ChatContracts.listReportsAdmin, await listReports(query))
+}))
+chatReportAdminRouter.get('/:id', endpoint('获取聊天举报详情失败', async (req, res) => {
+  const query = parseContractQuery(ChatContracts.getReportAdmin, req.query)
+  return sendContractData(res, ChatContracts.getReportAdmin, await getReport(req.user!.userId, req.params.id, query.reason))
+}))
+chatReportAdminRouter.post('/:id/resolve', endpoint('处理聊天举报失败', async (req, res) => {
+  const body = parseContractBody(ChatContracts.reviewReportAdmin, req.body)
+  return sendContractData(res, ChatContracts.reviewReportAdmin, await reviewReport(req.user!.userId, req.params.id, 'resolved', body.note))
+}))
+chatReportAdminRouter.post('/:id/dismiss', endpoint('驳回聊天举报失败', async (req, res) => {
+  const body = parseContractBody(ChatContracts.reviewReportAdmin, req.body)
+  return sendContractData(res, ChatContracts.reviewReportAdmin, await reviewReport(req.user!.userId, req.params.id, 'dismissed', body.note))
+}))
 
 chatStickerAdminRouter.use(authenticate, authorize('super_admin'))
 chatStickerAdminRouter.post('/chat-sticker-imports', stickerUpload.single('archive'), endpoint('导入聊天表情包失败', async (req, res) => {

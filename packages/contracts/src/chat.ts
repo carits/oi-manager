@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DateTimeWireSchema, defineApiEndpoint } from './http'
+import { DateTimeWireSchema, defineApiEndpoint, PaginationMetaSchema, PaginationQuerySchema } from './http'
 
 export const ChatUserSchema = z.object({
   id: z.string().min(1),
@@ -115,6 +115,70 @@ export const ChatUnreadSchema = z.object({
 })
 export type ChatUnread = z.infer<typeof ChatUnreadSchema>
 
+export const ChatReportStatusSchema = z.enum(['pending', 'resolved', 'dismissed'])
+export type ChatReportStatus = z.infer<typeof ChatReportStatusSchema>
+
+const ChatReportPartySchema = z.object({ username: z.string().min(1) })
+
+export const ChatReportSummarySchema = z.object({
+  id: z.string().min(1),
+  reason: z.string().min(1),
+  status: ChatReportStatusSchema,
+  createdAt: DateTimeWireSchema,
+  reviewedAt: DateTimeWireSchema.nullable().optional(),
+  evidenceReleasedAt: DateTimeWireSchema.nullable().optional(),
+  Reporter: ChatReportPartySchema,
+  Target: ChatReportPartySchema,
+})
+export type ChatReportSummary = z.infer<typeof ChatReportSummarySchema>
+
+export const ChatReportEvidenceMessageSchema = z.object({
+  id: z.string().min(1),
+  senderUserId: z.string().min(1),
+  seq: z.number().int().positive(),
+  messageType: z.enum(['text', 'sticker']).optional(),
+  stickerId: z.string().nullable().optional(),
+  content: z.string(),
+  createdAt: DateTimeWireSchema,
+  Sender: ChatReportPartySchema.optional(),
+  Sticker: z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    sha256: z.string().optional(),
+    Pack: z.object({ key: z.string(), version: z.number().int().positive() }).optional(),
+  }).nullable().optional(),
+})
+export type ChatReportEvidenceMessage = z.infer<typeof ChatReportEvidenceMessageSchema>
+
+const ReleasedChatReportEvidenceSchema = z.object({
+  released: z.literal(true),
+  releasedAt: DateTimeWireSchema,
+  sha256: z.string().min(1),
+  itemCount: z.number().int().nonnegative().optional(),
+})
+
+export const ChatReportDetailSchema = ChatReportSummarySchema.extend({
+  messageId: z.string().nullable().optional(),
+  details: z.string().nullable().optional(),
+  evidenceSnapshot: z.union([z.array(ChatReportEvidenceMessageSchema), ReleasedChatReportEvidenceSchema]),
+  resolutionNote: z.string().nullable().optional(),
+})
+export type ChatReportDetail = z.infer<typeof ChatReportDetailSchema>
+
+export const ChatReportListSchema = z.object({
+  items: z.array(ChatReportSummarySchema),
+  pagination: PaginationMetaSchema,
+})
+export type ChatReportList = z.infer<typeof ChatReportListSchema>
+
+export const ChatReportReviewResultSchema = z.object({
+  id: z.string().min(1),
+  status: ChatReportStatusSchema,
+  reviewedAt: DateTimeWireSchema.nullable().optional(),
+  resolutionNote: z.string().nullable().optional(),
+})
+export type ChatReportReviewResult = z.infer<typeof ChatReportReviewResultSchema>
+
 const EmptyBodySchema = z.object({})
 const ConversationListQuerySchema = z.object({
   pagination: z.literal('v2'),
@@ -203,6 +267,18 @@ export const ChatContracts = {
   createReport: defineApiEndpoint({
     key: 'chat.reports.create', method: 'POST', scope: 'account', data: z.object({ id: z.string().min(1) }),
     body: z.object({ messageId: z.string().min(1), reason: z.string().trim().min(1).max(100) }),
+  }),
+  listReportsAdmin: defineApiEndpoint({
+    key: 'chat.reports.admin.list', method: 'GET', scope: 'platform', data: ChatReportListSchema,
+    query: PaginationQuerySchema.extend({ status: ChatReportStatusSchema.optional() }),
+  }),
+  getReportAdmin: defineApiEndpoint({
+    key: 'chat.reports.admin.detail', method: 'GET', scope: 'platform', data: ChatReportDetailSchema,
+    query: z.object({ reason: z.string().trim().min(1).max(500) }),
+  }),
+  reviewReportAdmin: defineApiEndpoint({
+    key: 'chat.reports.admin.review', method: 'POST', scope: 'platform', data: ChatReportReviewResultSchema,
+    body: z.object({ note: z.string().trim().min(1).max(2000) }),
   }),
   listStickerPacks: defineApiEndpoint({
     key: 'chat.stickers.list', method: 'GET', scope: 'account', data: z.array(ChatStickerPackSchema),

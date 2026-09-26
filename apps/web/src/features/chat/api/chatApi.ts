@@ -4,9 +4,12 @@ import {
   type ChatMessage,
   type ChatMessagePage,
   type ChatPrivacy,
+  type ChatReportDetail,
+  type ChatReportList,
+  type ChatReportStatus,
   type ChatSticker,
 } from '@oi-manager/contracts'
-import { accountClient } from '@/lib/apiClient'
+import { accountClient, platformClient } from '@/lib/apiClient'
 
 const chatPath = '/api/chat'
 const encoded = (value: string) => encodeURIComponent(value)
@@ -53,5 +56,21 @@ export const unarchiveChatConversation = (conversationId: string) => accountClie
 export const clearChatConversation = (conversationId: string) => accountClient.mutateContract(ChatContracts.clearConversation, `${chatPath}/conversations/${encoded(conversationId)}/clear`, {})
 export const getChatUnread = () => accountClient.queryContract(ChatContracts.getUnread, `${chatPath}/unread`)
 export const createChatReport = (messageId: string, reason: string) => accountClient.mutateContract(ChatContracts.createReport, `${chatPath}/reports`, { messageId, reason })
+
+const chatReportAdminPath = '/api/platform/chat-reports'
+
+export function listPlatformChatReports(status: ChatReportStatus, page = 1, pageSize = 20): Promise<ChatReportList> {
+  const query = new URLSearchParams({ status, page: String(page), pageSize: String(pageSize) })
+  return platformClient.queryContract(ChatContracts.listReportsAdmin, `${chatReportAdminPath}?${query}`)
+}
+
+export function getPlatformChatReport(reportId: string, reason: string): Promise<ChatReportDetail> {
+  const query = new URLSearchParams({ reason })
+  return platformClient.queryContract(ChatContracts.getReportAdmin, `${chatReportAdminPath}/${encoded(reportId)}?${query}`)
+}
+
+export function reviewPlatformChatReport(reportId: string, action: 'resolve' | 'dismiss', note: string) {
+  return platformClient.mutateContract(ChatContracts.reviewReportAdmin, `${chatReportAdminPath}/${encoded(reportId)}/${action}`, { note })
+}
 
 export type { ChatMessage }
