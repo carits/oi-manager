@@ -120,6 +120,176 @@ export const ProblemSubmissionListSchema = z.object({
   totalPages: z.number().int().nonnegative(),
 });
 
+export const ProblemContributionAssetStatusSchema = z.enum([
+  "none", "draft", "verifying", "failed", "ready", "active",
+]);
+
+export const ProblemContributionAssetSchema = z.object({
+  status: ProblemContributionAssetStatusSchema,
+  versionId: z.string().optional(),
+  source: z.enum(["dsl", "custom"]).optional(),
+});
+
+export const ProblemContributionReadinessSchema = z.object({
+  canContribute: z.boolean(),
+  canHack: z.boolean(),
+  canManage: z.boolean(),
+  mode: z.enum(["acm", "oi"]),
+  standard: ProblemContributionAssetSchema,
+  validator: ProblemContributionAssetSchema,
+  classifier: ProblemContributionAssetSchema.extend({
+    requiredForHack: z.boolean(),
+    requiredForPromotion: z.boolean(),
+  }),
+  wrongCorpus: z.object({
+    status: z.enum(["none", "bootstrap", "ready"]),
+    mode: z.enum(["closed", "limited", "open"]),
+  }),
+  subtasks: z.array(z.object({
+    subtaskId: z.number().int().positive(),
+    caseCount: z.number().int().nonnegative(),
+    caseLimit: z.number().int().positive(),
+    wrongProgramCount: z.number().int().nonnegative(),
+    wrongClusterCount: z.number().int().nonnegative(),
+    contributionMode: z.enum(["closed", "limited", "open"]),
+    autoSelection: z.boolean(),
+    bootstrapAvailable: z.boolean(),
+  })).optional(),
+  blockers: z.array(z.object({ code: z.string(), message: z.string() })),
+  warnings: z.array(z.object({ code: z.string(), message: z.string() })),
+});
+
+export const ProblemContributionCaseSchema = z.object({
+  caseId: z.string(),
+  name: z.string(),
+  status: z.string(),
+  stage: z.string(),
+  candidateId: z.string().optional(),
+  candidateStatus: z.string().optional(),
+  promotedRevisionId: z.string().optional(),
+  message: z.string().nullable().optional(),
+});
+
+export const ProblemContributionTaskSchema = z.object({
+  jobId: z.string(),
+  status: z.string(),
+  sourceMode: z.string(),
+  contributionOrganizationId: z.string().nullable(),
+  contributionOrganizationName: z.string().nullable(),
+  stage: z.string(),
+  createdAt: DateTimeWireSchema,
+  updatedAt: DateTimeWireSchema,
+  finishedAt: DateTimeWireSchema.nullable().optional(),
+  errorCode: z.string().nullable().optional(),
+  message: z.string().nullable().optional(),
+  cases: z.array(ProblemContributionCaseSchema),
+});
+
+export const ProblemCandidateDataInputSchema = z.object({
+  name: z.string().trim().min(1).max(80).default("用户贡献"),
+  inputData: z.string().min(1),
+  contributionOrganizationId: z.string().min(1).optional(),
+});
+
+const ProblemGeneratorProfileSchema = z.object({
+  id: z.string(),
+  label: z.string().optional(),
+  params: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const ProblemCandidateGeneratorInputSchema = z.object({
+  language: z.enum(["cpp17", "python3"]),
+  source: z.string().min(1),
+  contributionOrganizationId: z.string().min(1).optional(),
+  manifest: z.object({
+    apiVersion: z.string(),
+    protocol: z.string(),
+    language: z.string().optional(),
+    entry: z.string().optional(),
+    parameterSchema: z.record(z.string(), z.unknown()).default({}),
+    profiles: z.array(ProblemGeneratorProfileSchema),
+  }),
+});
+
+export const ProblemContributionJobResultSchema = z.object({
+  jobId: z.string(),
+  status: z.string(),
+});
+
+export const ProblemHackAttemptSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  userId: z.string(),
+  username: z.string().optional(),
+  contributionOrganizationId: z.string().nullable(),
+  contributionOrganizationName: z.string().nullable(),
+  status: z.string(),
+  inputMode: z.string(),
+  generatorLanguage: z.string().nullable().optional(),
+  hackLanguage: z.string(),
+  baselineResult: z.string().nullable().optional(),
+  baselineScore: z.number().nullable().optional(),
+  candidateResult: z.string().nullable().optional(),
+  candidateScore: z.number().nullable().optional(),
+  scoreDelta: z.number().nullable().optional(),
+  affectedSubtaskIds: z.array(z.number().int().positive()),
+  acceptedTestcaseId: z.string().nullable().optional(),
+  testGraphRevision: z.number().int().nullable().optional(),
+  baseTestSetRevisionId: z.string().nullable().optional(),
+  candidateTestcaseId: z.string().nullable().optional(),
+  promotedRevisionId: z.string().nullable().optional(),
+  canonicalStatus: z.string().nullable().optional(),
+  testcaseCandidateId: z.string().nullable().optional(),
+  testcaseCandidateStatus: z.string().nullable().optional(),
+  promotionRetries: z.number().int().nonnegative().optional(),
+  baseTestSetRevision: z.number().int().positive().nullable().optional(),
+  promotedRevision: z.number().int().positive().nullable().optional(),
+  failureStage: z.string().nullable().optional(),
+  message: z.string().nullable().optional(),
+  acceptedInputFile: z.string().nullable().optional(),
+  createdAt: DateTimeWireSchema,
+  updatedAt: DateTimeWireSchema,
+  finishedAt: DateTimeWireSchema.nullable().optional(),
+  inputData: z.string().nullable().optional(),
+  generatorSource: z.string().nullable().optional(),
+  hackSource: z.string().nullable().optional(),
+  inputFilename: z.string().nullable().optional(),
+  outputFilename: z.string().nullable().optional(),
+}).passthrough();
+
+export const ProblemHackAttemptListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export const ProblemHackAttemptListSchema = z.object({
+  attempts: z.array(ProblemHackAttemptSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  acceptedCount: z.number().int().nonnegative(),
+  canManage: z.boolean(),
+});
+
+export const ProblemHackAttemptInputSchema = z.object({
+  inputMode: z.enum(["data", "generator"]),
+  inputData: z.string().optional(),
+  generatorSource: z.string().optional(),
+  generatorLanguage: z.enum(["cpp17", "python3"]).optional(),
+  hackSource: z.string().min(1),
+  hackLanguage: z.string().min(1),
+  inputFilename: z.string().nullable().optional(),
+  outputFilename: z.string().nullable().optional(),
+  contributionOrganizationId: z.string().nullable().optional(),
+}).superRefine((value, context) => {
+  if (value.inputMode === "data" && !value.inputData?.trim()) {
+    context.addIssue({ code: "custom", path: ["inputData"], message: "候选输入不能为空" });
+  }
+  if (value.inputMode === "generator" && (!value.generatorSource?.trim() || !value.generatorLanguage)) {
+    context.addIssue({ code: "custom", path: ["generatorSource"], message: "请提供生成器源码和语言" });
+  }
+});
+
 export const ProblemHackConfigSchema = z.object({
   enabled: z.boolean(),
   mode: z.enum(["acm", "oi"]),
@@ -709,6 +879,38 @@ export const ProblemContracts = {
     key: "problem.hack-config.save", method: "PUT", scope: "context",
     body: ProblemHackConfigInputSchema, data: ProblemHackConfigSchema,
   }),
+  getContributionReadiness: defineApiEndpoint({
+    key: "problem.contribution-readiness.get", method: "GET", scope: "context",
+    data: ProblemContributionReadinessSchema,
+  }),
+  listContributions: defineApiEndpoint({
+    key: "problem.contributions.list", method: "GET", scope: "context",
+    data: z.array(ProblemContributionTaskSchema),
+  }),
+  contributeCandidateData: defineApiEndpoint({
+    key: "problem.candidate-data.create", method: "POST", scope: "context",
+    body: ProblemCandidateDataInputSchema, data: ProblemContributionJobResultSchema,
+  }),
+  contributeCandidateGenerator: defineApiEndpoint({
+    key: "problem.candidate-generator.create", method: "POST", scope: "context",
+    body: ProblemCandidateGeneratorInputSchema, data: ProblemContributionJobResultSchema,
+  }),
+  listHackAttempts: defineApiEndpoint({
+    key: "problem.hack-attempts.list", method: "GET", scope: "context",
+    query: ProblemHackAttemptListQuerySchema, data: ProblemHackAttemptListSchema,
+  }),
+  createHackAttempt: defineApiEndpoint({
+    key: "problem.hack-attempt.create", method: "POST", scope: "context",
+    body: ProblemHackAttemptInputSchema, data: ProblemHackAttemptSchema,
+  }),
+  getHackAttempt: defineApiEndpoint({
+    key: "problem.hack-attempt.get", method: "GET", scope: "context",
+    data: ProblemHackAttemptSchema,
+  }),
+  retryHackAttempt: defineApiEndpoint({
+    key: "problem.hack-attempt.retry", method: "POST", scope: "context",
+    body: z.object({}), data: ProblemHackAttemptSchema,
+  }),
   getNote: defineApiEndpoint({
     key: "problem.note.get", method: "GET", scope: "context",
     data: ProblemNoteSchema,
@@ -868,6 +1070,12 @@ export type ProblemSubmissionList = z.infer<typeof ProblemSubmissionListSchema>;
 export type ProblemAiUsage = z.infer<typeof ProblemAiUsageSchema>;
 export type ProblemAiTranslateInput = z.infer<typeof ProblemAiTranslateInputSchema>;
 export type ProblemAiFormatInput = z.infer<typeof ProblemAiFormatInputSchema>;
+export type ProblemContributionReadiness = z.infer<typeof ProblemContributionReadinessSchema>;
+export type ProblemContributionTask = z.infer<typeof ProblemContributionTaskSchema>;
+export type ProblemCandidateDataInput = z.infer<typeof ProblemCandidateDataInputSchema>;
+export type ProblemCandidateGeneratorInput = z.infer<typeof ProblemCandidateGeneratorInputSchema>;
+export type ProblemHackAttempt = z.infer<typeof ProblemHackAttemptSchema>;
+export type ProblemHackAttemptInput = z.infer<typeof ProblemHackAttemptInputSchema>;
 export type ProblemHackConfig = z.infer<typeof ProblemHackConfigSchema>;
 export type ProblemHackConfigInput = z.infer<typeof ProblemHackConfigInputSchema>;
 export type ProblemPersonalContent = z.infer<typeof ProblemPersonalContentSchema>;

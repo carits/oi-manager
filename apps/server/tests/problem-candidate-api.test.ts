@@ -38,7 +38,7 @@ describe('bounded Candidate HTTP boundary', () => {
   })
 
   it('rejects a forged contribution organization snapshot', async () => {
-    const stranger = await createTestUser()
+    const stranger = await createTestUser({ organization: { role: 'student' } })
     const foreignMembership = await prisma.organizationMembership.findFirstOrThrow({ where: { userId: stranger.user.id, status: 'active' } })
     const studentClient = createAuthenticatedRequest(app, generateTokenFromUser({ ...student.user, workspaceMode: 'personal' }))
     const contribution = await studentClient.post(`/api/problems/${problem.id}/candidates/data`).send({ inputData: '1 2\n', contributionOrganizationId: foreignMembership.organizationId })

@@ -6,23 +6,21 @@ import collisionStyles from './ProblemHackPanel.collision.module.css'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
-import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { getLanguageLabel } from '@/lib/judge-constants'
 import styles from './ProblemHackPanel.module.css'
 import { SubmissionIoFields, SubmissionCodeEditor, clearSubmissionDraft, type SubmissionIoValue } from '@/features/submission'
 import { getJudgeProgramTemplate } from '@oi-manager/shared'
-import type { WorkspaceSummary } from '@oi-manager/contracts'
+import type { ProblemContributionReadiness, ProblemContributionTask, ProblemHackAttempt, WorkspaceSummary } from '@oi-manager/contracts'
 import { listWorkspaces } from '@/features/workspace'
 import { buildContributionTimeline, candidateLifecyclePresentation, contributionStageLabel, hackCanonicalPresentation, type LifecycleTone } from '../model/problem-contribution-display'
+import { contributeProblemCandidateData, contributeProblemCandidateGenerator, createProblemHackAttempt, getProblemContributionReadiness, getProblemHackAttempt, listProblemContributions, listProblemHackAttempts, retryProblemHackAttempt } from '../api/problemContributionApi'
 
 type InputChoice = 'data' | 'cpp17' | 'python3'
-interface Attempt { id: string; username?: string; status: string; inputMode: string; generatorLanguage?: string | null; hackLanguage: string; inputFilename?: string | null; outputFilename?: string | null; baselineResult?: string | null; baselineScore?: number | null; candidateResult?: string | null; candidateScore?: number | null; scoreDelta?: number | null; affectedSubtaskIds?: number[]; failureStage?: string | null; message?: string | null; createdAt: string; inputData?: string | null; generatorSource?: string | null; hackSource?: string | null; canonicalStatus?: string | null; testcaseCandidateStatus?: string | null; baseTestSetRevision?: number | null; promotedRevision?: number | null; contributionOrganizationId?: string | null; contributionOrganizationName?: string | null }
+type Attempt = ProblemHackAttempt
+type Readiness = ProblemContributionReadiness
+type ContributionTask = ProblemContributionTask
 type AssetStatus = 'none' | 'draft' | 'verifying' | 'failed' | 'ready' | 'active'
-interface Asset { status: AssetStatus; versionId?: string; source?: 'dsl' | 'custom' }
-interface Readiness { canContribute: boolean; canHack: boolean; canManage: boolean; mode: 'acm' | 'oi'; standard: Asset; validator: Asset; classifier: Asset & { requiredForHack: boolean; requiredForPromotion: boolean }; wrongCorpus: { status: 'none' | 'bootstrap' | 'ready'; mode: 'closed' | 'limited' | 'open' }; subtasks?: Array<{ subtaskId: number; caseCount: number; caseLimit: number; wrongProgramCount: number; wrongClusterCount: number; contributionMode: 'closed' | 'limited' | 'open'; autoSelection: boolean; bootstrapAvailable: boolean }>; blockers: Array<{ code: string; message: string }>; warnings: Array<{ code: string; message: string }> }
-interface ContributionCase { caseId: string; name: string; status: string; stage: string; candidateId?: string; candidateStatus?: string; promotedRevisionId?: string; message?: string | null }
-interface ContributionTask { jobId: string; status: string; sourceMode: string; stage: string; createdAt: string; updatedAt: string; message?: string | null; contributionOrganizationId?: string | null; contributionOrganizationName?: string | null; cases: ContributionCase[] }
 
 const STATUS: Record<string, string> = { queuing: '排队中', judging: '验证与评测中', accepted: '有效 Hack', rejected: '无效 Hack', system_error: '系统错误', stale: '配置已变化' }
 const FAILURE_STAGE: Record<string, string> = { input: '候选输入', generator: '数据生成器', validator: '输入校验', classifier: '子任务分类', standard: '标准答案生成', checker: '答案检查', baseline: '原始完整评测', candidate: '加入候选点后评测', persist: '测试数据入库', stale: '配置一致性检查' }
@@ -42,17 +40,36 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
 
   const load = useCallback(async () => {
     setHackLoadError(''); setReadinessLoadError(''); setContributionLoadError(''); setWorkspaceLoadError('')
-    const [hackResult, readinessResult, contributionResult, workspaceResult] = await Promise.all([
-      apiClient.get<{ attempts: Attempt[]; acceptedCount: number; canManage: boolean }>(`/api/problems/${problemId}/hacks?pageSize=50`),
-      apiClient.get<Readiness>(`/api/problems/${problemId}/contribution-readiness`),
-      apiClient.get<ContributionTask[]>(`/api/problems/${problemId}/contributions/mine`),
-      listWorkspaces().catch(() => ({ workspaces: [] })),
+    const [hackResult, readinessResult, contributionResult, workspaceResult] = await Promise.allSettled([
+      listProblemHackAttempts(problemId, { page: 1, pageSize: 50 }),
+      getProblemContributionReadiness(problemId),
+      listProblemContributions(problemId),
+      listWorkspaces(),
     ])
-    if (hackResult.success && hackResult.data) { setAttempts(hackResult.data.attempts); setCanManage(hackResult.data.canManage); setTotalAccepted(hackResult.data.acceptedCount) } else { setAttempts([]); setHackLoadError(hackResult.message || 'Hack 记录加载失败') }
-    if (readinessResult.success && readinessResult.data) { setReadiness(readinessResult.data); setCanManage(readinessResult.data.canManage) } else { setReadiness(null); setReadinessLoadError(readinessResult.message || '贡献就绪状态加载失败') }
-    if (contributionResult.success && contributionResult.data) setContributions(contributionResult.data); else { setContributions([]); setContributionLoadError(contributionResult.message || '贡献任务加载失败') }
-    setOrganizationWorkspaces(workspaceResult.workspaces.filter(item => item.type === 'organization'))
-    if (workspaceResult.workspaces.length === 0) setWorkspaceLoadError('学校列表暂时无法加载')
+    if (hackResult.status === 'fulfilled') {
+      setAttempts(hackResult.value.attempts)
+      setCanManage(hackResult.value.canManage)
+      setTotalAccepted(hackResult.value.acceptedCount)
+    } else {
+      setAttempts([])
+      setHackLoadError(hackResult.reason instanceof Error ? hackResult.reason.message : 'Hack 记录加载失败')
+    }
+    if (readinessResult.status === 'fulfilled') {
+      setReadiness(readinessResult.value)
+      setCanManage(readinessResult.value.canManage)
+    } else {
+      setReadiness(null)
+      setReadinessLoadError(readinessResult.reason instanceof Error ? readinessResult.reason.message : '贡献就绪状态加载失败')
+    }
+    if (contributionResult.status === 'fulfilled') {
+      setContributions(contributionResult.value)
+    } else {
+      setContributions([])
+      setContributionLoadError(contributionResult.reason instanceof Error ? contributionResult.reason.message : '贡献任务加载失败')
+    }
+    const workspaces = workspaceResult.status === 'fulfilled' ? workspaceResult.value.workspaces : []
+    setOrganizationWorkspaces(workspaces.filter(item => item.type === 'organization'))
+    if (workspaceResult.status === 'rejected') setWorkspaceLoadError('学校列表暂时无法加载')
     setLoading(false)
   }, [problemId])
   useEffect(() => { setLoading(true); void load() }, [load])
@@ -66,25 +83,27 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
     setSubmitting(true)
     try {
       const attribution = contributionOrganizationId ? { contributionOrganizationId } : {}
-      const result = choice === 'data' ? await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/data`, { name: '用户贡献', inputData: candidate, ...attribution }) : await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/generator`, { language: choice, source: candidate, ...attribution, manifest: { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', language: choice, entry: choice === 'python3' ? 'main.py' : 'main.cpp', parameterSchema: {}, profiles: [{ id: 'default', label: '默认', params: {} }] } })
-      if (!result.success) return toast.error(result.message || '候选数据提交失败')
-      toast.success(`贡献任务 #${result.data?.jobId.slice(0, 8) || '—'} 已进入隔离队列`); setCandidate(''); await load()
+      const result = choice === 'data'
+        ? await contributeProblemCandidateData(problemId, { name: '用户贡献', inputData: candidate, ...attribution })
+        : await contributeProblemCandidateGenerator(problemId, { language: choice, source: candidate, ...attribution, manifest: { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', language: choice, entry: choice === 'python3' ? 'main.py' : 'main.cpp', parameterSchema: {}, profiles: [{ id: 'default', label: '默认', params: {} }] } })
+      if (!result.ok) return toast.error(result.error.message)
+      toast.success(`贡献任务 #${result.data.jobId.slice(0, 8)} 已进入隔离队列`); setCandidate(''); await load()
     } finally { setSubmitting(false) }
   }
   const submit = async () => {
     if (!candidate.trim() || !hackSource.trim()) return toast.error('请完整填写候选输入和被 Hack 程序')
     setSubmitting(true)
     try {
-      const result = await apiClient.post<Attempt>(`/api/problems/${problemId}/hacks`, { inputMode: choice === 'data' ? 'data' : 'generator', inputData: choice === 'data' ? candidate : undefined, generatorSource: choice === 'data' ? undefined : candidate, generatorLanguage: choice === 'data' ? undefined : choice, hackSource, hackLanguage, inputFilename: hackIo.inputFilename || null, outputFilename: hackIo.outputFilename || null, contributionOrganizationId: contributionOrganizationId || null })
-      if (!result.success) return toast.error(result.message || 'Hack 提交失败')
+      const result = await createProblemHackAttempt(problemId, { inputMode: choice === 'data' ? 'data' : 'generator', inputData: choice === 'data' ? candidate : undefined, generatorSource: choice === 'data' ? undefined : candidate, generatorLanguage: choice === 'data' ? undefined : choice, hackSource, hackLanguage, inputFilename: hackIo.inputFilename || null, outputFilename: hackIo.outputFilename || null, contributionOrganizationId: contributionOrganizationId || null })
+      if (!result.ok) return toast.error(result.error.message)
       toast.success('Hack 已加入独立评测队列'); clearSubmissionDraft(`hack:${problemId}`, hackLanguage); setCandidate(''); setHackSource(''); setHackIo({ inputFilename: null, outputFilename: null }); await load()
     } finally { setSubmitting(false) }
   }
-  const retry = async (id: string) => { const result = await apiClient.post(`/api/problems/${problemId}/hacks/${id}/retry`); if (!result.success) return toast.error(result.message || '重新执行失败'); toast.success('已重新加入队列'); await load() }
+  const retry = async (id: string) => { const result = await retryProblemHackAttempt(problemId, id); if (!result.ok) return toast.error(result.error.message); toast.success('已重新加入队列'); await load() }
   const toggleDetails = async (attempt: Attempt) => {
     if (expandedAttemptId === attempt.id) return setExpandedAttemptId(null)
     setExpandedAttemptId(attempt.id); if (attemptDetails[attempt.id]) return; setLoadingDetailId(attempt.id)
-    try { const result = await apiClient.get<Attempt>(`/api/problems/${problemId}/hacks/${attempt.id}`); if (!result.success || !result.data) return toast.error(result.message || 'Hack 详情加载失败'); setAttemptDetails(current => ({ ...current, [attempt.id]: result.data! })) } finally { setLoadingDetailId(current => current === attempt.id ? null : current) }
+    try { const detail = await getProblemHackAttempt(problemId, attempt.id); setAttemptDetails(current => ({ ...current, [attempt.id]: detail })) } catch (error) { toast.error(error instanceof Error ? error.message : 'Hack 详情加载失败') } finally { setLoadingDetailId(current => current === attempt.id ? null : current) }
   }
   const icon = (status: AssetStatus | 'good' | 'bad') => status === 'active' || status === 'good' ? <CheckCircle2 size={17} /> : status === 'failed' || status === 'none' || status === 'bad' ? <XCircle size={17} /> : <Circle size={17} />
   const tone = (status: AssetStatus | 'good' | 'bad') => status === 'active' || status === 'good' ? styles.ok : status === 'failed' || status === 'none' || status === 'bad' ? styles.bad : styles.pending

@@ -2,15 +2,15 @@
   "schemaVersion": 2,
   "contracts": 29,
   "featureSlices": 27,
-  "contractedBoundaries": 195,
+  "contractedBoundaries": 197,
   "transport": {
     "legacy": {
       "files": 0,
       "calls": 0
     },
     "feature": {
-      "files": 7,
-      "calls": 94
+      "files": 6,
+      "calls": 86
     },
     "raw": {
       "registered": 11
@@ -110,11 +110,6 @@
       "file": "apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx",
       "calls": 8,
       "layer": "feature"
-    },
-    {
-      "file": "apps/web/src/features/problem/ui/ProblemHackPanel.tsx",
-      "calls": 8,
-      "layer": "feature"
     }
   ],
   "exitCriteria": {
@@ -127,5 +122,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-26T14:27:42.001Z"
+  "updatedAt": "2026-09-26T14:54:24.043Z"
 }

@@ -992,4 +992,68 @@ describe('shared API contract adapter', () => {
       workspaces: [{ type: 'organization', organizationId: 'organization-1', availableModules: [] }],
     })).toThrowError(ApiContractError)
   })
+  it('guards Candidate contribution and Generator protocol inputs', () => {
+    expect(parseContractBody(ProblemContracts.contributeCandidateData, {
+      name: ' 边界数据 ', inputData: '1\n', contributionOrganizationId: 'organization-1',
+    })).toEqual({
+      name: '边界数据', inputData: '1\n', contributionOrganizationId: 'organization-1',
+    })
+    expect(parseContractBody(ProblemContracts.contributeCandidateGenerator, {
+      language: 'python3', source: 'print(1)',
+      manifest: {
+        apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1',
+        language: 'python3', entry: 'main.py', parameterSchema: {},
+        profiles: [{ id: 'default', label: '默认', params: {} }],
+      },
+    }).manifest.entry).toBe('main.py')
+    expect(() => parseContractBody(ProblemContracts.contributeCandidateGenerator, {
+      language: 'ruby3', source: 'puts 1',
+      manifest: {
+        apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1',
+        language: 'ruby3', entry: 'main.rb', parameterSchema: {},
+        profiles: [{ id: 'default', params: {} }],
+      },
+    })).toThrowError(ApiContractError)
+  })
+
+  it('guards contribution readiness and Hack attempt wire data', () => {
+    const readiness = responseStub()
+    sendContractData(readiness.response, ProblemContracts.getContributionReadiness, {
+      canContribute: true, canHack: true, canManage: false, mode: 'oi',
+      standard: { status: 'active', versionId: 'std-v1' },
+      validator: { status: 'active', source: 'dsl', versionId: 'validator-v1' },
+      classifier: { status: 'active', versionId: 'classifier-v1', requiredForHack: true, requiredForPromotion: true },
+      wrongCorpus: { status: 'ready', mode: 'open' },
+      blockers: [], warnings: [],
+    })
+    expect(readiness.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ canContribute: true, validator: expect.objectContaining({ source: 'dsl' }) }),
+    }))
+
+    expect(parseContractBody(ProblemContracts.createHackAttempt, {
+      inputMode: 'data', inputData: '1\n', hackSource: 'int main(){}', hackLanguage: 'cpp17',
+      inputFilename: null, outputFilename: null, contributionOrganizationId: null,
+    }).inputMode).toBe('data')
+    expect(() => parseContractBody(ProblemContracts.createHackAttempt, {
+      inputMode: 'generator', hackSource: 'int main(){}', hackLanguage: 'cpp17',
+    })).toThrowError(ApiContractError)
+
+    const list = responseStub()
+    sendContractData(list.response, ProblemContracts.listHackAttempts, {
+      attempts: [{
+        id: 'hack-1', problemId: 'problem-1', userId: 'user-1',
+        contributionOrganizationId: null, contributionOrganizationName: null,
+        status: 'accepted', inputMode: 'data', hackLanguage: 'cpp17',
+        affectedSubtaskIds: [1], createdAt: new Date('2026-09-16T00:00:00Z'),
+        updatedAt: new Date('2026-09-16T00:01:00Z'),
+      }],
+      total: 1, page: 1, pageSize: 50, acceptedCount: 1, canManage: false,
+    })
+    expect(list.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        attempts: [expect.objectContaining({ createdAt: '2026-09-16T00:00:00.000Z' })],
+      }),
+    }))
+  })
+
 })
