@@ -67,6 +67,13 @@ export function emptyBlogReference(type: BlogReferenceType = 'PROBLEM'): BlogDra
   return { type, relationType: 'MENTION', displayMode: 'CARD' }
 }
 
+export function parseAuthorTagsText(value: string) {
+  return [...new Set(value
+    .split(/[,，;；\n]/)
+    .map(item => item.trim().replace(/\s+/g, ' '))
+    .filter(Boolean))]
+}
+
 export function validateBlogDraft(input: { title: string; contentMarkdown: string; references: BlogDraftReference[]; classification?: BlogDraftClassification }) {
   if (!input.title.trim()) return '请填写标题'
   if (new TextEncoder().encode(input.contentMarkdown).byteLength > 1024 * 1024) return '正文不能超过 1 MiB'

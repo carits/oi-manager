@@ -25,6 +25,7 @@ import {
   BLOG_VISIBILITY_LABELS,
   EMPTY_BLOG_CLASSIFICATION,
   emptyBlogReference,
+  parseAuthorTagsText,
   validateBlogDraft,
   type BlogDraftReference,
   type BlogDraftClassification,
@@ -95,6 +96,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
   const initialDraft = useRef<DraftState>({ ...EMPTY_DRAFT, classification: { ...EMPTY_BLOG_CLASSIFICATION }, references: initialReference(new URLSearchParams(searchParams.toString())) })
   const [post, setPost] = useState<BlogPost | null>(null)
   const [draft, setDraft] = useState<DraftState>(initialDraft.current)
+  const [authorTagsText, setAuthorTagsText] = useState(() => initialDraft.current.classification.authorTags.join(', '))
   const [baseline, setBaseline] = useState(() => serializeEditorState({ type: 'ARTICLE', slug: '', organizationId: '', visibility: 'PRIVATE', draft: initialDraft.current }))
   const [type, setType] = useState<BlogPostType>('ARTICLE')
   const [slug, setSlug] = useState('')
@@ -116,7 +118,8 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
   const [seriesVisibility, setSeriesVisibility] = useState<BlogVisibility>('PRIVATE')
   const [error, setError] = useState('')
   const serializedEditorState = useMemo(() => serializeEditorState({ type, slug, organizationId, visibility, draft }), [draft, organizationId, slug, type, visibility])
-  const dirty = baseline !== serializedEditorState
+  const rawTagsDirty = authorTagsText !== draft.classification.authorTags.join(', ')
+  const dirty = baseline !== serializedEditorState || rawTagsDirty
   const { requestNavigation } = useUnsavedChanges(`blog-editor:${postId || 'new'}`, dirty)
 
   const applyPost = useCallback((value: BlogPost) => {
@@ -124,6 +127,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     if (value.draft) {
       const next = { title: value.draft.title, summary: value.draft.summary || '', contentMarkdown: value.draft.contentMarkdown, references: value.draft.references || [], classification: value.draft.classification || { ...EMPTY_BLOG_CLASSIFICATION } }
       setDraft(next); setBaseline(serializeEditorState({ type: value.type, slug: value.slug, organizationId: value.organizationId || '', visibility: value.visibility, draft: next }))
+      setAuthorTagsText(next.classification.authorTags.join(', '))
     }
   }, [])
 
@@ -173,7 +177,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
       }, { accountScoped: true })
       if (!result.success || !result.data) { toast.error(result.message || '草稿保存失败'); return null }
       const next = { title: result.data.title, summary: result.data.summary || '', contentMarkdown: result.data.contentMarkdown, references: result.data.references || [], classification: result.data.classification || { ...EMPTY_BLOG_CLASSIFICATION } }
-      setDraft(next); setBaseline(serializeEditorState({ type, slug, organizationId, visibility, draft: next })); setPost(current => current ? { ...current, draft: { ...current.draft!, ...result.data! } } : current)
+      setDraft(next); setAuthorTagsText(next.classification.authorTags.join(', ')); setBaseline(serializeEditorState({ type, slug, organizationId, visibility, draft: next })); setPost(current => current ? { ...current, draft: { ...current.draft!, ...result.data! } } : current)
       return { id: post.id, revision: result.data.revision }
     } finally { setSaving(false) }
   }
@@ -258,7 +262,21 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
         <div className={styles.referenceHeading}><div><strong>系列与标签</strong><p>系列保存文章顺序；系统标签全平台受控，作者标签每篇最多 5 个。</p></div><Button variant="outline" icon={<FolderPlus size={16} />} onClick={() => { setSeriesVisibility(organizationId ? 'ORGANIZATION' : visibility); setSeriesDialogOpen(true) }}>新建系列</Button></div>
         <div className={styles.classificationGrid}>
           <FormField label="所属系列"><Select value={draft.classification.seriesId || ''} onChange={event => setDraft(current => ({ ...current, classification: { ...current.classification, seriesId: event.target.value || null } }))}><option value="">不加入系列</option>{series.filter(item => (item.organizationId || '') === organizationId && item.visibility === visibility).map(item => <option key={item.id} value={item.id}>{item.title}（{item.entryCount} 篇）</option>)}</Select></FormField>
-          <FormField label="作者标签" hint="使用逗号分隔；与系统标签同名时自动使用系统标签。"><Input value={draft.classification.authorTags.join(', ')} onChange={event => setDraft(current => ({ ...current, classification: { ...current.classification, authorTags: event.target.value.split(/[,，]/).map(item => item.trim()).filter(Boolean) } }))} placeholder="学习笔记, NOI 复习" /></FormField>
+          <FormField label="作者标签" hint="使用逗号分隔；输入中的分隔符会保留到离开输入框，便于连续录入。与系统标签同名时自动使用系统标签。">
+            <Input
+              value={authorTagsText}
+              onChange={event => {
+                const value = event.target.value
+                setAuthorTagsText(value)
+                setDraft(current => ({
+                  ...current,
+                  classification: { ...current.classification, authorTags: parseAuthorTagsText(value) },
+                }))
+              }}
+              onBlur={() => setAuthorTagsText(draft.classification.authorTags.join(', '))}
+              placeholder="学习笔记, NOI 复习"
+            />
+          </FormField>
         </div>
         {tagSuggestions.length > 0 && <div className={styles.tagPicker}><span>已有标签：</span>{tagSuggestions.map(tag => <Button key={tag.id} size="sm" variant={selectedTags.has(tag.id) ? 'secondary' : 'ghost'} onClick={() => toggleTag(tag.id)}>{tag.name}{tag.kind === 'SYSTEM' ? ' · 系统' : ''}</Button>)}</div>}
       </section>

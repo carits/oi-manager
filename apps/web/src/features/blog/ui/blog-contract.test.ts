@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyBlogReference, validateBlogDraft } from '../model/blog-contract'
+import { emptyBlogReference, parseAuthorTagsText, validateBlogDraft } from '../model/blog-contract'
 
 describe('blog knowledge publishing contract', () => {
   it('requires concrete fixed identities for versioned references', () => {
@@ -20,5 +20,12 @@ describe('blog knowledge publishing contract', () => {
       references: [],
       classification: { seriesId: 'series-1', tagIds: ['system-1'], authorTags: ['a', 'b', 'c', 'd', 'e'] },
     })).toContain('5 个标签')
+  })
+
+  it('parses pasted author tags across common delimiters without duplicates', () => {
+    expect(parseAuthorTagsText('动态规划, 图论，NOI 复习\n图论；搜索')).toEqual([
+      '动态规划', '图论', 'NOI 复习', '搜索',
+    ])
+    expect(parseAuthorTagsText('等待输入,')).toEqual(['等待输入'])
   })
 })
