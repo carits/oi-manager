@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { AlertTriangle, Check, ClipboardList, ListChecks, LoaderCircle, RotateCcw, UserRound } from 'lucide-react'
-import apiClient from '@/lib/apiClient'
+import type { ContestRejudgeScope } from '@oi-manager/contracts'
+import { previewContestRejudge, rejudgeContest } from '../../api/contestApi'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import type { ContestProblem } from '../../model/types'
@@ -63,11 +64,12 @@ export function ContestRejudgeModal({
     const load = async () => {
       setPreviewLoading(true)
       setPreviewError('')
-      const params = new URLSearchParams({ scopeType: scope })
-      if (scope !== 'all') params.set('contestProblemId', problemId)
-      if (scope === 'user_problem') params.set('userId', userId)
       try {
-        const data = await apiClient.query<{ matchedCount: number; inProgressCount: number }>(`/api/contests/${contestId}/rejudge/preview?${params.toString()}`)
+        const data = await previewContestRejudge(contestId, {
+          scopeType: scope,
+          contestProblemId: scope === 'all' ? undefined : problemId,
+          userId: scope === 'user_problem' ? userId : undefined,
+        })
         if (!cancelled) setPreview(data)
       } catch (error) {
         if (!cancelled) setPreviewError(error instanceof Error ? error.message : '无法获取预计数量，请重试')
@@ -89,8 +91,12 @@ export function ContestRejudgeModal({
     if (!ready || !preview || preview.matchedCount === 0 || submitting) return
     setSubmitting(true)
     setMessage(null)
-    const selectedScope = scope === 'all' ? { type: 'all' } : scope === 'problem' ? { type: 'problem', contestProblemId: problemId } : { type: 'user_problem', contestProblemId: problemId, userId }
-    const result = await apiClient.mutate<{ resetCount: number; skippedCount: number }>(`/api/contests/${contestId}/rejudge`, 'POST', { scope: selectedScope })
+    const selectedScope: ContestRejudgeScope = scope === 'all'
+      ? { type: 'all' }
+      : scope === 'problem'
+        ? { type: 'problem', contestProblemId: problemId }
+        : { type: 'user_problem', contestProblemId: problemId, userId }
+    const result = await rejudgeContest(contestId, selectedScope)
     setSubmitting(false)
     if (!result.ok) {
       setMessage({ type: 'error', text: result.error.message })

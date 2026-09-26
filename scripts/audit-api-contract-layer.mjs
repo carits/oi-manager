@@ -46,8 +46,6 @@ const legacyFeatureTransportAllowances = {
   'apps/web/src/features/contest/ui/components/ContestContentSelectionModal.tsx': 3,
   'apps/web/src/features/contest/ui/components/ContestHackSyncAction.tsx': 2,
   'apps/web/src/features/contest/ui/components/ContestContentEditorModal.tsx': 1,
-  'apps/web/src/features/contest/ui/components/ContestRankingSubmissionsModal.tsx': 1,
-  'apps/web/src/features/contest/ui/components/ContestRejudgeModal.tsx': 2,
 }
 const directTransportPattern = /\bapiClient\.(?:get|post|put|patch|delete|query|mutate)(?:Contract)?\b/g
 
@@ -215,6 +213,11 @@ const contractedBoundaries = [
   ['apps/web/src/features/contest-rating/ui/TrainingRatingPanel.tsx', 'getContestRatingParticipation'],
   ['apps/web/src/features/contest/ui/ContestDetailPage.tsx', 'listContestSubmissionUsers'],
   ['apps/web/src/features/contest/ui/ContestDetailPage.tsx', 'createContestMakeupHomework'],
+  ['apps/web/src/features/contest/api/contestApi.ts', 'ContestContracts'],
+  ['apps/web/src/features/contest/api/useContestSubmissions.ts', 'listContestSubmissions'],
+  ['apps/web/src/features/contest/ui/components/ContestRankingSubmissionsModal.tsx', 'listContestSubmissions'],
+  ['apps/web/src/features/contest/ui/components/ContestRejudgeModal.tsx', 'previewContestRejudge'],
+  ['apps/web/src/features/contest/ui/components/ContestRejudgeModal.tsx', 'rejudgeContest'],
   ['apps/web/src/features/team/ui/TeamActivityOverview.tsx', 'listTeamContests'],
   ['apps/web/src/features/team/ui/TeamActivityOverview.tsx', 'listTrainingSessions'],
   ['apps/web/src/features/team/ui/TeamActivityOverview.tsx', 'listTeamProblemLists'],

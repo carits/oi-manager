@@ -8,9 +8,9 @@ import { ContestContracts, SubmissionContracts } from '@oi-manager/contracts'
 import yaml from 'js-yaml'
 import { authenticate, getAccountRole, getResourceScope, isAdmin, isPersonalContext } from '../../middleware/auth'
 import { logger } from '../../lib/logger'
-import { parsePagination, paginatedResponse } from '../../lib/pagination'
+import { paginatedResponse } from '../../lib/pagination'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { sendContractData } from '../../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData } from '../../lib/api-contract'
 import type { AuthRequest } from '../../middleware/auth'
 import {
   canAccessContest,
@@ -149,8 +149,17 @@ contestSubmissionsRouter.post('/contests/:id/submit', authenticate, asyncHandler
 contestSubmissionsRouter.get('/contests/:id/submissions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
     const id = parseContestId(req.params.id)
     const userId = req.user!.userId
-    const { userId: filterUserId, problemId: filterProblemId, username: filterUsername, result: filterResult, language: filterLanguage } = req.query as Record<string, string>
-    const { page: pageNum, pageSize: pageSizeNum, skip } = parsePagination(req.query, { defaultPageSize: 50, maxPageSize: 200 })
+    const query = parseContractQuery(ContestContracts.submissions, req.query)
+    const {
+      userId: filterUserId,
+      problemId: filterProblemId,
+      username: filterUsername,
+      result: filterResult,
+      language: filterLanguage,
+      page: pageNum,
+      pageSize: pageSizeNum,
+    } = query
+    const skip = (pageNum - 1) * pageSizeNum
 
     const contest = await findContestForProblemAccess(id)
     if (!contest) {
@@ -232,14 +241,11 @@ contestSubmissionsRouter.get('/contests/:id/submissions', authenticate, asyncHan
       pageSizeNum
     )
 
-    res.json({
-      success: true,
-      data: {
-        submissions: paginated.data,
-        page: paginated.page,
-        totalPages: paginated.totalPages,
-        total: paginated.total,
-      },
+    return sendContractData(res, ContestContracts.submissions, {
+      submissions: paginated.data,
+      page: paginated.page,
+      totalPages: paginated.totalPages,
+      total: paginated.total,
     })
 }, '查询失败'))
 
@@ -293,16 +299,17 @@ contestSubmissionsRouter.get('/contests/:id/rejudge/preview', authenticate, asyn
     const id = parseContestId(req.params.id)
     const contest = await findContestForProblemAccess(id)
     if (!contest || !await canManageContest(req.user!.userId, contest)) return res.status(403).json({ success: false, message: '无权限' })
-    const scopeType = String(req.query.scopeType || 'all')
+    const query = parseContractQuery(ContestContracts.rejudgePreview, req.query)
+    const scopeType = query.scopeType
     const where = await buildRejudgeTarget({
       contest,
       scopeType,
-      contestProblemId: String(req.query.contestProblemId || ''),
-      userId: String(req.query.userId || ''),
+      contestProblemId: query.contestProblemId || '',
+      userId: query.userId || '',
     })
     if (!where) return res.status(404).json({ success: false, message: '题目不属于当前比赛' })
     const { matchedCount, inProgressCount } = await previewRejudgeTarget(where)
-    res.json({ success: true, data: { matchedCount, inProgressCount } })
+    return sendContractData(res, ContestContracts.rejudgePreview, { matchedCount, inProgressCount })
 }, '预览失败'))
 
 /**
@@ -322,16 +329,13 @@ contestSubmissionsRouter.post('/contests/:id/rejudge', authenticate, asyncHandle
       return res.status(403).json({ success: false, message: '仅比赛管理员可执行重新评测' })
     }
 
-    const scope = req.body?.scope || { type: 'all' }
+    const { scope } = parseContractBody(ContestContracts.rejudge, req.body)
     const scopeType = scope.type
-    if (!['all', 'problem', 'user_problem'].includes(scopeType)) return res.status(400).json({ success: false, message: '无效的重测范围' })
-    if ((scopeType === 'problem' || scopeType === 'user_problem') && !scope.contestProblemId) return res.status(400).json({ success: false, message: '请选择题目' })
-    if (scopeType === 'user_problem' && !scope.userId) return res.status(400).json({ success: false, message: '请选择用户' })
     const baseWhere = await buildRejudgeTarget({
       contest,
       scopeType,
-      contestProblemId: scope.contestProblemId,
-      userId: scope.userId,
+      contestProblemId: scope.type === 'all' ? undefined : scope.contestProblemId,
+      userId: scope.type === 'user_problem' ? scope.userId : undefined,
     })
     if (!baseWhere) return res.status(404).json({ success: false, message: '题目不属于当前比赛' })
     // Snapshot the target IDs before mutating them. Running the count and update
@@ -353,5 +357,11 @@ contestSubmissionsRouter.post('/contests/:id/rejudge', authenticate, asyncHandle
       metadata: { contestId: contest.canonicalContestId, batchId: batchResult.batch.id, scope: scopeType, resetCount: count, skippedCount },
     })
 
-    res.json({ success: true, data: { batchId: batchResult.batch.id, scope: scopeType, resetCount: count, skippedCount, message: '已重置 ' + count + ' 条提交，' + skippedCount + ' 条正在评测中的提交已跳过' } })
+    return sendContractData(res, ContestContracts.rejudge, {
+      batchId: batchResult.batch.id,
+      scope: scopeType,
+      resetCount: count,
+      skippedCount,
+      message: '已重置 ' + count + ' 条提交，' + skippedCount + ' 条正在评测中的提交已跳过',
+    })
 }, '重新评测失败'))

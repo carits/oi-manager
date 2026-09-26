@@ -3,26 +3,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
-import apiClient from '@/lib/apiClient'
+import type { ContestSubmissionListItem } from '@oi-manager/contracts'
+import { listContestSubmissions } from '../../api/contestApi'
 import { DetailDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { LoadError } from '@/components/ui/LoadError'
 import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
 import type { ContestInfo } from '../../model/types'
 import styles from './ContestRankingSubmissionsModal.module.css'
-
-interface RankingSubmission {
-  id: number
-  result: string | null
-  displayResult?: string
-  hidden?: boolean
-  score: number | null
-  timeUsed: number | null
-  memoryUsed: number | null
-  codeLength: number
-  language: string
-  createdAt: string
-}
 
 interface ContestRankingSubmissionsModalProps {
   isOpen: boolean
@@ -52,7 +40,7 @@ const RESULT_COLORS: Record<string, string> = {
 export function ContestRankingSubmissionsModal({
   isOpen, onClose, contestId, contest, userId, userName, username, contestProblemId, problemAlias, onViewSubmission,
 }: ContestRankingSubmissionsModalProps) {
-  const [submissions, setSubmissions] = useState<RankingSubmission[]>([])
+  const [submissions, setSubmissions] = useState<ContestSubmissionListItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scoreBased = contest.format === 'oi' || contest.format === 'ioi'
@@ -62,8 +50,12 @@ export function ContestRankingSubmissionsModal({
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ page: '1', pageSize: '50', userId, problemId: contestProblemId })
-      const data = await apiClient.query<{ submissions: RankingSubmission[] }>(`/api/contests/${contestId}/submissions?${params.toString()}`)
+      const data = await listContestSubmissions(contestId, {
+        page: 1,
+        pageSize: 50,
+        userId,
+        problemId: contestProblemId,
+      })
       setSubmissions(data.submissions)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '提交记录获取失败')
@@ -76,7 +68,7 @@ export function ContestRankingSubmissionsModal({
     if (isOpen) void load()
   }, [isOpen, load])
 
-  const resultLabel = (submission: RankingSubmission) => {
+  const resultLabel = (submission: ContestSubmissionListItem) => {
     if (submission.hidden || submission.displayResult === 'pending') return '已提交'
     return JUDGE_RESULT_LABEL_MAP[submission.result || ''] || submission.result || '待处理'
   }

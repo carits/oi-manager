@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import apiClient from '@/lib/apiClient'
+import { listContestSubmissions } from './contestApi'
 import type { SubmissionRow } from '../model/types'
 
 export function useContestSubmissions(
@@ -21,23 +21,14 @@ export function useContestSubmissions(
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams()
-      params.set('page', String(submissionsPage))
-      params.set('pageSize', '50')
-      if (filterProblemId) params.set('problemId', filterProblemId)
-      if (filterUsername) params.set('username', filterUsername)
-      if (filterResult) params.set('result', filterResult)
-      if (filterLanguage) params.set('language', filterLanguage)
-
-      const data = await apiClient.query<{
-        submissions: SubmissionRow[]
-        page: number
-        totalPages: number
-        total: number
-      }>(
-        `/api/contests/${contestId}/submissions?${params.toString()}`,
-        { signal },
-      )
+      const data = await listContestSubmissions(contestId, {
+        page: submissionsPage,
+        pageSize: 50,
+        problemId: filterProblemId || undefined,
+        username: filterUsername || undefined,
+        result: filterResult || undefined,
+        language: filterLanguage || undefined,
+      }, signal)
 
       setSubmissions(data.submissions)
       setSubmissionsTotal(data.total)

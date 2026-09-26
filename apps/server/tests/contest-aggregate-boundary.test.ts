@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { ContestContracts } from '@oi-manager/contracts'
 import { describe, expect, it } from 'vitest'
 
 function sourceFiles(root: string): string[] {
@@ -11,6 +12,13 @@ function sourceFiles(root: string): string[] {
 }
 
 describe('Contest aggregate write boundary', () => {
+  it('validates submission pagination and discriminated rejudge requests', () => {
+    expect(ContestContracts.submissions.query.parse({ page: '2', pageSize: '50' })).toMatchObject({ page: 2, pageSize: 50 })
+    expect(ContestContracts.rejudge.body.safeParse({ scope: { type: 'problem', contestProblemId: 'cp-1' } }).success).toBe(true)
+    expect(ContestContracts.rejudge.body.safeParse({ scope: { type: 'user_problem', contestProblemId: 'cp-1' } }).success).toBe(false)
+    expect(ContestContracts.submissions.query.safeParse({ page: 1, pageSize: 201 }).success).toBe(false)
+  })
+
   it('keeps runtime contest projection writes inside contest or maintenance modules', () => {
     const root = path.resolve(__dirname, '../src/modules')
     const violations = sourceFiles(root)

@@ -87,13 +87,13 @@ export interface SubmissionRow {
   userId: string
   userName: string
   username: string
-  userType: string
+  userType?: string
   problemSourceHidden?: boolean
   /** @deprecated compatibility with older API payloads */
   problemIdentityHidden?: boolean
   problemAlias?: string
   problemOrderIndex?: number
-  contestProblemId?: string
+  contestProblemId?: string | null
   oj?: string
   language: string
   result: string | null
