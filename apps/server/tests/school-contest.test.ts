@@ -74,44 +74,22 @@ describe('organization contest contract', () => {
       const schoolContest = await createTestSchoolContest({ organizationId: schoolA.organizationId!, createdBy: teacher.user.id, title: 'School contest' })
       const visibleTeam = await createTestTeam({ organizationId: schoolA.organizationId!, ownerId: student.user.id, ownerType: 'student' })
       const hiddenTeam = await createTestTeam({ organizationId: schoolA.organizationId! })
-      const visibleTeamContest = await prisma.training.create({
-        data: {
-          title: 'Visible team contest', format: 'icpc', type: 'contest', scope: 'campus',
-          organizationId: schoolA.organizationId, teamId: visibleTeam.id,
-          startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),
-          status: 'ongoing', createdBy: student.user.id,
-        },
+      const visibleTeamContest = await createTestSchoolContest({
+        organizationId: schoolA.organizationId!, teamId: visibleTeam.id, createdBy: student.user.id, title: 'Visible team contest',
       })
-      await prisma.$transaction(async tx => {
-        await ensureCanonicalContestFixtureTx(tx, schoolContest.id)
-        await ensureCanonicalContestFixtureTx(tx, visibleTeamContest.id)
-      })
-      await prisma.training.create({
-        data: {
-          title: 'Hidden team contest', format: 'icpc', type: 'contest', scope: 'campus',
-          organizationId: schoolA.organizationId, teamId: hiddenTeam.id,
-          startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),
-          status: 'ongoing', createdBy: teacher.user.id,
-        },
-      })
-      await prisma.training.create({
-        data: {
-          title: 'Homework', format: 'oi', type: 'homework', scope: 'campus',
-          organizationId: schoolA.organizationId, teamId: visibleTeam.id,
-          startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),
-          status: 'ongoing', createdBy: teacher.user.id,
-        },
+      await createTestSchoolContest({
+        organizationId: schoolA.organizationId!, teamId: hiddenTeam.id, createdBy: teacher.user.id, title: 'Hidden team contest',
       })
 
       const response = await organizationRequest('get', contestsUrl(), tokenFor(student), schoolA.organizationId!)
       expect(response.status).toBe(200)
-      expect(response.body.data.map((item: { id: number }) => item.id)).toEqual(expect.arrayContaining([schoolContest.id, visibleTeamContest.id]))
+      expect(response.body.data.map((item: { id: number }) => item.id)).toEqual(
+        expect.arrayContaining([schoolContest.publicId, visibleTeamContest.publicId]),
+      )
       expect(response.body.data.map((item: { title: string }) => item.title)).not.toContain('Hidden team contest')
-      expect(response.body.data.map((item: { title: string }) => item.title)).not.toContain('Homework')
-      expect(response.body.data.find((item: { id: number }) => item.id === schoolContest.id).source).toBe('school')
-      expect(response.body.data.find((item: { id: number }) => item.id === visibleTeamContest.id).source).toBe('team')
+      expect(response.body.data.find((item: { id: number }) => item.id === schoolContest.publicId).source).toBe('school')
+      expect(response.body.data.find((item: { id: number }) => item.id === visibleTeamContest.publicId).source).toBe('team')
     })
-
     it('computes status from timestamps instead of trusting the stored status', async () => {
       const contest = await createTestSchoolContest({
         organizationId: schoolA.organizationId!,
@@ -121,7 +99,7 @@ describe('organization contest contract', () => {
         endTime: new Date(Date.now() + 60_000),
       })
       const response = await organizationRequest('get', contestsUrl(), tokenFor(teacher), schoolA.organizationId!)
-      expect(response.body.data.find((item: { id: number }) => item.id === contest.id).status).toBe('ongoing')
+      expect(response.body.data.find((item: { id: number }) => item.id === contest.publicId).status).toBe('ongoing')
     })
   })
 
@@ -163,7 +141,7 @@ describe('organization contest contract', () => {
     })
   })
 
-  describe('active organization context isolation for legacy training routes', () => {
+  describe('active organization context isolation for contest routes', () => {
     it('rejects a training from another organization even when the same account is a member there', async () => {
       const membershipId = crypto.randomUUID()
       await prisma.organizationMembership.create({
@@ -183,7 +161,7 @@ describe('organization contest contract', () => {
       })
 
       const contest = await createTestSchoolContest({
-        schoolId: schoolA.id,
+        organizationId: schoolA.organizationId!,
         createdBy: teacher.user.id,
         title: '学校A上下文比赛',
       })
@@ -191,7 +169,7 @@ describe('organization contest contract', () => {
 
       const wrongContext = await organizationRequest(
         'get',
-        `/api/contests/${contest.id}`,
+        `/api/contests/${contest.publicId}`,
         token,
         schoolB.organizationId!,
       )
@@ -199,7 +177,7 @@ describe('organization contest contract', () => {
 
       const correctContext = await organizationRequest(
         'get',
-        `/api/contests/${contest.id}`,
+        `/api/contests/${contest.publicId}`,
         token,
         schoolA.organizationId!,
       )
@@ -207,7 +185,7 @@ describe('organization contest contract', () => {
     })
   })
 
-  describe('current training access and management helpers', () => {
+  describe('current contest access and management helpers', () => {
     it('requires active organization membership for ordinary users', async () => {
       expect(await isOrganizationMember(student.user.id, schoolA.organizationId!)).toBe(true)
       expect(await isOrganizationMember(remoteTeacher.user.id, schoolA.organizationId!)).toBe(false)
@@ -231,7 +209,7 @@ describe('organization contest contract', () => {
       expect(await isOrganizationContestAdmin(otherTeacher.user.id, schoolA.organizationId!, teacher.user.id)).toBe(false)
     })
 
-    it('uses organizationId as the only organization training ownership key', async () => {
+    it('uses organizationId as the only organization contest ownership key', async () => {
       const training = { teamId: null, organizationId: schoolA.organizationId! }
       expect(await canAccessContest(student.user.id, training)).toBe(true)
       expect(await canAccessContest(remoteTeacher.user.id, training)).toBe(false)
