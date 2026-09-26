@@ -23,7 +23,6 @@ const legacyTransportAllowances = {
 }
 const legacyFeatureTransportAllowances = {
   'apps/web/src/features/contest/ui/ContestFormModal.tsx': 19,
-  'apps/web/src/features/solution-review/ui/SolutionEditorialPanel.tsx': 13,
   'apps/web/src/features/problem/ui/JudgeProgramWizard.tsx': 11,
   'apps/web/src/features/problem/ui/ProblemListDetailPage.tsx': 17,
   'apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx': 18,
@@ -230,6 +229,8 @@ const contractedBoundaries = [
   ['apps/web/src/features/team/ui/TeamProblemListsTab.tsx', 'listProblemLists'],
   ['apps/web/src/features/training-session/ui/TrainingDesignAuxiliary.tsx', 'getTrainingRoster'],
   ['apps/web/src/features/training-session/ui/TrainingDesignAuxiliary.tsx', 'createTrainingHint'],
+  ['apps/web/src/features/solution-review/api/solutionReviewApi.ts', 'SolutionReviewContracts'],
+  ['apps/web/src/features/solution-review/ui/SolutionEditorialPanel.tsx', 'listProblemSolutions'],
   ['apps/web/src/features/solution-review/ui/SolutionEditorialPanel.tsx', 'getSimilarityComparison'],
   ['apps/web/src/features/submission/api/submissionApi.ts', 'SubmissionContracts'],
   ['apps/web/src/features/submission/api/submissionApi.ts', 'submitProblem'],

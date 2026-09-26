@@ -1,8 +1,17 @@
 import { Router, type Response } from 'express'
-import { SolutionReviewContracts } from '@oi-manager/contracts'
+import {
+  SolutionReviewContracts,
+  type ApiEndpointContract,
+} from '@oi-manager/contracts'
+import type { ZodType } from 'zod'
 import { authenticate, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { sendContractData, sendContractError } from '../../lib/api-contract'
+import {
+  parseContractBody,
+  parseContractQuery,
+  sendContractData,
+  sendContractError,
+} from '../../lib/api-contract'
 import type { JwtPayload } from '@oi-manager/shared'
 import {
   acceptSolutionContribution,
@@ -29,16 +38,29 @@ export const solutionRouter = Router()
 export const solutionReviewRouter = Router()
 
 type AuthenticatedRequest = AuthRequest & { user: JwtPayload }
+type Contract = ApiEndpointContract<ZodType, ZodType, ZodType>
 
-function command(handler: (req: AuthenticatedRequest) => Promise<unknown>, successStatus = 200) {
+function command(
+  contract: Contract,
+  handler: (req: AuthenticatedRequest) => Promise<unknown>,
+  successStatus = 200,
+) {
   return asyncHandler(async (req: AuthRequest, res: Response) => {
     try {
-      const data = await handler(req as AuthenticatedRequest)
-      return res.status(successStatus).json({ success: true, data })
+      return sendContractData(
+        res,
+        contract,
+        await handler(req as AuthenticatedRequest),
+        successStatus,
+      )
     } catch (error) {
       if (sendContractError(error, res)) return
       if (error instanceof SolutionDomainError) {
-        return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
+        return res.status(error.statusCode).json({
+          success: false,
+          code: error.code,
+          message: error.message,
+        })
       }
       throw error
     }
@@ -46,68 +68,131 @@ function command(handler: (req: AuthenticatedRequest) => Promise<unknown>, succe
 }
 
 problemSolutionRouter.post('/:problemId/solution-contributions', authenticate, command(
-  req => createSolutionContribution(req.user, req.params.problemId, req.body), 201,
+  SolutionReviewContracts.createContribution,
+  req => createSolutionContribution(
+    req.user,
+    req.params.problemId,
+    parseContractBody(SolutionReviewContracts.createContribution, req.body),
+  ),
+  201,
 ))
 problemSolutionRouter.get('/:problemId/solution-contributions/me', authenticate, command(
+  SolutionReviewContracts.listMyContributions,
   req => listMySolutionContributions(req.user, req.params.problemId),
 ))
 problemSolutionRouter.get('/:problemId/solutions', authenticate, command(
+  SolutionReviewContracts.listProblemSolutions,
   req => listProblemSolutions(req.user, req.params.problemId),
 ))
 
 solutionContributionRouter.get('/:id', authenticate, command(
+  SolutionReviewContracts.getContribution,
   req => getSolutionContribution(req.user, req.params.id),
 ))
 solutionContributionRouter.patch('/:id', authenticate, command(
-  req => updateSolutionContribution(req.user, req.params.id, req.body),
+  SolutionReviewContracts.updateContribution,
+  req => updateSolutionContribution(
+    req.user,
+    req.params.id,
+    parseContractBody(SolutionReviewContracts.updateContribution, req.body),
+  ),
 ))
 solutionContributionRouter.post('/:id/submit', authenticate, command(
-  req => submitSolutionContribution(req.user, req.params.id, false),
+  SolutionReviewContracts.submitContribution,
+  req => {
+    parseContractBody(SolutionReviewContracts.submitContribution, req.body)
+    return submitSolutionContribution(req.user, req.params.id, false)
+  },
 ))
 solutionContributionRouter.post('/:id/resubmit', authenticate, command(
-  req => submitSolutionContribution(req.user, req.params.id, true),
+  SolutionReviewContracts.resubmitContribution,
+  req => {
+    parseContractBody(SolutionReviewContracts.resubmitContribution, req.body)
+    return submitSolutionContribution(req.user, req.params.id, true)
+  },
 ))
 solutionContributionRouter.post('/:id/verification/refresh', authenticate, command(
-  req => refreshSolutionVerification(req.user, req.params.id),
+  SolutionReviewContracts.refreshVerification,
+  req => {
+    parseContractBody(SolutionReviewContracts.refreshVerification, req.body)
+    return refreshSolutionVerification(req.user, req.params.id)
+  },
 ))
 
 solutionRouter.get('/:solutionId', authenticate, command(
+  SolutionReviewContracts.getSolution,
   req => getProblemSolution(req.user, req.params.solutionId),
 ))
 solutionRouter.get('/:solutionId/versions/:versionId', authenticate, command(
+  SolutionReviewContracts.getSolutionVersion,
   req => getProblemSolution(req.user, req.params.solutionId, req.params.versionId),
 ))
 solutionRouter.post('/:solutionId/corrections', authenticate, command(
-  req => createCorrectionContribution(req.user, req.params.solutionId, req.body), 201,
+  SolutionReviewContracts.createCorrection,
+  req => createCorrectionContribution(
+    req.user,
+    req.params.solutionId,
+    parseContractBody(SolutionReviewContracts.createCorrection, req.body),
+  ),
+  201,
 ))
 
 solutionReviewRouter.get('/', authenticate, command(
-  req => listSolutionReviewQueue(req.user, String(req.query.status || '')),
+  SolutionReviewContracts.reviewQueue,
+  req => {
+    const query = parseContractQuery(SolutionReviewContracts.reviewQueue, req.query)
+    return listSolutionReviewQueue(req.user, query.status)
+  },
 ))
-solutionReviewRouter.get('/:id/similarity-comparison', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
-  try {
-    return sendContractData(res, SolutionReviewContracts.similarityComparison, await getSolutionSimilarityComparison(req.user!, req.params.id))
-  } catch (error) {
-    if (sendContractError(error, res)) return
-    if (error instanceof SolutionDomainError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
-    throw error
-  }
-}))
+solutionReviewRouter.get('/:id/similarity-comparison', authenticate, command(
+  SolutionReviewContracts.similarityComparison,
+  req => getSolutionSimilarityComparison(req.user, req.params.id),
+))
 solutionReviewRouter.post('/:id/reviews', authenticate, command(
-  req => recordSolutionReview(req.user, req.params.id, req.body), 201,
+  SolutionReviewContracts.recordReview,
+  req => recordSolutionReview(
+    req.user,
+    req.params.id,
+    parseContractBody(SolutionReviewContracts.recordReview, req.body),
+  ),
+  201,
 ))
 solutionReviewRouter.post('/:id/request-revision', authenticate, command(
-  req => recordSolutionReview(req.user, req.params.id, { ...req.body, decision: 'REQUEST_CHANGES' }), 201,
+  SolutionReviewContracts.requestRevision,
+  req => recordSolutionReview(req.user, req.params.id, {
+    ...parseContractBody(SolutionReviewContracts.requestRevision, req.body),
+    decision: 'REQUEST_CHANGES',
+  }),
+  201,
 ))
 solutionReviewRouter.post('/:id/reject', authenticate, command(
-  req => recordSolutionReview(req.user, req.params.id, { ...req.body, decision: 'REJECT' }), 201,
+  SolutionReviewContracts.rejectContribution,
+  req => recordSolutionReview(req.user, req.params.id, {
+    ...parseContractBody(SolutionReviewContracts.rejectContribution, req.body),
+    decision: 'REJECT',
+  }),
+  201,
 ))
 solutionReviewRouter.post('/:id/accept', authenticate, command(
-  req => acceptSolutionContribution(req.user, req.params.id),
+  SolutionReviewContracts.acceptContribution,
+  req => {
+    parseContractBody(SolutionReviewContracts.acceptContribution, req.body)
+    return acceptSolutionContribution(req.user, req.params.id)
+  },
 ))
 solutionReviewRouter.post('/:id/publish', authenticate, command(
-  req => publishSolutionContribution(req.user, req.params.id, req.body), 201,
+  SolutionReviewContracts.publishContribution,
+  req => publishSolutionContribution(
+    req.user,
+    req.params.id,
+    parseContractBody(SolutionReviewContracts.publishContribution, req.body),
+  ),
+  201,
 ))
 solutionReviewRouter.post('/:id/similarity/retry', authenticate, command(
-  req => retrySolutionSimilarity(req.user, req.params.id),
+  SolutionReviewContracts.retrySimilarity,
+  req => {
+    parseContractBody(SolutionReviewContracts.retrySimilarity, req.body)
+    return retrySolutionSimilarity(req.user, req.params.id)
+  },
 ))

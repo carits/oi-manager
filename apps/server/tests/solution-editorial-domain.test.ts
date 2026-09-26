@@ -19,7 +19,7 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
   beforeEach(async () => {
     author = await createTestUser({ organization: { role: 'teacher' } })
     reviewer = await createTestUser({ organization: { role: 'school_principal', organizationId: author.organization!.organizationId } })
-    organizationId = (await prisma.school.findUniqueOrThrow({ where: { id: author.organization!.organizationId } })).organizationId!
+    organizationId = author.organization!.organizationId
     problem = await createTestProblem({ ownerId: author.user.id, title: 'Editorial domain problem' })
     await prisma.problem.update({ where: { id: problem.id }, data: {
       libraryScope: 'school', libraryKey: `organization:${organizationId}`, organizationId,
@@ -37,11 +37,11 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
   })
 
   function authorClient() {
-    return createAuthenticatedRequest(app, generateTokenFromUser(author.user))
+    return createAuthenticatedRequest(app, generateTokenFromUser(author.user), { organizationId })
   }
 
   function reviewerClient() {
-    return createAuthenticatedRequest(app, generateTokenFromUser(reviewer.user))
+    return createAuthenticatedRequest(app, generateTokenFromUser(reviewer.user), { organizationId })
   }
 
   async function createFullContribution() {
@@ -61,10 +61,10 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
       where: { ContributionRevision: { contributionId } }, include: { Submission: { include: { CurrentJudgeRun: true } } },
     })
     const run = verification.Submission!.CurrentJudgeRun!
-    await prisma.$transaction([
-      prisma.judgeRun.update({ where: { id: run.id }, data: { status: 'FINALIZED', result, score, finalizedAt: new Date() } }),
-      prisma.submission.update({ where: { id: verification.submissionId! }, data: { result, score } }),
-    ])
+    await prisma.judgeRun.update({
+      where: { id: run.id },
+      data: { status: 'FINALIZED', result, score, finalizedAt: new Date() },
+    })
     return verification
   }
 

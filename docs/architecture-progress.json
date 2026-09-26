@@ -2,15 +2,15 @@
   "schemaVersion": 2,
   "contracts": 29,
   "featureSlices": 27,
-  "contractedBoundaries": 197,
+  "contractedBoundaries": 199,
   "transport": {
     "legacy": {
       "files": 0,
       "calls": 0
     },
     "feature": {
-      "files": 6,
-      "calls": 86
+      "files": 5,
+      "calls": 73
     },
     "raw": {
       "registered": 11
@@ -97,11 +97,6 @@
       "layer": "feature"
     },
     {
-      "file": "apps/web/src/features/solution-review/ui/SolutionEditorialPanel.tsx",
-      "calls": 13,
-      "layer": "feature"
-    },
-    {
       "file": "apps/web/src/features/problem/ui/JudgeProgramWizard.tsx",
       "calls": 11,
       "layer": "feature"
@@ -122,5 +117,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-26T14:54:24.043Z"
+  "updatedAt": "2026-09-26T16:08:33.055Z"
 }

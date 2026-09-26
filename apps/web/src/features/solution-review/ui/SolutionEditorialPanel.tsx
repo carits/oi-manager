@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BookOpenCheck, FileClock, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
-import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/features/auth'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -23,41 +22,33 @@ import {
   VERIFICATION_STATUS_LABELS,
 } from '../model/solution-editorial'
 import styles from './SolutionEditorialPanel.module.css'
-import { getSimilarityComparison } from '@/features/solution-review/api/solutionReviewApi'
-import type { SimilarityComparison } from '@oi-manager/contracts'
+import {
+  acceptSolutionContribution,
+  createSolutionContribution,
+  createSolutionCorrection,
+  getProblemSolution,
+  getSimilarityComparison,
+  getSolutionContribution,
+  listMySolutionContributions,
+  listProblemSolutions,
+  listSolutionReviewQueue,
+  publishSolutionContribution,
+  recordSolutionReview,
+  refreshSolutionContributionVerification,
+  rejectSolutionContribution,
+  requestSolutionRevision,
+  resubmitSolutionContribution,
+  retrySolutionSimilarity,
+  submitSolutionContribution,
+  updateSolutionContribution,
+} from '@/features/solution-review/api/solutionReviewApi'
+import type {
+  ProblemSolution as Solution,
+  ProblemSolutionVersion as Version,
+  SimilarityComparison,
+  SolutionContribution as Contribution,
+} from '@oi-manager/contracts'
 
-type Verification = { id: string; status: string; result?: string | null; errorMessage?: string | null; createdAt: string }
-type SimilarityCheck = {
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; textSimilarityBasisPoints?: number; codeSimilarityBasisPoints?: number
-  maximumSimilarityBasisPoints?: number; sourceDeclared: boolean; comparisonCount?: number; checkedAt: string
-}
-type Revision = {
-  id: string; revision: number; title: string; contentMarkdown: string; algorithmTags?: unknown
-  approachKey?: string | null; complexityTime?: string | null; complexityMemory?: string | null
-  language?: string | null; referenceCode?: string | null; sourceType: Draft['sourceType']
-  sourceUrl?: string | null; citation?: string | null; createdAt: string; Verification?: Verification | null
-  SimilarityCheck?: SimilarityCheck | null
-  SimilarityJob?: { status: 'QUEUED' | 'RUNNING' | 'READY' | 'FAILED'; attempts: number; lastError?: string | null } | null
-}
-type Review = { id: string; reviewType: string; decision: string; comment?: string | null; createdAt: string; Reviewer?: { username: string } }
-type Contribution = {
-  id: string; problemId: string; type: SolutionType; title: string; summary?: string | null; contentMarkdown: string
-  algorithmTags?: unknown; approachKey?: string | null; complexityTime?: string | null; complexityMemory?: string | null
-  language?: string | null; referenceCode?: string | null; sourceType: Draft['sourceType']; sourceUrl?: string | null
-  citation?: string | null; organizationId?: string | null; status: string; currentRevision: number; updatedAt: string
-  Author?: { username: string }; Problem?: { id: string; problemId: string; title: string }
-  Revisions?: Revision[]; Reviews?: Review[]
-}
-type Version = {
-  id: string; version: number; title: string; contentMarkdown: string; algorithmTags?: unknown
-  complexityTime?: string | null; complexityMemory?: string | null; language?: string | null
-  referenceCode?: string | null; sourceType: string; sourceUrl?: string | null; citation?: string | null
-  status: string; publishedAt: string
-}
-type Solution = {
-  id: string; problemId: string; type: SolutionType; title: string; visibilityPolicy: string
-  primary: boolean; recommended: boolean; CurrentVersion: Version; Versions?: Version[]; Author?: { username: string }
-}
 type Draft = SolutionDraftLike & {
   summary: string; algorithmTagsText: string; approachKey: string; organizationAttributed: boolean
 }
@@ -117,17 +108,17 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [published, mine, pending] = await Promise.all([
-      apiClient.get<Solution[]>(`/api/problems/${problemId}/solutions`),
-      apiClient.get<Contribution[]>(`/api/problems/${problemId}/solution-contributions/me`),
-      canManage ? apiClient.get<Contribution[]>('/api/review/solution-contributions') : Promise.resolve(null),
+    const [published, mine, pending] = await Promise.allSettled([
+      listProblemSolutions(problemId),
+      listMySolutionContributions(problemId),
+      canManage ? listSolutionReviewQueue() : Promise.resolve([]),
     ])
-    if (published.success) setSolutions(published.data || [])
-    else toast.error(published.message || '读取题解失败')
-    if (mine.success) setContributions(mine.data || [])
-    else toast.error(mine.message || '读取我的投稿失败')
-    if (pending?.success) setQueue((pending.data || []).filter(item => item.problemId === problemId))
-    else if (pending && !pending.success) toast.error(pending.message || '读取审核队列失败')
+    if (published.status === 'fulfilled') setSolutions(published.value)
+    else toast.error(published.reason instanceof Error ? published.reason.message : '读取题解失败')
+    if (mine.status === 'fulfilled') setContributions(mine.value)
+    else toast.error(mine.reason instanceof Error ? mine.reason.message : '读取我的投稿失败')
+    if (pending.status === 'fulfilled') setQueue(pending.value.filter(item => item.problemId === problemId))
+    else toast.error(pending.reason instanceof Error ? pending.reason.message : '读取审核队列失败')
     setLoading(false)
   // Toast actions close over a stable provider callback. Keeping them out of
   // the resource key prevents a toast render from re-triggering all reads.
@@ -138,11 +129,15 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
 
   const openSolution = async (item: Solution) => {
     setBusyId(item.id)
-    const result = await apiClient.get<Solution>(`/api/solutions/${item.id}`)
-    setBusyId(null)
-    if (!result.success || !result.data) return toast.error(result.message || '读取题解版本失败')
-    setSelectedSolution(result.data)
-    setSelectedVersion(result.data.CurrentVersion)
+    try {
+      const result = await getProblemSolution(item.id)
+      setSelectedSolution(result)
+      setSelectedVersion(result.CurrentVersion)
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : '读取题解版本失败')
+    } finally {
+      setBusyId(null)
+    }
   }
 
   const openNew = () => {
@@ -186,63 +181,71 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
     if (message) return toast.warning(message)
     setSaving(true)
     const result = editing
-      ? await apiClient.patch<Contribution>(`/api/solution-contributions/${editing.id}`, payload)
+      ? await updateSolutionContribution(editing.id, payload)
       : correctionTarget
-        ? await apiClient.post<Contribution>(`/api/solutions/${correctionTarget.solutionId}/corrections`, payload)
-        : await apiClient.post<Contribution>(`/api/problems/${problemId}/solution-contributions`, payload)
+        ? await createSolutionCorrection(correctionTarget.solutionId, { ...payload, type: 'CORRECTION' })
+        : await createSolutionContribution(problemId, payload)
     setSaving(false)
-    if (!result.success) return toast.error(result.message || '保存失败')
+    if (!result.ok) return toast.error(result.error.message || '保存失败')
     toast.success(editing ? '草稿已更新' : '投稿草稿已创建')
     setEditorOpen(false); await load()
   }
 
   const runContributionAction = async (item: Contribution, action: 'submit' | 'resubmit' | 'verification/refresh') => {
     setBusyId(item.id)
-    const result = await apiClient.post(`/api/solution-contributions/${item.id}/${action}`)
+    const result = action === 'submit'
+      ? await submitSolutionContribution(item.id)
+      : action === 'resubmit'
+        ? await resubmitSolutionContribution(item.id)
+        : await refreshSolutionContributionVerification(item.id)
     setBusyId(null)
-    if (!result.success) return toast.error(result.message || '操作失败')
+    if (!result.ok) return toast.error(result.error.message || '操作失败')
     toast.success(action === 'verification/refresh' ? '验证状态已刷新' : '投稿已送审，当前版本已冻结')
     await load()
   }
 
   const openReview = async (item: Contribution) => {
     setBusyId(item.id)
-    const result = await apiClient.get<Contribution>(`/api/solution-contributions/${item.id}`)
-    setBusyId(null)
-    if (!result.success || !result.data) return toast.error(result.message || '读取投稿失败')
-    setReviewing({ ...result.data, Author: item.Author }); setReviewOpen(true)
+    try {
+      const result = await getSolutionContribution(item.id)
+      setReviewing({ ...result, Author: item.Author })
+      setReviewOpen(true)
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : '读取投稿失败')
+    } finally {
+      setBusyId(null)
+    }
   }
 
   const submitReview = async () => {
     if (!reviewing || !reviewAction) return
     if (reviewAction !== 'approve' && reviewComment.trim().length < 10) return toast.warning('要求修改或拒绝时，请填写至少 10 个字符的说明')
     setBusyId(reviewing.id)
-    const endpoint = reviewAction === 'approve'
-      ? `/api/review/solution-contributions/${reviewing.id}/reviews`
-      : `/api/review/solution-contributions/${reviewing.id}/${reviewAction}`
-    const body = reviewAction === 'approve'
-      ? { reviewType, decision: 'APPROVE', comment: reviewComment.trim() || null }
-      : { reviewType, comment: reviewComment.trim() }
-    const result = await apiClient.post(endpoint, body)
+    const body = { reviewType: reviewType as 'TECHNICAL' | 'CONTENT' | 'COPYRIGHT', comment: reviewComment.trim() }
+    const result = reviewAction === 'approve'
+      ? await recordSolutionReview(reviewing.id, { ...body, decision: 'APPROVE', comment: body.comment || null })
+      : reviewAction === 'request-revision'
+        ? await requestSolutionRevision(reviewing.id, body)
+        : await rejectSolutionContribution(reviewing.id, body)
     setBusyId(null)
-    if (!result.success) return toast.error(result.message || '审核操作失败')
+    if (!result.ok) return toast.error(result.error.message || '审核操作失败')
     toast.success(reviewAction === 'approve' ? '审核已通过，可继续采纳' : reviewAction === 'reject' ? '投稿已拒绝' : '已要求作者修改')
     setReviewAction(null); setReviewComment(''); setReviewOpen(false); await load()
   }
 
   const accept = async (item: Contribution) => {
     setBusyId(item.id)
-    const result = await apiClient.post(`/api/review/solution-contributions/${item.id}/accept`)
+    const result = await acceptSolutionContribution(item.id)
     setBusyId(null)
-    if (!result.success) return toast.error(result.message || '采纳失败')
+    if (!result.ok) return toast.error(result.error.message || '采纳失败')
     toast.success('投稿已采纳，发布前仍不会对读者可见'); setReviewOpen(false); await load()
   }
 
   const retrySimilarity = async (item: Contribution) => {
     setBusyId(item.id)
-    const result = await apiClient.post(`/api/review/solution-contributions/${item.id}/similarity/retry`)
+    const result = await retrySolutionSimilarity(item.id)
     setBusyId(null)
-    if (!result.success) return toast.error(result.message || '相似度检查重试失败')
+    if (!result.ok) return toast.error(result.error.message || '相似度检查重试失败')
     toast.success('相似度检查已重新排队')
     setReviewOpen(false); await load()
   }
@@ -263,9 +266,11 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
   const publish = async () => {
     if (!publishing) return
     setBusyId(publishing.id)
-    const result = await apiClient.post(`/api/review/solution-contributions/${publishing.id}/publish`, { visibilityPolicy })
+    const result = await publishSolutionContribution(publishing.id, {
+      visibilityPolicy: visibilityPolicy as 'PUBLIC' | 'AFTER_AC' | 'MANAGER_ONLY',
+    })
     setBusyId(null)
-    if (!result.success) return toast.error(result.message || '发布失败')
+    if (!result.ok) return toast.error(result.error.message || '发布失败')
     toast.success('新题解版本已发布'); setPublishing(null); setReviewOpen(false); await load()
   }
 

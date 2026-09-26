@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, BlogManagementContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, ProblemQualityContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, BlogManagementContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, ProblemQualityContracts, RankingContracts, RatingLeaderboardContracts, SolutionReviewContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -1053,6 +1053,48 @@ describe('shared API contract adapter', () => {
       data: expect.objectContaining({
         attempts: [expect.objectContaining({ createdAt: '2026-09-16T00:00:00.000Z' })],
       }),
+    }))
+  })
+
+
+  it('guards solution editorial drafts, corrections and review responses', () => {
+    const draft = parseContractBody(SolutionReviewContracts.createContribution, {
+      type: 'COMMUNITY_EDITORIAL',
+      title: '动态规划题解',
+      contentMarkdown: '# 思路',
+      sourceType: 'ORIGINAL',
+      licenseAccepted: true,
+    })
+    expect(draft.type).toBe('COMMUNITY_EDITORIAL')
+    expect(() => parseContractBody(SolutionReviewContracts.createContribution, {
+      type: 'COMMUNITY_EDITORIAL',
+      title: '缺少授权声明',
+      contentMarkdown: '# 思路',
+      sourceType: 'ORIGINAL',
+    })).toThrowError(ApiContractError)
+
+    const correction = parseContractBody(SolutionReviewContracts.createCorrection, {
+      title: '纠错说明',
+      contentMarkdown: '修正复杂度分析。',
+      sourceType: 'ORIGINAL',
+      licenseAccepted: true,
+    })
+    expect(correction).not.toHaveProperty('type')
+    expect(() => parseContractBody(SolutionReviewContracts.createCorrection, {
+      type: 'COMMUNITY_EDITORIAL',
+      licenseAccepted: true,
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, SolutionReviewContracts.recordReview, {
+      id: 'review-1',
+      reviewType: 'CONTENT',
+      decision: 'APPROVE',
+      comment: '已核验',
+      createdAt: new Date('2026-09-26T00:00:00Z'),
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ createdAt: '2026-09-26T00:00:00.000Z' }),
     }))
   })
 
