@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, BlogManagementContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, ProblemQualityContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, BlogManagementContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, ProblemQualityContracts, RankingContracts, RatingLeaderboardContracts, SolutionReviewContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -30,6 +30,26 @@ describe('shared API contract adapter', () => {
       codeLength: 0, language: 'cpp17', code: null, submitMethod: 'local', ojRemoteId: null,
       submittedAt: new Date(), errorMessage: null,
     })).toThrowError(ApiContractError)
+  })
+
+  it('guards local submission creation through the shared runtime contract', () => {
+    expect(parseContractBody(SubmissionContracts.create, {
+      problemId: '1041', oj: 'carits', language: 'cpp17', code: 'int main(){}',
+      submitMethod: 'local', inputFilename: null, outputFilename: null,
+    })).toEqual({
+      problemId: '1041', oj: 'carits', language: 'cpp17', code: 'int main(){}',
+      submitMethod: 'local', inputFilename: null, outputFilename: null,
+    })
+    expect(() => parseContractBody(SubmissionContracts.create, {
+      problemId: '1041', oj: 'carits', language: 'cpp17', code: '   ',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, SubmissionContracts.create, { submissionId: 42, replayed: true })
+    expect(json).toHaveBeenCalledWith({
+      success: true,
+      data: { submissionId: 42, replayed: true },
+    })
   })
 
   it('normalizes bounded pagination at the server boundary', () => {
@@ -396,15 +416,149 @@ describe('shared API contract adapter', () => {
       difficulty: null,
       timeLimit: 1000,
       memoryLimit: 256,
+      visibility: 'public',
       status: 'draft',
+      libraryScope: 'platform',
+      ownerId: 'teacher-1',
+      ownerType: 'user',
+      ownerName: 'teacher',
+      allowedLanguages: null,
+      ojBindings: null,
+      createdAt: new Date('2026-09-16T00:00:00Z'),
       statements: [],
       solutions: [],
-      permissions: { canEdit: true, canView: true },
-      ownerName: 'teacher',
+      permissions: {
+        canEdit: true, canPublish: true, canArchive: true,
+        canCopyToSchool: false, canSubmit: false, canView: true,
+      },
+      hack: { enabled: false, acceptedCount: 0, canHack: false, mode: 'acm' },
+      legacyIoSuggestion: null,
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
       data: expect.objectContaining({ ownerName: 'teacher' }),
+    }))
+
+    expect(parseContractQuery(ProblemContracts.listSubmissions, {
+      page: '2', pageSize: '50',
+    })).toEqual({ page: 2, pageSize: 50 })
+    const submissions = responseStub()
+    sendContractData(submissions.response, ProblemContracts.listSubmissions, {
+      submissions: [{
+        id: 42, username: 'student', result: 'wrong_answer', timeUsed: 12,
+        memoryUsed: 1024, codeLength: 80, language: 'cpp17',
+        submittedAt: new Date('2026-09-16T01:00:00Z'),
+      }],
+      page: 1, pageSize: 20, total: 1, totalPages: 1,
+    })
+    expect(submissions.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        submissions: [expect.objectContaining({ submittedAt: '2026-09-16T01:00:00.000Z' })],
+      }),
+    }))
+
+    expect(parseContractBody(ProblemContracts.translateStatement, {
+      targetLang: 'en', statementId: 'statement-1',
+    })).toEqual({ targetLang: 'en', statementId: 'statement-1' })
+    expect(() => parseContractBody(ProblemContracts.translateStatement, {
+      targetLang: 'fr',
+    })).toThrowError(ApiContractError)
+    const aiUsage = responseStub()
+    sendContractData(aiUsage.response, ProblemContracts.getAiUsage, {
+      isAdmin: false,
+      translations: { zh: true, en: false },
+      formattedStatementIds: [],
+      markdownStatements: [{
+        id: 'statement-1', language: 'zh',
+        createdAt: new Date('2026-09-16T00:00:00Z'), maxReservedTokens: 12000,
+      }],
+    })
+    expect(aiUsage.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ translations: { zh: true, en: false } }),
+    }))
+
+    expect(parseContractBody(ProblemContracts.saveMyContent, {
+      title: '我的题解', language: 'zh', content: '# 思路',
+    })).toEqual({ title: '我的题解', language: 'zh', content: '# 思路' })
+    expect(() => parseContractBody(ProblemContracts.saveMyContent, {
+      title: '空内容', language: 'zh', content: '',
+    })).toThrowError(ApiContractError)
+
+    const personalContent = responseStub()
+    sendContractData(personalContent.response, ProblemContracts.getMyContent, {
+      contents: [{
+        id: 'content-1', kind: 'solution', title: null, format: 'markdown',
+        language: 'zh', content: '# 思路', fileUrl: null, revision: 2,
+        updatedAt: new Date('2026-09-20T01:02:03Z'), shareKeys: ['platform'],
+        fileId: 'must-not-leak',
+      }],
+      shareTargets: [{ key: 'school-1', label: '学校一' }],
+    })
+    expect(personalContent.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        contents: [expect.objectContaining({
+          updatedAt: '2026-09-20T01:02:03.000Z',
+        })],
+      }),
+    }))
+    expect(personalContent.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        contents: [expect.not.objectContaining({ fileId: expect.anything() })],
+      }),
+    }))
+  })
+
+  it('guards statement-version requests and strips storage internals', () => {
+    expect(parseContractQuery(ProblemContracts.listStatementVersions, {
+      page: '2', pageSize: '50', ignored: 'drop-me',
+    })).toEqual({ page: 2, pageSize: 50 })
+    expect(parseContractBody(ProblemContracts.createStatementVersion, {
+      name: '自定义题面', language: 'zh', visibility: 'private',
+      format: 'markdown', source: { type: 'blank' },
+    })).toEqual({
+      name: '自定义题面', language: 'zh', visibility: 'private',
+      format: 'markdown', source: { type: 'blank' },
+    })
+    expect(() => parseContractBody(ProblemContracts.createStatementVersion, {
+      name: '复制官方题面', visibility: 'private',
+      source: { type: 'canonical' },
+    })).toThrowError(ApiContractError)
+    expect(() => parseContractBody(ProblemContracts.updateStatementVersionContent, {
+      content: '   ',
+    })).toThrowError(ApiContractError)
+    expect(() => parseContractBody(ProblemContracts.updateStatementVersionMetadata, {}))
+      .toThrowError(ApiContractError)
+
+    const statementVersions = responseStub()
+    sendContractData(statementVersions.response, ProblemContracts.listStatementVersions, {
+      official: [{
+        id: 'official-1', key: 'canonical:official-1', name: '官方中文',
+        title: '整数求和', language: 'zh', format: 'markdown', visibility: 'public',
+        content: '# 题面', fileUrl: null, authorUsername: 'System', isOfficial: true,
+      }],
+      mine: [{
+        id: 'version-1', name: '课堂版', title: '整数求和', language: 'zh',
+        format: 'markdown', visibility: 'private', content: '# 课堂题面',
+        fileUrl: null, authorUsername: 'teacher1', isMine: true,
+        createdAt: new Date('2026-09-20T01:02:03Z'),
+        updatedAt: new Date('2026-09-20T02:03:04Z'),
+        fileId: 'must-not-leak',
+      }],
+      public: [],
+      publicPagination: { page: 1, pageSize: 10, total: 0 },
+    })
+    expect(statementVersions.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        mine: [expect.objectContaining({
+          createdAt: '2026-09-20T01:02:03.000Z',
+          updatedAt: '2026-09-20T02:03:04.000Z',
+        })],
+      }),
+    }))
+    expect(statementVersions.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        mine: [expect.not.objectContaining({ fileId: expect.anything() })],
+      }),
     }))
   })
 
@@ -656,6 +810,168 @@ describe('shared API contract adapter', () => {
     })).toThrowError(ApiContractError)
   })
 
+
+  it('guards judge program drafts and verification jobs through shared contracts', () => {
+    const body = parseContractBody(ProblemContracts.saveJudgeProgramDraft, {
+      kind: 'validator',
+      name: '严格校验器',
+      language: 'cpp17',
+      protocol: 'oj.validator/v1',
+      source: 'int main() { return 0; }',
+      fixtures: [{ name: '合法输入', stdin: '1\\n', expectedExitCode: 0 }],
+    })
+    expect(body.kind).toBe('validator')
+    expect(parseContractBody(ProblemContracts.preflightJudgeProgramVersion, {})).toEqual({})
+    expect(() => parseContractBody(ProblemContracts.createJudgeProgram, {
+      kind: 'standard', language: 'cpp17', protocol: 'oj.standard/v1', source: '',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getJudgeProgramVerification, [{
+      id: 'job-1', problemId: 'problem-1', programId: 'program-1', versionId: 'version-1',
+      fixtureSetId: 'fixtures-1', mode: 'compile', status: 'completed', judgeId: null,
+      fencingToken: null, leaseExpiresAt: null, attemptCount: 1, report: { warnings: [] },
+      errorCode: null, errorMessage: null, createdBy: 'user-1', startedAt: new Date('2026-09-16T00:00:00Z'),
+      finishedAt: new Date('2026-09-16T00:00:01Z'), createdAt: new Date('2026-09-16T00:00:00Z'),
+      updatedAt: new Date('2026-09-16T00:00:01Z'),
+    }])
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ startedAt: '2026-09-16T00:00:00.000Z' })],
+    }))
+  })
+
+  it('guards AI Validator requests and strips internal prompt metadata', () => {
+    expect(parseContractBody(ProblemContracts.generateAiValidator, {
+      statementId: 'statement-1',
+    })).toEqual({ statementId: 'statement-1' })
+    expect(parseContractBody(ProblemContracts.repairAiValidator, {})).toEqual({})
+    expect(() => parseContractBody(ProblemContracts.saveAiValidator, {
+      name: 'x'.repeat(81),
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getAiValidatorRequest, {
+      id: 'request-1',
+      userId: 'user-1',
+      problemId: 'problem-1',
+      statementId: 'statement-1',
+      action: 'validator',
+      model: 'deepseek-chat',
+      status: 'succeeded',
+      parentRequestId: null,
+      repairDepth: 0,
+      reservedTokens: 2048,
+      promptTokens: 120,
+      completionTokens: 380,
+      totalTokens: 500,
+      response: {
+        validatorSource: 'int main() { return 0; }',
+        assumptions: ['n is an integer'],
+      },
+      errorCode: null,
+      errorMessage: null,
+      compileStatus: 'succeeded',
+      compileMessage: null,
+      programVersionId: null,
+      promptHash: 'must-not-leak',
+      createdAt: new Date('2026-09-27T00:00:00Z'),
+      startedAt: new Date('2026-09-27T00:00:01Z'),
+      finishedAt: new Date('2026-09-27T00:00:02Z'),
+    })
+
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({
+        createdAt: '2026-09-27T00:00:00.000Z',
+        totalTokens: 500,
+      }),
+    }))
+    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('promptHash')
+  })
+
+  it('guards data-generation inputs and strips worker lease metadata', () => {
+    expect(parseContractBody(ProblemContracts.createDataGenerationJob, {
+      sourceMode: 'generator',
+      generatorVersionId: 'generator-v1',
+      standardVersionId: 'standard-v1',
+      validatorVersionId: 'validator-v1',
+      cases: [{ name: 'large', args: ['100000'], seed: '42' }],
+    }).cases[0]?.name).toBe('large')
+    expect(() => parseContractBody(ProblemContracts.promoteDataGenerationJob, {
+      expectedLatestRevisionId: '',
+      caseIds: [],
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getDataGenerationJob, {
+      id: 'job-1',
+      status: 'running',
+      expectedLatestRevisionId: 'revision-1',
+      promotedRevisionId: null,
+      createdAt: new Date('2026-09-27T00:00:00Z'),
+      judgeId: 'internal-judge',
+      fencingToken: 'internal-fence',
+      cases: [{
+        id: 'case-1',
+        name: 'large',
+        status: 'validated',
+        failureStage: null,
+        message: null,
+        inputPreview: '1\n',
+        outputPreview: '1\n',
+      }],
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        createdAt: '2026-09-27T00:00:00.000Z',
+        cases: [expect.objectContaining({ name: 'large' })],
+      }),
+    }))
+    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('judgeId')
+    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('fencingToken')
+  })
+
+  it('guards Candidate policy, selector and Wrong Corpus manager boundaries', () => {
+    expect(parseContractBody(ProblemContracts.updateCandidatePolicy, {
+      expectedRevision: 3,
+      selectorMode: 'observe',
+      maxHotCandidates: 2000,
+      topK: 500,
+    }).selectorMode).toBe('observe')
+    expect(() => parseContractBody(ProblemContracts.emergencyPublishCandidate, {
+      candidateId: 'candidate-1',
+      reason: 'too short',
+    })).toThrowError(ApiContractError)
+
+    const pool = responseStub()
+    sendContractData(pool.response, ProblemContracts.getCandidatePool, {
+      policy: { revision: 3, selectorMode: 'auto', maxHotCandidates: 2000, topK: 500, maxHotBytes: '1073741824' },
+      activeCount: 1,
+      hotBytes: 1024,
+      subtasks: [{
+        subtaskId: 1, caseCount: 10, caseLimit: 50, wrongProgramCount: 8, wrongClusterCount: 4,
+        contributionMode: 'open', autoSelection: true, bootstrapAvailable: false,
+      }],
+      candidates: [{
+        id: 'candidate-1', source: 'hack', targetRole: 'hack_gate', status: 'ELIGIBLE',
+        evaluationStage: 'evaluated', marginalValue: 12.5, createdAt: new Date('2026-09-27T00:00:00Z'),
+        inputSha256: 'must-not-leak',
+      }],
+      retirements: [],
+    })
+    expect(pool.json.mock.calls[0]?.[0]?.data.policy).not.toHaveProperty('maxHotBytes')
+    expect(pool.json.mock.calls[0]?.[0]?.data.candidates[0]).not.toHaveProperty('inputSha256')
+
+    const corpus = responseStub()
+    sendContractData(corpus.response, ProblemContracts.getWrongCorpus, {
+      revision: { revisionNumber: 2, clusterCount: 8, evaluationCount: 6, holdoutCount: 2, corpusHash: 'must-not-leak' },
+      clusters: [{ id: 'cluster-1', weight: 5, frequency: 3, partition: 'evaluation', behaviorHash: 'must-not-leak' }],
+      categories: [{ id: 'category-1', key: 'overflow', name: '溢出', weight: 5, problemId: 'must-not-leak' }],
+    })
+    expect(corpus.json.mock.calls[0]?.[0]?.data.revision).not.toHaveProperty('corpusHash')
+    expect(corpus.json.mock.calls[0]?.[0]?.data.clusters[0]).not.toHaveProperty('behaviorHash')
+  })
+
   it('guards chat message payloads and serializes dates at the account boundary', () => {
     const body = parseContractBody(ChatContracts.sendMessage, {
       type: 'text', content: '你好', clientMessageId: '12345678-1234-1234-1234-123456789012',
@@ -838,4 +1154,110 @@ describe('shared API contract adapter', () => {
       workspaces: [{ type: 'organization', organizationId: 'organization-1', availableModules: [] }],
     })).toThrowError(ApiContractError)
   })
+  it('guards Candidate contribution and Generator protocol inputs', () => {
+    expect(parseContractBody(ProblemContracts.contributeCandidateData, {
+      name: ' 边界数据 ', inputData: '1\n', contributionOrganizationId: 'organization-1',
+    })).toEqual({
+      name: '边界数据', inputData: '1\n', contributionOrganizationId: 'organization-1',
+    })
+    expect(parseContractBody(ProblemContracts.contributeCandidateGenerator, {
+      language: 'python3', source: 'print(1)',
+      manifest: {
+        apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1',
+        language: 'python3', entry: 'main.py', parameterSchema: {},
+        profiles: [{ id: 'default', label: '默认', params: {} }],
+      },
+    }).manifest.entry).toBe('main.py')
+    expect(() => parseContractBody(ProblemContracts.contributeCandidateGenerator, {
+      language: 'ruby3', source: 'puts 1',
+      manifest: {
+        apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1',
+        language: 'ruby3', entry: 'main.rb', parameterSchema: {},
+        profiles: [{ id: 'default', params: {} }],
+      },
+    })).toThrowError(ApiContractError)
+  })
+
+  it('guards contribution readiness and Hack attempt wire data', () => {
+    const readiness = responseStub()
+    sendContractData(readiness.response, ProblemContracts.getContributionReadiness, {
+      canContribute: true, canHack: true, canManage: false, mode: 'oi',
+      standard: { status: 'active', versionId: 'std-v1' },
+      validator: { status: 'active', source: 'dsl', versionId: 'validator-v1' },
+      classifier: { status: 'active', versionId: 'classifier-v1', requiredForHack: true, requiredForPromotion: true },
+      wrongCorpus: { status: 'ready', mode: 'open' },
+      blockers: [], warnings: [],
+    })
+    expect(readiness.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ canContribute: true, validator: expect.objectContaining({ source: 'dsl' }) }),
+    }))
+
+    expect(parseContractBody(ProblemContracts.createHackAttempt, {
+      inputMode: 'data', inputData: '1\n', hackSource: 'int main(){}', hackLanguage: 'cpp17',
+      inputFilename: null, outputFilename: null, contributionOrganizationId: null,
+    }).inputMode).toBe('data')
+    expect(() => parseContractBody(ProblemContracts.createHackAttempt, {
+      inputMode: 'generator', hackSource: 'int main(){}', hackLanguage: 'cpp17',
+    })).toThrowError(ApiContractError)
+
+    const list = responseStub()
+    sendContractData(list.response, ProblemContracts.listHackAttempts, {
+      attempts: [{
+        id: 'hack-1', problemId: 'problem-1', userId: 'user-1',
+        contributionOrganizationId: null, contributionOrganizationName: null,
+        status: 'accepted', inputMode: 'data', hackLanguage: 'cpp17',
+        affectedSubtaskIds: [1], createdAt: new Date('2026-09-16T00:00:00Z'),
+        updatedAt: new Date('2026-09-16T00:01:00Z'),
+      }],
+      total: 1, page: 1, pageSize: 50, acceptedCount: 1, canManage: false,
+    })
+    expect(list.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        attempts: [expect.objectContaining({ createdAt: '2026-09-16T00:00:00.000Z' })],
+      }),
+    }))
+  })
+
+
+  it('guards solution editorial drafts, corrections and review responses', () => {
+    const draft = parseContractBody(SolutionReviewContracts.createContribution, {
+      type: 'COMMUNITY_EDITORIAL',
+      title: '动态规划题解',
+      contentMarkdown: '# 思路',
+      sourceType: 'ORIGINAL',
+      licenseAccepted: true,
+    })
+    expect(draft.type).toBe('COMMUNITY_EDITORIAL')
+    expect(() => parseContractBody(SolutionReviewContracts.createContribution, {
+      type: 'COMMUNITY_EDITORIAL',
+      title: '缺少授权声明',
+      contentMarkdown: '# 思路',
+      sourceType: 'ORIGINAL',
+    })).toThrowError(ApiContractError)
+
+    const correction = parseContractBody(SolutionReviewContracts.createCorrection, {
+      title: '纠错说明',
+      contentMarkdown: '修正复杂度分析。',
+      sourceType: 'ORIGINAL',
+      licenseAccepted: true,
+    })
+    expect(correction).not.toHaveProperty('type')
+    expect(() => parseContractBody(SolutionReviewContracts.createCorrection, {
+      type: 'COMMUNITY_EDITORIAL',
+      licenseAccepted: true,
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, SolutionReviewContracts.recordReview, {
+      id: 'review-1',
+      reviewType: 'CONTENT',
+      decision: 'APPROVE',
+      comment: '已核验',
+      createdAt: new Date('2026-09-26T00:00:00Z'),
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ createdAt: '2026-09-26T00:00:00.000Z' }),
+    }))
+  })
+
 })

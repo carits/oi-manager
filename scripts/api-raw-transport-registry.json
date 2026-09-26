@@ -10,6 +10,16 @@
     "serverSymbol": "problemPdfUpload"
   },
   {
+    "key": "problem.attachment.download",
+    "kind": "binary",
+    "method": "GET",
+    "route": "/api/files/:fileId/download",
+    "featureApi": "apps/web/src/features/problem/api/problemFilesApi.ts",
+    "featureSymbol": "downloadProblemAttachment",
+    "serverBoundary": "apps/server/src/routes/files.ts",
+    "serverSymbol": "downloadAuthorizedFile"
+  },
+  {
     "key": "problem.attachment.upload",
     "kind": "multipart",
     "method": "POST",
@@ -68,5 +78,35 @@
     "featureSymbol": "uploadContestContentPdf",
     "serverBoundary": "apps/server/src/modules/contest/contest.content.routes.ts",
     "serverSymbol": "contestContentPdfUpload"
+  },
+  {
+    "key": "problem.personal-content-pdf.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/problems/:problemId/my-content/:kind/pdf",
+    "featureApi": "apps/web/src/features/problem/api/problemUserContentApi.ts",
+    "featureSymbol": "uploadProblemPersonalContentPdf",
+    "serverBoundary": "apps/server/src/modules/problem/problem.user-content.routes.ts",
+    "serverSymbol": "problemContentPdfUpload"
+  },
+  {
+    "key": "problem.statement-version-pdf.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/problems/:problemId/statement-versions/:versionId/pdf",
+    "featureApi": "apps/web/src/features/problem/api/problemStatementVersionApi.ts",
+    "featureSymbol": "uploadProblemStatementVersionPdf",
+    "serverBoundary": "apps/server/src/modules/problem/problem.statement-version.routes.ts",
+    "serverSymbol": "problemContentPdfUpload"
+  },
+  {
+    "key": "problem.statement-version-pdf.download",
+    "kind": "binary",
+    "method": "GET",
+    "route": "/api/problems/:problemId/statement-versions/:versionId/file",
+    "featureApi": "apps/web/src/features/problem/api/problemStatementVersionApi.ts",
+    "featureSymbol": "problemStatementVersionFileUrl",
+    "serverBoundary": "apps/server/src/modules/problem/problem.statement-version.routes.ts",
+    "serverSymbol": "downloadProblemStatementVersion"
   }
 ]

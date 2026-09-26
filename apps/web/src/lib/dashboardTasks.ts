@@ -39,3 +39,41 @@ export function compareDashboardTasks(a: LearningTask, b: LearningTask, now = Da
   const bTime = Math.min(timestamp(b.dueAt), timestamp(b.actionAt))
   return aTime - bTime || a.title.localeCompare(b.title, 'zh-CN')
 }
+
+export type LearningResourceAvailabilityState = 'pending' | 'ready' | 'empty' | 'error'
+
+export interface LearningResourceAvailability {
+  state: LearningResourceAvailabilityState
+  hasData?: boolean
+}
+
+export interface LearningFeedAvailability {
+  status: 'loading' | 'partial' | 'ready' | 'error'
+  hasPending: boolean
+  hasError: boolean
+}
+
+/**
+ * Keeps an incomplete learning feed from being presented as an authoritative empty result.
+ * Error snapshots with previous data remain usable, but the feed stays visibly degraded.
+ */
+export function resolveLearningFeedAvailability(
+  resources: LearningResourceAvailability[],
+): LearningFeedAvailability {
+  const hasPending = resources.some(resource => resource.state === 'pending')
+  const hasError = resources.some(resource => resource.state === 'error')
+  const hasUsableData = resources.some(resource =>
+    resource.state === 'ready' || resource.state === 'empty' || resource.hasData === true,
+  )
+
+  if (resources.length === 0 || resources.every(resource => resource.state === 'pending')) {
+    return { status: 'loading', hasPending: true, hasError: false }
+  }
+  if (resources.every(resource => resource.state === 'error') && !hasUsableData) {
+    return { status: 'error', hasPending: false, hasError: true }
+  }
+  if (hasPending || hasError) {
+    return { status: 'partial', hasPending, hasError }
+  }
+  return { status: 'ready', hasPending: false, hasError: false }
+}

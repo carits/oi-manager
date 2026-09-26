@@ -4,34 +4,28 @@ import { useCallback, useEffect, useState } from 'react'
 import unifiedStyles from './UserProblemContentPanel.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
-import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
+import type {
+  ProblemPersonalContent,
+  ProblemPersonalContentKind as Kind,
+} from '@oi-manager/contracts'
+import {
+  deleteProblemPersonalContent,
+  getProblemPersonalContent,
+  saveProblemPersonalContent,
+  updateProblemPersonalContentShares,
+  uploadProblemPersonalContentPdf,
+} from '../api/problemUserContentApi'
 
-type Kind = 'statement' | 'solution'
 type Format = 'markdown' | 'pdf'
-
-interface PersonalContent {
-  id: string
-  kind: Kind
-  title: string | null
-  format: Format
-  language: string | null
-  content: string | null
-  fileUrl: string | null
-  revision: number
-  updatedAt: string
-  shareKeys: string[]
-}
 
 interface Props {
   problemId: string
-  apiBase?: string
 }
 
-export function UserProblemContentPanel({ problemId, apiBase }: Props) {
+export function UserProblemContentPanel({ problemId }: Props) {
   const toast = useToast()
-  const base = apiBase || `/api/problems/${problemId}`
   const [kind] = useState<Kind>('solution')
   const [format, setFormat] = useState<Format>('markdown')
   const [title, setTitle] = useState('')
@@ -39,20 +33,23 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
   const [content, setContent] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [shareKeys, setShareKeys] = useState<string[]>([])
-  const [items, setItems] = useState<PersonalContent[]>([])
+  const [items, setItems] = useState<ProblemPersonalContent[]>([])
   const [shareTargets, setShareTargets] = useState<Array<{ key: string; label: string }>>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const response = await apiClient.get<{ contents: PersonalContent[]; shareTargets: Array<{ key: string; label: string }> }>(`${base}/my-content`)
-    if (response.success && response.data) {
-      setItems(response.data.contents)
-      setShareTargets(response.data.shareTargets)
-    } else toast.error(response.message || '加载个人版本失败')
-    setLoading(false)
-  }, [base, toast])
+    try {
+      const data = await getProblemPersonalContent(problemId)
+      setItems(data.contents)
+      setShareTargets(data.shareTargets)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '加载个人版本失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [problemId, toast])
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
@@ -68,9 +65,12 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
   const save = async () => {
     setSaving(true)
     try {
-      let response
       if (format === 'markdown') {
-        response = await apiClient.put(`${base}/my-content/${kind}`, { title, language, content })
+        const response = await saveProblemPersonalContent(problemId, kind, { title, language, content })
+        if (!response.ok) {
+          toast.error(response.error.message || '保存失败')
+          return
+        }
       } else {
         if (!file) {
           toast.error(items.find(item => item.kind === kind)?.format === 'pdf' ? '请选择新 PDF，或保留当前版本不保存' : '请选择 PDF 文件')
@@ -80,15 +80,15 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
         body.append('file', file)
         body.append('title', title)
         body.append('language', language)
-        response = await apiClient.post(`${base}/my-content/${kind}/pdf`, body, { timeout: 30000 })
+        const response = await uploadProblemPersonalContentPdf(problemId, kind, body)
+        if (!response.success) {
+          toast.error(response.message || '保存失败')
+          return
+        }
       }
-      if (!response.success) {
-        toast.error(response.message || '保存失败')
-        return
-      }
-      const shareResponse = await apiClient.put(`${base}/my-content/${kind}/shares`, { shareKeys })
-      if (!shareResponse.success) {
-        toast.warning(shareResponse.message || '内容已保存，但共享范围保存失败')
+      const shareResponse = await updateProblemPersonalContentShares(problemId, kind, shareKeys)
+      if (!shareResponse.ok) {
+        toast.warning(shareResponse.error.message || '内容已保存，但共享范围保存失败')
       } else {
         toast.success('个人版本已保存')
       }
@@ -100,11 +100,11 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
 
   const remove = async () => {
     if (!window.confirm(`确定删除我的${kind === 'statement' ? '题面' : '题解'}吗？已被活动选用的快照不会受影响。`)) return
-    const response = await apiClient.delete(`${base}/my-content/${kind}`)
-    if (response.success) {
+    const response = await deleteProblemPersonalContent(problemId, kind)
+    if (response.ok) {
       toast.success('已删除')
       await load()
-    } else toast.error(response.message || '删除失败')
+    } else toast.error(response.error.message || '删除失败')
   }
 
   const current = items.find(item => item.kind === kind)

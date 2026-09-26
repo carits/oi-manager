@@ -12,7 +12,7 @@ import {
 } from './application/problem-hack-route.service'
 import { ContributionApplicationError } from '../contribution/application/contribution.service'
 import { ProblemContracts } from '@oi-manager/contracts'
-import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 
 export const problemHackRouter = Router()
 
@@ -55,28 +55,27 @@ problemHackRouter.post('/:id/hacks', authenticate, asyncHandler(async (req, res)
     const data = await createProblemHackAttempt({
       user: req.user!,
       problemId: req.params.id,
-      body: req.body,
+      body: parseContractBody(ProblemContracts.createHackAttempt, req.body),
     })
-    return res.status(202).json({
-      success: true,
-      data,
-      message: 'Hack 已加入独立评测队列',
-    })
+    return sendContractData(res, ProblemContracts.createHackAttempt, data, 202)
   } catch (error) {
+    if (sendContractError(error, res)) return
     return sendHackError(error, res)
   }
 }))
 
 problemHackRouter.get('/:id/hacks', authenticate, asyncHandler(async (req, res) => {
   try {
+    const query = parseContractQuery(ProblemContracts.listHackAttempts, req.query)
     const data = await listProblemHackAttempts({
       user: req.user!,
       problemId: req.params.id,
-      pageValue: req.query.page,
-      pageSizeValue: req.query.pageSize,
+      pageValue: query.page,
+      pageSizeValue: query.pageSize,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.listHackAttempts, data)
   } catch (error) {
+    if (sendContractError(error, res)) return
     return sendHackError(error, res)
   }
 }))
@@ -84,17 +83,20 @@ problemHackRouter.get('/:id/hacks', authenticate, asyncHandler(async (req, res) 
 problemHackRouter.get('/:id/hacks/:hackId', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getProblemHackAttempt(req.user!, req.params.id, req.params.hackId)
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.getHackAttempt, data)
   } catch (error) {
+    if (sendContractError(error, res)) return
     return sendHackError(error, res)
   }
 }))
 
 problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(async (req, res) => {
   try {
+    parseContractBody(ProblemContracts.retryHackAttempt, req.body)
     const data = await retryProblemHackAttempt(req.user!, req.params.id, req.params.hackId)
-    return res.json({ success: true, data, message: 'Hack 已重新加入队列' })
+    return sendContractData(res, ProblemContracts.retryHackAttempt, data)
   } catch (error) {
+    if (sendContractError(error, res)) return
     return sendHackError(error, res)
   }
 }))

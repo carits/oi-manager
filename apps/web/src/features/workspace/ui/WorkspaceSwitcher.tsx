@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
@@ -10,7 +10,7 @@ import { useAuth } from '@/features/auth'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import { listWorkspaces } from '../api/workspaceApi'
-import { workspaceHref, workspaceModule, workspaceRoleLabel } from '../model/workspaceRouting'
+import { nextWorkspaceFocusIndex, workspaceHref, workspaceModule, workspaceRoleLabel, type WorkspaceFocusKey } from '../model/workspaceRouting'
 import styles from './WorkspaceSwitcher.module.css'
 import { useNavigationGuard } from '@/components/navigation/UnsavedChangesProvider'
 import { resolveNavigationContext } from '@/lib/navigationContext'
@@ -27,13 +27,45 @@ export function WorkspaceSwitcher() {
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLElement>(null)
+  const openRef = useRef(false)
+  const initialFocusRef = useRef<'first' | 'last'>('first')
+  const popoverId = useId()
+  const titleId = useId()
   const { requestNavigation } = useNavigationGuard()
   const toast = useToast()
   const currentOrganization = resolveNavigationContext(pathname, user).organizationId
   const current = currentOrganization ? workspaces.find(item => item.organizationId === currentOrganization) : workspaces.find(item => item.type === 'personal')
   const visible = useMemo(() => workspaces.filter(item => !query || ((item.organizationName || '') + ' ' + (item.relationLabel || '')).toLocaleLowerCase().includes(query.toLocaleLowerCase())), [query, workspaces])
+  const shouldSearch = loaded && workspaces.filter(item => item.type === 'organization').length > 5
+  openRef.current = open
 
-  const openSwitcher = async () => {
+  const focusTrigger = useCallback(() => {
+    rootRef.current?.querySelector<HTMLButtonElement>('[aria-controls]')?.focus()
+  }, [])
+
+  const closeSwitcher = useCallback((restoreFocus = false) => {
+    setOpen(false)
+    setQuery('')
+    if (restoreFocus) window.requestAnimationFrame(focusTrigger)
+  }, [focusTrigger])
+
+  const focusPopover = useCallback(() => {
+    const popover = popoverRef.current
+    if (!popover) return
+    const options = Array.from(popover.querySelectorAll<HTMLButtonElement>('[data-workspace-option="true"]:not(:disabled)'))
+    const requested = initialFocusRef.current
+    const target = requested === 'last'
+      ? options.at(-1)
+      : shouldSearch
+        ? popover.querySelector<HTMLInputElement>('input[type="search"], input')
+        : options[0]
+    ;(target || popover.querySelector<HTMLButtonElement>('button:not(:disabled)') || popover).focus()
+    initialFocusRef.current = 'first'
+  }, [shouldSearch])
+
+  const openSwitcher = async (initialFocus: 'first' | 'last' = 'first') => {
+    initialFocusRef.current = initialFocus
     setOpen(true)
     if (loaded || loading) return
     setLoading(true)
@@ -53,19 +85,48 @@ export function WorkspaceSwitcher() {
   }
 
   useEffect(() => {
-    const close = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false)
+    if (!open) return
+    const frame = window.requestAnimationFrame(() => {
+      if (loading) popoverRef.current?.focus()
+      else focusPopover()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusPopover, loaded, loading, open, visible.length])
+
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: MouseEvent) => {
+      if (openRef.current && rootRef.current && !rootRef.current.contains(event.target as Node)) closeSwitcher()
     }
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !openRef.current) return
+      event.preventDefault()
+      closeSwitcher(true)
     }
-    document.addEventListener('mousedown', close)
-    document.addEventListener('keydown', escape)
+    document.addEventListener('mousedown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
     return () => {
-      document.removeEventListener('mousedown', close)
-      document.removeEventListener('keydown', escape)
+      document.removeEventListener('mousedown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
     }
-  }, [])
+  }, [closeSwitcher])
+
+  const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    void openSwitcher(event.key === 'ArrowUp' ? 'last' : 'first')
+  }
+
+  const handlePopoverKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    const supported = ['ArrowDown', 'ArrowUp', 'Home', 'End'] as const
+    if (!supported.includes(event.key as typeof supported[number])) return
+    if (event.target instanceof HTMLInputElement && (event.key === 'Home' || event.key === 'End')) return
+    const options = Array.from(popoverRef.current?.querySelectorAll<HTMLButtonElement>('[data-workspace-option="true"]:not(:disabled)') || [])
+    const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement)
+    const nextIndex = nextWorkspaceFocusIndex(currentIndex, options.length, event.key as WorkspaceFocusKey)
+    if (nextIndex < 0) return
+    event.preventDefault()
+    options[nextIndex]?.focus()
+  }
 
   const select = (workspace: WorkspaceSummary) => {
     const targetModule = workspaceModule(pathname)
@@ -78,12 +139,51 @@ export function WorkspaceSwitcher() {
   const currentType = current?.type || (currentOrganization ? 'organization' : 'personal')
   const title = currentType === 'platform' ? '平台管理' : currentType === 'personal' ? '个人' : user?.organizationName || '当前学校'
   const subtitle = currentType === 'platform' ? '平台管理员' : currentType === 'personal' ? user?.username : workspaceRoleLabel(user?.organizationRole || current?.relationLabel)
-  const shouldSearch = loaded && workspaces.filter(item => item.type === 'organization').length > 5
 
   return <div className={styles.root} ref={rootRef}>
-    <Button variant="ghost" className={styles.trigger} type="button" onClick={() => { if (open) setOpen(false); else void openSwitcher() }} aria-expanded={open} aria-haspopup="menu" aria-label={`切换身份，当前${title}，${subtitle}`}>
-      <span className={styles.badge}>{currentType === 'platform' ? <ShieldCheck size={17} /> : currentType === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span><span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span><ChevronDown size={16} />
+    <Button
+      variant="ghost"
+      className={styles.trigger}
+      type="button"
+      onClick={() => { if (open) closeSwitcher(); else void openSwitcher() }}
+      onKeyDown={handleTriggerKeyDown}
+      aria-expanded={open}
+      aria-controls={popoverId}
+      aria-label={`切换身份，当前${title}，${subtitle}`}
+    >
+      <span className={styles.badge}>{currentType === 'platform' ? <ShieldCheck size={17} /> : currentType === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span>
+      <span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span>
+      <ChevronDown size={16} />
     </Button>
-    {open && <section className={styles.menu} role="menu" aria-label="切换身份"><header><strong>切换身份</strong></header>{shouldSearch && <label className={styles.search}><Search size={16} /><Input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" /></label>}<div className={styles.list}>{loading && <p className={styles.empty} role="status">正在加载身份列表…</p>}{!loading && loadError && <div className={styles.empty} role="alert"><p>身份列表加载失败，当前身份不会改变。</p><Button size="sm" variant="outline" type="button" onClick={() => { setLoaded(false); void openSwitcher() }}>重新加载</Button></div>}{!loading && loaded && visible.map(item => <Button variant="ghost" key={item.organizationId || item.type} className={styles.item} type="button" role="menuitem" onClick={() => select(item)}><span className={styles.itemBadge}>{item.type === 'platform' ? <ShieldCheck size={17} /> : item.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span><span><strong>{item.type === 'platform' ? '平台管理' : item.type === 'personal' ? '个人' : item.organizationName}</strong><small>{item.type === 'platform' ? '平台管理员' : item.type === 'personal' ? user?.username : workspaceRoleLabel(item.relationLabel)}</small></span>{(item.organizationId === currentOrganization || (item.type === 'personal' && !currentOrganization)) && <Check className={styles.check} size={17} />}</Button>)}{!loading && loaded && !loadError && visible.length === 0 && <p className={styles.empty}>没有匹配的身份</p>}</div><div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" role="menuitem" onClick={() => { setOpen(false); requestNavigation('/personal/organizations', { hard: true }) }}><Plus size={17} /><span>加入或创建学校</span></Button></div></section>}
+    {open && <section
+      ref={popoverRef}
+      id={popoverId}
+      className={styles.menu}
+      role="region"
+      aria-labelledby={titleId}
+      tabIndex={-1}
+      onKeyDown={handlePopoverKeyDown}
+    >
+      <header><strong id={titleId}>切换身份</strong></header>
+      {shouldSearch && <label className={styles.search}><Search size={16} aria-hidden="true" /><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" aria-label="搜索身份" /></label>}
+      <div className={styles.list}>
+        {loading && <p className={styles.empty} role="status">正在加载身份列表…</p>}
+        {!loading && loadError && <div className={styles.empty} role="alert"><p>身份列表加载失败，当前身份不会改变。</p><Button size="sm" variant="outline" type="button" onClick={() => { setLoaded(false); void openSwitcher() }}>重新加载</Button></div>}
+        {!loading && loaded && visible.map(item => <Button
+          variant="ghost"
+          key={item.organizationId || item.type}
+          className={styles.item}
+          type="button"
+          data-workspace-option="true"
+          onClick={() => select(item)}
+        >
+          <span className={styles.itemBadge}>{item.type === 'platform' ? <ShieldCheck size={17} /> : item.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span>
+          <span><strong>{item.type === 'platform' ? '平台管理' : item.type === 'personal' ? '个人' : item.organizationName}</strong><small>{item.type === 'platform' ? '平台管理员' : item.type === 'personal' ? user?.username : workspaceRoleLabel(item.relationLabel)}</small></span>
+          {(item.organizationId === currentOrganization || (item.type === 'personal' && !currentOrganization)) && <Check className={styles.check} size={17} />}
+        </Button>)}
+        {!loading && loaded && !loadError && visible.length === 0 && <p className={styles.empty}>没有匹配的身份</p>}
+      </div>
+      <div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" data-workspace-option="true" onClick={() => { setOpen(false); requestNavigation('/personal/organizations', { hard: true }) }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
+    </section>}
   </div>
 }

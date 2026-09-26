@@ -1,6 +1,8 @@
 import { Router } from 'express'
+import { ProblemContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import {
   createProblemStatementVersion,
   deleteProblemStatementVersion,
@@ -20,6 +22,7 @@ import {
 export const problemStatementVersionRouter = Router()
 
 function sendStatementVersionError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return
   if (!(error instanceof ProblemStatementVersionRouteError)) throw error
   return res.status(error.statusCode).json({
     success: false,
@@ -36,13 +39,14 @@ function sendInlineFile(res: any, file: { mimeType: string; originalName: string
 
 problemStatementVersionRouter.get('/:id/statement-versions', authenticate, asyncHandler(async (req, res) => {
   try {
+    const query = parseContractQuery(ProblemContracts.listStatementVersions, req.query)
     const data = await listProblemStatementVersions({
       user: req.user!,
       problemId: req.params.id,
-      pageValue: req.query.page,
-      pageSizeValue: req.query.pageSize,
+      pageValue: query.page,
+      pageSizeValue: query.pageSize,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.listStatementVersions, data)
   } catch (error) {
     return sendStatementVersionError(error, res)
   }
@@ -55,7 +59,7 @@ problemStatementVersionRouter.get('/:id/statement-versions/:versionId', authenti
       req.params.id,
       req.params.versionId,
     )
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.getStatementVersion, data)
   } catch (error) {
     return sendStatementVersionError(error, res)
   }
@@ -63,12 +67,13 @@ problemStatementVersionRouter.get('/:id/statement-versions/:versionId', authenti
 
 problemStatementVersionRouter.post('/:id/statement-versions', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ProblemContracts.createStatementVersion, req.body)
     const data = await createProblemStatementVersion({
       user: req.user!,
       problemId: req.params.id,
-      body: req.body,
+      body,
     })
-    return res.status(201).json({ success: true, data })
+    return sendContractData(res, ProblemContracts.createStatementVersion, data, 201)
   } catch (error) {
     return sendStatementVersionError(error, res)
   }
@@ -76,14 +81,15 @@ problemStatementVersionRouter.post('/:id/statement-versions', authenticate, asyn
 
 problemStatementVersionRouter.put('/:id/statement-versions/:versionId/content', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ProblemContracts.updateStatementVersionContent, req.body)
     const data = await updateProblemStatementMarkdown({
       user: req.user!,
       problemId: req.params.id,
       versionId: req.params.versionId,
-      content: String(req.body?.content || ''),
-      title: req.body?.title,
+      content: body.content,
+      title: body.title,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.updateStatementVersionContent, data)
   } catch (error) {
     return sendStatementVersionError(error, res)
   }
@@ -91,13 +97,14 @@ problemStatementVersionRouter.put('/:id/statement-versions/:versionId/content', 
 
 problemStatementVersionRouter.patch('/:id/statement-versions/:versionId', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ProblemContracts.updateStatementVersionMetadata, req.body)
     const data = await updateProblemStatementMetadata({
       user: req.user!,
       problemId: req.params.id,
       versionId: req.params.versionId,
-      body: req.body,
+      body,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.updateStatementVersionMetadata, data)
   } catch (error) {
     return sendStatementVersionError(error, res)
   }
@@ -140,7 +147,7 @@ problemStatementVersionRouter.delete('/:id/statement-versions/:versionId', authe
       problemId: req.params.id,
       versionId: req.params.versionId,
     })
-    return res.json({ success: true })
+    return sendContractData(res, ProblemContracts.deleteStatementVersion, {})
   } catch (error) {
     return sendStatementVersionError(error, res)
   }

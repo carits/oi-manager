@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { ContestContracts } from '@oi-manager/contracts'
+import { ContestContracts, ProblemContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
@@ -46,7 +46,7 @@ contestContentRouter.get('/contests/:id/problems/:contestProblemId/my-content', 
       req.params.contestProblemId,
       req.user!.userId,
     )
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.getMyContent, data)
   } catch (error) {
     return sendContentError(error, res)
   }

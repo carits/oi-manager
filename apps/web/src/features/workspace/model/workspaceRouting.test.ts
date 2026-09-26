@@ -1,4 +1,4 @@
-import { canNavigate, fallbackHref, listHref, notificationTeamHref, organizationUnavailableMessage, resolveNotificationHref, resourceHref, workspaceHref, workspaceRoleLabel } from './workspaceRouting'
+import { canNavigate, fallbackHref, listHref, nextWorkspaceFocusIndex, notificationTeamHref, organizationUnavailableMessage, resolveNotificationHref, resourceHref, workspaceHref, workspaceRoleLabel } from './workspaceRouting'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 
@@ -49,6 +49,16 @@ describe('组织路由能力', () => {
     expect(workspaceRoleLabel('student')).toBe('学生')
     expect(workspaceRoleLabel('teacher')).toBe('教师')
     expect(workspaceRoleLabel('school_principal')).toBe('负责人')
+  })
+
+  it('计算身份浮层的循环键盘焦点', () => {
+    expect(nextWorkspaceFocusIndex(-1, 3, 'ArrowDown')).toBe(0)
+    expect(nextWorkspaceFocusIndex(-1, 3, 'ArrowUp')).toBe(2)
+    expect(nextWorkspaceFocusIndex(2, 3, 'ArrowDown')).toBe(0)
+    expect(nextWorkspaceFocusIndex(0, 3, 'ArrowUp')).toBe(2)
+    expect(nextWorkspaceFocusIndex(1, 3, 'Home')).toBe(0)
+    expect(nextWorkspaceFocusIndex(1, 3, 'End')).toBe(2)
+    expect(nextWorkspaceFocusIndex(0, 0, 'ArrowDown')).toBe(-1)
   })
 
   it('用安全文案解释学校身份失效原因', () => {

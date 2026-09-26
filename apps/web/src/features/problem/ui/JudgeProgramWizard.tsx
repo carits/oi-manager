@@ -5,17 +5,14 @@ import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, Rotat
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
-import apiClient from '@/lib/apiClient'
+import type { JudgeProgram as Program, JudgeProgramDraft as Draft, JudgeProgramVerification as Verification, JudgeProgramVersion } from '@oi-manager/contracts'
 import { useToast } from '@/components/ui/Toast'
 import styles from './JudgeProgramWizard.module.css'
 import type { GeneratorProtocolConfig as ProtocolConfig, JudgeProgramFixture as Fixture, JudgeProgramKind as Kind, ParameterRule, ProgramCatalog, ProgramTemplate } from '../model/judgeProgramTemplateTypes'
 import { getJudgeProgramTemplate } from '../api/judgeProgramTemplateApi'
+import { compileJudgeProgramVersion, createJudgeProgram, createJudgeProgramFixtureSet, createValidatorSpec, getJudgeProgramVerification, listJudgeProgramDrafts, materializeValidatorSpec, preflightJudgeProgramVersion, saveJudgeProgramDraft, updateJudgeProgram } from '../api/judgeProgramApi'
 
-type Draft = { id: string; kind: Kind; name: string; language: string; protocol: string; templateId?: string; templateVersion?: number; source: string; protocolConfig?: ProtocolConfig; fixtures: Fixture[]; revision: number }
-type Program = { id: string; kind: Kind; name: string; currentVersionId?: string | null; versions: Array<{ id: string; versionNumber: number; lifecycleStatus: string; compileStatus: string }> }
-type Verification = { id: string; status: string; mode: string; report?: { fixtures?: Array<{ name: string; passed: boolean; message: string; timeMs: number; memoryKb: number; stdoutPreview?: string; stderrPreview?: string }>; warnings?: string[] }; errorCode?: string; errorMessage?: string }
-type CreatedProgramVersion = { program: Program; version: { id: string } }
-type IdPayload = { id: string }
+type CreatedProgramVersion = { program: Program; version: JudgeProgramVersion }
 
 const DEFAULT_DSL = JSON.stringify({ version: 1, input: [{ type: 'int', name: 'n', min: 1, max: 200000 }, { type: 'array', name: 'a', length: 'n', element: { min: -1000000000, max: 1000000000 } }], assertions: [], strictEof: true }, null, 2)
 const DEFAULT_CONFIG: ProtocolConfig = { profiles: [{ id: 'default', label: '默认', params: {} }], parameterSchema: {} }
@@ -67,21 +64,21 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
     if (!open || !catalog) return
     setStep(initialTemplateId ? 1 : 0)
     if (initialTemplateId) { void loadTemplate(initialTemplateId); return }
-    void apiClient.get<Draft[]>(`/api/problems/${problemId}/judge-program-drafts`).then(result => {
-      const existing = result.data?.find(item => item.kind === 'standard')
+    void listJudgeProgramDrafts(problemId).then(drafts => {
+      const existing = drafts.find(item => item.kind === 'standard')
       if (existing) {
         setKind(existing.kind); setDraft(existing); setName(existing.name); setLanguage(existing.language); setProtocol(existing.protocol); setTemplateId(existing.templateId || ''); setSource(existing.source); setFixtures(existing.fixtures || []); setProtocolConfig(existing.protocolConfig || DEFAULT_CONFIG); setLoadedTemplate(null); setBlankChosen(!existing.templateId)
         if (existing.templateId) void getJudgeProgramTemplate(existing.templateId).then(setLoadedTemplate).catch(() => undefined)
       }
       else selectKind('standard')
-    })
+    }).catch(() => toast.error('评测程序草稿加载失败'))
   }, [open, catalog, problemId, initialTemplateId, loadTemplate, selectKind])
 
   useEffect(() => {
     if (!open || !source.trim() || method === 'dsl') return
     const timer = window.setTimeout(async () => {
-      const result = await apiClient.post<Draft>(`/api/problems/${problemId}/judge-program-drafts`, { kind, name: name || catalog?.capabilities[kind]?.title, language, protocol, templateId, templateVersion: selectedTemplateVersion, source, fixtures, protocolConfig, expectedRevision: draft?.revision })
-      if (result.success && result.data) setDraft(result.data)
+      const result = await saveJudgeProgramDraft(problemId, { kind, name: name || catalog?.capabilities[kind]?.title, language, protocol, templateId: templateId || undefined, templateVersion: selectedTemplateVersion ?? undefined, source, fixtures, protocolConfig, expectedRevision: draft?.revision })
+      if (result.ok) setDraft(result.data)
     }, 900)
     return () => window.clearTimeout(timer)
   }, [open, kind, name, language, protocol, templateId, source, fixtures, protocolConfig, method])
@@ -89,10 +86,14 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
   useEffect(() => {
     if (!program || !versionId || !verification || !['queued', 'running'].includes(verification.status)) return
     const timer = window.setInterval(async () => {
-      const result = await apiClient.get<Verification[]>(`/api/problems/${problemId}/judge-programs/${program.id}/versions/${versionId}/verification`)
-      const latest = result.data?.[0]
-      if (latest) setVerification(latest)
-      if (latest && !['queued', 'running'].includes(latest.status)) await onChanged()
+      try {
+        const jobs = await getJudgeProgramVerification(problemId, program.id, versionId)
+        const latest = jobs[0]
+        if (latest) setVerification(latest)
+        if (latest && !['queued', 'running'].includes(latest.status)) await onChanged()
+      } catch {
+        // Transient polling failures retry on the next interval.
+      }
     }, 1200)
     return () => window.clearInterval(timer)
   }, [program, versionId, verification?.status, problemId, onChanged])
@@ -132,7 +133,7 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
   const parseParameterValue = (value: string, type: ParameterRule['type']): string | number | boolean => type === 'boolean' ? value === 'true' : type === 'integer' ? Number.parseInt(value || '0', 10) : type === 'number' ? Number(value || 0) : value
   const retryVerification = async () => {
     if (!program || !versionId || !verification) return
-    if (verification.mode === 'compile') { setVerification(null); const result = await apiClient.post<Verification>(`/api/problems/${problemId}/judge-programs/${program.id}/versions/${versionId}/compile`, {}); if (result.success && result.data) setVerification(result.data); else toast.error(result.message || '重新编译失败') }
+    if (verification.mode === 'compile') { setVerification(null); const result = await compileJudgeProgramVersion(problemId, program.id, versionId); if (result.ok) setVerification(result.data); else toast.error(result.error.message || '重新编译失败') }
     else { setVerification(null); await preflight() }
   }
 
@@ -146,19 +147,19 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
       if (method === 'dsl') {
         let spec: unknown
         try { spec = JSON.parse(source) } catch { return toast.error('Validator DSL 必须是合法 JSON') }
-        const saved = await apiClient.post<IdPayload>(`/api/problems/${problemId}/validator-specs`, { spec })
-        if (!saved.success || !saved.data) return toast.error(saved.message || 'DSL 保存失败')
-        const materialized = await apiClient.post<CreatedProgramVersion>(`/api/problems/${problemId}/validator-specs/${saved.data.id}/materialize`, {})
-        if (!materialized.success || !materialized.data) return toast.error(materialized.message || 'DSL 生成程序版本失败')
+        const saved = await createValidatorSpec(problemId, { spec })
+        if (!saved.ok) return toast.error(saved.error.message || 'DSL 保存失败')
+        const materialized = await materializeValidatorSpec(problemId, saved.data.id)
+        if (!materialized.ok) return toast.error(materialized.error.message || 'DSL 生成程序版本失败')
         created = materialized.data
       } else {
-        const response = await apiClient.post<CreatedProgramVersion>(`/api/problems/${problemId}/judge-programs`, { kind, name: name || catalog?.capabilities[kind].title, language, protocol, templateId, templateVersion: selectedTemplateVersion, source, fixtures, protocolConfig })
-        if (!response.success || !response.data) return toast.error(response.message || '程序版本创建失败')
+        const response = await createJudgeProgram(problemId, { kind, name: name || catalog?.capabilities[kind].title, language, protocol, templateId: templateId || undefined, templateVersion: selectedTemplateVersion ?? undefined, source, fixtures, protocolConfig })
+        if (!response.ok) return toast.error(response.error.message || '程序版本创建失败')
         created = response.data
       }
       setProgram(created.program); setVersionId(created.version.id)
-      const compile = await apiClient.post<Verification>(`/api/problems/${problemId}/judge-programs/${created.program.id}/versions/${created.version.id}/compile`, {})
-      if (!compile.success || !compile.data) return toast.error(compile.message || '编译任务创建失败')
+      const compile = await compileJudgeProgramVersion(problemId, created.program.id, created.version.id)
+      if (!compile.ok) return toast.error(compile.error.message || '编译任务创建失败')
       setVerification(compile.data); toast.success('版本已保存，Judge 正在编译')
     } finally { setBusy(false) }
   }
@@ -166,17 +167,17 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
     if (!program || !versionId) return
     setBusy(true)
     try {
-      const fixtureSet = await apiClient.post<IdPayload>(`/api/problems/${problemId}/judge-programs/${program.id}/fixture-sets`, { fixtures })
-      if (!fixtureSet.success || !fixtureSet.data) return toast.error(fixtureSet.message || 'Fixture 保存失败')
-      const result = await apiClient.post<Verification>(`/api/problems/${problemId}/judge-programs/${program.id}/versions/${versionId}/preflight`, { fixtureSetId: fixtureSet.data.id })
-      if (!result.success || !result.data) return toast.error(result.message || '预检任务创建失败')
+      const fixtureSet = await createJudgeProgramFixtureSet(problemId, program.id, { fixtures })
+      if (!fixtureSet.ok) return toast.error(fixtureSet.error.message || 'Fixture 保存失败')
+      const result = await preflightJudgeProgramVersion(problemId, program.id, versionId, { fixtureSetId: fixtureSet.data.id })
+      if (!result.ok) return toast.error(result.error.message || '预检任务创建失败')
       setVerification(result.data)
     } finally { setBusy(false) }
   }
   const activate = async () => {
     if (!program || !versionId) return
     setBusy(true)
-    try { const result = await apiClient.patch(`/api/problems/${problemId}/judge-programs/${program.id}`, { currentVersionId: versionId }); if (!result.success) return toast.error(result.message || '激活失败'); toast.success('评测程序已激活'); await onChanged(); onClose() } finally { setBusy(false) }
+    try { const result = await updateJudgeProgram(problemId, program.id, { currentVersionId: versionId }); if (!result.ok) return toast.error(result.error.message || '激活失败'); toast.success('评测程序已激活'); await onChanged(); onClose() } finally { setBusy(false) }
   }
 
   const canNext = step < 4
