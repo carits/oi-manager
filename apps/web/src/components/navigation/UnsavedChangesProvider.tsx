@@ -4,12 +4,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useRouter } from 'next/navigation'
 import { ConfirmDialog } from '@/components/ui/Dialogs'
 
-type NavigationRequest = { href: string; hard?: boolean }
+type LeaveRequest =
+  | { kind: 'navigation'; href: string; hard?: boolean }
+  | { kind: 'action'; run: () => void | Promise<void> }
 
 type UnsavedChangesContextValue = {
   hasUnsavedChanges: boolean
   setDirty: (scope: string, dirty: boolean) => void
   requestNavigation: (href: string, options?: { hard?: boolean }) => void
+  requestAction: (run: () => void | Promise<void>) => void
 }
 
 const UnsavedChangesContext = createContext<UnsavedChangesContextValue | null>(null)
@@ -25,7 +28,7 @@ function localHref(anchor: HTMLAnchorElement): string | null {
 export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const [dirtyScopes, setDirtyScopes] = useState<Set<string>>(new Set())
-  const [pending, setPending] = useState<NavigationRequest | null>(null)
+  const [pending, setPending] = useState<LeaveRequest | null>(null)
   const bypass = useRef(false)
   const hasUnsavedChanges = dirtyScopes.size > 0
 
@@ -38,19 +41,28 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const navigate = useCallback((request: NavigationRequest) => {
+  const allowLeave = useCallback(() => {
     bypass.current = true
     setDirtyScopes(new Set())
+    window.setTimeout(() => { bypass.current = false }, 0)
+  }, [])
+
+  const navigate = useCallback((request: Extract<LeaveRequest, { kind: 'navigation' }>) => {
+    allowLeave()
     if (request.hard) window.location.assign(request.href)
     else router.push(request.href)
-    window.setTimeout(() => { bypass.current = false }, 0)
-  }, [router])
+  }, [allowLeave, router])
 
   const requestNavigation = useCallback((href: string, options?: { hard?: boolean }) => {
-    const request = { href, hard: options?.hard }
+    const request = { kind: 'navigation' as const, href, hard: options?.hard }
     if (!hasUnsavedChanges || bypass.current) navigate(request)
     else setPending(request)
   }, [hasUnsavedChanges, navigate])
+
+  const requestAction = useCallback((run: () => void | Promise<void>) => {
+    if (!hasUnsavedChanges || bypass.current) void run()
+    else setPending({ kind: 'action', run })
+  }, [hasUnsavedChanges])
 
   useEffect(() => {
     const protectUnload = (event: BeforeUnloadEvent) => {
@@ -71,13 +83,13 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
       if (!href || href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return
       event.preventDefault()
       event.stopPropagation()
-      setPending({ href })
+      setPending({ kind: 'navigation', href })
     }
     document.addEventListener('click', protectLink, true)
     return () => document.removeEventListener('click', protectLink, true)
   }, [hasUnsavedChanges])
 
-  const value = useMemo(() => ({ hasUnsavedChanges, setDirty, requestNavigation }), [hasUnsavedChanges, requestNavigation, setDirty])
+  const value = useMemo(() => ({ hasUnsavedChanges, setDirty, requestNavigation, requestAction }), [hasUnsavedChanges, requestAction, requestNavigation, setDirty])
   return <UnsavedChangesContext.Provider value={value}>
     {children}
     <ConfirmDialog
@@ -86,7 +98,12 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
       onConfirm={() => {
         const request = pending
         setPending(null)
-        if (request) navigate(request)
+        if (!request) return
+        if (request.kind === 'navigation') navigate(request)
+        else {
+          allowLeave()
+          void request.run()
+        }
       }}
       title="有未保存的更改"
       message="离开后，本页尚未保存的修改将丢失。"

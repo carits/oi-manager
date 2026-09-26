@@ -13,6 +13,7 @@ import { SessionUnavailable } from './SessionUnavailable'
 import { WorkspaceSwitcher } from '@/features/workspace'
 import { NotificationBell } from '@/features/notification'
 import { ChatButton } from '@/features/chat'
+import { useNavigationGuard } from '@/components/navigation/UnsavedChangesProvider'
 import { UserAvatar } from '@/components/user/UserAvatar'
 import styles from './AppShell.module.css'
 import { navigationHome, resolveNavigationContext } from '@/lib/navigationContext'
@@ -27,13 +28,16 @@ const accountPaths = {
 }
 
 function isWorkbenchPath(pathname: string): boolean {
-  return /\/(trainings|submissions)\/[^/]+$/.test(pathname) || /\/problems\/[^/]+$/.test(pathname)
+  return /\/training-sessions\/[^/]+(?:\/design)?$/.test(pathname)
+    || /\/submissions\/[^/]+$/.test(pathname)
+    || /\/problems\/[^/]+$/.test(pathname)
 }
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { user, logout } = useAuth()
+  const { requestAction } = useNavigationGuard()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [isPersistentSidebar, setIsPersistentSidebar] = useState(false)
   const [desktopSidebarExpanded, setDesktopSidebarExpanded] = useState(false)
@@ -206,7 +210,7 @@ export function AppShell({ children }: AppShellProps) {
           {!isGlobalAdmin && <Link className={styles.menuItem} href="/personal/blogs" role="menuitem" onClick={() => setShowUserMenu(false)}><PenLine size={17} aria-hidden="true" />我的文章</Link>}
           {!isGlobalAdmin && <Link className={styles.menuItem} href="/identity" role="menuitem" onClick={() => setShowUserMenu(false)}><UsersRound size={17} aria-hidden="true" />切换身份</Link>}
           <div className={styles.menuDivider} />
-          <Button variant="ghost" className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />退出登录</Button>
+          <Button variant="ghost" className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => requestAction(logout)}><LogOut size={17} aria-hidden="true" />退出登录</Button>
         </div>
       )}
     </div>

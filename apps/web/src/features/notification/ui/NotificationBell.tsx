@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Bell, UserPlus } from 'lucide-react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import type { UserNotification } from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/features/auth'
 import { resolveNotificationHref } from '@/features/workspace'
+import { useNavigationGuard } from '@/components/navigation/UnsavedChangesProvider'
 import { resolveNavigationContext } from '@/lib/navigationContext'
 import {
   listContextNotifications,
@@ -17,7 +18,8 @@ import {
 import styles from '@/components/AppShell.module.css'
 
 export function NotificationBell() {
-  const pathname = usePathname(), router = useRouter(), { user } = useAuth()
+  const pathname = usePathname(), { user } = useAuth()
+  const { requestNavigation } = useNavigationGuard()
   const navigationContext = resolveNavigationContext(pathname, user)
   const organizationId = navigationContext.organizationId
   const context = navigationContext.workspace
@@ -58,7 +60,7 @@ export function NotificationBell() {
   const openNotification = async (notification: UserNotification) => {
     await markRead(notification.id)
     const href = resolveNotificationHref(context, organizationId, notification.href)
-    if (href) { setOpen(false); router.push(href) }
+    if (href) { setOpen(false); requestNavigation(href) }
   }
   const act = async (notification: UserNotification, action: string) => {
     if (action === 'view') return openNotification(notification)
@@ -77,7 +79,7 @@ export function NotificationBell() {
         <Button variant="ghost" type="button" className={styles.notificationContent} onClick={() => void openNotification(notification)}><span className={styles.notificationIcon} aria-hidden="true">{notification.type.includes('join_application') ? <UserPlus size={17} /> : <Bell size={17} />}</span><span className={styles.notificationText}><strong>{notification.title}</strong><span>{notification.body}</span><time>{new Date(notification.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></span>{!notification.readAt && <span className={styles.unreadDot} aria-label="未读" />}</Button>
         {notification.actionable && <div className={styles.notificationActions}>{(notification.actions || []).map(action => <Button key={action.key} variant="ghost" type="button" className={action.style === 'primary' ? styles.primaryAction : styles.secondaryAction} disabled={processingId === notification.id} onClick={() => void act(notification, action.key)}>{action.label}</Button>)}</div>}
       </article>)}</div>
-      <div className={styles.notificationHeader}><Button variant="ghost" type="button" onClick={() => { setOpen(false); router.push('/account/notifications') }}>查看全部通知</Button></div>
+      <div className={styles.notificationHeader}><Button variant="ghost" type="button" onClick={() => { setOpen(false); requestNavigation('/account/notifications') }}>查看全部通知</Button></div>
     </div>}
   </div>
 }
