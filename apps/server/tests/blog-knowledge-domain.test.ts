@@ -586,6 +586,24 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(report.status).toBe(201)
     expect(report.body.data).toMatchObject({ status: 'pending' })
 
+    const moderator = await createTestUser({ accountRole: 'super_admin' })
+    const reports = await client(moderator).get('/api/platform/blog-reports?status=pending&page=1&pageSize=20')
+    expect(reports.status).toBe(200)
+    expect(reports.body.data.data).toEqual(expect.arrayContaining([expect.objectContaining({ id: report.body.data.id })]))
+    const reportDetail = await client(moderator).get(`/api/platform/blog-reports/${report.body.data.id}?reason=Reviewing%20reported%20content`)
+    expect(reportDetail.status).toBe(200)
+    expect(reportDetail.body.data).toMatchObject({ id: report.body.data.id, postId: publicPostId })
+    const featured = await client(moderator).put(`/api/platform/blogs/${publicPostId}/featured`).send({ active: true, reason: 'High-quality reference article' })
+    expect(featured.status).toBe(200)
+    expect(featured.body.data).toEqual({ featured: true })
+    const decision = await client(moderator).post(`/api/platform/blog-reports/${report.body.data.id}/decision`).send({
+      decision: 'resolved',
+      action: 'none',
+      resolutionNote: 'Reviewed and recorded for moderation follow-up.',
+    })
+    expect(decision.status).toBe(200)
+    expect(decision.body.data).toMatchObject({ id: report.body.data.id, status: 'resolved' })
+
     expect((await client(reader).delete(`/api/blogs/${publicPostId}/comments/${comment.body.data.id}`)).body.data)
       .toEqual({ id: comment.body.data.id, status: 'removed' })
     expect((await client(reader).delete(`/api/blogs/${publicPostId}/reactions/LIKE`)).body.data.myReactions).toEqual([])

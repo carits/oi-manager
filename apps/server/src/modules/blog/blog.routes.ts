@@ -1,5 +1,5 @@
 import { Router, type Response } from 'express'
-import { BlogCommunityContracts, BlogDiscoveryContracts, BlogManagementContracts, type AnyApiEndpointContract } from '@oi-manager/contracts'
+import { BlogCommunityContracts, BlogDiscoveryContracts, BlogManagementContracts, BlogModerationContracts, type AnyApiEndpointContract } from '@oi-manager/contracts'
 import { authenticate, optionalAuthenticate, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
@@ -162,10 +162,10 @@ blogRouter.post('/blogs/:id/reports', authenticate, endpoint(async req => {
   const report = await reportBlogContent(req.user, req.params.id, parseContractBody(BlogCommunityContracts.report, req.body))
   return { id: report.id, status: report.status }
 }, 201, BlogCommunityContracts.report))
-blogRouter.put('/platform/blogs/:id/featured', authenticate, endpoint(req => setBlogFeatured(req.user, req.params.id, req.body)))
-blogRouter.get('/platform/blog-reports', authenticate, endpoint(req => listBlogReports(req.user, req.query)))
-blogRouter.get('/platform/blog-reports/:id', authenticate, endpoint(req => getBlogReport(req.user, req.params.id, req.query)))
-blogRouter.post('/platform/blog-reports/:id/decision', authenticate, endpoint(req => moderateBlogReport(req.user, req.params.id, req.body)))
+blogRouter.put('/platform/blogs/:id/featured', authenticate, endpoint(req => setBlogFeatured(req.user, req.params.id, parseContractBody(BlogModerationContracts.setFeatured, req.body)), 200, BlogModerationContracts.setFeatured))
+blogRouter.get('/platform/blog-reports', authenticate, endpoint(req => listBlogReports(req.user, parseContractQuery(BlogModerationContracts.listReports, req.query)), 200, BlogModerationContracts.listReports))
+blogRouter.get('/platform/blog-reports/:id', authenticate, endpoint(req => getBlogReport(req.user, req.params.id, parseContractQuery(BlogModerationContracts.reportDetail, req.query)), 200, BlogModerationContracts.reportDetail))
+blogRouter.post('/platform/blog-reports/:id/decision', authenticate, endpoint(req => moderateBlogReport(req.user, req.params.id, parseContractBody(BlogModerationContracts.decideReport, req.body)), 200, BlogModerationContracts.decideReport))
 blogRouter.post('/blogs/:id/versions/:versionId/convert-to-solution-contribution', authenticate, endpoint(
   req => convertBlogVersionToSolutionContribution(req.user, req.params.id, req.params.versionId, req.body), 201,
 ))

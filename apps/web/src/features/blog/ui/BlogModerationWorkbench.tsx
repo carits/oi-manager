@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { apiClient } from '@/lib/apiClient'
+import type { BlogReportDetail, BlogReportSummary } from '@oi-manager/contracts'
+import { decideBlogReport, getBlogReport, listBlogReports, setBlogFeatured } from '../api/blogModerationApi'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -13,22 +14,13 @@ import { useToast } from '@/components/ui/Toast'
 import styles from './BlogModerationWorkbench.module.css'
 import { reviewStatusLabel } from '@/lib/humanPresentation'
 
-type Summary = {
-  id: string; postId: string; commentId?: string | null; reason: string; status: string; createdAt: string
-  Reporter: { id: string; username: string }
-  Post: { id: string; slug: string; Author: { id: string; username: string }; CurrentVersion?: { title: string } | null }
-}
-type Detail = Summary & {
-  details?: string | null; evidenceSnapshot: unknown; resolutionNote?: string | null
-  Post: Summary['Post'] & { status: string; Features: Array<{ id: string; reason?: string | null }> }
-  Comment?: { id: string; content: string; status: string } | null
-}
-type Page = { data: Summary[]; total: number }
+type Summary = BlogReportSummary
+type Detail = BlogReportDetail
 
 export function BlogModerationWorkbench() {
   const toast = useToast()
   const [items, setItems] = useState<Summary[]>([])
-  const [status, setStatus] = useState('pending')
+  const [status, setStatus] = useState<'pending' | 'resolved' | 'dismissed'>('pending')
   const [selected, setSelected] = useState<Summary>()
   const [detail, setDetail] = useState<Detail>()
   const [accessReason, setAccessReason] = useState('处理博客内容举报')
@@ -37,46 +29,58 @@ export function BlogModerationWorkbench() {
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    const response = await apiClient.get<Page>(`/api/platform/blog-reports?status=${status}`, { accountScoped: true })
-    if (response.success) setItems(response.data?.data || [])
-    else toast.error(response.message || '博客举报加载失败')
+    try {
+      const response = await listBlogReports(status)
+      setItems(response.data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '博客举报加载失败')
+    }
   }, [status, toast])
   useEffect(() => { void load() }, [load])
 
   const reveal = async () => {
     if (!selected || accessReason.trim().length < 5) return
     setBusy(true)
-    const response = await apiClient.get<Detail>(`/api/platform/blog-reports/${selected.id}?reason=${encodeURIComponent(accessReason.trim())}`, { accountScoped: true })
-    setBusy(false)
-    if (response.success && response.data) setDetail(response.data)
-    else toast.error(response.message || '举报详情加载失败')
+    try {
+      setDetail(await getBlogReport(selected.id, accessReason.trim()))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '举报详情加载失败')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const decide = async (decision: 'resolved' | 'dismissed') => {
     if (!selected || resolutionNote.trim().length < 5) return
     if (moderationAction === 'hide_comment' && !selected.commentId) return toast.error('只有评论举报可以隐藏评论')
     setBusy(true)
-    const response = await apiClient.post(`/api/platform/blog-reports/${selected.id}/decision`, { decision, action: decision === 'dismissed' ? 'none' : moderationAction, resolutionNote }, { accountScoped: true })
-    setBusy(false)
-    if (!response.success) return toast.error(response.message || '处理失败')
-    toast.success('举报已处理')
-    setSelected(undefined); setDetail(undefined); setResolutionNote(''); setModerationAction('none')
-    await load()
+    try {
+      const response = await decideBlogReport(selected.id, { decision, action: decision === 'dismissed' ? 'none' : moderationAction as 'none' | 'hide_comment' | 'hold_post' | 'remove_post', resolutionNote })
+      if (!response.ok) return toast.error(response.error.message)
+      toast.success('举报已处理')
+      setSelected(undefined); setDetail(undefined); setResolutionNote(''); setModerationAction('none')
+      await load()
+    } finally {
+      setBusy(false)
+    }
   }
 
   const feature = async () => {
     if (!detail) return
     const active = detail.Post.Features.length === 0
     setBusy(true)
-    const response = await apiClient.put(`/api/platform/blogs/${detail.postId}/featured`, { active, reason: resolutionNote.trim() || null }, { accountScoped: true })
-    setBusy(false)
-    if (!response.success) return toast.error(response.message || '精选状态更新失败')
-    toast.success(active ? '已设为社区精选' : '已取消社区精选')
-    await reveal()
+    try {
+      const response = await setBlogFeatured(detail.postId, { active, reason: resolutionNote.trim() || null })
+      if (!response.ok) return toast.error(response.error.message)
+      toast.success(active ? '已设为社区精选' : '已取消社区精选')
+      await reveal()
+    } finally {
+      setBusy(false)
+    }
   }
 
   return <PageFrame>
-    <PageHeader title="博客治理" description="处理用户举报并维护社区精选；每次查看举报证据都会写入平台审计。" actions={<Select aria-label="举报状态" value={status} onChange={event => setStatus(event.target.value)}><option value="pending">待处理</option><option value="resolved">已处理</option><option value="dismissed">已驳回</option></Select>} />
+    <PageHeader title="博客治理" description="处理用户举报并维护社区精选；每次查看举报证据都会写入平台审计。" actions={<Select aria-label="举报状态" value={status} onChange={event => setStatus(event.target.value as 'pending' | 'resolved' | 'dismissed')}><option value="pending">待处理</option><option value="resolved">已处理</option><option value="dismissed">已驳回</option></Select>} />
     <Table data={items} columns={[
       { key: 'createdAt', label: '举报时间', render: item => new Date(item.createdAt).toLocaleString('zh-CN') },
       { key: 'Post.CurrentVersion.title', label: '文章' }, { key: 'Reporter.username', label: '举报人' },

@@ -1,5 +1,6 @@
 export * from './api/blogDiscoveryApi'
 export * from './api/blogManagementApi'
+export * from './api/blogModerationApi'
 export * from './api/blogCommunityApi'
 export * from './model/blog-contract'
 export { BlogDiscovery } from './ui/BlogDiscovery'

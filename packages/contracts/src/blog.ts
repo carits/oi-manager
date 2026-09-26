@@ -301,6 +301,49 @@ export const BlogCommunityContracts = {
     data: z.object({ id: z.string(), status: z.string() }),
   }),
 } as const
+export const BlogReportStatusSchema = z.enum(['pending', 'resolved', 'dismissed'])
+export const BlogReportSummarySchema = z.looseObject({
+  id: z.string(),
+  postId: z.string(),
+  commentId: z.string().nullable().optional(),
+  reason: z.string(),
+  status: BlogReportStatusSchema,
+  createdAt: DateTimeWireSchema,
+  reviewedAt: DateTimeWireSchema.nullable().optional(),
+  Reporter: z.looseObject({ id: z.string(), username: z.string() }),
+  Post: z.looseObject({
+    id: z.string(),
+    slug: z.string(),
+    Author: z.looseObject({ id: z.string(), username: z.string() }),
+    CurrentVersion: z.looseObject({ title: z.string() }).nullable().optional(),
+  }),
+})
+export const BlogReportDetailSchema = BlogReportSummarySchema.extend({
+  details: z.string().nullable().optional(),
+  evidenceSnapshot: z.unknown(),
+  resolutionNote: z.string().nullable().optional(),
+  Post: BlogReportSummarySchema.shape.Post.extend({
+    status: BlogPostStatusSchema,
+    Features: z.array(z.looseObject({
+      id: z.string(),
+      reason: z.string().nullable().optional(),
+      createdAt: DateTimeWireSchema.optional(),
+    })),
+  }),
+  Comment: z.looseObject({
+    id: z.string(),
+    content: z.string(),
+    status: z.string(),
+  }).nullable().optional(),
+})
+export const BlogReportPageSchema = z.object({
+  data: z.array(BlogReportSummarySchema),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  total: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+})
+
 export const BlogManagementContracts = {
   listMine: defineApiEndpoint({
     key: 'blog.management.list-mine',
@@ -377,6 +420,33 @@ export const BlogManagementContracts = {
   }),
 } as const
 
+export const BlogModerationContracts = {
+  listReports: defineApiEndpoint({
+    key: 'blog.moderation.reports.list', method: 'GET', scope: 'platform',
+    query: PaginationQuerySchema.extend({ status: BlogReportStatusSchema.optional() }),
+    data: BlogReportPageSchema,
+  }),
+  reportDetail: defineApiEndpoint({
+    key: 'blog.moderation.report.detail', method: 'GET', scope: 'platform',
+    query: z.object({ reason: z.string().trim().min(5).max(500) }),
+    data: BlogReportDetailSchema,
+  }),
+  decideReport: defineApiEndpoint({
+    key: 'blog.moderation.report.decision', method: 'POST', scope: 'platform',
+    body: z.object({
+      decision: z.enum(['resolved', 'dismissed']),
+      action: z.enum(['none', 'hide_comment', 'hold_post', 'remove_post']),
+      resolutionNote: z.string().trim().min(5).max(5000),
+    }),
+    data: z.looseObject({ id: z.string(), status: BlogReportStatusSchema }),
+  }),
+  setFeatured: defineApiEndpoint({
+    key: 'blog.moderation.featured.set', method: 'PUT', scope: 'platform',
+    body: z.object({ active: z.boolean(), reason: z.string().trim().max(1000).nullable() }),
+    data: z.object({ featured: z.boolean() }),
+  }),
+} as const
+
 export const BlogDiscoveryContracts = {
   list: defineApiEndpoint({
     key: 'blog.discovery.list',
@@ -422,3 +492,6 @@ export type BlogSeriesSummary = z.infer<typeof BlogSeriesSummarySchema>
 export type BlogSeriesList = z.infer<typeof BlogSeriesListSchema>
 export type BlogSeriesDetails = z.infer<typeof BlogSeriesDetailsSchema>
 export type BlogTagList = z.infer<typeof BlogTagListSchema>
+
+export type BlogReportSummary = z.infer<typeof BlogReportSummarySchema>
+export type BlogReportDetail = z.infer<typeof BlogReportDetailSchema>

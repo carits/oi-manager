@@ -33,7 +33,7 @@ export function removeBlogComment(postId: string, commentId: string) {
   return accountClient.mutateContract(
     BlogCommunityContracts.removeComment,
     '/api/blogs/' + encodeURIComponent(postId) + '/comments/' + encodeURIComponent(commentId),
-    undefined,
+    {},
   )
 }
 
@@ -42,13 +42,13 @@ export function setBlogReaction(postId: string, type: 'LIKE' | 'HELPFUL', active
   return accountClient.mutateContract(
     contract,
     '/api/blogs/' + encodeURIComponent(postId) + '/reactions/' + type,
-    active ? {} : undefined,
+    {},
   )
 }
 
 export function setBlogBookmark(postId: string, active: boolean) {
   const contract = active ? BlogCommunityContracts.addBookmark : BlogCommunityContracts.removeBookmark
-  return accountClient.mutateContract(contract, '/api/blogs/' + encodeURIComponent(postId) + '/bookmark', active ? {} : undefined)
+  return accountClient.mutateContract(contract, '/api/blogs/' + encodeURIComponent(postId) + '/bookmark', {} )
 }
 
 export function reportBlogContent(postId: string, body: EndpointBody<typeof BlogCommunityContracts.report>) {
