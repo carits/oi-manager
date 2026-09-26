@@ -5,6 +5,12 @@ last_verified: 2026-09-26
 source_of_truth: Git history
 ---
 
+## 2026-09-27 — Problem / Solution Runtime Contract 发布
+
+- 题目详情、评测程序、题面版本、AI Validator、数据生成、Candidate Pool / Wrong Corpus、贡献与 Hack，以及题解审核的 JSON 边界统一接入共享 Runtime Contract 与 Feature API；旧 Route/Component transport 保持 0/0，契约边界增至 210，Feature 内直接 transport 降至 3 文件/44 调用。
+- Contracts、Server/Web TypeScript、Server/Judge/Web production build、Candidate/AI Validator/题解/JudgeRun 定向回归及文档/架构门禁通过；Candidate Contract 夹具同步补齐 affectedSubtaskIds，真实 Candidate API 9/9 与策略 6/6 保持通过。
+- 发布提交 9be24325 已进入 main；API 3302→3303，Web BUILD_ID mGP5AF9MPpbpNfsPHJavD 经 canary 与正式双账号消息闭环（序号 348–351）后提升。Router、API、Web、Worker、Executor 和 Judge 均为 active，readiness 正常。本批无 Prisma Schema 或业务数据迁移。
+
 ## 2026-09-26 — Training Engine V2 单一模型最终收口
 
 - 最终领域不变量固定为 Participant → stable Group → active StageGroup → Stage：Stage 仅保留教学元数据，StageGroup 成为配置与运行唯一事实，不再保存 Session/Participant currentStage 镜像。

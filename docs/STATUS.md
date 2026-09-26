@@ -17,6 +17,12 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 - 当前公网仍为 HTTP；生产 HTTPS、Secure Cookie、CSP、HSTS 和外部 HTTPS 探针以机器状态中的五项证据为准。
 - 本文件只保留最近五次 rollout。完整历史见 [2026-09 归档](archive/history/STATUS-2026-09.md) 与既有 archive 文档。
 
+## 2026-09-27 Problem / Solution Contract rollout
+
+- 发布提交 9be24325 完成 Problem / Solution JSON Contract 与 Feature API 收口：共享契约边界 210，旧页面 transport 0/0，Feature 内直接 transport 3 文件/44 调用。
+- Contracts、Server/Web TypeScript、Server/Judge/Web production build、定向领域回归和文档/架构门禁通过；本批无数据库结构或业务数据迁移。
+- API 已从 3302 提升至 3303；Web BUILD_ID mGP5AF9MPpbpNfsPHJavD 通过 canary 与正式消息闭环（序号 348–351）。Router、API、Web、Worker、Executor、Judge 均 active，readiness 正常。
+
 ## 最近 rollout
 
 - 2026-09-26: Training Engine V2 单一模型完成代码与生产 schema 收口。Participant 必须属于稳定 Group，Stage 只保存教学元数据，StageGroup 是 Group × Stage 的唯一配置/运行事实；删除 currentStage、Stage 运行镜像及 legacy assignment/GroupChange。迁移前 PostgreSQL 16 备份 28 MiB，12 条 Stage assignment 无歧义回填；迁移后 Prisma diff 为 0、consistency 为 0 error。8/8 核心领域测试、相关迁移/规则/API 测试、17 项 Web Feature Contract、Contracts/Prisma/Server/Web 类型检查与 Server/Web production build 均通过。
