@@ -257,6 +257,17 @@ describe('human UX productization contract', () => {
     expect(source).not.toContain('>硬暂停</Button>')
   })
 
+  it('keeps organization joining honest on deep links and read failures', () => {
+    const source = read('../features/organization-account/ui/OrganizationJoinManagement.tsx')
+    expect(source).toContain('selectApplication(linkedApplication)')
+    expect(source).toContain('没有将读取失败显示成“暂无申请”')
+    expect(source).toContain('没有将读取失败显示成“暂无邀请”')
+    expect(source).toContain('当前策略未知，未使用默认值代替')
+    expect(source).toContain('重新加载加入设置')
+    expect(source).toContain('重试教师列表')
+    expect(source).toContain('(!listError || items.length > 0)')
+  })
+
   it('keeps archive import out of activity submission guidance', () => {
     const source = read('../features/contest/ui/ContestDetailPage.tsx')
     expect(source).toContain('提交结果只计入当前活动')
