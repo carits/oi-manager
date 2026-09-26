@@ -54,7 +54,7 @@ assignmentRouter.post('/assignments', asyncHandler(async (req: AuthRequest, res)
   try {
     const parsed = parseContractBody(AssignmentContracts.create, req.body)
     const organizationId = req.user!.organizationId
-    if (organizationId && parsed.organizationId !== organizationId) {
+    if (organizationId && parsed.organizationId && parsed.organizationId !== organizationId) {
       return res.status(403).json({ success: false, code: 'ORGANIZATION_CONTEXT_REQUIRED', message: '不能在当前学校上下文为其他学校创建作业' })
     }
     const body = organizationId ? { ...parsed, organizationId } : parsed

@@ -20,7 +20,6 @@ async function main() {
   const heartbeat = setInterval(() => {
     logger.info('background_executor_heartbeat', { action: 'background_executor', metadata: { instance } })
   }, 300_000)
-  heartbeat.unref()
   logger.info('background_executor_started', { action: 'background_executor', metadata: { instance, pid: process.pid } })
 
   let shutdownPromise: Promise<void> | null = null

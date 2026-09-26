@@ -77,15 +77,27 @@ export const AssignmentValidationDataSchema = z.object({
 })
 
 export const CreateAssignmentBodySchema = z.object({
-  organizationId: z.string().min(1),
+  organizationId: z.string().min(1).optional(),
   title: z.string().trim().min(1).max(200),
   description: z.string().max(10_000).optional().default(''),
+  learningObjectives: z.string().max(10_000).optional(),
+  rosterMode: z.enum(['SNAPSHOT', 'DYNAMIC']).optional(),
+  gradingPolicy: z.enum(['BEST_BEFORE_DUE', 'BEST', 'LATEST', 'FIRST_TARGET_MET', 'MANUAL']).optional(),
   publishAt: z.string().trim().min(1).max(64).nullable().optional(),
   openAt: z.string().trim().min(1).max(64),
   dueAt: z.string().trim().min(1).max(64),
   closeAt: z.string().trim().min(1).max(64),
+  correctionDueAt: z.string().trim().min(1).max(64).nullable().optional(),
   latePolicy: z.enum(['DISALLOW', 'ALLOW_MARK_LATE', 'ALLOW_NO_PENALTY', 'ALLOW_WITH_PENALTY']).default('DISALLOW'),
   latePenaltyPercent: z.number().int().min(0).max(100).nullable().optional(),
+  correctionPolicy: z.enum(['NONE', 'BELOW_TARGET', 'NON_AC', 'TEACHER_ASSIGNED', 'ALL_INCOMPLETE']).optional(),
+  solutionReleasePolicy: z.enum(['NEVER', 'AFTER_DUE', 'AFTER_CLOSE', 'AFTER_RELEASE']).optional(),
+  baseScoreMax: z.number().int().min(1).max(1000).optional(),
+  optionalScoringPolicy: z.enum(['NONE', 'BONUS', 'BEST_N']).optional(),
+  optionalBestCount: z.number().int().min(1).max(1000).nullable().optional(),
+  optionalBonusMax: z.number().int().min(1).max(1000).optional(),
+  challengeScoringPolicy: z.enum(['NONE', 'EXTRA_CREDIT']).optional(),
+  challengeBonusMax: z.number().int().min(1).max(1000).optional(),
 })
 export type CreateAssignmentBody = z.infer<typeof CreateAssignmentBodySchema>
 
