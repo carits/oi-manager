@@ -2,7 +2,7 @@ import express from 'express'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { asyncHandler, classifyClientError } from '../src/lib/asyncHandler'
-import { parseTrainingId } from '../src/modules/training/training.helpers'
+import { parseContestId } from '../src/modules/contest/contest.helpers'
 
 describe('async route error boundary', () => {
   it('classifies known input, permission, missing-record and binding errors', () => {
@@ -17,18 +17,18 @@ describe('async route error boundary', () => {
   it('returns a client response for invalid IDs instead of a 500', async () => {
     const app = express()
     app.get('/training/:id', asyncHandler(async req => {
-      parseTrainingId(req.params.id)
+      parseContestId(req.params.id)
     }))
 
     const response = await request(app).get('/training/not-a-number')
     expect(response.status).toBe(400)
-    expect(response.body).toMatchObject({ success: false, message: '无效的训练 ID' })
+    expect(response.body).toMatchObject({ success: false, message: '无效的比赛 ID' })
   })
 
-  it('requires a complete positive decimal training ID', () => {
-    expect(parseTrainingId('12')).toBe(12)
+  it('requires a complete positive decimal contest ID', () => {
+    expect(parseContestId('12')).toBe(12)
     for (const value of ['0', '-1', '1junk', '1.5', '', '9007199254740992']) {
-      expect(() => parseTrainingId(value)).toThrow('无效的训练 ID')
+      expect(() => parseContestId(value)).toThrow('无效的比赛 ID')
     }
   })
 })

@@ -2,7 +2,7 @@ import express from 'express'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { submitRouter } from '../src/routes/submit'
-import { trainingsRouter } from '../src/modules/training/training.routes'
+import { contestRouter } from '../src/modules/contest/contest.routes'
 import { prisma } from '../src/prisma'
 import { createTestUser } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
@@ -10,7 +10,7 @@ import { generateTestToken } from './helpers/testToken'
 const app = express()
 app.use(express.json())
 app.use('/api/submit', submitRouter)
-app.use('/api', trainingsRouter)
+app.use('/api', contestRouter)
 
 async function fixture(judgeConfig: string | null = 'mode: acm\ncases: []\n', withTestdata = true) {
   const actor = await createTestUser({ accountRole: 'platform_admin' })
@@ -59,15 +59,18 @@ describe('external-source local judging', () => {
       })
 
     expect(response.status).toBe(200)
-    const submission = await prisma.submission.findUniqueOrThrow({ where: { id: response.body.data.submissionId } })
+    const submission = await prisma.submission.findUniqueOrThrow({
+      where: { id: response.body.data.submissionId },
+      include: { CurrentJudgeRun: true },
+    })
     expect(submission).toMatchObject({
       userId: actor.user.id,
       oj: 'codeforces',
       problemId: problem.problemId,
       problemInternalId: problem.id,
       submitMethod: 'local',
-      result: 'queuing',
       ojRemoteId: null,
+      CurrentJudgeRun: expect.objectContaining({ status: 'QUEUED' }),
     })
   })
 
@@ -130,41 +133,36 @@ describe('external-source local judging', () => {
     expect(response.body.code).toBe('LOCAL_JUDGE_NOT_CONFIGURED')
   })
 
-  it('queues an external training problem locally using its judge config snapshot', async () => {
+  it('queues an external contest problem locally using its fixed revision snapshot', async () => {
     const { actor, token, problem } = await fixture()
     const now = Date.now()
-    const training = await prisma.training.create({
+    const revision = await prisma.problemTestSetRevision.create({
       data: {
-        title: 'External local judge training',
-        format: 'icpc',
-        type: 'training',
-        scope: 'campus',
-        organizationId: 'platform-organization-00000000',
-        startTime: new Date(now - 60_000),
-        endTime: new Date(now + 60_000),
-        status: 'ongoing',
-        createdBy: actor.user.id,
-        updatedAt: new Date(),
+        id: crypto.randomUUID(), problemId: problem.id, revisionNumber: 1, mode: 'acm', source: 'test',
+        judgeConfig: 'mode: acm\ncases: []\n', judgeConfigHash: 'external-local-judge', graphHash: 'external-local-judge',
+        testdataPath: '/test/external-local-judge', createdBy: actor.user.id,
       },
     })
-    const trainingProblem = await prisma.trainingProblem.create({
+    const contest = await prisma.contest.create({
       data: {
-        id: crypto.randomUUID(),
-        trainingId: training.id,
-        problemId: problem.id,
-        alias: 'A',
-        orderIndex: 1,
-        points: 100,
-        judgeConfigSnapshot: 'mode: acm\ncases: []\n',
+        id: crypto.randomUUID(), title: 'External local judge contest', format: 'icpc', type: 'judged', scope: 'platform',
+        contestDate: new Date(now - 60_000), startAt: new Date(now - 60_000), endAt: new Date(now + 60_000),
+        status: 'ongoing', createdBy: actor.user.id,
+      },
+    })
+    const contestProblem = await prisma.contestProblem.create({
+      data: {
+        id: crypto.randomUUID(), contestId: contest.id, canonicalProblemId: problem.id, testSetRevisionId: revision.id,
+        alias: 'A', orderIndex: 1, points: 100, title: problem.title, ojName: problem.platform, problemId: problem.problemId,
       },
     })
     await prisma.problem.update({ where: { id: problem.id }, data: { judgeConfig: null } })
 
     const response = await request(app)
-      .post(`/api/contests/${training.id}/submit`)
+      .post(`/api/contests/${contest.publicId}/submit`)
       .set('Cookie', `oi_session=${token}`)
       .send({
-        trainingProblemId: trainingProblem.id,
+        contestProblemId: contestProblem.id,
         language: 'cpp',
         code: 'int main() { return 0; }',
         submitMethod: 'myAccount',
@@ -175,10 +173,10 @@ describe('external-source local judging', () => {
     expect(submission).toMatchObject({
       oj: 'codeforces',
       problemInternalId: problem.id,
-      trainingId: training.id,
-      trainingProblemId: trainingProblem.id,
+      canonicalContestId: contest.id,
+      canonicalContestProblemId: contestProblem.id,
+      testSetRevisionId: revision.id,
       submitMethod: 'local',
-      result: 'queuing',
       ojRemoteId: null,
     })
   })

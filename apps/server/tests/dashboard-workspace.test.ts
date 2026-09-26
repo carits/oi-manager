@@ -6,7 +6,7 @@ import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from '.
 import { statsRouter } from '../src/routes/stats'
 import { workspaceRouter } from '../src/routes/workspaces'
 import { prisma } from '../src/prisma'
-import { ensureContestAggregateTx } from './helpers/legacy-contest-fixture'
+import { createTestSchoolContest } from './helpers/school-contest-helpers'
 
 const app = createTestApp()
 app.use('/api/stats', statsRouter)
@@ -88,85 +88,44 @@ describe('dashboard and workspace application routes', () => {
     })
 
     const now = Date.now()
-    const homeworkA = await prisma.training.create({
+    const assignmentA = await prisma.assignment.create({
       data: {
-        organizationId: school.organizationId!,
-        teamId: teamA.id,
-        title: 'A 校作业',
-        format: 'oi',
-        type: 'homework',
-        scope: 'campus',
-        startTime: new Date(now - 60_000),
-        endTime: new Date(now + 3_600_000),
-        status: 'ongoing',
-        createdBy: student.user.id,
-        updatedAt: new Date(),
+        organizationId: school.organizationId!, teamId: teamA.id, title: 'A 校作业',
+        status: 'OPEN', openAt: new Date(now - 60_000), dueAt: new Date(now + 3_600_000), closeAt: new Date(now + 3_600_000),
+        createdByMembershipId: student.organization!.membershipId,
       },
     })
-    const homeworkB = await prisma.training.create({
+    const assignmentB = await prisma.assignment.create({
       data: {
-        organizationId: schoolB.organizationId!,
-        teamId: teamB.id,
-        title: 'B 校作业',
-        format: 'oi',
-        type: 'homework',
-        scope: 'campus',
-        startTime: new Date(now - 60_000),
-        endTime: new Date(now + 3_600_000),
-        status: 'ongoing',
-        createdBy: student.user.id,
-        updatedAt: new Date(),
+        organizationId: schoolB.organizationId!, teamId: teamB.id, title: 'B 校作业',
+        status: 'OPEN', openAt: new Date(now - 60_000), dueAt: new Date(now + 3_600_000), closeAt: new Date(now + 3_600_000),
+        createdByMembershipId: membershipId,
       },
     })
-    const contestA = await prisma.training.create({
-      data: {
-        organizationId: school.organizationId!,
-        teamId: teamA.id,
-        title: 'A 校比赛',
-        format: 'oi',
-        type: 'contest',
-        scope: 'campus',
-        startTime: new Date(now - 60_000),
-        endTime: new Date(now + 3_600_000),
-        status: 'ongoing',
-        createdBy: student.user.id,
-        updatedAt: new Date(),
-      },
+    const contestA = await createTestSchoolContest({
+      organizationId: school.organizationId!, teamId: teamA.id, createdBy: student.user.id, title: 'A 校比赛',
+      startTime: new Date(now - 60_000), endTime: new Date(now + 3_600_000), status: 'ongoing',
     })
-    const contestB = await prisma.training.create({
-      data: {
-        organizationId: schoolB.organizationId!,
-        teamId: teamB.id,
-        title: 'B 校比赛',
-        format: 'oi',
-        type: 'contest',
-        scope: 'campus',
-        startTime: new Date(now - 60_000),
-        endTime: new Date(now + 3_600_000),
-        status: 'ongoing',
-        createdBy: student.user.id,
-        updatedAt: new Date(),
-      },
+    const contestB = await createTestSchoolContest({
+      organizationId: schoolB.organizationId!, teamId: teamB.id, createdBy: student.user.id, title: 'B 校比赛',
+      startTime: new Date(now - 60_000), endTime: new Date(now + 3_600_000), status: 'ongoing',
     })
-    await prisma.$transaction(tx => ensureContestAggregateTx(tx, contestA.id))
-    await prisma.$transaction(tx => ensureContestAggregateTx(tx, contestB.id))
-
     const token = tokenFor(student)
     const homeworks = await request(app)
       .get('/api/me/homeworks')
       .set('Cookie', `oi_session=${token}`)
       .set('x-oi-organization-id', school.organizationId!)
     expect(homeworks.status).toBe(200)
-    expect(homeworks.body.data.map((item: any) => item.id)).toContain(homeworkA.id)
-    expect(homeworks.body.data.map((item: any) => item.id)).not.toContain(homeworkB.id)
+    expect(homeworks.body.data.map((item: any) => item.id)).toContain(assignmentA.id)
+    expect(homeworks.body.data.map((item: any) => item.id)).not.toContain(assignmentB.id)
 
     const contests = await request(app)
       .get('/api/me/contests')
       .set('Cookie', `oi_session=${token}`)
       .set('x-oi-organization-id', school.organizationId!)
     expect(contests.status).toBe(200)
-    expect(contests.body.data.map((item: any) => item.id)).toContain(contestA.id)
-    expect(contests.body.data.map((item: any) => item.id)).not.toContain(contestB.id)
+    expect(contests.body.data.map((item: any) => item.id)).toContain(contestA.publicId)
+    expect(contests.body.data.map((item: any) => item.id)).not.toContain(contestB.publicId)
   })
 
   it('serves campus contest lists and a personal overview through their explicit contexts', async () => {

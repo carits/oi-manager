@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { canModifyProblem, canUseProblem, canViewProblem } from '../src/modules/problem/problem.access'
 import {
-  canAccessTraining,
-  canManageTraining,
+  canAccessContest,
+  canManageContest,
   isTeamAdmin,
   isTeamMember,
-} from '../src/modules/training/training.helpers'
+} from '../src/modules/contest/contest.helpers'
 import { prisma } from '../src/prisma'
 import { createTestSchool, createTestTeam, createTestUser } from './helpers/testUser'
 
@@ -33,34 +33,36 @@ describe('resource ownership permission matrix', () => {
   })
 
   it('separates activity participation from activity management', async () => {
-    const training = await prisma.training.create({
+    const contest = await prisma.contest.create({
       data: {
+        id: crypto.randomUUID(),
         title: 'Ownership contest',
-        type: 'contest',
+        type: 'judged',
         format: 'icpc',
         scope: 'campus',
         organizationId: schoolA.organizationId!,
         createdBy: creator.user.id,
         status: 'upcoming',
-        startTime: new Date(Date.now() + 60_000),
-        endTime: new Date(Date.now() + 3_600_000),
+        contestDate: new Date(Date.now() + 60_000),
+        startAt: new Date(Date.now() + 60_000),
+        endAt: new Date(Date.now() + 3_600_000),
       },
     })
 
-    await expect(canManageTraining(principal.user.id, training)).resolves.toBe(true)
-    await expect(canManageTraining(creator.user.id, training)).resolves.toBe(true)
-    await expect(canManageTraining(otherTeacher.user.id, training)).resolves.toBe(false)
-    await expect(canManageTraining(student.user.id, training)).resolves.toBe(false)
-    await expect(canManageTraining(outsider.user.id, training)).resolves.toBe(false)
-    await expect(canManageTraining(superAdmin.user.id, training)).resolves.toBe(true)
-    await expect(canManageTraining(platformAdmin.user.id, training)).resolves.toBe(false)
+    await expect(canManageContest(principal.user.id, contest)).resolves.toBe(true)
+    await expect(canManageContest(creator.user.id, contest)).resolves.toBe(true)
+    await expect(canManageContest(otherTeacher.user.id, contest)).resolves.toBe(false)
+    await expect(canManageContest(student.user.id, contest)).resolves.toBe(false)
+    await expect(canManageContest(outsider.user.id, contest)).resolves.toBe(false)
+    await expect(canManageContest(superAdmin.user.id, contest)).resolves.toBe(true)
+    await expect(canManageContest(platformAdmin.user.id, contest)).resolves.toBe(false)
 
-    await expect(canAccessTraining(principal.user.id, training)).resolves.toBe(true)
-    await expect(canAccessTraining(otherTeacher.user.id, training)).resolves.toBe(true)
-    await expect(canAccessTraining(student.user.id, training)).resolves.toBe(true)
-    await expect(canAccessTraining(outsider.user.id, training)).resolves.toBe(false)
-    await expect(canAccessTraining(superAdmin.user.id, training)).resolves.toBe(true)
-    await expect(canAccessTraining(platformAdmin.user.id, training)).resolves.toBe(true)
+    await expect(canAccessContest(principal.user.id, contest)).resolves.toBe(true)
+    await expect(canAccessContest(otherTeacher.user.id, contest)).resolves.toBe(true)
+    await expect(canAccessContest(student.user.id, contest)).resolves.toBe(true)
+    await expect(canAccessContest(outsider.user.id, contest)).resolves.toBe(false)
+    await expect(canAccessContest(superAdmin.user.id, contest)).resolves.toBe(true)
+    await expect(canAccessContest(platformAdmin.user.id, contest)).resolves.toBe(true)
   })
 
   it('keeps campus team management narrower than global read access', async () => {
@@ -108,13 +110,25 @@ describe('resource ownership permission matrix', () => {
       visibility: 'private',
     }
     const schoolPublished = { ...schoolDraft, id: 'school-published', status: 'published' }
-    const user = (created: Awaited<ReturnType<typeof createTestUser>>, organizationId?: string) => ({
-      userId: created.user.id,
-      username: created.user.username,
-      role: created.user.accountRole,
-      workspaceMode: 'work' as const,
-      organizationId,
-    })
+    const user = (created: Awaited<ReturnType<typeof createTestUser>>, organizationId?: string) => {
+      const organization = organizationId ? created.organization : null
+      return {
+        userId: created.user.id,
+        username: created.user.username,
+        accountRole: created.user.accountRole,
+        workspaceMode: 'work' as const,
+        ...(organization
+          ? {
+              organizationId: organization.organizationId,
+              organizationMembershipId: organization.membershipId,
+              organizationRole: organization.role,
+              organizationCapabilities: organization.role === 'student'
+                ? ['organization.view']
+                : ['organization.view', 'problem.create', 'problem.manage'],
+            }
+          : {}),
+      }
+    }
 
     expect(canModifyProblem(user(superAdmin), platformDraft)).toBe(true)
     expect(canModifyProblem(user(platformAdmin), platformDraft)).toBe(true)

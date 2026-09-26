@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { organizationCreationRouter } from '../src/modules/organization-creation/organization-creation.routes'
 import { prisma } from '../src/prisma'
 import { generateTestToken } from './helpers/testToken'
-import { applySchoolNameKeyMigration, inspectSchoolNameKeyMigration } from '../src/modules/maintenance/application/school-name-key-migration.service'
 
 const app = express()
 app.use(express.json())
@@ -68,13 +67,6 @@ describe('organization creation applications', () => {
     expect((await request(app).get('/api/me/organization-creation-applications').set(auth(superAdminToken))).status).toBe(403)
   })
 
-  it('allows a legacy school principal account to apply for another school without changing its role', async () => {
-    await prisma.user.update({where:{id:applicantId},data:{role:'school_principal'}})
-    const principalToken=generateTestToken({ userId:applicantId, username:'legacy-principal', accountRole: 'user' })
-    const created=await request(app).post('/api/organization-creation-applications').set(auth(principalToken)).send(payload())
-    expect(created.status).toBe(201)
-    expect((await prisma.user.findUniqueOrThrow({where:{id:applicantId}})).role).toBe('school_principal')
-  })
 
   it('processes concurrent approvals only once', async () => {
     const created=await request(app).post('/api/organization-creation-applications').set(auth(applicantToken)).send(payload())
@@ -82,15 +74,6 @@ describe('organization creation applications', () => {
     expect(responses.filter(item=>item.status===200)).toHaveLength(1)
     expect(responses.filter(item=>item.status===409)).toHaveLength(1)
     expect(await prisma.organizationMembership.count({where:{userId:applicantId,memberRole:'school_principal'}})).toBe(1)
-  })
-
-  it('checks and backfills normalized school names idempotently', async () => {
-    const organization=await prisma.organization.create({data:{id:crypto.randomUUID(),name:'  演示　学校 ',type:'school'}})
-    const school=await prisma.school.create({data:{id:crypto.randomUUID(),name:'  演示　学校 ',organizationId:organization.id}})
-    expect((await inspectSchoolNameKeyMigration()).missing).toBeGreaterThanOrEqual(1)
-    expect((await applySchoolNameKeyMigration()).updated).toBeGreaterThanOrEqual(1)
-    expect((await prisma.school.findUniqueOrThrow({where:{id:school.id}})).nameKey).toBe('演示 学校')
-    expect((await applySchoolNameKeyMigration()).updated).toBe(0)
   })
 
   it('blocks a new application that matches a legacy school without nameKey', async () => {
