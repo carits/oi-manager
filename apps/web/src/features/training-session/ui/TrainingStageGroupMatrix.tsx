@@ -41,10 +41,10 @@ export function TrainingStageGroupMatrix({ sessionId, revision, stages, grouping
         <div className={styles.matrixHeader} key={group.clientKey + "-name"}>{group.name}<small>{group.participantIds.length} 人</small></div>
         {stages.map(stage => {
           const plan = drafts.find(item => item.groupId === group.id && item.stageId === stage.id);
-          return <button type="button" className={styles.matrixCell} key={group.clientKey + stage.clientKey} disabled={!plan} onClick={() => plan && setEditing(plan)}>
+          return <Button variant="ghost" className={styles.matrixCell} key={group.clientKey + stage.clientKey} disabled={!plan} onClick={() => plan && setEditing(plan)}>
             <strong>{plan ? modeNames[plan.mode] : "保存阶段后生成"}</strong>
             <small>{plan?.problemIds.length || 0} 题 · {plan?.transitionPolicy === "AUTO_ADVANCE" ? "自动推进" : "教师推进"}</small>
-          </button>;
+          </Button>;
         })}
       </div>)}
     </div>

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 describe('contest Rating workspace contract', () => {
   it('renders only the scopes allowed by the server and resets an invalid draft scope', () => {
-    const source = fs.readFileSync(new URL('../contest/ui/TrainingFormModal.tsx', import.meta.url), 'utf8')
+    const source = fs.readFileSync(new URL('../contest/ui/ContestFormModal.tsx', import.meta.url), 'utf8')
 
     expect(source).toContain('config.allowedScopes')
     expect(source).toContain("allowedRatingScopes.includes('NONE')")
@@ -39,7 +39,7 @@ describe('contest Rating workspace contract', () => {
   })
 
   it('guides contest creation through explicit rating and visibility steps', () => {
-    const source = fs.readFileSync(new URL('../contest/ui/TrainingFormModal.tsx', import.meta.url), 'utf8')
+    const source = fs.readFileSync(new URL('../contest/ui/ContestFormModal.tsx', import.meta.url), 'utf8')
 
     expect(source).toContain("['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']")
     expect(source).toContain('比赛赛制')
@@ -65,7 +65,7 @@ describe('contest Rating workspace contract', () => {
   })
 
   it('shows finalized Rating changes directly in each ranking row', () => {
-    const source = fs.readFileSync(new URL('../contest/ui/components/TrainingRankTable.tsx', import.meta.url), 'utf8')
+    const source = fs.readFileSync(new URL('../contest/ui/components/ContestRankTable.tsx', import.meta.url), 'utf8')
 
     expect(source).toContain('row.ratingChanges?.map')
     expect(source).toContain('ratingBefore')

@@ -17,6 +17,14 @@ export function filenameFromContentDisposition(
   return asciiMatch?.[1]?.trim() || fallback
 }
 
+export function csvCell(value: unknown): string {
+  const raw = String(value ?? '')
+  const startsWithControl = /^[\t\r\n]/.test(raw)
+  const startsWithFormula = /^[=+\-@]/.test(raw.trimStart())
+  const safe = startsWithControl || startsWithFormula ? `'${raw}` : raw
+  return `"${safe.replaceAll('"', '""')}"`
+}
+
 export function saveBlobDownload(blob: Blob, filename: string): void {
   const url = window.URL.createObjectURL(blob)
   const anchor = document.createElement('a')

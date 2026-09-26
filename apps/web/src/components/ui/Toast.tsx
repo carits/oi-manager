@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
 
 // ==================== 类型定义 ====================
 
@@ -44,13 +44,17 @@ const typeConfig: Record<ToastType, { bg: string; border: string; icon: string }
 function ToastItemView({ item, onRemove }: { item: ToastItem; onRemove: (id: number) => void }) {
   const config = typeConfig[item.type]
 
-  useState(() => {
-    const timer = setTimeout(() => onRemove(item.id), 3500)
+  useEffect(() => {
+    const duration = item.type === 'error' ? 7000 : 3500
+    const timer = window.setTimeout(() => onRemove(item.id), duration)
     return () => clearTimeout(timer)
-  })
+  }, [item.id, item.type, onRemove])
 
   return (
     <div
+      role={item.type === 'error' ? 'alert' : 'status'}
+      aria-live={item.type === 'error' ? 'assertive' : 'polite'}
+      aria-atomic="true"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -87,7 +91,9 @@ function ToastItemView({ item, onRemove }: { item: ToastItem; onRemove: (id: num
         {item.message}
       </span>
       <button
+        type="button"
         onClick={() => onRemove(item.id)}
+        aria-label="关闭提示"
         style={{
           background: 'none',
           border: 'none',
@@ -114,6 +120,9 @@ export function showToastNotification(message: string, type: ToastType = 'info')
   const config = typeConfig[type]
 
   const el = document.createElement('div')
+  el.setAttribute('role', type === 'error' ? 'alert' : 'status')
+  el.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite')
+  el.setAttribute('aria-atomic', 'true')
   el.setAttribute('data-toast-id', String(id))
   el.style.cssText = 'display:flex;align-items:center;gap:0.625rem;padding:0.75rem 1rem;border-radius:8px;box-shadow:0 2px 8px var(--shadow-color-medium);min-width:280px;max-width:420px;background:' + config.bg + ';border:1px solid ' + config.border + ';animation:toast-in 0.25s ease-out;'
 
@@ -149,13 +158,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts(prev => [...prev, { id, type, message }])
   }, [])
 
-  const value: ToastContextValue = {
+  const success = useCallback((message: string) => add('success', message), [add])
+  const error = useCallback((message: string) => add('error', message), [add])
+  const warning = useCallback((message: string) => add('warning', message), [add])
+  const info = useCallback((message: string) => add('info', message), [add])
+  const value = useMemo<ToastContextValue>(() => ({
     toast: add,
-    success: (msg) => add('success', msg),
-    error: (msg) => add('error', msg),
-    warning: (msg) => add('warning', msg),
-    info: (msg) => add('info', msg),
-  }
+    success,
+    error,
+    warning,
+    info,
+  }), [add, error, info, success, warning])
 
   return (
     <ToastContext.Provider value={value}>

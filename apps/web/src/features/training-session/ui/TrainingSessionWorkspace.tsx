@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/ui/Badge'
 import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
+import { useAuth } from '@/features/auth'
 import { SubmissionCodeEditor, SubmissionIoFields, type SubmissionIoValue } from '@/features/submission'
 import {
   changeTrainingStageGroup,
@@ -35,7 +36,7 @@ import {
   transitionTrainingStage,
 } from '../api/trainingSessionApi'
 import { testDataVersion, trainingStatusLabel } from '@/lib/humanPresentation'
-import { saveBlobDownload } from '@/lib/download'
+import { csvCell, saveBlobDownload } from '@/lib/download'
 
 const stageModeLabel: Record<string, string> = {
   TRAINING: '训练',
@@ -90,8 +91,11 @@ const formatDuration = (seconds?: number | null) => {
 
 export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const toast = useToast(), router = useRouter(), pathname = usePathname()
+  const { user } = useAuth()
   const [data, setData] = useState<Workspace>(), [dashboard, setDashboard] = useState<Dashboard>(), [peerProgress, setPeerProgress] = useState<PeerProgress>()
   const [selectedId, setSelectedId] = useState<string>(), [code, setCode] = useState(''), [language, setLanguage] = useState('cpp17'), [draftRevision, setDraftRevision] = useState<number>()
+  const [draftState, setDraftState] = useState<'loading' | 'dirty' | 'saving' | 'saved' | 'error'>('loading')
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
   const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [commandBusy, setCommandBusy] = useState(false), [rosterSaving, setRosterSaving] = useState(false)
   const [clockNow, setClockNow] = useState(() => Date.now())
@@ -110,15 +114,24 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const cursor = useRef(0), saveDraftRef = useRef<(quiet?: boolean) => Promise<number | false>>(async () => false)
   const draftRevisionRef = useRef<Record<string, number | undefined>>({})
   const draftSaveQueueRef = useRef<Promise<number | false>>(Promise.resolve(false))
+  const problemRef = useRef<StageProblem>()
+  const codeRef = useRef('')
+  const languageRef = useRef('cpp17')
+  const submissionIoRef = useRef<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
+  const draftDirtyRef = useRef(false)
+  const draftLoadVersion = useRef(0)
+  const workspaceLoadVersion = useRef(0)
   const commandInFlight = useRef(false), statusRevisionRef = useRef<number>(), hintLoadVersion = useRef(0)
 
   const load = useCallback(async () => {
+    const version = ++workspaceLoadVersion.current
     let workspace: Workspace
     try {
       workspace = await getTrainingWorkspace(sessionId) as Workspace
     } catch (error) {
       return toast.error(error instanceof Error ? error.message : '训练加载失败')
     }
+    if (version !== workspaceLoadVersion.current) return
     statusRevisionRef.current = workspace.session.statusRevision
     setData(workspace)
     setSelectedId(current => {
@@ -132,6 +145,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       workspace.manager ? getTrainingCoachDashboard(sessionId) : Promise.resolve(null),
       getTrainingPeerProgress(sessionId),
     ])
+    if (version !== workspaceLoadVersion.current) return
     if (coachResult.status === 'fulfilled' && coachResult.value) setDashboard(coachResult.value as Dashboard)
     else if (coachResult.status === 'rejected') toast.error(coachResult.reason instanceof Error ? coachResult.reason.message : '教练看板加载失败')
     if (peerResult.status === 'fulfilled') setPeerProgress(peerResult.value as PeerProgress)
@@ -140,8 +154,31 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   useEffect(() => { void load() }, [load])
 
   const problem = useMemo(() => data?.session.Stages.flatMap(stage => stage.Problems).find(item => item.id === selectedId), [data, selectedId])
-  const draftKey = problem ? `training-draft:${sessionId}:${problem.id}` : ''
-  const editorDraftKey = problem ? `training-engine:${sessionId}:${problem.id}` : ''
+  const draftScope = `${user?.userId || 'anonymous'}:${user?.organizationId || 'personal'}`
+  const editorDraftKey = problem ? `${draftScope}:training-engine:${sessionId}:${problem.id}` : ''
+  problemRef.current = problem
+  codeRef.current = code
+  languageRef.current = language
+  submissionIoRef.current = submissionIo
+  const markDraftDirty = useCallback(() => {
+    draftDirtyRef.current = true
+    setDraftState('dirty')
+  }, [])
+  const handleCodeChange = useCallback((nextCode: string) => {
+    codeRef.current = nextCode
+    setCode(nextCode)
+    markDraftDirty()
+  }, [markDraftDirty])
+  const handleLanguageChange = useCallback((nextLanguage: string) => {
+    languageRef.current = nextLanguage
+    setLanguage(nextLanguage)
+    markDraftDirty()
+  }, [markDraftDirty])
+  const handleSubmissionIoChange = useCallback((nextIo: SubmissionIoValue) => {
+    submissionIoRef.current = nextIo
+    setSubmissionIo(nextIo)
+    markDraftDirty()
+  }, [markDraftDirty])
   const loadHints = useCallback(async (id?: string) => {
     const version = ++hintLoadVersion.current
     if (!id) { setHints([]); return }
@@ -155,50 +192,102 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }, [sessionId, toast])
   useEffect(() => {
     if (!problem) return
+    const version = ++draftLoadVersion.current
     let cancelled = false
+    setDraftState('loading')
+    setCode('')
+    setLanguage('cpp17')
+    setDraftRevision(undefined)
+    setSubmissionIo({ inputFilename: null, outputFilename: null })
+    draftDirtyRef.current = false
     void (async () => {
-      const local = typeof window !== 'undefined' ? window.localStorage.getItem(draftKey) : null
       try {
         const draft = await getTrainingDraft(sessionId, problem.id) as TrainingDraft | null
-        if (cancelled) return
-        setCode(draft?.code || local || '')
-        setLanguage(draft?.language || 'cpp17')
+        if (cancelled || version !== draftLoadVersion.current) return
+        const nextCode = draft?.code || ''
+        const nextLanguage = draft?.language || 'cpp17'
+        const nextIo = { inputFilename: draft?.inputFilename || null, outputFilename: draft?.outputFilename || null }
+        codeRef.current = nextCode
+        languageRef.current = nextLanguage
+        submissionIoRef.current = nextIo
+        setCode(nextCode)
+        setLanguage(nextLanguage)
         setDraftRevision(draft?.revision)
         draftRevisionRef.current[problem.id] = draft?.revision
-        setSubmissionIo({ inputFilename: draft?.inputFilename || null, outputFilename: draft?.outputFilename || null })
-        if (local) window.localStorage.removeItem(draftKey)
+        setSubmissionIo(nextIo)
+        draftDirtyRef.current = false
+        setDraftState('saved')
       } catch (error) {
-        if (cancelled) return
-        setCode(local || '')
-        setLanguage('cpp17')
-        setDraftRevision(undefined)
-        setSubmissionIo({ inputFilename: null, outputFilename: null })
-        toast.error(error instanceof Error ? `服务器草稿加载失败：${error.message}` : '服务器草稿加载失败；已仅使用本地草稿')
+        if (cancelled || version !== draftLoadVersion.current) return
+        setDraftState('error')
+        toast.error(error instanceof Error ? `服务器草稿加载失败：${error.message}` : '服务器草稿加载失败；本机草稿仍会保留')
       }
     })()
     void loadHints(problem.id)
     return () => { cancelled = true }
-  }, [draftKey, loadHints, problem?.id, problem?.problemId, sessionId, toast])
+  }, [loadHints, problem?.id, sessionId, toast])
   const saveDraft = useCallback(async (quiet = false) => {
-    if (!problem) return false
+    const targetProblem = problemRef.current
+    if (!targetProblem) return false
+    if (quiet && !draftDirtyRef.current) return draftRevisionRef.current[targetProblem.id] ?? 0
+    const snapshot = {
+      problemId: targetProblem.id,
+      code: codeRef.current,
+      language: languageRef.current,
+      inputFilename: submissionIoRef.current.inputFilename,
+      outputFilename: submissionIoRef.current.outputFilename,
+    }
     const save = async () => {
       setSaving(true)
-      const response = await saveTrainingDraft(sessionId, problem.id, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevisionRef.current[problem.id], editorFocused: document.hasFocus() })
-      setSaving(false)
-      if (!response.ok) { if (!quiet) toast.error(response.error.message || '草稿保存失败'); return false }
-      const nextRevision = Number(response.data?.revision ?? draftRevisionRef.current[problem.id] ?? 0)
-      draftRevisionRef.current[problem.id] = nextRevision
-      setDraftRevision(nextRevision)
-      if (draftKey) window.localStorage.removeItem(draftKey)
-      if (!quiet) toast.success('草稿已保存')
-      return nextRevision
+      setDraftState('saving')
+      try {
+        const response = await saveTrainingDraft(sessionId, snapshot.problemId, {
+          code: snapshot.code,
+          language: snapshot.language,
+          inputFilename: snapshot.inputFilename,
+          outputFilename: snapshot.outputFilename,
+          expectedRevision: draftRevisionRef.current[snapshot.problemId],
+          editorFocused: document.hasFocus(),
+        })
+        if (!response.ok) {
+          draftDirtyRef.current = true
+          setDraftState('error')
+          if (!quiet) toast.error(response.error.message || '草稿保存失败')
+          return false
+        }
+        const nextRevision = Number(response.data?.revision ?? draftRevisionRef.current[snapshot.problemId] ?? 0)
+        draftRevisionRef.current[snapshot.problemId] = nextRevision
+        if (problemRef.current?.id === snapshot.problemId) {
+          const unchanged = codeRef.current === snapshot.code
+            && languageRef.current === snapshot.language
+            && submissionIoRef.current.inputFilename === snapshot.inputFilename
+            && submissionIoRef.current.outputFilename === snapshot.outputFilename
+          setDraftRevision(nextRevision)
+          draftDirtyRef.current = !unchanged
+          setDraftState(unchanged ? 'saved' : 'dirty')
+        }
+        if (!quiet) toast.success('草稿已保存')
+        return nextRevision
+      } catch (error) {
+        draftDirtyRef.current = true
+        setDraftState('error')
+        if (!quiet) toast.error(error instanceof Error ? error.message : '草稿保存失败')
+        return false
+      } finally {
+        setSaving(false)
+      }
     }
     const queued = draftSaveQueueRef.current.then(save, save)
     draftSaveQueueRef.current = queued
     return queued
-  }, [code, draftKey, language, problem, sessionId, submissionIo.inputFilename, submissionIo.outputFilename, toast])
+  }, [sessionId, toast])
   saveDraftRef.current = saveDraft
-  useEffect(() => { const timer = setInterval(() => { if (code && problem) void saveDraftRef.current(true) }, 30_000); return () => clearInterval(timer) }, [code, problem])
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (draftDirtyRef.current && problemRef.current) void saveDraftRef.current(true)
+    }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
   useEffect(() => {
     if (!selectedId) return
     const heartbeat = () => void sendTrainingHeartbeat(sessionId, { stageProblemId: selectedId, pageVisible: document.visibilityState === 'visible', editorFocused: document.hasFocus() })
@@ -207,17 +296,33 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     return () => clearInterval(timer)
   }, [selectedId, sessionId])
   useEffect(() => {
-    if (!problem || !draftKey) return
     const persistOnExit = () => {
-      void saveTrainingDraft(sessionId, problem.id, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevisionRef.current[problem.id], editorFocused: false }, { keepalive: true })
+      const currentProblem = problemRef.current
+      if (!currentProblem || !draftDirtyRef.current) return
+      void saveTrainingDraft(sessionId, currentProblem.id, {
+        code: codeRef.current,
+        language: languageRef.current,
+        inputFilename: submissionIoRef.current.inputFilename,
+        outputFilename: submissionIoRef.current.outputFilename,
+        expectedRevision: draftRevisionRef.current[currentProblem.id],
+        editorFocused: false,
+      }, { keepalive: true })
     }
     window.addEventListener('pagehide', persistOnExit)
     return () => window.removeEventListener('pagehide', persistOnExit)
-  }, [code, draftKey, language, problem, sessionId, submissionIo.inputFilename, submissionIo.outputFilename])
+  }, [sessionId])
   useEffect(() => {
+    setConnectionState('connecting')
     const source = new EventSource(`/api/training-sessions/${sessionId}/events?afterSeq=${cursor.current}`, { withCredentials: true })
-    source.addEventListener('training', event => { cursor.current = Number((event as MessageEvent).lastEventId || cursor.current); void saveDraftRef.current(true).finally(() => load()) })
-    source.addEventListener('resync_required', () => void load())
+    source.onopen = () => setConnectionState('connected')
+    source.onerror = () => setConnectionState('reconnecting')
+    const saveThenReload = () => {
+      void saveDraftRef.current(true).then(saved => {
+        if (saved !== false) void load()
+      })
+    }
+    source.addEventListener('training', event => { cursor.current = Number((event as MessageEvent).lastEventId || cursor.current); saveThenReload() })
+    source.addEventListener('resync_required', saveThenReload)
     return () => source.close()
   }, [load, sessionId])
 
@@ -280,14 +385,20 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const submit = async () => {
     if (!problem || !selectedId) return
     setSubmitting(true)
-    const savedRevision = await saveDraftRef.current(true)
-    if (savedRevision === false) { setSubmitting(false); return }
-    const response = await submitTrainingSolution(sessionId, { stageProblemId: selectedId, code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename })
-    if (!response.ok) { setSubmitting(false); return toast.error(response.error.message || '提交失败') }
-    // A submission is a checkpoint, not the end of the editing session.
-    // Keep the exact source and I/O settings so WA / partial-score workflows can iterate naturally.
-    setSubmitting(false)
-    toast.success(`提交 #${response.data?.id} 已进入评测队列，代码已保留，可继续修改`)
+    try {
+      const savedRevision = await saveDraftRef.current(true)
+      if (savedRevision === false) {
+        toast.error('提交前无法同步服务器草稿；代码仍保留，请检查网络后重试')
+        return
+      }
+      const response = await submitTrainingSolution(sessionId, { stageProblemId: selectedId, code: codeRef.current, language: languageRef.current, inputFilename: submissionIoRef.current.inputFilename, outputFilename: submissionIoRef.current.outputFilename })
+      if (!response.ok) { toast.error(response.error.message || '提交失败'); return }
+      // A submission is a checkpoint, not the end of the editing session.
+      // Keep the exact source and I/O settings so WA / partial-score workflows can iterate naturally.
+      toast.success(`提交 #${response.data?.id} 已进入评测队列，代码已保留，可继续修改`)
+    } finally {
+      setSubmitting(false)
+    }
   }
   const openRoster = async () => { const response = await getTrainingRoster(sessionId).catch(() => null); if (!response) return toast.error('学员名单加载失败'); setRoster(response as Roster); setRosterOpen(true) }
   const saveRosterChanges = async () => { if (!roster) return; setRosterSaving(true); const response = await saveTrainingRoster(sessionId, { expectedRevision: roster.revision, participants: roster.candidates.filter(item => item.selected).map(item => ({ userId: item.userId })) }); setRosterSaving(false); if (!response.ok) return toast.error(response.error.message || '学员名单保存失败'); setRosterOpen(false); await load() }
@@ -299,7 +410,6 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setHintOpen(false); setHintTitle(''); setHintContent(''); setHintMode('MANUAL'); setHintTrigger(''); await loadHints(selectedId)
   }
   const showReport = async () => { const response = await getTrainingReport(sessionId).catch(() => null); if (!response) return toast.error('训练报告加载失败'); setReport(response as TrainingReport); setReportOpen(true) }
-  const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const exportReportCsv = () => {
     if (!report || !data) return
     const rows = [
@@ -380,7 +490,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     return queryMatch && statusMatch && groupMatch
   })
   return <PageFrame width="workbench"><div className={styles.stack}>
-    <PageHeader title={data.session.title} description={data.session.description || '训练工作台'} actions={<div className={styles.actions}><StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge></div>} />
+    <PageHeader
+      title={data.session.title}
+      description={data.session.description || '训练工作台'}
+      actions={<div className={styles.actions}>
+        <StatusBadge variant={connectionState === 'connected' ? 'success' : 'warning'}>{connectionState === 'connected' ? '实时连接正常' : connectionState === 'connecting' ? '正在建立实时连接' : '实时连接中断，正在重连'}</StatusBadge>
+        <StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge>
+      </div>}
+    />
     {data.manager && <Section title="各组运行进度" description="各训练组可以独立位于不同 Stage；全部推进只是批量便利操作。" actions={<div className={styles.actions}><Button variant="secondary" disabled={commandBusy} onClick={() => void runGroupBatch('start_all')}>开始未启动组</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void runGroupBatch('advance_all')}>推进所有可推进组</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void runGroupBatch('pause_all')}>全部暂停</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void runGroupBatch('resume_all')}>全部恢复</Button></div>}>
       <div className={styles.grid}>{(data.session.Groups || []).filter(group => group.status === 'active').map(group => {
         const runtime = group.StageGroups?.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status)) || group.StageGroups?.slice(-1)[0]
@@ -422,7 +539,18 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}><div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === activeStageId ? 'success' : 'neutral'}>{stageModeLabel[stage.kind] || stage.kind} · {stage.Groups.map(unit => unit.status).join(' / ')}</StatusBadge>}</div>{stage.Groups.some(unit => unit.endedAt) && <small>{stage.Groups.map(unit => `${unit.name}：${Math.floor(unit.activeElapsedSeconds / 60)} 分钟${unit.endReason ? ` · ${unit.endReason}` : ''}`).join('；')}</small>}{data.manager && stage.Groups.some(unit => unit.status === 'PENDING') && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此阶段</Button>}{stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? '当前要求' : '本阶段历史'} · {access?.canView ? `${progressLabel[progress?.status || 'NOT_STARTED'] || progress?.status || '未开始'}${progress?.bestScore != null ? ` · ${progress.bestScore} 分` : ''}` : '尚未开放'}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>})}</section>)}</aside>
       <main className={styles.stack}>{problem ? <>
         <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · ${testDataVersion(problem.TestSetRevision.revisionNumber)}` : '使用训练发布时固定的数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>
-        <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。"><div className={styles.stack}><label className={styles.field}>语言<Select value={language} disabled={!data.permissions[problem.id]?.canEdit} onChange={event => { if (!code || window.confirm('切换后会保存当前语言草稿，并加载目标语言自己的草稿。是否切换？')) setLanguage(event.target.value) }}><option value="cpp17">C++17</option><option value="python3">Python3</option><option value="c">C</option></Select></label><label className={styles.field}>代码草稿<SubmissionCodeEditor value={code} onChange={setCode} language={language} draftKey={editorDraftKey} readOnly={!data.permissions[problem.id]?.canEdit} minHeight={420} /></label><SubmissionIoFields value={submissionIo} onChange={setSubmissionIo} disabled={!data.permissions[problem.id]?.canEdit} /><div className={styles.actions}><Button variant="secondary" loading={saving} disabled={!data.permissions[problem.id]?.canEdit} onClick={() => void saveDraft()}>保存草稿</Button><Button loading={submitting} disabled={!data.permissions[problem.id]?.canSubmit || !code.trim()} onClick={() => void submit()}>提交评测</Button></div>{!data.permissions[problem.id]?.canSubmit && <p className={styles.muted}>当前不可提交：{data.permissions[problem.id]?.reason}</p>}</div></Section>
+        <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。">
+          <div className={styles.stack}>
+            <label className={styles.field}>语言<Select value={language} disabled={!data.permissions[problem.id]?.canEdit} onChange={event => { if (!code || window.confirm('将保留当前代码并切换语言。是否继续？')) handleLanguageChange(event.target.value) }}><option value="cpp17">C++17</option><option value="python3">Python3</option><option value="c">C</option></Select></label>
+            <label className={styles.field} htmlFor="training-source-editor">代码草稿<SubmissionCodeEditor id="training-source-editor" value={code} onChange={handleCodeChange} language={language} draftKey={editorDraftKey} readOnly={!data.permissions[problem.id]?.canEdit} minHeight={420} aria-describedby="training-draft-status" /></label>
+            <SubmissionIoFields value={submissionIo} onChange={handleSubmissionIoChange} disabled={!data.permissions[problem.id]?.canEdit} />
+            <p id="training-draft-status" className={styles.muted} aria-live="polite">
+              {draftState === 'loading' ? '正在读取草稿…' : draftState === 'saving' ? '正在保存草稿…' : draftState === 'dirty' ? '有尚未同步到服务器的修改' : draftState === 'error' ? '草稿同步失败，本机副本仍保留；请重试保存' : `草稿已同步${draftRevision ? ` · 版本 ${draftRevision}` : ''}`}
+            </p>
+            <div className={styles.actions}><Button variant="secondary" loading={saving} disabled={!data.permissions[problem.id]?.canEdit} onClick={() => void saveDraft()}>保存草稿</Button><Button loading={submitting} disabled={!data.permissions[problem.id]?.canSubmit || !code.trim()} onClick={() => void submit()}>提交评测</Button></div>
+            {!data.permissions[problem.id]?.canSubmit && <p className={styles.muted}>当前不可提交：{data.permissions[problem.id]?.reason}</p>}
+          </div>
+        </Section>
         {status === 'RUNNING' && activeStrategy?.timeLimitReached && activeStrategy.timeAction && <Section
           title={activeStrategy.timeAction === 'REMIND' ? '单题时间提醒' : activeStrategy.timeAction === 'RECOMMEND_SWITCH' ? '建议切题' : activeStrategy.timeAction === 'LOCK_SUBMISSION' ? '单题提交已锁定' : '必须切题'}
           description={activeStrategy.timeAction === 'REMIND'

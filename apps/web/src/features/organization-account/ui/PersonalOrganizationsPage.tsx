@@ -45,6 +45,9 @@ export default function PersonalOrganizationsPage() {
   const [organizations, setOrganizations] = useState<OrganizationDirectoryItem[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
+  const [mineError, setMineError] = useState('')
+  const [creationError, setCreationError] = useState('')
+  const [directoryError, setDirectoryError] = useState('')
   const [selected, setSelected] = useState<OrganizationDirectoryItem | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState<{ requestedRole: 'student' | 'teacher'; requestedRelationType: 'enrolled' | 'preselected' | 'employee' | 'external_coach'; realName: string; enrollmentYear: string; title: string; message: string }>({ requestedRole: 'student', requestedRelationType: 'enrolled', realName: '', enrollmentYear: '', title: '', message: '' })
@@ -55,15 +58,20 @@ export default function PersonalOrganizationsPage() {
   const [creationSubmitting, setCreationSubmitting] = useState(false)
 
   const loadMine = async () => {
-    try { setMine(await getMyOrganizations()) } catch { toast.error('我的学校加载失败') }
+    setMineError('')
+    try { setMine(await getMyOrganizations()) }
+    catch { setMineError('我的学校加载失败，请重新加载'); toast.error('我的学校加载失败') }
   }
   const loadCreationApplications = async () => {
-    try { setCreationApplications((await getMyOrganizationCreationApplications()).items) } catch { toast.error('创建申请加载失败') }
+    setCreationError('')
+    try { setCreationApplications((await getMyOrganizationCreationApplications()).items) }
+    catch { setCreationError('创建申请加载失败，请重新加载'); toast.error('创建申请加载失败') }
   }
   const search = async () => {
     setLoading(true)
+    setDirectoryError('')
     try { setOrganizations((await searchOrganizations(query)).items) }
-    catch { toast.error('学校列表加载失败') }
+    catch { setDirectoryError('学校列表加载失败，请重新搜索'); toast.error('学校列表加载失败') }
     finally { setLoading(false) }
   }
   useEffect(() => { void Promise.all([loadMine(), loadCreationApplications(), search()]) }, [])
@@ -150,13 +158,15 @@ export default function PersonalOrganizationsPage() {
     </PageHeader>
     <SegmentedControl label="学校页面" value={tab} onChange={setTab} items={[{ value: 'mine', label: '我的学校' }, { value: 'search', label: '查找学校' }]} />
     {tab === 'mine' ? <div className={styles.sections}>
+      {mineError && <div className={styles.emptyAction} role="alert"><Empty title="我的学校加载失败" description="当前没有把请求失败显示成空列表，你可以重新加载。" /><Button variant="secondary" onClick={() => void loadMine()}>重新加载</Button></div>}
+      {creationError && <div className={styles.emptyAction} role="alert"><Empty title="创建申请加载失败" /><Button variant="secondary" onClick={() => void loadCreationApplications()}>重新加载申请</Button></div>}
       {mine.invitations.filter(item => item.status === 'pending').length > 0 && <section><h2>待处理邀请</h2><div className={styles.list}>{mine.invitations.filter(item => item.status === 'pending').map(item => <article className={styles.card} key={item.id}><span className={styles.icon}><Building2 size={20} /></span><div className={styles.cardBody}><strong>{item.Organization.name}</strong><span>邀请你以{relationLabel(item)}身份加入</span></div><div className={styles.actions}><Button variant="secondary" onClick={() => void respond(item.id, 'decline')}>拒绝</Button><Button onClick={() => void respond(item.id, 'accept')}>接受</Button></div></article>)}</div></section>}
       {mine.applications.filter(item => item.status === 'pending').length > 0 && <section><h2>等待审核</h2><div className={styles.list}>{mine.applications.filter(item => item.status === 'pending').map(item => <article className={styles.card} key={item.id}><span className={styles.icon}><Building2 size={20} /></span><div className={styles.cardBody}><strong>{item.Organization.name}</strong><span>{relationLabel(item)} · {new Date(item.createdAt).toLocaleString('zh-CN')}</span></div><span className={styles.pending}>审核中</span><Button variant="secondary" onClick={() => void cancel(item.id)}>撤销申请</Button></article>)}</div></section>}
       {creationApplications.length > 0 && <section><h2>学校创建申请</h2><div className={styles.list}>{creationApplications.map(item => <article className={styles.card} key={item.id}><span className={styles.icon}><Building2 size={20} /></span><div className={styles.cardBody}><strong>{item.name}</strong><span>{item.region.replaceAll('/', ' · ')} · {new Date(item.createdAt).toLocaleString('zh-CN')}{item.status === 'rejected' && item.decisionMessage ? ` · ${item.decisionMessage}` : ''}</span></div><span className={item.status === 'approved' ? styles.success : styles.pending}>{item.status === 'pending' ? '审核中' : item.status === 'approved' ? '已通过 · 已创建' : item.status === 'rejected' ? '已拒绝' : '已撤销'}</span>{item.status === 'pending' && <Button variant="secondary" onClick={() => void cancelCreation(item.id)}>撤销</Button>}{item.status === 'approved' && item.createdOrganizationId && <Button onClick={() => window.location.assign(`/org/${item.createdOrganizationId}/overview`)}>进入学校</Button>}</article>)}</div></section>}
-      <section><h2>已加入</h2>{mine.memberships.filter(item => item.status === 'active').length ? <div className={styles.list}>{mine.memberships.filter(item => item.status === 'active').map(item => <article className={styles.card} key={item.id}><span className={styles.icon}><Building2 size={20} /></span><div className={styles.cardBody}><strong>{item.Organization.name}</strong><span>{relationLabel(item)}</span></div><Button onClick={() => window.location.assign(`/org/${item.Organization.id}/overview`)}>进入</Button></article>)}</div> : <Empty title="尚未加入学校" description="你可以查找学校并提交加入申请。" />}</section>
+      <section><h2>已加入</h2>{mine.memberships.filter(item => item.status === 'active').length ? <div className={styles.list}>{mine.memberships.filter(item => item.status === 'active').map(item => <article className={styles.card} key={item.id}><span className={styles.icon}><Building2 size={20} /></span><div className={styles.cardBody}><strong>{item.Organization.name}</strong><span>{relationLabel(item)}</span></div><Button onClick={() => window.location.assign(`/org/${item.Organization.id}/overview`)}>进入</Button></article>)}</div> : mineError ? null : <Empty title="尚未加入学校" description="你可以查找学校并提交加入申请。" />}</section>
     </div> : <section className={styles.searchSection}>
       <div className={styles.toolbar}><Input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void search() }} placeholder="输入学校名称、简称或地区" aria-label="搜索学校" /><Button icon={<Search size={16} />} onClick={() => void search()}>搜索</Button></div>
-      {loading ? <p className={styles.muted}>正在加载学校…</p> : organizations.length ? <div className={styles.list}>{organizations.map(organizationCard)}</div> : <div className={styles.emptyAction}><Empty title="没有找到匹配的学校" description="请确认学校确实不存在，再申请创建。" /><Button variant="secondary" onClick={openCreation}>申请创建学校</Button></div>}
+      {loading ? <p className={styles.muted} role="status">正在加载学校…</p> : directoryError ? <div className={styles.emptyAction} role="alert"><Empty title="学校列表加载失败" description="没有将网络错误显示成“没有找到学校”。" /><Button variant="secondary" onClick={() => void search()}>重新搜索</Button></div> : organizations.length ? <div className={styles.list}>{organizations.map(organizationCard)}</div> : <div className={styles.emptyAction}><Empty title="没有找到匹配的学校" description="请确认学校确实不存在，再申请创建。" /><Button variant="secondary" onClick={openCreation}>申请创建学校</Button></div>}
     </section>}
     <FormDialog isOpen={Boolean(selected)} onClose={() => setSelected(null)} onSubmit={() => void submit()} title="申请加入" description={selected?.name} size="md" submitText="提交申请" loading={submitting} dirty={Boolean(form.realName || form.message)}>
       <div className={styles.form}>

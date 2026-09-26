@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Send, Trash2 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
@@ -23,7 +23,7 @@ import { Tabs } from '@/components/ui/Tabs'
 import { useToast } from '@/components/ui/Toast'
 import styles from './Assignment.module.css'
 import { type Assignment, type AssignmentProblem, assignmentStatusMeta, formatAssignmentTime } from '../model/types'
-import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
+import { useNavigationGuard, useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 import { StudentPicker } from '@/features/organization-account'
 import { setAssignmentManualCompletion } from '@/features/assignment/api/assignmentApi'
 import type {
@@ -461,7 +461,6 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
 }
 
 export function AssignmentWorkspace() {
-  const router = useRouter()
   const params = useParams<{ organizationId: string; assignmentId?: string; segments?: string[] }>()
   const id = params.assignmentId || params.segments?.[0] || ''
   const { sessionKey } = useAuth()
@@ -470,6 +469,7 @@ export function AssignmentWorkspace() {
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const toast = useToast()
+  const { requestNavigation } = useNavigationGuard()
   useEffect(() => { if (resource.data) setLocal(resource.data.assignment) }, [resource.data])
   const assignment = local || resource.data?.assignment
   const canManage = resource.data?.canManage ?? false
@@ -487,7 +487,7 @@ export function AssignmentWorkspace() {
     toast.success('作业已取消')
   }
   return <PageFrame>
-    <PageHeader title={assignment?.title || '作业'} description={assignment?.description || '独立作业工作台'} actions={<><Button variant="secondary" icon={<ArrowLeft size={16} />} onClick={() => router.push(`/org/${params.organizationId}/homeworks`)}>返回列表</Button>{canCancel && <Button variant="danger" onClick={() => setConfirmCancel(true)}>取消作业</Button>}</>} />
+    <PageHeader title={assignment?.title || '作业'} description={assignment?.description || '独立作业工作台'} actions={<><Button variant="secondary" icon={<ArrowLeft size={16} />} onClick={() => requestNavigation(`/org/${params.organizationId}/homeworks`)}>返回列表</Button>{canCancel && <Button variant="danger" onClick={() => setConfirmCancel(true)}>取消作业</Button>}</>} />
     <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText="作业不存在" skeletonRows={6}>
       {() => assignment && <div className={styles.stack}>
         <div className={styles.summaryGrid}>{facts.map(item => <div className={styles.summaryItem} key={item.label}><span>{item.label}</span><strong>{item.value}</strong></div>)}</div>

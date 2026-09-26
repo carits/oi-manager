@@ -24,6 +24,7 @@ export function WorkspaceSwitcher() {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
   const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
   const { requestNavigation } = useNavigationGuard()
   const toast = useToast()
@@ -35,12 +36,15 @@ export function WorkspaceSwitcher() {
     setOpen(true)
     if (loaded || loading) return
     setLoading(true)
+    setLoadError('')
     try {
       const result = await listWorkspaces()
       setWorkspaces(result.workspaces)
       setLoaded(true)
+      setLoadError('')
     } catch (error) {
       setWorkspaces([])
+      setLoadError(error instanceof Error ? error.message : '身份列表加载失败')
       toast.error(error instanceof Error ? error.message : '身份列表加载失败')
     } finally {
       setLoading(false)
@@ -79,6 +83,6 @@ export function WorkspaceSwitcher() {
     <Button variant="ghost" className={styles.trigger} type="button" onClick={() => { if (open) setOpen(false); else void openSwitcher() }} aria-expanded={open} aria-haspopup="menu" aria-label="切换身份">
       <span className={styles.badge}>{currentType === 'platform' ? <ShieldCheck size={17} /> : currentType === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span><span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span><ChevronDown size={16} />
     </Button>
-    {open && <section className={styles.menu} role="menu" aria-label="切换身份"><header><strong>切换身份</strong></header>{shouldSearch && <label className={styles.search}><Search size={16} /><Input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" /></label>}<div className={styles.list}>{loading && <p className={styles.empty}>正在加载身份列表…</p>}{!loading && loaded && visible.map(item => <Button variant="ghost" key={item.organizationId || item.type} className={styles.item} type="button" role="menuitem" onClick={() => select(item)}><span className={styles.itemBadge}>{item.type === 'platform' ? <ShieldCheck size={17} /> : item.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span><span><strong>{item.type === 'platform' ? '平台管理' : item.type === 'personal' ? '个人' : item.organizationName}</strong><small>{item.type === 'platform' ? '平台管理员' : item.type === 'personal' ? user?.username : workspaceRoleLabel(item.relationLabel)}</small></span>{(item.organizationId === currentOrganization || (item.type === 'personal' && !currentOrganization)) && <Check className={styles.check} size={17} />}</Button>)}</div><div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" role="menuitem" onClick={() => { setOpen(false); requestNavigation('/personal/organizations', { hard: true }) }}><Plus size={17} /><span>加入或创建学校</span></Button></div></section>}
+    {open && <section className={styles.menu} role="menu" aria-label="切换身份"><header><strong>切换身份</strong></header>{shouldSearch && <label className={styles.search}><Search size={16} /><Input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" /></label>}<div className={styles.list}>{loading && <p className={styles.empty} role="status">正在加载身份列表…</p>}{!loading && loadError && <div className={styles.empty} role="alert"><p>身份列表加载失败，当前身份不会改变。</p><Button size="sm" variant="outline" type="button" onClick={() => { setLoaded(false); void openSwitcher() }}>重新加载</Button></div>}{!loading && loaded && visible.map(item => <Button variant="ghost" key={item.organizationId || item.type} className={styles.item} type="button" role="menuitem" onClick={() => select(item)}><span className={styles.itemBadge}>{item.type === 'platform' ? <ShieldCheck size={17} /> : item.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span><span><strong>{item.type === 'platform' ? '平台管理' : item.type === 'personal' ? '个人' : item.organizationName}</strong><small>{item.type === 'platform' ? '平台管理员' : item.type === 'personal' ? user?.username : workspaceRoleLabel(item.relationLabel)}</small></span>{(item.organizationId === currentOrganization || (item.type === 'personal' && !currentOrganization)) && <Check className={styles.check} size={17} />}</Button>)}{!loading && loaded && !loadError && visible.length === 0 && <p className={styles.empty}>没有匹配的身份</p>}</div><div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" role="menuitem" onClick={() => { setOpen(false); requestNavigation('/personal/organizations', { hard: true }) }}><Plus size={17} /><span>加入或创建学校</span></Button></div></section>}
   </div>
 }

@@ -55,7 +55,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     [saving, setSaving] = useState(false),
     [publishing, setPublishing] = useState(false),
     [dirty, setDirty] = useState(false);
-  useUnsavedChanges(`training-session-design:${sessionId}`, dirty);
+  const { requestNavigation } = useUnsavedChanges(`training-session-design:${sessionId}`, dirty);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [draggedStage, setDraggedStage] = useState<number | null>(null),
     [draggedProblem, setDraggedProblem] = useState<number | null>(null);
@@ -291,7 +291,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     setPublishing(false);
     if (!response.ok) return toast.error(response.error.message || "发布失败");
     toast.success("训练已发布，结构已永久冻结");
-    router.push(runtimePath);
+    requestNavigation(runtimePath);
   };
   const flowPreview = useMemo(
     () =>
@@ -320,7 +320,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           title="训练结构已冻结"
           description="已结束训练不能再编排；已运行阶段永久只读。"
           action={
-            <Button onClick={() => router.push(runtimePath)}>
+            <Button onClick={() => requestNavigation(runtimePath)}>
               返回运行工作台
             </Button>
           }

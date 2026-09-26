@@ -16,12 +16,16 @@ export function FormField({
 }) {
   const generatedId = useId()
   const controlId = children.props.id || generatedId
-  const descriptionId = error ? `${controlId}-error` : hint ? `${controlId}-hint` : undefined
+  const hintId = hint ? `${controlId}-hint` : undefined
+  const errorId = error ? `${controlId}-error` : undefined
+  const descriptionIds = [children.props['aria-describedby'], hintId, errorId].filter(Boolean).join(' ')
+  const descriptionId = descriptionIds || undefined
   const control = isValidElement<any>(children)
     ? React.cloneElement(children, {
         id: controlId,
         className: `${styles.formControl} ${children.props.className || ''}`.trim(),
         'aria-invalid': Boolean(error) || undefined,
+        'aria-required': required || undefined,
         'aria-describedby': descriptionId,
       })
     : children
@@ -32,11 +36,8 @@ export function FormField({
         {label}{required && <span className={styles.requiredMark} aria-hidden="true">*</span>}
       </label>
       {control}
-      {error ? (
-        <p className={styles.formError} id={descriptionId}>{error}</p>
-      ) : hint ? (
-        <p className={styles.formHint} id={descriptionId}>{hint}</p>
-      ) : null}
+      {hint && <p className={styles.formHint} id={hintId}>{hint}</p>}
+      {error && <p className={styles.formError} id={errorId} role="alert">{error}</p>}
     </div>
   )
 }

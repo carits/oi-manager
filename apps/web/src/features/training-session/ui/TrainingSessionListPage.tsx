@@ -259,9 +259,9 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
           {[
             { value: 'quick' as const, title: '快速训练', description: '单阶段、全班统一，适合日常刷题。' },
             { value: 'custom' as const, title: '多阶段训练', description: '先搭建课堂骨架，再进入全屏设计器配置阶段。' },
-          ].map(item => <button type="button" key={item.value} className={`${styles.creationModeCard} ${mode === item.value ? styles.creationModeCardActive : ''}`} aria-pressed={mode === item.value} onClick={() => setMode(item.value)}>
+          ].map(item => <Button variant="ghost" role="radio" key={item.value} className={`${styles.creationModeCard} ${mode === item.value ? styles.creationModeCardActive : ''}`} aria-checked={mode === item.value} onClick={() => setMode(item.value)}>
             <strong>{item.title}</strong><span>{item.description}</span><small>{mode === item.value ? '已选择' : '选择此方式'}</small>
-          </button>)}
+          </Button>)}
         </div>
         {mode === 'quick' && <>
           <div className={styles.designSteps}>{simpleSteps.map((label, index) => index === simpleStep ? <strong key={label}>{index + 1}. {label}</strong> : <span key={label}>{index + 1}. {label}</span>)}</div>

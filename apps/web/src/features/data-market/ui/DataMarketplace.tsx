@@ -37,7 +37,23 @@ export function DataMarketplace() {
   const [incidents, setIncidents] = useState<Incident[]>([]), [incidentFixes, setIncidentFixes] = useState<Record<string, string>>({})
   const [upgradeTarget, setUpgradeTarget] = useState<Record<string, string>>({})
   const canManage = canManageDataMarketplace(user?.accountRole, user?.organizationRole)
-  const load = useCallback(async () => { setLoading(true); try { const [a, b] = await Promise.all([listDataProducts(), listDataEntitlements()]); setProducts(a); setEntitlements(b) } catch (error) { toast.error(error instanceof Error ? error.message : '读取数据市场失败') } finally { setLoading(false) } }, [toast])
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [productsResult, entitlementsResult] = await Promise.allSettled([
+        listDataProducts(),
+        listDataEntitlements(),
+      ])
+      if (productsResult.status === 'fulfilled') setProducts(productsResult.value)
+      if (entitlementsResult.status === 'fulfilled') setEntitlements(entitlementsResult.value)
+      const failures = [productsResult, entitlementsResult].filter(result => result.status === 'rejected')
+      if (failures.length === 2) toast.error('数据商品和授权均加载失败，请稍后重试')
+      else if (productsResult.status === 'rejected') toast.warning('数据商品加载失败，已保留你的授权列表')
+      else if (entitlementsResult.status === 'rejected') toast.warning('授权列表加载失败，数据商品仍可浏览')
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
   useEffect(() => { void load() }, [load])
 
   const buy = async () => { if (!buying) return; setBusy(true); const result = await purchaseDataProduct(buying.id, buildDataPurchasePayload(license, organizationId, contestId), createClientUUID()); setBusy(false); if (!result.ok) return toast.error(result.error.message); toast.success('购买成功，固定版本授权已生成'); setBuying(null); await load() }

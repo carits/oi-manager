@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filenameFromContentDisposition } from './download'
+import { csvCell, filenameFromContentDisposition } from './download'
 
 describe('filenameFromContentDisposition', () => {
   it('prefers a UTF-8 filename', () => {
@@ -15,5 +15,15 @@ describe('filenameFromContentDisposition', () => {
     expect(filenameFromContentDisposition(undefined, 'attachment.zip')).toBe(
       'attachment.zip',
     )
+  })
+})
+
+describe('csvCell', () => {
+  it('neutralizes spreadsheet formulas while preserving ordinary values', () => {
+    expect(csvCell('=SUM(1,2)')).toBe('"\'=SUM(1,2)"')
+    expect(csvCell('  +cmd')).toBe('"\'  +cmd"')
+    expect(csvCell('\t@payload')).toBe('"\'\t@payload"')
+    expect(csvCell('normal')).toBe('"normal"')
+    expect(csvCell('a"b')).toBe('"a""b"')
   })
 })

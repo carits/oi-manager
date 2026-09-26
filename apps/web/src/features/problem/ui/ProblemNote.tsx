@@ -80,6 +80,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
   const [loading, setLoading] = useState(true)
   const [noteSaving, setNoteSaving] = useState(false)
   const [noteLastSaved, setNoteLastSaved] = useState<Date | null>(null)
+  const [noteSaveError, setNoteSaveError] = useState('')
   const [lastSavedContent, setLastSavedContent] = useState('')
   const [editMode, setEditMode] = useState<'edit' | 'preview' | 'split'>('split')
 
@@ -116,16 +117,26 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
     }
   }
 
-  const saveToServer = async (content: string) => {
+  const saveToServer = async (content: string, notify = false) => {
+    setNoteSaveError('')
     try {
       setNoteSaving(true)
       const result = await saveProblemNote(problemId, content)
-      if (result.ok) {
-        setLastSavedContent(content)
-        setNoteLastSaved(new Date())
+      if (!result.ok) {
+        const message = result.error.message || '保存失败，内容仍保留在编辑器中'
+        setNoteSaveError(message)
+        if (notify) toast.error(message)
+        return false
       }
+      setLastSavedContent(content)
+      setNoteLastSaved(new Date())
+      return true
     } catch (error) {
       console.error('Save error:', error)
+      const message = '保存失败，内容仍保留在编辑器中'
+      setNoteSaveError(message)
+      if (notify) toast.error(message)
+      return false
     } finally {
       setNoteSaving(false)
     }
@@ -136,7 +147,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
-    saveToServer(noteContent)
+    void saveToServer(noteContent, true)
   }
 
   useEffect(() => {
@@ -160,7 +171,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
     }
   }, [noteContent])
 
-  useUnsavedChanges(`problem-note:${problemId}`, noteSaving || noteContent !== lastSavedContent)
+  const { requestNavigation } = useUnsavedChanges(`problem-note:${problemId}`, noteSaving || noteContent !== lastSavedContent)
 
   if (loading) {
     return (
@@ -178,7 +189,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       <div className={unifiedStyles.u4}>
         <div className={unifiedStyles.u5}>
           <Button variant="ghost"
-            onClick={() => router.push(`${pathPrefix}/problems/${problemId}`)}
+            onClick={() => requestNavigation(`${pathPrefix}/problems/${problemId}`)}
             className={unifiedStyles.u6}
           >
             ← 返回
@@ -198,6 +209,8 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
               <span>⏳ 保存中...</span>
             ) : noteLastSaved ? (
               <span>✓ 已保存 {noteLastSaved.toLocaleTimeString()}</span>
+            ) : noteSaveError ? (
+              <span role="alert">保存失败，请重试</span>
             ) : (
               <span>输入后自动保存</span>
             )}

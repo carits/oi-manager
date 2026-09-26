@@ -119,6 +119,7 @@ export default function ChatWorkspace() {
   const [hasMoreBefore, setHasMoreBefore] = useState(false)
   const [loadingBefore, setLoadingBefore] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [draftsLoadedFor, setDraftsLoadedFor] = useState<string>()
   const [newMessageCount, setNewMessageCount] = useState(0)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ChatUser[]>([])
@@ -148,6 +149,41 @@ export default function ChatWorkspace() {
   const selected = useMemo(() => conversations.find(item => item.id === selectedId), [conversations, selectedId])
   const messageGroups = useMemo(() => groupMessages(messages), [messages])
   const draft = selectedId ? drafts[selectedId] || '' : ''
+
+  useEffect(() => {
+    const owner = user?.userId
+    if (!owner) {
+      setDrafts({})
+      setDraftsLoadedFor(undefined)
+      return
+    }
+    let restored: Record<string, string> = {}
+    try {
+      const parsed = JSON.parse(localStorage.getItem(`chat-drafts:${owner}`) || '{}')
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        restored = Object.fromEntries(
+          Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && Boolean(entry[1])),
+        )
+      }
+    } catch {
+      restored = {}
+    }
+    setDrafts(restored)
+    setDraftsLoadedFor(owner)
+  }, [user?.userId])
+
+  useEffect(() => {
+    const owner = user?.userId
+    if (!owner || draftsLoadedFor !== owner) return
+    const timer = window.setTimeout(() => {
+      const nonEmpty = Object.fromEntries(Object.entries(drafts).filter(([, content]) => Boolean(content)))
+      try {
+        if (Object.keys(nonEmpty).length) localStorage.setItem(`chat-drafts:${owner}`, JSON.stringify(nonEmpty))
+        else localStorage.removeItem(`chat-drafts:${owner}`)
+      } catch { /* keep the in-memory draft when browser storage is unavailable */ }
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [drafts, draftsLoadedFor, user?.userId])
 
   useEffect(() => {
     const element = composerRef.current

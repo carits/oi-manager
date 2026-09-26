@@ -55,6 +55,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const [saving, setSaving] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'failed'>('idle')
   const savedFingerprintRef = useRef<string | null>(null)
+  const loadedProblemIdRef = useRef<string | null>(null)
+  const fingerprintProblemIdRef = useRef<string | null>(null)
   const judgeSettingsRef = useRef<JudgeSettingsTabHandle>(null)
   const [loading, setLoading] = useState(true)
   type TabType = 'statement' | 'solution' | 'judge_settings' | 'settings' | 'attachments'
@@ -149,8 +151,13 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
   const isAutoSaveDraft = mode === 'edit' && searchParams.get('new') === '1'
   const currentFingerprint = JSON.stringify(buildProblemPayload())
-  const draftDirty = isAutoSaveDraft && savedFingerprintRef.current !== null && savedFingerprintRef.current !== currentFingerprint
-  useUnsavedChanges(`problem-draft:${problemId || 'new'}`, draftDirty || autoSaveStatus === 'saving')
+  const formDirty = savedFingerprintRef.current !== null && savedFingerprintRef.current !== currentFingerprint
+  const { requestNavigation } = useUnsavedChanges(`problem-draft:${problemId || 'new'}`, formDirty || autoSaveStatus === 'saving')
+  useEffect(() => {
+    if (loading || isAutoSaveDraft || mode !== 'edit' || loadedProblemIdRef.current !== problemId || fingerprintProblemIdRef.current === problemId) return
+    savedFingerprintRef.current = currentFingerprint
+    fingerprintProblemIdRef.current = problemId || null
+  }, [currentFingerprint, isAutoSaveDraft, loading, mode, problemId])
 
   // OJ 拉取状态
   const [fetchingFromOj, setFetchingFromOj] = useState(false)
@@ -222,6 +229,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
         })
         setStatements((p.statements || []).map(normalizeContent))
         setSolutions((p.solutions || []).map(normalizeContent))
+        loadedProblemIdRef.current = problemId || null
     } catch (error) {
       console.error('Failed to fetch problem:', error)
     } finally {
@@ -502,6 +510,9 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       }
 
       if (result.ok) {
+        savedFingerprintRef.current = JSON.stringify(data)
+        fingerprintProblemIdRef.current = problemId || result.data.id || null
+        setAutoSaveStatus('saved')
         const createdId = result.data.id || problemId
 
         // 创建模式：上传暂存的评测数据 + 保存评测配置
@@ -573,7 +584,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       <div className={unifiedStyles.u3}>
         {/* 返回按钮 */}
         <Button variant="ghost"
-          onClick={() => router.push(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
+          onClick={() => requestNavigation(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
           className={unifiedStyles.u4}
         >
           ← 返回
@@ -746,7 +757,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           <div className={unifiedStyles.u45}>
             <Button variant="primary"
               type="button"
-              onClick={() => router.push(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
+              onClick={() => requestNavigation(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
               className={unifiedStyles.u36}
             >
               取消

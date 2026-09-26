@@ -15,7 +15,7 @@ describe('unified problem selection', () => {
 
   it('keeps all business UIs on the shared number-only entry', () => {
     const sources = [
-      read('../contest/ui/TrainingFormModal.tsx'),
+      read('../contest/ui/ContestFormModal.tsx'),
       read('../assignment/ui/AssignmentWorkspace.tsx'),
       read('../training-session/ui/TrainingSessionListPage.tsx'),
       read('../training-session/ui/TrainingSessionDesigner.tsx'),
