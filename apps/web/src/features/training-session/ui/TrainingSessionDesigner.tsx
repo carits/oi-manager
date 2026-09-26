@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { Download, RefreshCw, RotateCcw } from "lucide-react";
 import { PageFrame } from "@/components/ui/PageFrame";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
@@ -18,6 +18,8 @@ import { TrainingProblemChain } from "./TrainingProblemChain";
 import { TrainingStageGroupMatrix } from "./TrainingStageGroupMatrix";
 import styles from "./TrainingEngine.module.css";
 import { useUnsavedChanges } from "@/components/navigation/UnsavedChangesProvider";
+import { saveBlobDownload } from "@/lib/download";
+import { useAuth } from "@/features/auth";
 import {
   getTrainingDesign,
   getTrainingDesignProblem,
@@ -30,6 +32,16 @@ import { createTrainingDesignDraft, moveItem, newTrainingDesignKey, normalizeAss
 import { QuickProblemInput, type SelectedCanonicalProblem } from "@/features/problem-selection";
 
 const newKey = newTrainingDesignKey;
+
+type DesignRecoveryDraft = {
+  version: 1;
+  savedAt: string;
+  sourceRevision: number;
+  title: string;
+  description: string;
+  stages: Stage[];
+  grouping?: TrainingGrouping;
+};
 
 const copyStageAsDraft = (stage: Stage): Stage => ({
   ...stage,
@@ -44,6 +56,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     pathname = usePathname(),
     searchParams = useSearchParams(),
     toast = useToast();
+  const { user } = useAuth();
   const [design, setDesign] = useState<Design | null>(null),
     [stages, setStages] = useState<Stage[]>([]),
     [grouping, setGrouping] = useState<TrainingGrouping | undefined>();
@@ -62,6 +75,12 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const [pendingRemovalConfirm, setPendingRemovalConfirm] = useState(false),
     [problemTarget, setProblemTarget] = useState<"current" | "multiple">("current"),
     [targetStages, setTargetStages] = useState<string[]>([]);
+  const [reloadConfirmOpen, setReloadConfirmOpen] = useState(false);
+  const [recoveryDraftAvailable, setRecoveryDraftAvailable] = useState(false);
+  const recoveryKey = useMemo(
+    () => `training-design-recovery:${user?.userId || "anonymous"}:${sessionId}`,
+    [sessionId, user?.userId],
+  );
   const runtimePath = pathname.replace(/\/design$/, "");
   const copyRequestHandled = useRef(false);
 
@@ -89,8 +108,10 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       );
       setDirty(Boolean(copied));
       if (requestedCopyId && typeof window !== "undefined") window.history.replaceState(window.history.state, "", pathname);
+      return true;
     } catch {
       toast.error("训练设计加载失败");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -98,6 +119,17 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+  const refreshDesign = useCallback(async () => {
+    await load();
+  }, [load]);
+  useEffect(() => {
+    try {
+      setRecoveryDraftAvailable(Boolean(window.localStorage.getItem(recoveryKey)));
+    } catch {
+      setRecoveryDraftAvailable(false);
+    }
+  }, [recoveryKey]);
+
   const activeStage =
     stages.find((stage) => stage.clientKey === activeStageKey) || null;
   const activeStageReadOnly = false;
@@ -246,6 +278,72 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       })),
     })),
   });
+  const createRecoveryDraft = (): DesignRecoveryDraft => ({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    sourceRevision: design?.statusRevision ?? 0,
+    title,
+    description,
+    stages,
+    grouping,
+  });
+  const persistRecoveryDraft = () => {
+    const snapshot = createRecoveryDraft();
+    try {
+      window.localStorage.setItem(recoveryKey, JSON.stringify(snapshot));
+      setRecoveryDraftAvailable(true);
+    } catch {
+      toast.error("浏览器无法保存冲突副本，请先下载本地编排");
+    }
+    return snapshot;
+  };
+  const downloadRecoveryDraft = () => {
+    const snapshot = persistRecoveryDraft();
+    const safeTitle = (title || "training-design").replace(/[\\/:*?"<>|]/g, "-");
+    saveBlobDownload(
+      new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" }),
+      `${safeTitle}-本地编排-${snapshot.sourceRevision}.json`,
+    );
+  };
+  const restoreRecoveryDraft = () => {
+    try {
+      const raw = window.localStorage.getItem(recoveryKey);
+      if (!raw) return toast.error("没有可恢复的本地编排");
+      const snapshot = JSON.parse(raw) as Partial<DesignRecoveryDraft>;
+      if (snapshot.version !== 1 || !Array.isArray(snapshot.stages) || typeof snapshot.title !== "string") {
+        return toast.error("本地编排副本格式无效");
+      }
+      setTitle(snapshot.title);
+      setDescription(typeof snapshot.description === "string" ? snapshot.description : "");
+      setStages(snapshot.stages as Stage[]);
+      setGrouping(snapshot.grouping);
+      setActiveStageKey(snapshot.stages[0]?.clientKey || "");
+      setDirty(true);
+      toast.success("已恢复本地编排，请检查后重新保存");
+    } catch {
+      toast.error("本地编排副本无法读取");
+    }
+  };
+  const clearRecoveryDraft = () => {
+    try {
+      window.localStorage.removeItem(recoveryKey);
+    } catch {
+      // 保存结果已经由服务端确认，本地清理失败不影响训练结构。
+    }
+    setRecoveryDraftAvailable(false);
+  };
+  const reloadFromServer = async () => {
+    const hadUnsavedChanges = dirty;
+    if (hadUnsavedChanges) persistRecoveryDraft();
+    setReloadConfirmOpen(false);
+    const loaded = await load();
+    if (loaded) toast.success(hadUnsavedChanges ? "已保存本地副本并载入服务器版本" : "已载入最新服务器版本");
+  };
+  const requestReload = () => {
+    if (dirty) setReloadConfirmOpen(true);
+    else void reloadFromServer();
+  };
+
   const validate = async () => {
     const response = await validateTrainingDesign(sessionId, requestBody());
     if (!response.ok) {
@@ -262,7 +360,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     return true;
   };
   const save = async (confirmDependentRemoval = false) => {
-    if (!design || !(await validate())) return;
+    if (!design) return;
     setSaving(true);
     const response = await saveTrainingDesign(
       sessionId,
@@ -272,15 +370,17 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     if (!response.ok) {
       if (response.error.code === "TRAINING_STRUCTURE_REMOVAL_REQUIRES_CONFIRMATION")
         return setPendingRemovalConfirm(true);
-      if (response.error.code === "TRAINING_SESSION_STALE")
-        toast.error(
-          "另一名管理员已修改训练，本地草稿已保留，请复制草稿后重新加载",
-        );
-      else toast.error(response.error.message || "保存失败");
+      if (response.error.code === "TRAINING_SESSION_STALE") {
+        persistRecoveryDraft();
+        toast.error("另一名管理员已修改训练；完整本地编排已保存，可下载或在载入新版本后恢复");
+      } else {
+        toast.error(response.error.message || "保存失败");
+      }
       return;
     }
     setPendingRemovalConfirm(false);
-    toast.success("编排已保存，题目分配 ID 和固定版本保持稳定");
+    clearRecoveryDraft();
+    toast.success("编排草稿已保存；未完成项会在发布检查中继续提示");
     await load();
   };
   const publish = async () => {
@@ -290,7 +390,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     const response = await publishTraining(sessionId, { expectedRevision: design.statusRevision });
     setPublishing(false);
     if (!response.ok) return toast.error(response.error.message || "发布失败");
-    toast.success("训练已发布，结构已永久冻结");
+    toast.success("训练已发布；阶段开始后其配置固定，运行调整请在训练工作台完成");
     requestNavigation(runtimePath);
   };
   const flowPreview = useMemo(
@@ -317,8 +417,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     return (
       <PageFrame>
         <Empty
-          title="训练结构已冻结"
-          description="已结束训练不能再编排；已运行阶段永久只读。"
+          title={["ENDED", "ARCHIVED"].includes(design.session.status) ? "训练已经结束" : "训练结构已固定"}
+          description={["ENDED", "ARCHIVED"].includes(design.session.status) ? "已结束训练不能再编排。" : "已有阶段开始运行，结构不会再被设计器覆盖；请返回运行工作台进行课堂调整。"}
           action={
             <Button onClick={() => requestNavigation(runtimePath)}>
               返回运行工作台
@@ -333,7 +433,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       <div className={styles.stack}>
         <PageHeader
           title={`编排：${design.session.title}`}
-          description={design.session.status === "DRAFT" ? "发布前可编辑全部阶段；开始后只有未来阶段可调整。" : "运行中和历史阶段永久只读；可继续编辑、追加或复制未来阶段。"}
+          description={design.session.status === "DRAFT" ? "可随时保存未完成草稿；只有发布时才要求全部配置通过检查。" : "已发布且尚未开始时仍可调整；任一阶段开始后，结构固定并转到运行工作台调整。"}
           breadcrumbs={[
             { label: "教练训练", href: runtimePath.replace(/\/[^/]+$/, "") },
             { label: "训练设计" },
@@ -343,15 +443,31 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               <Button
                 variant="outline"
                 icon={<RefreshCw size={16} />}
-                onClick={() => void load()}
+                onClick={requestReload}
                 disabled={saving}
               >
                 重新加载
               </Button>
+              {recoveryDraftAvailable && <>
+                <Button
+                  variant="outline"
+                  icon={<Download size={16} />}
+                  onClick={downloadRecoveryDraft}
+                >
+                  下载本地副本
+                </Button>
+                <Button
+                  variant="outline"
+                  icon={<RotateCcw size={16} />}
+                  onClick={restoreRecoveryDraft}
+                >
+                  恢复本地副本
+                </Button>
+              </>}
               <Button variant="secondary" onClick={() => void validate()}>
                 发布检查
               </Button>
-             <Button
+              <Button
                 onClick={() => void save()}
                 loading={saving}
                 disabled={!dirty}
@@ -503,7 +619,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               </div>
             </section>
           </div>
-          {grouping && <TrainingStageGroupMatrix sessionId={sessionId} revision={design.statusRevision} stages={stages} grouping={grouping} stageGroups={design.stageGroups} onSaved={load} />}
+          {grouping && <TrainingStageGroupMatrix sessionId={sessionId} revision={design.statusRevision} stages={stages} grouping={grouping} stageGroups={design.stageGroups} onSaved={refreshDesign} />}
         </>)}
 
         {activeStep === 3 && (
@@ -514,7 +630,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             onStagesChange={replaceStages}
             grouping={grouping}
             onGroupingChange={setGrouping}
-            onChanged={load}
+            onChanged={refreshDesign}
           />
         )}
         {activeStep === 4 && (
@@ -522,7 +638,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             sessionId={sessionId}
             mode="hints"
             stages={stages}
-            onChanged={load}
+            onChanged={refreshDesign}
           />
         )}
         {activeStep === 5 && (
@@ -575,7 +691,15 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           danger
           loading={saving}
         />
-
+        <ConfirmDialog
+          isOpen={reloadConfirmOpen}
+          onClose={() => setReloadConfirmOpen(false)}
+          onConfirm={() => void reloadFromServer()}
+          title="用服务器版本替换当前编排？"
+          message="当前修改尚未保存。继续后会先在此浏览器保存一份完整恢复副本，再载入服务器版本。"
+          confirmText="保存副本并重新加载"
+          loading={loading}
+        />
       </div>
     </PageFrame>
   );

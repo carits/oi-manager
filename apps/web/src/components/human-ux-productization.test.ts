@@ -62,6 +62,11 @@ describe('human UX productization contract', () => {
     expect(workspace).toContain('调整分组')
     expect(workspace).not.toContain('上一阶段')
     expect(designer).toContain('copyStageAsDraft')
+    expect(designer).toContain('persistRecoveryDraft')
+    expect(designer).toContain('恢复本地副本')
+    expect(designer).toContain('if (!design) return;')
+    expect(designer).not.toContain('if (!design || !(await validate())) return;')
+    expect(designer).not.toContain('结构已永久冻结')
   })
 
   it('does not block organization entry on workspace discovery', () => {

@@ -7,10 +7,12 @@ import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.tes
 import {
   changeTrainingGrouping,
   createTrainingSession,
+  getTrainingDesign,
   executeTrainingCommand,
   executeTrainingGroupRuntimeAction,
   mergeTrainingGroup,
   publishTrainingSession,
+  replaceTrainingStructure,
   replaceTrainingStageGroupMatrix,
   splitTrainingGroup,
   TrainingEngineError,
@@ -66,6 +68,28 @@ describe('Training Engine single-model domain', () => {
     for (const index of groupIndexes) { await executeTrainingGroupRuntimeAction(coach.user.id, id, { expectedRevision: session.statusRevision, action: 'start', groupId: session.Groups[index].id }); session = await loaded(id) }
     return session
   }
+  it('saves incomplete draft structure but freezes the designer after runtime starts', async () => {
+    const created = await createSession(1, 2)
+    const before = await getTrainingDesign(coach.user.id, created!.id)
+    expect(before.editable).toBe(true)
+
+    const saved = await replaceTrainingStructure(coach.user.id, created!.id, {
+      expectedRevision: before.statusRevision,
+      title: '未完成训练草稿',
+      description: '',
+      stages: [{ clientKey: 'empty-stage', name: '待配置阶段', kind: 'TRAINING', problems: [] }],
+    })
+    expect(saved.stages).toHaveLength(1)
+    expect(saved.stages[0].Problems).toHaveLength(0)
+    expect(saved.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'STAGE_PROBLEM_REQUIRED', severity: 'error' }),
+    ]))
+
+    const runtime = await publishAndStart((await createSession(1, 2))!.id)
+    const frozen = await getTrainingDesign(coach.user.id, runtime.id)
+    expect(frozen.editable).toBe(false)
+  })
+
 
   it('creates one stable Group and exactly one StageGroup per Stage', async () => {
     const created = await createSession(1, 3)

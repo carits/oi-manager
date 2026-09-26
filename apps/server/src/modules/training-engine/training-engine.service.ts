@@ -743,8 +743,9 @@ export async function getTrainingDesign(userId: string, sessionId: string) {
   })))
   const groups = session.Groups.map(group => ({ id: group.id, clientKey: group.id, name: group.name, orderIndex: group.orderIndex, status: group.status, participantIds: group.Participants.filter(item => item.status === 'active').map(item => item.userId) }))
   const payloadStages = stages.map(stage => ({ ...stage, problems: stage.Problems })) as unknown as StructureStage[]
+  const structureEditable = !['ENDED', 'ARCHIVED'].includes(session.status) && session.Stages.every(stage => stage.Groups.every(unit => unit.status === 'PENDING'))
   return {
-    editable: !['ENDED', 'ARCHIVED'].includes(session.status), statusRevision: session.statusRevision,
+    editable: structureEditable, statusRevision: session.statusRevision,
     session: { id: session.id, title: session.title, description: session.description, sessionType: session.sessionType, status: session.status, organizationId: session.organizationId, teamId: session.teamId, scheduledStartAt: session.scheduledStartAt, rankingMode: session.rankingMode, peerVisibility: session.peerVisibility, joinMode: session.joinMode, allowHints: session.allowHints },
     participants: session.Groups.flatMap(group => group.Participants), groups, stages, stageGroups, issues: structureIssues(payloadStages),
   }
