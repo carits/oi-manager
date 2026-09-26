@@ -105,3 +105,19 @@ export function organizationUnavailableMessage(reason?: string | null) {
   }
   return '原学校身份已失效或不可用，相关学校数据已停止显示。'
 }
+
+export type WorkspaceFocusKey = 'ArrowDown' | 'ArrowUp' | 'Home' | 'End'
+
+export function nextWorkspaceFocusIndex(
+  currentIndex: number,
+  itemCount: number,
+  key: WorkspaceFocusKey,
+) {
+  if (itemCount <= 0) return -1
+  if (key === 'Home') return 0
+  if (key === 'End') return itemCount - 1
+  if (currentIndex < 0) return key === 'ArrowUp' ? itemCount - 1 : 0
+  return key === 'ArrowDown'
+    ? (currentIndex + 1) % itemCount
+    : (currentIndex - 1 + itemCount) % itemCount
+}
