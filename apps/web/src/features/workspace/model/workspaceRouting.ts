@@ -54,11 +54,19 @@ export function workspaceModule(pathname: string) {
   const match = pathname.match(/^\/org\/[^/]+\/([^/?#]+)/)
   return match?.[1] || (pathname.startsWith('/personal/') ? pathname.split('/')[2] || 'overview' : 'overview')
 }
-export function workspaceHref(workspace: WorkspaceSummary, module: string) {
+export function workspaceHref(workspace: WorkspaceSummary, module: string, search = '') {
   if (workspace.type === 'platform') return '/platform-admin'
   if (workspace.type === 'personal') return personalWorkspaceModules.has(module) ? `/personal/${module}` : '/personal'
   const target = organizationModules.has(module) && (module === 'knowledge' || workspace.availableModules.includes(module)) ? module : 'overview'
-  return `/org/${workspace.organizationId}/${target}`
+  const base = `/org/${workspace.organizationId}/${target}`
+  if (target !== 'management') return base
+  const tab = new URLSearchParams(search).get('tab')
+  if (!tab || tab === 'students') return base
+  const role = workspaceRoleLabel(workspace.relationLabel)
+  const principalOnly = tab === 'teachers' || tab === 'settings'
+  const allowed = ['teachers', 'applications', 'invitations', 'settings', 'wallet'].includes(tab)
+    && (!principalOnly || role === '负责人')
+  return allowed ? `${base}?tab=${tab}` : base
 }
 export const moduleHref = workspaceHref
 
@@ -78,8 +86,8 @@ export function resolveNotificationHref(workspace: NavigationContext['workspace'
 export const notificationHref = resolveNotificationHref
 
 export function workspaceRoleLabel(label?: string | null) {
-  if (label === '本校学生' || label === '预选学生') return '学生'
-  if (label === '本校教师') return '教师'
-  if (label === '学校负责人') return '负责人'
+  if (label === 'student' || label === '本校学生' || label === '预选学生') return '学生'
+  if (label === 'teacher' || label === '本校教师') return '教师'
+  if (label === 'school_principal' || label === '学校负责人') return '负责人'
   return label || '学校成员'
 }

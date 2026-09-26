@@ -189,6 +189,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
     { value: 'problems' as const, label: '题目' },
     { value: 'submissions' as const, label: '提交记录' },
     { value: 'solutions' as const, label: '题解' },
+    { value: 'attachments' as const, label: '附件' },
     ...(canViewRanking ? [{ value: 'ranking' as const, label: '排名' }] : []),
   ]
   const selectedProblem = problems.find(p => p.id === selectedProblemId)

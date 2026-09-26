@@ -6,7 +6,7 @@ import unifiedStyles from './ProblemListDetailPage.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { usePathname, useRouter, useParams } from 'next/navigation'
+import { usePathname, useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/features/auth'
 import { currentWorkspacePrefix, isPersonalPath } from '@/lib/workspacePath'
 import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
@@ -161,9 +161,13 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
   const router = useRouter()
   const params = useParams()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
   const listId = listIdOverride || (params.id as string)
   const pathPrefix = currentWorkspacePrefix(pathname, user?.accountRole === 'platform_admin' ? '/platform-admin' : '/personal')
+  const requestedReturn = searchParams.get('returnTo')
+  const listReturnHref = requestedReturn?.startsWith(`${pathPrefix}/problem-lists`) ? requestedReturn : `${pathPrefix}/problem-lists`
+  const problemHref = (problemId: string) => `${pathPrefix}/problems/${problemId}?returnTo=${encodeURIComponent(pathname + (searchParams.size ? `?${searchParams}` : ''))}`
 
   const [detail, setDetail] = useState<ListDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -399,7 +403,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
         <PageHeader
           title={detail.title}
           description={detail.description || `${detail.Sections.length} 个章节，共 ${totalEntries} 题`}
-          breadcrumbs={[{ label: '题单', href: `${pathPrefix}/problem-lists` }, { label: detail.title }]}
+          breadcrumbs={[{ label: '题单', href: listReturnHref }, { label: detail.title }]}
           actions={canEdit && !isStudentView ? <><Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => { setEditingTitle(true); setTitleDraft(detail.title) }}>编辑标题</Button>{isAdmin && <Button variant="secondary" icon={<Share2 size={16} />} onClick={() => setShowSharePanel(true)}>权限</Button>}{isAdmin && <Button icon={<Send size={16} />} onClick={() => setShowPublishModal(true)}>创建作业草稿</Button>}</> : undefined}
         />
         {editingTitle && (
@@ -470,14 +474,14 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                             <TableCell className={unifiedStyles.u23}>{idx + 1}</TableCell>
                             {!isStudentView && <TableCell className={unifiedStyles.u24}>{getOjPlatformLabel(entry.Problem.ojBindings, entry.ojName)}</TableCell>}
                             {!isStudentView && <TableCell className={unifiedStyles.u25}>
-                              <Link href={`${pathPrefix}/problems/${entry.problemId}`} className={unifiedStyles.u26}>
+                              <Link href={problemHref(entry.problemId)} className={unifiedStyles.u26}>
                                 {entry.Problem.problemId}
                               </Link>
                             </TableCell>}
                             <TableCell className={unifiedStyles.u27}>
                               <span className={unifiedStyles.u28}>✓</span>
                               {!isStudentView ? (
-                                <Link href={`${pathPrefix}/problems/${entry.problemId}`} className={unifiedStyles.u29} title={entry.Problem.title}>
+                                <Link href={problemHref(entry.problemId)} className={unifiedStyles.u29} title={entry.Problem.title}>
                                   {entry.Problem.title}
                                 </Link>
                               ) : (

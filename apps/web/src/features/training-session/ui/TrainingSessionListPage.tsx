@@ -19,6 +19,7 @@ import { trainingSessionTypeLabel, trainingStatusLabel } from '@/lib/humanPresen
 import { StudentPicker } from '@/features/organization-account'
 import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
 import { createTrainingSession, joinTrainingSession, listManagedTrainingTeams, listTrainingSessions, previewTrainingParticipants, publishTraining } from '../api/trainingSessionApi'
+import { buildTrainingListQuery, resolveTrainingListTeamId } from '../model/trainingListScope'
 
 type Session = { id: string; title: string; description?: string; status: string; sessionType: string; problemCount?: number; dueAt?: string | null; statusRevision?: number; canJoin?: boolean; teamId?: string | null; teamName?: string | null; _count: { Stages: number; Participants: number } }
 type SessionListPayload = { items: Session[]; statusCounts: Record<ListFilter, number>; pagination: { page: number; pageSize: number; total: number; totalPages: number } }
@@ -55,6 +56,7 @@ async function loadAllManagedTeams(organizationId?: string) {
 export function TrainingSessionListPage({ organizationId, teamId }: { organizationId?: string; teamId?: string }) {
   const router = useRouter(), searchParams = useSearchParams(), toast = useToast(), { user } = useAuth()
   const canViewTrainingManagement = Boolean(organizationId && (user?.organizationRole === 'teacher' || user?.organizationRole === 'school_principal'))
+  const urlTeamId = resolveTrainingListTeamId(teamId, searchParams.get('teamId'))
   const [sessions, setSessions] = useState<Session[]>([]), [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [open, setOpen] = useState(false)
   const [mode, setMode] = useState<CreateMode>('quick'), [simpleStep, setSimpleStep] = useState(0)
@@ -69,20 +71,28 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   const [completionMode, setCompletionMode] = useState<'all' | 'count'>('all'), [requiredCount, setRequiredCount] = useState(1)
   const [selectedProblems, setSelectedProblems] = useState<Problem[]>([])
   const [customStages, setCustomStages] = useState<CustomStageDraft[]>([{ name: '阶段 1' }])
-  const [listFilter, setListFilter] = useState<ListFilter>('active'), [listQuery, setListQuery] = useState(''), [listTeamId, setListTeamId] = useState(() => teamId || searchParams.get('teamId') || '')
+  const [listFilter, setListFilter] = useState<ListFilter>('active'), [listQuery, setListQuery] = useState(''), [listTeamId, setListTeamId] = useState(urlTeamId)
   const [listPage, setListPage] = useState(1), [listTotal, setListTotal] = useState(0), [listTotalPages, setListTotalPages] = useState(1)
   const [statusCounts, setStatusCounts] = useState<Record<ListFilter, number>>({ active: 0, upcoming: 0, completed: 0, draft: 0 })
-  const scopeQuery = organizationId ? `organizationId=${encodeURIComponent(organizationId)}` : teamId ? `teamId=${encodeURIComponent(teamId)}` : ''
+  useEffect(() => {
+    setListTeamId(current => current === urlTeamId ? current : urlTeamId)
+    setListPage(1)
+  }, [urlTeamId])
 
   const load = useCallback(async () => {
     setLoading(true)
-    const listParams = new URLSearchParams(scopeQuery)
-    listParams.set('statusGroup', listFilter); listParams.set('page', String(listPage)); listParams.set('pageSize', '20')
-    if (listQuery.trim()) listParams.set('keyword', listQuery.trim())
-    if (organizationId && listTeamId) listParams.set('filterTeamId', listTeamId)
+    const listQueryParams = buildTrainingListQuery({
+      organizationId,
+      fixedTeamId: teamId,
+      selectedTeamId: listTeamId,
+      statusGroup: listFilter,
+      page: listPage,
+      pageSize: 20,
+      keyword: listQuery,
+    })
     try {
       const [listResult, teamResult] = await Promise.allSettled([
-        listTrainingSessions(Object.fromEntries(listParams.entries())),
+        listTrainingSessions(listQueryParams),
         teamId ? Promise.resolve({ success: true, data: [] as Team[], status: 200, message: undefined })
           : organizationId && canViewTrainingManagement
             ? loadAllManagedTeams(organizationId)
@@ -121,7 +131,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     } finally {
       setLoading(false)
     }
-  }, [canViewTrainingManagement, listFilter, listPage, listQuery, listTeamId, organizationId, scopeQuery, teamId, toast])
+  }, [canViewTrainingManagement, listFilter, listPage, listQuery, listTeamId, organizationId, teamId, toast])
   useEffect(() => { const timer = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timer) }, [load])
 
   const targetTeamId = teamId || selectedTeamId

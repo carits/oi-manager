@@ -188,6 +188,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     return currentWorkspacePrefix(pathname, '/personal')
   }
   const pathPrefix = getPathPrefix()
+  const requestedReturn = searchParams.get('returnTo')
+  const returnHref = requestedReturn?.startsWith(`${pathPrefix}/problem-lists/`) ? requestedReturn : `${pathPrefix}/problems`
 
   useEffect(() => {
     fetchProblem()
@@ -201,12 +203,14 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   useEffect(() => {
     const requested = searchParams.get('tab')
     const tab = requested === 'my-content' ? 'solution' : requested as TabType
-    if (VALID_TABS.includes(tab)) setActiveTab(tab)
+    setActiveTab(VALID_TABS.includes(tab) ? tab : 'statement')
   }, [searchParams])
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab)
-    router.push(`${pathPrefix}/problems/${problemId}?tab=${tab}`, { scroll: false })
+    const next = new URLSearchParams(searchParams.toString())
+    tab === 'statement' ? next.delete('tab') : next.set('tab', tab)
+    router.replace(`${pathPrefix}/problems/${problemId}${next.size ? `?${next}` : ''}`, { scroll: false })
   }
 
   // 当 problem 数据更新后，设置默认选中的版本
@@ -557,10 +561,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       <div className={unifiedStyles.u3}>
         {/* 返回按钮 */}
         <Button variant="ghost"
-          onClick={() => router.push(`${pathPrefix}/problems`)}
+          onClick={() => router.push(returnHref)}
           className={unifiedStyles.u4}
         >
-          ← 返回列表
+          {returnHref.includes('/problem-lists/') ? '← 返回题单' : '← 返回列表'}
         </Button>
 
         {/* 题目头部 */}

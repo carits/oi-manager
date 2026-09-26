@@ -55,8 +55,12 @@ describe('human navigation productization', () => {
     expect(shell).not.toContain('>好友与私信</Link>')
   })
 
-  it('marks every knowledge-square navigation item as a global route', () => {
-    for (const config of [personalNav, studentNav, teacherNav, schoolManagerNav, platformAdminNav, superAdminNav]) {
+  it('keeps knowledge browsing inside user workspaces while platform entries remain public', () => {
+    expect(personalNav.items.find(item => item.label === '知识广场')?.href).toBe('/personal/knowledge')
+    for (const config of [studentNav, teacherNav, schoolManagerNav]) {
+      expect(config.items.find(item => item.label === '知识广场')?.href).toBe('knowledge')
+    }
+    for (const config of [platformAdminNav, superAdminNav]) {
       expect(config.items.find(item => item.label === '知识广场')).toEqual(expect.objectContaining({ href: '/blog', scope: 'global' }))
     }
   })

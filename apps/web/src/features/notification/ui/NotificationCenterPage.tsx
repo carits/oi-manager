@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { Bell } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import type { NotificationFilter, UserNotification } from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
@@ -13,9 +12,11 @@ import { useToast } from '@/components/ui/Toast'
 import { resolveNotificationHref } from '@/features/workspace'
 import { listAccountNotifications, readAccountNotification, readAllAccountNotifications, respondToNotification } from '../api/notificationApi'
 import styles from './NotificationCenterPage.module.css'
+import { useNavigationGuard } from '@/components/navigation/UnsavedChangesProvider'
 
 export default function NotificationCenterPage() {
-  const router = useRouter(), toast = useToast()
+  const toast = useToast()
+  const { requestNavigation } = useNavigationGuard()
   const [filter, setFilter] = useState<NotificationFilter>('all')
   const [items, setItems] = useState<UserNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -35,7 +36,7 @@ export default function NotificationCenterPage() {
   const open = async (item: UserNotification) => {
     if (!item.readAt) await readAccountNotification(item.id)
     const href = resolveNotificationHref(item.organizationId ? 'organization' : 'personal', item.organizationId || undefined, item.href)
-    if (href) router.push(href)
+    if (href) requestNavigation(href, { hard: href.startsWith('/org/') })
     else await load(1)
   }
   const act = async (item: UserNotification, action: string) => {

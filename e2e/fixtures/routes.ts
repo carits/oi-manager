@@ -59,6 +59,7 @@ export const routePatterns = [
   '/personal/problem-lists/new',
   '/personal/problems',
   '/personal/problems/[id]',
+  '/personal/problems/[id]/note',
   '/personal/rankings',
   '/personal/submissions',
   '/personal/submissions/[id]',

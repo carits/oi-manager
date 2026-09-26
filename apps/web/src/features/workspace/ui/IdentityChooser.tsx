@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Building2, ChevronRight, ShieldCheck, UserRound } from 'lucide-react'
 import type { AuthUser } from '@/features/auth'
@@ -12,6 +13,14 @@ import { isGlobalAdministrator } from '@/lib/capabilities'
 import styles from './IdentityChooser.module.css'
 
 export function IdentityChooser({ user }: { user: AuthUser }) {
+  const searchParams = useSearchParams()
+  const unavailable = searchParams.get('organizationUnavailable') === '1'
+  const reason = searchParams.get('reason')
+  const unavailableMessage = unavailable
+    ? reason === 'membership_inactive' ? '你在原学校的身份已失效，请选择其他可用身份。'
+      : reason === 'organization_unavailable' ? '原学校当前不可访问，请选择其他可用身份。'
+        : '无法进入原学校，请选择其他可用身份。'
+    : ''
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
   const [error, setError] = useState('')
   const [entering, setEntering] = useState<string | null>(null)
@@ -22,7 +31,7 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
     try {
       const { workspaces: items } = await listWorkspaces()
       setWorkspaces(items)
-      if (items.length === 1) window.location.replace(workspaceHref(items[0], 'overview'))
+      if (items.length === 1 && !unavailableMessage) window.location.replace(workspaceHref(items[0], 'overview'))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '身份列表加载失败')
     }
@@ -45,6 +54,7 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
     <section className={styles.panel} aria-labelledby="identity-title">
       <img className={styles.logo} src="/logo.png" alt="Carits" />
       <header><h1 id="identity-title">选择身份</h1><p>你好，{user.username}</p></header>
+      {unavailableMessage && <div className={styles.error} role="status"><p>{unavailableMessage}</p></div>}
       {error && <div className={styles.error}><p>{error}</p><Button variant="secondary" onClick={() => void load()}>重新加载</Button></div>}
       {!workspaces && !error && <p className={styles.loading}>正在加载可进入的身份…</p>}
       {workspaces && <div className={styles.list}>{workspaces.map(workspace => {

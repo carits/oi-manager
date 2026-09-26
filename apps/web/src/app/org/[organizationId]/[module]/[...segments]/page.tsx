@@ -10,6 +10,7 @@ import { ProblemForm } from '@/features/problem/ProblemForm'
 import { ProblemNote } from '@/features/problem/ProblemNote'
 import { SubmissionDetailPage } from '@/features/submission'
 import { ProblemListDetailPage } from '@/features/problem/ProblemListDetailPage'
+import { NewProblemListPage } from '@/features/problem/NewProblemListPage'
 import { ContestStatementManagementPage } from '@/features/contest/ContestStatementManagementPage'
 import { TrainingSessionWorkspace } from '@/features/training-session/TrainingSessionWorkspace'
 import { TrainingSessionDesigner } from '@/features/training-session/TrainingSessionDesigner'
@@ -62,6 +63,10 @@ export default function OrganizationResourcePage() {
   }
   if (module === 'problems' && parts.length === 1) return <ProblemDetail role={userType} problemId={parts[0]} />
   if (module === 'submissions' && parts.length === 1) return <SubmissionDetailPage role={userType} submissionId={parts[0]} />
+  if (module === 'problem-lists' && parts.length === 1 && parts[0] === 'new') {
+    if (userType === 'student') return <ContextualRecovery status="403" title="无法创建题单" description="校园学生不能创建学校题单。" />
+    return <NewProblemListPage />
+  }
   if (module === 'problem-lists' && parts.length === 1) return <ProblemListDetailPage listIdOverride={parts[0]} />
   if (module === 'knowledge' && parts.length === 1) return <BlogDiscoveryDetail id={parts[0]} workspaceBasePath={`${prefix}/knowledge`} embedded />
   return <ContextualRecovery status="404" title="这里没有这个学校页面" description="链接可能已经失效，或功能位置发生了变化。" />

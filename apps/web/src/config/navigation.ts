@@ -70,7 +70,7 @@ export const schoolManagerNav: NavConfig = {
     { label: '加入审批', href: 'management?tab=applications', group: '学校' },
     { label: '学校设置', href: 'management?tab=settings', group: '学校' },
     { label: '学校资产', href: 'management?tab=wallet', group: '学校' },
-    { label: '知识广场', href: '/blog', scope: 'global', group: '社区' },
+    { label: '知识广场', href: 'knowledge', group: '社区' },
   ]
 }
 
@@ -91,7 +91,7 @@ export const teacherNav: NavConfig = {
     { label: '学校信息', href: 'campus', group: '学校' },
     { label: '加入审批', href: 'management?tab=applications', group: '学校' },
     { label: '学校资产', href: 'management?tab=wallet', group: '学校' },
-    { label: '知识广场', href: '/blog', scope: 'global', group: '社区' },
+    { label: '知识广场', href: 'knowledge', group: '社区' },
   ]
 }
 
@@ -107,7 +107,7 @@ export const studentNav: NavConfig = {
     { label: '评测记录', href: 'submissions', group: '学习' },
     { label: '团队', href: 'teams', group: '社区' },
     { label: '排名', href: 'rankings', group: '社区' },
-    { label: '知识广场', href: '/blog', scope: 'global', group: '社区' },
+    { label: '知识广场', href: 'knowledge', group: '社区' },
     { label: '学校信息', href: 'campus', group: '学校' },
   ]
 }
@@ -123,7 +123,8 @@ export const personalNav: NavConfig = {
     { label: '比赛', href: '/personal/contests', group: '学习' },
     { label: '评测记录', href: '/personal/submissions', group: '学习' },
     { label: '团队', href: '/personal/teams', group: '社区' },
-    { label: '知识广场', href: '/blog', scope: 'global', group: '社区' },
+    { label: '知识广场', href: '/personal/knowledge', group: '社区' },
+    { label: '我的文章', href: '/personal/blogs', group: '社区' },
     { label: '排名', href: '/personal/rankings', group: '社区' },
     { label: '学校', href: '/personal/organizations', group: '资源' },
     { label: '贡献', href: '/personal/contributions', group: '资源' },
@@ -174,7 +175,7 @@ export function getActiveNavItem(href: string, role: NavigationRole | string, co
     }
     // 对于其他页面，检查是否是该路径的前缀
     // 使用最长匹配原则
-    if (pathname.startsWith(itemPath) && itemPath !== '/') {
+    if (pathname.startsWith(itemPath + '/') && itemPath !== '/personal') {
       if (itemPath.length > bestMatchLength) {
         bestMatch = item.label
         bestMatchLength = itemPath.length

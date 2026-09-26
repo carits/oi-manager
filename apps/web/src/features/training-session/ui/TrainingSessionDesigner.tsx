@@ -55,7 +55,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     [saving, setSaving] = useState(false),
     [publishing, setPublishing] = useState(false),
     [dirty, setDirty] = useState(false);
-  useUnsavedChanges(`training-session-design:${sessionId}`, dirty);
+  const { requestNavigation } = useUnsavedChanges(`training-session-design:${sessionId}`, dirty);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [draggedStage, setDraggedStage] = useState<number | null>(null),
     [draggedProblem, setDraggedProblem] = useState<number | null>(null);
@@ -340,6 +340,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           ]}
           actions={
             <>
+              <Button variant="ghost" onClick={() => requestNavigation(runtimePath)}>返回运行工作台</Button>
               <Button
                 variant="outline"
                 icon={<RefreshCw size={16} />}

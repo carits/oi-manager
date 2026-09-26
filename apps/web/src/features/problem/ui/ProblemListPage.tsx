@@ -47,6 +47,8 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const resource = useProblemLists({ tab: activeTab, page, pageSize: 20, keyword: keyword || undefined, teamId: teamId || undefined }, sessionKey)
   const lists = resource.data?.lists || []
+  const listLocation = pathname + (searchParams.size ? `?${searchParams}` : '')
+  const detailHref = (id: string) => `${pathPrefix}/problem-lists/${id}?returnTo=${encodeURIComponent(listLocation)}`
 
   const updateLocation = (tab: 'mine' | 'shared', nextKeyword = keyword, nextPage = 1) => {
     const params = new URLSearchParams()
@@ -81,7 +83,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
       <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText={activeTab === 'mine' ? '暂无题单' : '暂无共享题单'} skeletonRows={6}>
         {(_, refreshing) => displayMode === 'card' ? (
           <div className={styles.cardGrid} aria-busy={refreshing || undefined}>
-            {lists.map(list => <Link key={list.id} className={styles.listCard} href={`${pathPrefix}/problem-lists/${list.id}`}><h2 className={styles.listTitle}>{list.title}</h2><p className={styles.listDescription}>{list.description || '暂无题单说明'}</p><div className={styles.listMeta}><span>{list._count?.Entries ?? 0} 题</span><span>{formatDate(list.updatedAt)}</span></div></Link>)}
+            {lists.map(list => <Link key={list.id} className={styles.listCard} href={detailHref(list.id)}><h2 className={styles.listTitle}>{list.title}</h2><p className={styles.listDescription}>{list.description || '暂无题单说明'}</p><div className={styles.listMeta}><span>{list._count?.Entries ?? 0} 题</span><span>{formatDate(list.updatedAt)}</span></div></Link>)}
           </div>
         ) : (
           <Table
@@ -90,12 +92,12 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
             rowKey={list => list.id}
             emptyText="暂无题单"
             columns={[
-              { key: 'title', label: '标题', render: list => <Link className={styles.titleLink} href={`${pathPrefix}/problem-lists/${list.id}`}>{list.title}</Link> },
+              { key: 'title', label: '标题', render: list => <Link className={styles.titleLink} href={detailHref(list.id)}>{list.title}</Link> },
               { key: 'description', label: '描述', render: list => list.description || '—' },
               { key: 'count', label: '题目数', align: 'center', width: '96px', render: list => list._count?.Entries ?? 0 },
               { key: 'updatedAt', label: '更新时间', width: '120px', render: list => formatDate(list.updatedAt) },
             ]}
-            actions={list => <>{(list._permission === 'admin' || list._permission === 'edit') && <Button size="sm" variant="text" onClick={() => router.push(`${pathPrefix}/problem-lists/${list.id}`)}>编辑</Button>}{list._permission === 'admin' && <ActionMenu><ActionMenuItem danger onClick={() => setDeleteConfirm(list.id)}>删除题单</ActionMenuItem></ActionMenu>}</>}
+            actions={list => <>{(list._permission === 'admin' || list._permission === 'edit') && <Button size="sm" variant="text" onClick={() => router.push(detailHref(list.id))}>编辑</Button>}{list._permission === 'admin' && <ActionMenu><ActionMenuItem danger onClick={() => setDeleteConfirm(list.id)}>删除题单</ActionMenuItem></ActionMenu>}</>}
           />
         )}
       </AsyncRegion>
