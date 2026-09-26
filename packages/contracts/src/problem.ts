@@ -112,6 +112,37 @@ export const ProblemNoteInputSchema = z.object({
   content: z.string().max(200_000),
 });
 
+export const ProblemPersonalContentKindSchema = z.enum(["statement", "solution"]);
+export const ProblemPersonalContentFormatSchema = z.enum(["markdown", "pdf"]);
+export const ProblemPersonalContentSchema = z.object({
+  id: z.string(),
+  kind: ProblemPersonalContentKindSchema,
+  title: z.string().nullable(),
+  format: ProblemPersonalContentFormatSchema,
+  language: z.string().nullable(),
+  content: z.string().nullable(),
+  fileUrl: z.string().nullable(),
+  revision: z.number().int().positive(),
+  updatedAt: DateTimeWireSchema,
+  shareKeys: z.array(z.string()),
+});
+export const ProblemMyContentSchema = z.object({
+  contents: z.array(ProblemPersonalContentSchema),
+  shareTargets: z.array(z.object({ key: z.string(), label: z.string() })),
+});
+export const ProblemPersonalContentInputSchema = z.object({
+  title: z.string().max(300).nullable().optional(),
+  language: z.string().max(20).nullable().optional(),
+  content: z.string().min(1).max(1_048_576),
+});
+export const ProblemPersonalContentResultSchema = z.object({
+  id: z.string(),
+  revision: z.number().int().positive(),
+});
+export const ProblemPersonalContentSharesInputSchema = z.object({
+  shareKeys: z.array(z.string()).max(100),
+});
+
 export const ProblemAdminListItemSchema = z.object({
   id: z.string(),
   problemId: z.string(),
@@ -525,6 +556,22 @@ export const ProblemContracts = {
     key: "problem.note.save", method: "PUT", scope: "context",
     body: ProblemNoteInputSchema, data: ProblemNoteSchema,
   }),
+  getMyContent: defineApiEndpoint({
+    key: "problem.my-content.get", method: "GET", scope: "context",
+    data: ProblemMyContentSchema,
+  }),
+  saveMyContent: defineApiEndpoint({
+    key: "problem.my-content.save", method: "PUT", scope: "context",
+    body: ProblemPersonalContentInputSchema, data: ProblemPersonalContentResultSchema,
+  }),
+  updateMyContentShares: defineApiEndpoint({
+    key: "problem.my-content.shares.update", method: "PUT", scope: "context",
+    body: ProblemPersonalContentSharesInputSchema, data: z.object({}),
+  }),
+  deleteMyContent: defineApiEndpoint({
+    key: "problem.my-content.delete", method: "DELETE", scope: "context",
+    body: z.object({}), data: z.object({}),
+  }),
   getJudgeSettings: defineApiEndpoint({
     key: "problem.judge-settings.get",
     method: "GET",
@@ -633,6 +680,10 @@ export type ProblemAdminListItem = z.infer<typeof ProblemAdminListItemSchema>;
 export type ProblemAttachment = z.infer<typeof ProblemAttachmentSchema>;
 export type ProblemHackConfig = z.infer<typeof ProblemHackConfigSchema>;
 export type ProblemHackConfigInput = z.infer<typeof ProblemHackConfigInputSchema>;
+export type ProblemPersonalContent = z.infer<typeof ProblemPersonalContentSchema>;
+export type ProblemPersonalContentKind = z.infer<typeof ProblemPersonalContentKindSchema>;
+export type ProblemPersonalContentInput = z.infer<typeof ProblemPersonalContentInputSchema>;
+export type ProblemMyContent = z.infer<typeof ProblemMyContentSchema>;
 export type ProblemTestGraphWorkspace = z.infer<typeof ProblemTestGraphWorkspaceSchema>;
 export type ProblemTestGraphSubtask = z.infer<typeof ProblemTestGraphSubtaskSchema>;
 export type ProblemTestGraphSaveInput = z.infer<typeof ProblemTestGraphSaveInputSchema>;

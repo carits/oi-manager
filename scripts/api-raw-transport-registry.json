@@ -68,5 +68,15 @@
     "featureSymbol": "uploadContestContentPdf",
     "serverBoundary": "apps/server/src/modules/contest/contest.content.routes.ts",
     "serverSymbol": "contestContentPdfUpload"
+  },
+  {
+    "key": "problem.personal-content-pdf.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/problems/:problemId/my-content/:kind/pdf",
+    "featureApi": "apps/web/src/features/problem/api/problemUserContentApi.ts",
+    "featureSymbol": "uploadProblemPersonalContentPdf",
+    "serverBoundary": "apps/server/src/modules/problem/problem.user-content.routes.ts",
+    "serverSymbol": "problemContentPdfUpload"
   }
 ]

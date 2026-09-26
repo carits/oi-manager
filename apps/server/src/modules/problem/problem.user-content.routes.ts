@@ -1,6 +1,8 @@
 import { Router } from 'express'
+import { ProblemContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import {
   deleteMyProblemContent,
   getMyProblemContent,
@@ -19,6 +21,7 @@ import {
 export const problemUserContentRouter = Router()
 
 function sendUserContentError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return
   if (!(error instanceof ProblemUserContentRouteError)) throw error
   return res.status(error.statusCode).json({
     success: false,
@@ -30,7 +33,7 @@ function sendUserContentError(error: unknown, res: any) {
 problemUserContentRouter.get('/:id/my-content', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getMyProblemContent(req.user!, req.params.id)
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.getMyContent, data)
   } catch (error) {
     return sendUserContentError(error, res)
   }
@@ -47,15 +50,16 @@ problemUserContentRouter.get('/:id/content-options', authenticate, asyncHandler(
 
 problemUserContentRouter.put('/:id/my-content/:kind', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ProblemContracts.saveMyContent, req.body)
     const data = await saveProblemMarkdownContent({
       user: req.user!,
       problemId: req.params.id,
       kind: parseUserContentKind(req.params.kind),
-      title: req.body?.title,
-      language: req.body?.language,
-      content: String(req.body?.content || ''),
+      title: body.title,
+      language: body.language,
+      content: body.content,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.saveMyContent, data)
   } catch (error) {
     return sendUserContentError(error, res)
   }
@@ -81,13 +85,14 @@ problemUserContentRouter.post('/:id/my-content/:kind/pdf', authenticate, problem
 
 problemUserContentRouter.put('/:id/my-content/:kind/shares', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ProblemContracts.updateMyContentShares, req.body)
     await updateProblemContentVisibility({
       user: req.user!,
       problemId: req.params.id,
       kind: parseUserContentKind(req.params.kind),
-      shareKeys: req.body?.shareKeys,
+      shareKeys: body.shareKeys,
     })
-    return res.json({ success: true })
+    return sendContractData(res, ProblemContracts.updateMyContentShares, {})
   } catch (error) {
     return sendUserContentError(error, res)
   }
@@ -100,7 +105,7 @@ problemUserContentRouter.delete('/:id/my-content/:kind', authenticate, asyncHand
       problemId: req.params.id,
       kind: parseUserContentKind(req.params.kind),
     })
-    return res.json({ success: true })
+    return sendContractData(res, ProblemContracts.deleteMyContent, {})
   } catch (error) {
     return sendUserContentError(error, res)
   }

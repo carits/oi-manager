@@ -406,6 +406,36 @@ describe('shared API contract adapter', () => {
       success: true,
       data: expect.objectContaining({ ownerName: 'teacher' }),
     }))
+
+    expect(parseContractBody(ProblemContracts.saveMyContent, {
+      title: '我的题解', language: 'zh', content: '# 思路',
+    })).toEqual({ title: '我的题解', language: 'zh', content: '# 思路' })
+    expect(() => parseContractBody(ProblemContracts.saveMyContent, {
+      title: '空内容', language: 'zh', content: '',
+    })).toThrowError(ApiContractError)
+
+    const personalContent = responseStub()
+    sendContractData(personalContent.response, ProblemContracts.getMyContent, {
+      contents: [{
+        id: 'content-1', kind: 'solution', title: null, format: 'markdown',
+        language: 'zh', content: '# 思路', fileUrl: null, revision: 2,
+        updatedAt: new Date('2026-09-20T01:02:03Z'), shareKeys: ['platform'],
+        fileId: 'must-not-leak',
+      }],
+      shareTargets: [{ key: 'school-1', label: '学校一' }],
+    })
+    expect(personalContent.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        contents: [expect.objectContaining({
+          updatedAt: '2026-09-20T01:02:03.000Z',
+        })],
+      }),
+    }))
+    expect(personalContent.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        contents: [expect.not.objectContaining({ fileId: expect.anything() })],
+      }),
+    }))
   })
 
   it('guards problem-list CRUD and problem-note payloads', () => {

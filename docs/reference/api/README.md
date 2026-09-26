@@ -602,7 +602,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/blog-drafts/from-contest/:trainingId` | 从本人已结算 Standing Snapshot 创建比赛复盘草稿 |
 | `POST` | `/api/blog-drafts/from-solution/:solutionVersionId` | 从有权读取的固定题解版本创建学习博客草稿 |
 | `GET` | `/api/problems/:problemId/blogs` | 基于 BlogReference 反向查询当前读者可见的题目相关博客 |
-| `GET` | `/api/contests/:trainingId/blogs` | 基于固定榜单/Rating 引用反向查询比赛复盘 |
+| `GET` | `/api/contests/:contestId/blogs` | 基于固定榜单/Rating 引用反向查询比赛复盘 |
 | `GET` | `/api/solutions/:solutionId/related-blogs` | 反向查询固定题解版本相关博客 |
 | `GET` | `/api/users/:userId/blogs` | 分页查询指定作者对当前读者可见的已发布博客 |
 | `POST` | `/api/blog-series` | 创建个人或组织范围内名称规范化唯一的博客系列 |
