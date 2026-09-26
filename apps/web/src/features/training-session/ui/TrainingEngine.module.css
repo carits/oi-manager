@@ -35,6 +35,12 @@
 .timeline { display: grid; gap: var(--space-2); }
 .timelineItem { border-left: 3px solid var(--border); padding-left: var(--space-3); }
 .message { padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
+.controlDisclosure { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.controlDisclosure > summary { padding: var(--space-3); cursor: pointer; font-weight: 600; color: var(--text-primary); }
+.controlDisclosure[open] > summary { border-bottom: 1px solid var(--border); }
+.controlDisclosure > :not(summary) { margin: var(--space-3); }
+.dangerDisclosure { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.dangerDisclosure > summary { color: var(--danger); }
 .draftConflict { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
 .draftConflict p { margin: 0; }
 .draftCompare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }

@@ -6,6 +6,7 @@ import { isOrganizationContestAdmin, isOrganizationMember, isTeamAdmin, isTeamMe
 import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
 import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { BUILTIN_TRAINING_TEMPLATES, getBuiltinTrainingTemplate } from './training-engine.templates'
+import { flattenTrainingDesignParticipants } from './training-engine.design'
 import { TrainingEngineError } from './training-engine.errors'
 import { eligibleTrainingParticipantIds, validateTrainingParticipantTarget } from './application/training-roster.service'
 import { trainingMetrics } from './training-metrics'
@@ -747,7 +748,7 @@ export async function getTrainingDesign(userId: string, sessionId: string) {
   return {
     editable: structureEditable, statusRevision: session.statusRevision,
     session: { id: session.id, title: session.title, description: session.description, sessionType: session.sessionType, status: session.status, organizationId: session.organizationId, teamId: session.teamId, scheduledStartAt: session.scheduledStartAt, rankingMode: session.rankingMode, peerVisibility: session.peerVisibility, joinMode: session.joinMode, allowHints: session.allowHints },
-    participants: session.Groups.flatMap(group => group.Participants), groups, stages, stageGroups, issues: structureIssues(payloadStages),
+    participants: flattenTrainingDesignParticipants(session.Groups), groups, stages, stageGroups, issues: structureIssues(payloadStages),
   }
 }
 
@@ -1306,7 +1307,7 @@ export async function replaceTrainingStageGroupMatrix(userId: string, sessionId:
     if (current.statusRevision !== expectedRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练已被其他管理员修改，请刷新')
     const stages = await tx.trainingSessionStage.findMany({ where: { sessionId }, include: { Problems: true, Groups: { include: { ProblemPlans: true } } } })
     const groups = await tx.trainingSessionGroup.findMany({ where: { sessionId, status: 'active' } })
-    if (stageGroups.length !== stages.length * groups.length) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_MATRIX_INCOMPLETE', '每个有效 Stage × Group 必须有且仅有一个训练单元')
+    if (stageGroups.length !== stages.length * groups.length) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_MATRIX_INCOMPLETE', '每个有效阶段与训练分组必须有且仅有一个训练方案')
     const stageById = new Map(stages.map(stage => [stage.id, stage]))
     const groupById = new Map(groups.map(group => [group.id, group]))
     const seen = new Set<string>()
@@ -1315,10 +1316,10 @@ export async function replaceTrainingStageGroupMatrix(userId: string, sessionId:
       const group = groupById.get(String(raw.groupId))
       if (!stage || !group) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_INVALID', '训练单元引用了无效阶段或分组')
       const key = stage.id + ':' + group.id
-      if (seen.has(key)) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_DUPLICATE', 'Stage × Group 训练单元重复')
+      if (seen.has(key)) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_DUPLICATE', '同一阶段和训练分组的训练方案重复')
       seen.add(key)
       const stageGroup = stage.Groups.find(item => item.groupId === group.id)
-      if (!stageGroup) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_REQUIRED', 'Stage × Group 训练单元缺失')
+      if (!stageGroup) throw new TrainingEngineError(422, 'TRAINING_STAGE_GROUP_REQUIRED', '阶段的分组训练方案缺失')
       if (stageGroup.status !== 'PENDING') continue
       const mode = String(raw.mode || raw.trainingMode || 'PRACTICE')
       if (!['PRACTICE', 'EXAM', 'GUIDED', 'REVIEW'].includes(mode)) throw new TrainingEngineError(422, 'TRAINING_MODE_INVALID', '训练方式不受支持')

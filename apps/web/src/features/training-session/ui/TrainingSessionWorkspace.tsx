@@ -35,31 +35,15 @@ import {
   submitTrainingSolution,
   transitionTrainingStage,
 } from '../api/trainingSessionApi'
-import { testDataVersion, trainingStatusLabel } from '@/lib/humanPresentation'
+import { testDataVersion, trainingProgressStatusLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from '@/lib/humanPresentation'
 import { csvCell, saveBlobDownload } from '@/lib/download'
 import { arbitrateTrainingDraft, type TrainingDraftSnapshot } from '../model/trainingDraftArbitration'
 import styles from './TrainingEngine.module.css'
 
 type GroupBatchAction = 'start_all' | 'advance_all' | 'pause_all' | 'resume_all'
 
-const stageModeLabel: Record<string, string> = {
-  TRAINING: '训练',
-  TEACHING: '统一讲解',
-  REVIEW: '复盘',
-}
-const progressLabel: Record<string, string> = {
-  NOT_STARTED: '未开始', WORKING: '进行中', STUCK: '可能卡题', COMPLETED: '已完成', SKIPPED: '已跳过', PAUSED: '已暂停', LOCKED: '尚未开放',
-}
 const visibilityLabel: Record<string, string> = { NONE: '仅自己', PROGRESS: '完成进度', SCORE: '成绩与进度', FULL: '详细进度' }
 const rankingLabel: Record<string, string> = { OFF: '不排名', PROGRESS_ONLY: '按完成进度', SCORE: '按得分', ACM_RANKING: '按通过题数和罚时' }
-const stageRuntimeStatusLabel: Record<string, string> = {
-  PENDING: '待开始',
-  RUNNING: '训练中',
-  PAUSED: '已暂停',
-  ENDED: '已完成',
-  SKIPPED: '已跳过',
-}
-
 type StageProblem = { id: string; problemId: string; alias?: string; targetScore?: number; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>; timePolicy?: { mode: string; limitSeconds?: number }; stuckPolicy?: { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Statements?: Array<{ type?: string; format: string; language?: string | null; content?: string | null; fileUrl?: string | null }>; Problem: { problemId: string; title: string; platform: string }; TestSetRevision: { revisionNumber: number; mode: string } }
 type StageGroup = { id: string; groupId: string; name: string; mode: string; status: string; plannedDurationSeconds?: number | null; runningSince?: string | null; activeElapsedSeconds: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null; accessPolicy: string; submissionMode: string }
 type Stage = { id: string; name: string; description?: string; orderIndex: number; kind: string; Groups: StageGroup[]; Problems: StageProblem[] }
@@ -117,6 +101,7 @@ function StageTimeMetrics({ activeElapsedSeconds, runningSince, plannedDurationS
 
 export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const toast = useToast(), router = useRouter(), pathname = usePathname()
+  const organizationId = useMemo(() => pathname.match(/^\/org\/([^/]+)/)?.[1], [pathname])
   const { user } = useAuth()
   const [data, setData] = useState<Workspace>(), [dashboard, setDashboard] = useState<Dashboard>(), [peerProgress, setPeerProgress] = useState<PeerProgress>()
   const [selectedId, setSelectedId] = useState<string>(), [code, setCode] = useState(''), [language, setLanguage] = useState('cpp17'), [draftRevision, setDraftRevision] = useState<number>()
@@ -408,7 +393,11 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }, [sessionId])
   useEffect(() => {
     setConnectionState('connecting')
-    const source = new EventSource(`/api/training-sessions/${sessionId}/events?afterSeq=${cursor.current}`, { withCredentials: true })
+    const query = new URLSearchParams({
+      afterSeq: String(cursor.current),
+      ...(organizationId ? { organizationId } : {}),
+    })
+    const source = new EventSource(`/api/training-sessions/${sessionId}/events?${query}`, { withCredentials: true })
     source.onopen = () => setConnectionState('connected')
     source.onerror = () => setConnectionState('reconnecting')
     const saveThenReload = () => {
@@ -424,7 +413,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     source.addEventListener('training', event => { cursor.current = Number((event as MessageEvent).lastEventId || cursor.current); scheduleReload() })
     source.addEventListener('resync_required', scheduleReload)
     return () => { source.close(); if (reloadTimer) window.clearTimeout(reloadTimer) }
-  }, [load, sessionId])
+  }, [load, organizationId, sessionId])
 
   const command = async (type: string, payload: Record<string, unknown> = {}, targetType = commandTargetType, targetId = commandTargetId) => {
     if (!data || commandInFlight.current) return false
@@ -518,7 +507,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     if (!report || !data) return
     const rows = [
       ['学员', '分组', '训练题目 ID', '状态', '最高分', '提交次数', '学员有效训练秒数'],
-      ...report.participants.flatMap(participant => participant.progress.map(entry => [participant.user.username, participant.group.name, entry.stageProblemId, progressLabel[entry.status] || entry.status, entry.bestScore ?? 0, entry.attemptCount ?? 0, participant.activeSeconds])),
+      ...report.participants.flatMap(participant => participant.progress.map(entry => [participant.user.username, participant.group.name, entry.stageProblemId, trainingProgressStatusLabel(entry.status), entry.bestScore ?? 0, entry.attemptCount ?? 0, participant.activeSeconds])),
     ]
     const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n')
     const safeTitle = data.session.title.replace(/[\\/:*?"<>|]/g, '_')
@@ -639,12 +628,13 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge>
       </div>}
     />
-    {data.manager && <Section title="各组运行进度" description="各训练组可以独立位于不同阶段；批量操作会先展示影响范围并要求确认。" actions={<div className={styles.actions}><Button variant="secondary" disabled={commandBusy || batchTargetCount('start_all') === 0} onClick={() => setBatchAction('start_all')}>开始 {batchTargetCount('start_all')} 个待开始组</Button><Button variant="secondary" disabled={commandBusy || batchTargetCount('advance_all') === 0} onClick={() => setBatchAction('advance_all')}>推进 {batchTargetCount('advance_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('pause_all') === 0} onClick={() => setBatchAction('pause_all')}>暂停 {batchTargetCount('pause_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('resume_all') === 0} onClick={() => setBatchAction('resume_all')}>恢复 {batchTargetCount('resume_all')} 个已暂停组</Button></div>}>
+    {data.manager && <Section title="各组运行进度" description="各训练组可以独立位于不同阶段；批量操作会先展示影响范围并要求确认。">
+      <details className={styles.controlDisclosure}><summary>批量控制</summary><div className={styles.actions}><Button variant="secondary" disabled={commandBusy || batchTargetCount('start_all') === 0} onClick={() => setBatchAction('start_all')}>开始 {batchTargetCount('start_all')} 个待开始组</Button><Button variant="secondary" disabled={commandBusy || batchTargetCount('advance_all') === 0} onClick={() => setBatchAction('advance_all')}>推进 {batchTargetCount('advance_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('pause_all') === 0} onClick={() => setBatchAction('pause_all')}>暂停 {batchTargetCount('pause_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('resume_all') === 0} onClick={() => setBatchAction('resume_all')}>恢复 {batchTargetCount('resume_all')} 个已暂停组</Button></div></details>
       <div className={styles.grid}>{activeGroups.map(group => {
         const runtime = group.StageGroups?.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status)) || group.StageGroups?.slice(-1)[0]
         const stage = data.session.Stages.find(item => item.id === runtime?.stageId)
         const runtimeStatus = runtime?.status || 'PENDING'
-        return <article className={styles.card} key={group.id}><div className={styles.actions}><strong>{group.name}</strong><StatusBadge variant={runtimeStatus === 'RUNNING' ? 'success' : runtimeStatus === 'PAUSED' ? 'warning' : 'neutral'}>{stageRuntimeStatusLabel[runtimeStatus] || runtimeStatus}</StatusBadge></div><p>{stage ? stage.name : runtimeStatus === 'ENDED' ? '已完成全部阶段' : '尚未开始'} · {group.Participants?.length || 0} 人</p><p className={styles.muted}>有效训练 {formatDuration(runtime?.activeElapsedSeconds || 0)}</p><div className={styles.actions}>{!runtime?.stageId && runtimeStatus !== 'ENDED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('start', group.id)}>开始</Button>}{runtimeStatus === 'RUNNING' && <><Button size="sm" variant="secondary" disabled={commandBusy} onClick={() => void runGroupAction('advance', group.id)}>进入下一阶段</Button><Button size="sm" variant="ghost" disabled={commandBusy} onClick={() => void runGroupAction('pause', group.id)}>暂停本组</Button></>}{runtimeStatus === 'PAUSED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('resume', group.id)}>恢复本组</Button>}</div></article>
+        return <article className={styles.card} key={group.id}><div className={styles.actions}><strong>{group.name}</strong><StatusBadge variant={runtimeStatus === 'RUNNING' ? 'success' : runtimeStatus === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStageStatusLabel(runtimeStatus)}</StatusBadge></div><p>{stage ? stage.name : runtimeStatus === 'ENDED' ? '已完成全部阶段' : '尚未开始'} · {group.Participants?.length || 0} 人</p><p className={styles.muted}>有效训练 {formatDuration(runtime?.activeElapsedSeconds || 0)}</p><div className={styles.actions}>{!runtime?.stageId && runtimeStatus !== 'ENDED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('start', group.id)}>开始</Button>}{runtimeStatus === 'RUNNING' && <><Button size="sm" variant="secondary" disabled={commandBusy} onClick={() => void runGroupAction('advance', group.id)}>进入下一阶段</Button><Button size="sm" variant="ghost" disabled={commandBusy} onClick={() => void runGroupAction('pause', group.id)}>暂停本组</Button></>}{runtimeStatus === 'PAUSED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('resume', group.id)}>恢复本组</Button>}</div></article>
       })}</div>
     </Section>}
     {currentStage && <Section title={`当前阶段 · ${currentStage.name}`} description={currentStage.description || (data.manager ? '当前课堂阶段的实时状态' : '完成当前要求后等待教师进入下一阶段')}>
@@ -658,25 +648,46 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     </Section>}
     {data.session.Overlays.filter(item => item.type === 'MESSAGE').map(item => <div className={styles.message} key={item.id}>{item.payload?.message || '教练消息'}</div>)}
     {data.manager && <Section title="教练控制" description="控制会实时发送给学员；切换题目前，系统会先保存学员草稿。"><div className={styles.stack}>
-      <div className={styles.targetBar}>
-        <label className={styles.field}>控制对象<Select aria-label="教练控制对象" value={commandTargetType} onChange={event => { setCommandTargetType(event.target.value); setCommandTargetId('') }}><option value="ALL">全体学员</option>{Boolean(currentStage?.Groups.length) && <option value="GROUP">当前训练分组</option>}<option value="USER">指定学员</option>{data.session.teamId && <option value="TEAM">当前团队</option>}</Select></label>
-        {commandTargetType === 'GROUP' && <label className={styles.field}>分组<Select aria-label="目标分组" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{currentStage?.Groups.map(group => <option value={group.groupId} key={group.id}>{group.name}</option>)}</Select></label>}
-        {commandTargetType === 'USER' && <label className={styles.field}>学员<Select aria-label="目标学员" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{dashboard?.participants.map(item => <option value={item.user.id} key={item.user.id}>{item.user.username}</option>)}</Select></label>}
-      </div>
       <div className={styles.actions}>
-        {status === 'SCHEDULED' && nextPendingStage && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void transitionStage('start', nextPendingStage.id)}>开始</Button>}
+        {status === 'SCHEDULED' && nextPendingStage && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void transitionStage('start', nextPendingStage.id)}>开始训练</Button>}
         {status === 'RUNNING' && <><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>暂停提交（可继续编辑）</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>暂停提交与编辑</Button></>}
-        {status === 'PAUSED' && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void command('RESUME_SESSION', {}, 'ALL', '')}>恢复</Button>}
-        {['RUNNING', 'PAUSED'].includes(status) && currentStage && <><Button variant="secondary" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'completed' }); setTransitionReason('') }}>{nextPendingStage ? '完成并进入下一阶段' : '完成并结束训练'}</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前阶段</Button><Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束整场训练</Button></>}
-        {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
-        {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(`${pathname}/design?copyStage=${encodeURIComponent(currentStage.id)}`)}>复制当前阶段为未来阶段</Button>}
-        {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
-        {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => setMessageOpen(true)}>广播消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
-        <Button variant="secondary" onClick={() => void openRoster()}>管理学员</Button><Button variant="secondary" onClick={() => void showReport()}>训练报告</Button><Button variant="ghost" onClick={() => void load()}>刷新</Button>
+        {status === 'PAUSED' && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void command('RESUME_SESSION', {}, 'ALL', '')}>恢复训练</Button>}
+        {['RUNNING', 'PAUSED'].includes(status) && currentStage && <Button disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'completed' }); setTransitionReason('') }}>{nextPendingStage ? '完成并进入下一阶段' : '完成并结束训练'}</Button>}
       </div>
+      <details className={styles.controlDisclosure}>
+        <summary>课堂工具</summary>
+        <div className={styles.stack}>
+          <div className={styles.targetBar}>
+            <label className={styles.field}>控制对象<Select aria-label="教练控制对象" value={commandTargetType} onChange={event => { setCommandTargetType(event.target.value); setCommandTargetId('') }}><option value="ALL">全体学员</option>{Boolean(currentStage?.Groups.length) && <option value="GROUP">当前训练分组</option>}<option value="USER">指定学员</option>{data.session.teamId && <option value="TEAM">当前团队</option>}</Select></label>
+            {commandTargetType === 'GROUP' && <label className={styles.field}>分组<Select aria-label="目标分组" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{currentStage?.Groups.map(group => <option value={group.groupId} key={group.id}>{group.name}</option>)}</Select></label>}
+            {commandTargetType === 'USER' && <label className={styles.field}>学员<Select aria-label="目标学员" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{dashboard?.participants.map(item => <option value={item.user.id} key={item.user.id}>{item.user.username}</option>)}</Select></label>}
+          </div>
+          <div className={styles.actions}>
+            {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
+            {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => setMessageOpen(true)}>广播消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
+          </div>
+        </div>
+      </details>
+      <details className={styles.controlDisclosure}>
+        <summary>课堂管理</summary>
+        <div className={styles.actions}>
+          {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
+          {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(`${pathname}/design?copyStage=${encodeURIComponent(currentStage.id)}`)}>复制当前阶段为未来阶段</Button>}
+          <Button variant="secondary" onClick={() => void openRoster()}>管理学员</Button>
+          <Button variant="secondary" onClick={() => void showReport()}>训练报告</Button>
+          <Button variant="ghost" onClick={() => void load()}>刷新</Button>
+        </div>
+      </details>
+      {['RUNNING', 'PAUSED'].includes(status) && currentStage && <details className={`${styles.controlDisclosure} ${styles.dangerDisclosure}`}>
+        <summary>更多操作</summary>
+        <div className={styles.actions}>
+          <Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前阶段</Button>
+          <Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束整场训练</Button>
+        </div>
+      </details>}
     </div></Section>}
     <div className={styles.workspace}>
-      <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}><div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === activeStageId ? 'success' : 'neutral'}>{stageModeLabel[stage.kind] || stage.kind} · {stage.Groups.map(unit => stageRuntimeStatusLabel[unit.status] || unit.status).join(' / ')}</StatusBadge>}</div>{stage.Groups.some(unit => unit.endedAt) && <small>{stage.Groups.map(unit => `${unit.name}：${Math.floor(unit.activeElapsedSeconds / 60)} 分钟${unit.endReason ? ` · ${unit.endReason}` : ''}`).join('；')}</small>}{data.manager && stage.Groups.some(unit => unit.status === 'PENDING') && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此阶段</Button>}{stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? '当前要求' : '本阶段历史'} · {access?.canView ? `${progressLabel[progress?.status || 'NOT_STARTED'] || progress?.status || '未开始'}${progress?.bestScore != null ? ` · ${progress.bestScore} 分` : ''}` : '尚未开放'}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>})}</section>)}</aside>
+      <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}><div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === activeStageId ? 'success' : 'neutral'}>{trainingStageKindLabel(stage.kind)} · {stage.Groups.map(unit => trainingStageStatusLabel(unit.status)).join(' / ')}</StatusBadge>}</div>{stage.Groups.some(unit => unit.endedAt) && <small>{stage.Groups.map(unit => `${unit.name}：${Math.floor(unit.activeElapsedSeconds / 60)} 分钟${unit.endReason ? ` · ${trainingStageEndReasonLabel(unit.endReason)}` : ''}`).join('；')}</small>}{data.manager && stage.Groups.some(unit => unit.status === 'PENDING') && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此阶段</Button>}{stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? '当前要求' : '本阶段历史'} · {access?.canView ? `${trainingProgressStatusLabel(progress?.status || 'NOT_STARTED')}${progress?.bestScore != null ? ` · ${progress.bestScore} 分` : ''}` : '尚未开放'}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>})}</section>)}</aside>
       <main className={styles.stack}>{problem ? <>
         <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · ${testDataVersion(problem.TestSetRevision.revisionNumber)}` : '使用训练发布时固定的数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>
         <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。">
@@ -728,7 +739,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       confirmText="确认执行"
       loading={commandBusy}
     />
-    <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理基础学员名单" description="基础名单只决定谁参加训练；分组在每个阶段中独立配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
+    <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理训练学员" description="这里决定谁参加训练；不同阶段的分组方案在训练设计中配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
     <FormDialog isOpen={Boolean(groupChangeParticipant)} onClose={() => setGroupChangeParticipant(undefined)} title="调整训练分组" description="可立即调整当前要求，也可预设下一阶段；既有草稿、提交和历史进度永不删除。" onSubmit={() => void submitGroupChange()} submitText="确认换组" loading={commandBusy} dirty={Boolean(groupChangeReason)}><div className={styles.stack}><p>学员：<strong>{groupChangeParticipant?.user.username}</strong></p><label className={styles.field}>生效方式<Select value={groupChangeMode} onChange={event => { const mode = event.target.value as 'immediate' | 'next_stage'; setGroupChangeMode(mode); setGroupChangeTarget(''); if (mode === 'next_stage') setGroupChangeStageId(futureStages[0]?.id || '') }}><option value="immediate" disabled={!currentStage}>立即应用到当前阶段</option><option value="next_stage" disabled={!futureStages.length}>预设下一阶段</option></Select></label>{groupChangeMode === 'next_stage' && <label className={styles.field}>目标阶段<Select value={groupChangeStageId} onChange={event => { setGroupChangeStageId(event.target.value); setGroupChangeTarget('') }}>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}<label className={styles.field}>目标分组<Select value={groupChangeTarget} onChange={event => setGroupChangeTarget(event.target.value)}><option value="">请选择</option>{groupTargetStage?.Groups.map(group => <option key={group.id} value={group.groupId}>{group.name}</option>)}</Select></label><label className={styles.field}>调整原因<Textarea rows={4} maxLength={2000} value={groupChangeReason} onChange={event => setGroupChangeReason(event.target.value)} /></label></div></FormDialog>
     <FormDialog
       isOpen={Boolean(transitionDialog)}
@@ -774,11 +785,11 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     <FormDialog isOpen={messageOpen} onClose={() => setMessageOpen(false)} title="发送教练消息" description={`发送给：${commandTargetType === 'ALL' ? '全体学员' : commandTargetType === 'GROUP' ? '指定分组' : commandTargetType === 'USER' ? '指定学员' : '当前团队'}`} onSubmit={() => void command('SHOW_MESSAGE', { message, messageType }).then(success => { if (success) { setMessageOpen(false); setMessage('') } })} submitText="发送消息" dirty={Boolean(message)}><div className={styles.stack}><label className={styles.field}>消息类型<Select value={messageType} onChange={event => setMessageType(event.target.value)}><option value="INFO">信息</option><option value="WARNING">提醒</option><option value="INSTRUCTION">教学指令</option><option value="COUNTDOWN">倒计时</option></Select></label><label className={styles.field}>消息内容<Textarea rows={6} maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={hintOpen} onClose={() => setHintOpen(false)} title="新增分级提示" onSubmit={() => void createHint()} submitText="创建提示" dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>{hintMode === 'TIME' ? '触发秒数' : hintMode === 'ATTEMPT' ? '触发提交次数' : '触发分数'}<Input type="number" min={hintMode === 'TIME' ? 60 : hintMode === 'SCORE' ? 0 : 1} max={hintMode === 'TIME' ? 86400 : 100} value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>
     <DetailDialog isOpen={Boolean(openedHint)} onClose={() => setOpenedHint(undefined)} title={`${openedHint?.level || ''} 级提示 · ${openedHint?.title || '提示'}`} size="md"><p>{openedHint?.content}</p></DetailDialog>
-    <DetailDialog isOpen={reportOpen} onClose={() => setReportOpen(false)} title="训练过程报告" description="按 Stage × Group 时间轴展示每个训练组的真实运行历史。" size="xl">
+    <DetailDialog isOpen={reportOpen} onClose={() => setReportOpen(false)} title="训练过程报告" description="按阶段和训练组展示真实运行历史。" size="xl">
       <div className={styles.stack}>
         {report && <div className={styles.actions}><Button variant="secondary" onClick={exportReportCsv}>导出学员明细 CSV</Button><Button variant="ghost" onClick={exportReportJson}>导出完整 JSON</Button></div>}
         {report && <Section title="训练汇总"><div className={styles.summary}><div className={styles.metric}><strong>{report.timeline.length}</strong>阶段</div><div className={styles.metric}><strong>{report.participants.length}</strong>学员</div><div className={styles.metric}><strong>{report.groupChanges.length}</strong>换组记录</div></div></Section>}
-        {report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.orderIndex + 1}. {stage.name}</h3><div className={styles.timeline}>{stage.groups.map(unit => <div className={styles.timelineItem} key={unit.id}><strong>{unit.groupName} · {unit.status}</strong><br /><span>计划 {formatDuration(unit.plannedDurationSeconds)} · 实际 {formatDuration(unit.actualDurationSeconds)} · {unit.problemIds.length} 题{unit.endReason ? ` · ${unit.endReason}` : ''}</span></div>)}</div>{stage.timeAdjustments.length > 0 && <small>延时记录：{stage.timeAdjustments.map(item => `${formatDuration(item.seconds)}（${item.reason}）`).join('；')}</small>}</article>)}
+        {report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.orderIndex + 1}. {stage.name}</h3><div className={styles.timeline}>{stage.groups.map(unit => <div className={styles.timelineItem} key={unit.id}><strong>{unit.groupName} · {trainingStageStatusLabel(unit.status)}</strong><br /><span>计划 {formatDuration(unit.plannedDurationSeconds)} · 实际 {formatDuration(unit.actualDurationSeconds)} · {unit.problemIds.length} 题{unit.endReason ? ` · ${trainingStageEndReasonLabel(unit.endReason)}` : ''}</span></div>)}</div>{stage.timeAdjustments.length > 0 && <small>延时记录：{stage.timeAdjustments.map(item => `${formatDuration(item.seconds)}（${item.reason}）`).join('；')}</small>}</article>)}
         {Boolean(report?.groupChanges.length) && <Section title="换组时间线"><div className={styles.timeline}>{report?.groupChanges.map(change => <div className={styles.timelineItem} key={change.id}><strong>{reportParticipantName(change.participantId)}</strong><br /><span>{reportGroupName(change.fromGroupId || undefined)} → {reportGroupName(change.toGroupId)} · {change.reason} · {new Date(change.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         <div className={styles.grid}>{report?.participants.map(item => <article className={styles.card} key={item.user.id}><h3>{item.user.username}</h3><p>{item.group.name} · 有效训练 {formatDuration(item.activeSeconds)}</p><p>{item.progress.length} 条题目进度</p></article>)}</div>
       </div>

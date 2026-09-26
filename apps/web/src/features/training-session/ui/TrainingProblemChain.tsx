@@ -30,7 +30,7 @@ export function TrainingProblemChain({ stages, activeStage, draggedProblem, onDr
         <label className={styles.field}>阶段名称<Input value={activeStage.name} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, name: event.target.value }))} /></label>
         <label className={styles.field}>这一阶段做什么？<Select value={activeStage.kind} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, kind: event.target.value as Stage["kind"] }))}>{stageKinds.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</Select></label>
         <label className={styles.field}>阶段说明<Textarea rows={2} value={activeStage.description || ""} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, description: event.target.value }))} /></label>
-        <p className={styles.muted}>分组、开放方式、提交规则、时长与推进策略统一在下方 Stage × Group 训练矩阵中配置。</p>
+        <p className={styles.muted}>分组、开放方式、提交规则、时长与推进策略统一在下方分组训练方案中配置。</p>
       </div>
       {!problems.length ? <Empty title="当前阶段尚未分配题目" description="从右侧按平台和题号加入；讲解、复盘阶段可以留空。" /> : problems.map((problem, index) => <div key={problem.clientKey}>
         {index > 0 && <div className={styles.unlockConnector}><span>↓</span><strong>{unlockLabel(problem.unlockPolicy)}</strong></div>}

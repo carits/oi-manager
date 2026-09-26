@@ -51,6 +51,8 @@ export const removeSubtaskWithDependents = (subtasks: Subtask[], selectedIds: nu
 }
 export const newTrainingDesignKey = () => globalThis.crypto?.randomUUID?.() || `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
 export const normalizeAssignments = (items: Assignment[]) => items.map(item => ({ ...item, assignmentId: item.assignmentId || item.id, clientKey: item.clientKey || item.id || newTrainingDesignKey(), allowedSubtaskIds: Array.isArray(item.allowedSubtaskIds) ? item.allowedSubtaskIds.map(Number) : [], subtasks: item.subtasks || [] }))
+export const isTrainingStageDefinitionLocked = (stageId: string | undefined, stageGroups: StageGroup[]) => Boolean(stageId && stageGroups.some(unit => unit.stageId === stageId && unit.status !== 'PENDING'))
+export const isTrainingGroupingDefinitionLocked = (sessionStatus: string, stageGroups: StageGroup[]) => !['DRAFT', 'SCHEDULED'].includes(sessionStatus) || stageGroups.some(unit => unit.status !== 'PENDING')
 export const createTrainingDesignDraft = (data: TrainingDesignContract): Design => ({
   editable: data.editable, statusRevision: data.statusRevision, session: data.session, issues: data.issues,
   participants: data.participants, groups: data.groups.map(group => ({ ...group, clientKey: group.clientKey || group.id || newTrainingDesignKey(), participantIds: group.participantIds || [] })),

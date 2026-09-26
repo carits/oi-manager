@@ -28,7 +28,7 @@ import {
   validateTrainingDesign,
 } from "../api/trainingSessionApi";
 import type { Assignment, Design, DesignProblem, Issue, Stage, TrainingGrouping } from "../model/trainingDesign";
-import { createTrainingDesignDraft, moveItem, newTrainingDesignKey, normalizeAssignments, normalizeProblemOrder } from "../model/trainingDesign";
+import { createTrainingDesignDraft, isTrainingStageDefinitionLocked, moveItem, newTrainingDesignKey, normalizeAssignments, normalizeProblemOrder } from "../model/trainingDesign";
 import { QuickProblemInput, type SelectedCanonicalProblem } from "@/features/problem-selection";
 
 const newKey = newTrainingDesignKey;
@@ -132,8 +132,15 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
 
   const activeStage =
     stages.find((stage) => stage.clientKey === activeStageKey) || null;
-  const activeStageReadOnly = false;
+  const stageReadOnly = (stage: Stage | null | undefined) =>
+    isTrainingStageDefinitionLocked(stage?.id, design?.stageGroups || []);
+  const activeStageReadOnly = stageReadOnly(activeStage);
   const updateStage = (clientKey: string, updater: (stage: Stage) => Stage) => {
+    const target = stages.find((stage) => stage.clientKey === clientKey);
+    if (stageReadOnly(target)) {
+      toast.error("该阶段已经开始，定义不可修改");
+      return;
+    }
     setStages((current) =>
       current.map((stage) =>
         stage.clientKey === clientKey ? updater(stage) : stage,
@@ -162,6 +169,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     setActiveStageKey(copy.clientKey);
   };
   const removeStage = (stage: Stage) => {
+    if (stageReadOnly(stage)) return toast.error("该阶段已经开始，不能删除");
     replaceStages((current) =>
       current.filter((item) => item.clientKey !== stage.clientKey),
     );
@@ -200,9 +208,9 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const addResolvedProblems = async (problems: SelectedCanonicalProblem[]) => {
     const destinationKeys = (problemTarget === "current" ? (activeStage ? [activeStage.clientKey] : []) : targetStages).filter(key => {
       const stage = stages.find(item => item.clientKey === key);
-      return Boolean(stage);
+      return Boolean(stage && !stageReadOnly(stage));
     });
-    if (!destinationKeys.length) return toast.error("请先选择目标阶段");
+    if (!destinationKeys.length) return toast.error("请选择尚未开始的目标阶段");
     const details: DesignProblem[] = [];
     for (const problem of problems) {
       const detail = await fetchDesignProblem(problem.id);
@@ -227,6 +235,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const moveProblemToStage = (problem: Assignment, targetStageKey: string) => {
     if (!activeStage || activeStageReadOnly || targetStageKey === activeStage.clientKey) return;
     const target = stages.find((stage) => stage.clientKey === targetStageKey);
+    if (stageReadOnly(target)) return toast.error("目标阶段已经开始，定义不可修改");
     if (
       !target ||
       target.Problems.some((item) => item.problemId === problem.problemId)
@@ -566,16 +575,18 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               onSelect={setActiveStageKey}
               onDragStart={setDraggedStage}
               onDrop={(index) => {
-                if (draggedStage != null)
+                if (draggedStage != null && !stageReadOnly(stages[draggedStage]) && !stageReadOnly(stages[index]))
                   replaceStages((current) =>
                     moveItem(current, draggedStage, index),
                   );
                 setDraggedStage(null);
               }}
-              onMove={(from, to) =>
-                replaceStages((current) => moveItem(current, from, to))
-              }
+              onMove={(from, to) => {
+                if (stageReadOnly(stages[from]) || stageReadOnly(stages[to])) return;
+                replaceStages((current) => moveItem(current, from, to));
+              }}
               onCopy={copyStage}
+              isStageReadOnly={stageReadOnly}
               onRemove={removeStage}
             />
 
@@ -607,9 +618,9 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
                 {problemTarget === "multiple" && <div className={styles.stack}>{stages.map(stage => <Checkbox
                   key={stage.clientKey}
                   label={stage.name}
-                  description={`${stage.Problems.length} 道题`}
+                  description={stageReadOnly(stage) ? "已开始，只读" : `${stage.Problems.length} 道题`}
                   checked={targetStages.includes(stage.clientKey)}
-
+                  disabled={stageReadOnly(stage)}
                   onChange={event => setTargetStages(current => event.target.checked ? [...current, stage.clientKey] : current.filter(key => key !== stage.clientKey))}
                 />)}</div>}
                 <QuickProblemInput
@@ -630,6 +641,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             stages={stages}
             onStagesChange={replaceStages}
             grouping={grouping}
+            stageGroups={design.stageGroups}
+            sessionStatus={design.session.status}
             onGroupingChange={setGrouping}
             onChanged={refreshDesign}
           />
@@ -639,6 +652,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             sessionId={sessionId}
             mode="hints"
             stages={stages}
+            stageGroups={design.stageGroups}
+            sessionStatus={design.session.status}
             onChanged={refreshDesign}
           />
         )}

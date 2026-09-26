@@ -17,6 +17,7 @@ type Props = {
   onMove: (from: number, to: number) => void;
   onCopy: (stage: Stage) => void;
   onRemove: (stage: Stage) => void;
+  isStageReadOnly: (stage: Stage) => boolean;
 };
 
 export function TrainingStageTimeline({
@@ -30,6 +31,7 @@ export function TrainingStageTimeline({
   onMove,
   onCopy,
   onRemove,
+  isStageReadOnly,
 }: Props) {
   return (
     <section className={styles.designColumn} aria-label="阶段时间线">
@@ -50,9 +52,9 @@ export function TrainingStageTimeline({
       <div className={styles.designColumnBody}>
         {stages.map((stage, index) => (
           (() => {
-          const editable = true;
-          const previousEditable = index > 0;
-          const nextEditable = index < stages.length - 1;
+          const editable = !isStageReadOnly(stage);
+          const previousEditable = editable && index > 0 && !isStageReadOnly(stages[index - 1]);
+          const nextEditable = editable && index < stages.length - 1 && !isStageReadOnly(stages[index + 1]);
           return (
           <article
             key={stage.clientKey}
@@ -71,7 +73,7 @@ export function TrainingStageTimeline({
             </div>
             <small>
               {stageKinds.find((item) => item[0] === stage.kind)?.[1] || stage.kind}{" "}
-              · {stage.Problems.length} 题
+              · {stage.Problems.length} 题{editable ? "" : " · 已开始，只读"}
             </small>
             <div className={styles.actions}>
               <Button

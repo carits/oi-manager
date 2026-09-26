@@ -32,7 +32,7 @@ export const BUILTIN_TRAINING_TEMPLATES: TrainingTemplate[] = [
     ],
   },
   {
-    key: 'layered-class', name: '分层课堂', sessionType: 'GENERAL', description: '先创建稳定训练组，再在 Stage × Group 矩阵中配置各组训练。',
+    key: 'layered-class', name: '分层课堂', sessionType: 'GENERAL', description: '先创建稳定训练组，再为各阶段配置不同的分组训练方案。',
     stages: [
       { name: '全班热身', description: '完成基础热身题', kind: 'TRAINING', plannedDurationSeconds: 600, endPolicy: 'TIME', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' },
       { name: '第一次分层', description: '按当前学习目标分组训练', kind: 'TRAINING', plannedDurationSeconds: 2100, endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' },

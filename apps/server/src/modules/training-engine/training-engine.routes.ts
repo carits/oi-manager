@@ -4,6 +4,7 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { TrainingContracts } from '@oi-manager/contracts'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
+import { resolveTrainingEventStreamOrganizationId } from './training-engine.event-stream'
 import { trainingMetrics } from './training-metrics'
 import {
   TrainingEngineError,
@@ -128,6 +129,16 @@ trainingEngineRouter.post('/training-sessions/participant-preview', authenticate
     sendContractData(res, TrainingContracts.previewParticipants, await previewTrainingParticipants(req.user!.userId, body))
   } catch (error) { return sendError(error, res) }
 }))
+
+trainingEngineRouter.use('/training-sessions/:id/events', (req, _res, next) => {
+  const organizationId = resolveTrainingEventStreamOrganizationId(req.query.organizationId)
+  if (!req.get('x-oi-organization-id') && organizationId) {
+    // EventSource cannot send custom headers. Authentication still resolves
+    // and verifies the membership before exposing any session event.
+    req.headers['x-oi-organization-id'] = organizationId
+  }
+  next()
+})
 
 trainingEngineRouter.use('/training-sessions/:id', authenticate, asyncHandler(async (request, _res, next) => {
   const req = request as AuthRequest
