@@ -41,11 +41,29 @@ problemCandidateRouter.post('/:id/candidates/generator', authenticate, asyncHand
 problemCandidateRouter.get('/:id/candidates/mine', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await listMyCandidates(req.user!, req.params.id) })))
 problemCandidateRouter.get('/:id/candidates/:candidateId', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await getCandidateDetail(req.user!, req.params.id, req.params.candidateId) })))
 problemCandidateRouter.post('/:id/candidates/:candidateId/cancel', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await cancelCandidate(req.user!, req.params.id, req.params.candidateId) })))
-problemCandidateRouter.get('/:id/candidate-pool', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await getCandidatePool(req.user!, req.params.id) })))
-problemCandidateRouter.put('/:id/candidate-policy', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await updateCandidatePolicy(req.user!, req.params.id, req.body) })))
+problemCandidateRouter.get('/:id/candidate-pool', authenticate, asyncHandler(async (req, res) => {
+  try { sendContractData(res, ProblemContracts.getCandidatePool, await getCandidatePool(req.user!, req.params.id)) }
+  catch (error) { return send(error, res) }
+}))
+problemCandidateRouter.put('/:id/candidate-policy', authenticate, asyncHandler(async (req, res) => {
+  try {
+    const body = parseContractBody(ProblemContracts.updateCandidatePolicy, req.body)
+    sendContractData(res, ProblemContracts.updateCandidatePolicy, await updateCandidatePolicy(req.user!, req.params.id, body))
+  } catch (error) { return send(error, res) }
+}))
 problemCandidateRouter.get('/:id/selector-runs', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await listSelectorRuns(req.user!, req.params.id) })))
-problemCandidateRouter.post('/:id/selector-runs/preview', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await previewSelector(req.user!, req.params.id) })))
-problemCandidateRouter.post('/:id/canonical-emergency-publish', authenticate, asyncHandler(async (req, res) => { try { res.json({ success: true, data: await emergencyPublish(req.user!, req.params.id, req.body) }) } catch (error) { return send(error, res) } }))
+problemCandidateRouter.post('/:id/selector-runs/preview', authenticate, asyncHandler(async (req, res) => {
+  try {
+    parseContractBody(ProblemContracts.previewCandidateSelector, req.body || {})
+    sendContractData(res, ProblemContracts.previewCandidateSelector, await previewSelector(req.user!, req.params.id))
+  } catch (error) { return send(error, res) }
+}))
+problemCandidateRouter.post('/:id/canonical-emergency-publish', authenticate, asyncHandler(async (req, res) => {
+  try {
+    const body = parseContractBody(ProblemContracts.emergencyPublishCandidate, req.body)
+    sendContractData(res, ProblemContracts.emergencyPublishCandidate, await emergencyPublish(req.user!, req.params.id, body))
+  } catch (error) { return send(error, res) }
+}))
 problemCandidateRouter.get('/:id/feature-definitions', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await listFeatureDefinitions(req.user!, req.params.id) })))
 problemCandidateRouter.put('/:id/feature-definitions', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await updateFeatureDefinitions(req.user!, req.params.id, req.body) })))
 problemCandidateRouter.get('/:id/subtask-rules', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await listSubtaskRules(req.user!, req.params.id) })))

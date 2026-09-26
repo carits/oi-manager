@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { AiValidatorRequest, DataGenerationJob, DataGenerationJobDetail } from '@oi-manager/contracts'
+import type { AiValidatorRequest, CandidateSelectorPreview, DataGenerationJob, DataGenerationJobDetail, ProblemCandidatePool, ProblemWrongCorpus } from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
-import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemJudgeAssetsPanel.module.css'
 import { JudgeProgramWizard } from './JudgeProgramWizard'
@@ -20,15 +19,12 @@ import { uploadProblemTestdata } from '../api/problemFilesApi'
 import { compileJudgeProgramVersion, listJudgePrograms, preflightJudgeProgramVersion, updateJudgeProgram } from '../api/judgeProgramApi'
 import { generateAiValidator, generateAiValidatorSpec, repairAiValidator, saveAiValidator, saveAiValidatorSpec } from '../api/problemAiValidatorApi'
 import { createDataGenerationJob, getDataGenerationJob, listDataGenerationJobs, promoteDataGenerationJob } from '../api/problemDataGenerationApi'
+import { emergencyPublishCandidate, getCandidatePool, getWrongCorpus, previewCandidateSelector, rebuildWrongCorpus, updateCandidatePolicy } from '../api/problemCandidatePoolApi'
 
 type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
 type Program = { id: string; kind: string; name: string; language: string; currentVersionId?: string | null; versions: Version[] }
 type Graph = { revisionId?: string; subtasks: Array<{ id: number; score?: number; dependencies?: number[]; groups: Array<{ key: string; name: string; kind: string }> }> }
 type AiUsage = { markdownStatements: Array<{ id: string; language?: string; maxReservedTokens: number }> }
-type CandidateDecision = { subtaskId: number; selected: boolean; reason: string; retiredTestcaseId?: string; baselineQuality: number; candidateQuality: number; qualityGain: number; requiredGain: number }
-type CandidatePool = { policy: { revision: number; selectorMode: string; maxHotCandidates: number; topK: number }; activeCount: number; hotBytes: number; subtasks: Array<{ subtaskId: number; caseCount: number; caseLimit: number; wrongProgramCount: number; wrongClusterCount: number; contributionMode: 'closed' | 'limited' | 'open'; autoSelection: boolean; bootstrapAvailable: boolean }>; candidates: Array<{ id: string; source: string; targetRole: string; status: string; evaluationStage: string; marginalValue: number; createdAt: string }>; retirements: Array<{ id: string; subtaskId: number; testcaseId: string; replacementTestcaseId: string; fromRevisionId: string; toRevisionId: string; reason: string; createdAt: string }> }
-type SelectorPreview = { note: string; publishable: boolean; candidates: Array<{ id: string; source: string; status: string; marginalValue: number; reason: string; publishRateLimited?: boolean; decisions?: CandidateDecision[] }> }
-type Corpus = { revision?: { revisionNumber: number; clusterCount: number; evaluationCount: number; holdoutCount: number } | null; clusters: Array<{ id: string; weight: number; frequency: number; partition: string }>; categories: unknown[] }
 type AssetsTab = 'programs' | 'import' | 'generate' | 'candidates' | 'pool' | 'corpus' | 'quality' | 'revisions'
 type AiValidatorView = AiValidatorRequest & { dsl?: boolean }
 type PromoteRequest = {
@@ -62,9 +58,9 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const [assignments, setAssignments] = useState<Record<string, string>>({})
   const [importFiles, setImportFiles] = useState<File[]>([])
   const [replaceExisting, setReplaceExisting] = useState(false)
-  const [candidatePool, setCandidatePool] = useState<CandidatePool | null>(null)
-  const [corpus, setCorpus] = useState<Corpus | null>(null)
-  const [selectorPreview, setSelectorPreview] = useState<SelectorPreview | null>(null)
+  const [candidatePool, setCandidatePool] = useState<ProblemCandidatePool | null>(null)
+  const [corpus, setCorpus] = useState<ProblemWrongCorpus | null>(null)
+  const [selectorPreview, setSelectorPreview] = useState<CandidateSelectorPreview | null>(null)
   const [emergencyCandidate, setEmergencyCandidate] = useState<string | null>(null)
   const [emergencyReason, setEmergencyReason] = useState('')
 
@@ -88,13 +84,19 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
       const jobRequest = listDataGenerationJobs(problemId)
         .then(data => ({ data, error: null as string | null }))
         .catch(error => ({ data: null, error: error instanceof Error ? error.message : '生成任务加载失败' }))
+      const poolRequest = getCandidatePool(problemId)
+        .then(data => ({ data, error: null as string | null }))
+        .catch(error => ({ data: null, error: error instanceof Error ? error.message : 'Candidate Pool 加载失败' }))
+      const corpusRequest = getWrongCorpus(problemId)
+        .then(data => ({ data, error: null as string | null }))
+        .catch(error => ({ data: null, error: error instanceof Error ? error.message : 'Wrong Corpus 加载失败' }))
       const [programResult, jobResult, graphResult, aiUsageResult, poolResult, corpusResult, templateResult] = await Promise.all([
         programRequest,
         jobRequest,
         graphRequest,
         aiUsageRequest,
-        apiClient.get<CandidatePool>(`/api/problems/${problemId}/candidate-pool`),
-        apiClient.get<Corpus>(`/api/problems/${problemId}/wrong-corpus`),
+        poolRequest,
+        corpusRequest,
         templateRequest,
       ])
 
@@ -109,10 +111,10 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
         setAiUsage(aiUsageResult.data)
         setStatementId(current => current || aiUsageResult.data!.markdownStatements[0]?.id || '')
       } else failures.push(`AI 使用信息：${aiUsageResult.error || '加载失败'}`)
-      if (poolResult.success && poolResult.data) setCandidatePool(poolResult.data)
-      else failures.push(`Candidate Pool：${poolResult.message || '加载失败'}`)
-      if (corpusResult.success && corpusResult.data) setCorpus(corpusResult.data)
-      else failures.push(`Wrong Corpus：${corpusResult.message || '加载失败'}`)
+      if (poolResult.data) setCandidatePool(poolResult.data)
+      else failures.push(`Candidate Pool：${poolResult.error || '加载失败'}`)
+      if (corpusResult.data) setCorpus(corpusResult.data)
+      else failures.push(`Wrong Corpus：${corpusResult.error || '加载失败'}`)
       if (templateResult.data) setCatalog(templateResult.data)
       else if (templateResult.error) failures.push(`评测程序模板：${templateResult.error}`)
 
@@ -172,23 +174,23 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   }
   const updateSelectorMode = async (selectorMode: 'observe' | 'auto') => {
     if (!candidatePool) return
-    const result = await apiClient.put(`/api/problems/${problemId}/candidate-policy`, { expectedRevision: candidatePool.policy.revision, selectorMode, maxHotCandidates: candidatePool.policy.maxHotCandidates, topK: candidatePool.policy.topK })
-    if (!result.success) return toast.error(result.message || '策略更新失败')
+    const result = await updateCandidatePolicy(problemId, { expectedRevision: candidatePool.policy.revision, selectorMode, maxHotCandidates: candidatePool.policy.maxHotCandidates, topK: candidatePool.policy.topK })
+    if (!result.ok) return toast.error(result.error.message || '策略更新失败')
     toast.success(selectorMode === 'auto' ? '已启用质量阈值自动发布' : '已切换为观察模式'); await load()
   }
   const rebuildCorpus = async () => {
     setSaving(true)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/wrong-corpus/rebuild`, {})
-      if (!result.success) return toast.error(result.message || 'Corpus 重建失败')
-      toast.success(result.message || 'Corpus 已重建'); await load()
+      const result = await rebuildWrongCorpus(problemId)
+      if (!result.ok) return toast.error(result.error.message || 'Corpus 重建失败')
+      toast.success(`Corpus R${result.data.revisionNumber} 已重建（${result.data.clusters} 个行为簇）`); await load()
     } finally { setSaving(false) }
   }
   const previewSelector = async () => {
     setSaving(true)
     try {
-      const result = await apiClient.post<SelectorPreview>(`/api/problems/${problemId}/selector-runs/preview`, {})
-      if (!result.success || !result.data) return toast.error(result.message || 'Selector 预览失败')
+      const result = await previewCandidateSelector(problemId)
+      if (!result.ok) return toast.error(result.error.message || 'Selector 预览失败')
       setSelectorPreview(result.data)
     } finally { setSaving(false) }
   }
@@ -196,8 +198,8 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
     if (!emergencyCandidate) return
     setSaving(true)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/canonical-emergency-publish`, { candidateId: emergencyCandidate, reason: emergencyReason })
-      if (!result.success) return toast.error(result.message || '紧急发布失败')
+      const result = await emergencyPublishCandidate(problemId, { candidateId: emergencyCandidate, reason: emergencyReason })
+      if (!result.ok) return toast.error(result.error.message || '紧急发布失败')
       toast.success('已通过结构、保护和 CAS 校验并创建新的正式 Revision')
       setEmergencyCandidate(null); setEmergencyReason(''); setSelectorPreview(null); await load()
     } finally { setSaving(false) }
@@ -273,7 +275,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
         </div>
         {selectorPreview && <div className={styles.protocolCard}><strong>{selectorPreview.publishable ? '存在可入选 Candidate' : '当前没有 Candidate 达到自动选择条件'}</strong><span>{selectorPreview.note}</span>{selectorPreview.candidates.map(item => <details key={item.id}><summary>{item.id.slice(0, 8)} · {item.reason}</summary>{item.decisions?.map(decision => <p key={decision.subtaskId}>S{decision.subtaskId}：{decision.selected ? '入选' : '不入选'} · 增益 {decision.qualityGain.toFixed(1)} / 门槛 {decision.requiredGain.toFixed(1)} · {decision.reason}{decision.retiredTestcaseId ? ` · 替换 ${decision.retiredTestcaseId.slice(0, 8)}` : ''}</p>)}</details>)}</div>}
         <TableRoot><TableHead><TableRow><TableHeaderCell>Candidate</TableHeaderCell><TableHeaderCell>来源</TableHeaderCell><TableHeaderCell>目标</TableHeaderCell><TableHeaderCell>阶段</TableHeaderCell><TableHeaderCell>边际价值</TableHeaderCell><TableHeaderCell>操作</TableHeaderCell></TableRow></TableHead><TableBody>{candidatePool.candidates.map(item => <TableRow key={item.id}><TableCell>{item.id.slice(0, 8)}</TableCell><TableCell>{item.source}</TableCell><TableCell>{item.targetRole}</TableCell><TableCell>{item.status} · {item.evaluationStage}</TableCell><TableCell>{item.marginalValue}</TableCell><TableCell>{item.targetRole === 'hack_gate' && ['ELIGIBLE', 'ELIGIBLE_NOT_SELECTED', 'WAITING_REPLACEMENT'].includes(item.status) ? <Button variant="outline" onClick={() => { setEmergencyCandidate(item.id); setEmergencyReason('') }}>紧急发布</Button> : '—'}</TableCell></TableRow>)}</TableBody></TableRoot>
-        {candidatePool.retirements.length > 0 && <details><summary>历史成员替换审计（{candidatePool.retirements.length}）</summary><TableRoot><TableHead><TableRow><TableHeaderCell>Subtask</TableHeaderCell><TableHeaderCell>退出测试点</TableHeaderCell><TableHeaderCell>替换测试点</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell></TableRow></TableHead><TableBody>{candidatePool.retirements.map(item => <TableRow key={item.id}><TableCell>S{item.subtaskId}</TableCell><TableCell>{item.testcaseId.slice(0, 8)}</TableCell><TableCell>{item.replacementTestcaseId.slice(0, 8)}</TableCell><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell></TableRow>)}</TableBody></TableRoot></details>}
+        {candidatePool.retirements.length > 0 && <details><summary>历史成员替换审计（{candidatePool.retirements.length}）</summary><TableRoot><TableHead><TableRow><TableHeaderCell>Subtask</TableHeaderCell><TableHeaderCell>退出测试点</TableHeaderCell><TableHeaderCell>替换测试点</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell></TableRow></TableHead><TableBody>{candidatePool.retirements.map(item => <TableRow key={item.id}><TableCell>S{item.subtaskId}</TableCell><TableCell>{item.testcaseId.slice(0, 8)}</TableCell><TableCell>{item.replacementTestcaseId?.slice(0, 8) || '—'}</TableCell><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell></TableRow>)}</TableBody></TableRoot></details>}
       </> : <p className={styles.muted}>正在加载 Candidate Pool…</p>}
       <FormDialog isOpen={Boolean(emergencyCandidate)} onClose={() => { setEmergencyCandidate(null); setEmergencyReason('') }} onSubmit={emergencyPublish} title="紧急发布 Candidate" description="仅跳过 Corpus/质量门槛；不会绕过 15 个 Subtask、每 Subtask 10 点、保护期、Official Core 或 Revision CAS。" submitText="确认紧急发布" danger loading={saving} dirty={Boolean(emergencyReason)}><label>审计原因（10～1000 字）<Textarea rows={5} value={emergencyReason} onChange={event => setEmergencyReason(event.target.value)} /></label></FormDialog>
     </section>}

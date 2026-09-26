@@ -982,12 +982,12 @@ export const DataGenerationCaseInputSchema = z.object({
   params: z.record(z.string(), z.unknown()).optional(),
 });
 export const DataGenerationJobCreateInputSchema = z.object({
-  sourceMode: z.enum(["generator", "input"]),
+  sourceMode: z.enum(["generator", "input"]).default("generator"),
   generatorVersionId: z.string().min(1).optional(),
-  standardVersionId: z.string().min(1),
-  validatorVersionId: z.string().min(1),
+  standardVersionId: z.string().min(1).optional(),
+  validatorVersionId: z.string().min(1).optional(),
   targetRole: z.enum(["official", "hack_gate"]).optional(),
-  cases: z.array(DataGenerationCaseInputSchema).min(1).max(50),
+  cases: z.array(DataGenerationCaseInputSchema).min(1).max(50).optional(),
 });
 export const DataGenerationCaseSchema = z.object({
   id: z.string(),
@@ -1009,14 +1009,130 @@ export const DataGenerationJobDetailSchema = DataGenerationJobSchema.extend({
   cases: z.array(DataGenerationCaseSchema),
 });
 export const DataGenerationJobPromoteInputSchema = z.object({
-  expectedLatestRevisionId: z.string().min(1),
-  caseIds: z.array(z.string().min(1)).min(1).max(512),
+  expectedLatestRevisionId: z.string().min(1).nullable().optional(),
+  caseIds: z.array(z.string().min(1)).max(512).optional(),
   assignments: z.array(z.object({
     caseId: z.string().min(1),
     subtaskId: z.number().int().positive(),
     groupKey: z.string().min(1),
   })).max(2048).optional(),
   overrideReason: z.string().max(1000).optional(),
+});
+
+export const CandidatePolicySchema = z.object({
+  revision: z.number().int().positive(),
+  selectorMode: z.enum(["observe", "auto"]),
+  maxHotCandidates: z.number().int().positive(),
+  topK: z.number().int().positive(),
+});
+export const CandidatePolicyUpdateInputSchema = z.object({
+  expectedRevision: z.number().int().positive(),
+  selectorMode: z.enum(["observe", "auto"]),
+  maxHotCandidates: z.number().int().positive(),
+  topK: z.number().int().positive(),
+});
+export const CandidateSubtaskReadinessSchema = z.object({
+  subtaskId: z.number().int().positive(),
+  caseCount: z.number().int().nonnegative(),
+  caseLimit: z.number().int().positive(),
+  wrongProgramCount: z.number().int().nonnegative(),
+  wrongClusterCount: z.number().int().nonnegative(),
+  contributionMode: z.enum(["closed", "limited", "open"]),
+  autoSelection: z.boolean(),
+  bootstrapAvailable: z.boolean(),
+});
+export const CandidatePoolItemSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  targetRole: z.string(),
+  status: z.string(),
+  evaluationStage: z.string(),
+  marginalValue: z.number(),
+  affectedSubtaskIds: z.array(z.number().int().positive()),
+  createdAt: DateTimeWireSchema,
+});
+export const CandidateRetirementSchema = z.object({
+  id: z.string(),
+  subtaskId: z.number().int().positive(),
+  testcaseId: z.string(),
+  replacementTestcaseId: z.string().nullable(),
+  fromRevisionId: z.string(),
+  toRevisionId: z.string(),
+  reason: z.string(),
+  createdAt: DateTimeWireSchema,
+});
+export const ProblemCandidatePoolSchema = z.object({
+  policy: CandidatePolicySchema,
+  activeCount: z.number().int().nonnegative(),
+  hotBytes: z.number().nonnegative(),
+  subtasks: z.array(CandidateSubtaskReadinessSchema),
+  candidates: z.array(CandidatePoolItemSchema),
+  retirements: z.array(CandidateRetirementSchema),
+});
+export const CandidateSelectorDecisionSchema = z.object({
+  subtaskId: z.number().int().nonnegative(),
+  selected: z.boolean(),
+  reason: z.string(),
+  retiredTestcaseId: z.string().optional(),
+  baselineQuality: z.number(),
+  candidateQuality: z.number(),
+  qualityGain: z.number(),
+  requiredGain: z.number(),
+});
+export const CandidateSelectorResultSchema = z.object({
+  promoted: z.boolean(),
+  reason: z.string().optional(),
+  revisionId: z.string().optional(),
+  decisions: z.array(CandidateSelectorDecisionSchema).optional(),
+  publishRateLimited: z.boolean().optional(),
+});
+export const CandidateSelectorPreviewSchema = z.object({
+  mode: z.literal("preview"),
+  policyRevision: z.number().int().positive(),
+  candidates: z.array(z.object({
+    id: z.string(),
+    source: z.string(),
+    status: z.string(),
+    marginalValue: z.number(),
+    reason: z.string(),
+    publishRateLimited: z.boolean().optional(),
+    decisions: z.array(CandidateSelectorDecisionSchema).optional(),
+  })),
+  publishable: z.boolean(),
+  note: z.string(),
+});
+export const CandidateEmergencyPublishInputSchema = z.object({
+  candidateId: z.string().min(1),
+  reason: z.string().trim().min(10).max(1000),
+});
+export const WrongCorpusRevisionSchema = z.object({
+  revisionNumber: z.number().int().positive(),
+  clusterCount: z.number().int().nonnegative(),
+  evaluationCount: z.number().int().nonnegative(),
+  holdoutCount: z.number().int().nonnegative(),
+});
+export const WrongCorpusClusterSchema = z.object({
+  id: z.string(),
+  weight: z.number().int(),
+  frequency: z.number().int().nonnegative(),
+  partition: z.string(),
+});
+export const WrongCorpusCategorySchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  name: z.string(),
+  weight: z.number().int(),
+});
+export const ProblemWrongCorpusSchema = z.object({
+  revision: WrongCorpusRevisionSchema.nullable(),
+  clusters: z.array(WrongCorpusClusterSchema),
+  categories: z.array(WrongCorpusCategorySchema),
+});
+export const WrongCorpusRebuildResultSchema = z.object({
+  revisionNumber: z.number().int().positive(),
+  samples: z.number().int().nonnegative(),
+  clusters: z.number().int().nonnegative(),
+  qualityEvaluationJobId: z.string().nullable(),
 });
 
 export const AiValidatorResponseSchema = z.object({
@@ -1395,6 +1511,31 @@ export const ProblemContracts = {
   }),
 
 
+  getCandidatePool: defineApiEndpoint({
+    key: "problem.candidate-pool.get", method: "GET", scope: "context",
+    data: ProblemCandidatePoolSchema,
+  }),
+  updateCandidatePolicy: defineApiEndpoint({
+    key: "problem.candidate-policy.update", method: "PUT", scope: "context",
+    body: CandidatePolicyUpdateInputSchema, data: CandidatePolicySchema,
+  }),
+  previewCandidateSelector: defineApiEndpoint({
+    key: "problem.candidate-selector.preview", method: "POST", scope: "context",
+    body: z.object({}), data: CandidateSelectorPreviewSchema,
+  }),
+  emergencyPublishCandidate: defineApiEndpoint({
+    key: "problem.candidate-selector.emergency-publish", method: "POST", scope: "context",
+    body: CandidateEmergencyPublishInputSchema, data: CandidateSelectorResultSchema,
+  }),
+  getWrongCorpus: defineApiEndpoint({
+    key: "problem.wrong-corpus.get", method: "GET", scope: "context",
+    data: ProblemWrongCorpusSchema,
+  }),
+  rebuildWrongCorpus: defineApiEndpoint({
+    key: "problem.wrong-corpus.rebuild", method: "POST", scope: "context",
+    body: z.object({}), data: WrongCorpusRebuildResultSchema,
+  }),
+
   listDataGenerationJobs: defineApiEndpoint({
     key: "problem.data-generation.list", method: "GET", scope: "context",
     data: z.array(DataGenerationJobSchema),
@@ -1508,3 +1649,6 @@ export type ValidatorSpec = z.infer<typeof ValidatorSpecSchema>;
 export type AiValidatorRequest = z.infer<typeof AiValidatorRequestSchema>;
 export type DataGenerationJob = z.infer<typeof DataGenerationJobSchema>;
 export type DataGenerationJobDetail = z.infer<typeof DataGenerationJobDetailSchema>;
+export type ProblemCandidatePool = z.infer<typeof ProblemCandidatePoolSchema>;
+export type CandidateSelectorPreview = z.infer<typeof CandidateSelectorPreviewSchema>;
+export type ProblemWrongCorpus = z.infer<typeof ProblemWrongCorpusSchema>;

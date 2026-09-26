@@ -931,6 +931,47 @@ describe('shared API contract adapter', () => {
     expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('fencingToken')
   })
 
+  it('guards Candidate policy, selector and Wrong Corpus manager boundaries', () => {
+    expect(parseContractBody(ProblemContracts.updateCandidatePolicy, {
+      expectedRevision: 3,
+      selectorMode: 'observe',
+      maxHotCandidates: 2000,
+      topK: 500,
+    }).selectorMode).toBe('observe')
+    expect(() => parseContractBody(ProblemContracts.emergencyPublishCandidate, {
+      candidateId: 'candidate-1',
+      reason: 'too short',
+    })).toThrowError(ApiContractError)
+
+    const pool = responseStub()
+    sendContractData(pool.response, ProblemContracts.getCandidatePool, {
+      policy: { revision: 3, selectorMode: 'auto', maxHotCandidates: 2000, topK: 500, maxHotBytes: '1073741824' },
+      activeCount: 1,
+      hotBytes: 1024,
+      subtasks: [{
+        subtaskId: 1, caseCount: 10, caseLimit: 50, wrongProgramCount: 8, wrongClusterCount: 4,
+        contributionMode: 'open', autoSelection: true, bootstrapAvailable: false,
+      }],
+      candidates: [{
+        id: 'candidate-1', source: 'hack', targetRole: 'hack_gate', status: 'ELIGIBLE',
+        evaluationStage: 'evaluated', marginalValue: 12.5, createdAt: new Date('2026-09-27T00:00:00Z'),
+        inputSha256: 'must-not-leak',
+      }],
+      retirements: [],
+    })
+    expect(pool.json.mock.calls[0]?.[0]?.data.policy).not.toHaveProperty('maxHotBytes')
+    expect(pool.json.mock.calls[0]?.[0]?.data.candidates[0]).not.toHaveProperty('inputSha256')
+
+    const corpus = responseStub()
+    sendContractData(corpus.response, ProblemContracts.getWrongCorpus, {
+      revision: { revisionNumber: 2, clusterCount: 8, evaluationCount: 6, holdoutCount: 2, corpusHash: 'must-not-leak' },
+      clusters: [{ id: 'cluster-1', weight: 5, frequency: 3, partition: 'evaluation', behaviorHash: 'must-not-leak' }],
+      categories: [{ id: 'category-1', key: 'overflow', name: '溢出', weight: 5, problemId: 'must-not-leak' }],
+    })
+    expect(corpus.json.mock.calls[0]?.[0]?.data.revision).not.toHaveProperty('corpusHash')
+    expect(corpus.json.mock.calls[0]?.[0]?.data.clusters[0]).not.toHaveProperty('behaviorHash')
+  })
+
   it('guards chat message payloads and serializes dates at the account boundary', () => {
     const body = parseContractBody(ChatContracts.sendMessage, {
       type: 'text', content: '你好', clientMessageId: '12345678-1234-1234-1234-123456789012',

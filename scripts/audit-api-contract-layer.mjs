@@ -24,7 +24,6 @@ const legacyTransportAllowances = {
 const legacyFeatureTransportAllowances = {
   'apps/web/src/features/contest/ui/ContestFormModal.tsx': 19,
   'apps/web/src/features/problem/ui/ProblemListDetailPage.tsx': 17,
-  'apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx': 6,
   'apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx': 8,
 }
 const directTransportPattern = /\bapiClient\.(?:get|post|put|patch|delete|query|mutate)(?:Contract)?\b/g
@@ -255,6 +254,7 @@ const contractedBoundaries = [
   ['apps/web/src/features/problem/api/judgeProgramApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/problemAiValidatorApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/problemDataGenerationApi.ts', 'ProblemContracts'],
+  ['apps/web/src/features/problem/api/problemCandidatePoolApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/ui/ProblemForm.tsx', 'getProblemEditorDetail'],
   ['apps/web/src/features/problem/ui/ProblemDetail.tsx', 'getProblemDetail'],
   ['apps/web/src/features/problem/ui/ProblemDetail.tsx', 'listProblemSubmissions'],
@@ -296,6 +296,7 @@ const contractedBoundaries = [
   ['apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx', 'uploadProblemTestdata'],
   ['apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx', 'generateAiValidator'],
   ['apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx', 'listDataGenerationJobs'],
+  ['apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx', 'getCandidatePool'],
   ['apps/web/src/features/chat/api/chatApi.ts', 'ChatContracts'],
   ['apps/web/src/features/chat/ui/ChatWorkspace.tsx', 'sendChatTextMessage'],
   ['apps/web/src/features/chat/ui/ChatWorkspace.tsx', 'sendChatStickerMessage'],
