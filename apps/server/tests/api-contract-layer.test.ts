@@ -810,6 +810,35 @@ describe('shared API contract adapter', () => {
     })).toThrowError(ApiContractError)
   })
 
+
+  it('guards judge program drafts and verification jobs through shared contracts', () => {
+    const body = parseContractBody(ProblemContracts.saveJudgeProgramDraft, {
+      kind: 'validator',
+      name: '严格校验器',
+      language: 'cpp17',
+      protocol: 'oj.validator/v1',
+      source: 'int main() { return 0; }',
+      fixtures: [{ name: '合法输入', stdin: '1\\n', expectedExitCode: 0 }],
+    })
+    expect(body.kind).toBe('validator')
+    expect(() => parseContractBody(ProblemContracts.createJudgeProgram, {
+      kind: 'standard', language: 'cpp17', protocol: 'oj.standard/v1', source: '',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getJudgeProgramVerification, [{
+      id: 'job-1', problemId: 'problem-1', programId: 'program-1', versionId: 'version-1',
+      fixtureSetId: 'fixtures-1', mode: 'compile', status: 'completed', judgeId: null,
+      fencingToken: null, leaseExpiresAt: null, attemptCount: 1, report: { warnings: [] },
+      errorCode: null, errorMessage: null, createdBy: 'user-1', startedAt: new Date('2026-09-16T00:00:00Z'),
+      finishedAt: new Date('2026-09-16T00:00:01Z'), createdAt: new Date('2026-09-16T00:00:00Z'),
+      updatedAt: new Date('2026-09-16T00:00:01Z'),
+    }])
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ startedAt: '2026-09-16T00:00:00.000Z' })],
+    }))
+  })
+
   it('guards chat message payloads and serializes dates at the account boundary', () => {
     const body = parseContractBody(ChatContracts.sendMessage, {
       type: 'text', content: '你好', clientMessageId: '12345678-1234-1234-1234-123456789012',

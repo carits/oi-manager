@@ -28,23 +28,29 @@ function sendAiError(error: unknown, res: any) {
 }
 
 problemAiRouter.post('/:id/validator-specs', authenticate, asyncHandler(async (req, res) => {
-  try { res.status(201).json({ success: true, data: await createValidatorSpec({ user: req.user!, problemId: req.params.id, spec: req.body?.spec }) }) }
-  catch (error) { return sendAiError(error, res) }
+  try {
+    const body = parseContractBody(ProblemContracts.createValidatorSpec, req.body)
+    sendContractData(res, ProblemContracts.createValidatorSpec, await createValidatorSpec({ user: req.user!, problemId: req.params.id, spec: body.spec }), 201)
+  } catch (error) { return sendAiError(error, res) }
 }))
 
 problemAiRouter.get('/:id/validator-specs', authenticate, asyncHandler(async (req, res) => {
-  try { res.json({ success: true, data: await listValidatorSpecs(req.user!, req.params.id) }) }
+  try { sendContractData(res, ProblemContracts.listValidatorSpecs, await listValidatorSpecs(req.user!, req.params.id)) }
   catch (error) { return sendAiError(error, res) }
 }))
 
 problemAiRouter.post('/:id/validator-specs/:specId/activate', authenticate, asyncHandler(async (req, res) => {
-  try { res.json({ success: true, data: await activateValidatorSpec({ user: req.user!, problemId: req.params.id, specId: req.params.specId }) }) }
-  catch (error) { return sendAiError(error, res) }
+  try {
+    parseContractBody(ProblemContracts.activateValidatorSpec, req.body || {})
+    sendContractData(res, ProblemContracts.activateValidatorSpec, await activateValidatorSpec({ user: req.user!, problemId: req.params.id, specId: req.params.specId }))
+  } catch (error) { return sendAiError(error, res) }
 }))
 
 problemAiRouter.post('/:id/validator-specs/:specId/materialize', authenticate, asyncHandler(async (req, res) => {
-  try { res.json({ success: true, data: await materializeValidatorSpec({ user: req.user!, problemId: req.params.id, specId: req.params.specId }) }) }
-  catch (error) { return sendAiError(error, res) }
+  try {
+    parseContractBody(ProblemContracts.materializeValidatorSpec, req.body || {})
+    sendContractData(res, ProblemContracts.materializeValidatorSpec, await materializeValidatorSpec({ user: req.user!, problemId: req.params.id, specId: req.params.specId }))
+  } catch (error) { return sendAiError(error, res) }
 }))
 
 problemAiRouter.post('/:id/ai/validator', authenticate, asyncHandler(async (req, res) => {

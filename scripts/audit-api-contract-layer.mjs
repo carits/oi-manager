@@ -23,7 +23,6 @@ const legacyTransportAllowances = {
 }
 const legacyFeatureTransportAllowances = {
   'apps/web/src/features/contest/ui/ContestFormModal.tsx': 19,
-  'apps/web/src/features/problem/ui/JudgeProgramWizard.tsx': 11,
   'apps/web/src/features/problem/ui/ProblemListDetailPage.tsx': 17,
   'apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx': 18,
   'apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx': 8,
@@ -253,6 +252,7 @@ const contractedBoundaries = [
   ['apps/web/src/features/problem/api/platformProblemAdminApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/problemTestGraphApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/api/judgeProgramTemplateApi.ts', 'ProblemContracts'],
+  ['apps/web/src/features/problem/api/judgeProgramApi.ts', 'ProblemContracts'],
   ['apps/web/src/features/problem/ui/ProblemForm.tsx', 'getProblemEditorDetail'],
   ['apps/web/src/features/problem/ui/ProblemDetail.tsx', 'getProblemDetail'],
   ['apps/web/src/features/problem/ui/ProblemDetail.tsx', 'listProblemSubmissions'],
@@ -287,6 +287,7 @@ const contractedBoundaries = [
   ['apps/web/src/features/problem/ui/ProblemTestGraphPanel.tsx', 'getProblemTestSetRevision'],
   ['apps/web/src/features/problem/ui/JudgeProgramTemplateGallery.tsx', 'getJudgeProgramTemplate'],
   ['apps/web/src/features/problem/ui/JudgeProgramWizard.tsx', 'getJudgeProgramTemplate'],
+  ['apps/web/src/features/problem/ui/JudgeProgramWizard.tsx', 'createJudgeProgram'],
   ['apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx', 'listJudgeProgramTemplates'],
   ['apps/web/src/features/chat/api/chatApi.ts', 'ChatContracts'],
   ['apps/web/src/features/chat/ui/ChatWorkspace.tsx', 'sendChatTextMessage'],

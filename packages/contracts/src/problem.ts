@@ -786,6 +786,194 @@ export const JudgeProgramCatalogSchema = z.object({
   templates: z.array(JudgeProgramTemplateSummarySchema),
 }).passthrough();
 
+export const JudgeProgramDraftSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  programId: z.string().nullable(),
+  userId: z.string(),
+  kind: JudgeProgramKindSchema,
+  name: z.string(),
+  language: z.string(),
+  protocol: z.string(),
+  templateId: z.string().nullable(),
+  templateVersion: z.number().int().positive().nullable(),
+  source: z.string(),
+  protocolConfig: JudgeProgramProtocolConfigSchema.nullable(),
+  fixtures: z.array(JudgeProgramFixtureSchema),
+  revision: z.number().int().positive(),
+  createdAt: DateTimeWireSchema,
+  updatedAt: DateTimeWireSchema,
+});
+
+export const JudgeProgramVersionSchema = z.object({
+  id: z.string(),
+  programId: z.string(),
+  problemId: z.string(),
+  versionNumber: z.number().int().positive(),
+  language: z.string(),
+  source: z.string(),
+  sourceSha256: z.string(),
+  origin: z.string(),
+  aiRequestId: z.string().nullable(),
+  compileStatus: z.string(),
+  compileMessage: z.string().nullable(),
+  protocol: z.string(),
+  protocolVersion: z.number().int().positive(),
+  templateId: z.string().nullable(),
+  templateVersion: z.number().int().positive().nullable(),
+  lifecycleStatus: z.string(),
+  runtimeMetadata: z.unknown().nullable(),
+  protocolConfig: z.unknown().nullable(),
+  preflightReport: z.unknown().nullable(),
+  fixtureSetId: z.string().nullable(),
+  verifiedAt: DateTimeWireSchema.nullable(),
+  activatedAt: DateTimeWireSchema.nullable(),
+  createdBy: z.string(),
+  createdAt: DateTimeWireSchema,
+});
+
+export const JudgeProgramSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  kind: JudgeProgramKindSchema,
+  name: z.string(),
+  language: z.string(),
+  currentVersionId: z.string().nullable(),
+  status: z.string(),
+  createdBy: z.string(),
+  createdAt: DateTimeWireSchema,
+  updatedAt: DateTimeWireSchema,
+  versions: z.array(JudgeProgramVersionSchema).optional(),
+});
+
+export const JudgeProgramFixtureSetSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  programId: z.string(),
+  revision: z.number().int().positive(),
+  fixtures: z.array(JudgeProgramFixtureSchema),
+  fixtureHash: z.string(),
+  createdBy: z.string(),
+  createdAt: DateTimeWireSchema,
+});
+
+export const JudgeProgramVerificationReportSchema = z.object({
+  fixtures: z.array(z.object({
+    name: z.string(),
+    passed: z.boolean(),
+    message: z.string(),
+    timeMs: z.number(),
+    memoryKb: z.number(),
+    stdoutPreview: z.string().optional(),
+    stderrPreview: z.string().optional(),
+  })).optional(),
+  warnings: z.array(z.string()).optional(),
+}).passthrough();
+
+export const JudgeProgramVerificationSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  programId: z.string(),
+  versionId: z.string(),
+  fixtureSetId: z.string(),
+  mode: z.enum(["compile", "preflight"]),
+  status: z.string(),
+  judgeId: z.string().nullable(),
+  fencingToken: z.string().nullable(),
+  leaseExpiresAt: DateTimeWireSchema.nullable(),
+  attemptCount: z.number().int().nonnegative(),
+  report: JudgeProgramVerificationReportSchema.nullable(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  createdBy: z.string(),
+  startedAt: DateTimeWireSchema.nullable(),
+  finishedAt: DateTimeWireSchema.nullable(),
+  createdAt: DateTimeWireSchema,
+  updatedAt: DateTimeWireSchema,
+});
+
+export const JudgeProgramAuditLogSchema = z.object({
+  id: z.string(),
+  programId: z.string(),
+  versionId: z.string().nullable(),
+  actorUserId: z.string(),
+  action: z.string(),
+  metadata: z.unknown().nullable(),
+  createdAt: DateTimeWireSchema,
+});
+
+export const ValidatorSpecSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  versionNumber: z.number().int().positive(),
+  spec: z.unknown(),
+  specHash: z.string(),
+  generatedSource: z.string(),
+  templateVersion: z.string(),
+  compileStatus: z.string(),
+  compileMessage: z.string().nullable(),
+  verification: z.unknown().nullable(),
+  origin: z.string(),
+  aiRequestId: z.string().nullable(),
+  programVersionId: z.string().nullable(),
+  status: z.string(),
+  createdBy: z.string(),
+  createdAt: DateTimeWireSchema,
+  activatedAt: DateTimeWireSchema.nullable(),
+});
+
+const JudgeProgramFixtureInputSchema = JudgeProgramFixtureSchema.extend({
+  name: z.string().max(80).optional(),
+});
+const JudgeProgramSourceInputShape = {
+  language: z.string().min(1),
+  protocol: z.string().min(1),
+  templateId: z.string().optional(),
+  templateVersion: z.number().int().positive().optional(),
+  source: z.string().min(1).max(262144),
+  protocolConfig: JudgeProgramProtocolConfigSchema.optional(),
+  fixtures: z.array(JudgeProgramFixtureInputSchema).max(50).optional(),
+};
+export const JudgeProgramDraftInputSchema = z.object({
+  kind: JudgeProgramKindSchema,
+  name: z.string().min(1).max(80).optional(),
+  programId: z.string().optional(),
+  expectedRevision: z.number().int().positive().optional(),
+  ...JudgeProgramSourceInputShape,
+});
+export const JudgeProgramCreateInputSchema = z.object({
+  kind: JudgeProgramKindSchema,
+  name: z.string().min(1).max(80).optional(),
+  ...JudgeProgramSourceInputShape,
+});
+export const JudgeProgramVersionCreateInputSchema = z.object(JudgeProgramSourceInputShape);
+export const JudgeProgramFixtureSetInputSchema = z.object({
+  fixtures: z.array(JudgeProgramFixtureInputSchema).min(1).max(50),
+});
+export const JudgeProgramPreflightInputSchema = z.object({
+  fixtureSetId: z.string().optional(),
+  fixtures: z.array(JudgeProgramFixtureInputSchema).min(1).max(50).optional(),
+}).refine(value => Boolean(value.fixtureSetId || value.fixtures), {
+  message: "fixtureSetId 或 fixtures 至少提供一项",
+});
+export const JudgeProgramUpdateInputSchema = z.object({
+  currentVersionId: z.string().optional(),
+  name: z.string().min(1).max(80).optional(),
+  status: z.literal("archived").optional(),
+}).refine(value => Object.keys(value).length > 0, { message: "至少提供一项更新" });
+export const ValidatorSpecCreateInputSchema = z.object({ spec: z.unknown() }).refine(
+  value => Object.prototype.hasOwnProperty.call(value, "spec"),
+  { message: "spec 不能为空" },
+);
+export const JudgeProgramCreatedSchema = z.object({
+  program: JudgeProgramSchema,
+  version: JudgeProgramVersionSchema,
+});
+export const ValidatorSpecMaterializedSchema = JudgeProgramCreatedSchema.extend({
+  spec: ValidatorSpecSchema,
+  requiresVerification: z.boolean(),
+});
+
 export const ProblemJudgeModeTransitionInputSchema = z.object({
   targetMode: z.enum(["acm", "oi"]),
   expectedLatestRevisionId: z.string().min(1),
@@ -1043,6 +1231,79 @@ export const ProblemContracts = {
     scope: "account",
     data: JudgeProgramTemplateSchema,
   }),
+  listJudgeProgramDrafts: defineApiEndpoint({
+    key: "judge-program.drafts.list", method: "GET", scope: "context",
+    data: z.array(JudgeProgramDraftSchema),
+  }),
+  saveJudgeProgramDraft: defineApiEndpoint({
+    key: "judge-program.draft.save", method: "POST", scope: "context",
+    body: JudgeProgramDraftInputSchema, data: JudgeProgramDraftSchema,
+  }),
+  updateJudgeProgramDraft: defineApiEndpoint({
+    key: "judge-program.draft.update", method: "PATCH", scope: "context",
+    body: JudgeProgramDraftInputSchema, data: JudgeProgramDraftSchema,
+  }),
+  deleteJudgeProgramDraft: defineApiEndpoint({
+    key: "judge-program.draft.delete", method: "DELETE", scope: "context",
+    body: z.object({}), data: z.object({ deleted: z.literal(true) }),
+  }),
+  listJudgePrograms: defineApiEndpoint({
+    key: "judge-program.list", method: "GET", scope: "context",
+    data: z.array(JudgeProgramSchema.extend({ versions: z.array(JudgeProgramVersionSchema) })),
+  }),
+  listJudgeProgramAuditLogs: defineApiEndpoint({
+    key: "judge-program.audit-logs.list", method: "GET", scope: "context",
+    data: z.array(JudgeProgramAuditLogSchema),
+  }),
+  createJudgeProgram: defineApiEndpoint({
+    key: "judge-program.create", method: "POST", scope: "context",
+    body: JudgeProgramCreateInputSchema, data: JudgeProgramCreatedSchema,
+  }),
+  createJudgeProgramVersion: defineApiEndpoint({
+    key: "judge-program.version.create", method: "POST", scope: "context",
+    body: JudgeProgramVersionCreateInputSchema, data: JudgeProgramVersionSchema,
+  }),
+  createJudgeProgramFixtureSet: defineApiEndpoint({
+    key: "judge-program.fixture-set.create", method: "POST", scope: "context",
+    body: JudgeProgramFixtureSetInputSchema, data: JudgeProgramFixtureSetSchema,
+  }),
+  listJudgeProgramFixtureSets: defineApiEndpoint({
+    key: "judge-program.fixture-sets.list", method: "GET", scope: "context",
+    data: z.array(JudgeProgramFixtureSetSchema),
+  }),
+  compileJudgeProgramVersion: defineApiEndpoint({
+    key: "judge-program.version.compile", method: "POST", scope: "context",
+    body: z.object({}), data: JudgeProgramVerificationSchema,
+  }),
+  preflightJudgeProgramVersion: defineApiEndpoint({
+    key: "judge-program.version.preflight", method: "POST", scope: "context",
+    body: JudgeProgramPreflightInputSchema, data: JudgeProgramVerificationSchema,
+  }),
+  getJudgeProgramVerification: defineApiEndpoint({
+    key: "judge-program.version.verification", method: "GET", scope: "context",
+    data: z.array(JudgeProgramVerificationSchema),
+  }),
+  updateJudgeProgram: defineApiEndpoint({
+    key: "judge-program.update", method: "PATCH", scope: "context",
+    body: JudgeProgramUpdateInputSchema, data: JudgeProgramSchema,
+  }),
+  createValidatorSpec: defineApiEndpoint({
+    key: "validator-spec.create", method: "POST", scope: "context",
+    body: ValidatorSpecCreateInputSchema, data: ValidatorSpecSchema,
+  }),
+  listValidatorSpecs: defineApiEndpoint({
+    key: "validator-spec.list", method: "GET", scope: "context",
+    data: z.array(ValidatorSpecSchema),
+  }),
+  activateValidatorSpec: defineApiEndpoint({
+    key: "validator-spec.activate", method: "POST", scope: "context",
+    body: z.object({}), data: ValidatorSpecMaterializedSchema,
+  }),
+  materializeValidatorSpec: defineApiEndpoint({
+    key: "validator-spec.materialize", method: "POST", scope: "context",
+    body: z.object({}), data: ValidatorSpecMaterializedSchema,
+  }),
+
   transitionJudgeMode: defineApiEndpoint({
     key: "problem.judge-mode.transition",
     method: "POST",
@@ -1100,3 +1361,10 @@ export type JudgeProgramProtocolConfig = z.infer<typeof JudgeProgramProtocolConf
 export type JudgeProgramTemplateSummary = z.infer<typeof JudgeProgramTemplateSummarySchema>;
 export type JudgeProgramTemplate = z.infer<typeof JudgeProgramTemplateSchema>;
 export type JudgeProgramCatalog = z.infer<typeof JudgeProgramCatalogSchema>;
+export type JudgeProgramDraft = z.infer<typeof JudgeProgramDraftSchema>;
+export type JudgeProgramVersion = z.infer<typeof JudgeProgramVersionSchema>;
+export type JudgeProgram = z.infer<typeof JudgeProgramSchema>;
+export type JudgeProgramFixtureSet = z.infer<typeof JudgeProgramFixtureSetSchema>;
+export type JudgeProgramVerification = z.infer<typeof JudgeProgramVerificationSchema>;
+export type JudgeProgramAuditLog = z.infer<typeof JudgeProgramAuditLogSchema>;
+export type ValidatorSpec = z.infer<typeof ValidatorSpecSchema>;
