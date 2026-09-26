@@ -12,6 +12,7 @@ export const BlogPostTypeSchema = z.enum([
   'ANNOUNCEMENT',
 ])
 export const BlogVisibilitySchema = z.enum(['PRIVATE', 'ORGANIZATION', 'PLATFORM', 'UNLISTED', 'PUBLIC'])
+export const BlogPostStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED', 'MODERATION_HOLD', 'REMOVED'])
 
 export const BlogClassificationSchema = z.looseObject({
   tags: z.array(z.looseObject({
@@ -93,6 +94,37 @@ export const BlogDiscoveryDetailSchema = z.looseObject({
   }).optional(),
 })
 
+export const MyBlogListItemSchema = z.looseObject({
+  id: z.string(),
+  type: BlogPostTypeSchema,
+  status: BlogPostStatusSchema,
+  visibility: BlogVisibilitySchema,
+  updatedAt: DateTimeWireSchema,
+  publishedAt: DateTimeWireSchema.nullable().optional(),
+  currentVersion: z.looseObject({
+    version: z.number().int().positive(),
+    title: z.string(),
+    summary: z.string().nullable().optional(),
+    classification: BlogClassificationSchema.nullable().optional(),
+  }).nullable(),
+  draft: z.looseObject({
+    title: z.string(),
+    summary: z.string().nullable().optional(),
+    revision: z.number().int().positive(),
+  }).nullable().optional(),
+})
+export const MyBlogListSchema = paginatedDataSchema(MyBlogListItemSchema)
+
+export const BlogManagementContracts = {
+  listMine: defineApiEndpoint({
+    key: 'blog.management.list-mine',
+    method: 'GET',
+    scope: 'account',
+    query: PaginationQuerySchema.extend({ status: BlogPostStatusSchema.optional() }),
+    data: MyBlogListSchema,
+  }),
+} as const
+
 export const BlogDiscoveryContracts = {
   list: defineApiEndpoint({
     key: 'blog.discovery.list',
@@ -119,6 +151,9 @@ export const BlogDiscoveryContracts = {
   }),
 } as const
 
+export type MyBlogListItem = z.infer<typeof MyBlogListItemSchema>
+export type MyBlogList = z.infer<typeof MyBlogListSchema>
+export type BlogPostStatus = z.infer<typeof BlogPostStatusSchema>
 export type BlogDiscoveryItem = z.infer<typeof BlogDiscoveryItemSchema>
 export type BlogDiscoveryList = z.infer<typeof BlogDiscoveryListSchema>
 export type BlogDiscoveryDetail = z.infer<typeof BlogDiscoveryDetailSchema>

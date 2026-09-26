@@ -11,22 +11,10 @@ import { Select } from '@/components/ui/FormControls'
 import { StatusBadge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Pagination } from '@/components/ui/Pagination'
-import apiClient from '@/lib/apiClient'
-import { BLOG_TYPE_LABELS, BLOG_VISIBILITY_LABELS, type BlogPostType, type BlogVisibility } from '../model/blog-contract'
+import { listMyBlogPosts } from '../api/blogDiscoveryApi'
+import { BLOG_TYPE_LABELS, BLOG_VISIBILITY_LABELS } from '../model/blog-contract'
+import type { BlogPostStatus, MyBlogList, MyBlogListItem } from '@oi-manager/contracts'
 import styles from './BlogWorkspace.module.css'
-
-type BlogListItem = {
-  id: string
-  type: BlogPostType
-  status: string
-  visibility: BlogVisibility
-  updatedAt: string
-  publishedAt?: string | null
-  currentVersion?: { version: number; title: string; summary?: string | null; classification?: { series?: { title: string } | null; tags?: Array<{ id: string; name: string }> } } | null
-  draft?: { title: string; summary?: string | null; revision: number } | null
-}
-
-type BlogListPayload = { items: BlogListItem[]; page: number; pageSize: number; total: number; totalPages: number }
 
 function statusBadge(status: string) {
   if (status === 'PUBLISHED') return <StatusBadge variant="success">已发布</StatusBadge>
@@ -38,21 +26,23 @@ function statusBadge(status: string) {
 
 export function BlogListPage() {
   const router = useRouter()
-  const [items, setItems] = useState<BlogListItem[]>([])
+  const [items, setItems] = useState<MyBlogListItem[]>([])
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
-  const [payload, setPayload] = useState<BlogListPayload | null>(null)
+  const [payload, setPayload] = useState<MyBlogList | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
-    const query = new URLSearchParams({ page: String(page), pageSize: '20' })
-    if (status) query.set('status', status)
-    const result = await apiClient.get<BlogListPayload>(`/api/blogs?${query}`, { accountScoped: true })
-    if (result.success && result.data) { setItems(result.data.items); setPayload(result.data) }
-    else { setItems([]); setPayload(null); setError(result.message || '博客列表加载失败') }
-    setLoading(false)
+    try {
+      const result = await listMyBlogPosts({ page, pageSize: 20, status: status ? status as BlogPostStatus : undefined })
+      setItems(result.items); setPayload(result)
+    } catch (reason) {
+      setItems([]); setPayload(null); setError(reason instanceof Error ? reason.message : '博客列表加载失败')
+    } finally {
+      setLoading(false)
+    }
   }, [page, status])
 
   useEffect(() => { void load() }, [load])

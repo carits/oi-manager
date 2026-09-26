@@ -1,11 +1,21 @@
 import {
   BlogDiscoveryContracts,
+  BlogManagementContracts,
   type BlogDiscoveryDetail,
   type BlogDiscoveryList,
   type BlogPostType,
+  type BlogPostStatus,
+  type MyBlogList,
   type ProblemRelatedBlogList,
 } from '@oi-manager/contracts'
 import { accountClient } from '@/lib/apiClient'
+
+export function listMyBlogPosts(input: { page: number; pageSize: number; status?: BlogPostStatus }): Promise<MyBlogList> {
+  const query = BlogManagementContracts.listMine.query.parse(input)
+  const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) })
+  if (query.status) params.set('status', query.status)
+  return accountClient.queryContract(BlogManagementContracts.listMine, `/api/blogs?${params}`)
+}
 
 export function listBlogDiscovery(input: {
   page: number

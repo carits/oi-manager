@@ -1,5 +1,5 @@
 import { Router, type Response } from 'express'
-import { BlogDiscoveryContracts } from '@oi-manager/contracts'
+import { BlogDiscoveryContracts, BlogManagementContracts } from '@oi-manager/contracts'
 import { authenticate, optionalAuthenticate, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
@@ -100,7 +100,16 @@ blogRouter.get('/blog-discovery/:id', optionalAuthenticate, asyncHandler(async (
 blogRouter.get('/blog-discovery/:id/community', optionalAuthenticate, publicEndpoint(req => getPublicBlogCommunity(req.user, req.params.id)))
 blogRouter.get('/blog-discovery/:id/comments', optionalAuthenticate, publicEndpoint(req => listBlogComments(req.user, req.params.id, req.query)))
 blogRouter.get('/blog-discovery/:id/comments/:commentId/replies', optionalAuthenticate, publicEndpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, req.query)))
-blogRouter.get('/blogs', authenticate, endpoint(req => listMyBlogPosts(req.user, req.query)))
+blogRouter.get('/blogs', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  try {
+    const query = parseContractQuery(BlogManagementContracts.listMine, req.query)
+    return sendContractData(res, BlogManagementContracts.listMine, await listMyBlogPosts(req.user!, query))
+  } catch (error) {
+    if (sendContractError(error, res)) return
+    if (error instanceof BlogDomainError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
+    throw error
+  }
+}))
 blogRouter.get('/blogs/:id', authenticate, endpoint(req => getBlogPost(req.user, req.params.id)))
 blogRouter.patch('/blogs/:id/draft', authenticate, endpoint(req => updateBlogDraft(req.user, req.params.id, req.body)))
 blogRouter.post('/blogs/:id/publish', authenticate, endpoint(req => publishBlogPost(req.user, req.params.id, req.body)))

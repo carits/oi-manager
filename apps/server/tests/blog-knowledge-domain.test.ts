@@ -62,6 +62,19 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     })
   }
 
+  it('validates and returns the author blog list contract', async () => {
+    const created = await createProblemBlog()
+    expect(created.status).toBe(201)
+
+    const listed = await client(author).get('/api/blogs?page=1&pageSize=20&status=DRAFT')
+    expect(listed.status).toBe(200)
+    expect(listed.body.data.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: created.body.data.id, status: 'DRAFT' })]))
+
+    const invalid = await client(author).get('/api/blogs?status=UNKNOWN')
+    expect(invalid.status).toBe(422)
+    expect(invalid.body.code).toBe('API_CONTRACT_REQUEST_INVALID')
+  })
+
   it('publishes immutable versions, pins a problem revision, and powers reverse lookup', async () => {
     const created = await createProblemBlog()
     expect(created.status).toBe(201)
