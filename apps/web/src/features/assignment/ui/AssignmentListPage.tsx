@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation'
 import { ArrowRight, CalendarClock, History, ListChecks, Plus, Users } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
-import apiClient from '@/lib/apiClient'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
@@ -18,7 +17,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Tabs } from '@/components/ui/Tabs'
 import { useToast } from '@/components/ui/Toast'
 import styles from './Assignment.module.css'
-import { type Assignment, type AssignmentListPayload, type AssignmentStatus, assignmentStatusMeta, formatAssignmentTime } from '../model/types'
+import { createAssignmentDraft } from '../api/assignmentApi'
+import { type AssignmentListPayload, type AssignmentStatus, assignmentStatusMeta, formatAssignmentTime } from '../model/types'
 
 type Filter = 'active' | 'draft' | 'finished' | 'all'
 
@@ -27,7 +27,7 @@ function localInput(date: Date) {
   return shifted.toISOString().slice(0, 16)
 }
 
-function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { open: boolean; organizationId: string; onClose: () => void; onCreated: (assignment: Assignment) => void }) {
+function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { open: boolean; organizationId: string; onClose: () => void; onCreated: (assignment: { id: string }) => void }) {
   const toast = useToast()
   const now = new Date()
   const [title, setTitle] = useState('')
@@ -43,7 +43,7 @@ function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { 
 
   const submit = async () => {
     setSaving(true)
-    const result = await apiClient.mutate<Assignment>('/api/assignments', 'POST', { organizationId, title, description, publishAt: publishAt || null, openAt, dueAt, closeAt, latePolicy, latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null })
+    const result = await createAssignmentDraft(organizationId, { organizationId, title, description, publishAt: publishAt || null, openAt, dueAt, closeAt, latePolicy: latePolicy as 'DISALLOW' | 'ALLOW_MARK_LATE' | 'ALLOW_NO_PENALTY' | 'ALLOW_WITH_PENALTY', latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null })
     setSaving(false)
     if (!result.ok) return toast.error(result.error.message)
     toast.success('作业已创建，请继续选择题目和学生')

@@ -76,7 +76,27 @@ export const AssignmentValidationDataSchema = z.object({
   issues: z.array(FieldIssueSchema),
 })
 
+export const CreateAssignmentBodySchema = z.object({
+  organizationId: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(10_000).optional().default(''),
+  publishAt: z.string().trim().min(1).max(64).nullable().optional(),
+  openAt: z.string().trim().min(1).max(64),
+  dueAt: z.string().trim().min(1).max(64),
+  closeAt: z.string().trim().min(1).max(64),
+  latePolicy: z.enum(['DISALLOW', 'ALLOW_MARK_LATE', 'ALLOW_NO_PENALTY', 'ALLOW_WITH_PENALTY']).default('DISALLOW'),
+  latePenaltyPercent: z.number().int().min(0).max(100).nullable().optional(),
+})
+export type CreateAssignmentBody = z.infer<typeof CreateAssignmentBodySchema>
+
 export const AssignmentContracts = {
+  create: defineApiEndpoint({
+    key: 'assignment.create',
+    method: 'POST',
+    scope: 'organization',
+    body: CreateAssignmentBodySchema,
+    data: z.looseObject({ id: z.string().min(1) }),
+  }),
   progress: defineApiEndpoint({
     key: 'assignment.progress',
     method: 'GET',

@@ -2,9 +2,18 @@ import {
   AssignmentContracts,
   AssignmentProgressQuerySchema,
   type AssignmentProgressData,
+  type CreateAssignmentBody,
   type ManualCompletionBody,
 } from '@oi-manager/contracts'
-import apiClient from '@/lib/apiClient'
+import apiClient, { organizationClient } from '@/lib/apiClient'
+
+export function createAssignmentDraft(organizationId: string, body: CreateAssignmentBody) {
+  return organizationClient(organizationId).mutateContract(
+    AssignmentContracts.create,
+    '/api/assignments',
+    body,
+  )
+}
 
 export async function getAssignmentProgress(
   assignmentId: string,

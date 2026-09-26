@@ -52,12 +52,13 @@ assignmentRouter.get('/assignments', asyncHandler(async (req: AuthRequest, res) 
 
 assignmentRouter.post('/assignments', asyncHandler(async (req: AuthRequest, res) => {
   try {
+    const parsed = parseContractBody(AssignmentContracts.create, req.body)
     const organizationId = req.user!.organizationId
-    if (organizationId && req.body?.organizationId && String(req.body.organizationId) !== organizationId) {
+    if (organizationId && parsed.organizationId !== organizationId) {
       return res.status(403).json({ success: false, code: 'ORGANIZATION_CONTEXT_REQUIRED', message: '不能在当前学校上下文为其他学校创建作业' })
     }
-    const body = organizationId ? { ...req.body, organizationId } : req.body
-    return res.status(201).json({ success: true, data: await createAssignment(req.user!.userId, body) })
+    const body = organizationId ? { ...parsed, organizationId } : parsed
+    return sendContractData(res, AssignmentContracts.create, await createAssignment(req.user!.userId, body), 201)
   }
   catch (error) { return sendError(error, res) }
 }))
