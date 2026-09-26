@@ -71,10 +71,10 @@ export function WorkspaceSwitcher() {
 
   if (isGlobalAdmin) return null
 
-  const title = current?.type === 'platform' ? '平台管理' : current?.type === 'personal' ? '个人' : user?.organizationName || '选择身份'
-  const subtitle = current?.type === 'platform' ? '平台管理员' : current?.type === 'personal' ? user?.username : workspaceRoleLabel(user?.organizationRole || current?.relationLabel)
-  const shouldSearch = loaded && workspaces.filter(item => item.type === 'organization').length > 5
   const currentType = current?.type || (currentOrganization ? 'organization' : 'personal')
+  const title = currentType === 'platform' ? '平台管理' : currentType === 'personal' ? '个人' : user?.organizationName || '当前学校'
+  const subtitle = currentType === 'platform' ? '平台管理员' : currentType === 'personal' ? user?.username : workspaceRoleLabel(user?.organizationRole || current?.relationLabel)
+  const shouldSearch = loaded && workspaces.filter(item => item.type === 'organization').length > 5
 
   return <div className={styles.root} ref={rootRef}>
     <Button variant="ghost" className={styles.trigger} type="button" onClick={() => { if (open) setOpen(false); else void openSwitcher() }} aria-expanded={open} aria-haspopup="menu" aria-label={`切换身份，当前${title}，${subtitle}`}>
