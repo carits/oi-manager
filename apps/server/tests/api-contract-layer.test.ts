@@ -954,8 +954,8 @@ describe('shared API contract adapter', () => {
       }],
       candidates: [{
         id: 'candidate-1', source: 'hack', targetRole: 'hack_gate', status: 'ELIGIBLE',
-        evaluationStage: 'evaluated', marginalValue: 12.5, createdAt: new Date('2026-09-27T00:00:00Z'),
-        inputSha256: 'must-not-leak',
+        evaluationStage: 'evaluated', marginalValue: 12.5, affectedSubtaskIds: [1],
+        createdAt: new Date('2026-09-27T00:00:00Z'), inputSha256: 'must-not-leak',
       }],
       retirements: [],
     })
