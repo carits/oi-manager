@@ -6,12 +6,12 @@ import { Building2, ChevronRight, ShieldCheck, UserRound } from 'lucide-react'
 import type { AuthUser } from '@/features/auth'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 import { listWorkspaces } from '../api/workspaceApi'
-import { workspaceHref, workspaceRoleLabel } from '../model/workspaceRouting'
+import { organizationUnavailableMessage, workspaceHref, workspaceRoleLabel } from '../model/workspaceRouting'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import styles from './IdentityChooser.module.css'
 
-export function IdentityChooser({ user }: { user: AuthUser }) {
+export function IdentityChooser({ user, unavailableReason }: { user: AuthUser; unavailableReason?: string }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
   const [error, setError] = useState('')
   const [entering, setEntering] = useState<string | null>(null)
@@ -22,7 +22,7 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
     try {
       const { workspaces: items } = await listWorkspaces()
       setWorkspaces(items)
-      if (items.length === 1) window.location.replace(workspaceHref(items[0], 'overview'))
+      if (items.length === 1 && !unavailableReason) window.location.replace(workspaceHref(items[0], 'overview'))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '身份列表加载失败')
     }
@@ -34,7 +34,7 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
       return
     }
     void load()
-  }, [user.accountRole])
+  }, [unavailableReason, user.accountRole])
 
   const enter = (workspace: WorkspaceSummary) => {
     setEntering(workspace.organizationId || workspace.type)
@@ -45,6 +45,12 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
     <section className={styles.panel} aria-labelledby="identity-title">
       <img className={styles.logo} src="/logo.png" alt="Carits" />
       <header><h1 id="identity-title">选择身份</h1><p>你好，{user.username}</p></header>
+      {unavailableReason && <div className={styles.notice} role="status">
+        <strong>原学校身份已不可用</strong>
+        <p>{organizationUnavailableMessage(unavailableReason)}</p>
+        <p>请选择个人空间或其他有效身份；如需恢复学校权限，请联系学校管理员。</p>
+        <Button variant="outline" onClick={() => void load()}>刷新成员身份</Button>
+      </div>}
       {error && <div className={styles.error}><p>{error}</p><Button variant="secondary" onClick={() => void load()}>重新加载</Button></div>}
       {!workspaces && !error && <p className={styles.loading}>正在加载可进入的身份…</p>}
       {workspaces && <div className={styles.list}>{workspaces.map(workspace => {

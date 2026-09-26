@@ -1,4 +1,4 @@
-import { canNavigate, fallbackHref, listHref, notificationTeamHref, resolveNotificationHref, resourceHref, workspaceHref } from './workspaceRouting'
+import { canNavigate, fallbackHref, listHref, notificationTeamHref, organizationUnavailableMessage, resolveNotificationHref, resourceHref, workspaceHref } from './workspaceRouting'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 
@@ -37,5 +37,11 @@ describe('组织路由能力', () => {
     expect(workspaceHref(personal, 'knowledge')).toBe('/personal/knowledge')
     expect(workspaceHref(campus, 'knowledge')).toBe('/org/org_1/knowledge')
     expect(workspaceHref({ ...campus, availableModules: ['submissions'] }, 'submissions')).toBe('/org/org_1/submissions')
+  })
+
+  it('用安全文案解释学校身份失效原因', () => {
+    expect(organizationUnavailableMessage('ORGANIZATION_ACCESS_DENIED')).toContain('移除或停用')
+    expect(organizationUnavailableMessage('ORGANIZATION_NOT_AVAILABLE')).toContain('学校当前不可用')
+    expect(organizationUnavailableMessage('UNKNOWN')).toContain('身份已失效')
   })
 })

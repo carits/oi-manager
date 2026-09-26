@@ -67,6 +67,7 @@ export function notificationTeamHref(workspace: NavigationContext['workspace'], 
   if (notificationValue.startsWith('organization:')) { const id = notificationValue.slice('organization:'.length); return id ? `/org/${id}/overview` : null }
   if (!notificationValue.startsWith('team:')) return null
   const teamId = notificationValue.slice('team:'.length)
+
   if (!teamId) return null
   return workspace === 'personal' ? `/personal/teams/${teamId}` : workspace === 'organization' && organizationId ? `/org/${organizationId}/teams/${teamId}` : null
 }
@@ -82,4 +83,17 @@ export function workspaceRoleLabel(label?: string | null) {
   if (label === '本校教师') return '教师'
   if (label === '学校负责人') return '负责人'
   return label || '学校成员'
+}
+
+export function organizationUnavailableMessage(reason?: string | null) {
+  if (reason === 'ORGANIZATION_ACCESS_DENIED') {
+    return '你的学校成员身份已被移除或停用，原学校数据已停止显示。'
+  }
+  if (reason === 'ORGANIZATION_NOT_AVAILABLE') {
+    return '该学校当前不可用，原学校数据已停止显示。'
+  }
+  if (reason === 'ORGANIZATION_AUTHORIZATION_INCOMPLETE') {
+    return '你的学校成员资料或权限尚未配置完整，暂时不能进入该学校。'
+  }
+  return '原学校身份已失效或不可用，相关学校数据已停止显示。'
 }

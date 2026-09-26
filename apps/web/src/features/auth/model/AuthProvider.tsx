@@ -75,7 +75,7 @@ export function AuthProvider({
   }, [mutateCache, user])
 
   useEffect(() => {
-    const handleUnavailableOrganization = () => {
+    const handleUnavailableOrganization = (event: Event) => {
       void mutateCache(() => true, undefined, { revalidate: false })
       setUser(current => current ? {
         ...current,
@@ -84,7 +84,9 @@ export function AuthProvider({
         organizationMembershipId: undefined,
         organizationRole: undefined,
       } : null)
-      window.location.assign('/identity?organizationUnavailable=1')
+      const detail = event instanceof CustomEvent ? event.detail as { code?: unknown } : undefined
+      const reason = typeof detail?.code === 'string' ? detail.code : 'UNKNOWN'
+      window.location.assign(`/identity?organizationUnavailable=1&reason=${encodeURIComponent(reason)}`)
     }
     window.addEventListener(ORGANIZATION_UNAVAILABLE_EVENT, handleUnavailableOrganization)
     return () => window.removeEventListener(ORGANIZATION_UNAVAILABLE_EVENT, handleUnavailableOrganization)

@@ -246,7 +246,7 @@ export class ApiClient {
         typeof window !== 'undefined' &&
         window.location.pathname.startsWith('/org/')
       ) {
-        window.dispatchEvent(new CustomEvent(ORGANIZATION_UNAVAILABLE_EVENT))
+        window.dispatchEvent(new CustomEvent(ORGANIZATION_UNAVAILABLE_EVENT, { detail: { code: parsed.code } }))
       }
       return parsed
     } catch (error) {

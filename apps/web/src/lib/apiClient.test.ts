@@ -195,6 +195,9 @@ describe('parseApiResponse', () => {
     }), { status: 403, headers: { 'Content-Type': 'application/json' } }))
     await apiClient.get('/api/private')
     expect(dispatchEvent).toHaveBeenCalledTimes(1)
+    expect(dispatchEvent.mock.calls[0][0]).toMatchObject({
+      detail: { code: 'ORGANIZATION_ACCESS_DENIED' },
+    })
   })
 
   it('does not evict account pages or generic forbidden resources', async () => {
