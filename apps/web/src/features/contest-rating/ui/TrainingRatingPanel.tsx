@@ -1,14 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import apiClient from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/FormControls'
 import { Section } from '@/components/ui/Section'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import styles from './TrainingRatingPanel.module.css'
-import { getContestRating } from '@/features/contest-rating/api/contestRatingApi'
-import type { ContestRatingData } from '@oi-manager/contracts'
+import { finalizeContestRating, getContestRating, getContestRatingParticipation, rebuildContestRating, updateContestRatingParticipation } from '@/features/contest-rating/api/contestRatingApi'
+import type { ContestRatingData, ContestRatingParticipation } from '@oi-manager/contracts'
 
 type RatingPayload = ContestRatingData
 
@@ -24,18 +23,6 @@ type ContestRatingTraining = {
     weight: number
     locked: boolean
   } | null
-}
-
-type RatingParticipationPayload = {
-  scope: string
-  context: 'organization' | 'platform' | 'personal_team'
-  fixed: boolean
-  selectedOrganizationId: string | null
-  selectedOrganization?: { id: string; name: string; shortName?: string | null } | null
-  organizations: Array<{ id: string; name: string; shortName?: string | null }>
-  requiresExplicitSelection: boolean
-  canChange: boolean
-  locked: boolean
 }
 
 const stateLabel: Record<string, string> = {
@@ -60,7 +47,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
   onChanged: () => void | Promise<void>
 }) {
   const [data, setData] = useState<RatingPayload | null>(null)
-  const [participation, setParticipation] = useState<RatingParticipationPayload | null>(null)
+  const [participation, setParticipation] = useState<ContestRatingParticipation | null>(null)
   const [selectedOrganizationId, setSelectedOrganizationId] = useState('')
   const [participationSaving, setParticipationSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -73,15 +60,11 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     try {
       const [response, participationResponse] = await Promise.all([
         getContestRating(Number(trainingId)),
-        apiClient.get<RatingParticipationPayload>(`/api/contests/${trainingId}/rating-participation`),
+        getContestRatingParticipation(Number(trainingId)),
       ])
       setData(response)
-      if (participationResponse.success && participationResponse.data) {
-        setParticipation(participationResponse.data)
-        setSelectedOrganizationId(participationResponse.data.selectedOrganizationId || '')
-      } else {
-        setParticipation(null)
-      }
+      setParticipation(participationResponse)
+      setSelectedOrganizationId(participationResponse.selectedOrganizationId || '')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '读取 Rating 结算状态失败')
     } finally {
@@ -95,9 +78,10 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     setAction(kind)
     setError('')
     try {
-      const suffix = kind === 'finalize' ? 'finalize' : 'rating/rebuild'
-      const response = await apiClient.post<RatingPayload>(`/api/contests/${trainingId}/${suffix}`, {})
-      if (!response.success || !response.data) throw new Error(response.message || 'Rating 操作失败')
+      const response = kind === 'finalize'
+        ? await finalizeContestRating(Number(trainingId))
+        : await rebuildContestRating(Number(trainingId))
+      if (!response.ok) throw response.error
       setData(response.data)
       await onChanged()
     } catch (reason) {
@@ -111,10 +95,8 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     setParticipationSaving(true)
     setError('')
     try {
-      const response = await apiClient.put<RatingParticipationPayload>(`/api/contests/${trainingId}/rating-participation`, {
-        organizationId: selectedOrganizationId || null,
-      })
-      if (!response.success || !response.data) throw new Error(response.message || '保存参赛组织失败')
+      const response = await updateContestRatingParticipation(Number(trainingId), selectedOrganizationId || null)
+      if (!response.ok) throw response.error
       setParticipation(response.data)
       setSelectedOrganizationId(response.data.selectedOrganizationId || '')
     } catch (reason) {

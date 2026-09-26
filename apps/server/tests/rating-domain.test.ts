@@ -8,16 +8,54 @@ import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from '.
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 import { lockRatingParticipantTx, processDueContestRatings } from '../src/modules/rating/application/contest-rating.service'
-import { ensureCanonicalContestFixtureTx, syncCanonicalContestProblemFixtureTx } from './helpers/contest-fixture'
 import { holdContestFinalizationForRejudgeTx } from '../src/modules/contest/contest-command.service'
 
 const app = createTestApp()
 
-async function createContestRuntimeFixture(args: Prisma.TrainingCreateArgs) {
-  const runtime = await prisma.training.create(args)
-  const aggregate = await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, runtime.id))
-  if (!aggregate) throw new Error('Contest aggregate missing')
-  return { ...runtime, canonicalContestId: aggregate.id }
+type ContestRuntimeFixtureArgs = {
+  data: {
+    title: string
+    description?: string | null
+    format: string
+    type?: string
+    scope: string
+    organizationId?: string | null
+    teamId?: string | null
+    startTime: Date
+    endTime: Date
+    status: string
+    finalizationStatus?: Prisma.ContestUncheckedCreateInput['finalizationStatus']
+    createdBy: string
+  }
+}
+
+async function createContestRuntimeFixture(args: ContestRuntimeFixtureArgs) {
+  const source = args.data
+  const aggregate = await prisma.contest.create({
+    data: {
+      id: crypto.randomUUID(),
+      createdBy: source.createdBy,
+      organizationId: source.organizationId ?? null,
+      teamId: source.teamId ?? null,
+      title: source.title,
+      description: source.description ?? null,
+      contestDate: source.startTime,
+      startAt: source.startTime,
+      endAt: source.endTime,
+      format: source.format,
+      status: source.status,
+      type: 'judged',
+      scope: source.scope,
+      finalizationStatus: source.finalizationStatus ?? 'LIVE',
+    },
+  })
+  return {
+    ...source,
+    id: aggregate.publicId,
+    canonicalContestId: aggregate.id,
+    startTime: aggregate.startAt!,
+    endTime: aggregate.endAt!,
+  }
 }
 
 async function createFinalizedContestSubmission(data: Prisma.SubmissionUncheckedCreateInput, result: string, score: number) {
@@ -158,12 +196,13 @@ describe('rating domain HTTP and persistence', () => {
     const endHoursAgo = options.endHoursAgo ?? 1
     const problem = await prisma.problem.create({ data: { id: crypto.randomUUID(), platform: 'carits', problemId: `RATING_${crypto.randomUUID()}`, title: 'Rating test', ownerId: manager.user.id, visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', publishedAt: new Date() } })
     const contest = await createContestRuntimeFixture({ data: { title: options.title || 'Rated IOI contest', format: 'ioi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() - startHoursAgo * 3600_000), endTime: new Date(Date.now() - endHoursAgo * 3600_000), status: 'finished', finalizationStatus: 'JUDGING', createdBy: manager.user.id } })
-    const trainingProblem = await prisma.trainingProblem.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 0, points: 100 } })
-    const canonicalProblem = await prisma.$transaction(tx => syncCanonicalContestProblemFixtureTx(tx, trainingProblem.id))
-    if (!canonicalProblem) throw new Error('Contest problem aggregate missing')
+    const canonicalProblem = await prisma.contestProblem.create({ data: {
+      id: crypto.randomUUID(), contestId: contest.canonicalContestId, canonicalProblemId: problem.id,
+      alias: 'A', orderIndex: 0, points: 100, title: problem.title, ojName: problem.platform, problemId: problem.problemId,
+    } })
     await prisma.contestRatingConfig.create({ data: { id: crypto.randomUUID(), contestId: contest.canonicalContestId, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
     for (const [index, user] of [first, second].entries()) {
-      await createFinalizedContestSubmission({ userId: user.user.id, oj: 'carits', problemId: problem.problemId, problemInternalId: problem.id, language: 'cpp', code: 'int main(){}', codeLength: 12, submitMethod: 'local', submitScope: 'contest', workspaceScope: 'campus', organizationId, trainingId: null, trainingProblemId: null, canonicalContestId: canonicalProblem.contestId, canonicalContestProblemId: canonicalProblem.id, createdAt: new Date(contest.startTime.getTime() + (index + 1) * 60_000) }, index === 0 ? 'accepted' : 'wrong_answer', index === 0 ? 100 : 20)
+      await createFinalizedContestSubmission({ userId: user.user.id, oj: 'carits', problemId: problem.problemId, problemInternalId: problem.id, language: 'cpp', code: 'int main(){}', codeLength: 12, submitMethod: 'local', submitScope: 'contest', workspaceScope: 'campus', organizationId, canonicalContestId: canonicalProblem.contestId, canonicalContestProblemId: canonicalProblem.id, createdAt: new Date(contest.startTime.getTime() + (index + 1) * 60_000) }, index === 0 ? 'accepted' : 'wrong_answer', index === 0 ? 100 : 20)
     }
     return contest
   }

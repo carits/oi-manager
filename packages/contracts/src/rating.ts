@@ -57,11 +57,55 @@ export const ContestRatingDataSchema = z.looseObject({
   myChanges: z.array(RatingChangeSchema).default([]),
 })
 
+export const ContestRatingParticipationSchema = z.object({
+  scope: z.enum(['NONE', 'ORGANIZATION', 'GLOBAL', 'BOTH']),
+  context: z.enum(['organization', 'platform', 'personal_team']),
+  fixed: z.boolean(),
+  selectedOrganizationId: z.string().nullable(),
+  selectionPersisted: z.boolean(),
+  selectedOrganization: z.object({ id: z.string(), name: z.string(), shortName: z.string().nullable().optional() }).nullable(),
+  organizations: z.array(z.object({ id: z.string(), name: z.string(), shortName: z.string().nullable().optional() })),
+  requiresExplicitSelection: z.boolean(),
+  canChange: z.boolean(),
+  locked: z.boolean(),
+  firstSubmissionAt: DateTimeWireSchema.nullable(),
+})
+export type ContestRatingParticipation = z.infer<typeof ContestRatingParticipationSchema>
+
+const EmptyBodySchema = z.object({})
+
 export const ContestRatingContracts = {
   detail: defineApiEndpoint({
     key: 'contest.rating.detail',
     method: 'GET',
     scope: 'context',
+    data: ContestRatingDataSchema,
+  }),
+  participation: defineApiEndpoint({
+    key: 'contest.rating.participation',
+    method: 'GET',
+    scope: 'context',
+    data: ContestRatingParticipationSchema,
+  }),
+  updateParticipation: defineApiEndpoint({
+    key: 'contest.rating.participation.update',
+    method: 'PUT',
+    scope: 'context',
+    body: z.object({ organizationId: z.string().min(1).nullable() }),
+    data: ContestRatingParticipationSchema,
+  }),
+  finalize: defineApiEndpoint({
+    key: 'contest.rating.finalize',
+    method: 'POST',
+    scope: 'context',
+    body: EmptyBodySchema,
+    data: ContestRatingDataSchema,
+  }),
+  rebuild: defineApiEndpoint({
+    key: 'contest.rating.rebuild',
+    method: 'POST',
+    scope: 'context',
+    body: EmptyBodySchema,
     data: ContestRatingDataSchema,
   }),
 } as const

@@ -6,7 +6,7 @@ import { parseContestId } from '../contest/contest.helpers'
 import { contestMatchesWorkspaceScope } from '../contest/application/contest-scope.service'
 import { ContestRatingError, finalizeContestRating, getContestRating, getContestRatingConfig, getRatingParticipation, rebuildContestRating, setFinalSubmission, updateContestRatingConfig, updateRatingParticipantDisposition, updateRatingParticipation } from './application/contest-rating.service'
 import { getMyRatingAccounts, getRatingHistory, getRatingLeaderboard } from './application/rating-query.service'
-import { parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 
 export const ratingDomainRouter = Router()
 
@@ -47,11 +47,20 @@ ratingDomainRouter.use('/contests/:id', authenticate, asyncHandler(async (req: A
 
 ratingDomainRouter.get('/contests/:id/rating-config', endpoint(async (req, res) => res.json({ success: true, data: await getContestRatingConfig(parseContestId(req.params.id), req.user!.userId) })))
 ratingDomainRouter.put('/contests/:id/rating-config', endpoint(async (req, res) => res.json({ success: true, data: await updateContestRatingConfig(parseContestId(req.params.id), req.user!.userId, req.body) })))
-ratingDomainRouter.get('/contests/:id/rating-participation', endpoint(async (req, res) => res.json({ success: true, data: await getRatingParticipation(parseContestId(req.params.id), req.user!.userId) })))
-ratingDomainRouter.put('/contests/:id/rating-participation', endpoint(async (req, res) => res.json({ success: true, data: await updateRatingParticipation(parseContestId(req.params.id), req.user!.userId, req.body) })))
+ratingDomainRouter.get('/contests/:id/rating-participation', endpoint(async (req, res) => sendContractData(res, ContestRatingContracts.participation, await getRatingParticipation(parseContestId(req.params.id), req.user!.userId))))
+ratingDomainRouter.put('/contests/:id/rating-participation', endpoint(async (req, res) => {
+  const body = parseContractBody(ContestRatingContracts.updateParticipation, req.body)
+  return sendContractData(res, ContestRatingContracts.updateParticipation, await updateRatingParticipation(parseContestId(req.params.id), req.user!.userId, body))
+}))
 ratingDomainRouter.get('/contests/:id/rating', endpoint(async (req, res) => sendContractData(res, ContestRatingContracts.detail, await getContestRating(parseContestId(req.params.id), req.user!.userId))))
-ratingDomainRouter.post('/contests/:id/finalize', endpoint(async (req, res) => res.json({ success: true, data: await finalizeContestRating(parseContestId(req.params.id), req.user!.userId) })))
-ratingDomainRouter.post('/contests/:id/rating/rebuild', endpoint(async (req, res) => res.json({ success: true, data: await rebuildContestRating(parseContestId(req.params.id), req.user!.userId) })))
+ratingDomainRouter.post('/contests/:id/finalize', endpoint(async (req, res) => {
+  parseContractBody(ContestRatingContracts.finalize, req.body)
+  return sendContractData(res, ContestRatingContracts.finalize, await finalizeContestRating(parseContestId(req.params.id), req.user!.userId))
+}))
+ratingDomainRouter.post('/contests/:id/rating/rebuild', endpoint(async (req, res) => {
+  parseContractBody(ContestRatingContracts.rebuild, req.body)
+  return sendContractData(res, ContestRatingContracts.rebuild, await rebuildContestRating(parseContestId(req.params.id), req.user!.userId))
+}))
 ratingDomainRouter.post('/contests/:id/problems/:contestProblemId/final-submission/:submissionId', endpoint(async (req, res) => res.json({ success: true, data: await setFinalSubmission(parseContestId(req.params.id), req.params.contestProblemId, Number(req.params.submissionId), req.user!.userId) })))
 
 ratingDomainRouter.patch('/contests/:id/rating-participants/:userId', endpoint(async (req, res) => {
