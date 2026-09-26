@@ -75,5 +75,8 @@ describe('human navigation productization', () => {
     expect(styles).not.toContain('--rail-width')
     expect(styles).not.toContain('.sidebar:not(.sidebarOpen)')
     expect(styles).toContain('@media (min-width: 1100px)')
+    const switcherStyles = fs.readFileSync(new URL('../features/workspace/ui/WorkspaceSwitcher.module.css', import.meta.url), 'utf8')
+    expect(switcherStyles).toContain('.currentText{display:grid}')
+    expect(switcherStyles).not.toContain('.currentText,.trigger>svg{display:none}')
   })
 })
