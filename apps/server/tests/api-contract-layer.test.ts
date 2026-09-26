@@ -889,6 +889,48 @@ describe('shared API contract adapter', () => {
     expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('promptHash')
   })
 
+  it('guards data-generation inputs and strips worker lease metadata', () => {
+    expect(parseContractBody(ProblemContracts.createDataGenerationJob, {
+      sourceMode: 'generator',
+      generatorVersionId: 'generator-v1',
+      standardVersionId: 'standard-v1',
+      validatorVersionId: 'validator-v1',
+      cases: [{ name: 'large', args: ['100000'], seed: '42' }],
+    }).cases[0]?.name).toBe('large')
+    expect(() => parseContractBody(ProblemContracts.promoteDataGenerationJob, {
+      expectedLatestRevisionId: '',
+      caseIds: [],
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getDataGenerationJob, {
+      id: 'job-1',
+      status: 'running',
+      expectedLatestRevisionId: 'revision-1',
+      promotedRevisionId: null,
+      createdAt: new Date('2026-09-27T00:00:00Z'),
+      judgeId: 'internal-judge',
+      fencingToken: 'internal-fence',
+      cases: [{
+        id: 'case-1',
+        name: 'large',
+        status: 'validated',
+        failureStage: null,
+        message: null,
+        inputPreview: '1\n',
+        outputPreview: '1\n',
+      }],
+    })
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        createdAt: '2026-09-27T00:00:00.000Z',
+        cases: [expect.objectContaining({ name: 'large' })],
+      }),
+    }))
+    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('judgeId')
+    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('fencingToken')
+  })
+
   it('guards chat message payloads and serializes dates at the account boundary', () => {
     const body = parseContractBody(ChatContracts.sendMessage, {
       type: 'text', content: '你好', clientMessageId: '12345678-1234-1234-1234-123456789012',

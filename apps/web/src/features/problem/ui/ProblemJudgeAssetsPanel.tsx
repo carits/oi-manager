@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { AiValidatorRequest } from '@oi-manager/contracts'
+import type { AiValidatorRequest, DataGenerationJob, DataGenerationJobDetail } from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -19,11 +19,10 @@ import { getProblemAiUsage } from '../api/problemDetailApi'
 import { uploadProblemTestdata } from '../api/problemFilesApi'
 import { compileJudgeProgramVersion, listJudgePrograms, preflightJudgeProgramVersion, updateJudgeProgram } from '../api/judgeProgramApi'
 import { generateAiValidator, generateAiValidatorSpec, repairAiValidator, saveAiValidator, saveAiValidatorSpec } from '../api/problemAiValidatorApi'
+import { createDataGenerationJob, getDataGenerationJob, listDataGenerationJobs, promoteDataGenerationJob } from '../api/problemDataGenerationApi'
 
 type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
 type Program = { id: string; kind: string; name: string; language: string; currentVersionId?: string | null; versions: Version[] }
-type JobCase = { id: string; name: string; status: string; failureStage?: string; message?: string; inputPreview?: string; outputPreview?: string }
-type Job = { id: string; status: string; expectedLatestRevisionId?: string; promotedRevisionId?: string; createdAt: string; cases?: JobCase[] }
 type Graph = { revisionId?: string; subtasks: Array<{ id: number; score?: number; dependencies?: number[]; groups: Array<{ key: string; name: string; kind: string }> }> }
 type AiUsage = { markdownStatements: Array<{ id: string; language?: string; maxReservedTokens: number }> }
 type CandidateDecision = { subtaskId: number; selected: boolean; reason: string; retiredTestcaseId?: string; baselineQuality: number; candidateQuality: number; qualityGain: number; requiredGain: number }
@@ -48,8 +47,8 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const toast = useToast()
   const [tab, setTab] = useState<AssetsTab>('programs')
   const [programs, setPrograms] = useState<Program[]>([])
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
+  const [jobs, setJobs] = useState<DataGenerationJob[]>([])
+  const [selectedJob, setSelectedJob] = useState<DataGenerationJobDetail | null>(null)
   const [graph, setGraph] = useState<Graph | null>(null)
   const [saving, setSaving] = useState(false)
   const [catalog, setCatalog] = useState<ProgramCatalog | null>(null), [wizardOpen, setWizardOpen] = useState(false)
@@ -86,9 +85,12 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
       const programRequest = listJudgePrograms(problemId)
         .then(data => ({ data: data as Program[], error: null as string | null }))
         .catch(error => ({ data: null, error: error instanceof Error ? error.message : '评测程序加载失败' }))
+      const jobRequest = listDataGenerationJobs(problemId)
+        .then(data => ({ data, error: null as string | null }))
+        .catch(error => ({ data: null, error: error instanceof Error ? error.message : '生成任务加载失败' }))
       const [programResult, jobResult, graphResult, aiUsageResult, poolResult, corpusResult, templateResult] = await Promise.all([
         programRequest,
-        apiClient.get<Job[]>(`/api/problems/${problemId}/data-generation-jobs`),
+        jobRequest,
         graphRequest,
         aiUsageRequest,
         apiClient.get<CandidatePool>(`/api/problems/${problemId}/candidate-pool`),
@@ -99,8 +101,8 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
       const failures: string[] = []
       if (programResult.data) setPrograms(programResult.data)
       else failures.push(`评测程序：${programResult.error || '加载失败'}`)
-      if (jobResult.success && jobResult.data) setJobs(jobResult.data)
-      else failures.push(`生成任务：${jobResult.message || '加载失败'}`)
+      if (jobResult.data) setJobs(jobResult.data)
+      else failures.push(`生成任务：${jobResult.error || '加载失败'}`)
       if (graphResult.data) setGraph(graphResult.data)
       else if (graphResult.error) failures.push(`Test Graph：${graphResult.error}`)
       if (aiUsageResult.data) {
@@ -208,8 +210,8 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
         ? (JSON.parse(rows) as Array<{ name?: string; inputData: string }>).map((item, index) => ({ name: item.name || `case-${index + 1}`, args: [], inputData: item.inputData }))
         : rows.split('\n').map(row => row.trim()).filter(Boolean).map((row, index) => { const [caseName, seed, args] = row.split('|').map(item => item.trim()); return { name: caseName || `case-${index + 1}`, seed, args: args ? args.split(/\s+/) : [] } })
     } catch { return toast.error('输入数据必须是合法 JSON 数组') }
-    const result = await apiClient.post<Job>(`/api/problems/${problemId}/data-generation-jobs`, { sourceMode, generatorVersionId: sourceMode === 'generator' ? generatorId : undefined, standardVersionId: standardId, validatorVersionId: validatorId, cases })
-    if (!result.success) return toast.error(result.message || '生成任务创建失败')
+    const result = await createDataGenerationJob(problemId, { sourceMode, generatorVersionId: sourceMode === 'generator' ? generatorId : undefined, standardVersionId: standardId, validatorVersionId: validatorId, cases })
+    if (!result.ok) return toast.error(result.error.message || '生成任务创建失败')
     toast.success('已加入数据生成队列'); await load(); setTab('candidates')
   }
   const uploadTestdata = async () => {
@@ -222,7 +224,10 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
       setImportFiles([])
     } finally { setSaving(false) }
   }
-  const openJob = async (job: Job) => { const result = await apiClient.get<Job>(`/api/problems/${problemId}/data-generation-jobs/${job.id}`); if (result.success && result.data) setSelectedJob(result.data) }
+  const openJob = async (job: DataGenerationJob) => {
+    try { setSelectedJob(await getDataGenerationJob(problemId, job.id)) }
+    catch (error) { toast.error(error instanceof Error ? error.message : '生成任务详情加载失败') }
+  }
   useEffect(() => {
     if (!selectedJob || !['queued', 'running', 'finalizing'].includes(selectedJob.status)) return
     const timer = window.setInterval(() => { void openJob(selectedJob) }, 2000)
@@ -231,10 +236,14 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const promote = async () => {
     if (!selectedJob) return
     const valid = selectedJob.cases?.filter(item => item.status === 'validated') || []
-    const body: PromoteRequest = { expectedLatestRevisionId: selectedJob.expectedLatestRevisionId, caseIds: valid.map(item => item.id) }
+    const body: PromoteRequest = { expectedLatestRevisionId: selectedJob.expectedLatestRevisionId || undefined, caseIds: valid.map(item => item.id) }
     if (judgeMode === 'oi') body.assignments = valid.map(item => { const [subtaskId, groupKey] = (assignments[item.id] || '').split(':'); return { caseId: item.id, subtaskId: Number(subtaskId), groupKey } })
-    const result = await apiClient.post(`/api/problems/${problemId}/data-generation-jobs/${selectedJob.id}/promote`, body)
-    if (!result.success) return toast.error(result.message || '候选测试点发布失败')
+    const result = await promoteDataGenerationJob(problemId, selectedJob.id, {
+      expectedLatestRevisionId: body.expectedLatestRevisionId || '',
+      caseIds: body.caseIds,
+      assignments: body.assignments,
+    })
+    if (!result.ok) return toast.error(result.error.message || '候选测试点发布失败')
     toast.success('已发布新的正式 TestSet Revision'); setSelectedJob(null); await load(); setTab('revisions')
   }
 

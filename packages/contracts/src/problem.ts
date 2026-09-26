@@ -973,6 +973,52 @@ export const ValidatorSpecMaterializedSchema = JudgeProgramCreatedSchema.extend(
 });
 
 
+export const DataGenerationCaseInputSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  args: z.array(z.string().max(4096)).max(64).default([]),
+  seed: z.string().nullable().optional(),
+  inputData: z.string().max(16 * 1024 * 1024).optional(),
+  profile: z.string().min(1).max(80).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+});
+export const DataGenerationJobCreateInputSchema = z.object({
+  sourceMode: z.enum(["generator", "input"]),
+  generatorVersionId: z.string().min(1).optional(),
+  standardVersionId: z.string().min(1),
+  validatorVersionId: z.string().min(1),
+  targetRole: z.enum(["official", "hack_gate"]).optional(),
+  cases: z.array(DataGenerationCaseInputSchema).min(1).max(50),
+});
+export const DataGenerationCaseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.string(),
+  failureStage: z.string().nullable(),
+  message: z.string().nullable(),
+  inputPreview: z.string().nullable(),
+  outputPreview: z.string().nullable(),
+});
+export const DataGenerationJobSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  expectedLatestRevisionId: z.string().nullable(),
+  promotedRevisionId: z.string().nullable(),
+  createdAt: DateTimeWireSchema,
+});
+export const DataGenerationJobDetailSchema = DataGenerationJobSchema.extend({
+  cases: z.array(DataGenerationCaseSchema),
+});
+export const DataGenerationJobPromoteInputSchema = z.object({
+  expectedLatestRevisionId: z.string().min(1),
+  caseIds: z.array(z.string().min(1)).min(1).max(512),
+  assignments: z.array(z.object({
+    caseId: z.string().min(1),
+    subtaskId: z.number().int().positive(),
+    groupKey: z.string().min(1),
+  })).max(2048).optional(),
+  overrideReason: z.string().max(1000).optional(),
+});
+
 export const AiValidatorResponseSchema = z.object({
   validatorSource: z.string().optional(),
   spec: z.unknown().optional(),
@@ -1349,6 +1395,27 @@ export const ProblemContracts = {
   }),
 
 
+  listDataGenerationJobs: defineApiEndpoint({
+    key: "problem.data-generation.list", method: "GET", scope: "context",
+    data: z.array(DataGenerationJobSchema),
+  }),
+  createDataGenerationJob: defineApiEndpoint({
+    key: "problem.data-generation.create", method: "POST", scope: "context",
+    body: DataGenerationJobCreateInputSchema, data: DataGenerationJobSchema,
+  }),
+  getDataGenerationJob: defineApiEndpoint({
+    key: "problem.data-generation.get", method: "GET", scope: "context",
+    data: DataGenerationJobDetailSchema,
+  }),
+  cancelDataGenerationJob: defineApiEndpoint({
+    key: "problem.data-generation.cancel", method: "POST", scope: "context",
+    body: z.object({}), data: z.object({ cancelled: z.literal(true) }),
+  }),
+  promoteDataGenerationJob: defineApiEndpoint({
+    key: "problem.data-generation.promote", method: "POST", scope: "context",
+    body: DataGenerationJobPromoteInputSchema, data: ProblemTestSetRevisionSummarySchema,
+  }),
+
   generateAiValidator: defineApiEndpoint({
     key: "problem.ai-validator.generate", method: "POST", scope: "context",
     body: AiValidatorGenerateInputSchema, data: AiValidatorRequestSchema,
@@ -1439,3 +1506,5 @@ export type JudgeProgramVerification = z.infer<typeof JudgeProgramVerificationSc
 export type JudgeProgramAuditLog = z.infer<typeof JudgeProgramAuditLogSchema>;
 export type ValidatorSpec = z.infer<typeof ValidatorSpecSchema>;
 export type AiValidatorRequest = z.infer<typeof AiValidatorRequestSchema>;
+export type DataGenerationJob = z.infer<typeof DataGenerationJobSchema>;
+export type DataGenerationJobDetail = z.infer<typeof DataGenerationJobDetailSchema>;
