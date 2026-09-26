@@ -25,8 +25,6 @@ const legacyFeatureTransportAllowances = {
   'apps/web/src/features/training-session/ui/TrainingSessionWorkspace.tsx': 18,
   'apps/web/src/features/training-session/ui/TrainingSessionListPage.tsx': 10,
   'apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx': 3,
-  'apps/web/src/features/blog/ui/BlogReferenceEditor.tsx': 3,
-  'apps/web/src/features/blog/ui/BlogModerationWorkbench.tsx': 4,
   'apps/web/src/features/contest/ui/ContestFormModal.tsx': 19,
   'apps/web/src/features/solution-review/ui/SolutionEditorialPanel.tsx': 13,
   'apps/web/src/features/problem/ui/JudgeProgramWizard.tsx': 11,
