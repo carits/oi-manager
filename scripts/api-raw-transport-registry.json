@@ -10,6 +10,16 @@
     "serverSymbol": "problemPdfUpload"
   },
   {
+    "key": "problem.attachment.download",
+    "kind": "binary",
+    "method": "GET",
+    "route": "/api/files/:fileId/download",
+    "featureApi": "apps/web/src/features/problem/api/problemFilesApi.ts",
+    "featureSymbol": "downloadProblemAttachment",
+    "serverBoundary": "apps/server/src/routes/files.ts",
+    "serverSymbol": "downloadAuthorizedFile"
+  },
+  {
     "key": "problem.attachment.upload",
     "kind": "multipart",
     "method": "POST",

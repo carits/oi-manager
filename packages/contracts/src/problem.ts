@@ -49,16 +49,38 @@ export const ProblemEditorDetailSchema = z.object({
   difficulty: z.string().nullable(),
   timeLimit: z.number().nullable(),
   memoryLimit: z.number().nullable(),
-  visibility: z.string().nullable().optional(),
+  visibility: z.string(),
   status: z.enum(["draft", "published", "archived"]),
-  ojBindings: z.string().nullable().optional(),
+  libraryScope: z.enum(["platform", "school"]),
+  ownerId: z.string(),
+  ownerType: z.string(),
+  ownerName: z.string(),
+  allowedLanguages: z.string().nullable(),
+  ojBindings: z.string().nullable(),
+  createdAt: DateTimeWireSchema,
   statements: z.array(ProblemContentVersionSchema.extend({
     id: z.string(), content: z.string().nullable(), fileUrl: z.string().nullable(), isVisible: z.boolean(),
   })),
   solutions: z.array(ProblemContentVersionSchema.extend({
     id: z.string(), content: z.string().nullable(), fileUrl: z.string().nullable(), isVisible: z.boolean(),
   })),
-  permissions: z.object({ canEdit: z.boolean().optional() }).passthrough(),
+  permissions: z.object({
+    canEdit: z.boolean(),
+    canPublish: z.boolean(),
+    canArchive: z.boolean(),
+    canCopyToSchool: z.boolean(),
+    canSubmit: z.boolean(),
+  }).passthrough(),
+  hack: z.object({
+    enabled: z.boolean(),
+    acceptedCount: z.number().int().nonnegative(),
+    canHack: z.boolean(),
+    mode: z.enum(["acm", "oi"]),
+  }),
+  legacyIoSuggestion: z.object({
+    inputFilename: z.string().nullable(),
+    outputFilename: z.string().nullable(),
+  }).nullable(),
 }).passthrough();
 
 export const ProblemMutationResultSchema = z.object({ id: z.string() }).passthrough();
@@ -75,6 +97,27 @@ export const ProblemAttachmentSchema = z.object({
   fileUrl: z.string(),
   description: z.string().nullable(),
   uploadedAt: DateTimeWireSchema,
+});
+
+export const ProblemSubmissionListItemSchema = z.object({
+  id: z.number().int().positive(),
+  username: z.string(),
+  result: z.string(),
+  timeUsed: z.number().nullable().optional(),
+  memoryUsed: z.number().nullable().optional(),
+  codeLength: z.number().int().nonnegative().nullable().optional(),
+  language: z.string(),
+  submittedAt: DateTimeWireSchema.nullable().optional(),
+}).passthrough();
+
+export const ProblemSubmissionListQuerySchema = PaginationQuerySchema;
+
+export const ProblemSubmissionListSchema = z.object({
+  submissions: z.array(ProblemSubmissionListItemSchema),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  total: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
 });
 
 export const ProblemHackConfigSchema = z.object({
@@ -101,6 +144,40 @@ export const ProblemHackConfigInputSchema = z.object({
   validatorProgramVersionId: z.string().nullable().optional(),
   classifierProgramVersionId: z.string().nullable().optional(),
   expectedRevision: z.number().int().nonnegative(),
+});
+
+export const ProblemAiUsageSchema = z.object({
+  isAdmin: z.boolean(),
+  translations: z.object({ zh: z.boolean(), en: z.boolean() }),
+  formattedStatementIds: z.array(z.string()),
+  markdownStatements: z.array(z.object({
+    id: z.string(),
+    language: z.string().nullable(),
+    createdAt: DateTimeWireSchema,
+    maxReservedTokens: z.number().int().nonnegative(),
+  })),
+});
+
+export const ProblemAiTranslateInputSchema = z.object({
+  targetLang: z.enum(["zh", "en"]),
+  statementId: z.string().nullable().optional(),
+});
+
+export const ProblemAiTranslateResultSchema = z.object({
+  statementId: z.string(),
+  content: z.string(),
+  sourceLang: z.string(),
+  targetLang: z.enum(["zh", "en"]),
+  diagnostics: z.unknown().optional(),
+});
+
+export const ProblemAiFormatInputSchema = z.object({
+  statementId: z.string().nullable().optional(),
+});
+
+export const ProblemAiFormatResultSchema = z.object({
+  content: z.string(),
+  diagnostics: z.unknown().optional(),
 });
 
 export const ProblemNoteSchema = z.object({
@@ -571,6 +648,33 @@ export const ProblemContracts = {
     scope: "context",
     data: ProblemEditorDetailSchema,
   }),
+  listSubmissions: defineApiEndpoint({
+    key: "problem.submissions.list",
+    method: "GET",
+    scope: "context",
+    query: ProblemSubmissionListQuerySchema,
+    data: ProblemSubmissionListSchema,
+  }),
+  getAiUsage: defineApiEndpoint({
+    key: "problem.ai-usage.get",
+    method: "GET",
+    scope: "context",
+    data: ProblemAiUsageSchema,
+  }),
+  translateStatement: defineApiEndpoint({
+    key: "problem.statement.translate",
+    method: "POST",
+    scope: "context",
+    body: ProblemAiTranslateInputSchema,
+    data: ProblemAiTranslateResultSchema,
+  }),
+  formatStatement: defineApiEndpoint({
+    key: "problem.statement.format",
+    method: "POST",
+    scope: "context",
+    body: ProblemAiFormatInputSchema,
+    data: ProblemAiFormatResultSchema,
+  }),
   update: defineApiEndpoint({
     key: "problem.update",
     method: "PUT",
@@ -759,6 +863,11 @@ export type ProblemCreateInput = z.infer<typeof ProblemCreateInputSchema>;
 export type ProblemEditorDetail = z.infer<typeof ProblemEditorDetailSchema>;
 export type ProblemAdminListItem = z.infer<typeof ProblemAdminListItemSchema>;
 export type ProblemAttachment = z.infer<typeof ProblemAttachmentSchema>;
+export type ProblemSubmissionListItem = z.infer<typeof ProblemSubmissionListItemSchema>;
+export type ProblemSubmissionList = z.infer<typeof ProblemSubmissionListSchema>;
+export type ProblemAiUsage = z.infer<typeof ProblemAiUsageSchema>;
+export type ProblemAiTranslateInput = z.infer<typeof ProblemAiTranslateInputSchema>;
+export type ProblemAiFormatInput = z.infer<typeof ProblemAiFormatInputSchema>;
 export type ProblemHackConfig = z.infer<typeof ProblemHackConfigSchema>;
 export type ProblemHackConfigInput = z.infer<typeof ProblemHackConfigInputSchema>;
 export type ProblemPersonalContent = z.infer<typeof ProblemPersonalContentSchema>;

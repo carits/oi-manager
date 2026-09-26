@@ -32,6 +32,26 @@ describe('shared API contract adapter', () => {
     })).toThrowError(ApiContractError)
   })
 
+  it('guards local submission creation through the shared runtime contract', () => {
+    expect(parseContractBody(SubmissionContracts.create, {
+      problemId: '1041', oj: 'carits', language: 'cpp17', code: 'int main(){}',
+      submitMethod: 'local', inputFilename: null, outputFilename: null,
+    })).toEqual({
+      problemId: '1041', oj: 'carits', language: 'cpp17', code: 'int main(){}',
+      submitMethod: 'local', inputFilename: null, outputFilename: null,
+    })
+    expect(() => parseContractBody(SubmissionContracts.create, {
+      problemId: '1041', oj: 'carits', language: 'cpp17', code: '   ',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, SubmissionContracts.create, { submissionId: 42, replayed: true })
+    expect(json).toHaveBeenCalledWith({
+      success: true,
+      data: { submissionId: 42, replayed: true },
+    })
+  })
+
   it('normalizes bounded pagination at the server boundary', () => {
     expect(parseContractQuery(AssignmentContracts.progress, {
       page: '2',
@@ -396,15 +416,65 @@ describe('shared API contract adapter', () => {
       difficulty: null,
       timeLimit: 1000,
       memoryLimit: 256,
+      visibility: 'public',
       status: 'draft',
+      libraryScope: 'platform',
+      ownerId: 'teacher-1',
+      ownerType: 'user',
+      ownerName: 'teacher',
+      allowedLanguages: null,
+      ojBindings: null,
+      createdAt: new Date('2026-09-16T00:00:00Z'),
       statements: [],
       solutions: [],
-      permissions: { canEdit: true, canView: true },
-      ownerName: 'teacher',
+      permissions: {
+        canEdit: true, canPublish: true, canArchive: true,
+        canCopyToSchool: false, canSubmit: false, canView: true,
+      },
+      hack: { enabled: false, acceptedCount: 0, canHack: false, mode: 'acm' },
+      legacyIoSuggestion: null,
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
       data: expect.objectContaining({ ownerName: 'teacher' }),
+    }))
+
+    expect(parseContractQuery(ProblemContracts.listSubmissions, {
+      page: '2', pageSize: '50',
+    })).toEqual({ page: 2, pageSize: 50 })
+    const submissions = responseStub()
+    sendContractData(submissions.response, ProblemContracts.listSubmissions, {
+      submissions: [{
+        id: 42, username: 'student', result: 'wrong_answer', timeUsed: 12,
+        memoryUsed: 1024, codeLength: 80, language: 'cpp17',
+        submittedAt: new Date('2026-09-16T01:00:00Z'),
+      }],
+      page: 1, pageSize: 20, total: 1, totalPages: 1,
+    })
+    expect(submissions.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        submissions: [expect.objectContaining({ submittedAt: '2026-09-16T01:00:00.000Z' })],
+      }),
+    }))
+
+    expect(parseContractBody(ProblemContracts.translateStatement, {
+      targetLang: 'en', statementId: 'statement-1',
+    })).toEqual({ targetLang: 'en', statementId: 'statement-1' })
+    expect(() => parseContractBody(ProblemContracts.translateStatement, {
+      targetLang: 'fr',
+    })).toThrowError(ApiContractError)
+    const aiUsage = responseStub()
+    sendContractData(aiUsage.response, ProblemContracts.getAiUsage, {
+      isAdmin: false,
+      translations: { zh: true, en: false },
+      formattedStatementIds: [],
+      markdownStatements: [{
+        id: 'statement-1', language: 'zh',
+        createdAt: new Date('2026-09-16T00:00:00Z'), maxReservedTokens: 12000,
+      }],
+    })
+    expect(aiUsage.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ translations: { zh: true, en: false } }),
     }))
 
     expect(parseContractBody(ProblemContracts.saveMyContent, {

@@ -48,8 +48,32 @@ export const SubmissionDetailSchema = z.object({
   io: z.object({ input: InputIoSchema, output: OutputIoSchema }).optional(),
 })
 
+export const SubmissionCreateInputSchema = z.object({
+  problemId: z.union([z.string().min(1), z.number()]),
+  oj: z.string().min(1),
+  language: z.string().min(1),
+  code: z.string().refine(value => value.trim().length > 0, '代码不能为空'),
+  submitMethod: z.literal('local').optional(),
+  inputFilename: z.string().nullable().optional(),
+  outputFilename: z.string().nullable().optional(),
+})
+
+export const SubmissionCreateResultSchema = z.object({
+  submissionId: z.number().int().positive(),
+  replayed: z.boolean().optional(),
+})
+
 export type SubmissionDetail = z.infer<typeof SubmissionDetailSchema>
+export type SubmissionCreateInput = z.infer<typeof SubmissionCreateInputSchema>
+export type SubmissionCreateResult = z.infer<typeof SubmissionCreateResultSchema>
 
 export const SubmissionContracts = {
   detail: defineApiEndpoint({ key: 'submission.detail', method: 'GET', scope: 'context', data: SubmissionDetailSchema }),
+  create: defineApiEndpoint({
+    key: 'submission.create',
+    method: 'POST',
+    scope: 'context',
+    body: SubmissionCreateInputSchema,
+    data: SubmissionCreateResultSchema,
+  }),
 } as const

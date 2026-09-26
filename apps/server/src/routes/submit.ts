@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { authenticate, getAccountRole, getResourceScope, isAdmin } from '../middleware/auth'
 import { logger } from '../lib/logger'
 import { readIdempotencyKey } from '../lib/idempotency'
+import { SubmissionContracts } from '@oi-manager/contracts'
+import { parseContractBody, sendContractData, sendContractError } from '../lib/api-contract'
 import {
   rejudgeLocalCode,
   SubmissionCommandContext,
@@ -23,6 +25,7 @@ function commandContext(req: any): SubmissionCommandContext {
 }
 
 function sendCommandError(res: any, error: unknown, fallbackMessage: string) {
+  if (sendContractError(error, res)) return res
   if (error instanceof SubmissionCommandError) {
     return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
   }
@@ -36,14 +39,14 @@ function sendCommandError(res: any, error: unknown, fallbackMessage: string) {
 /** Every source platform uses the local Judge. */
 submitRouter.post('/', authenticate, async (req: any, res) => {
   try {
+    const body = parseContractBody(SubmissionContracts.create, req.body)
     const result = await submitLocalCode(commandContext(req), {
-      ...req.body,
+      ...body,
       idempotencyKey: readIdempotencyKey(req),
     })
-    return res.json({
-      success: true,
-      data: { submissionId: result.submissionId, replayed: result.replayed || undefined },
-      message: result.replayed ? '已返回同一次提交的结果' : '已加入本地评测队列',
+    return sendContractData(res, SubmissionContracts.create, {
+      submissionId: result.submissionId,
+      replayed: result.replayed || undefined,
     })
   } catch (error) {
     return sendCommandError(res, error, '提交失败')

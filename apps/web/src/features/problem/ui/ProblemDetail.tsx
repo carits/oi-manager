@@ -14,13 +14,21 @@ import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { DetailDialog } from '@/components/ui/Dialogs'
-import apiClient from '@/lib/apiClient'
+import { archiveProblem, copyProblemToSchool } from '../api/problemEditorApi'
+import { downloadProblemAttachment, listProblemAttachments } from '../api/problemFilesApi'
+import {
+  formatProblemStatement,
+  getProblemAiUsage,
+  getProblemDetail,
+  listProblemSubmissions,
+  translateProblemStatement,
+} from '../api/problemDetailApi'
 import { createClientUUID } from '@/lib/uuid'
 import { saveBlobDownload } from '@/lib/download'
 import { getOjProblemUrl, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { TranslateModal } from './TranslateModal'
-import { SubmissionDetailModal, SubmissionIoFields, SubmissionCodeEditor, type SubmissionIoValue } from '@/features/submission'
+import { SubmissionDetailModal, SubmissionIoFields, SubmissionCodeEditor, submitProblem, type SubmissionIoValue } from '@/features/submission'
 import { UserProblemContentPanel } from './UserProblemContentPanel'
 import { StatementVersionWorkspace } from './StatementVersionWorkspace'
 import { ProblemHackPanel } from './ProblemHackPanel'
@@ -266,10 +274,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
   const fetchAiUsage = async () => {
     try {
-      const result = await apiClient.get<AiUsage>(`/api/problems/${problemId}/ai/usage`)
-      if (result.success && result.data) {
-        setAiUsage(result.data)
-      }
+      setAiUsage(await getProblemAiUsage(problemId))
     } catch {
       // 静默失败，不影响页面
     }
@@ -279,20 +284,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     try {
       setLoading(true)
       setProblemError(null)
-      const result = await apiClient.get<Problem>(`/api/problems/${problemId}`)
-      if (result.success && result.data) {
-        setProblem(result.data)
-        if (result.data.permissions.canEdit) void fetchAiUsage()
-        // 设置默认提交语言为平台语言列表的第一项
-        const langs: PlatformLanguage[] = result.data.allowedLanguages
-          ? JSON.parse(result.data.allowedLanguages)
-          : []
-        if (langs.length > 0) {
-          setSubmitLanguage(langs[0].id)
-        }
-      } else {
-        setProblem(null)
-        setProblemError(result.message || '题目加载失败，请稍后重试')
+      const result = await getProblemDetail(problemId)
+      setProblem(result)
+      if (result.permissions.canEdit) void fetchAiUsage()
+      // 设置默认提交语言为平台语言列表的第一项
+      const langs: PlatformLanguage[] = result.allowedLanguages
+        ? JSON.parse(result.allowedLanguages)
+        : []
+      if (langs.length > 0) {
+        setSubmitLanguage(langs[0].id)
       }
     } catch (error) {
       console.error('Failed to fetch problem:', error)
@@ -306,10 +306,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const fetchAttachments = async () => {
     try {
       setAttachmentsLoading(true)
-      const result = await apiClient.get<Attachment[]>(`/api/problems/${problemId}/attachments`)
-      if (result.success && result.data) {
-        setAttachments(result.data)
-      }
+      setAttachments(await listProblemAttachments(problemId))
     } catch (error) {
       console.error('Failed to fetch attachments:', error)
     } finally {
@@ -327,20 +324,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     setSubmitLoading(true)
     try {
       submitKeyRef.current ||= createClientUUID()
-      const result = await apiClient.mutate<{ submissionId?: number }>(
-        '/api/submit',
-        'POST',
-        {
-          problemId: problem.problemId,
-          oj: problem.platform,
-          language: submitLanguage,
-          code: submitCode,
-          submitMethod: 'local',
-          inputFilename: submissionIo.inputFilename || null,
-          outputFilename: submissionIo.outputFilename || null,
-        },
-        { headers: { 'Idempotency-Key': submitKeyRef.current } },
-      )
+      const result = await submitProblem({
+        problemId: problem.problemId,
+        oj: problem.platform,
+        language: submitLanguage,
+        code: submitCode,
+        submitMethod: 'local',
+        inputFilename: submissionIo.inputFilename || null,
+        outputFilename: submissionIo.outputFilename || null,
+      }, submitKeyRef.current)
 
       if (result.ok && result.data?.submissionId) {
         submitKeyRef.current = null
@@ -368,21 +360,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     setProblemSubmissionsLoading(true)
     setProblemSubmissionsError(null)
     try {
-      const result = await apiClient.get<{
-        submissions: ProblemSubmission[]
-        page: number
-        pageSize: number
-        total: number
-        totalPages: number
-      }>(`/api/problems/${problemId}/submissions?page=${page}&pageSize=${pageSize}`)
+      const result = await listProblemSubmissions(problemId, { page, pageSize })
       if (requestId !== submissionRequestRef.current) return
-      if (result.success && result.data) {
-        setProblemSubmissions(result.data.submissions || [])
-        setSubmissionTotal(result.data.total)
-        setSubmissionTotalPages(result.data.totalPages)
-      } else {
-        setProblemSubmissionsError(result.message || '提交记录加载失败，请重试')
-      }
+      setProblemSubmissions(result.submissions || [])
+      setSubmissionTotal(result.total)
+      setSubmissionTotalPages(result.totalPages)
     } catch (error) {
       if (requestId !== submissionRequestRef.current) return
       console.error('Failed to fetch submissions:', error)
@@ -408,7 +390,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     try {
       // 如果是新格式的 File API URL
       if (attachment.fileUrl.startsWith('/api/files/')) {
-        const result = await apiClient.download(attachment.fileUrl)
+        const result = await downloadProblemAttachment(attachment.fileUrl)
         saveBlobDownload(result.blob, attachment.fileName)
       } else {
         // 旧格式直接打开
@@ -428,9 +410,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const confirmDelete = async () => {
     setDeleteConfirmOpen(false)
     try {
-      const result = await apiClient.delete(`/api/problems/${problemId}`)
-      if (result.success) {
+      const result = await archiveProblem(problemId)
+      if (result.ok) {
         router.push(`${pathPrefix}/problems`)
+      } else {
+        toast.error(result.error.message)
       }
     } catch (error) {
       console.error('Failed to delete problem:', error)
@@ -440,10 +424,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const copyToSchool = async () => {
     if (!problem || copyingToSchool) return
     setCopyingToSchool(true)
-    const result = await apiClient.mutate<{ problem: { id: string }; skippedFiles: string[] }>(
-      `/api/problems/${problem.id}/copy-to-school`,
-      'POST',
-    )
+    const result = await copyProblemToSchool(problem.id)
     setCopyingToSchool(false)
     if (result.ok) {
       toast.success('已复制到校内题库，并保存为草稿')
@@ -499,18 +480,18 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     setAiLoading('translate')
     setAiError(null)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/ai/translate`, {
-        targetLang,
+      const result = await translateProblemStatement(problemId, {
+        targetLang: targetLang as 'zh' | 'en',
         statementId: selectedStatementId,
       })
-      if (result.success) {
-        // 重新获取题目数据以包含新翻译的版本
-        await fetchProblem()
-        fetchAiUsage()
-        setShowTranslateModal(false)
-      } else {
-        setAiError(result.message || '翻译失败')
+      if (!result.ok) {
+        setAiError(result.error.message)
+        return
       }
+      // 重新获取题目数据以包含新翻译的版本
+      await fetchProblem()
+      void fetchAiUsage()
+      setShowTranslateModal(false)
     } catch (error: unknown) {
       setAiError(errorMessage(error, '翻译失败'))
     } finally {
@@ -524,15 +505,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     setAiLoading('format')
     setAiError(null)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/ai/format`, {
+      const result = await formatProblemStatement(problemId, {
         statementId: selectedStatementId,
       })
-      if (result.success) {
-        await fetchProblem()
-        fetchAiUsage()
-      } else {
-        setAiError(result.message || '格式化失败')
+      if (!result.ok) {
+        setAiError(result.error.message)
+        return
       }
+      await fetchProblem()
+      void fetchAiUsage()
     } catch (error: unknown) {
       setAiError(errorMessage(error, '格式化失败'))
     } finally {

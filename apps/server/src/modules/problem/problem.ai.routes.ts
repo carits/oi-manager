@@ -9,11 +9,14 @@ import {
 } from './application/problem-ai-route.service'
 import { AiValidatorError, generateAiValidator, generateAiValidatorSpec, getAiValidatorRequest, saveAiValidator, saveAiValidatorSpec } from './application/problem-ai-validator.service'
 import { AiTokenError } from '../ai/ai-token.service'
+import { ProblemContracts } from '@oi-manager/contracts'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import { activateValidatorSpec, createValidatorSpec, listValidatorSpecs, materializeValidatorSpec, ValidatorSpecError } from './problem.validator-spec.service'
 
 export const problemAiRouter = Router()
 
 function sendAiError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return res
   if (error instanceof ValidatorSpecError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message, data: error.data })
   if (error instanceof AiValidatorError || error instanceof AiTokenError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
   if (!(error instanceof ProblemAiRouteError)) throw error
@@ -76,13 +79,14 @@ problemAiRouter.post('/:id/ai/validator/:requestId/save', authenticate, asyncHan
 
 problemAiRouter.post('/:id/ai/translate', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ProblemContracts.translateStatement, req.body)
     const data = await translateProblemStatement({
       user: req.user!,
       problemId: req.params.id,
-      targetLang: req.body?.targetLang,
-      statementId: req.body?.statementId,
+      targetLang: body.targetLang,
+      statementId: body.statementId,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.translateStatement, data)
   } catch (error) {
     return sendAiError(error, res)
   }
@@ -90,12 +94,13 @@ problemAiRouter.post('/:id/ai/translate', authenticate, asyncHandler(async (req,
 
 problemAiRouter.post('/:id/ai/format', authenticate, asyncHandler(async (req, res) => {
   try {
+    const body = parseContractBody(ProblemContracts.formatStatement, req.body)
     const data = await formatProblemStatement({
       user: req.user!,
       problemId: req.params.id,
-      statementId: req.body?.statementId,
+      statementId: body.statementId,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.formatStatement, data)
   } catch (error) {
     return sendAiError(error, res)
   }
@@ -104,7 +109,7 @@ problemAiRouter.post('/:id/ai/format', authenticate, asyncHandler(async (req, re
 problemAiRouter.get('/:id/ai/usage', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getProblemAiUsage(req.user!, req.params.id)
-    return res.json({ success: true, data })
+    return sendContractData(res, ProblemContracts.getAiUsage, data)
   } catch (error) {
     return sendAiError(error, res)
   }

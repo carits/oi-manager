@@ -7,6 +7,9 @@ const problemPath = (problemId: string) => `/api/problems/${encoded(problemId)}`
 export const listProblemAttachments = (problemId: string) =>
   apiClient.queryContract(ProblemContracts.listAttachments, `${problemPath(problemId)}/attachments`)
 
+export const downloadProblemAttachment = (fileUrl: string) =>
+  apiClient.download(fileUrl)
+
 export const deleteProblemAttachment = (problemId: string, attachmentId: string) =>
   apiClient.mutateContract(ProblemContracts.deleteAttachment, `${problemPath(problemId)}/attachments/${encoded(attachmentId)}`, {})
 

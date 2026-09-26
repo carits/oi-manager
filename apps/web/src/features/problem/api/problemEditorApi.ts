@@ -14,6 +14,9 @@ export const createProblem = (body: ProblemCreateInput) =>
 export const copyProblemToSchool = (problemId: string) =>
   apiClient.mutateContract(ProblemContracts.copyToSchool, `${problemPath(problemId)}/copy-to-school`, undefined)
 
+export const archiveProblem = (problemId: string) =>
+  apiClient.mutateContract(ProblemContracts.archive, problemPath(problemId), {})
+
 export const getProblemEditorDetail = (problemId: string) =>
   apiClient.queryContract(ProblemContracts.getEditorDetail, problemPath(problemId))
 
