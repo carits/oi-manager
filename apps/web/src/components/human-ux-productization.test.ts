@@ -115,6 +115,9 @@ describe('human UX productization contract', () => {
     expect(source).toContain('teamResource.data?.total')
     expect(source).toContain('summary?.memberCount')
     expect(source).toContain('organizationId=${encodeURIComponent(organizationId)}&view=mine')
+    expect(source).toContain('课后独立完成')
+    expect(source).toContain('课堂分阶段训练')
+    expect(source).toContain('定时竞赛')
   })
 
   it('builds the student task inbox from assignments, training and contests without counting the displayed slice', () => {
