@@ -174,17 +174,12 @@ describe('feature slice contracts', () => {
         clientKey: 'stage-1',
         name: '热身',
         kind: 'TRAINING',
-        audienceMode: 'ALL',
-        endPolicy: 'MANUAL',
-        accessPolicy: 'SEQUENTIAL',
-        submissionMode: 'ENABLED',
-        plannedDurationSeconds: null,
-        defaultTargetScore: null,
-        completionThreshold: null,
-        minDurationSeconds: null,
+        orderIndex: 0,
         Problems: [],
-        Groups: [],
       }],
+      participants: [{ id: 'participant-1', userId: 'user-1', groupId: 'group-1' }],
+      groups: [{ id: 'group-1', clientKey: 'group-1', name: '全体学员', orderIndex: 0, status: 'active', participantIds: ['user-1'] }],
+      stageGroups: [{ id: 'unit-1', clientKey: 'unit-1', stageId: 'stage-1', stageName: '热身', groupId: 'group-1', groupName: '全体学员', mode: 'PRACTICE', accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED', transitionPolicy: 'WAIT_FOR_TEACHER', problemIds: [], status: 'PENDING', activeElapsedSeconds: 0 }],
       issues: [],
     }).success).toBe(true)
 
@@ -196,16 +191,7 @@ describe('feature slice contracts', () => {
         clientKey: 'draft-stage-1',
         name: '热身',
         kind: 'TRAINING',
-        audienceMode: 'ALL',
-        endPolicy: 'MANUAL',
-        accessPolicy: 'SEQUENTIAL',
-        submissionMode: 'ENABLED',
-        plannedDurationSeconds: null,
-        defaultTargetScore: null,
-        completionThreshold: null,
-        minDurationSeconds: null,
         problems: [],
-        groups: [],
       }],
     }).success).toBe(true)
 
@@ -224,7 +210,7 @@ describe('feature slice contracts', () => {
     expect(TrainingStuckPolicySchema.safeParse({ minActiveSeconds: 600, minAttempts: 3, noImprovementSeconds: 300 }).success).toBe(true)
     expect(TrainingTemplateSchema.safeParse({
       key: 'database:template-1', name: '分层课堂', sessionType: 'GENERAL', description: '', source: 'organization',
-      stages: [{ name: '分层', description: '', kind: 'TRAINING', audienceMode: 'GROUPED', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', groups: [{ clientKey: 'foundation', name: '基础组' }] }],
+      stages: [{ name: '分层', description: '', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' }],
     }).success).toBe(true)
   })
 

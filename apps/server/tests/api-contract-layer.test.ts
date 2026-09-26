@@ -275,12 +275,7 @@ describe('shared API contract adapter', () => {
         clientKey: 'stage-draft-1',
         name: '热身',
         kind: 'TRAINING',
-        audienceMode: 'ALL',
-        endPolicy: 'MANUAL',
-        accessPolicy: 'SEQUENTIAL',
-        submissionMode: 'ENABLED',
         problems: [],
-        groups: [],
       }],
     })
     expect(body.expectedRevision).toBe(2)
@@ -296,7 +291,10 @@ describe('shared API contract adapter', () => {
         status: 'DRAFT',
         scheduledStartAt: new Date('2026-09-15T00:00:00Z'),
       },
+      participants: [],
+      groups: [],
       stages: [],
+      stageGroups: [],
       issues: [],
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
@@ -311,7 +309,7 @@ describe('shared API contract adapter', () => {
     expect(() => parseContractBody(TrainingContracts.createTemplate, { name: '', scope: 'organization' })).toThrowError(ApiContractError)
     sendContractData(response, TrainingContracts.listTemplates, [{
       key: 'database:template-1', name: '分层课堂', sessionType: 'GENERAL', description: '', source: 'organization',
-      stages: [{ name: '分层', description: '', kind: 'TRAINING', audienceMode: 'GROUPED', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', groups: [{ clientKey: 'foundation', name: '基础组' }] }],
+      stages: [{ name: '分层', description: '', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' }],
     }])
   })
 

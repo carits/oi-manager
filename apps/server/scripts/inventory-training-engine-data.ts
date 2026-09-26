@@ -9,10 +9,7 @@ async function main() {
     stageProblems,
     progress,
     events,
-    templates,
-    legacyTrainings,
     sessionStatus,
-    stageLifecycle,
     relationSizes,
   ] = await Promise.all([
     prisma.trainingSession.count(),
@@ -22,9 +19,7 @@ async function main() {
     prisma.trainingSessionStageProblem.count(),
     prisma.trainingSessionProblemProgress.count(),
     prisma.trainingSessionEvent.count(),
-    prisma.trainingSessionTemplate.count(),
     prisma.trainingSession.groupBy({ by: ['status'], _count: { _all: true }, orderBy: { status: 'asc' } }),
-    prisma.trainingSessionStage.groupBy({ by: ['lifecycle'], _count: { _all: true }, orderBy: { lifecycle: 'asc' } }),
     prisma.$queryRaw<Array<{ tableName: string; sizeBytes: bigint }>>`
       SELECT c.relname AS "tableName", pg_total_relation_size(c.oid)::bigint AS "sizeBytes"
       FROM pg_class c
@@ -39,9 +34,7 @@ async function main() {
           'TrainingSessionStageProblem',
           'TrainingSessionStageProblemPlan',
           'TrainingSessionProblemProgress',
-          'TrainingSessionEvent',
-          'TrainingSessionTemplate',
-          'Training'
+          'TrainingSessionEvent'
         )
       ORDER BY pg_total_relation_size(c.oid) DESC
     `,
@@ -57,11 +50,8 @@ async function main() {
       stageProblems,
       progress,
       events,
-      templates,
-      legacyTrainings,
     },
     sessionStatus: Object.fromEntries(sessionStatus.map(item => [item.status, item._count._all])),
-    stageLifecycle: Object.fromEntries(stageLifecycle.map(item => [item.lifecycle, item._count._all])),
     relationSizes: relationSizes.map(item => ({
       table: item.tableName,
       bytes: Number(item.sizeBytes),

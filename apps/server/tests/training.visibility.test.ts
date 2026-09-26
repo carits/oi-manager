@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldHideContestProblemSource } from '../src/modules/training/training.visibility'
+import { shouldHideContestProblemSource } from '../src/modules/contest/contest.visibility'
 
 const now = Date.now()
 const runningContest = {

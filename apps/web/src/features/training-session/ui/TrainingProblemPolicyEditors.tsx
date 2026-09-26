@@ -58,7 +58,7 @@ export function AssignmentPolicyEditor({
   stage: Stage;
   onChange: (value: Partial<Assignment>) => void;
 }) {
-  const strategyMode = stage.accessPolicy === "TEACHER_CONTROLLED";
+  const strategyMode = false;
   return (
     <details className={styles.assignmentPolicy}>
       <summary>单题目标与训练策略</summary>
@@ -79,7 +79,7 @@ export function AssignmentPolicyEditor({
           />
           <small>
             当前有效目标：
-            {assignment.targetScore ?? stage.defaultTargetScore ?? "未设置"}
+            {assignment.targetScore ?? "未设置"}
           </small>
         </label>
         <ScoreGoalsEditor assignment={assignment} onChange={onChange} />

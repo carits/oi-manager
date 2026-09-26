@@ -3875,7 +3875,6 @@ model TrainingSession {
   title                 String
   description           String?                         @db.Text
   sessionType           TrainingEngineSessionType       @default(GENERAL)
-  groupingModelVersion  Int                             @default(1)
   status                TrainingEngineSessionStatus     @default(DRAFT)
   organizationId        String?
   teamId                String?
@@ -3887,7 +3886,6 @@ model TrainingSession {
   endedAt               DateTime?
   archivedAt            DateTime?
   activeElapsedSeconds  Int                             @default(0)
-  currentStageId        String?
   statusRevision        Int                             @default(0)
   commandSeq            Int                             @default(0)
   eventSeq              Int                             @default(0)
@@ -3928,24 +3926,6 @@ model TrainingSessionStage {
   description            String?                                     @db.Text
   orderIndex             Int
   kind                   TrainingEngineStageKind                     @default(TRAINING)
-  audienceMode           TrainingEngineStageAudienceMode             @default(ALL)
-  lifecycle              TrainingEngineStageLifecycle                @default(PENDING)
-  endPolicy              TrainingEngineStageEndPolicy                @default(MANUAL)
-  accessPolicy           TrainingEngineStageAccessPolicy             @default(ALL_AT_ONCE)
-  submissionMode         TrainingEngineSubmissionMode                @default(ENABLED)
-  plannedDurationSeconds Int?
-  defaultTargetScore     Int?
-  completionThreshold    Int?
-  minDurationSeconds     Int?
-  runningSince           DateTime?
-  activeElapsedSeconds   Int                                         @default(0)
-  endedBy                String?
-  endReason              TrainingEngineStageEndReason?
-  endNote                String?                                     @db.Text
-  definitionRevision     Int                                         @default(0)
-  rules                  Json?
-  startedAt              DateTime?
-  endedAt                DateTime?
   createdAt              DateTime                                    @default(now())
   updatedAt              DateTime                                    @updatedAt
   Session                TrainingSession                             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -3954,10 +3934,8 @@ model TrainingSessionStage {
   Groups                 TrainingSessionStageGroup[]
   ParticipantAssignments TrainingSessionStageParticipantAssignment[]
   TimeAdjustments        TrainingSessionStageTimeAdjustment[]
-  GroupChanges           TrainingSessionStageGroupChange[]
 
   @@unique([sessionId, orderIndex])
-  @@index([sessionId, lifecycle])
 }
 
 model TrainingSessionStageProblem {
@@ -4001,11 +3979,9 @@ model TrainingSessionParticipant {
   id                String                                      @id @default(uuid())
   sessionId         String
   userId            String
-  groupId           String?
+  groupId           String
   status            String                                      @default("active")
-  currentStageId    String?
   currentProblemId  String?
-  returnStageId     String?
   returnProblemId   String?
   joinedAt          DateTime                                    @default(now())
   lastHeartbeatAt   DateTime?
@@ -4014,19 +3990,17 @@ model TrainingSessionParticipant {
   updatedAt         DateTime                                    @updatedAt
   Session           TrainingSession                             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   User              User                                        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  Group             TrainingSessionGroup?                       @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  Group             TrainingSessionGroup                        @relation(fields: [groupId], references: [id], onDelete: Restrict)
   Progress          TrainingSessionProblemProgress[]
   HintAccess        TrainingSessionHintAccess[]
   ScoreEvents       TrainingSessionScoreEvent[]
   StrategyDecisions TrainingSessionStrategyDecision[]
   StageAssignments  TrainingSessionStageParticipantAssignment[]
-  StageGroupChanges TrainingSessionStageGroupChange[]
   GroupChanges      TrainingSessionGroupChange[]
 
   @@unique([sessionId, userId])
   @@index([userId, status])
   @@index([sessionId, groupId])
-  @@index([sessionId, currentStageId])
 }
 
 model TrainingSessionGroup {
@@ -4071,12 +4045,11 @@ model TrainingSessionGroupChange {
 model TrainingSessionStageGroup {
   id                     String                                      @id @default(uuid())
   stageId                String
-  groupId                String?
-  name                   String?
-  orderIndex             Int                                         @default(0)
+  groupId                String
   mode                   String                                      @default("PRACTICE")
   accessPolicy           TrainingEngineStageAccessPolicy             @default(ALL_AT_ONCE)
   submissionMode         TrainingEngineSubmissionMode                @default(ENABLED)
+  rules                  Json?
   plannedDurationSeconds Int?
   completionThreshold    Int?
   minDurationSeconds     Int?
@@ -4088,19 +4061,13 @@ model TrainingSessionStageGroup {
   activeElapsedSeconds   Int                                         @default(0)
   endedAt                DateTime?
   endReason              String?
-  rules                  Json?
   createdAt              DateTime                                    @default(now())
   updatedAt              DateTime                                    @updatedAt
   Stage                  TrainingSessionStage                        @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  TrainingGroup          TrainingSessionGroup?                       @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  TrainingGroup          TrainingSessionGroup                        @relation(fields: [groupId], references: [id], onDelete: Restrict)
   ProblemPlans           TrainingSessionStageProblemPlan[]
-  LegacyAssignments      TrainingSessionStageParticipantAssignment[] @relation("LegacyStageGroupAssignment")
-  ChangesFrom            TrainingSessionStageGroupChange[]           @relation("TrainingStageGroupChangeFrom")
-  ChangesTo              TrainingSessionStageGroupChange[]           @relation("TrainingStageGroupChangeTo")
 
   @@unique([stageId, groupId])
-  @@unique([stageId, name])
-  @@unique([stageId, orderIndex])
   @@index([stageId, status])
   @@index([groupId, status])
 }
@@ -4109,27 +4076,24 @@ model TrainingSessionStageParticipantAssignment {
   id                 String                     @id @default(uuid())
   stageId            String
   participantId      String
-  groupId            String?
-  legacyStageGroupId String?
+  groupId            String
   assignedAt         DateTime                   @default(now())
   assignedBy         String?
   source             String                     @default("manual")
   Stage              TrainingSessionStage       @relation(fields: [stageId], references: [id], onDelete: Cascade)
   Participant        TrainingSessionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  Group              TrainingSessionGroup?      @relation(fields: [groupId], references: [id], onDelete: Restrict)
-  LegacyStageGroup   TrainingSessionStageGroup? @relation("LegacyStageGroupAssignment", fields: [legacyStageGroupId], references: [id], onDelete: Restrict)
+  Group              TrainingSessionGroup       @relation(fields: [groupId], references: [id], onDelete: Restrict)
 
   @@unique([stageId, participantId])
   @@index([participantId, stageId])
   @@index([groupId])
-  @@index([legacyStageGroupId])
 }
 
 model TrainingSessionStageProblemPlan {
   id                      String                      @id @default(uuid())
   stageId                 String
   stageProblemId          String
-  groupId                 String?
+  stageGroupId            String
   orderIndex              Int
   unlockPolicy            Json?
   targetScore             Int?
@@ -4145,32 +4109,10 @@ model TrainingSessionStageProblemPlan {
   updatedAt               DateTime                    @updatedAt
   Stage                   TrainingSessionStage        @relation(fields: [stageId], references: [id], onDelete: Cascade)
   StageProblem            TrainingSessionStageProblem @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
-  Group                   TrainingSessionStageGroup?  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  StageGroup              TrainingSessionStageGroup   @relation(fields: [stageGroupId], references: [id], onDelete: Cascade)
 
-  @@index([stageId, groupId, orderIndex])
+  @@index([stageId, stageGroupId, orderIndex])
   @@index([stageProblemId])
-}
-
-model TrainingSessionStageGroupChange {
-  id            String                                 @id @default(uuid())
-  sessionId     String
-  stageId       String
-  participantId String
-  fromGroupId   String?
-  toGroupId     String
-  effectiveMode TrainingEngineGroupChangeEffectiveMode
-  targetStageId String?
-  reason        String                                 @db.Text
-  changedBy     String
-  requestedAt   DateTime                               @default(now())
-  effectiveAt   DateTime?
-  Stage         TrainingSessionStage                   @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  Participant   TrainingSessionParticipant             @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  FromGroup     TrainingSessionStageGroup?             @relation("TrainingStageGroupChangeFrom", fields: [fromGroupId], references: [id], onDelete: SetNull)
-  ToGroup       TrainingSessionStageGroup              @relation("TrainingStageGroupChangeTo", fields: [toGroupId], references: [id], onDelete: Restrict)
-
-  @@index([sessionId, stageId, requestedAt])
-  @@index([participantId, requestedAt])
 }
 
 model TrainingSessionStageTimeAdjustment {
@@ -4400,7 +4342,6 @@ model TrainingSessionTemplateStage {
   description            String?
   orderIndex             Int
   kind                   TrainingEngineStageKind         @default(TRAINING)
-  audienceMode           TrainingEngineStageAudienceMode @default(ALL)
   plannedDurationSeconds Int?
   endPolicy              TrainingEngineStageEndPolicy    @default(MANUAL)
   accessPolicy           TrainingEngineStageAccessPolicy @default(ALL_AT_ONCE)

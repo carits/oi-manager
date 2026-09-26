@@ -76,7 +76,7 @@ erDiagram
 #### 数据与并发约束
 
 - 题目 Revision、训练/比赛 Assignment、聊天会话、经济账本等高竞争写入使用数据库事务锁或 advisory lock，并通过 revision/CAS 防止丢失更新。
-- `TrainingSession` 是一堂课，`TrainingSessionStage` 是课堂时间轴。Group、ParticipantAssignment 和 ProblemPlan 均属于 Stage；Stage 开始时生成不可变 RuntimeSnapshot。Progress 绑定稳定 StageProblem，与当前组要求分离，因此换组不会删除历史成绩。单题时间与卡题阈值是显式策略而非固定常量；教练统计以 Plan 要求集为分母，报告必须把缺少 Progress 的题投影为 `NOT_STARTED`。
+- `TrainingSession` 是一堂课，`TrainingSessionStage` 只保存有序教学元数据；`TrainingSessionGroup` 是整场训练的稳定分组，`TrainingSessionStageGroup` 是 Group × Stage 的唯一配置与运行事实。Participant 通过必填 `groupId` 归属稳定 Group，ProblemPlan 通过必填 `stageGroupId` 归属运行单元。Progress 绑定稳定 StageProblem，与当前组要求分离，因此换组不会删除历史成绩。
 - `TrainingSessionTemplate` 只保存个人、学校或团队可复用的 Stage/分组/规则骨架。模板不会复制题目、学员和运行事实，停用模板也不会改变已经创建的 Session。
 - 正式版本、账本分录、消息、审计、举报证据和发布版本均按追加或不可变方式保存。
 - 用户控制的源码、压缩包、消息、AI 请求、Candidate 和 Judge 输出均有服务端硬上限；前端禁用状态不是安全边界。

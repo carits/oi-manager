@@ -1,183 +1,42 @@
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
+type Issue = { code: string; message: string; detail?: Record<string, unknown> }
 
-type ConsistencyIssue = {
-  code: string
-  message: string
-  sessionId?: string
-  stageId?: string
-  participantId?: string
-  detail?: Record<string, unknown>
-}
+async function scan(): Promise<Issue[]> {
+  const issues: Issue[] = []
+  const add = (code: string, message: string, values: any[]) => values.forEach(detail => issues.push({ code, message, detail }))
+  const rows = await prisma.$queryRawUnsafe<any[]>('SELECT sg.id, sg."stageId", sg."groupId", sg.status, sg."startedAt", sg."runningSince", s."sessionId" AS "stageSessionId", g."sessionId" AS "groupSessionId" FROM "TrainingSessionStageGroup" sg JOIN "TrainingSessionStage" s ON s.id = sg."stageId" LEFT JOIN "TrainingSessionGroup" g ON g.id = sg."groupId"')
+  add('STAGE_GROUP_WITHOUT_GROUP', 'StageGroup.groupId 不能为空', rows.filter(r => !r.groupId).map(r => ({ id: r.id })))
+  add('STAGE_GROUP_CROSS_SESSION', 'Stage 与 Group 不属于同一 Session', rows.filter(r => r.groupId && r.stageSessionId !== r.groupSessionId).map(r => ({ id: r.id })))
+  add('ENDED_STAGE_GROUP_HAS_RUNTIME', 'ENDED/SKIPPED StageGroup 不得保留 runningSince', rows.filter(r => ['ENDED', 'SKIPPED'].includes(r.status) && r.runningSince).map(r => ({ id: r.id, status: r.status })))
+  add('RUNNING_STAGE_GROUP_MISSING_START', 'RUNNING StageGroup 必须有 startedAt 与 runningSince', rows.filter(r => r.status === 'RUNNING' && (!r.startedAt || !r.runningSince)).map(r => ({ id: r.id })))
+  const active = new Map<string, string[]>()
+  for (const row of rows) if (row.groupId && ['RUNNING', 'PAUSED'].includes(row.status)) active.set(row.groupId, [...(active.get(row.groupId) || []), row.id])
+  for (const [groupId, ids] of active) if (ids.length > 1) issues.push({ code: 'GROUP_HAS_MULTIPLE_ACTIVE_STAGE_GROUPS', message: '一个 Stable Group 最多只能有一个 RUNNING/PAUSED StageGroup', detail: { groupId, ids } })
 
-async function scanTrainingEngineConsistency(): Promise<ConsistencyIssue[]> {
-  const issues: ConsistencyIssue[] = []
+  const participants = await prisma.$queryRawUnsafe<any[]>('SELECT p.id, p."sessionId", p."groupId", p.status, g."sessionId" AS "groupSessionId" FROM "TrainingSessionParticipant" p LEFT JOIN "TrainingSessionGroup" g ON g.id = p."groupId"')
+  add('ACTIVE_PARTICIPANT_WITHOUT_GROUP', 'active Participant 必须属于 Stable Group', participants.filter(r => r.status === 'active' && !r.groupId).map(r => ({ id: r.id })))
+  add('PARTICIPANT_CROSS_SESSION_GROUP', 'Participant.groupId 必须属于同一 Session', participants.filter(r => r.groupId && r.sessionId !== r.groupSessionId).map(r => ({ id: r.id })))
 
-  const runningWithoutCurrent = await prisma.trainingSession.findMany({
-    where: { status: 'RUNNING', currentStageId: null },
-    select: { id: true },
-  })
-  for (const session of runningWithoutCurrent) {
-    issues.push({
-      code: 'RUNNING_SESSION_WITHOUT_CURRENT_STAGE',
-      sessionId: session.id,
-      message: 'RUNNING Session 没有 current Stage',
-    })
-  }
+  const assignments = await prisma.$queryRawUnsafe<any[]>('SELECT a.id, s."sessionId" AS "stageSessionId", p."sessionId" AS "participantSessionId", g."sessionId" AS "groupSessionId" FROM "TrainingSessionStageParticipantAssignment" a JOIN "TrainingSessionStage" s ON s.id = a."stageId" JOIN "TrainingSessionParticipant" p ON p.id = a."participantId" JOIN "TrainingSessionGroup" g ON g.id = a."groupId"')
+  add('STAGE_ASSIGNMENT_CROSS_SESSION', 'Stage assignment 的 Stage、Participant、Group 必须同 Session', assignments.filter(r => r.stageSessionId !== r.participantSessionId || (r.groupSessionId && r.groupSessionId !== r.stageSessionId)).map(r => ({ id: r.id })))
 
-  const runningStages = await prisma.trainingSessionStage.findMany({
-    where: { lifecycle: 'RUNNING' },
-    select: { id: true, sessionId: true },
-    orderBy: [{ sessionId: 'asc' }, { orderIndex: 'asc' }],
-  })
-  const runningBySession = new Map<string, string[]>()
-  for (const stage of runningStages) {
-    runningBySession.set(stage.sessionId, [...(runningBySession.get(stage.sessionId) || []), stage.id])
-  }
-  for (const [sessionId, stageIds] of runningBySession) {
-    if (stageIds.length <= 1) continue
-    issues.push({
-      code: 'MULTIPLE_RUNNING_STAGES',
-      sessionId,
-      message: '同一个 Session 存在多个 RUNNING Stage',
-      detail: { stageIds },
-    })
-  }
-
-  const endedWithRunning = await prisma.trainingSession.findMany({
-    where: { status: { in: ['ENDED', 'ARCHIVED'] }, Stages: { some: { lifecycle: 'RUNNING' } } },
-    select: { id: true, status: true, Stages: { where: { lifecycle: 'RUNNING' }, select: { id: true } } },
-  })
-  for (const session of endedWithRunning) {
-    issues.push({
-      code: 'TERMINAL_SESSION_WITH_RUNNING_STAGE',
-      sessionId: session.id,
-      message: 'ENDED/ARCHIVED Session 仍有 RUNNING Stage',
-      detail: { status: session.status, stageIds: session.Stages.map(stage => stage.id) },
-    })
-  }
-
-  const groupedStages = await prisma.trainingSessionStage.findMany({
-    where: {
-      audienceMode: 'GROUPED',
-      lifecycle: { in: ['PENDING', 'RUNNING'] },
-      Session: { status: { in: ['DRAFT', 'SCHEDULED', 'RUNNING', 'PAUSED'] } },
-    },
-    select: {
-      id: true,
-      sessionId: true,
-      Session: { select: { Participants: { where: { status: 'active' }, select: { id: true } } } },
-      ParticipantAssignments: { select: { participantId: true, groupId: true } },
-    },
-  })
-  for (const stage of groupedStages) {
-    const assignmentByParticipant = new Map(stage.ParticipantAssignments.map(item => [item.participantId, item.groupId]))
-    for (const participant of stage.Session.Participants) {
-      if (assignmentByParticipant.get(participant.id)) continue
-      issues.push({
-        code: 'GROUPED_STAGE_UNASSIGNED_PARTICIPANT',
-        sessionId: stage.sessionId,
-        stageId: stage.id,
-        participantId: participant.id,
-        message: 'GROUPED Stage 存在未分组 active participant',
-      })
-    }
-  }
-
-  const assignments = await prisma.trainingSessionStageParticipantAssignment.findMany({
-    where: { groupId: { not: null } },
-    select: {
-      id: true,
-      stageId: true,
-      participantId: true,
-      groupId: true,
-      Stage: { select: { sessionId: true } },
-      Group: { select: { sessionId: true } },
-    },
-  })
-  for (const assignment of assignments) {
-    // Groups are session-scoped. Stage membership is represented by the
-    // assignment's own stageId and no longer lives on the group record.
-    if (!assignment.Group || assignment.Group.sessionId === assignment.Stage.sessionId) continue
-    issues.push({
-      code: 'STAGE_ASSIGNMENT_CROSS_STAGE_GROUP',
-      stageId: assignment.stageId,
-      participantId: assignment.participantId,
-      message: 'StageAssignment points to a group from another session',
-      detail: {
-        assignmentId: assignment.id,
-        groupId: assignment.groupId,
-        assignmentSessionId: assignment.Stage.sessionId,
-        groupSessionId: assignment.Group.sessionId,
-      },
-    })
-  }
-
-  const currentStageMismatches = await prisma.trainingSession.findMany({
-    where: { currentStageId: { not: null }, status: { in: ['RUNNING', 'PAUSED'] } },
-    select: { id: true, currentStageId: true, Stages: { where: { lifecycle: 'RUNNING' }, select: { id: true } } },
-  })
-  for (const session of currentStageMismatches) {
-    if (session.Stages.length === 1 && session.Stages[0].id === session.currentStageId) continue
-    issues.push({
-      code: 'CURRENT_STAGE_LIFECYCLE_MISMATCH',
-      sessionId: session.id,
-      stageId: session.currentStageId || undefined,
-      message: 'Session.currentStageId 与唯一 RUNNING Stage 不一致',
-      detail: { runningStageIds: session.Stages.map(stage => stage.id) },
-    })
-  }
-
-  const orphanProgress = await prisma.$queryRaw<Array<{ id: string; participantId: string; stageProblemId: string }>>`
-    SELECT p."id", p."participantId", p."stageProblemId"
-    FROM "TrainingSessionProblemProgress" p
-    LEFT JOIN "TrainingSessionStageProblem" sp ON sp."id" = p."stageProblemId"
-    WHERE sp."id" IS NULL
-  `
-  for (const progress of orphanProgress) {
-    issues.push({
-      code: 'PROGRESS_WITHOUT_STAGE_PROBLEM',
-      participantId: progress.participantId,
-      message: 'Progress 指向不存在的 StageProblem',
-      detail: { progressId: progress.id, stageProblemId: progress.stageProblemId },
-    })
-  }
-
+  const plans = await prisma.$queryRawUnsafe<any[]>('SELECT pp.id, pp."stageId", sp."stageId" AS "problemStageId", sg."stageId" AS "groupStageId" FROM "TrainingSessionStageProblemPlan" pp JOIN "TrainingSessionStageProblem" sp ON sp.id = pp."stageProblemId" JOIN "TrainingSessionStageGroup" sg ON sg.id = pp."stageGroupId"')
+  add('PLAN_CROSS_STAGE', 'StageProblemPlan 的 Stage、StageProblem、StageGroup 必须同一 Stage', plans.filter(r => r.stageId !== r.problemStageId || (r.groupStageId && r.groupStageId !== r.stageId)).map(r => ({ id: r.id })))
+  const orphan = await prisma.$queryRawUnsafe<any[]>('SELECT p.id FROM "TrainingSessionProblemProgress" p LEFT JOIN "TrainingSessionStageProblem" sp ON sp.id = p."stageProblemId" WHERE sp.id IS NULL')
+  add('PROGRESS_WITHOUT_STAGE_PROBLEM', 'Progress 指向不存在的 StageProblem', orphan)
   return issues
 }
 
 async function main() {
-  const json = process.argv.includes('--json')
-  const issues = await scanTrainingEngineConsistency()
-  const result = {
-    checkedAt: new Date().toISOString(),
-    errorCount: issues.length,
-    ok: issues.length === 0,
-    issues,
-  }
-
-  if (json) console.log(JSON.stringify(result, null, 2))
+  const issues = await scan()
+  const result = { checkedAt: new Date().toISOString(), errorCount: issues.length, ok: issues.length === 0, issues }
+  if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2))
   else {
-    console.log(`Training Engine consistency: ${issues.length === 0 ? 'OK' : `${issues.length} error(s)`}`)
-    for (const issue of issues) {
-      console.error(`[${issue.code}] ${issue.message}`, {
-        sessionId: issue.sessionId,
-        stageId: issue.stageId,
-        participantId: issue.participantId,
-        ...issue.detail,
-      })
-    }
+    console.log('Training Engine consistency: ' + (result.ok ? 'OK' : issues.length + ' error(s)'))
+    issues.forEach(i => console.error('[' + i.code + '] ' + i.message, i.detail))
   }
-
   if (issues.length) process.exitCode = 1
 }
-
-main()
-  .catch(error => {
-    console.error('Training Engine consistency scan failed:', error)
-    process.exitCode = 2
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+main().catch(error => { console.error('Training Engine consistency scan failed:', error); process.exitCode = 2 }).finally(async () => { await prisma.$disconnect() })

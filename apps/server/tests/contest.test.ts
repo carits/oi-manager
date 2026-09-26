@@ -179,7 +179,7 @@ describe('比赛类型区分测试', () => {
     ownerToken = generateTestToken({ userId: ownerUser.user.id, username: ownerUser.user.username, accountRole: 'user' })
   })
 
-  it('CT1: 创建训练（type=training）', async () => {
+  it('CT1: Contest 接口拒绝旧 training 类型', async () => {
     const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .post(`/api/teams/${team.id}/contests`)
       .send({
@@ -190,9 +190,7 @@ describe('比赛类型区分测试', () => {
         endTime: new Date(Date.now() + 86400000 * 2).toISOString()
       })
 
-    expect(res.status).toBe(200)
-    expect(res.body.success).toBe(true)
-    expect(res.body.data.type).toBe('training')
+    expect(res.status).toBe(400)
   })
 
   it('CT2: 创建比赛（type=contest）', async () => {
@@ -211,34 +209,18 @@ describe('比赛类型区分测试', () => {
     expect(res.body.data.type).toBe('contest')
   })
 
-  it('CT3: 按类型筛选列表', async () => {
-    // 创建一个训练和一个比赛
+  it('CT3: Contest 列表只返回 canonical Contest', async () => {
     const now = Date.now()
-    await prisma.training.create({
-      data: {
-        teamId: team.id,
-        title: '训练',
-        format: 'ioi',
-        type: 'training',
-        startTime: new Date(now + 86400000),
-        endTime: new Date(now + 86400000 * 2),
-        status: 'upcoming',
-        createdBy: ownerUser.user.id
-      }
-    })
-
-    await createContestRuntimeFixture({
-      data: {
-        teamId: team.id,
+    const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
+      .post(`/api/teams/${team.id}/contests`)
+      .send({
         title: '比赛',
         format: 'oi',
         type: 'contest',
-        startTime: new Date(now + 86400000),
-        endTime: new Date(now + 86400000 * 2),
-        status: 'upcoming',
-        createdBy: ownerUser.user.id
-      }
-    })
+        startTime: new Date(now + 86400000).toISOString(),
+        endTime: new Date(now + 86400000 * 2).toISOString(),
+      })
+    expect(created.status).toBe(200)
 
     // 筛选比赛
     const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
@@ -330,7 +312,7 @@ describe('比赛类型区分测试', () => {
     expect(aggregate.RatingConfig?.track).toBe('IOI')
   })
 
-  it('CT6: 删除未终结比赛会同时删除聚合和兼容运行时', async () => {
+  it('CT6: 删除未终结比赛只删除 canonical Contest 聚合', async () => {
     const created = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .post(`/api/teams/${team.id}/contests`)
       .send({
@@ -350,7 +332,6 @@ describe('比赛类型区分测试', () => {
     const deleted = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .delete(`/api/contests/${contestId}`)
     expect(deleted.status).toBe(200)
-    expect(await prisma.training.findUnique({ where: { id: contestId } })).toBeNull()
     expect(await prisma.contest.findUnique({ where: { id: aggregateBefore.id } })).toBeNull()
   })
 

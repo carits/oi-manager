@@ -34,11 +34,9 @@ const newKey = newTrainingDesignKey;
 const copyStageAsDraft = (stage: Stage): Stage => ({
   ...stage,
   id: undefined,
-  lifecycle: "PENDING",
   clientKey: newKey(),
   name: `${stage.name}（副本）`,
   Problems: stage.Problems.map(problem => ({ ...problem, id: undefined, assignmentId: undefined, clientKey: newKey() })),
-  Groups: stage.Groups.map(group => ({ ...group, id: undefined, clientKey: newKey(), Problems: group.Problems.map(problem => ({ ...problem, id: undefined, assignmentId: undefined, clientKey: newKey() })) })),
 });
 
 export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
@@ -80,7 +78,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       if (copied) loadedStages = [...loadedStages, copied];
       setDesign(data);
       setStages(loadedStages);
-      setGrouping(data.grouping);
+      setGrouping({ groups: data.groups, memberships: data.participants.map(participant => { const group = data.groups.find(item => item.id === participant.groupId)!; return { participantId: participant.id, userId: participant.userId, groupId: participant.groupId, groupName: group?.name || '' } }) });
       setTitle(data.session.title);
       setDescription(data.session.description || "");
       setIssues(data.issues || []);
@@ -102,11 +100,11 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   }, [load]);
   const activeStage =
     stages.find((stage) => stage.clientKey === activeStageKey) || null;
-  const activeStageReadOnly = Boolean(activeStage?.lifecycle && activeStage.lifecycle !== "PENDING");
+  const activeStageReadOnly = false;
   const updateStage = (clientKey: string, updater: (stage: Stage) => Stage) => {
     setStages((current) =>
       current.map((stage) =>
-        stage.clientKey === clientKey && (!stage.lifecycle || stage.lifecycle === "PENDING") ? updater(stage) : stage,
+        stage.clientKey === clientKey ? updater(stage) : stage,
       ),
     );
     setDirty(true);
@@ -121,13 +119,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       name: `新阶段 ${stages.length + 1}`,
       description: "",
       kind: "TRAINING",
-      audienceMode: "ALL",
-      endPolicy: "MANUAL",
-      accessPolicy: "ALL_AT_ONCE",
-      accessScope: "CURRENT_STAGE",
-      submissionMode: "ENABLED",
       Problems: [],
-      Groups: [],
     };
     replaceStages((current) => [...current, stage]);
     setActiveStageKey(stage.clientKey);
@@ -138,7 +130,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     setActiveStageKey(copy.clientKey);
   };
   const removeStage = (stage: Stage) => {
-    if (stage.lifecycle && stage.lifecycle !== "PENDING") return toast.error("已开始阶段永久只读，只能复制为新的未来阶段");
     replaceStages((current) =>
       current.filter((item) => item.clientKey !== stage.clientKey),
     );
@@ -177,7 +168,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const addResolvedProblems = async (problems: SelectedCanonicalProblem[]) => {
     const destinationKeys = (problemTarget === "current" ? (activeStage ? [activeStage.clientKey] : []) : targetStages).filter(key => {
       const stage = stages.find(item => item.clientKey === key);
-      return stage && (!stage.lifecycle || stage.lifecycle === "PENDING");
+      return Boolean(stage);
     });
     if (!destinationKeys.length) return toast.error("请先选择目标阶段");
     const details: DesignProblem[] = [];
@@ -188,9 +179,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     if (!details.length) return;
     replaceStages((current) => current.map((stage) => destinationKeys.includes(stage.clientKey) ? {
       ...stage,
-      ...(stage.audienceMode === "GROUPED" ? {
-        Groups: stage.Groups.map((group, index) => index === 0 ? { ...group, Problems: [...group.Problems, ...details.filter(problem => !group.Problems.some(item => item.problemId === problem.id)).map(assignmentFromProblem)] } : group),
-      } : { Problems: [...stage.Problems, ...details.filter(problem => !stage.Problems.some(item => item.problemId === problem.id)).map(assignmentFromProblem)] }),
+      Problems: [...stage.Problems, ...details.filter(problem => !stage.Problems.some(item => item.problemId === problem.id)).map(assignmentFromProblem)],
     } : stage));
   };
   const updateProblem = (
@@ -200,7 +189,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     if (!activeStage) return;
     updateStage(activeStage.clientKey, (stage) => ({
       ...stage,
-      ...(stage.audienceMode === "GROUPED" ? { Groups: stage.Groups.map((group, index) => index === 0 ? { ...group, Problems: group.Problems.map(problem => problem.clientKey === clientKey ? updater(problem) : problem) } : group) } : { Problems: stage.Problems.map((problem) => problem.clientKey === clientKey ? updater(problem) : problem) }),
+      Problems: stage.Problems.map((problem) => problem.clientKey === clientKey ? updater(problem) : problem),
     }));
   };
   const moveProblemToStage = (problem: Assignment, targetStageKey: string) => {
@@ -208,27 +197,25 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     const target = stages.find((stage) => stage.clientKey === targetStageKey);
     if (
       !target ||
-      (target.lifecycle && target.lifecycle !== "PENDING") ||
-      ((target.audienceMode === "GROUPED" ? target.Groups[0]?.Problems : target.Problems) || []).some((item) => item.problemId === problem.problemId)
+      target.Problems.some((item) => item.problemId === problem.problemId)
     )
       return toast.error("目标阶段已包含该题");
     replaceStages((current) =>
       current.map((stage) =>
         stage.clientKey === activeStage.clientKey
-          ? stage.audienceMode === "GROUPED" ? { ...stage, Groups: stage.Groups.map((group, index) => index === 0 ? { ...group, Problems: normalizeProblemOrder(group.Problems.filter(item => item.clientKey !== problem.clientKey)) } : group) } : { ...stage, Problems: normalizeProblemOrder(stage.Problems.filter((item) => item.clientKey !== problem.clientKey)) }
+          ? { ...stage, Problems: normalizeProblemOrder(stage.Problems.filter((item) => item.clientKey !== problem.clientKey)) }
           : stage.clientKey === targetStageKey
-            ? stage.audienceMode === "GROUPED" ? { ...stage, Groups: stage.Groups.map((group, index) => index === 0 ? { ...group, Problems: normalizeProblemOrder([...group.Problems, problem]) } : group) } : { ...stage, Problems: normalizeProblemOrder([...stage.Problems, problem]) }
+            ? { ...stage, Problems: normalizeProblemOrder([...stage.Problems, problem]) }
             : stage,
       ),
     );
     setActiveStageKey(targetStageKey);
   };
-  const updateToLatest = async (problem: Assignment, groupClientKey?: string) => {
+  const updateToLatest = async (problem: Assignment) => {
     const detail = await fetchDesignProblem(problem.problemId);
     if (!detail) return;
     const updater = (current: Assignment) => ({ ...current, testSetRevisionId: detail.revision.id, TestSetRevision: detail.revision, latestRevision: detail.revision, subtasks: detail.subtasks, allowedSubtaskIds: current.allowedSubtaskIds.filter(id => detail.subtasks.some(subtask => subtask.id === id)) });
-    if (activeStage?.audienceMode === "GROUPED" && groupClientKey) updateStage(activeStage.clientKey, stage => ({ ...stage, Groups: stage.Groups.map(group => group.clientKey === groupClientKey ? { ...group, Problems: group.Problems.map(current => current.clientKey === problem.clientKey ? updater(current) : current) } : group) }));
-    else updateProblem(problem.clientKey, updater);
+    updateProblem(problem.clientKey, updater);
   };
 
   const requestBody = (confirmDependentRemoval = false) => ({
@@ -236,23 +223,13 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     title,
     description,
     confirmDependentRemoval,
-    grouping: grouping ? { groups: grouping.groups.map(group => ({ id: group.id, clientKey: group.clientKey, name: group.name, participantIds: group.participantIds })) } : undefined,
+    groups: grouping?.groups.map(group => ({ id: group.id, clientKey: group.clientKey, name: group.name, participantIds: group.participantIds })),
     stages: stages.map((stage) => ({
       id: stage.id,
       clientKey: stage.clientKey,
       name: stage.name,
       description: stage.description,
       kind: stage.kind,
-      audienceMode: stage.audienceMode ?? "ALL",
-      endPolicy: stage.endPolicy,
-      accessPolicy: stage.accessPolicy,
-      accessScope: stage.accessScope,
-      submissionMode: stage.submissionMode,
-      plannedDurationSeconds: stage.plannedDurationSeconds || null,
-      defaultTargetScore: stage.defaultTargetScore ?? null,
-      completionThreshold: stage.completionThreshold ?? null,
-      minDurationSeconds: stage.minDurationSeconds ?? null,
-      rules: stage.rules || undefined,
       problems: stage.Problems.map((problem) => ({
         assignmentId: problem.assignmentId,
         clientKey: problem.clientKey,
@@ -266,29 +243,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         stuckPolicy: problem.stuckPolicy || undefined,
         allowedSubtaskIds: problem.allowedSubtaskIds,
         strategyIntervalSeconds: problem.strategyIntervalSeconds ?? null,
-      })),
-      groups: stage.Groups.map((group) => ({
-        id: group.id,
-        clientKey: group.clientKey,
-        name: group.name,
-        accessPolicy: group.accessPolicy,
-        submissionMode: group.submissionMode,
-        rules: group.rules || undefined,
-        participantIds: group.participantIds,
-        problems: group.Problems.map((problem) => ({
-          assignmentId: problem.assignmentId,
-          clientKey: problem.clientKey,
-          problemId: problem.problemId,
-          testSetRevisionId: problem.testSetRevisionId,
-          alias: problem.alias || null,
-          unlockPolicy: problem.unlockPolicy || undefined,
-          targetScore: problem.targetScore ?? null,
-          scoreGoals: problem.scoreGoals,
-          timePolicy: problem.timePolicy || undefined,
-          stuckPolicy: problem.stuckPolicy || undefined,
-          allowedSubtaskIds: problem.allowedSubtaskIds,
-          strategyIntervalSeconds: problem.strategyIntervalSeconds ?? null,
-        })),
       })),
     })),
   });
@@ -344,7 +298,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       stages
         .map(
           (stage) =>
-            `${stage.name}：${stage.audienceMode === "GROUPED" ? `${stage.Groups.length} 个分组` : stage.Problems.length ? stage.Problems.map((problem) => problem.alias || problem.Problem.problemId).join(" → ") : ["TEACHING", "REVIEW"].includes(stage.kind) ? "（可留空）" : "（待分配）"}`,
+            `${stage.name}：${stage.Problems.length ? stage.Problems.map((problem) => problem.alias || problem.Problem.problemId).join(" → ") : ["TEACHING", "REVIEW"].includes(stage.kind) ? "（可留空）" : "（待分配）"}`,
         )
         .join("  →  "),
     [stages],
@@ -538,7 +492,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
                   label={stage.name}
                   description={`${stage.Problems.length} 道题`}
                   checked={targetStages.includes(stage.clientKey)}
-                  disabled={Boolean(stage.lifecycle && stage.lifecycle !== "PENDING")}
+
                   onChange={event => setTargetStages(current => event.target.checked ? [...current, stage.clientKey] : current.filter(key => key !== stage.clientKey))}
                 />)}</div>}
                 <QuickProblemInput
@@ -549,7 +503,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               </div>
             </section>
           </div>
-          {design?.grouping && <TrainingStageGroupMatrix sessionId={sessionId} revision={design.statusRevision} stages={stages} grouping={grouping} plans={design.stageGroupPlans || []} onSaved={load} />}
+          {grouping && <TrainingStageGroupMatrix sessionId={sessionId} revision={design.statusRevision} stages={stages} grouping={grouping} stageGroups={design.stageGroups} onSaved={load} />}
         </>)}
 
         {activeStep === 3 && (

@@ -13,10 +13,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 208 |
+| Prisma models | 197 |
 | Prisma enums | 78 |
 | Legacy route adapters | 18 |
-| Module route adapters | 54 |
+| Module route adapters | 53 |
 | systemd units | 8 |
 | Referenced environment keys | 485 |
 
@@ -51,6 +51,17 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/carits/carits.routes.ts`
 - `apps/server/src/modules/carits/resource.routes.ts`
 - `apps/server/src/modules/chat/chat.routes.ts`
+- `apps/server/src/modules/contest/contest.content.routes.ts`
+- `apps/server/src/modules/contest/contest.crud.routes.ts`
+- `apps/server/src/modules/contest/contest.hack-sync.routes.ts`
+- `apps/server/src/modules/contest/contest.misc.routes.ts`
+- `apps/server/src/modules/contest/contest.notes.routes.ts`
+- `apps/server/src/modules/contest/contest.problems.routes.ts`
+- `apps/server/src/modules/contest/contest.ranking.routes.ts`
+- `apps/server/src/modules/contest/contest.record.routes.ts`
+- `apps/server/src/modules/contest/contest.routes.ts`
+- `apps/server/src/modules/contest/contest.statement-management.routes.ts`
+- `apps/server/src/modules/contest/contest.submissions.routes.ts`
 - `apps/server/src/modules/contribution/contribution.routes.ts`
 - `apps/server/src/modules/data-market/data-market.routes.ts`
 - `apps/server/src/modules/notification/notification.routes.ts`
@@ -87,18 +98,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/team/team.routes.ts`
 - `apps/server/src/modules/telemetry/telemetry.routes.ts`
 - `apps/server/src/modules/training-engine/training-engine.routes.ts`
-- `apps/server/src/modules/training/training-legacy-retired.routes.ts`
-- `apps/server/src/modules/training/training.content.routes.ts`
-- `apps/server/src/modules/training/training.crud.routes.ts`
-- `apps/server/src/modules/training/training.hack-sync.routes.ts`
-- `apps/server/src/modules/training/training.misc.routes.ts`
-- `apps/server/src/modules/training/training.notes.routes.ts`
-- `apps/server/src/modules/training/training.problems.routes.ts`
-- `apps/server/src/modules/training/training.ranking.routes.ts`
-- `apps/server/src/modules/training/training.record.routes.ts`
-- `apps/server/src/modules/training/training.routes.ts`
-- `apps/server/src/modules/training/training.statement-management.routes.ts`
-- `apps/server/src/modules/training/training.submissions.routes.ts`
 
 ## Prisma models
 
@@ -266,13 +265,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TestcaseMembershipRetirement`
 - `TestdataFile`
 - `TestdataObject`
-- `Training`
-- `TrainingAttachment`
-- `TrainingParticipant`
-- `TrainingProblem`
-- `TrainingProblemContentSnapshot`
-- `TrainingProblemStatementSet`
-- `TrainingProblemStatementSnapshot`
 - `TrainingSession`
 - `TrainingSessionCommand`
 - `TrainingSessionEvent`
@@ -287,18 +279,14 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingSessionScoreEvent`
 - `TrainingSessionStage`
 - `TrainingSessionStageGroup`
-- `TrainingSessionStageGroupChange`
 - `TrainingSessionStageParticipantAssignment`
 - `TrainingSessionStageProblem`
 - `TrainingSessionStageProblemPlan`
-- `TrainingSessionStageRuntimeSnapshot`
 - `TrainingSessionStageTimeAdjustment`
 - `TrainingSessionStrategyDecision`
 - `TrainingSessionTemplate`
 - `TrainingSessionTemplateStage`
 - `TrainingSessionUserOverride`
-- `TrainingSolution`
-- `TrainingUserProblemStatus`
 - `User`
 - `UserBlock`
 - `UserNotification`

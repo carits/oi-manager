@@ -1,401 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
 import { Empty } from "@/components/ui/Empty";
 import { Checkbox, Input, Select, Textarea } from "@/components/ui/FormControls";
 import type { Assignment, Stage } from "../model/trainingDesign";
-import {
-  closeSubtaskSelection,
-  moveItem,
-  normalizeProblemOrder,
-  removeSubtaskWithDependents,
-  stageKinds,
-  unlockLabel,
-} from "../model/trainingDesign";
+import { closeSubtaskSelection, moveItem, normalizeProblemOrder, removeSubtaskWithDependents, stageKinds, unlockLabel } from "../model/trainingDesign";
 import { AssignmentPolicyEditor, UnlockEditor } from "./TrainingProblemPolicyEditors";
 import styles from "./TrainingEngine.module.css";
 
 type Props = {
-  stages: Stage[];
-  activeStage: Stage | null;
-  draggedProblem: number | null;
-  onDraggedProblemChange: (index: number | null) => void;
-  onUpdateStage: (clientKey: string, updater: (stage: Stage) => Stage) => void;
-  onUpdateProblem: (
-    clientKey: string,
-    updater: (problem: Assignment) => Assignment,
-  ) => void;
-  onMoveProblemToStage: (problem: Assignment, targetStageKey: string) => void;
-  onUpdateToLatest: (problem: Assignment, groupClientKey?: string) => Promise<void>;
-  readOnly?: boolean;
-};
+  stages: Stage[]; activeStage: Stage | null; draggedProblem: number | null; onDraggedProblemChange: (index: number | null) => void
+  onUpdateStage: (clientKey: string, updater: (stage: Stage) => Stage) => void
+  onUpdateProblem: (clientKey: string, updater: (problem: Assignment) => Assignment) => void
+  onMoveProblemToStage: (problem: Assignment, targetStageKey: string) => void
+  onUpdateToLatest: (problem: Assignment) => Promise<void>; readOnly?: boolean
+}
 
-export function TrainingProblemChain({
-  stages,
-  activeStage,
-  draggedProblem,
-  onDraggedProblemChange,
-  onUpdateStage,
-  onUpdateProblem,
-  onMoveProblemToStage,
-  onUpdateToLatest,
-  readOnly = false,
-}: Props) {
-  const [activeGroupKey, setActiveGroupKey] = useState("");
-  useEffect(() => {
-    if (!activeStage || activeStage.audienceMode !== "GROUPED") return setActiveGroupKey("");
-    if (!activeStage.Groups.some(group => group.clientKey === activeGroupKey)) setActiveGroupKey(activeStage.Groups[0]?.clientKey || "");
-  }, [activeGroupKey, activeStage]);
-  const activeGroup = activeStage?.Groups.find(group => group.clientKey === activeGroupKey) || activeStage?.Groups[0];
-  const displayedProblems = activeStage?.audienceMode === "GROUPED" ? activeGroup?.Problems || [] : activeStage?.Problems || [];
-  const updateDisplayedProblems = (stage: Stage, updater: (items: Assignment[]) => Assignment[]): Stage => stage.audienceMode === "GROUPED"
-    ? { ...stage, Groups: stage.Groups.map(group => group.clientKey === activeGroup?.clientKey ? { ...group, Problems: updater(group.Problems) } : group) }
-    : { ...stage, Problems: updater(stage.Problems) };
-  const updateDisplayedProblem = (clientKey: string, updater: (problem: Assignment) => Assignment) => {
-    if (!activeStage) return;
-    if (activeStage.audienceMode !== "GROUPED") return onUpdateProblem(clientKey, updater);
-    onUpdateStage(activeStage.clientKey, stage => updateDisplayedProblems(stage, items => items.map(problem => problem.clientKey === clientKey ? updater(problem) : problem)));
-  };
-  return (
-    <section className={styles.designColumn} aria-label="当前阶段题目链">
-      <header>
-        <div>
-          <strong>题目链</strong>
-          <small>{activeStage?.name || "未选择阶段"}</small>
-        </div>
-      </header>
-      <div className={styles.designColumnBody}>
-        {activeStage ? (
-          <fieldset disabled={readOnly} aria-label={readOnly ? "已开始阶段，只读" : "阶段定义"} className={styles.definitionFieldset}>
-            {readOnly && <p className={styles.muted}>该阶段已开始，定义和题目计划永久只读；需要再次训练时请使用左侧“复制阶段”创建新的未来阶段。</p>}
-            <div className={styles.stageSettings}>
-              <label className={styles.field}>
-                阶段名称
-                <Input
-                  value={activeStage.name}
-                  onChange={(event) =>
-                    onUpdateStage(activeStage.clientKey, (stage) => ({
-                      ...stage,
-                      name: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className={styles.field}>
-                这一阶段做什么？
-                <Select
-                  value={activeStage.kind}
-                  onChange={(event) =>
-                    onUpdateStage(activeStage.clientKey, (stage) => ({
-                      ...stage,
-                      kind: event.target.value as Stage["kind"],
-                    }))
-                  }
-                >
-                  {stageKinds.map(([value, label]) => (
-                    <option value={value} key={value}>
-                      {label}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label className={styles.field}>
-                阶段说明
-                <Textarea
-                  rows={2}
-                  value={activeStage.description || ""}
-                  onChange={(event) =>
-                    onUpdateStage(activeStage.clientKey, (stage) => ({
-                      ...stage,
-                      description: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <div className={styles.compactGrid}>
-                <label className={styles.field}>
-                  谁参加？
-                  <Select
-                    value={activeStage.audienceMode}
-                    onChange={(event) =>
-                      onUpdateStage(activeStage.clientKey, (stage) => ({
-                        ...stage,
-                        audienceMode: event.target.value as Stage["audienceMode"],
-                        Groups: event.target.value === "GROUPED" && !stage.Groups.length
-                          ? (stages.find(item => item.audienceMode === "GROUPED" && item.Groups.length)?.Groups || [{ clientKey: `group-${Date.now()}`, name: "分组 1", accessPolicy: stage.accessPolicy, submissionMode: stage.submissionMode, participantIds: [], Problems: [] }]).map(group => ({ ...group, Problems: [] }))
-                          : stage.Groups,
-                      }))
-                    }
-                  >
-                    <option value="ALL">全班统一</option>
-                    <option value="GROUPED">按训练分组</option>
-                  </Select>
-                </label>
-                <label className={styles.field}>
-                  题目怎么开放？
-                  <Select value={activeStage.accessPolicy} onChange={(event) => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, accessPolicy: event.target.value as Stage["accessPolicy"] }))}>
-                    <option value="ALL_AT_ONCE">全部开放</option>
-                    <option value="SEQUENTIAL">顺序开放</option>
-                    <option value="TEACHER_CONTROLLED">教师控制</option>
-                  </Select>
-                </label>
-                <label className={styles.field}>
-                  跨阶段可见范围
-                  <Select value={activeStage.accessScope || "CURRENT_STAGE"} onChange={(event) => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, accessScope: event.target.value as Stage["accessScope"] }))}>
-                    <option value="CURRENT_STAGE">仅当前阶段</option>
-                    <option value="PREVIOUS_AND_CURRENT">历史 + 当前阶段</option>
-                    <option value="SESSION_ALL">整场训练（未来阶段只读）</option>
-                  </Select>
-                </label>
-                <label className={styles.field}>
-                  什么时候结束？
-                  <Select value={activeStage.endPolicy} onChange={(event) => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, endPolicy: event.target.value as Stage["endPolicy"] }))}>
-                    <option value="MANUAL">教师手动</option><option value="TIME">到达时间</option><option value="COMPLETION">达到完成度</option><option value="HYBRID">时间和完成度</option>
-                  </Select>
-                </label>
-                {["TIME", "HYBRID"].includes(activeStage.endPolicy) && (
-                  <label className={styles.field}>
-                    时长（分钟）
-                    <Input
-                      type="number"
-                      min={1}
-                      value={
-                        activeStage.plannedDurationSeconds
-                          ? Math.round(activeStage.plannedDurationSeconds / 60)
-                          : ""
-                      }
-                      onChange={(event) =>
-                        onUpdateStage(activeStage.clientKey, (stage) => ({
-                          ...stage,
-                          plannedDurationSeconds: event.target.value
-                            ? Number(event.target.value) * 60
-                            : null,
-                        }))
-                      }
-                    />
-                  </label>
-                )}
-                {["COMPLETION", "HYBRID"].includes(activeStage.endPolicy) && (
-                  <label className={styles.field}>
-                    完成比例（%）
-                    <Input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={activeStage.completionThreshold || ""}
-                      onChange={(event) =>
-                        onUpdateStage(activeStage.clientKey, (stage) => ({
-                          ...stage,
-                          completionThreshold: event.target.value
-                            ? Number(event.target.value)
-                            : null,
-                        }))
-                      }
-                    />
-                  </label>
-                )}
-              </div>
-              {activeStage.audienceMode === "GROUPED" && <div className={styles.assignmentPolicy}>
-                <strong>按训练分组安排题目</strong>
-                <p>分组成员、名称和建议统一在“学员与训练分组”面板维护；这里仅选择要为哪个训练分组安排题目。</p>
-                <label className={styles.field}>当前训练分组<Select value={activeGroup?.clientKey || ""} onChange={event => setActiveGroupKey(event.target.value)}>{activeStage.Groups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></label>
-              </div>}
-              {activeStage.kind === "TRAINING" && (
-                <label className={styles.field}>
-                  默认目标分
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={activeStage.defaultTargetScore ?? ""}
-                    onChange={(event) =>
-                      onUpdateStage(activeStage.clientKey, (stage) => ({
-                        ...stage,
-                        defaultTargetScore:
-                          event.target.value === ""
-                            ? null
-                            : Number(event.target.value),
-                      }))
-                    }
-                  />
-                </label>
-              )}
-            </div>
-            {!displayedProblems.length ? (
-              <Empty
-                title="当前阶段尚未分配题目"
-                description="从右侧题目池显式加入；Teaching / Review 阶段可留空。"
-              />
-            ) : (
-              displayedProblems.map((problem, index) => (
-                <div key={problem.clientKey}>
-                  {index > 0 && (
-                    <div className={styles.unlockConnector}>
-                      <span>↓</span>
-                      <strong>{unlockLabel(problem.unlockPolicy)}</strong>
-                    </div>
-                  )}
-                  <article
-                    draggable
-                    onDragStart={() => onDraggedProblemChange(index)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => {
-                      if (draggedProblem != null) {
-                        onUpdateStage(activeStage.clientKey, (stage) => ({
-                          ...stage,
-                          ...updateDisplayedProblems(stage, items => normalizeProblemOrder(moveItem(items, draggedProblem, index))),
-                        }));
-                      }
-                      onDraggedProblemChange(null);
-                    }}
-                    className={styles.problemChainCard}
-                  >
-                    <div className={styles.cardTitle}>
-                      <GripVertical size={15} />
-                      <strong>
-                        {String.fromCharCode(65 + index)} · {problem.Problem.problemId}{" "}
-                        {problem.Problem.title}
-                      </strong>
-                    </div>
-                    <div className={styles.actions}>
-                      <StatusBadge variant="neutral">已固定测试数据</StatusBadge>
-                      {problem.latestRevision &&
-                        problem.latestRevision.id !== problem.testSetRevisionId && (
-                          <Button
-                            variant="text"
-                            size="sm"
-                            onClick={() => void onUpdateToLatest(problem, activeStage.audienceMode === "GROUPED" ? activeGroup?.clientKey : undefined)}
-                          >
-                            更新到最新测试数据
-                          </Button>
-                        )}
-                      <Button
-                        iconOnly
-                        aria-label="上移题目"
-                        variant="text"
-                        disabled={index === 0}
-                        onClick={() =>
-                          onUpdateStage(activeStage.clientKey, (stage) => ({
-                            ...stage,
-                            ...updateDisplayedProblems(stage, items => normalizeProblemOrder(moveItem(items, index, index - 1))),
-                          }))
-                        }
-                      >
-                        <ArrowUp size={14} />
-                      </Button>
-                      <Button
-                        iconOnly
-                        aria-label="下移题目"
-                        variant="text"
-                        disabled={index === displayedProblems.length - 1}
-                        onClick={() =>
-                          onUpdateStage(activeStage.clientKey, (stage) => ({
-                            ...stage,
-                            ...updateDisplayedProblems(stage, items => normalizeProblemOrder(moveItem(items, index, index + 1))),
-                          }))
-                        }
-                      >
-                        <ArrowDown size={14} />
-                      </Button>
-                      <Button
-                        iconOnly
-                        aria-label="移除题目"
-                        variant="text"
-                        onClick={() =>
-                          onUpdateStage(activeStage.clientKey, (stage) => ({
-                            ...stage,
-                            ...updateDisplayedProblems(stage, items => normalizeProblemOrder(
-                              items.filter(
-                                (item) => item.clientKey !== problem.clientKey,
-                              ),
-                            )),
-                          }))
-                        }
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </div>
-                    <label className={styles.field}>
-                      移动到阶段
-                      <Select
-                        aria-label="移动题目到阶段"
-                        value={activeStage.clientKey}
-                        onChange={(event) =>
-                          onMoveProblemToStage(problem, event.target.value)
-                        }
-                      >
-                        {stages.map((stage) => (
-                          <option value={stage.clientKey} key={stage.clientKey}>
-                            {stage.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </label>
-                    {index === 0 ? (
-                      <p className={styles.startProblem}>起始题，阶段开始后直接开放</p>
-                    ) : (
-                      <UnlockEditor
-                        value={
-                          problem.unlockPolicy || {
-                            mode: "ANY",
-                            conditions: [{ type: "AC" }],
-                          }
-                        }
-                        onChange={(value) =>
-                          updateDisplayedProblem(problem.clientKey, (current) => ({
-                            ...current,
-                            unlockPolicy: value,
-                          }))
-                        }
-                      />
-                    )}
-                    <AssignmentPolicyEditor
-                      assignment={problem}
-                      stage={activeStage}
-                      onChange={(value) =>
-                        updateDisplayedProblem(problem.clientKey, (current) => ({
-                          ...current,
-                          ...value,
-                        }))
-                      }
-                    />
-                    {problem.subtasks.length > 0 && (
-                      <fieldset className={styles.subtaskPicker}>
-                        <legend>OI 子任务范围</legend>
-                        {problem.subtasks.map((subtask) => (
-                          <Checkbox
-                            key={subtask.id}
-                            label={`子任务 ${subtask.id} · ${subtask.score} 分`}
-                            description={
-                              subtask.dependencies?.length
-                                ? `依赖 S${subtask.dependencies.join(", S")}`
-                                : "无依赖"
-                            }
-                            checked={problem.allowedSubtaskIds.includes(subtask.id)}
-                            onChange={(event) =>
-                              updateDisplayedProblem(problem.clientKey, (current) => ({
-                                ...current,
-                                allowedSubtaskIds: event.target.checked
-                                  ? closeSubtaskSelection(current.subtasks, [...current.allowedSubtaskIds, subtask.id])
-                                  : removeSubtaskWithDependents(current.subtasks, current.allowedSubtaskIds, subtask.id),
-                              }))
-                            }
-                          />
-                        ))}
-                      </fieldset>
-                    )}
-                  </article>
-                </div>
-              ))
-            )}
-          </fieldset>
-        ) : (
-          <Empty title="请先选择阶段" />
-        )}
+export function TrainingProblemChain({ stages, activeStage, draggedProblem, onDraggedProblemChange, onUpdateStage, onUpdateProblem, onMoveProblemToStage, onUpdateToLatest, readOnly = false }: Props) {
+  const problems = activeStage?.Problems || []
+  const updateProblems = (updater: (items: Assignment[]) => Assignment[]) => {
+    if (activeStage) onUpdateStage(activeStage.clientKey, stage => ({ ...stage, Problems: updater(stage.Problems) }))
+  }
+  return <section className={styles.designColumn} aria-label="当前阶段题目链">
+    <header><div><strong>题目链</strong><small>{activeStage?.name || "未选择阶段"}</small></div></header>
+    <div className={styles.designColumnBody}>{activeStage ? <fieldset disabled={readOnly} aria-label="阶段定义" className={styles.definitionFieldset}>
+      <div className={styles.stageSettings}>
+        <label className={styles.field}>阶段名称<Input value={activeStage.name} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, name: event.target.value }))} /></label>
+        <label className={styles.field}>这一阶段做什么？<Select value={activeStage.kind} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, kind: event.target.value as Stage["kind"] }))}>{stageKinds.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</Select></label>
+        <label className={styles.field}>阶段说明<Textarea rows={2} value={activeStage.description || ""} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, description: event.target.value }))} /></label>
+        <p className={styles.muted}>分组、开放方式、提交规则、时长与推进策略统一在下方 Stage × Group 训练矩阵中配置。</p>
       </div>
-    </section>
-  );
+      {!problems.length ? <Empty title="当前阶段尚未分配题目" description="从右侧按平台和题号加入；讲解、复盘阶段可以留空。" /> : problems.map((problem, index) => <div key={problem.clientKey}>
+        {index > 0 && <div className={styles.unlockConnector}><span>↓</span><strong>{unlockLabel(problem.unlockPolicy)}</strong></div>}
+        <article draggable onDragStart={() => onDraggedProblemChange(index)} onDragOver={event => event.preventDefault()} onDrop={() => { if (draggedProblem != null) updateProblems(items => normalizeProblemOrder(moveItem(items, draggedProblem, index))); onDraggedProblemChange(null) }} className={styles.problemChainCard}>
+          <div className={styles.cardTitle}><GripVertical size={15} /><strong>{String.fromCharCode(65 + index)} · {problem.Problem.problemId} {problem.Problem.title}</strong></div>
+          <div className={styles.actions}>
+            <StatusBadge variant="neutral">已固定测试数据</StatusBadge>
+            {problem.latestRevision && problem.latestRevision.id !== problem.testSetRevisionId && <Button variant="text" size="sm" onClick={() => void onUpdateToLatest(problem)}>更新到最新测试数据</Button>}
+            <Button iconOnly aria-label="上移题目" variant="text" disabled={index === 0} onClick={() => updateProblems(items => normalizeProblemOrder(moveItem(items, index, index - 1)))}><ArrowUp size={14} /></Button>
+            <Button iconOnly aria-label="下移题目" variant="text" disabled={index === problems.length - 1} onClick={() => updateProblems(items => normalizeProblemOrder(moveItem(items, index, index + 1)))}><ArrowDown size={14} /></Button>
+            <Button iconOnly aria-label="移除题目" variant="text" onClick={() => updateProblems(items => normalizeProblemOrder(items.filter(item => item.clientKey !== problem.clientKey)))}><Trash2 size={14} /></Button>
+          </div>
+          <label className={styles.field}>移动到阶段<Select aria-label="移动题目到阶段" value={activeStage.clientKey} onChange={event => onMoveProblemToStage(problem, event.target.value)}>{stages.map(stage => <option value={stage.clientKey} key={stage.clientKey}>{stage.name}</option>)}</Select></label>
+          {index === 0 ? <p className={styles.startProblem}>起始题，训练单元开始后直接开放</p> : <UnlockEditor value={problem.unlockPolicy || { mode: "ANY", conditions: [{ type: "AC" }] }} onChange={value => onUpdateProblem(problem.clientKey, current => ({ ...current, unlockPolicy: value }))} />}
+          <AssignmentPolicyEditor assignment={problem} stage={activeStage} onChange={value => onUpdateProblem(problem.clientKey, current => ({ ...current, ...value }))} />
+          {problem.subtasks.length > 0 && <fieldset className={styles.subtaskPicker}><legend>OI 子任务范围</legend>{problem.subtasks.map(subtask => <Checkbox key={subtask.id} label={`子任务 ${subtask.id} · ${subtask.score} 分`} description={subtask.dependencies?.length ? `依赖 S${subtask.dependencies.join(", S")}` : "无依赖"} checked={problem.allowedSubtaskIds.includes(subtask.id)} onChange={event => onUpdateProblem(problem.clientKey, current => ({ ...current, allowedSubtaskIds: event.target.checked ? closeSubtaskSelection(current.subtasks, [...current.allowedSubtaskIds, subtask.id]) : removeSubtaskWithDependents(current.subtasks, current.allowedSubtaskIds, subtask.id) }))} />)}</fieldset>}
+        </article>
+      </div>)}
+    </fieldset> : <Empty title="请先选择阶段" />}</div>
+  </section>
 }

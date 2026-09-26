@@ -14,7 +14,7 @@ export type TrainingPermissionResult = {
 }
 
 type PermissionPlan = {
-  groupId: string | null
+  stageGroupId: string
   orderIndex: number
   stageProblemId: string
   unlockPolicy?: unknown
@@ -43,14 +43,13 @@ type PermissionGroup = {
 type PermissionStage = {
   id: string
   orderIndex: number
-  audienceMode: string
   accessPolicy?: unknown
   submissionMode?: unknown
   kind?: unknown
   endPolicy?: unknown
   defaultTargetScore?: unknown
   rules?: unknown
-  ParticipantAssignments: Array<{ participantId: string; groupId: string | null; legacyStageGroupId?: string | null }>
+  ParticipantAssignments: Array<{ participantId: string; groupId: string }>
   Groups: PermissionGroup[]
   Problems: PermissionProblem[]
 }
@@ -60,7 +59,6 @@ export type PermissionSession = {
   teamId: string | null
   status: string
   pauseMode?: string | null
-  currentStageId?: string | null
   allowHints: boolean
   defaultSubmissionMode: string
   Stages: PermissionStage[]
@@ -90,17 +88,12 @@ export function targetApplies(
   participant: { id?: string; userId: string; currentGroupId?: string | null },
   session: {
     teamId: string | null
-    currentStageId?: string | null
-    Stages?: Array<{ id: string; ParticipantAssignments?: Array<{ participantId: string; groupId: string | null }> }>
+      Stages?: Array<{ id: string; ParticipantAssignments?: Array<{ participantId: string; groupId: string }> }>
   },
 ) {
   if (targetType === 'ALL') return true
   if (targetType === 'USER') return targetId === participant.userId
-  if (targetType === 'GROUP') {
-    const assignment = session.Stages?.find(stage => stage.id === session.currentStageId)
-      ?.ParticipantAssignments?.find(item => item.participantId === participant.id)
-    return targetId === (participant.currentGroupId ?? assignment?.groupId ?? null)
-  }
+  if (targetType === 'GROUP') return targetId === (participant.currentGroupId ?? null)
   if (targetType === 'TEAM') return targetId === session.teamId
   return false
 }
@@ -157,8 +150,9 @@ export function resolveTrainingPermissionLoaded(
     return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'PROBLEM_REQUIRED' }
   }
 
-  const activeStageId = session.currentStageId
-  const stage = activeStageId ? session.Stages.find(item => item.id === activeStageId) : null
+  const stage = participant.currentGroupId
+    ? session.Stages.find(item => item.Groups.some(group => group.groupId === participant.currentGroupId && ['RUNNING', 'PAUSED'].includes(String(group.status))))
+    : null
   const problemStage = session.Stages.find(item => item.Problems.some(problem => problem.id === stageProblemId))
   const stageProblem = problemStage?.Problems.find(problem => problem.id === stageProblemId)
   if (!stage || !problemStage || !stageProblem) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_IN_SESSION' }
@@ -192,12 +186,9 @@ export function resolveTrainingPermissionLoaded(
     return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'HISTORICAL_STAGE' }
   }
 
-  const assignment = stage.ParticipantAssignments.find(item => item.participantId === participant.id)
-  const stableStageGroup = participant.currentGroupId ? stage.Groups.find(item => item.groupId === participant.currentGroupId) : null
-  const legacyStageGroupId = assignment?.legacyStageGroupId ?? assignment?.groupId ?? null
-  const plan = stageProblem.Plans.find(item => item.groupId === (stableStageGroup?.id || (stage.audienceMode === 'GROUPED' ? legacyStageGroupId : null)))
+  const group = participant.currentGroupId ? stage.Groups.find(item => item.groupId === participant.currentGroupId) : null
+  const plan = stageProblem.Plans.find(item => item.stageGroupId === group?.id)
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
-  const group = stableStageGroup || (legacyStageGroupId ? stage.Groups.find(item => item.id === legacyStageGroupId) : null)
   const submissionDisabled = overlays.some(item => item.type === 'DISABLE_SUBMISSION')
   const runtimeOverride = {
     ...(submissionOverride ? { submissionPolicy: 'ENABLED' } : submissionDisabled ? { submissionPolicy: 'DISABLED' } : {}),
@@ -211,9 +202,9 @@ export function resolveTrainingPermissionLoaded(
   }
 
   if (accessPolicy === 'SEQUENTIAL' && !unlocked) {
-    const stageGroupId = stableStageGroup?.id || (stage.audienceMode === 'GROUPED' ? legacyStageGroupId : null)
+    const stageGroupId = group?.id || null
     const ordered = stage.Problems.flatMap(problem => problem.Plans.map(item => ({ ...item, problem })))
-      .filter(item => item.groupId === stageGroupId)
+      .filter(item => item.stageGroupId === stageGroupId)
       .sort((a, b) => a.orderIndex - b.orderIndex)
     const index = ordered.findIndex(item => item.stageProblemId === stageProblemId)
     if (index > 0) {

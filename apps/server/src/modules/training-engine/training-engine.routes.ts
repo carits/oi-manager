@@ -204,7 +204,7 @@ trainingEngineRouter.post('/training-sessions/:id/commands', authenticate, async
   try {
     const result = await executeTrainingCommand(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.executeCommand, req.body))
     trainingMetrics.recordCommand(true)
-    const status = result && 'session' in result ? result.session.status : result?.status
+    const status = (result as any)?.session?.status || (result as any)?.status
     if (status) trainingMetrics.observeSession(req.params.id, status)
     sendContractData(res, TrainingContracts.executeCommand, result)
   } catch (error) {

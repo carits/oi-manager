@@ -1,14 +1,22 @@
+---
+status: current
+audience: development, operations
+last_verified: 2026-09-26
+source_of_truth: Git history
+---
+
+## 2026-09-26 — Training Engine V2 单一模型最终收口
+
+- 最终领域不变量固定为 Participant → stable Group → active StageGroup → Stage：Stage 仅保留教学元数据，StageGroup 成为配置与运行唯一事实，不再保存 Session/Participant currentStage 镜像。
+- 直接迁移历史数据：12 条 Stage assignment 从 Participant 稳定 Group 无歧义回填，ProblemPlan 外键原位改名为 stageGroupId；删除旧 Stage 规则/运行字段、legacy assignment 字段和 stage-scoped GroupChange，增加单 Group 单活动单元及必填外键约束。
+- 生产迁移前完成 28 MiB PostgreSQL 16 备份；迁移后 inventory 为 1 Session、3 Stage、8 Participant、1 Group、3 StageGroup、12 Assignment，引用数量保持一致，consistency 为 0 error，Prisma schema diff 为 0。
+- 新增并通过 8 个单一模型领域用例；Contracts、Prisma、Server/Web TypeScript、Server/Web production build、API Contract 与 Feature Contract 定向测试通过。
+
 ## 2026-09-25
 
 - Contest 与 Training Engine V2 的 HTTP 边界彻底拆分：比赛详情链路统一为 `/api/contests/*`，团队比赛统一为 `/api/teams/:teamId/contests`；删除 `/api/trainings/*` retired catch-all 和旧团队训练页面，不提供兼容路由。
 - 清理 381 条旧 TrainingSession V1 数据及全部级联运行数据，删除旧 `TrainingSessionStageRuntimeSnapshot` 表；V2 无旧数据双读。
 
----
-status: current
-audience: development, operations
-last_verified: 2026-09-22
-source_of_truth: Git history
----
 
 ## 2026-09-23 — Training Engine 最终验收与提交并发收口
 

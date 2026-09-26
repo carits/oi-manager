@@ -35,6 +35,72 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
+  "apps/server/src/modules/contest/contest.content.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.crud.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.hack-sync.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.misc.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.notes.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.problems.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.ranking.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.record.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.statement-management.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contest/contest.submissions.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
   "apps/server/src/modules/contribution/contribution.routes.ts": {
     "prisma": 0,
     "transaction": 0,
@@ -246,72 +312,6 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training-engine/training-engine.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.content.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.crud.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.hack-sync.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.misc.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.notes.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.problems.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.ranking.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.record.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/contest.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.statement-management.routes.ts": {
-    "prisma": 0,
-    "transaction": 0,
-    "filesystem": 0,
-    "judgeRuntime": 0
-  },
-  "apps/server/src/modules/training/training.submissions.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,

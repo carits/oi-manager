@@ -4,9 +4,7 @@ import path from 'node:path'
 const root = path.resolve(import.meta.dirname, '..')
 const sourceRoot = path.join(root, 'apps', 'server', 'src')
 const allowedHackWriter = 'apps/server/src/modules/problem/problem.hack-state.ts'
-const allowedTrainingWriters = new Set([
-  'apps/server/src/modules/training/application/training-crud.service.ts',
-])
+const allowedTrainingWriters = new Set()
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

@@ -60,27 +60,17 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
         increment: Math.max(0, Math.floor((at.getTime() - current.runningSince.getTime()) / 1000)),
       }
     }
-    if (current.groupingModelVersion >= 2) {
-      const runningUnits = await tx.trainingSessionStageGroup.findMany({
-        where: { Stage: { sessionId }, status: 'RUNNING', runningSince: { not: null } },
-        select: { id: true, runningSince: true },
-      })
-      for (const unit of runningUnits) await tx.trainingSessionStageGroup.update({
-        where: { id: unit.id },
-        data: {
-          activeElapsedSeconds: { increment: unit.runningSince ? Math.max(0, Math.floor((at.getTime() - unit.runningSince.getTime()) / 1000)) : 0 },
-          runningSince: null,
-        },
-      })
-    } else if (current.currentStageId) {
-      const stage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId } })
-      if (stage?.lifecycle === 'RUNNING') {
-        await tx.trainingSessionStage.update({
-          where: { id: stage.id },
-          data: { activeElapsedSeconds: { increment: activeStageIncrement(stage, at) }, runningSince: null },
-        })
-      }
-    }
+    const runningUnits = await tx.trainingSessionStageGroup.findMany({
+      where: { Stage: { sessionId }, status: 'RUNNING', runningSince: { not: null } },
+      select: { id: true, runningSince: true },
+    })
+    for (const unit of runningUnits) await tx.trainingSessionStageGroup.update({
+      where: { id: unit.id },
+      data: {
+        activeElapsedSeconds: { increment: unit.runningSince ? Math.max(0, Math.floor((at.getTime() - unit.runningSince.getTime()) / 1000)) : 0 },
+        runningSince: null,
+      },
+    })
   }
 
   const resumeSession = async () => {
@@ -90,31 +80,22 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     update.pausedAt = null
     update.runningSince = new Date()
     update.pauseMode = null
-    if (current.groupingModelVersion >= 2) {
-      await tx.trainingSessionStageGroup.updateMany({
-        where: { Stage: { sessionId }, status: 'RUNNING', runningSince: null },
-        data: { runningSince: new Date() },
-      })
-    } else if (current.currentStageId) {
-      const stage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId } })
-      if (stage?.lifecycle === 'RUNNING') {
-        await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { runningSince: new Date() } })
-      }
-    }
+    await tx.trainingSessionStageGroup.updateMany({
+      where: { Stage: { sessionId }, status: 'RUNNING', runningSince: null },
+      data: { runningSince: new Date() },
+    })
   }
 
   const problemInActiveUnit = async (stageProblemId: string) => {
-    if (current.groupingModelVersion >= 2) {
-      let groupIds: string[] | undefined
-      if (targetType === 'GROUP' && targetId) groupIds = [targetId]
-      if (targetType === 'USER' && targetId) {
-        const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } }, select: { groupId: true } })
-        groupIds = participant?.groupId ? [participant.groupId] : []
-      }
-      const units = await tx.trainingSessionStageGroup.findMany({ where: { groupId: groupIds ? { in: groupIds } : { not: null }, status: { in: ['RUNNING', 'PAUSED'] } }, include: { ProblemPlans: { select: { stageProblemId: true } } } })
-      return units.some(unit => unit.ProblemPlans.some(plan => plan.stageProblemId === stageProblemId))
+    let groupIds: string[] | undefined
+    if (targetType === 'GROUP' && targetId) groupIds = [targetId]
+    if (targetType === 'USER' && targetId) {
+      const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } }, select: { groupId: true } })
+      groupIds = participant?.groupId ? [participant.groupId] : []
     }
-    return Boolean(session.currentStageId && session.Stages.find((stage: any) => stage.id === session.currentStageId)?.Problems.some((problem: any) => problem.id === stageProblemId))
+    const units = await tx.trainingSessionStageGroup.findMany({ where: { ...(groupIds ? { groupId: { in: groupIds } } : {}), status: { in: ['RUNNING', 'PAUSED'] } }, include: { ProblemPlans: { select: { stageProblemId: true } } } })
+    return units.some(unit => unit.ProblemPlans.some(plan => plan.stageProblemId === stageProblemId))
+
   }
 
   const focusProblem = async () => {
@@ -151,8 +132,7 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
       await tx.trainingSessionParticipant.update({
         where: { id: participant.id },
         data: {
-          returnStageId: participant.returnStageId || participant.currentStageId,
-          returnProblemId: participant.returnStageId || participant.returnProblemId ? participant.returnProblemId : participant.currentProblemId,
+          returnProblemId: participant.returnProblemId || participant.currentProblemId,
           currentProblemId: stageProblemId,
         },
       })
@@ -174,7 +154,7 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
       where: {
         sessionId,
         status: 'active',
-        OR: [{ returnStageId: { not: null } }, { returnProblemId: { not: null } }],
+        returnProblemId: { not: null },
       },
     })
     await restoreFocusParticipants(tx, session, participants.filter(item => targetApplies(targetType, targetId, item, session)))

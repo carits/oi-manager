@@ -1,14 +1,15 @@
+---
+status: current
+audience: development, operations
+last_verified: 2026-09-26
+source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
+---
+
 ## 2026-09-25 Contest / Training V2 边界收口
 
 - Contest 外部 API 已统一为 `/api/contests/*`；Training Engine V2 保持 `/api/training-sessions/*`，两者无路由兼容层。
 - 旧 TrainingSession V1 数据与运行快照已清理，数据库当前 TrainingSession/Stage/Participant/StageGroup 均为 0，等待通过 V2 创建新训练。
 
----
-status: current
-audience: development, operations
-last_verified: 2026-09-22
-source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
----
 
 # 当前状态
 
@@ -18,6 +19,7 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 ## 最近 rollout
 
+- 2026-09-26: Training Engine V2 单一模型完成代码与生产 schema 收口。Participant 必须属于稳定 Group，Stage 只保存教学元数据，StageGroup 是 Group × Stage 的唯一配置/运行事实；删除 currentStage、Stage 运行镜像及 legacy assignment/GroupChange。迁移前 PostgreSQL 16 备份 28 MiB，12 条 Stage assignment 无歧义回填；迁移后 Prisma diff 为 0、consistency 为 0 error。8/8 核心领域测试、相关迁移/规则/API 测试、17 项 Web Feature Contract、Contracts/Prisma/Server/Web 类型检查与 Server/Web production build 均通过。
 - 2026-09-23: Training Engine 阶段驱动最终验收在 `codex/training-stage-driven-complete` 完成。修复草稿保存与 SSE/自动保存并发造成的 revision 409，提交前保存现在串行化；补齐训练 Contract 可空字段、分组换组上下文、Assignment 组织边界和阶段运行时默认值。隔离 PostgreSQL `e2e` schema 的 Playwright A–F 为 14/14，Contracts/Shared/Prisma/Server/Web 构建通过；一致性、盘点、基准、API Contract、架构和 UI 状态门禁按本轮命令复核。待完成主分支合并与候选部署验收。
 - 2026-09-22: full-project usability hardening 代码侧继续收口（分支 `codex/full-project-usability-hardening`，尚未部署）。Training Workspace 权限求值改为一次加载 Participant/Override/Progress 后批量计算全部 StageProblem，消除逐题重复加载 Session/Progress 的 N+1；同时修复 `SCHEDULED` / `PAUSED` 早退导致未来 Stage 元数据可能绕过脱敏的问题。TEAM Runtime Command 由当前 Session `teamId` 规范化，修复前端“当前团队”目标永远禁用；训练报告增加学员明细 CSV 与完整 JSON 导出。Server 72 个 route 文件完成静态 `route :param` / `req.params` 一致性扫描，除已修复的 Training design-problem 参数错配外未发现同类问题。删除 17 个已废弃或基于旧 School/Teacher/Student/直接数据库写入的一次性修复、造数和迁移脚本，并修复 `CLAUDE.md` 与组织迁移文档对已不存在脚本的引用。新增相应 Training Server 回归用例定义。按本轮明确约束，**未实际执行 Server/Web/Playwright 测试、未执行 Prisma migration、未做迁移演练、未部署**；这些项目必须在后续验证批次单独完成并记录。
 

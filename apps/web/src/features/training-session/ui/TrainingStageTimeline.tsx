@@ -50,9 +50,9 @@ export function TrainingStageTimeline({
       <div className={styles.designColumnBody}>
         {stages.map((stage, index) => (
           (() => {
-          const editable = !stage.lifecycle || stage.lifecycle === "PENDING";
-          const previousEditable = index > 0 && (!stages[index - 1].lifecycle || stages[index - 1].lifecycle === "PENDING");
-          const nextEditable = index < stages.length - 1 && (!stages[index + 1].lifecycle || stages[index + 1].lifecycle === "PENDING");
+          const editable = true;
+          const previousEditable = index > 0;
+          const nextEditable = index < stages.length - 1;
           return (
           <article
             key={stage.clientKey}
@@ -71,11 +71,7 @@ export function TrainingStageTimeline({
             </div>
             <small>
               {stageKinds.find((item) => item[0] === stage.kind)?.[1] || stage.kind}{" "}
-              · {stage.audienceMode === "GROUPED" ? `${stage.Groups.length} 组` : `${stage.Problems.length} 题`}
-              {stage.plannedDurationSeconds
-                ? ` · ${Math.round(stage.plannedDurationSeconds / 60)} 分钟`
-                : ""}
-              {!editable ? ` · ${stage.lifecycle}（只读）` : ""}
+              · {stage.Problems.length} 题
             </small>
             <div className={styles.actions}>
               <Button

@@ -93,13 +93,13 @@ describe('independent assignment domain', () => {
     expect(peerList.body.data.items.some((item: any) => item.id === assignmentId)).toBe(false)
   })
 
-  it('rejects Assignment APIs outside an active organization workspace', async () => {
+  it('supports personal assignments and creator access outside an organization context', async () => {
     const token = generateTokenFromUser(teacher.user)
     const personal = createAuthenticatedRequest(app, token)
 
     const list = await personal.get('/api/assignments')
-    expect(list.status).toBe(403)
-    expect(list.body.code).toBe('ORGANIZATION_CONTEXT_REQUIRED')
+    expect(list.status).toBe(200)
+    expect(Array.isArray(list.body.data.items)).toBe(true)
 
     const create = await personal.post('/api/assignments').send({
       title: '不应在个人工作区创建',
@@ -108,7 +108,10 @@ describe('independent assignment domain', () => {
       dueAt: new Date(Date.now() + 120_000),
       closeAt: new Date(Date.now() + 180_000),
     })
-    expect(create.status).toBe(403)
+    expect(create.status).toBe(201)
+
+    const personalDirect = await personal.get(`/api/assignments/${create.body.data.id}`)
+    expect(personalDirect.status).toBe(200)
 
     const orgRequest = createAuthenticatedRequest(app, token, { organizationId })
     const created = await orgRequest.post('/api/assignments').send({
@@ -120,8 +123,7 @@ describe('independent assignment domain', () => {
     expect(created.status).toBe(201)
 
     const direct = await personal.get(`/api/assignments/${created.body.data.id}`)
-    expect(direct.status).toBe(403)
-    expect(direct.body.code).toBe('ORGANIZATION_CONTEXT_REQUIRED')
+    expect(direct.status).toBe(200)
   })
 
   it('binds assignment list, create and direct-id access to the active organization context', async () => {

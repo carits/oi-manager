@@ -185,38 +185,29 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TeamOperationLog` | 以 Prisma schema 为准 |
 | `TeamProblemList` | 以 Prisma schema 为准 |
 | `TestdataFile` | 以 Prisma schema 为准 |
-| `Training` | 以 Prisma schema 为准 |
-| `TrainingSession` | 独立教练训练聚合根，保存范围、生命周期、当前阶段、有效运行时间和命令/事件 revision |
-| `TrainingSessionStage` | 课堂时间轴片段；保存用途、受众、组合式规则、生命周期、计划/实际时长和结束原因 |
-| `TrainingSessionStageProblem` | Stage 内 canonical 题目与固定 TestSet Revision 的稳定身份；保存可复用的 scoreGoals、timePolicy 与 stuckPolicy |
-| `TrainingSessionStageGroup` | 只属于一个 Stage 的自定义分组 |
-| `TrainingSessionStageParticipantAssignment` | 学员在指定 Stage 的当前分组；每个 Stage 每名学员唯一 |
-| `TrainingSessionStageProblemPlan` | 全班或具体组的题目顺序、解锁、目标分、Subtask、单题时间、卡题和提示规则；优先级高于 StageProblem 默认值 |
-| `TrainingSessionStageRuntimeSnapshot` | Stage 开始事务生成的不可变定义投影及哈希 |
-| `TrainingSessionStageGroupChange` | 即时或下一 Stage 换组的原因、操作者和生效记录 |
-| `TrainingSessionStageTimeAdjustment` | 课堂延时追加记录，不覆盖原计划时长 |
-| `TrainingSessionParticipant` | 学员当前阶段/题目、心跳和有效活跃时间；不保存 Session 级分组 |
-| `TrainingSessionProblemProgress` | 学员逐题最佳分、Verdict、尝试、提示、连续有效时间和卡题状态 |
+| `TrainingSession` | 独立训练聚合根；保存范围、生命周期、有效运行时间及 command/event revision，不保存全局 currentStage |
+| `TrainingSessionStage` | 有序教学元数据，只保存名称、说明、顺序和 kind |
+| `TrainingSessionStageProblem` | Stage 内 canonical 题目与固定 TestSet Revision 的稳定身份 |
+| `TrainingSessionGroup` | 整场 Session 的稳定分组；Participant 当前归属和 StageGroup 均引用它 |
+| `TrainingSessionGroupChange` | 稳定 Group 之间的学员换组审计 |
+| `TrainingSessionStageGroup` | Group × Stage 的唯一配置与运行事实；保存规则、状态、有效时长和结束原因 |
+| `TrainingSessionStageParticipantAssignment` | 每个 Stage 的学员分组计划/历史映射，groupId 必填 |
+| `TrainingSessionStageProblemPlan` | 通过 stageGroupId 归属 StageGroup 的题目顺序与规则 |
+| `TrainingSessionStageTimeAdjustment` | Stage 延时追加记录 |
+| `TrainingSessionParticipant` | 学员、稳定 groupId、当前题目、心跳和有效活跃时间；不保存 currentStage |
+| `TrainingSessionProblemProgress` | Participant × StageProblem 的稳定进度；换组不删除 |
 | `TrainingSessionCommand` | 带会话单调序号的教练控制命令审计 |
-| `TrainingSessionOverlay` | 面向全员、组、团队或用户的聚焦、锁定、禁交和消息覆盖层 |
-| `TrainingSessionUserOverride` | 教练对单个学员的解锁、跳题和提交覆盖 |
-| `TrainingSessionProblemDraft` | 用户逐题、带 revision 的训练代码草稿 |
-| `TrainingSessionHint` | 分级提示及手动、时间、尝试或分数开放策略 |
+| `TrainingSessionOverlay` | 面向全员、组、团队或用户的运行覆盖层 |
+| `TrainingSessionUserOverride` | 教练对单个学员的运行覆盖 |
+| `TrainingSessionProblemDraft` | Participant × StageProblem 代码草稿 |
+| `TrainingSessionHint` | 分级提示与开放策略 |
 | `TrainingSessionHintAccess` | 学员首次打开提示的不可变记录 |
-| `TrainingSessionScoreEvent` | 一次训练提交产生的幂等分数事件 |
-| `TrainingSessionStrategyDecision` | ACM 策略训练中的扫题、主攻或切题决策 |
-| `TrainingSessionEvent` | 面向 SSE 补偿的会话单调持久事件 |
-| `TrainingSessionTemplate` | 个人、学校或团队的可停用训练模板；不保存题目、学员或运行数据 |
-| `TrainingSessionTemplateStage` | 自定义模板的 Stage 结构；分组及补充规则作为模板骨架元数据保存 |
-| `TrainingAttachment` | 以 Prisma schema 为准 |
-| `TrainingParticipant` | 以 Prisma schema 为准 |
-| `TrainingProblem` | 以 Prisma schema 为准 |
-| `TrainingProblemContentSnapshot` | 活动题面/题解不可变 revision 快照；当前版本取最大 revision |
-| `TrainingProblemStatementSet` | 活动一道题的一次多题面选择 revision |
-| `TrainingProblemStatementSnapshot` | 选择集合内不可变的题面副本、顺序和默认标记 |
+| `TrainingSessionScoreEvent` | 训练提交产生的幂等分数事件 |
+| `TrainingSessionStrategyDecision` | ACM 策略训练决策 |
+| `TrainingSessionEvent` | SSE 补偿使用的会话单调持久事件 |
+| `TrainingSessionTemplate` | 可复用的 Stage/Group 骨架，不保存运行事实 |
+| `TrainingSessionTemplateStage` | 模板中的 Stage 元数据 |
 | `ContestRatingConfig` | 比赛开始前可配置、开始或首交时冻结的 Contest Rating 规则快照 |
-| `TrainingSolution` | 以 Prisma schema 为准 |
-| `TrainingUserProblemStatus` | 以 Prisma schema 为准 |
 | `User` | 全局账号、密码摘要、状态与会话撤销代数；不保存学校身份 |
 | `UserProblemContent` | 用户独立题面版本与兼容题解；题面按名称软删除并使用 private/public 可见性 |
 | `UserNotification` | 以 Prisma schema 为准 |
@@ -226,9 +217,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 ## Training Engine V2 表约束
 
-新增/收口后的 StageGroup 使用 `(stageId, groupId)` 唯一约束；V2 学员使用 `TrainingSessionParticipant.groupId`，旧 `currentStageId` 与旧 Stage assignment 字段仅供 legacy 记录兼容。每个 StageGroup 可独立 RUNNING/PAUSED/ENDED，题目计划通过 `groupId` 关联，不再使用原型 StageGroupPlan、GroupMembership 或 RuntimeState 表。
-
-
+StageGroup 使用 `(stageId, groupId)` 唯一约束；Participant.groupId、StageAssignment.groupId 和 ProblemPlan.stageGroupId 均为必填。部分唯一索引保证每个稳定 Group 最多一个 RUNNING/PAUSED StageGroup。Session、Stage 和 Participant 不保存重复的 currentStage 或运行镜像。
 
 Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`, `TrainingSessionStageParticipantAssignment`, `TrainingSessionStageProblemPlan`, and `TrainingSessionStageTimeAdjustment`.
 

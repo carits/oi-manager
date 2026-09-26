@@ -27,7 +27,7 @@ type TeamPayload = Team[] | { items?: Team[]; data?: Team[]; totalPages?: number
 type Problem = { id: string; platform: string; problemId: string; title: string; difficulty?: string | null }
 type CreateMode = 'quick' | 'custom'
 type ParticipantTarget = 'team' | 'organization_students' | 'custom_students'
-type CustomStageDraft = { name: string; audienceMode: 'ALL' | 'GROUPED' }
+type CustomStageDraft = { name: string }
 type ListFilter = 'active' | 'upcoming' | 'completed' | 'draft'
 
 
@@ -68,7 +68,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   const [allowHints, setAllowHints] = useState(true)
   const [completionMode, setCompletionMode] = useState<'all' | 'count'>('all'), [requiredCount, setRequiredCount] = useState(1)
   const [selectedProblems, setSelectedProblems] = useState<Problem[]>([])
-  const [customStages, setCustomStages] = useState<CustomStageDraft[]>([{ name: '阶段 1', audienceMode: 'ALL' }])
+  const [customStages, setCustomStages] = useState<CustomStageDraft[]>([{ name: '阶段 1' }])
   const [listFilter, setListFilter] = useState<ListFilter>('active'), [listQuery, setListQuery] = useState(''), [listTeamId, setListTeamId] = useState(() => teamId || searchParams.get('teamId') || '')
   const [listPage, setListPage] = useState(1), [listTotal, setListTotal] = useState(0), [listTotalPages, setListTotalPages] = useState(1)
   const [statusCounts, setStatusCounts] = useState<Record<ListFilter, number>>({ active: 0, upcoming: 0, completed: 0, draft: 0 })
@@ -139,7 +139,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     })
   }, [mode, open, organizationId, participantTarget, scopeReady, selectedStudentIds, simpleStep, targetTeamId, toast, useTeamScope])
   const resetDialog = () => {
-    setSimpleStep(0); setTitle(''); setDescription(''); setSelectedProblems([]); setCustomStages([{ name: '阶段 1', audienceMode: 'ALL' }]); setCompletionMode('all'); setRequiredCount(1); setSelectedStudentIds([]); setParticipantTarget('team'); setParticipantPreview(null); setSchoolWideConfirmed(false)
+    setSimpleStep(0); setTitle(''); setDescription(''); setSelectedProblems([]); setCustomStages([{ name: '阶段 1' }]); setCompletionMode('all'); setRequiredCount(1); setSelectedStudentIds([]); setParticipantTarget('team'); setParticipantPreview(null); setSchoolWideConfirmed(false)
     setScheduledStartAt(localDateTime(new Date())); setDueAt(localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)))
   }
   const closeDialog = () => { if (!creating) { setOpen(false); resetDialog() } }
@@ -164,7 +164,6 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
         name: stage.name.trim() || `阶段 ${index + 1}`,
         description: '',
         kind: 'TRAINING',
-        audienceMode: stage.audienceMode,
         endPolicy: 'MANUAL',
         accessPolicy: 'ALL_AT_ONCE',
         accessScope: 'CURRENT_STAGE',
@@ -190,7 +189,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
       allowHints: true,
       participantUserIds: participantTarget === 'custom_students' ? selectedStudentIds : undefined,
       settings: { dueAt: new Date(dueAt).toISOString(), completionMode, requiredProblemCount: count, participantTarget },
-      stages: [{ name: '训练任务', kind: 'TRAINING', audienceMode: 'ALL', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', accessScope: 'CURRENT_STAGE', submissionMode: 'ENABLED', rules: completionMode === 'count' ? { requiredProblemCount: count } : {}, problems: selectedProblems.map(problem => ({ problemId: problem.id, allowedSubtaskIds: [] })), groups: [] }],
+      stages: [{ name: '训练任务', kind: 'TRAINING', problems: selectedProblems.map(problem => ({ problemId: problem.id, allowedSubtaskIds: [] })) }],
     })
     if (!response.ok || !response.data) { setCreating(false); return toast.error(response.ok ? '创建训练失败' : response.error.message) }
     const published = await publishTraining(response.data.id, { expectedRevision: response.data.statusRevision ?? 0 })
@@ -313,7 +312,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
                 variant="outline"
                 icon={<Plus size={14} />}
                 disabled={customStages.length >= 30}
-                onClick={() => setCustomStages(current => [...current, { name: `阶段 ${current.length + 1}`, audienceMode: 'ALL' }])}
+                onClick={() => setCustomStages(current => [...current, { name: `阶段 ${current.length + 1}` }])}
               >
                 新增阶段
               </Button>

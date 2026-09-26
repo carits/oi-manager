@@ -91,7 +91,7 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `GET` | `/api/contests/:id/rating` | 读取比赛最终榜单、Batch 和 Rating 变化 |
 | `POST` | `/api/contests/:id/finalize` | 比赛结束且评测完成后生成不可变最终榜单并幂等结算 Rating |
 | `POST` | `/api/contests/:id/rating/rebuild` | 赛后重测完成后生成新榜单并从受影响池完整重放 Rating |
-| `POST` | `/api/contests/:id/problems/:trainingProblemId/final-submission/:submissionId` | OI 比赛结束前指定本题最终提交 |
+| `POST` | `/api/contests/:id/problems/:contestProblemId/final-submission/:submissionId` | OI 比赛结束前指定本题最终提交 |
 | `PATCH` | `/api/contests/:id/rating-participants/:userId` | 管理员设置带原因的 Rating 参赛者处置 |
 | `GET` | `/api/platform-contests` | 登录用户读取可见的平台比赛；平台/超级管理员同时获得管理信息 |
 | `POST` | `/api/platform-contests` | 平台或超级管理员创建可配置 GLOBAL/BOTH Rating 的平台比赛 |
@@ -241,8 +241,8 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `GET` | `/api/problems/:id/test-set-revisions` | 题目管理者列出正式测试版本历史 |
 | `GET` | `/api/problems/:id/test-set-revisions/:revisionId` | 读取单个不可变 Revision 和只读 Judge 投影 |
 | `POST` | `/api/problems/:id/judge-mode-transition` | 显式创建 ACM/OI 模式转换 Revision 并关闭 Hack |
-| `GET` | `/api/contests/:id/problems/:trainingProblemId/test-set-update` | 活动管理员比较固定 Revision 与题库最新版及冻结状态 |
-| `POST` | `/api/contests/:id/problems/:trainingProblemId/test-set-update` | 仅在未开始且无提交时手动固定到指定 Revision |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/test-set-update` | 活动管理员比较固定 Revision 与题库最新版及冻结状态 |
+| `POST` | `/api/contests/:id/problems/:contestProblemId/test-set-update` | 仅在未开始且无提交时手动固定到指定 Revision |
 | `GET` | `/api/readiness` | 蓝绿 API 候选的关键依赖 readiness；只检查数据库，Revision 投影一致性由独立运维诊断检查 |
 | `DELETE` | `/api/problems/:id/statement-versions/:versionId` | 软删除自己的题面版本 |
 | `GET` | `/api/problems/:id/statement-versions` | 列出官方、我的和公开题面版本 |
@@ -252,13 +252,13 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段。候选输入、生成器源码和被 Hack
 程序只由单条详情接口返回，并继续执行“本人或题目管理者”权限校验。活动任务冲突时重新执行接口
 返回 `409 HACK_ALREADY_ACTIVE`。
-| `GET` | `/api/contests/:id/problems/:trainingProblemId/statement-versions` | 读取活动当前可见题面快照集合 |
-| `GET` | `/api/contests/:id/problems/:trainingProblemId/statement-versions/:snapshotId/file` | 读取活动 PDF 题面快照 |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/statements` | 读取活动当前可见题面快照集合 |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/statement/file` | 读取活动 PDF 题面快照 |
 | `GET` | `/api/contests/:id/statement-management` | 读取活动多题面管理矩阵 |
 | `PATCH` | `/api/problems/:id/statement-versions/:versionId` | 重命名或切换个人题面可见性 |
 | `POST` | `/api/problems/:id/statement-versions` | 从官方、用户版本或空白创建独立题面 |
 | `POST` | `/api/problems/:id/statement-versions/:versionId/pdf` | 上传或替换个人 PDF 题面 |
-| `POST` | `/api/contests/:id/problems/:trainingProblemId/content-snapshots/:kind/:snapshotId/pdf` | 管理员替换活动 PDF 并创建新 revision |
+| `POST` | `/api/contests/:id/problems/:contestProblemId/content/:kind/pdf` | 管理员替换活动 PDF 并创建新 revision |
 | `PUT` | `/api/problems/:id/statement-versions/:versionId/content` | 更新个人 Markdown 题面内容 |
 | `PUT` | `/api/contests/:id/statement-management` | 保存活动多题面选择和唯一默认项 |
 | `DELETE` | `/api/files/:id` | 见对应路由实现 |
@@ -403,15 +403,12 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/workspaces` | 见对应路由实现 |
 | `PATCH` | `/api/notifications/:id/read` | 见对应路由实现 |
 | `PATCH` | `/api/organizations/:organizationId/join-policy` | 负责人或超管修改加入策略 |
-| `POST` | `/api/admin/data/backfill-training-participants` | 见对应路由实现 |
-| `POST` | `/api/admin/data/clean-training-submissions` | 见对应路由实现 |
 | `POST` | `/api/admin/data/fix-carits-remote-id` | 见对应路由实现 |
 | `POST` | `/api/admin/data/fix-hdu-memory` | 见对应路由实现 |
 | `POST` | `/api/admin/data/fix-submission-visibility` | 见对应路由实现 |
 | `POST` | `/api/admin/data/reset-user-password` | 见对应路由实现 |
 | `POST` | `/api/admin/data/rejudge-all-carits` | 见对应路由实现 |
 | `POST` | `/api/admin/data/rejudge-all-local` | 重测所有已完成的本地评测提交（兼容任意题目来源） |
-| `POST` | `/api/admin/data/rejudge-legacy-carits` | 见对应路由实现 |
 | `POST` | `/api/admin/demo-scenario/v2/events` | 见对应路由实现 |
 | `POST` | `/api/admin/demo-scenario/v2/prepare` | 见对应路由实现 |
 | `POST` | `/api/admin/demo-scenario/v3/events` | 见对应路由实现 |
@@ -585,13 +582,13 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `PUT` | `/api/problems/:id/my-content/:kind/shares` | 设置个人内容的平台/校园共享范围 |
 | `POST` | `/api/problems/:id/my-content/:kind/pdf` | 上传自己的 PDF 题面或题解 |
 | `DELETE` | `/api/problems/:id/my-content/:kind` | 删除自己的当前版本；既有活动快照不受影响 |
-| `GET` | `/api/contests/:id/problems/:trainingProblemId/my-content` | 从活动上下文读取自己的版本 |
-| `PUT` | `/api/contests/:id/problems/:trainingProblemId/content-snapshots/:kind/:snapshotId` | 管理员编辑活动 Markdown 并创建新 revision |
-| `GET` | `/api/contests/:id/problems/:trainingProblemId/content-options` | 管理员获取活动可选内容与当前快照 |
-| `GET` | `/api/contests/:id/problems/:trainingProblemId/content-options/:optionKey/preview` | 管理员预览候选内容 |
-| `GET` | `/api/contests/:id/problems/:trainingProblemId/content-options/:optionKey/file` | 管理员预览候选 PDF |
-| `PUT` | `/api/contests/:id/problems/:trainingProblemId/content-selection` | 选择活动题面与题解并追加不可变快照 |
-| `GET` | `/api/contests/:id/problems/:trainingProblemId/content-snapshot/:kind/file` | 读取活动当前 PDF 快照 |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/my-content` | 从活动上下文读取自己的版本 |
+| `PUT` | `/api/contests/:id/problems/:contestProblemId/content/:kind` | 管理员编辑活动 Markdown 并创建新 revision |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/content-options` | 管理员获取活动可选内容与当前快照 |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/content-options/:optionKey/preview` | 管理员预览候选内容 |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/content-options/:optionKey/file` | 管理员预览候选 PDF |
+| `PUT` | `/api/contests/:id/problems/:contestProblemId/content-selection` | 选择活动题面与题解并追加不可变快照 |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/content/:kind/file` | 读取活动当前 PDF 快照 |
 | `POST` | `/api/blogs` | 创建可覆盖编辑的知识文章草稿 |
 | `GET` | `/api/blogs` | 分页查询本人博客、草稿和归档 |
 | `GET` | `/api/blogs/:id` | 按当前版本可见范围读取博客；作者额外获取草稿 |
