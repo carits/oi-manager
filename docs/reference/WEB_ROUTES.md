@@ -67,6 +67,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/problem-lists/new` | 见页面权限布局 | 当前页面 |
 | `/personal/problems` | 见页面权限布局 | 当前页面 |
 | `/personal/problems/[id]` | 见页面权限布局 | 当前页面 |
+| `/personal/problems/[id]/note` | 已登录个人账号 | 个人题目笔记 |
 | `/personal/rankings` | 见页面权限布局 | 当前页面 |
 | `/personal/submissions` | 见页面权限布局 | 当前页面 |
 | `/personal/submissions/[id]` | 见页面权限布局 | 当前页面 |

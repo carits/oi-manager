@@ -196,6 +196,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     return currentWorkspacePrefix(pathname, '/personal')
   }
   const pathPrefix = getPathPrefix()
+  const requestedReturn = searchParams.get('returnTo')
+  const returnHref = requestedReturn?.startsWith(`${pathPrefix}/problem-lists/`) ? requestedReturn : `${pathPrefix}/problems`
 
   useEffect(() => {
     fetchProblem()
@@ -216,7 +218,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     const next = new URLSearchParams(searchParams.toString())
     if (tab === 'statement') next.delete('tab')
     else next.set('tab', tab)
-    router.push(`${pathname}${next.size ? `?${next.toString()}` : ''}`, { scroll: false })
+    router.replace(`${pathname}${next.size ? `?${next.toString()}` : ''}`, { scroll: false })
   }
 
   // 当 problem 数据更新后，设置默认选中的版本
@@ -582,10 +584,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       <div className={unifiedStyles.u3}>
         {/* 返回按钮 */}
         <Button variant="ghost"
-          onClick={() => router.push(`${pathPrefix}/problems`)}
+          onClick={() => router.push(returnHref)}
           className={unifiedStyles.u4}
         >
-          ← 返回列表
+          {returnHref.includes('/problem-lists/') ? '← 返回题单' : '← 返回列表'}
         </Button>
 
         {/* 题目头部 */}

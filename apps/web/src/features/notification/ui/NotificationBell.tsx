@@ -60,7 +60,7 @@ export function NotificationBell() {
   const openNotification = async (notification: UserNotification) => {
     await markRead(notification.id)
     const href = resolveNotificationHref(context, organizationId, notification.href)
-    if (href) { setOpen(false); requestNavigation(href) }
+    if (href) { setOpen(false); requestNavigation(href, { hard: href.startsWith('/org/') }) }
   }
   const act = async (notification: UserNotification, action: string) => {
     if (action === 'view') return openNotification(notification)

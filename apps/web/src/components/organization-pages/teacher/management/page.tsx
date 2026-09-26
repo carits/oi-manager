@@ -30,6 +30,8 @@ export default function CampusManagementPage() {
   const role = user?.organizationRole
   const isPrincipal = role === 'school_principal'
   const requestedTab = searchParams.get('tab')
+  const deniedTab = (requestedTab === 'teachers' || requestedTab === 'settings') && !isPrincipal
+  const knownTab = requestedTab === null || ['students', 'teachers', 'applications', 'invitations', 'settings', 'wallet'].includes(requestedTab)
   const resolvedTab: Tab = requestedTab === 'teachers' && isPrincipal ? 'teachers' : requestedTab === 'settings' && isPrincipal ? 'settings' : requestedTab === 'applications' || requestedTab === 'invitations' || requestedTab === 'wallet' ? requestedTab : 'students'
   const [activeTab, setActiveTab] = useState<Tab>(resolvedTab)
   const [pending, setPending] = useState({ applications: 0, invitations: 0 })
@@ -53,6 +55,10 @@ export default function CampusManagementPage() {
 
   useEffect(() => { setActiveTab(resolvedTab) }, [resolvedTab])
 
+  useEffect(() => {
+    if (!knownTab) window.history.replaceState(null, '', pathname)
+  }, [knownTab, pathname])
+
   const setTab = (tab: string) => {
     const nextTab = tab as Tab
     setActiveTab(nextTab)
@@ -61,6 +67,7 @@ export default function CampusManagementPage() {
     window.history.replaceState(null, '', pathname + (next.size ? '?' + next : ''))
   }
 
+  if (deniedTab) return <Empty title="无权访问该管理内容" description="当前学校身份不能访问此管理标签，请从可见标签进入。" />
   if (role === 'student') return <Empty title="无权访问管理" description="学生不能访问学校管理内容。" />
   if (!organizationId) return <Empty title="缺少学校上下文" description="请从学校工作区进入管理页面。" />
 

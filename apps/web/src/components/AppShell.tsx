@@ -177,7 +177,10 @@ export function AppShell({ children }: AppShellProps) {
     const hrefPath = href.split('?')[0]
     const hrefSearch = href.includes('?') ? new URLSearchParams(href.slice(href.indexOf('?') + 1)) : null
     const pathMatches = pathname === hrefPath || pathname.startsWith(`${hrefPath}/`)
-    const exactQueryMatches = hrefSearch ? [...hrefSearch.entries()].every(([key, value]) => searchParams.get(key) === value) : true
+    const exactQueryMatches = hrefSearch ? [...hrefSearch.entries()].every(([key, value]) => {
+      const actual = searchParams.get(key) ?? (hrefPath.endsWith('/management') && key === 'tab' ? 'students' : null)
+      return actual === value
+    }) : true
     const anotherItemMatchesQuery = !hrefSearch && resolvedNavConfig.items.some(other => {
       const [otherPath, otherQuery] = other.href.split('?')
       if (otherPath !== hrefPath || !otherQuery) return false
@@ -206,7 +209,7 @@ export function AppShell({ children }: AppShellProps) {
           <Link className={styles.menuItem} href={accountPaths.profile} role="menuitem" onClick={() => setShowUserMenu(false)}><UserRound size={17} aria-hidden="true" />个人信息</Link>
           <Link className={styles.menuItem} href={accountPaths.security} role="menuitem" onClick={() => setShowUserMenu(false)}><ShieldCheck size={17} aria-hidden="true" />账号安全</Link>
           <Link className={styles.menuItem} href={accountPaths.binding} role="menuitem" onClick={() => setShowUserMenu(false)}><Link2 size={17} aria-hidden="true" />平台绑定</Link>
-          <Link className={styles.menuItem} href="/blog" role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpenText size={17} aria-hidden="true" />知识广场</Link>
+          <Link className={styles.menuItem} href={organizationId ? `/org/${organizationId}/knowledge` : '/personal/knowledge'} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpenText size={17} aria-hidden="true" />知识广场</Link>
           {!isGlobalAdmin && <Link className={styles.menuItem} href="/personal/blogs" role="menuitem" onClick={() => setShowUserMenu(false)}><PenLine size={17} aria-hidden="true" />我的文章</Link>}
           {!isGlobalAdmin && <Link className={styles.menuItem} href="/identity" role="menuitem" onClick={() => setShowUserMenu(false)}><UsersRound size={17} aria-hidden="true" />切换身份</Link>}
           <div className={styles.menuDivider} />

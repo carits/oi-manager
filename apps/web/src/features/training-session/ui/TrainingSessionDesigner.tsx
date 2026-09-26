@@ -440,6 +440,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           ]}
           actions={
             <>
+              <Button variant="ghost" onClick={() => requestNavigation(runtimePath)}>返回运行工作台</Button>
               <Button
                 variant="outline"
                 icon={<RefreshCw size={16} />}
