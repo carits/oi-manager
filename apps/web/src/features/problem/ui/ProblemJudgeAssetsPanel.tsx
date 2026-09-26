@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { AiValidatorRequest } from '@oi-manager/contracts'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -17,6 +18,7 @@ import { getProblemTestGraph } from '../api/problemTestGraphApi'
 import { getProblemAiUsage } from '../api/problemDetailApi'
 import { uploadProblemTestdata } from '../api/problemFilesApi'
 import { compileJudgeProgramVersion, listJudgePrograms, preflightJudgeProgramVersion, updateJudgeProgram } from '../api/judgeProgramApi'
+import { generateAiValidator, generateAiValidatorSpec, repairAiValidator, saveAiValidator, saveAiValidatorSpec } from '../api/problemAiValidatorApi'
 
 type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
 type Program = { id: string; kind: string; name: string; language: string; currentVersionId?: string | null; versions: Version[] }
@@ -29,21 +31,7 @@ type CandidatePool = { policy: { revision: number; selectorMode: string; maxHotC
 type SelectorPreview = { note: string; publishable: boolean; candidates: Array<{ id: string; source: string; status: string; marginalValue: number; reason: string; publishRateLimited?: boolean; decisions?: CandidateDecision[] }> }
 type Corpus = { revision?: { revisionNumber: number; clusterCount: number; evaluationCount: number; holdoutCount: number } | null; clusters: Array<{ id: string; weight: number; frequency: number; partition: string }>; categories: unknown[] }
 type AssetsTab = 'programs' | 'import' | 'generate' | 'candidates' | 'pool' | 'corpus' | 'quality' | 'revisions'
-type AiValidatorRequest = {
-  id: string
-  dsl?: boolean
-  promptTokens?: number
-  completionTokens?: number
-  totalTokens?: number
-  compileStatus?: string
-  compileMessage?: string
-  repairDepth?: number
-  response?: {
-    assumptions?: string[]
-    spec?: unknown
-    validatorSource?: string
-  }
-}
+type AiValidatorView = AiValidatorRequest & { dsl?: boolean }
 type PromoteRequest = {
   expectedLatestRevisionId?: string
   caseIds: string[]
@@ -69,7 +57,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const [standardId, setStandardId] = useState(''), [validatorId, setValidatorId] = useState(''), [generatorId, setGeneratorId] = useState('')
   const [sourceMode, setSourceMode] = useState<'generator' | 'input'>('generator')
   const [rows, setRows] = useState('small-1 | 1 | 10 100\nsmall-2 | 2 | 100 1000')
-  const [aiRequest, setAiRequest] = useState<AiValidatorRequest | null>(null)
+  const [aiRequest, setAiRequest] = useState<AiValidatorView | null>(null)
   const [aiUsage, setAiUsage] = useState<AiUsage | null>(null)
   const [statementId, setStatementId] = useState('')
   const [assignments, setAssignments] = useState<Record<string, string>>({})
@@ -153,29 +141,31 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const generateValidator = async (parentRequestId?: string) => {
     setSaving(true)
     try {
-      const result = await apiClient.post<AiValidatorRequest>(`/api/problems/${problemId}/ai/validator${parentRequestId ? `/${parentRequestId}/repair` : ''}`, parentRequestId ? {} : { statementId })
-      if (!result.success || !result.data) return toast.error(result.message || 'DeepSeek Validator 生成失败')
+      const result = parentRequestId
+        ? await repairAiValidator(problemId, parentRequestId)
+        : await generateAiValidator(problemId, { statementId })
+      if (!result.ok) return toast.error(result.error.message || 'DeepSeek Validator 生成失败')
       setAiRequest(result.data); toast.success(`DeepSeek 已使用 ${result.data.totalTokens ?? '实际'} Token`)
     } finally { setSaving(false) }
   }
   const saveAi = async () => {
     if (!aiRequest) return
-    const result = await apiClient.post(`/api/problems/${problemId}/ai/validator/${aiRequest.id}/save`, { name: 'AI Validator' })
-    if (!result.success) return toast.error(result.message || 'AI Validator 保存失败')
+    const result = await saveAiValidator(problemId, aiRequest.id, { name: 'AI Validator' })
+    if (!result.ok) return toast.error(result.error.message || 'AI Validator 保存失败')
     toast.success('AI Validator 已保存为新的程序版本'); await load()
   }
   const generateValidatorDsl = async () => {
     setSaving(true)
     try {
-      const result = await apiClient.post<AiValidatorRequest>(`/api/problems/${problemId}/ai/validator-spec`, { statementId })
-      if (!result.success || !result.data) return toast.error(result.message || 'DeepSeek Validator DSL 生成失败')
+      const result = await generateAiValidatorSpec(problemId, { statementId })
+      if (!result.ok) return toast.error(result.error.message || 'DeepSeek Validator DSL 生成失败')
       setAiRequest({ ...result.data, dsl: true }); toast.success(`DeepSeek 已使用 ${result.data.totalTokens ?? '实际'} Token`)
     } finally { setSaving(false) }
   }
   const saveAiDsl = async () => {
     if (!aiRequest) return
-    const result = await apiClient.post(`/api/problems/${problemId}/ai/validator-spec/${aiRequest.id}/save`, {})
-    if (!result.success) return toast.error(result.message || 'Validator DSL 保存失败')
+    const result = await saveAiValidatorSpec(problemId, aiRequest.id)
+    if (!result.ok) return toast.error(result.error.message || 'Validator DSL 保存失败')
     toast.success('Validator DSL 已保存；激活前仍可审阅规则与测试样例'); await load()
   }
   const updateSelectorMode = async (selectorMode: 'observe' | 'auto') => {

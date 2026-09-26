@@ -972,6 +972,52 @@ export const ValidatorSpecMaterializedSchema = JudgeProgramCreatedSchema.extend(
   requiresVerification: z.boolean(),
 });
 
+
+export const AiValidatorResponseSchema = z.object({
+  validatorSource: z.string().optional(),
+  spec: z.unknown().optional(),
+  constraints: z.array(z.string()).optional(),
+  eofRules: z.array(z.string()).optional(),
+  assumptions: z.array(z.string()).optional(),
+  validTests: z.array(z.string()).optional(),
+  invalidTests: z.array(z.string()).optional(),
+  features: z.array(z.unknown()).optional(),
+  subtaskRules: z.array(z.unknown()).optional(),
+}).passthrough();
+
+export const AiValidatorRequestSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  problemId: z.string(),
+  statementId: z.string().nullable(),
+  action: z.enum(["validator", "validator_spec"]),
+  model: z.string(),
+  status: z.string(),
+  parentRequestId: z.string().nullable(),
+  repairDepth: z.number().int().nonnegative(),
+  reservedTokens: z.number().int().nonnegative(),
+  promptTokens: z.number().int().nonnegative().nullable(),
+  completionTokens: z.number().int().nonnegative().nullable(),
+  totalTokens: z.number().int().nonnegative().nullable(),
+  response: AiValidatorResponseSchema.nullable(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  compileStatus: z.string().nullable(),
+  compileMessage: z.string().nullable(),
+  programVersionId: z.string().nullable(),
+  createdAt: DateTimeWireSchema,
+  startedAt: DateTimeWireSchema.nullable(),
+  finishedAt: DateTimeWireSchema.nullable(),
+});
+
+export const AiValidatorGenerateInputSchema = z.object({
+  statementId: z.string().min(1).optional(),
+});
+export const AiValidatorSaveInputSchema = z.object({
+  programId: z.string().min(1).optional(),
+  name: z.string().min(1).max(80).optional(),
+});
+
 export const ProblemJudgeModeTransitionInputSchema = z.object({
   targetMode: z.enum(["acm", "oi"]),
   expectedLatestRevisionId: z.string().min(1),
@@ -1302,6 +1348,32 @@ export const ProblemContracts = {
     body: z.object({}), data: ValidatorSpecMaterializedSchema,
   }),
 
+
+  generateAiValidator: defineApiEndpoint({
+    key: "problem.ai-validator.generate", method: "POST", scope: "context",
+    body: AiValidatorGenerateInputSchema, data: AiValidatorRequestSchema,
+  }),
+  repairAiValidator: defineApiEndpoint({
+    key: "problem.ai-validator.repair", method: "POST", scope: "context",
+    body: z.object({}), data: AiValidatorRequestSchema,
+  }),
+  getAiValidatorRequest: defineApiEndpoint({
+    key: "problem.ai-validator.get", method: "GET", scope: "context",
+    data: AiValidatorRequestSchema,
+  }),
+  saveAiValidator: defineApiEndpoint({
+    key: "problem.ai-validator.save", method: "POST", scope: "context",
+    body: AiValidatorSaveInputSchema, data: JudgeProgramVersionSchema,
+  }),
+  generateAiValidatorSpec: defineApiEndpoint({
+    key: "problem.ai-validator-spec.generate", method: "POST", scope: "context",
+    body: AiValidatorGenerateInputSchema, data: AiValidatorRequestSchema,
+  }),
+  saveAiValidatorSpec: defineApiEndpoint({
+    key: "problem.ai-validator-spec.save", method: "POST", scope: "context",
+    body: z.object({}), data: ValidatorSpecSchema,
+  }),
+
   transitionJudgeMode: defineApiEndpoint({
     key: "problem.judge-mode.transition",
     method: "POST",
@@ -1366,3 +1438,4 @@ export type JudgeProgramFixtureSet = z.infer<typeof JudgeProgramFixtureSetSchema
 export type JudgeProgramVerification = z.infer<typeof JudgeProgramVerificationSchema>;
 export type JudgeProgramAuditLog = z.infer<typeof JudgeProgramAuditLogSchema>;
 export type ValidatorSpec = z.infer<typeof ValidatorSpecSchema>;
+export type AiValidatorRequest = z.infer<typeof AiValidatorRequestSchema>;

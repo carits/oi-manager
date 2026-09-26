@@ -54,33 +54,43 @@ problemAiRouter.post('/:id/validator-specs/:specId/materialize', authenticate, a
 }))
 
 problemAiRouter.post('/:id/ai/validator', authenticate, asyncHandler(async (req, res) => {
-  try { res.status(201).json({ success: true, data: await generateAiValidator({ user: req.user!, problemId: req.params.id, statementId: req.body?.statementId }) }) }
-  catch (error) { return sendAiError(error, res) }
+  try {
+    const body = parseContractBody(ProblemContracts.generateAiValidator, req.body)
+    sendContractData(res, ProblemContracts.generateAiValidator, await generateAiValidator({ user: req.user!, problemId: req.params.id, statementId: body.statementId }), 201)
+  } catch (error) { return sendAiError(error, res) }
 }, 'Validator 生成失败'))
 
 problemAiRouter.get('/:id/ai/validator/:requestId', authenticate, asyncHandler(async (req, res) => {
-  try { res.json({ success: true, data: await getAiValidatorRequest(req.user!, req.params.id, req.params.requestId) }) }
+  try { sendContractData(res, ProblemContracts.getAiValidatorRequest, await getAiValidatorRequest(req.user!, req.params.id, req.params.requestId)) }
   catch (error) { return sendAiError(error, res) }
 }))
 
 problemAiRouter.post('/:id/ai/validator-spec', authenticate, asyncHandler(async (req, res) => {
-  try { res.status(201).json({ success: true, data: await generateAiValidatorSpec({ user: req.user!, problemId: req.params.id, statementId: req.body?.statementId }) }) }
-  catch (error) { return sendAiError(error, res) }
+  try {
+    const body = parseContractBody(ProblemContracts.generateAiValidatorSpec, req.body)
+    sendContractData(res, ProblemContracts.generateAiValidatorSpec, await generateAiValidatorSpec({ user: req.user!, problemId: req.params.id, statementId: body.statementId }), 201)
+  } catch (error) { return sendAiError(error, res) }
 }, 'Validator DSL 生成失败'))
 
 problemAiRouter.post('/:id/ai/validator-spec/:requestId/save', authenticate, asyncHandler(async (req, res) => {
-  try { res.status(201).json({ success: true, data: await saveAiValidatorSpec({ user: req.user!, problemId: req.params.id, requestId: req.params.requestId }) }) }
-  catch (error) { return sendAiError(error, res) }
+  try {
+    parseContractBody(ProblemContracts.saveAiValidatorSpec, req.body || {})
+    sendContractData(res, ProblemContracts.saveAiValidatorSpec, await saveAiValidatorSpec({ user: req.user!, problemId: req.params.id, requestId: req.params.requestId }), 201)
+  } catch (error) { return sendAiError(error, res) }
 }))
 
 problemAiRouter.post('/:id/ai/validator/:requestId/repair', authenticate, asyncHandler(async (req, res) => {
-  try { res.status(201).json({ success: true, data: await generateAiValidator({ user: req.user!, problemId: req.params.id, parentRequestId: req.params.requestId }) }) }
-  catch (error) { return sendAiError(error, res) }
+  try {
+    parseContractBody(ProblemContracts.repairAiValidator, req.body || {})
+    sendContractData(res, ProblemContracts.repairAiValidator, await generateAiValidator({ user: req.user!, problemId: req.params.id, parentRequestId: req.params.requestId }), 201)
+  } catch (error) { return sendAiError(error, res) }
 }, 'Validator 修复失败'))
 
 problemAiRouter.post('/:id/ai/validator/:requestId/save', authenticate, asyncHandler(async (req, res) => {
-  try { res.status(201).json({ success: true, data: await saveAiValidator({ user: req.user!, problemId: req.params.id, requestId: req.params.requestId, programId: req.body?.programId, name: req.body?.name }) }) }
-  catch (error) { return sendAiError(error, res) }
+  try {
+    const body = parseContractBody(ProblemContracts.saveAiValidator, req.body)
+    sendContractData(res, ProblemContracts.saveAiValidator, await saveAiValidator({ user: req.user!, problemId: req.params.id, requestId: req.params.requestId, ...body }), 201)
+  } catch (error) { return sendAiError(error, res) }
 }, 'Validator 保存失败'))
 
 problemAiRouter.post('/:id/ai/translate', authenticate, asyncHandler(async (req, res) => {

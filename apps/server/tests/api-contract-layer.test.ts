@@ -840,6 +840,55 @@ describe('shared API contract adapter', () => {
     }))
   })
 
+  it('guards AI Validator requests and strips internal prompt metadata', () => {
+    expect(parseContractBody(ProblemContracts.generateAiValidator, {
+      statementId: 'statement-1',
+    })).toEqual({ statementId: 'statement-1' })
+    expect(parseContractBody(ProblemContracts.repairAiValidator, {})).toEqual({})
+    expect(() => parseContractBody(ProblemContracts.saveAiValidator, {
+      name: 'x'.repeat(81),
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, ProblemContracts.getAiValidatorRequest, {
+      id: 'request-1',
+      userId: 'user-1',
+      problemId: 'problem-1',
+      statementId: 'statement-1',
+      action: 'validator',
+      model: 'deepseek-chat',
+      status: 'succeeded',
+      parentRequestId: null,
+      repairDepth: 0,
+      reservedTokens: 2048,
+      promptTokens: 120,
+      completionTokens: 380,
+      totalTokens: 500,
+      response: {
+        validatorSource: 'int main() { return 0; }',
+        assumptions: ['n is an integer'],
+      },
+      errorCode: null,
+      errorMessage: null,
+      compileStatus: 'succeeded',
+      compileMessage: null,
+      programVersionId: null,
+      promptHash: 'must-not-leak',
+      createdAt: new Date('2026-09-27T00:00:00Z'),
+      startedAt: new Date('2026-09-27T00:00:01Z'),
+      finishedAt: new Date('2026-09-27T00:00:02Z'),
+    })
+
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({
+        createdAt: '2026-09-27T00:00:00.000Z',
+        totalTokens: 500,
+      }),
+    }))
+    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('promptHash')
+  })
+
   it('guards chat message payloads and serializes dates at the account boundary', () => {
     const body = parseContractBody(ChatContracts.sendMessage, {
       type: 'text', content: '你好', clientMessageId: '12345678-1234-1234-1234-123456789012',
