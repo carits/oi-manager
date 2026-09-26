@@ -3,12 +3,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bookmark, Flag, Heart, MessageCircle, ThumbsUp, Trash2 } from 'lucide-react'
-import apiClient from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/FormControls'
 import { useToast } from '@/components/ui/Toast'
 import styles from './BlogWorkspace.module.css'
 import { useAuth } from '@/features/auth'
+import {
+  createBlogComment,
+  getBlogCommunity,
+  listBlogComments,
+  listBlogReplies,
+  removeBlogComment,
+  reportBlogContent,
+  setBlogBookmark,
+  setBlogReaction,
+} from '../api/blogCommunityApi'
 
 type Community = {
   reactions: { LIKE: number; HELPFUL: number }
@@ -22,9 +31,6 @@ type Comment = {
   id: string; parentId?: string | null; content: string; status: string; createdAt: string; canDelete: boolean
   author: { id: string; username: string; avatar?: string | null }; replies?: Comment[]; replyCount?: number
 }
-
-type CommentPage = { data: Comment[]; total: number }
-type ReplyPage = { items: Comment[]; hasMore: boolean; nextCursor?: string | null }
 
 export function BlogCommunityPanel({ postId, publicRead = false }: { postId: string; publicRead?: boolean }) {
   const toast = useToast()
@@ -42,22 +48,18 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
   const load = useCallback(async () => {
     setLoadState('loading')
     setLoadError(null)
-    const readBase = publicRead ? `/api/blog-discovery/${postId}` : `/api/blogs/${postId}`
-    const [summary, commentPage] = await Promise.all([
-      apiClient.get<Community>(`${readBase}/community`, { accountScoped: true }),
-      apiClient.get<CommentPage>(`${readBase}/comments?pageSize=100`, { accountScoped: true }),
-    ])
-    if (!summary.success || !summary.data || !commentPage.success || !commentPage.data) {
+    try {
+      const [summary, commentPage] = await Promise.all([
+        getBlogCommunity(postId, publicRead),
+        listBlogComments(postId, publicRead),
+      ])
+      setCommunity(summary)
+      setComments(commentPage.data)
+      setLoadState('ready')
+    } catch (loadFailure) {
       setLoadState('error')
-      setLoadError({
-        message: summary.message || commentPage.message || '社区互动暂时无法加载',
-        requestId: summary.requestId || commentPage.requestId,
-      })
-      return
+      setLoadError({ message: loadFailure instanceof Error ? loadFailure.message : '社区互动暂时无法加载' })
     }
-    setCommunity(summary.data)
-    setComments(commentPage.data.data)
-    setLoadState('ready')
   }, [postId, publicRead])
 
   const requireLogin = () => {
@@ -73,20 +75,16 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
     if (!requireLogin()) return
     if (!community) return
     const active = community.myReactions.includes(type)
-    const result = active
-      ? await apiClient.delete<Community>(`/api/blogs/${postId}/reactions/${type}`, { accountScoped: true })
-      : await apiClient.put<Community>(`/api/blogs/${postId}/reactions/${type}`, {}, { accountScoped: true })
-    if (!result.success || !result.data) return toast.error(result.message || '操作失败')
+    const result = await setBlogReaction(postId, type, !active)
+    if (!result.ok) return toast.error(result.error.message)
     setCommunity(result.data)
   }
 
   const bookmark = async () => {
     if (!requireLogin()) return
     if (!community) return
-    const result = community.bookmarked
-      ? await apiClient.delete<Community>(`/api/blogs/${postId}/bookmark`, { accountScoped: true })
-      : await apiClient.put<Community>(`/api/blogs/${postId}/bookmark`, {}, { accountScoped: true })
-    if (!result.success || !result.data) return toast.error(result.message || '操作失败')
+    const result = await setBlogBookmark(postId, !community.bookmarked)
+    if (!result.ok) return toast.error(result.error.message)
     setCommunity(result.data)
   }
 
@@ -95,8 +93,8 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
     if (!content.trim()) return
     setBusy(true)
     try {
-      const result = await apiClient.post(`/api/blogs/${postId}/comments`, { content, parentId: replyTo?.id || null }, { accountScoped: true })
-      if (!result.success) return toast.error(result.message || '评论失败')
+      const result = await createBlogComment(postId, { content, parentId: replyTo?.id || null })
+      if (!result.ok) return toast.error(result.error.message)
       setContent(''); setReplyTo(null); await load()
     } finally {
       setBusy(false)
@@ -104,28 +102,31 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
   }
 
   const remove = async (id: string) => {
-    const result = await apiClient.delete(`/api/blogs/${postId}/comments/${id}`, { accountScoped: true })
-    if (!result.success) return toast.error(result.message || '删除评论失败')
+    const result = await removeBlogComment(postId, id)
+    if (!result.ok) return toast.error(result.error.message)
     await load()
   }
 
   const report = async (commentId?: string) => {
     if (!requireLogin()) return
-    const result = await apiClient.post(`/api/blogs/${postId}/reports`, { reason: 'INAPPROPRIATE', commentId: commentId || null }, { accountScoped: true })
-    result.success ? toast.success('举报已提交，平台会进行复核') : toast.error(result.message || '举报失败')
+    const result = await reportBlogContent(postId, { reason: 'INAPPROPRIATE', commentId: commentId || null })
+    result.ok ? toast.success('举报已提交，平台会进行复核') : toast.error(result.error.message)
   }
 
   const loadMoreReplies = async (comment: Comment) => {
     if (loadingReplies.has(comment.id)) return
     setLoadingReplies(current => new Set(current).add(comment.id))
     const cursor = comment.replies?.at(-1)?.id
-    const readBase = publicRead ? `/api/blog-discovery/${postId}` : `/api/blogs/${postId}`
-    const result = await apiClient.get<ReplyPage>(`${readBase}/comments/${comment.id}/replies?pageSize=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { accountScoped: true })
-    setLoadingReplies(current => { const next = new Set(current); next.delete(comment.id); return next })
-    if (!result.success || !result.data) return toast.error(result.message || '加载回复失败')
-    setComments(current => current.map(item => item.id === comment.id
-      ? { ...item, replies: [...(item.replies || []), ...result.data!.items.filter(reply => !(item.replies || []).some(existing => existing.id === reply.id))] }
-      : item))
+    try {
+      const result = await listBlogReplies(postId, comment.id, publicRead, cursor)
+      setComments(current => current.map(item => item.id === comment.id
+        ? { ...item, replies: [...(item.replies || []), ...result.items.filter(reply => !(item.replies || []).some(existing => existing.id === reply.id))] }
+        : item))
+    } catch (replyError) {
+      toast.error(replyError instanceof Error ? replyError.message : '加载回复失败')
+    } finally {
+      setLoadingReplies(current => { const next = new Set(current); next.delete(comment.id); return next })
+    }
   }
 
   const renderComment = (comment: Comment, reply = false) => <article className={reply ? styles.commentReply : styles.comment} key={comment.id}>

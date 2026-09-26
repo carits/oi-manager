@@ -576,6 +576,7 @@ function postDto(post: any, includeDraft: boolean) {
     currentVersion: version ? {
       id: version.id,
       version: version.version,
+      status: version.status,
       title: version.title,
       summary: version.summary,
       contentMarkdown: version.contentMarkdown,
@@ -1157,8 +1158,12 @@ export function listProblemBlogs(user: JwtPayload, problemId: string, query: any
   return discoveryRows(user, { problemId }, query)
 }
 
-export function listContestBlogs(user: JwtPayload, contestId: string | number, query: any) {
-  return discoveryRows(user, { contestId: String(contestId) }, query)
+export async function listContestBlogs(user: JwtPayload, contestPublicId: number, query: any) {
+  const contest = await prisma.contest.findUnique({
+    where: { publicId: contestPublicId },
+    select: { id: true },
+  })
+  return discoveryRows(user, { contestId: contest?.id ?? '__contest_not_found__' }, query)
 }
 
 export async function listSolutionBlogs(user: JwtPayload, solutionId: string, query: any) {

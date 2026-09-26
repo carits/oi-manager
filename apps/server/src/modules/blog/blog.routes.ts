@@ -1,5 +1,5 @@
 import { Router, type Response } from 'express'
-import { BlogDiscoveryContracts, BlogManagementContracts, type AnyApiEndpointContract } from '@oi-manager/contracts'
+import { BlogCommunityContracts, BlogDiscoveryContracts, BlogManagementContracts, type AnyApiEndpointContract } from '@oi-manager/contracts'
 import { authenticate, optionalAuthenticate, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
@@ -71,10 +71,15 @@ function endpoint(
   })
 }
 
-function publicEndpoint(handler: (req: AuthRequest) => Promise<unknown>, status = 200) {
+function publicEndpoint(
+  handler: (req: AuthRequest) => Promise<unknown>,
+  status = 200,
+  contract?: AnyApiEndpointContract,
+) {
   return asyncHandler(async (req: AuthRequest, res: Response) => {
     try {
       const data = await handler(req)
+      if (contract) return sendContractData(res, contract, data, status)
       return res.status(status).json({ success: true, data })
     } catch (error) {
       if (sendContractError(error, res)) return
@@ -102,9 +107,9 @@ blogRouter.get('/blog-discovery/:id', optionalAuthenticate, asyncHandler(async (
     throw error
   }
 }))
-blogRouter.get('/blog-discovery/:id/community', optionalAuthenticate, publicEndpoint(req => getPublicBlogCommunity(req.user, req.params.id)))
-blogRouter.get('/blog-discovery/:id/comments', optionalAuthenticate, publicEndpoint(req => listBlogComments(req.user, req.params.id, req.query)))
-blogRouter.get('/blog-discovery/:id/comments/:commentId/replies', optionalAuthenticate, publicEndpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, req.query)))
+blogRouter.get('/blog-discovery/:id/community', optionalAuthenticate, publicEndpoint(req => getPublicBlogCommunity(req.user, req.params.id), 200, BlogCommunityContracts.summary))
+blogRouter.get('/blog-discovery/:id/comments', optionalAuthenticate, publicEndpoint(req => listBlogComments(req.user, req.params.id, parseContractQuery(BlogCommunityContracts.comments, req.query)), 200, BlogCommunityContracts.comments))
+blogRouter.get('/blog-discovery/:id/comments/:commentId/replies', optionalAuthenticate, publicEndpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, parseContractQuery(BlogCommunityContracts.replies, req.query)), 200, BlogCommunityContracts.replies))
 blogRouter.get('/blogs', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
   try {
     const query = parseContractQuery(BlogManagementContracts.listMine, req.query)
@@ -126,16 +131,37 @@ blogRouter.post('/blogs/:id/archive', authenticate, endpoint(async req => {
 blogRouter.get('/blogs/:id/versions', authenticate, endpoint(req => listBlogVersions(req.user, req.params.id), 200, BlogManagementContracts.versions))
 blogRouter.get('/blogs/:id/versions/:versionId', authenticate, endpoint(req => getBlogVersion(req.user, req.params.id, req.params.versionId), 200, BlogManagementContracts.versionDetail))
 blogRouter.get('/blogs/:id/references', authenticate, endpoint(req => getBlogReferences(req.user, req.params.id)))
-blogRouter.get('/blogs/:id/community', authenticate, endpoint(req => getBlogCommunity(req.user, req.params.id)))
-blogRouter.get('/blogs/:id/comments', authenticate, endpoint(req => listBlogComments(req.user, req.params.id, req.query)))
-blogRouter.get('/blogs/:id/comments/:commentId/replies', authenticate, endpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, req.query)))
-blogRouter.post('/blogs/:id/comments', authenticate, endpoint(req => createBlogComment(req.user, req.params.id, req.body), 201))
-blogRouter.delete('/blogs/:id/comments/:commentId', authenticate, endpoint(req => removeBlogComment(req.user, req.params.id, req.params.commentId)))
-blogRouter.put('/blogs/:id/reactions/:type', authenticate, endpoint(req => setBlogReaction(req.user, req.params.id, req.params.type, true)))
-blogRouter.delete('/blogs/:id/reactions/:type', authenticate, endpoint(req => setBlogReaction(req.user, req.params.id, req.params.type, false)))
-blogRouter.put('/blogs/:id/bookmark', authenticate, endpoint(req => setBlogBookmark(req.user, req.params.id, true)))
-blogRouter.delete('/blogs/:id/bookmark', authenticate, endpoint(req => setBlogBookmark(req.user, req.params.id, false)))
-blogRouter.post('/blogs/:id/reports', authenticate, endpoint(req => reportBlogContent(req.user, req.params.id, req.body), 201))
+blogRouter.get('/blogs/:id/community', authenticate, endpoint(req => getBlogCommunity(req.user, req.params.id), 200, BlogCommunityContracts.summary))
+blogRouter.get('/blogs/:id/comments', authenticate, endpoint(req => listBlogComments(req.user, req.params.id, parseContractQuery(BlogCommunityContracts.comments, req.query)), 200, BlogCommunityContracts.comments))
+blogRouter.get('/blogs/:id/comments/:commentId/replies', authenticate, endpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, parseContractQuery(BlogCommunityContracts.replies, req.query)), 200, BlogCommunityContracts.replies))
+blogRouter.post('/blogs/:id/comments', authenticate, endpoint(async req => {
+  const comment = await createBlogComment(req.user, req.params.id, parseContractBody(BlogCommunityContracts.createComment, req.body))
+  return { id: comment.id }
+}, 201, BlogCommunityContracts.createComment))
+blogRouter.delete('/blogs/:id/comments/:commentId', authenticate, endpoint(req => {
+  parseContractBody(BlogCommunityContracts.removeComment, req.body)
+  return removeBlogComment(req.user, req.params.id, req.params.commentId)
+}, 200, BlogCommunityContracts.removeComment))
+blogRouter.put('/blogs/:id/reactions/:type', authenticate, endpoint(req => {
+  parseContractBody(BlogCommunityContracts.addReaction, req.body)
+  return setBlogReaction(req.user, req.params.id, req.params.type, true)
+}, 200, BlogCommunityContracts.addReaction))
+blogRouter.delete('/blogs/:id/reactions/:type', authenticate, endpoint(req => {
+  parseContractBody(BlogCommunityContracts.removeReaction, req.body)
+  return setBlogReaction(req.user, req.params.id, req.params.type, false)
+}, 200, BlogCommunityContracts.removeReaction))
+blogRouter.put('/blogs/:id/bookmark', authenticate, endpoint(req => {
+  parseContractBody(BlogCommunityContracts.addBookmark, req.body)
+  return setBlogBookmark(req.user, req.params.id, true)
+}, 200, BlogCommunityContracts.addBookmark))
+blogRouter.delete('/blogs/:id/bookmark', authenticate, endpoint(req => {
+  parseContractBody(BlogCommunityContracts.removeBookmark, req.body)
+  return setBlogBookmark(req.user, req.params.id, false)
+}, 200, BlogCommunityContracts.removeBookmark))
+blogRouter.post('/blogs/:id/reports', authenticate, endpoint(async req => {
+  const report = await reportBlogContent(req.user, req.params.id, parseContractBody(BlogCommunityContracts.report, req.body))
+  return { id: report.id, status: report.status }
+}, 201, BlogCommunityContracts.report))
 blogRouter.put('/platform/blogs/:id/featured', authenticate, endpoint(req => setBlogFeatured(req.user, req.params.id, req.body)))
 blogRouter.get('/platform/blog-reports', authenticate, endpoint(req => listBlogReports(req.user, req.query)))
 blogRouter.get('/platform/blog-reports/:id', authenticate, endpoint(req => getBlogReport(req.user, req.params.id, req.query)))
@@ -173,9 +199,9 @@ blogRouter.get('/problems/:problemId/blogs', authenticate, asyncHandler(async (r
     throw error
   }
 }))
-blogRouter.get('/contests/:trainingId/blogs', authenticate, endpoint(req => {
-  if (!/^\d+$/.test(req.params.trainingId)) throw new BlogDomainError(422, 'BLOG_CONTEST_ID_INVALID', '比赛 ID 无效')
-  return listContestBlogs(req.user, Number(req.params.trainingId), req.query)
+blogRouter.get('/contests/:contestId/blogs', authenticate, endpoint(req => {
+  if (!/^\d+$/.test(req.params.contestId)) throw new BlogDomainError(422, 'BLOG_CONTEST_ID_INVALID', '比赛 ID 无效')
+  return listContestBlogs(req.user, Number(req.params.contestId), req.query)
 }))
 blogRouter.get('/solutions/:solutionId/related-blogs', authenticate, endpoint(req => listSolutionBlogs(req.user, req.params.solutionId, req.query)))
 blogRouter.get('/users/:userId/blogs', authenticate, endpoint(req => listUserBlogs(req.user, req.params.userId, req.query)))

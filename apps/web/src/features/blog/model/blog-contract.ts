@@ -1,9 +1,9 @@
 import type { BlogPostType, BlogVisibility } from '@oi-manager/contracts'
 
 export type { BlogPostType, BlogVisibility } from '@oi-manager/contracts'
-export type BlogReferenceType = 'PROBLEM' | 'PROBLEM_REVISION' | 'SOLUTION_VERSION' | 'CONTEST_STANDING' | 'RATING_CHANGE'
-export type PublishedBlogReferenceType = BlogReferenceType | 'SUBMISSION_SNAPSHOT'
-export type BlogReferenceRelation = 'PRIMARY_SUBJECT' | 'MENTION' | 'SOURCE' | 'RESULT'
+export type BlogReferenceType = 'PROBLEM' | 'PROBLEM_REVISION' | 'SOLUTION_VERSION' | 'CONTEST_STANDING' | 'RATING_CHANGE' | 'SUBMISSION_SNAPSHOT'
+export type PublishedBlogReferenceType = BlogReferenceType
+export type BlogReferenceRelation = 'PRIMARY_SUBJECT' | 'MENTION' | 'SOURCE' | 'RESULT' | 'SOLUTION' | 'FOLLOW_UP'
 export type BlogReferenceDisplay = 'CARD' | 'INLINE' | 'COMPACT' | 'EMBED' | 'HIDDEN_METADATA'
 
 export type BlogDraftReference = {
@@ -13,6 +13,7 @@ export type BlogDraftReference = {
   solutionVersionId?: string
   standingSnapshotId?: string
   ratingChangeId?: string
+  submissionSnapshotId?: string
   relationType: BlogReferenceRelation
   displayMode: BlogReferenceDisplay
   positionKey?: string
@@ -56,12 +57,10 @@ export const BLOG_REFERENCE_LABELS: Record<BlogReferenceType, string> = {
   SOLUTION_VERSION: '题解（固定内容）',
   CONTEST_STANDING: '比赛榜单（固定内容）',
   RATING_CHANGE: 'Rating 变化（固定记录）',
-}
-
-export const BLOG_PUBLISHED_REFERENCE_LABELS: Record<PublishedBlogReferenceType, string> = {
-  ...BLOG_REFERENCE_LABELS,
   SUBMISSION_SNAPSHOT: '提交快照（固定安全副本）',
 }
+
+export const BLOG_PUBLISHED_REFERENCE_LABELS: Record<PublishedBlogReferenceType, string> = BLOG_REFERENCE_LABELS
 
 export function emptyBlogReference(type: BlogReferenceType = 'PROBLEM'): BlogDraftReference {
   return { type, relationType: 'MENTION', displayMode: 'CARD' }
@@ -86,6 +85,7 @@ export function validateBlogDraft(input: { title: string; contentMarkdown: strin
     if (reference.type === 'SOLUTION_VERSION' && !reference.solutionVersionId?.trim()) return `${prefix}尚未关联题解，请从题解页面重新进入写作`
     if (reference.type === 'CONTEST_STANDING' && !reference.standingSnapshotId?.trim()) return `${prefix}尚未关联比赛榜单，请从榜单页面重新进入写作`
     if (reference.type === 'RATING_CHANGE' && !reference.ratingChangeId?.trim()) return `${prefix}尚未关联 Rating 记录，请从 Rating 页面重新进入写作`
+    if (reference.type === 'SUBMISSION_SNAPSHOT' && !reference.submissionSnapshotId?.trim()) return `${prefix}尚未关联提交快照，请从提交详情重新进入写作`
   }
   return null
 }

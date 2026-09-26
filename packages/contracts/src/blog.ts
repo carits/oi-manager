@@ -116,21 +116,22 @@ export const MyBlogListItemSchema = z.looseObject({
 export const MyBlogListSchema = paginatedDataSchema(MyBlogListItemSchema)
 
 export const BlogDraftReferenceSchema = z.object({
-  type: z.enum(['PROBLEM', 'PROBLEM_REVISION', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE']),
+  type: z.enum(['PROBLEM', 'PROBLEM_REVISION', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT']),
   problemId: z.string().optional(),
   problemRevisionId: z.string().optional(),
   solutionVersionId: z.string().optional(),
   standingSnapshotId: z.string().optional(),
   ratingChangeId: z.string().optional(),
-  relationType: z.enum(['PRIMARY_SUBJECT', 'MENTION', 'SOURCE', 'RESULT']),
-  displayMode: z.enum(['CARD', 'INLINE', 'COMPACT', 'EMBED', 'HIDDEN_METADATA']),
+  submissionSnapshotId: z.string().optional(),
+  relationType: z.enum(['PRIMARY_SUBJECT', 'MENTION', 'SOURCE', 'RESULT', 'SOLUTION', 'FOLLOW_UP']).default('MENTION'),
+  displayMode: z.enum(['CARD', 'INLINE', 'COMPACT', 'EMBED', 'HIDDEN_METADATA']).default('CARD'),
   positionKey: z.string().optional(),
 })
 
 export const BlogDraftClassificationSchema = z.object({
-  seriesId: z.string().nullable(),
-  tagIds: z.array(z.string()),
-  authorTags: z.array(z.string()),
+  seriesId: z.string().nullable().default(null),
+  tagIds: z.array(z.string()).default([]),
+  authorTags: z.array(z.string()).default([]),
 })
 
 export const BlogDraftSchema = z.looseObject({
@@ -203,11 +204,17 @@ export const BlogTagListSchema = z.object({
   maxPerPost: z.number().int().positive(),
 })
 
+const BlogDraftReferenceInputSchema = BlogDraftReferenceSchema.extend({
+  // Accept unsafe legacy reference names at the transport boundary so the
+  // domain returns its stable, actionable error without ever storing them.
+  type: z.enum(['PROBLEM', 'PROBLEM_REVISION', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT', 'SUBMISSION', 'JUDGE_RUN']),
+})
+
 const BlogDraftContentInputSchema = z.object({
   title: z.string().max(160),
   summary: z.string().max(1000).nullable(),
   contentMarkdown: z.string(),
-  references: z.array(BlogDraftReferenceSchema).max(50),
+  references: z.array(BlogDraftReferenceInputSchema).max(50),
   classification: BlogDraftClassificationSchema,
 })
 const BlogSeriesContentInputSchema = z.object({
@@ -216,6 +223,84 @@ const BlogSeriesContentInputSchema = z.object({
   visibility: BlogVisibilitySchema,
 })
 
+export const BlogCommunitySchema = z.object({
+  reactions: z.object({ LIKE: z.number().int().nonnegative(), HELPFUL: z.number().int().nonnegative() }),
+  myReactions: z.array(z.enum(['LIKE', 'HELPFUL'])),
+  bookmarked: z.boolean(),
+  commentCount: z.number().int().nonnegative(),
+  featured: z.looseObject({ id: z.string(), reason: z.string().nullable().optional(), createdAt: DateTimeWireSchema.optional() }).nullable().optional(),
+  authenticated: z.boolean().optional(),
+})
+
+const BlogCommentBaseSchema = z.object({
+  id: z.string(),
+  parentId: z.string().nullable().optional(),
+  content: z.string(),
+  status: z.string(),
+  createdAt: DateTimeWireSchema,
+  editedAt: DateTimeWireSchema.nullable().optional(),
+  canDelete: z.boolean(),
+  author: z.object({ id: z.string(), username: z.string(), avatar: z.string().nullable().optional() }),
+})
+export const BlogCommentSchema = BlogCommentBaseSchema.extend({
+  replies: z.array(BlogCommentBaseSchema).optional(),
+  replyCount: z.number().int().nonnegative().optional(),
+})
+export const BlogCommentPageSchema = z.object({
+  data: z.array(BlogCommentSchema), page: z.number().int().positive(), pageSize: z.number().int().positive(),
+  total: z.number().int().nonnegative(), totalPages: z.number().int().nonnegative(),
+})
+export const BlogReplyPageSchema = z.object({
+  items: z.array(BlogCommentBaseSchema),
+  hasMore: z.boolean(),
+  nextCursor: z.string().nullable().optional(),
+})
+
+export const BlogCommunityContracts = {
+  summary: defineApiEndpoint({
+    key: 'blog.community.summary', method: 'GET', scope: 'public', data: BlogCommunitySchema,
+  }),
+  comments: defineApiEndpoint({
+    key: 'blog.community.comments', method: 'GET', scope: 'public',
+    query: PaginationQuerySchema.extend({ pageSize: z.coerce.number().int().min(1).max(100).default(100) }),
+    data: BlogCommentPageSchema,
+  }),
+  replies: defineApiEndpoint({
+    key: 'blog.community.replies', method: 'GET', scope: 'public',
+    query: z.object({ pageSize: z.coerce.number().int().min(1).max(50).default(20), cursor: z.string().optional() }),
+    data: BlogReplyPageSchema,
+  }),
+  createComment: defineApiEndpoint({
+    key: 'blog.community.comment.create', method: 'POST', scope: 'account',
+    body: z.object({ content: z.string().trim().min(1).max(5000), parentId: z.string().nullable() }),
+    data: z.object({ id: z.string() }),
+  }),
+  removeComment: defineApiEndpoint({
+    key: 'blog.community.comment.remove', method: 'DELETE', scope: 'account',
+    body: z.object({}).default({}), data: z.object({ id: z.string(), status: z.literal('removed') }),
+  }),
+  addReaction: defineApiEndpoint({
+    key: 'blog.community.reaction.add', method: 'PUT', scope: 'account',
+    body: z.object({}), data: BlogCommunitySchema,
+  }),
+  removeReaction: defineApiEndpoint({
+    key: 'blog.community.reaction.remove', method: 'DELETE', scope: 'account',
+    body: z.object({}).default({}), data: BlogCommunitySchema,
+  }),
+  addBookmark: defineApiEndpoint({
+    key: 'blog.community.bookmark.add', method: 'PUT', scope: 'account',
+    body: z.object({}), data: BlogCommunitySchema,
+  }),
+  removeBookmark: defineApiEndpoint({
+    key: 'blog.community.bookmark.remove', method: 'DELETE', scope: 'account',
+    body: z.object({}).default({}), data: BlogCommunitySchema,
+  }),
+  report: defineApiEndpoint({
+    key: 'blog.community.report', method: 'POST', scope: 'account',
+    body: z.object({ reason: z.string().trim().min(1).max(120), commentId: z.string().nullable(), details: z.string().max(5000).nullable().optional() }),
+    data: z.object({ id: z.string(), status: z.string() }),
+  }),
+} as const
 export const BlogManagementContracts = {
   listMine: defineApiEndpoint({
     key: 'blog.management.list-mine',
@@ -226,9 +311,10 @@ export const BlogManagementContracts = {
   }),
   create: defineApiEndpoint({
     key: 'blog.management.create', method: 'POST', scope: 'account',
-    body: BlogDraftContentInputSchema.extend({
+    body: BlogDraftContentInputSchema.partial().extend({
       slug: z.string().trim().max(160).optional(),
-      type: BlogPostTypeSchema,
+      type: BlogPostTypeSchema.optional(),
+      title: z.string().max(160),
       organizationId: z.string().nullable().optional(),
     }),
     data: BlogManagementPostSchema,
@@ -238,7 +324,7 @@ export const BlogManagementContracts = {
   }),
   updateDraft: defineApiEndpoint({
     key: 'blog.management.update-draft', method: 'PATCH', scope: 'account',
-    body: BlogDraftContentInputSchema.extend({ expectedRevision: z.number().int().positive() }),
+    body: BlogDraftContentInputSchema.partial().extend({ expectedRevision: z.number().int().positive() }),
     data: BlogDraftSchema,
   }),
   publish: defineApiEndpoint({
@@ -268,7 +354,10 @@ export const BlogManagementContracts = {
   }),
   createSeries: defineApiEndpoint({
     key: 'blog.series.create', method: 'POST', scope: 'account',
-    body: BlogSeriesContentInputSchema.extend({ organizationId: z.string().nullable() }),
+    body: BlogSeriesContentInputSchema.partial().extend({
+      title: z.string().trim().min(1).max(120),
+      organizationId: z.string().nullable().optional(),
+    }),
     data: BlogSeriesSummarySchema,
   }),
   updateSeries: defineApiEndpoint({

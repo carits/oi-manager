@@ -6,7 +6,6 @@ import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
-import { ensureCanonicalContestFixtureTx } from './helpers/contest-fixture'
 
 const app = createTestApp()
 
@@ -314,20 +313,22 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(leakedReference.status).toBe(201)
     expect((await client(reader).post(`/api/blogs/${leakedReference.body.data.id}/publish`).send({ expectedDraftRevision: 1, visibility: 'PRIVATE' })).body.code).toBe('BLOG_REFERENCE_NOT_FOUND')
 
-    const training = await prisma.training.create({ data: {
+    const contestStartAt = new Date(Date.now() - 3_600_000)
+    const contestEndAt = new Date(Date.now() - 1_800_000)
+    const contest = await prisma.contest.create({ data: {
+      id: crypto.randomUUID(),
       title: 'Platform final contest',
       description: 'Finalized contest for a review.',
+      contestDate: contestStartAt,
       format: 'ioi',
-      startTime: new Date(Date.now() - 3_600_000),
-      endTime: new Date(Date.now() - 1_800_000),
+      startAt: contestStartAt,
+      endAt: contestEndAt,
       status: 'finished',
       createdBy: author.user.id,
-      type: 'contest',
+      type: 'judged',
       scope: 'platform',
       finalizationStatus: 'FINALIZED',
     } })
-    const contest = await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, training.id))
-    if (!contest) throw new Error('Contest aggregate missing')
     const standingId = crypto.randomUUID()
     await prisma.contestStandingSnapshot.create({ data: {
       id: standingId,
@@ -347,7 +348,6 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
         totalScore: 90,
       } },
     } })
-    await prisma.training.update({ where: { id: training.id }, data: { finalizedStandingId: standingId } })
     await prisma.contest.update({ where: { id: contest.id }, data: { finalizedStandingId: standingId } })
     const pool = await prisma.ratingPool.create({ data: {
       id: crypto.randomUUID(),
@@ -372,7 +372,7 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       fieldSize: 2,
       status: 'APPLIED',
       inputHash: 'rating-input-v1',
-      sequenceAt: training.endTime,
+      sequenceAt: contestEndAt,
       appliedAt: new Date(),
     } })
     const ratingChange = await prisma.ratingChange.create({ data: {
@@ -410,7 +410,7 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(snapshots[2]).toMatchObject({ ratingBefore: 1500, appliedDelta: 20, ratingAfter: 1520 })
     expect(JSON.stringify(snapshots)).not.toContain(author.user.username)
 
-    const byContest = await client(reader).get(`/api/contests/${training.id}/blogs`)
+    const byContest = await client(reader).get(`/api/contests/${contest.publicId}/blogs`)
     const bySolution = await client(reader).get(`/api/solutions/${solutionId}/related-blogs`)
     expect(byContest.body.data.items.map((item: any) => item.id)).toContain(postId)
     expect(bySolution.body.data.items.map((item: any) => item.id)).toContain(postId)
@@ -554,6 +554,42 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     const anonymousCommunity = await request(app).get(`/api/blog-discovery/${publicPostId}/community`)
     expect(anonymousCommunity.status).toBe(200)
     expect(anonymousCommunity.body.data).toMatchObject({ myReactions: [], bookmarked: false, authenticated: false })
+
+    const comment = await client(reader).post(`/api/blogs/${publicPostId}/comments`).send({
+      content: 'This explanation is useful.',
+      parentId: null,
+    })
+    expect(comment.status).toBe(201)
+    const reply = await client(author).post(`/api/blogs/${publicPostId}/comments`).send({
+      content: 'Thanks for the feedback.',
+      parentId: comment.body.data.id,
+    })
+    expect(reply.status).toBe(201)
+
+    const comments = await request(app).get(`/api/blog-discovery/${publicPostId}/comments?pageSize=100`)
+    expect(comments.status).toBe(200)
+    expect(comments.body.data.data[0]).toMatchObject({
+      id: comment.body.data.id,
+      content: 'This explanation is useful.',
+      replyCount: 1,
+    })
+    const replies = await request(app).get(`/api/blog-discovery/${publicPostId}/comments/${comment.body.data.id}/replies?pageSize=20`)
+    expect(replies.status).toBe(200)
+    expect(replies.body.data.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: reply.body.data.id, content: 'Thanks for the feedback.' }),
+    ]))
+
+    const report = await client(reader).post(`/api/blogs/${publicPostId}/reports`).send({
+      reason: 'INAPPROPRIATE',
+      commentId: reply.body.data.id,
+    })
+    expect(report.status).toBe(201)
+    expect(report.body.data).toMatchObject({ status: 'pending' })
+
+    expect((await client(reader).delete(`/api/blogs/${publicPostId}/comments/${comment.body.data.id}`)).body.data)
+      .toEqual({ id: comment.body.data.id, status: 'removed' })
+    expect((await client(reader).delete(`/api/blogs/${publicPostId}/reactions/LIKE`)).body.data.myReactions).toEqual([])
+    expect((await client(reader).delete(`/api/blogs/${publicPostId}/bookmark`)).body.data.bookmarked).toBe(false)
   })
 
   it('references only an explicit immutable submission snapshot', async () => {

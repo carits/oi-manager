@@ -46,8 +46,8 @@ function targetFields(reference: BlogDraftReference, update: (patch: Partial<Blo
   if (reference.type === 'PROBLEM_REVISION') {
     return <ProblemReferencePicker reference={reference} update={update} />
   }
-  const linked = Boolean(reference.solutionVersionId || reference.standingSnapshotId || reference.ratingChangeId)
-  return <FormField label="关联对象" required><div><p>{linked ? '已从来源页面关联固定内容。' : '请到对应的题解、比赛榜单或 Rating 记录页面，点击“写文章”建立引用。'}</p>{linked && <Button size="sm" variant="secondary" onClick={() => update({ solutionVersionId: undefined, standingSnapshotId: undefined, ratingChangeId: undefined })}>清除关联</Button>}</div></FormField>
+  const linked = Boolean(reference.solutionVersionId || reference.standingSnapshotId || reference.ratingChangeId || reference.submissionSnapshotId)
+  return <FormField label="关联对象" required><div><p>{linked ? '已从来源页面关联固定内容。' : '请到对应的题解、比赛榜单或 Rating 记录页面，点击“写文章”建立引用。'}</p>{linked && <Button size="sm" variant="secondary" onClick={() => update({ solutionVersionId: undefined, standingSnapshotId: undefined, ratingChangeId: undefined, submissionSnapshotId: undefined })}>清除关联</Button>}</div></FormField>
 }
 
 export function BlogReferenceEditor({ value, onChange }: { value: BlogDraftReference[]; onChange: (value: BlogDraftReference[]) => void }) {
@@ -68,7 +68,7 @@ export function BlogReferenceEditor({ value, onChange }: { value: BlogDraftRefer
         <FormField label="引用类型" required><Select value={reference.type} onChange={event => changeType(index, event.target.value as BlogReferenceType)}>{Object.entries(BLOG_REFERENCE_LABELS).map(([key, label]) => <option value={key} key={key} disabled={!['PROBLEM', 'PROBLEM_REVISION'].includes(key) && key !== reference.type}>{label}{!['PROBLEM', 'PROBLEM_REVISION'].includes(key) ? '（从来源页面添加）' : ''}</option>)}</Select></FormField>
         {targetFields(reference, patch => update(index, patch))}
         <details><summary>高级展示设置</summary>
-          <FormField label="文章中的关系"><Select value={reference.relationType} onChange={event => update(index, { relationType: event.target.value as BlogDraftReference['relationType'] })}><option value="PRIMARY_SUBJECT">主要对象</option><option value="MENTION">提及</option><option value="SOURCE">来源</option><option value="RESULT">结果</option></Select></FormField>
+          <FormField label="文章中的关系"><Select value={reference.relationType} onChange={event => update(index, { relationType: event.target.value as BlogDraftReference['relationType'] })}><option value="PRIMARY_SUBJECT">主要对象</option><option value="MENTION">提及</option><option value="SOURCE">来源</option><option value="RESULT">结果</option><option value="SOLUTION">题解</option><option value="FOLLOW_UP">后续</option></Select></FormField>
           <FormField label="展示方式"><Select value={reference.displayMode} onChange={event => update(index, { displayMode: event.target.value as BlogDraftReference['displayMode'] })}><option value="CARD">引用卡片</option><option value="INLINE">行内信息</option><option value="COMPACT">紧凑</option><option value="EMBED">嵌入</option><option value="HIDDEN_METADATA">只建立索引</option></Select></FormField>
           <FormField label="内容位置标记" hint="可选；仅用于复杂文章中稳定排列引用卡片"><Input value={reference.positionKey || ''} onChange={event => update(index, { positionKey: event.target.value })} placeholder="例如 main-problem" /></FormField>
         </details>
