@@ -24,7 +24,7 @@ const legacyTransportAllowances = {
 const legacyFeatureTransportAllowances = {
   'apps/web/src/features/contest/ui/ContestFormModal.tsx': 19,
   'apps/web/src/features/problem/ui/ProblemListDetailPage.tsx': 17,
-  'apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx': 18,
+  'apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx': 15,
   'apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx': 8,
 }
 const directTransportPattern = /\bapiClient\.(?:get|post|put|patch|delete|query|mutate)(?:Contract)?\b/g
@@ -289,6 +289,7 @@ const contractedBoundaries = [
   ['apps/web/src/features/problem/ui/JudgeProgramWizard.tsx', 'getJudgeProgramTemplate'],
   ['apps/web/src/features/problem/ui/JudgeProgramWizard.tsx', 'createJudgeProgram'],
   ['apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx', 'listJudgeProgramTemplates'],
+  ['apps/web/src/features/problem/ui/ProblemJudgeAssetsPanel.tsx', 'listJudgePrograms'],
   ['apps/web/src/features/chat/api/chatApi.ts', 'ChatContracts'],
   ['apps/web/src/features/chat/ui/ChatWorkspace.tsx', 'sendChatTextMessage'],
   ['apps/web/src/features/chat/ui/ChatWorkspace.tsx', 'sendChatStickerMessage'],

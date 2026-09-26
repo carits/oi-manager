@@ -953,8 +953,6 @@ export const JudgeProgramFixtureSetInputSchema = z.object({
 export const JudgeProgramPreflightInputSchema = z.object({
   fixtureSetId: z.string().optional(),
   fixtures: z.array(JudgeProgramFixtureInputSchema).min(1).max(50).optional(),
-}).refine(value => Boolean(value.fixtureSetId || value.fixtures), {
-  message: "fixtureSetId 或 fixtures 至少提供一项",
 });
 export const JudgeProgramUpdateInputSchema = z.object({
   currentVersionId: z.string().optional(),

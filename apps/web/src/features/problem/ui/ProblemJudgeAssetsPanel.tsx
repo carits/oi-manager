@@ -14,6 +14,7 @@ import type { ProgramCatalog } from '../model/judgeProgramTemplateTypes'
 import { ProblemQualityPanel } from './ProblemQualityPanel'
 import { listJudgeProgramTemplates } from '../api/judgeProgramTemplateApi'
 import { getProblemTestGraph } from '../api/problemTestGraphApi'
+import { compileJudgeProgramVersion, listJudgePrograms, preflightJudgeProgramVersion, updateJudgeProgram } from '../api/judgeProgramApi'
 
 type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
 type Program = { id: string; kind: string; name: string; language: string; currentVersionId?: string | null; versions: Version[] }
@@ -89,8 +90,11 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
         .then(data => ({ data, error: null as string | null }))
         .catch(error => ({ data: null, error: error instanceof Error ? error.message : '评测程序模板加载失败' }))
 
+      const programRequest = listJudgePrograms(problemId)
+        .then(data => ({ data: data as Program[], error: null as string | null }))
+        .catch(error => ({ data: null, error: error instanceof Error ? error.message : '评测程序加载失败' }))
       const [programResult, jobResult, graphResult, aiUsageResult, poolResult, corpusResult, templateResult] = await Promise.all([
-        apiClient.get<Program[]>(`/api/problems/${problemId}/judge-programs`),
+        programRequest,
         apiClient.get<Job[]>(`/api/problems/${problemId}/data-generation-jobs`),
         graphRequest,
         apiClient.get<AiUsage>(`/api/problems/${problemId}/ai/usage`),
@@ -100,8 +104,8 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
       ])
 
       const failures: string[] = []
-      if (programResult.success && programResult.data) setPrograms(programResult.data)
-      else failures.push(`评测程序：${programResult.message || '加载失败'}`)
+      if (programResult.data) setPrograms(programResult.data)
+      else failures.push(`评测程序：${programResult.error || '加载失败'}`)
       if (jobResult.success && jobResult.data) setJobs(jobResult.data)
       else failures.push(`生成任务：${jobResult.message || '加载失败'}`)
       if (graphResult.data) setGraph(graphResult.data)
@@ -130,13 +134,15 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
 
   const transitionVersion = async (program: Program, version: Version) => {
     const action = version.lifecycleStatus === 'draft' ? 'compile' : 'preflight'
-    const result = await apiClient.post(`/api/problems/${problemId}/judge-programs/${program.id}/versions/${version.id}/${action}`, {})
-    if (!result.success) return toast.error(result.message || `${action === 'compile' ? '编译' : '协议预检'}任务创建失败`)
+    const result = action === 'compile'
+      ? await compileJudgeProgramVersion(problemId, program.id, version.id)
+      : await preflightJudgeProgramVersion(problemId, program.id, version.id, {})
+    if (!result.ok) return toast.error(result.error.message || `${action === 'compile' ? '编译' : '协议预检'}任务创建失败`)
     toast.success(`Judge 已开始${action === 'compile' ? '编译' : '协议预检'}`); await load()
   }
   const activate = async (program: Program, version: Version) => {
-    const result = await apiClient.patch(`/api/problems/${problemId}/judge-programs/${program.id}`, { currentVersionId: version.id })
-    if (!result.success) return toast.error(result.message || '激活失败')
+    const result = await updateJudgeProgram(problemId, program.id, { currentVersionId: version.id })
+    if (!result.ok) return toast.error(result.error.message || '激活失败')
     toast.success('评测程序版本已激活'); await load()
   }
   const generateValidator = async (parentRequestId?: string) => {

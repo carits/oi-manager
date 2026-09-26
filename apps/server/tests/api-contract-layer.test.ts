@@ -821,6 +821,7 @@ describe('shared API contract adapter', () => {
       fixtures: [{ name: '合法输入', stdin: '1\\n', expectedExitCode: 0 }],
     })
     expect(body.kind).toBe('validator')
+    expect(parseContractBody(ProblemContracts.preflightJudgeProgramVersion, {})).toEqual({})
     expect(() => parseContractBody(ProblemContracts.createJudgeProgram, {
       kind: 'standard', language: 'cpp17', protocol: 'oj.standard/v1', source: '',
     })).toThrowError(ApiContractError)
