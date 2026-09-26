@@ -209,12 +209,14 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   useEffect(() => {
     const requested = searchParams.get('tab')
     const tab = requested === 'my-content' ? 'solution' : requested as TabType
-    if (VALID_TABS.includes(tab)) setActiveTab(tab)
+    setActiveTab(VALID_TABS.includes(tab) ? tab : 'statement')
   }, [searchParams])
 
   const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab)
-    router.push(`${pathPrefix}/problems/${problemId}?tab=${tab}`, { scroll: false })
+    const next = new URLSearchParams(searchParams.toString())
+    if (tab === 'statement') next.delete('tab')
+    else next.set('tab', tab)
+    router.push(`${pathname}${next.size ? `?${next.toString()}` : ''}`, { scroll: false })
   }
 
   // 当 problem 数据更新后，设置默认选中的版本
