@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareDashboardTasks, taskUrgency, type LearningTask } from './dashboardTasks'
+import { compareDashboardTasks, resolveLearningFeedAvailability, taskUrgency, type LearningTask } from './dashboardTasks'
 
 const base: LearningTask = { id: 'x', type: 'assignment', title: '任务', status: 'OPEN', href: '/', actionLabel: '继续', detail: '' }
 
@@ -21,5 +21,44 @@ describe('dashboard task priority', () => {
     const sooner = { ...base, id: 'sooner', dueAt: '2026-09-14T09:00:00Z' }
     expect(compareDashboardTasks(sooner, later, now)).toBeLessThan(0)
     expect(taskUrgency({ ...base, dueAt: '2026-09-12T07:00:00Z' }, now)).toBe(0)
+  })
+})
+
+describe('learning feed availability', () => {
+  it('keeps an all-pending feed unknown', () => {
+    expect(resolveLearningFeedAvailability([
+      { state: 'pending' },
+      { state: 'pending' },
+      { state: 'pending' },
+    ])).toEqual({ status: 'loading', hasPending: true, hasError: false })
+  })
+
+  it('only treats fully resolved sources as authoritative', () => {
+    expect(resolveLearningFeedAvailability([
+      { state: 'ready' },
+      { state: 'empty' },
+      { state: 'ready' },
+    ])).toEqual({ status: 'ready', hasPending: false, hasError: false })
+  })
+
+  it('distinguishes total failure from a partial feed', () => {
+    expect(resolveLearningFeedAvailability([
+      { state: 'error' },
+      { state: 'error' },
+      { state: 'error' },
+    ])).toEqual({ status: 'error', hasPending: false, hasError: true })
+
+    expect(resolveLearningFeedAvailability([
+      { state: 'ready' },
+      { state: 'error' },
+      { state: 'pending' },
+    ])).toEqual({ status: 'partial', hasPending: true, hasError: true })
+  })
+
+  it('keeps stale previous data visible but marks the feed degraded', () => {
+    expect(resolveLearningFeedAvailability([
+      { state: 'error', hasData: true },
+      { state: 'error' },
+    ])).toEqual({ status: 'partial', hasPending: false, hasError: true })
   })
 })

@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import styles from '@/components/Dashboard.module.css'
 import { currentWorkspacePrefix, isPersonalPath } from '@/lib/workspacePath'
-import { compareDashboardTasks, type LearningTask } from '@/lib/dashboardTasks'
+import { compareDashboardTasks, resolveLearningFeedAvailability, type LearningTask } from '@/lib/dashboardTasks'
 
 interface TaskItem { id: string; title: string; openAt: string; dueAt: string; closeAt: string; status: string; problemCount: number }
 interface AssignmentPayload { items: TaskItem[]; pagination: { total: number }; statusCounts?: Record<string, number> }
@@ -64,15 +64,23 @@ export default function StudentPage() {
   const pendingTasks = [...assignmentTasks, ...trainingTasks, ...contestTasks].sort((a, b) => compareDashboardTasks(a, b, now))
   const displayedTasks = pendingTasks.slice(0, 5)
   const learningResources = [homeworkResource, trainingResource, contestResource]
-  const learningPending = learningResources.every(resource => resource.state.state === 'pending')
-  const learningAllFailed = learningResources.every(resource => resource.state.state === 'error')
-  const learningPartiallyFailed = !learningAllFailed && learningResources.some(resource => resource.state.state === 'error')
+  const learningFeed = resolveLearningFeedAvailability(learningResources.map(resource => ({
+    state: resource.state.state,
+    hasData: resource.data !== undefined,
+  })))
+  const learningPending = learningFeed.status === 'loading'
+  const learningAllFailed = learningFeed.status === 'error'
+  const learningIncomplete = learningFeed.status === 'partial'
   const retryLearningFeed = () => { void homeworkResource.retry(); void trainingResource.retry(); void contestResource.retry() }
   const assignmentPendingCount = homeworkResource.data?.statusCounts
     ? ['SCHEDULED', 'OPEN', 'OVERDUE'].reduce((sum, status) => sum + (homeworkResource.data?.statusCounts?.[status] || 0), 0)
     : assignmentTasks.length
   const pendingTaskCount = assignmentPendingCount + trainingTasks.length + contestTasks.length
-  const pendingTaskCountDisplay = (trainingResource.data?.length || 0) >= 100 ? `${pendingTaskCount}+` : pendingTaskCount
+  const homeworkCountKnown = homeworkResource.data !== undefined || ['ready', 'empty'].includes(homeworkResource.state.state)
+  const activeCountDisplay = homeworkCountKnown ? activeCount : '—'
+  const pendingTaskCountDisplay = learningFeed.status === 'ready'
+    ? ((trainingResource.data?.length || 0) >= 100 ? `${pendingTaskCount}+` : pendingTaskCount)
+    : pendingTaskCount > 0 ? `${pendingTaskCount}+` : '—'
 
   return (
       <PageFrame>
@@ -80,11 +88,11 @@ export default function StudentPage() {
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}><h2 className={styles.sectionTitle}>现在最需要完成</h2></div>
-        {displayedTasks[0] ? <Link className={styles.taskItem} href={displayedTasks[0].href}><span className={styles.taskUrgency} data-level="urgent">{displayedTasks[0].type === 'assignment' ? <ClipboardList size={16} /> : displayedTasks[0].type === 'contest' ? <Trophy size={16} /> : <ListChecks size={16} />}优先任务</span><span><strong>{displayedTasks[0].title}</strong><small>{displayedTasks[0].detail}</small></span><ArrowRight size={16} /></Link> : <p className={styles.inboxEmpty}>当前没有待完成的作业、训练或比赛，可以继续题单或自主练习。</p>}
+        {displayedTasks[0] ? <><Link className={styles.taskItem} href={displayedTasks[0].href}><span className={styles.taskUrgency} data-level="urgent">{displayedTasks[0].type === 'assignment' ? <ClipboardList size={16} /> : displayedTasks[0].type === 'contest' ? <Trophy size={16} /> : <ListChecks size={16} />}优先任务</span><span><strong>{displayedTasks[0].title}</strong><small>{displayedTasks[0].detail}</small></span><ArrowRight size={16} /></Link>{learningIncomplete && <p className={styles.inboxEmpty} role="status">{learningFeed.hasError ? '部分任务来源暂时无法加载，当前优先任务可能不完整。' : '其他任务仍在加载，优先级可能继续更新。'}</p>}</> : learningPending ? <SkeletonRegion rows={2} label="正在汇总学习任务" /> : learningAllFailed ? <LoadError compact message="学习任务暂时无法加载，尚不能判断是否存在待办" onRetry={retryLearningFeed} /> : learningIncomplete ? (learningFeed.hasError ? <LoadError compact message="部分学习任务暂时无法加载，尚不能确认没有待办" onRetry={retryLearningFeed} /> : <SkeletonRegion rows={2} label="正在汇总学习任务" />) : <p className={styles.inboxEmpty}>当前没有待完成的作业、训练或比赛，可以继续题单或自主练习。</p>}
       </section>
 
       <div className={styles.metricGrid}>
-        <div className={styles.metric}><p className={styles.metricLabel}>进行中的作业</p><p className={styles.metricValue}>{activeCount}</p><p className={styles.metricHint}>优先处理临近截止的任务</p></div>
+        <div className={styles.metric}><p className={styles.metricLabel}>进行中的作业</p><p className={styles.metricValue}>{activeCountDisplay}</p><p className={styles.metricHint}>{homeworkCountKnown ? '优先处理临近截止的任务' : '作业数据尚未确认'}</p></div>
         <div className={styles.metric}><p className={styles.metricLabel}>待完成任务</p><p className={styles.metricValue}>{pendingTaskCountDisplay}</p><p className={styles.metricHint}>包含作业、训练和比赛</p></div>
         <div className={styles.metric}><p className={styles.metricLabel}>提交总数</p><p className={styles.metricValue}>{submissionResource.data?.total ?? '—'}</p><p className={styles.metricHint}>当前范围内的全部评测记录</p></div>
       </div>
@@ -93,7 +101,9 @@ export default function StudentPage() {
         <section className={styles.section}>
           <div className={styles.sectionHeader}><h2 className={styles.sectionTitle}>近期学习安排</h2><span className={styles.sectionHint}><Link href={pathPrefix + '/homeworks'}>作业</Link> · <Link href={pathPrefix + '/training-sessions'}>训练</Link> · <Link href={pathPrefix + '/contests'}>比赛</Link></span></div>
           {learningPending ? <SkeletonRegion rows={4} /> : learningAllFailed ? <LoadError message="学习安排暂时无法加载" onRetry={retryLearningFeed} /> : <>
-            {learningPartiallyFailed && <LoadError compact message="部分学习任务暂时无法加载" onRetry={retryLearningFeed} />}
+            {learningIncomplete && (learningFeed.hasError
+              ? <LoadError compact message="部分学习任务暂时无法加载，以下内容可能不完整" onRetry={retryLearningFeed} />
+              : <SkeletonRegion rows={2} label="仍在汇总其他学习任务" />)}
             {displayedTasks.length > 0 ? (
               <div className={styles.list}>
                 {displayedTasks.map(task => {
@@ -102,7 +112,7 @@ export default function StudentPage() {
                   return <Link className={styles.listItem} key={task.id} href={task.href}><span className={styles.listMain}><span className={styles.listTitle}>{task.title}</span><span className={styles.listMeta}><span>{task.type === 'assignment' ? '作业' : task.type === 'training' ? '训练' : '比赛'}</span><span>{task.detail}</span></span></span><span className={styles.listEnd}><StatusBadge variant={variant}>{label}</StatusBadge><ArrowRight size={16} aria-hidden="true" /></span></Link>
                 })}
               </div>
-            ) : <div className={styles.inlineEmpty}>当前没有待处理任务</div>}
+            ) : learningFeed.status === 'ready' ? <div className={styles.inlineEmpty}>当前没有待处理任务</div> : null}
           </>}
         </section>
 
