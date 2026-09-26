@@ -143,6 +143,63 @@ export const ProblemPersonalContentSharesInputSchema = z.object({
   shareKeys: z.array(z.string()).max(100),
 });
 
+export const ProblemStatementVersionSchema = z.object({
+  id: z.string(),
+  key: z.string().optional(),
+  name: z.string(),
+  title: z.string().nullable().optional(),
+  language: z.string().nullable().optional(),
+  format: z.enum(["markdown", "pdf"]),
+  visibility: z.enum(["private", "public"]),
+  sourceType: z.string().nullable().optional(),
+  sourceId: z.string().nullable().optional(),
+  sourceNameSnapshot: z.string().nullable().optional(),
+  sourceAuthorSnapshot: z.string().nullable().optional(),
+  authorUserId: z.string().optional(),
+  authorUsername: z.string().nullable().optional(),
+  isOfficial: z.boolean().optional(),
+  isMine: z.boolean().optional(),
+  content: z.string().nullable().optional(),
+  fileUrl: z.string().nullable().optional(),
+  createdAt: DateTimeWireSchema.optional(),
+  updatedAt: DateTimeWireSchema.optional(),
+});
+export const ProblemStatementVersionListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(10),
+});
+export const ProblemStatementVersionListSchema = z.object({
+  official: z.array(ProblemStatementVersionSchema),
+  mine: z.array(ProblemStatementVersionSchema),
+  public: z.array(ProblemStatementVersionSchema),
+  publicPagination: z.object({
+    page: z.number().int().min(1),
+    pageSize: z.number().int().min(1).max(50),
+    total: z.number().int().min(0),
+  }),
+});
+export const ProblemStatementVersionCreateInputSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  language: z.string().max(20).nullable().optional(),
+  visibility: z.enum(["private", "public"]),
+  format: z.enum(["markdown", "pdf"]).optional(),
+  source: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("canonical"), id: z.string().min(1) }),
+    z.object({ type: z.literal("user"), id: z.string().min(1) }),
+    z.object({ type: z.literal("blank") }),
+  ]),
+});
+export const ProblemStatementVersionContentInputSchema = z.object({
+  content: z.string().max(1_048_576)
+    .refine(value => value.trim().length > 0, "题面内容不能为空"),
+  title: z.string().max(300).nullable().optional(),
+});
+export const ProblemStatementVersionMetadataInputSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  language: z.string().max(20).nullable().optional(),
+  visibility: z.enum(["private", "public"]).optional(),
+}).refine(value => Object.keys(value).length > 0, "至少提供一个修改字段");
+
 export const ProblemAdminListItemSchema = z.object({
   id: z.string(),
   problemId: z.string(),
@@ -572,6 +629,30 @@ export const ProblemContracts = {
     key: "problem.my-content.delete", method: "DELETE", scope: "context",
     body: z.object({}), data: z.object({}),
   }),
+  listStatementVersions: defineApiEndpoint({
+    key: "problem.statement-versions.list", method: "GET", scope: "context",
+    query: ProblemStatementVersionListQuerySchema, data: ProblemStatementVersionListSchema,
+  }),
+  getStatementVersion: defineApiEndpoint({
+    key: "problem.statement-version.get", method: "GET", scope: "context",
+    data: ProblemStatementVersionSchema,
+  }),
+  createStatementVersion: defineApiEndpoint({
+    key: "problem.statement-version.create", method: "POST", scope: "context",
+    body: ProblemStatementVersionCreateInputSchema, data: ProblemStatementVersionSchema,
+  }),
+  updateStatementVersionContent: defineApiEndpoint({
+    key: "problem.statement-version.content.update", method: "PUT", scope: "context",
+    body: ProblemStatementVersionContentInputSchema, data: ProblemStatementVersionSchema,
+  }),
+  updateStatementVersionMetadata: defineApiEndpoint({
+    key: "problem.statement-version.metadata.update", method: "PATCH", scope: "context",
+    body: ProblemStatementVersionMetadataInputSchema, data: ProblemStatementVersionSchema,
+  }),
+  deleteStatementVersion: defineApiEndpoint({
+    key: "problem.statement-version.delete", method: "DELETE", scope: "context",
+    body: z.object({}), data: z.object({}),
+  }),
   getJudgeSettings: defineApiEndpoint({
     key: "problem.judge-settings.get",
     method: "GET",
@@ -684,6 +765,11 @@ export type ProblemPersonalContent = z.infer<typeof ProblemPersonalContentSchema
 export type ProblemPersonalContentKind = z.infer<typeof ProblemPersonalContentKindSchema>;
 export type ProblemPersonalContentInput = z.infer<typeof ProblemPersonalContentInputSchema>;
 export type ProblemMyContent = z.infer<typeof ProblemMyContentSchema>;
+export type ProblemStatementVersion = z.infer<typeof ProblemStatementVersionSchema>;
+export type ProblemStatementVersionList = z.infer<typeof ProblemStatementVersionListSchema>;
+export type ProblemStatementVersionCreateInput = z.infer<typeof ProblemStatementVersionCreateInputSchema>;
+export type ProblemStatementVersionContentInput = z.infer<typeof ProblemStatementVersionContentInputSchema>;
+export type ProblemStatementVersionMetadataInput = z.infer<typeof ProblemStatementVersionMetadataInputSchema>;
 export type ProblemTestGraphWorkspace = z.infer<typeof ProblemTestGraphWorkspaceSchema>;
 export type ProblemTestGraphSubtask = z.infer<typeof ProblemTestGraphSubtaskSchema>;
 export type ProblemTestGraphSaveInput = z.infer<typeof ProblemTestGraphSaveInputSchema>;

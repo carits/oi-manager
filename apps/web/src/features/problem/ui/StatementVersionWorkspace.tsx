@@ -5,35 +5,26 @@ import unifiedStyles from './StatementVersionWorkspace.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { useSearchParams } from 'next/navigation'
-import apiClient from '@/lib/apiClient'
+import type {
+  ProblemStatementVersion as Version,
+  ProblemStatementVersionCreateInput,
+  ProblemStatementVersionList as VersionList,
+  ProblemStatementVersionMetadataInput,
+} from '@oi-manager/contracts'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
-
-interface Version {
-  id: string
-  key?: string
-  name: string
-  title?: string | null
-  language?: string | null
-  format: 'markdown' | 'pdf'
-  visibility: 'private' | 'public'
-  authorUsername?: string | null
-  isOfficial?: boolean
-  isMine?: boolean
-  content?: string | null
-  fileUrl?: string | null
-  sourceNameSnapshot?: string | null
-  sourceAuthorSnapshot?: string | null
-}
-
-interface VersionList {
-  official: Version[]
-  mine: Version[]
-  public: Version[]
-  publicPagination: { page: number; pageSize: number; total: number }
-}
+import {
+  createProblemStatementVersion,
+  deleteProblemStatementVersion,
+  getProblemStatementVersion,
+  listProblemStatementVersions,
+  problemStatementVersionFileUrl,
+  updateProblemStatementVersionContent,
+  updateProblemStatementVersionMetadata,
+  uploadProblemStatementVersionPdf,
+} from '../api/problemStatementVersionApi'
 
 export function StatementVersionWorkspace({ problemId }: { problemId: string }) {
   const toast = useToast()
@@ -54,23 +45,27 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
 
   const load = useCallback(async (all = showAll) => {
     setLoading(true)
-    const response = await apiClient.get<VersionList>(`/api/problems/${problemId}/statement-versions?pageSize=${all ? 50 : 10}`)
-    if (!response.success || !response.data) toast.error(response.message || '加载题面版本失败')
-    else {
-      setData(response.data)
+    try {
+      const response = await listProblemStatementVersions(problemId, { pageSize: all ? 50 : 10 })
+      setData(response)
       const requested = searchParams.get('statementVersion')
-      const allRows = [...response.data.official, ...response.data.mine, ...response.data.public]
+      const allRows = [...response.official, ...response.mine, ...response.public]
       let next = requested ? allRows.find(item => item.id === requested) : null
       if (requested && !next) {
-        const detail = await apiClient.get<Version>(`/api/problems/${problemId}/statement-versions/${requested}`)
-        if (detail.success && detail.data) next = detail.data
-        else toast.warning('指定题面不可访问，已回到默认官方题面')
+        try {
+          next = await getProblemStatementVersion(problemId, requested)
+        } catch {
+          toast.warning('指定题面不可访问，已回到默认官方题面')
+        }
       }
       next ||= selected ? allRows.find(item => item.id === selected.id) : null
-      next ||= response.data.official[0] || response.data.mine[0] || response.data.public[0] || null
+      next ||= response.official[0] || response.mine[0] || response.public[0] || null
       setSelected(next)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '加载题面版本失败')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [problemId, searchParams, selected, showAll, toast])
 
   useEffect(() => { void load() }, [problemId, showAll]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -78,9 +73,12 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
   const choose = async (item: Version) => {
     let detail = item
     if (!item.isOfficial && item.content === undefined) {
-      const response = await apiClient.get<Version>(`/api/problems/${problemId}/statement-versions/${item.id}`)
-      if (!response.success || !response.data) return toast.error(response.message || '题面不可访问')
-      detail = response.data
+      try {
+        detail = await getProblemStatementVersion(problemId, item.id)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '题面不可访问')
+        return
+      }
     }
     setSelected(detail)
     setEditing(false)
@@ -100,44 +98,56 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
 
   const create = async () => {
     setSaving(true)
-    const source = createMode === 'blank' || !selected
+    const source: ProblemStatementVersionCreateInput['source'] = createMode === 'blank' || !selected
       ? { type: 'blank' }
       : selected.isOfficial ? { type: 'canonical', id: selected.id } : { type: 'user', id: selected.id }
-    const response = await apiClient.post<Version>(`/api/problems/${problemId}/statement-versions`, {
-      name, language, visibility, format: selected?.format || 'markdown', source,
-    })
-    if (response.success && response.data) {
+    try {
+      const response = await createProblemStatementVersion(problemId, {
+        name, language, visibility, format: selected?.format || 'markdown', source,
+      })
+      if (!response.ok) {
+        toast.error(response.error.message || '创建失败')
+        return
+      }
       setCreateOpen(false)
       setShowAll(true)
       await load(true)
       await choose(response.data)
       if (response.data.format === 'markdown') { setDraft(response.data.content || ''); setEditing(true) }
       toast.success('题面版本已创建')
-    } else toast.error(response.message || '创建失败')
-    setSaving(false)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const saveContent = async () => {
     if (!selected?.isMine) return
     setSaving(true)
-    const response = await apiClient.put<Version>(`/api/problems/${problemId}/statement-versions/${selected.id}/content`, { content: draft, title: selected.title })
-    if (response.success && response.data) { setSelected(response.data); setEditing(false); toast.success('题面已保存'); await load(showAll) }
-    else toast.error(response.message || '保存失败')
-    setSaving(false)
+    try {
+      const response = await updateProblemStatementVersionContent(problemId, selected.id, { content: draft, title: selected.title })
+      if (response.ok) {
+        setSelected(response.data)
+        setEditing(false)
+        toast.success('题面已保存')
+        await load(showAll)
+      } else toast.error(response.error.message || '保存失败')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const patchSelected = async (body: Record<string, unknown>) => {
+  const patchSelected = async (body: ProblemStatementVersionMetadataInput) => {
     if (!selected?.isMine) return
-    const response = await apiClient.patch<Version>(`/api/problems/${problemId}/statement-versions/${selected.id}`, body)
-    if (response.success && response.data) { setSelected(response.data); await load(showAll) }
-    else toast.error(response.message || '修改失败')
+    const response = await updateProblemStatementVersionMetadata(problemId, selected.id, body)
+    if (response.ok) { setSelected(response.data); await load(showAll) }
+    else toast.error(response.error.message || '修改失败')
   }
 
   const remove = async () => {
     if (!selected?.isMine || !window.confirm(`确定删除题面「${selected.name}」吗？活动快照不会受影响。`)) return
-    const response = await apiClient.delete(`/api/problems/${problemId}/statement-versions/${selected.id}`)
-    if (response.success) { toast.success('题面已删除'); setSelected(null); await load(showAll) }
-    else toast.error(response.message || '删除失败')
+    const response = await deleteProblemStatementVersion(problemId, selected.id)
+    if (response.ok) { toast.success('题面已删除'); setSelected(null); await load(showAll) }
+    else toast.error(response.error.message || '删除失败')
   }
 
   const uploadPdf = async (file: File | undefined) => {
@@ -145,7 +155,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
     const body = new FormData()
     body.append('file', file)
     setSaving(true)
-    const response = await apiClient.postFile<Version>(`/api/problems/${problemId}/statement-versions/${selected.id}/pdf`, body)
+    const response = await uploadProblemStatementVersionPdf(problemId, selected.id, body)
     if (response.success && response.data) {
       setSelected(response.data)
       setEditing(false)
@@ -196,7 +206,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
             <Button variant="ghost" onClick={remove} className={unifiedStyles.u15}>删除</Button>
           </div>}
           {editing ? <div><MarkdownEditor value={draft} onChange={setDraft} minHeight="480px" showPreview /><div className={unifiedStyles.u16}><Button variant="ghost" onClick={() => setEditing(false)}>取消</Button><Button variant="ghost" onClick={saveContent} disabled={saving}>{saving ? '保存中…' : '保存'}</Button></div></div>
-            : selected.format === 'pdf' && selected.fileUrl ? <iframe src={selected.fileUrl} className={unifiedStyles.u17} />
+            : selected.format === 'pdf' && selected.fileUrl ? <iframe src={problemStatementVersionFileUrl(problemId, selected.id)} className={unifiedStyles.u17} />
             : <MarkdownRenderer content={selected.content || '暂无题面内容'} />}
         </>}
       </main>

@@ -2,18 +2,18 @@
   "schemaVersion": 2,
   "contracts": 29,
   "featureSlices": 27,
-  "contractedBoundaries": 176,
+  "contractedBoundaries": 186,
   "transport": {
     "legacy": {
       "files": 0,
       "calls": 0
     },
     "feature": {
-      "files": 12,
-      "calls": 110
+      "files": 11,
+      "calls": 103
     },
     "raw": {
-      "registered": 8
+      "registered": 10
     }
   },
   "contestCompatibility": {
@@ -120,11 +120,6 @@
       "file": "apps/web/src/features/problem/ui/ProblemHackPanel.tsx",
       "calls": 8,
       "layer": "feature"
-    },
-    {
-      "file": "apps/web/src/features/problem/ui/StatementVersionWorkspace.tsx",
-      "calls": 7,
-      "layer": "feature"
     }
   ],
   "exitCriteria": {
@@ -137,5 +132,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-26T13:05:40.752Z"
+  "updatedAt": "2026-09-26T13:25:32.828Z"
 }

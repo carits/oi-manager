@@ -78,5 +78,25 @@
     "featureSymbol": "uploadProblemPersonalContentPdf",
     "serverBoundary": "apps/server/src/modules/problem/problem.user-content.routes.ts",
     "serverSymbol": "problemContentPdfUpload"
+  },
+  {
+    "key": "problem.statement-version-pdf.upload",
+    "kind": "multipart",
+    "method": "POST",
+    "route": "/api/problems/:problemId/statement-versions/:versionId/pdf",
+    "featureApi": "apps/web/src/features/problem/api/problemStatementVersionApi.ts",
+    "featureSymbol": "uploadProblemStatementVersionPdf",
+    "serverBoundary": "apps/server/src/modules/problem/problem.statement-version.routes.ts",
+    "serverSymbol": "problemContentPdfUpload"
+  },
+  {
+    "key": "problem.statement-version-pdf.download",
+    "kind": "binary",
+    "method": "GET",
+    "route": "/api/problems/:problemId/statement-versions/:versionId/file",
+    "featureApi": "apps/web/src/features/problem/api/problemStatementVersionApi.ts",
+    "featureSymbol": "problemStatementVersionFileUrl",
+    "serverBoundary": "apps/server/src/modules/problem/problem.statement-version.routes.ts",
+    "serverSymbol": "downloadProblemStatementVersion"
   }
 ]

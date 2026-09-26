@@ -438,6 +438,60 @@ describe('shared API contract adapter', () => {
     }))
   })
 
+  it('guards statement-version requests and strips storage internals', () => {
+    expect(parseContractQuery(ProblemContracts.listStatementVersions, {
+      page: '2', pageSize: '50', ignored: 'drop-me',
+    })).toEqual({ page: 2, pageSize: 50 })
+    expect(parseContractBody(ProblemContracts.createStatementVersion, {
+      name: '自定义题面', language: 'zh', visibility: 'private',
+      format: 'markdown', source: { type: 'blank' },
+    })).toEqual({
+      name: '自定义题面', language: 'zh', visibility: 'private',
+      format: 'markdown', source: { type: 'blank' },
+    })
+    expect(() => parseContractBody(ProblemContracts.createStatementVersion, {
+      name: '复制官方题面', visibility: 'private',
+      source: { type: 'canonical' },
+    })).toThrowError(ApiContractError)
+    expect(() => parseContractBody(ProblemContracts.updateStatementVersionContent, {
+      content: '   ',
+    })).toThrowError(ApiContractError)
+    expect(() => parseContractBody(ProblemContracts.updateStatementVersionMetadata, {}))
+      .toThrowError(ApiContractError)
+
+    const statementVersions = responseStub()
+    sendContractData(statementVersions.response, ProblemContracts.listStatementVersions, {
+      official: [{
+        id: 'official-1', key: 'canonical:official-1', name: '官方中文',
+        title: '整数求和', language: 'zh', format: 'markdown', visibility: 'public',
+        content: '# 题面', fileUrl: null, authorUsername: 'System', isOfficial: true,
+      }],
+      mine: [{
+        id: 'version-1', name: '课堂版', title: '整数求和', language: 'zh',
+        format: 'markdown', visibility: 'private', content: '# 课堂题面',
+        fileUrl: null, authorUsername: 'teacher1', isMine: true,
+        createdAt: new Date('2026-09-20T01:02:03Z'),
+        updatedAt: new Date('2026-09-20T02:03:04Z'),
+        fileId: 'must-not-leak',
+      }],
+      public: [],
+      publicPagination: { page: 1, pageSize: 10, total: 0 },
+    })
+    expect(statementVersions.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        mine: [expect.objectContaining({
+          createdAt: '2026-09-20T01:02:03.000Z',
+          updatedAt: '2026-09-20T02:03:04.000Z',
+        })],
+      }),
+    }))
+    expect(statementVersions.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        mine: [expect.not.objectContaining({ fileId: expect.anything() })],
+      }),
+    }))
+  })
+
   it('guards problem-list CRUD and problem-note payloads', () => {
     expect(parseContractQuery(ProblemListContracts.list, {
       tab: 'mine', page: '2', pageSize: '20', keyword: '基础', ignored: 'drop-me',
