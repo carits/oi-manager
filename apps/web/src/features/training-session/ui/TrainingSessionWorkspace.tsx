@@ -8,7 +8,7 @@ import { Section } from '@/components/ui/Section'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
 import { StatusBadge } from '@/components/ui/Badge'
-import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
+import { ConfirmDialog, DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
@@ -37,6 +37,9 @@ import {
 } from '../api/trainingSessionApi'
 import { testDataVersion, trainingStatusLabel } from '@/lib/humanPresentation'
 import { csvCell, saveBlobDownload } from '@/lib/download'
+import styles from './TrainingEngine.module.css'
+
+type GroupBatchAction = 'start_all' | 'advance_all' | 'pause_all' | 'resume_all'
 
 const stageModeLabel: Record<string, string> = {
   TRAINING: '训练',
@@ -48,7 +51,13 @@ const progressLabel: Record<string, string> = {
 }
 const visibilityLabel: Record<string, string> = { NONE: '仅自己', PROGRESS: '完成进度', SCORE: '成绩与进度', FULL: '详细进度' }
 const rankingLabel: Record<string, string> = { OFF: '不排名', PROGRESS_ONLY: '按完成进度', SCORE: '按得分', ACM_RANKING: '按通过题数和罚时' }
-import styles from './TrainingEngine.module.css'
+const stageRuntimeStatusLabel: Record<string, string> = {
+  PENDING: '待开始',
+  RUNNING: '训练中',
+  PAUSED: '已暂停',
+  ENDED: '已完成',
+  SKIPPED: '已跳过',
+}
 
 type StageProblem = { id: string; problemId: string; alias?: string; targetScore?: number; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>; timePolicy?: { mode: string; limitSeconds?: number }; stuckPolicy?: { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Statements?: Array<{ type?: string; format: string; language?: string | null; content?: string | null; fileUrl?: string | null }>; Problem: { problemId: string; title: string; platform: string }; TestSetRevision: { revisionNumber: number; mode: string } }
 type StageGroup = { id: string; groupId: string; name: string; mode: string; status: string; plannedDurationSeconds?: number | null; runningSince?: string | null; activeElapsedSeconds: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null; accessPolicy: string; submissionMode: string }
@@ -96,6 +105,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [selectedId, setSelectedId] = useState<string>(), [code, setCode] = useState(''), [language, setLanguage] = useState('cpp17'), [draftRevision, setDraftRevision] = useState<number>()
   const [draftState, setDraftState] = useState<'loading' | 'dirty' | 'saving' | 'saved' | 'error'>('loading')
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
+  const [loadError, setLoadError] = useState('')
+  const [lastSyncedAt, setLastSyncedAt] = useState<number>()
   const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [commandBusy, setCommandBusy] = useState(false), [rosterSaving, setRosterSaving] = useState(false)
   const [clockNow, setClockNow] = useState(() => Date.now())
@@ -106,6 +117,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [commandTargetType, setCommandTargetType] = useState('ALL'), [commandTargetId, setCommandTargetId] = useState('')
   const [messageOpen, setMessageOpen] = useState(false), [message, setMessage] = useState(''), [messageType, setMessageType] = useState('INFO')
   const [groupChangeParticipant, setGroupChangeParticipant] = useState<Dashboard['participants'][number]>(), [groupChangeTarget, setGroupChangeTarget] = useState(''), [groupChangeReason, setGroupChangeReason] = useState('')
+  const [batchAction, setBatchAction] = useState<GroupBatchAction>()
   const [groupChangeMode, setGroupChangeMode] = useState<'immediate' | 'next_stage'>('immediate'), [groupChangeStageId, setGroupChangeStageId] = useState('')
   const [transitionDialog, setTransitionDialog] = useState<{ action: 'advance' | 'skip_pending' | 'end_session'; stageId: string; outcome?: 'completed' | 'ended_early' }>(), [transitionReason, setTransitionReason] = useState('')
   useEffect(() => { const timer = window.setInterval(() => setClockNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
@@ -125,13 +137,17 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
 
   const load = useCallback(async () => {
     const version = ++workspaceLoadVersion.current
+    setLoadError('')
     let workspace: Workspace
     try {
       workspace = await getTrainingWorkspace(sessionId) as Workspace
     } catch (error) {
-      return toast.error(error instanceof Error ? error.message : '训练加载失败')
+      const message = error instanceof Error ? error.message : '训练加载失败'
+      if (version === workspaceLoadVersion.current) setLoadError(message)
+      return toast.error(message)
     }
     if (version !== workspaceLoadVersion.current) return
+    setLastSyncedAt(Date.now())
     statusRevisionRef.current = workspace.session.statusRevision
     setData(workspace)
     setSelectedId(current => {
@@ -321,9 +337,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         if (saved !== false) void load()
       })
     }
-    source.addEventListener('training', event => { cursor.current = Number((event as MessageEvent).lastEventId || cursor.current); saveThenReload() })
-    source.addEventListener('resync_required', saveThenReload)
-    return () => source.close()
+    let reloadTimer: number | undefined
+    const scheduleReload = () => {
+      if (reloadTimer) window.clearTimeout(reloadTimer)
+      reloadTimer = window.setTimeout(saveThenReload, 250)
+    }
+    source.addEventListener('training', event => { cursor.current = Number((event as MessageEvent).lastEventId || cursor.current); scheduleReload() })
+    source.addEventListener('resync_required', scheduleReload)
+    return () => { source.close(); if (reloadTimer) window.clearTimeout(reloadTimer) }
   }, [load, sessionId])
 
   const command = async (type: string, payload: Record<string, unknown> = {}, targetType = commandTargetType, targetId = commandTargetId) => {
@@ -355,13 +376,17 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     if (!response.ok) return toast.error(response.error.message || '分组运行操作失败')
     await load()
   }
-  const runGroupBatch = async (action: 'start_all' | 'advance_all' | 'pause_all' | 'resume_all') => {
-    if (!data) return
+  const runGroupBatch = async (action: GroupBatchAction) => {
+    if (!data) return false
     setCommandBusy(true)
-    const response = await runTrainingGroupBatch(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, action })
-    setCommandBusy(false)
-    if (!response.ok) return toast.error(response.error.message || '批量分组操作失败')
-    await load()
+    try {
+      const response = await runTrainingGroupBatch(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, action })
+      if (!response.ok) { toast.error(response.error.message || '批量分组操作失败'); return false }
+      await load()
+      return true
+    } finally {
+      setCommandBusy(false)
+    }
   }
   const transitionStage = async (action: 'start' | 'advance' | 'skip_pending' | 'end_session', stageId: string, extra: Record<string, unknown> = {}) => {
     if (!data) return false
@@ -447,7 +472,13 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }
   const recordStrategy = async (decision: string) => { const response = await recordTrainingStrategy(sessionId, { stageProblemId: selectedId, decision }); if (!response.ok) toast.error(response.error.message || '策略记录失败'); else toast.success('策略决策已记录') }
 
-  if (!data) return <PageFrame width="workbench"><PageHeader title="训练工作台" description="正在准备训练状态…" /></PageFrame>
+  if (!data) return <PageFrame width="workbench"><div className={styles.stack}>
+    <PageHeader title="训练工作台" description={loadError ? "训练状态暂时无法读取" : "正在准备训练状态…"} />
+    {loadError && <Section title="加载失败"><div role="alert" className={styles.stack}>
+      <p>{loadError}</p>
+      <Button variant="outline" onClick={() => void load()}>重新加载训练</Button>
+    </div></Section>}
+  </div></PageFrame>
   const status = data.session.status
   const activeStrategy = selectedId ? data.strategy[selectedId] : undefined
   const participantRuntimeGroup = data.participant?.currentGroupId ? (data.session.Groups || []).find(group => group.id === data.participant?.currentGroupId) : undefined
@@ -477,6 +508,36 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     : 0
   const transitionNextStage = transitionDialog?.action === 'advance' ? nextPendingStage : undefined
   const currentProblemProgress = selectedId ? data.progress.find(item => item.stageProblemId === selectedId) : undefined
+  const activeGroups = (data.session.Groups || []).filter(group => group.status === 'active')
+  const groupRuntimeStatus = (group: V2RuntimeGroup) => {
+    const activeUnit = group.StageGroups?.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status))
+    if (activeUnit) return activeUnit.status
+    if (group.StageGroups?.some(unit => unit.status === 'PENDING')) return 'PENDING'
+    return 'ENDED'
+  }
+  const batchTargetStatus: Record<GroupBatchAction, string> = {
+    start_all: 'PENDING',
+    advance_all: 'RUNNING',
+    pause_all: 'RUNNING',
+    resume_all: 'PAUSED',
+  }
+  const batchTargets = batchAction
+    ? activeGroups.filter(group => groupRuntimeStatus(group) === batchTargetStatus[batchAction])
+    : []
+  const batchTargetPeople = batchTargets.reduce((total, group) => total + (group.Participants?.length || 0), 0)
+  const batchTargetCount = (action: GroupBatchAction) => activeGroups.filter(group => groupRuntimeStatus(group) === batchTargetStatus[action]).length
+  const batchActionTitle: Record<GroupBatchAction, string> = {
+    start_all: '确认开始待训练分组',
+    advance_all: '确认批量进入下一阶段',
+    pause_all: '确认暂停正在训练的分组',
+    resume_all: '确认恢复已暂停的分组',
+  }
+  const batchActionEffect: Record<GroupBatchAction, string> = {
+    start_all: '这些分组将从各自的第一个待开始阶段进入训练。',
+    advance_all: '这些分组将分别进入自己的下一阶段；已经处于最后阶段的分组会完成训练。',
+    pause_all: '这些分组的阶段计时与推进将暂停，已有草稿、提交和进度不会丢失。',
+    resume_all: '这些分组将恢复阶段计时，并继续当前阶段。',
+  }
   const scoreGoals = problem?.scoreGoals?.map(goal => goal.score).sort((a, b) => a - b) || []
   const nextScoreGoal = activeStrategy?.nextScoreTarget ?? scoreGoals.find(score => score > (currentProblemProgress?.bestScore || 0))
   const filteredParticipants = (dashboard?.participants || []).filter(item => {
@@ -495,15 +556,17 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       description={data.session.description || '训练工作台'}
       actions={<div className={styles.actions}>
         <StatusBadge variant={connectionState === 'connected' ? 'success' : 'warning'}>{connectionState === 'connected' ? '实时连接正常' : connectionState === 'connecting' ? '正在建立实时连接' : '实时连接中断，正在重连'}</StatusBadge>
+        {lastSyncedAt && <span className={styles.muted}>最后同步 {new Date(lastSyncedAt).toLocaleTimeString('zh-CN')}</span>}
+        <Button size="sm" variant="ghost" onClick={() => void load()}>手动刷新</Button>
         <StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge>
       </div>}
     />
-    {data.manager && <Section title="各组运行进度" description="各训练组可以独立位于不同 Stage；全部推进只是批量便利操作。" actions={<div className={styles.actions}><Button variant="secondary" disabled={commandBusy} onClick={() => void runGroupBatch('start_all')}>开始未启动组</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void runGroupBatch('advance_all')}>推进所有可推进组</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void runGroupBatch('pause_all')}>全部暂停</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void runGroupBatch('resume_all')}>全部恢复</Button></div>}>
-      <div className={styles.grid}>{(data.session.Groups || []).filter(group => group.status === 'active').map(group => {
+    {data.manager && <Section title="各组运行进度" description="各训练组可以独立位于不同阶段；批量操作会先展示影响范围并要求确认。" actions={<div className={styles.actions}><Button variant="secondary" disabled={commandBusy || batchTargetCount('start_all') === 0} onClick={() => setBatchAction('start_all')}>开始 {batchTargetCount('start_all')} 个待开始组</Button><Button variant="secondary" disabled={commandBusy || batchTargetCount('advance_all') === 0} onClick={() => setBatchAction('advance_all')}>推进 {batchTargetCount('advance_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('pause_all') === 0} onClick={() => setBatchAction('pause_all')}>暂停 {batchTargetCount('pause_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('resume_all') === 0} onClick={() => setBatchAction('resume_all')}>恢复 {batchTargetCount('resume_all')} 个已暂停组</Button></div>}>
+      <div className={styles.grid}>{activeGroups.map(group => {
         const runtime = group.StageGroups?.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status)) || group.StageGroups?.slice(-1)[0]
         const stage = data.session.Stages.find(item => item.id === runtime?.stageId)
         const runtimeStatus = runtime?.status || 'PENDING'
-        return <article className={styles.card} key={group.id}><div className={styles.actions}><strong>{group.name}</strong><StatusBadge variant={runtimeStatus === 'RUNNING' ? 'success' : runtimeStatus === 'PAUSED' ? 'warning' : 'neutral'}>{runtimeStatus}</StatusBadge></div><p>{stage ? stage.name : runtimeStatus === 'ENDED' ? '已完成全部阶段' : '尚未开始'} · {group.Participants?.length || 0} 人</p><p className={styles.muted}>有效训练 {formatDuration(runtime?.activeElapsedSeconds || 0)}</p><div className={styles.actions}>{!runtime?.stageId && runtimeStatus !== 'ENDED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('start', group.id)}>开始</Button>}{runtimeStatus === 'RUNNING' && <><Button size="sm" variant="secondary" disabled={commandBusy} onClick={() => void runGroupAction('advance', group.id)}>进入下一阶段</Button><Button size="sm" variant="ghost" disabled={commandBusy} onClick={() => void runGroupAction('pause', group.id)}>暂停</Button></>}{runtimeStatus === 'PAUSED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('resume', group.id)}>恢复</Button>}</div></article>
+        return <article className={styles.card} key={group.id}><div className={styles.actions}><strong>{group.name}</strong><StatusBadge variant={runtimeStatus === 'RUNNING' ? 'success' : runtimeStatus === 'PAUSED' ? 'warning' : 'neutral'}>{stageRuntimeStatusLabel[runtimeStatus] || runtimeStatus}</StatusBadge></div><p>{stage ? stage.name : runtimeStatus === 'ENDED' ? '已完成全部阶段' : '尚未开始'} · {group.Participants?.length || 0} 人</p><p className={styles.muted}>有效训练 {formatDuration(runtime?.activeElapsedSeconds || 0)}</p><div className={styles.actions}>{!runtime?.stageId && runtimeStatus !== 'ENDED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('start', group.id)}>开始</Button>}{runtimeStatus === 'RUNNING' && <><Button size="sm" variant="secondary" disabled={commandBusy} onClick={() => void runGroupAction('advance', group.id)}>进入下一阶段</Button><Button size="sm" variant="ghost" disabled={commandBusy} onClick={() => void runGroupAction('pause', group.id)}>暂停本组</Button></>}{runtimeStatus === 'PAUSED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('resume', group.id)}>恢复本组</Button>}</div></article>
       })}</div>
     </Section>}
     {currentStage && <Section title={`当前阶段 · ${currentStage.name}`} description={currentStage.description || (data.manager ? '当前课堂阶段的实时状态' : '完成当前要求后等待教师进入下一阶段')}>
@@ -525,7 +588,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </div>
       <div className={styles.actions}>
         {status === 'SCHEDULED' && nextPendingStage && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void transitionStage('start', nextPendingStage.id)}>开始</Button>}
-        {status === 'RUNNING' && <><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>软暂停</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>硬暂停</Button></>}
+        {status === 'RUNNING' && <><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>暂停提交（可继续编辑）</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>暂停提交与编辑</Button></>}
         {status === 'PAUSED' && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void command('RESUME_SESSION', {}, 'ALL', '')}>恢复</Button>}
         {['RUNNING', 'PAUSED'].includes(status) && currentStage && <><Button variant="secondary" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'completed' }); setTransitionReason('') }}>{nextPendingStage ? '完成并进入下一阶段' : '完成并结束训练'}</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前阶段</Button><Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束整场训练</Button></>}
         {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
@@ -536,7 +599,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </div>
     </div></Section>}
     <div className={styles.workspace}>
-      <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}><div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === activeStageId ? 'success' : 'neutral'}>{stageModeLabel[stage.kind] || stage.kind} · {stage.Groups.map(unit => unit.status).join(' / ')}</StatusBadge>}</div>{stage.Groups.some(unit => unit.endedAt) && <small>{stage.Groups.map(unit => `${unit.name}：${Math.floor(unit.activeElapsedSeconds / 60)} 分钟${unit.endReason ? ` · ${unit.endReason}` : ''}`).join('；')}</small>}{data.manager && stage.Groups.some(unit => unit.status === 'PENDING') && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此阶段</Button>}{stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? '当前要求' : '本阶段历史'} · {access?.canView ? `${progressLabel[progress?.status || 'NOT_STARTED'] || progress?.status || '未开始'}${progress?.bestScore != null ? ` · ${progress.bestScore} 分` : ''}` : '尚未开放'}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>})}</section>)}</aside>
+      <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}><div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === activeStageId ? 'success' : 'neutral'}>{stageModeLabel[stage.kind] || stage.kind} · {stage.Groups.map(unit => stageRuntimeStatusLabel[unit.status] || unit.status).join(' / ')}</StatusBadge>}</div>{stage.Groups.some(unit => unit.endedAt) && <small>{stage.Groups.map(unit => `${unit.name}：${Math.floor(unit.activeElapsedSeconds / 60)} 分钟${unit.endReason ? ` · ${unit.endReason}` : ''}`).join('；')}</small>}{data.manager && stage.Groups.some(unit => unit.status === 'PENDING') && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此阶段</Button>}{stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? '当前要求' : '本阶段历史'} · {access?.canView ? `${progressLabel[progress?.status || 'NOT_STARTED'] || progress?.status || '未开始'}${progress?.bestScore != null ? ` · ${progress.bestScore} 分` : ''}` : '尚未开放'}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>})}</section>)}</aside>
       <main className={styles.stack}>{problem ? <>
         <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · ${testDataVersion(problem.TestSetRevision.revisionNumber)}` : '使用训练发布时固定的数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>
         <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。">
@@ -567,6 +630,18 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       {data.manager && <aside className={`${styles.stack} ${styles.coach}`}><Section title="实时概览"><div className={styles.summary}><div className={styles.metric}><strong>{dashboard?.summary.total || 0}</strong>学员</div><div className={styles.metric}><strong>{dashboard?.summary.working || 0}</strong>进行中</div><div className={styles.metric}><strong>{dashboard?.summary.stuck || 0}</strong>可能卡题</div><div className={styles.metric}><strong>{dashboard?.summary.completed || 0}</strong>完成</div></div></Section><Section title="学员状态" description="优先定位需要干预的学生；分组调整会保留既有提交与历史进度。"><div className={styles.stack}><div className={styles.grid}><label className={styles.field}>搜索学生<Input value={studentQuery} onChange={event => setStudentQuery(event.target.value)} placeholder="用户名" /></label><label className={styles.field}>状态<Select value={studentFilter} onChange={event => setStudentFilter(event.target.value)}><option value="all">全部</option><option value="stuck">可能卡题</option><option value="working">进行中</option><option value="completed">已完成</option><option value="offline">离线</option></Select></label>{Boolean(currentStage?.Groups.length) && <label className={styles.field}>分组<Select value={studentGroupFilter} onChange={event => setStudentGroupFilter(event.target.value)}><option value="all">全部分组</option>{currentStage?.Groups.map(group => <option value={group.groupId} key={group.id}>{group.name}</option>)}</Select></label>}</div><div className={styles.timeline}>{filteredParticipants.map(item => <div className={styles.timelineItem} key={item.id}><strong>{item.user.username}</strong><br /><span className={styles.muted}>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 题完成{item.currentGroupId ? ` · ${currentStage?.Groups.find(group => group.groupId === item.currentGroupId)?.name || '已分组'}` : ''}</span><div className={styles.actions}>{selectedId && <><Button variant="ghost" disabled={commandBusy} onClick={() => void command('UNLOCK_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>单独解锁</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void command('SKIP_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>允许跳过</Button><Button variant="ghost" disabled={commandBusy || !item.progress.some(progress => progress.status === 'STUCK')} onClick={() => void command('CLEAR_STUCK_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>清除卡题</Button></>}{Boolean(currentStage || futureStages.length > 0) && <Button variant="ghost" disabled={commandBusy} onClick={() => { setGroupChangeParticipant(item); setGroupChangeMode(currentStage ? 'immediate' : 'next_stage'); setGroupChangeStageId(futureStages[0]?.id || ''); setGroupChangeTarget(currentStage ? item.currentGroupId || '' : ''); setGroupChangeReason('') }}>调整分组</Button>}</div></div>)}</div>{filteredParticipants.length === 0 && <p className={styles.muted}>没有符合当前筛选条件的学员。</p>}</div></Section></aside>}
     </div>
     {!data.manager && peerProgress && peerProgress.entries.length > 0 && <Section title="同学训练进度" description={`可见内容：${visibilityLabel[peerProgress.peerVisibility] || peerProgress.peerVisibility} · 排列方式：${rankingLabel[peerProgress.rankingMode] || peerProgress.rankingMode}`}><div className={styles.peerGrid}>{peerProgress.entries.map(item => <article className={styles.peerCard} key={item.user.id}>{item.rank && <span>#{item.rank}</span>}<strong>{item.user.username}</strong><span>完成 {item.completed}/{item.total}</span>{item.score !== undefined && <span>{item.score} 分</span>}{item.penaltyMinutes !== undefined && <span>罚时 {item.penaltyMinutes} 分钟</span>}{item.attempts !== undefined && <span>{item.attempts} 次提交</span>}</article>)}</div></Section>}
+    <ConfirmDialog
+      isOpen={Boolean(batchAction)}
+      onClose={() => setBatchAction(undefined)}
+      onConfirm={() => void (async () => {
+        if (batchAction && await runGroupBatch(batchAction)) setBatchAction(undefined)
+      })()}
+      title={batchAction ? batchActionTitle[batchAction] : '确认批量操作'}
+      description="批量操作只影响当前处于对应状态的活动分组。"
+      message={batchAction ? `将影响 ${batchTargets.length} 个组、${batchTargetPeople} 名学员。${batchActionEffect[batchAction]}` : ''}
+      confirmText="确认执行"
+      loading={commandBusy}
+    />
     <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理基础学员名单" description="基础名单只决定谁参加训练；分组在每个阶段中独立配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
     <FormDialog isOpen={Boolean(groupChangeParticipant)} onClose={() => setGroupChangeParticipant(undefined)} title="调整训练分组" description="可立即调整当前要求，也可预设下一阶段；既有草稿、提交和历史进度永不删除。" onSubmit={() => void submitGroupChange()} submitText="确认换组" loading={commandBusy} dirty={Boolean(groupChangeReason)}><div className={styles.stack}><p>学员：<strong>{groupChangeParticipant?.user.username}</strong></p><label className={styles.field}>生效方式<Select value={groupChangeMode} onChange={event => { const mode = event.target.value as 'immediate' | 'next_stage'; setGroupChangeMode(mode); setGroupChangeTarget(''); if (mode === 'next_stage') setGroupChangeStageId(futureStages[0]?.id || '') }}><option value="immediate" disabled={!currentStage}>立即应用到当前阶段</option><option value="next_stage" disabled={!futureStages.length}>预设下一阶段</option></Select></label>{groupChangeMode === 'next_stage' && <label className={styles.field}>目标阶段<Select value={groupChangeStageId} onChange={event => { setGroupChangeStageId(event.target.value); setGroupChangeTarget('') }}>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}<label className={styles.field}>目标分组<Select value={groupChangeTarget} onChange={event => setGroupChangeTarget(event.target.value)}><option value="">请选择</option>{groupTargetStage?.Groups.map(group => <option key={group.id} value={group.groupId}>{group.name}</option>)}</Select></label><label className={styles.field}>调整原因<Textarea rows={4} maxLength={2000} value={groupChangeReason} onChange={event => setGroupChangeReason(event.target.value)} /></label></div></FormDialog>
     <FormDialog

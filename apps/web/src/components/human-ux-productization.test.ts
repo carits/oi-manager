@@ -243,6 +243,20 @@ describe('human UX productization contract', () => {
     expect(note).toContain('内容仍保留在编辑器中')
   })
 
+  it('makes training realtime and batch controls explicit and safe', () => {
+    const source = read('../features/training-session/ui/TrainingSessionWorkspace.tsx')
+    expect(source).toContain('scheduleReload')
+    expect(source).toContain('最后同步')
+    expect(source).toContain('重新加载训练')
+    expect(source).toContain('batchTargetPeople')
+    expect(source).toContain('批量操作会先展示影响范围并要求确认')
+    expect(source).toContain('暂停提交（可继续编辑）')
+    expect(source).toContain('暂停提交与编辑')
+    expect(source).not.toContain('>{runtimeStatus}</StatusBadge>')
+    expect(source).not.toContain('>软暂停</Button>')
+    expect(source).not.toContain('>硬暂停</Button>')
+  })
+
   it('keeps archive import out of activity submission guidance', () => {
     const source = read('../features/contest/ui/ContestDetailPage.tsx')
     expect(source).toContain('提交结果只计入当前活动')
