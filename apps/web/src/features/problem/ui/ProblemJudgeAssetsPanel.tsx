@@ -14,6 +14,8 @@ import type { ProgramCatalog } from '../model/judgeProgramTemplateTypes'
 import { ProblemQualityPanel } from './ProblemQualityPanel'
 import { listJudgeProgramTemplates } from '../api/judgeProgramTemplateApi'
 import { getProblemTestGraph } from '../api/problemTestGraphApi'
+import { getProblemAiUsage } from '../api/problemDetailApi'
+import { uploadProblemTestdata } from '../api/problemFilesApi'
 import { compileJudgeProgramVersion, listJudgePrograms, preflightJudgeProgramVersion, updateJudgeProgram } from '../api/judgeProgramApi'
 
 type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
@@ -89,6 +91,9 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
       const templateRequest = listJudgeProgramTemplates()
         .then(data => ({ data, error: null as string | null }))
         .catch(error => ({ data: null, error: error instanceof Error ? error.message : '评测程序模板加载失败' }))
+      const aiUsageRequest = getProblemAiUsage(problemId)
+        .then(data => ({ data: data as AiUsage, error: null as string | null }))
+        .catch(error => ({ data: null, error: error instanceof Error ? error.message : 'AI 使用信息加载失败' }))
 
       const programRequest = listJudgePrograms(problemId)
         .then(data => ({ data: data as Program[], error: null as string | null }))
@@ -97,7 +102,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
         programRequest,
         apiClient.get<Job[]>(`/api/problems/${problemId}/data-generation-jobs`),
         graphRequest,
-        apiClient.get<AiUsage>(`/api/problems/${problemId}/ai/usage`),
+        aiUsageRequest,
         apiClient.get<CandidatePool>(`/api/problems/${problemId}/candidate-pool`),
         apiClient.get<Corpus>(`/api/problems/${problemId}/wrong-corpus`),
         templateRequest,
@@ -110,10 +115,10 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
       else failures.push(`生成任务：${jobResult.message || '加载失败'}`)
       if (graphResult.data) setGraph(graphResult.data)
       else if (graphResult.error) failures.push(`Test Graph：${graphResult.error}`)
-      if (aiUsageResult.success && aiUsageResult.data) {
+      if (aiUsageResult.data) {
         setAiUsage(aiUsageResult.data)
         setStatementId(current => current || aiUsageResult.data!.markdownStatements[0]?.id || '')
-      } else failures.push(`AI 使用信息：${aiUsageResult.message || '加载失败'}`)
+      } else failures.push(`AI 使用信息：${aiUsageResult.error || '加载失败'}`)
       if (poolResult.success && poolResult.data) setCandidatePool(poolResult.data)
       else failures.push(`Candidate Pool：${poolResult.message || '加载失败'}`)
       if (corpusResult.success && corpusResult.data) setCorpus(corpusResult.data)
@@ -221,10 +226,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
     if (!importFiles.length) return
     setSaving(true)
     try {
-      const body = new FormData()
-      importFiles.forEach(file => body.append('files', file))
-      if (replaceExisting) body.append('replace', 'true')
-      const result = await apiClient.postFile(`/api/problems/${problemId}/testdata`, body, { timeout: 120000 })
+      const result = await uploadProblemTestdata(problemId, importFiles, replaceExisting)
       if (!result.success) return toast.error(result.message || '测试数据上传失败')
       toast.success(`已导入 ${importFiles.length} 个文件`)
       setImportFiles([])
