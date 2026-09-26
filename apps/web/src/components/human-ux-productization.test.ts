@@ -258,6 +258,8 @@ describe('human UX productization contract', () => {
     expect(source).not.toContain('>{runtimeStatus}</StatusBadge>')
     expect(source).not.toContain('>软暂停</Button>')
     expect(source).not.toContain('>硬暂停</Button>')
+    expect(source).toContain('function StageTimeMetrics')
+    expect(source).not.toContain('setClockNow')
   })
 
   it('keeps organization joining honest on deep links and read failures', () => {

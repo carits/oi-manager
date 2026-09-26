@@ -91,6 +91,22 @@ const formatDuration = (seconds?: number | null) => {
   const remainder = value % 60
   return `${minutes}:${String(remainder).padStart(2, '0')}`
 }
+
+function StageTimeMetrics({ activeElapsedSeconds, runningSince, plannedDurationSeconds, running }: { activeElapsedSeconds: number; runningSince?: string | null; plannedDurationSeconds?: number | null; running: boolean }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!running || !runningSince) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [running, runningSince])
+  const extra = running && runningSince ? Math.max(0, Math.floor((now - new Date(runningSince).getTime()) / 1000)) : 0
+  const elapsed = activeElapsedSeconds + extra
+  const remaining = plannedDurationSeconds == null ? null : Math.max(0, plannedDurationSeconds - elapsed)
+  return <>
+    <div className={styles.metric}><strong>{formatDuration(elapsed)}</strong>已进行</div>
+    {remaining != null && <div className={styles.metric}><strong>{formatDuration(remaining)}</strong>剩余</div>}
+  </>
+}
   type TrainingReport = {
     session: { id: string; title: string; status: string; startedAt?: string | null; endedAt?: string | null }
     timeline: Array<{ id: string; name: string; orderIndex: number; kind: string; groups: Array<{ id: string; groupId: string; groupName: string; status: string; plannedDurationSeconds?: number | null; actualDurationSeconds: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null; problemIds: string[] }>; timeAdjustments: Array<{ id: string; seconds: number; reason: string }> }>
@@ -109,7 +125,6 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [lastSyncedAt, setLastSyncedAt] = useState<number>()
   const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [commandBusy, setCommandBusy] = useState(false), [rosterSaving, setRosterSaving] = useState(false)
-  const [clockNow, setClockNow] = useState(() => Date.now())
   const [studentQuery, setStudentQuery] = useState(''), [studentFilter, setStudentFilter] = useState('all'), [studentGroupFilter, setStudentGroupFilter] = useState('all')
   const [roster, setRoster] = useState<Roster>(), [rosterOpen, setRosterOpen] = useState(false)
   const [hints, setHints] = useState<Hint[]>([]), [hintOpen, setHintOpen] = useState(false), [hintTitle, setHintTitle] = useState(''), [hintContent, setHintContent] = useState(''), [hintLevel, setHintLevel] = useState(1), [openedHint, setOpenedHint] = useState<Hint>()
@@ -120,7 +135,6 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [batchAction, setBatchAction] = useState<GroupBatchAction>()
   const [groupChangeMode, setGroupChangeMode] = useState<'immediate' | 'next_stage'>('immediate'), [groupChangeStageId, setGroupChangeStageId] = useState('')
   const [transitionDialog, setTransitionDialog] = useState<{ action: 'advance' | 'skip_pending' | 'end_session'; stageId: string; outcome?: 'completed' | 'ended_early' }>(), [transitionReason, setTransitionReason] = useState('')
-  useEffect(() => { const timer = window.setInterval(() => setClockNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
   const [extensionOpen, setExtensionOpen] = useState(false), [extensionMinutes, setExtensionMinutes] = useState(10), [extensionReason, setExtensionReason] = useState('')
   const [report, setReport] = useState<TrainingReport>(), [reportOpen, setReportOpen] = useState(false)
   const cursor = useRef(0), saveDraftRef = useRef<(quiet?: boolean) => Promise<number | false>>(async () => false)
@@ -493,10 +507,9 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const reportParticipantName = (participantId: string) => dashboard?.participants.find(item => item.id === participantId)?.user.username || participantId
   const targetedCommandDisabled = commandBusy || ((commandTargetType === 'GROUP' || commandTargetType === 'USER') && !commandTargetId) || (commandTargetType === 'TEAM' && !data.session.teamId)
   const currentUnit = currentStage?.Groups.find(unit => unit.groupId === data.participant?.currentGroupId) || currentStage?.Groups.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status))
-  const runningExtraSeconds = currentUnit?.runningSince && status === 'RUNNING' ? Math.max(0, Math.floor((clockNow - new Date(currentUnit.runningSince).getTime()) / 1000)) : 0
+  const runningExtraSeconds = currentUnit?.runningSince && status === 'RUNNING' ? Math.max(0, Math.floor((Date.now() - new Date(currentUnit.runningSince).getTime()) / 1000)) : 0
   const currentStageElapsed = (currentUnit?.activeElapsedSeconds || 0) + runningExtraSeconds
   const currentStageLimit = currentUnit?.plannedDurationSeconds || null
-  const currentStageRemaining = currentStageLimit == null ? null : Math.max(0, currentStageLimit - currentStageElapsed)
   const currentGroupName = data.participant?.currentGroupId ? currentStage?.Groups.find(group => group.groupId === data.participant?.currentGroupId)?.name : null
   const transitionStageRecord = transitionDialog ? data.session.Stages.find(stage => stage.id === transitionDialog.stageId) : undefined
   const transitionIsCurrent = Boolean(transitionStageRecord && transitionStageRecord.id === currentStage?.id)
@@ -571,8 +584,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     </Section>}
     {currentStage && <Section title={`当前阶段 · ${currentStage.name}`} description={currentStage.description || (data.manager ? '当前课堂阶段的实时状态' : '完成当前要求后等待教师进入下一阶段')}>
       <div className={styles.summary}>
-        <div className={styles.metric}><strong>{formatDuration(currentStageElapsed)}</strong>已进行</div>
-        {currentStageRemaining != null && <div className={styles.metric}><strong>{formatDuration(currentStageRemaining)}</strong>剩余</div>}
+        <StageTimeMetrics activeElapsedSeconds={currentUnit?.activeElapsedSeconds || 0} runningSince={currentUnit?.runningSince} plannedDurationSeconds={currentStageLimit} running={status === 'RUNNING'} />
         {!data.manager && <div className={styles.metric}><strong>{data.participant?.completedCount || 0}/{data.participant?.requiredCount || 0}</strong>当前要求</div>}
         {data.manager && <div className={styles.metric}><strong>{dashboard?.summary.completed || 0}/{dashboard?.summary.total || 0}</strong>学员完成</div>}
         {!data.manager && Boolean(currentGroupName) && <div className={styles.metric}><strong>{currentGroupName || '待分组'}</strong>我的分组</div>}
