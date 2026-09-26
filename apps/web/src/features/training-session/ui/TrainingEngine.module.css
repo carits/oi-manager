@@ -5,6 +5,30 @@
 .listFilters { display: flex; align-items: center; gap: var(--space-2); }
 .listFilters > * { min-width: 180px; }
 .loadingCopy { min-height: 180px; display: grid; place-items: center; margin: 0; color: var(--text-muted); }
+.sessionGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-3); }
+.sessionCard { display: grid; align-content: start; gap: var(--space-3); min-height: 220px; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.sessionCard > button { justify-self: start; margin-top: auto; }
+.sessionCardHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.sessionCardHeader h3 { margin: 0; font-size: 1rem; line-height: 1.5; }
+.sessionAudience, .sessionProgress { margin: 0; color: var(--text-muted); }
+.sessionProgress { padding-top: var(--space-2); border-top: 1px solid var(--border); }
+.trainingSetupLayout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--space-5); align-items: start; }
+.trainingSetupMain { display: grid; gap: var(--space-5); min-width: 0; }
+.setupSection { display: grid; grid-template-columns: minmax(150px, .42fr) minmax(0, 1fr); gap: var(--space-4); padding-bottom: var(--space-5); border-bottom: 1px solid var(--border); }
+.setupSection:last-child { padding-bottom: 0; border-bottom: 0; }
+.setupSection h3, .setupSection p, .trainingSetupSummary p { margin: 0; }
+.setupSection > div:first-child p, .trainingSetupSummary p { margin-top: var(--space-1); color: var(--text-muted); font-size: .875rem; line-height: 1.55; }
+.setupProblemList { display: grid; gap: var(--space-2); }
+.setupProblemRow { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.setupProblemRow > div { display: grid; min-width: 0; }
+.setupProblemRow strong, .setupProblemRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setupProblemRow > div span { color: var(--text-muted); font-size: .875rem; }
+.problemOrder { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm); background: var(--bg-muted); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.trainingSetupSummary { position: sticky; top: var(--space-4); display: grid; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-muted); }
+.trainingSetupSummary dl { display: grid; gap: var(--space-3); margin: 0; }
+.trainingSetupSummary dl > div { display: grid; gap: 2px; padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+.trainingSetupSummary dt { color: var(--text-muted); font-size: .8125rem; }
+.trainingSetupSummary dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-3); }
 .card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-4); display: grid; gap: var(--space-3); }
 .card h3, .card p { margin: 0; }
@@ -14,11 +38,6 @@
 .field { display: grid; gap: var(--space-2); font-weight: 600; }
 .field small { color: var(--text-muted); font-weight: 400; }
 .problemPicker { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2); display: grid; gap: var(--space-1); }
-.creationModeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-.creationModeCard { display: grid; gap: var(--space-2); min-height: 150px; padding: var(--space-4); text-align: left; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text-primary); cursor: pointer; }
-.creationModeCard:hover, .creationModeCard:focus-visible { border-color: var(--primary); }
-.creationModeCardActive { border-color: var(--primary); background: var(--primary-light); box-shadow: 0 0 0 2px var(--primary-light); }
-.creationModeCard span, .creationModeCard small { color: var(--text-muted); }
 .workspace { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr) minmax(250px, 340px); gap: var(--space-4); align-items: start; }
 .rail { display: grid; gap: var(--space-2); position: sticky; top: var(--space-4); }
 .stage { display: grid; gap: var(--space-2); }
@@ -35,6 +54,7 @@
 .timeline { display: grid; gap: var(--space-2); }
 .timelineItem { border-left: 3px solid var(--border); padding-left: var(--space-3); }
 .message { padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
+.trainingSetupSummary .message p { color: var(--text-primary); }
 .controlDisclosure { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .controlDisclosure > summary { padding: var(--space-3); cursor: pointer; font-weight: 600; color: var(--text-primary); }
 .controlDisclosure[open] > summary { border-bottom: 1px solid var(--border); }
@@ -94,7 +114,7 @@
 .publishChecklist span { font-size: 1.2rem; font-weight: 700; }
 @media (max-width: 1180px) { .designWorkspace { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); } .designColumn:last-child { grid-column: 1 / -1; } }
 @media (max-width: 1000px) { .workspace { grid-template-columns: 220px minmax(0, 1fr); } .coach { grid-column: 1 / -1; } .designSteps { grid-template-columns: 1fr; } .designSteps > * { text-align: left; border-right: 0; border-bottom: 1px solid var(--border); } .basicGrid { grid-template-columns: 1fr; } }
-@media (max-width: 720px) { .draftCompare { grid-template-columns: 1fr; } .creationModeGrid { grid-template-columns: 1fr; } .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } }
+@media (max-width: 720px) { .draftCompare, .trainingSetupLayout, .setupSection { grid-template-columns: 1fr; } .trainingSetupSummary { position: static; } .sessionGrid { grid-template-columns: 1fr; } .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } }
 
 .matrixTable { display: grid; grid-template-columns: minmax(140px, .65fr) repeat(var(--training-stage-count, 3), minmax(180px, 1fr)); gap: 1px; overflow-x: auto; border: 1px solid var(--border); background: var(--border); }
 .matrixRow { display: contents; }

@@ -67,8 +67,6 @@ export const routePatterns = [
   '/personal/teams/[id]',
   '/personal/teams/[id]/contests/[cid]',
   '/personal/teams/[id]/contests/[cid]/statements',
-  '/personal/teams/[id]/contests/[cid]',
-  '/personal/teams/[id]/contests/[cid]/statements',
   '/personal/training-sessions',
   '/personal/training-sessions/[id]',
   '/personal/training-sessions/[id]/design',
