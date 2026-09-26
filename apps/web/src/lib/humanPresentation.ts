@@ -31,7 +31,9 @@ export function trainingHintOpenModeLabel(mode: string) {
 }
 
 export function trainingStageEndReasonLabel(reason: string) {
-  return ({ TIME_REACHED: '达到计划时长', COMPLETION_REACHED: '达到完成要求', HYBRID_REACHED: '达到阶段要求', TEACHER_ENDED: '教师结束', TEACHER_ENDED_EARLY: '教师提前结束', SESSION_ENDED: '训练已结束', SYSTEM_ENDED: '系统结束' } as Record<string, string>)[reason] || '结束原因待确认'
+  const known = ({ TIME_REACHED: '达到计划时长', COMPLETION_REACHED: '达到完成要求', HYBRID_REACHED: '达到阶段要求', TEACHER_ENDED: '教师结束', TEACHER_ENDED_EARLY: '教师提前结束', SESSION_ENDED: '训练已结束', SYSTEM_ENDED: '系统结束' } as Record<string, string>)[reason]
+  if (known) return known
+  return /^[A-Z][A-Z0-9_]*$/.test(reason) ? '结束原因待确认' : reason
 }
 
 export function trainingSessionTypeLabel(type: string) {

@@ -8,12 +8,15 @@ import {
   changeTrainingGrouping,
   createTrainingSession,
   getTrainingDesign,
+  getTrainingWorkspace,
   executeTrainingCommand,
   executeTrainingGroupRuntimeAction,
   mergeTrainingGroup,
   publishTrainingSession,
   replaceTrainingStructure,
   replaceTrainingStageGroupMatrix,
+  resolveTrainingPermission,
+  saveTrainingDraft,
   splitTrainingGroup,
   TrainingEngineError,
 } from '../src/modules/training-engine/training-engine.service'
@@ -97,6 +100,63 @@ describe('Training Engine single-model domain', () => {
     expect(session.Groups).toHaveLength(1)
     expect(session.Participants.every(item => item.groupId === session.Groups[0].id)).toBe(true)
     expect(session.Stages.every(stage => stage.Groups.length === 1 && stage.Groups[0].groupId === session.Groups[0].id)).toBe(true)
+  })
+
+  it('persists editable StageGroup runtime settings before the session starts', async () => {
+    const created = await createSession(1, 1)
+    const session = await loaded(created!.id)
+    const stage = session.Stages[0]
+    const unit = stage.Groups[0]
+
+    await replaceTrainingStageGroupMatrix(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      stageGroups: [{
+        id: unit.id,
+        clientKey: unit.id,
+        stageId: stage.id,
+        groupId: unit.groupId,
+        mode: 'EXAM',
+        accessPolicy: 'SEQUENTIAL',
+        submissionMode: 'DISABLED',
+        plannedDurationSeconds: 2400,
+        completionThreshold: 80,
+        minDurationSeconds: 300,
+        completionPolicy: { mode: 'all' },
+        transitionPolicy: 'AUTO_ADVANCE',
+        problemIds: unit.ProblemPlans.map(plan => plan.stageProblemId),
+        rules: { accessScope: 'CURRENT_STAGE' },
+      }],
+    })
+
+    const updated = (await loaded(session.id)).Stages[0].Groups[0]
+    expect(updated).toMatchObject({
+      mode: 'EXAM',
+      accessPolicy: 'SEQUENTIAL',
+      submissionMode: 'DISABLED',
+      plannedDurationSeconds: 2400,
+      completionThreshold: 80,
+      minDurationSeconds: 300,
+      transitionPolicy: 'AUTO_ADVANCE',
+    })
+  })
+
+  it('uses the stable participant group when resolving runtime draft permissions', async () => {
+    const created = await createSession(1, 1)
+    const session = await publishAndStart(created!.id)
+    const stageProblemId = session.Groups[0].StageGroups[0].ProblemPlans[0].stageProblemId
+
+    await expect(resolveTrainingPermission(first.user.id, session.id, stageProblemId)).resolves.toMatchObject({
+      canView: true,
+      canEdit: true,
+      reason: 'ALLOWED',
+    })
+    await expect(getTrainingWorkspace(first.user.id, session.id)).resolves.toMatchObject({
+      participant: { currentGroupId: session.Groups[0].id, requiredCount: 1, completedCount: 0 },
+    })
+    await expect(saveTrainingDraft(first.user.id, session.id, stageProblemId, {
+      language: 'cpp17',
+      code: 'int main() {}',
+    })).resolves.toMatchObject({ stageProblemId, userId: first.user.id })
   })
 
   it('allows different Groups to run in different Stages', async () => {

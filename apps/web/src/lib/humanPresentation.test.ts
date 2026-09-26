@@ -12,6 +12,7 @@ describe('human presentation vocabulary', () => {
     expect(trainingStageKindLabel('TEACHING')).toBe('统一讲解')
     expect(trainingHintOpenModeLabel('ATTEMPT')).toBe('按提交次数')
     expect(trainingStageEndReasonLabel('TEACHER_ENDED_EARLY')).toBe('教师提前结束')
+    expect(trainingStageEndReasonLabel('提前完成课堂目标')).toBe('提前完成课堂目标')
   })
 
   it('does not leak unknown internal values into primary status labels', () => {

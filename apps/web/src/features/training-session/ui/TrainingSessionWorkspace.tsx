@@ -38,6 +38,12 @@ import {
 import { testDataVersion, trainingProgressStatusLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from '@/lib/humanPresentation'
 import { csvCell, saveBlobDownload } from '@/lib/download'
 import { arbitrateTrainingDraft, type TrainingDraftSnapshot } from '../model/trainingDraftArbitration'
+import {
+  TrainingAttentionPanel,
+  TrainingParticipantDrawer,
+  TrainingRuntimeHeader,
+  type TrainingDashboardParticipant,
+} from './TrainingRuntimePanels'
 import styles from './TrainingEngine.module.css'
 
 type GroupBatchAction = 'start_all' | 'advance_all' | 'pause_all' | 'resume_all'
@@ -63,7 +69,7 @@ type StrategyState = {
 type V2StageGroupRuntime = { id: string; stageId: string; status: string; runningSince?: string | null; activeElapsedSeconds?: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null }
 type V2RuntimeGroup = { id: string; name: string; orderIndex: number; status: string; Participants?: Array<{ id?: string; userId?: string }>; StageGroups?: V2StageGroupRuntime[] }
 type Workspace = { session: { Groups: V2RuntimeGroup[]; activeUnits: Array<{ groupId: string; stageId: string; status: string }>; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; activeStageId?: string | null; currentGroupId: string; requiredCount?: number; completedCount?: number }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string }>; strategy: Record<string, StrategyState> }
-type Dashboard = { participants: Array<{ id: string; user: { id: string; username: string }; online: boolean; currentProblemId?: string; activeStageId?: string | null; currentGroupId?: string | null; requiredCount: number; completedCount: number; completed: boolean; progress: Array<{ status: string }> }>; summary: { total: number; working: number; stuck: number; completed: number } }
+type Dashboard = { participants: TrainingDashboardParticipant[]; summary: { total: number; working: number; stuck: number; completed: number } }
 type Roster = { revision: number; candidates: Array<{ userId: string; username: string; displayName: string; role: string; selected: boolean }> }
 type Hint = { id: string; level: number; title?: string; content?: string; opened: boolean; globallyOpenedAt?: string }
 type PeerProgress = { rankingMode: string; peerVisibility: string; entries: Array<{ rank?: number; user: { id: string; username: string }; completed: number; total: number; score?: number; attempts?: number; penaltyMinutes?: number; activeSeconds?: number }> }
@@ -121,6 +127,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [groupChangeParticipant, setGroupChangeParticipant] = useState<Dashboard['participants'][number]>(), [groupChangeTarget, setGroupChangeTarget] = useState(''), [groupChangeReason, setGroupChangeReason] = useState('')
   const [batchAction, setBatchAction] = useState<GroupBatchAction>()
   const [groupChangeMode, setGroupChangeMode] = useState<'immediate' | 'next_stage'>('immediate'), [groupChangeStageId, setGroupChangeStageId] = useState('')
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string>()
   const [transitionDialog, setTransitionDialog] = useState<{ action: 'advance' | 'skip_pending' | 'end_session'; stageId: string; outcome?: 'completed' | 'ended_early' }>(), [transitionReason, setTransitionReason] = useState('')
   const [extensionOpen, setExtensionOpen] = useState(false), [extensionMinutes, setExtensionMinutes] = useState(10), [extensionReason, setExtensionReason] = useState('')
   const [report, setReport] = useState<TrainingReport>(), [reportOpen, setReportOpen] = useState(false)
@@ -369,12 +376,12 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
-    if (!selectedId) return
+    if (!selectedId || data?.manager) return
     const heartbeat = () => void sendTrainingHeartbeat(sessionId, { stageProblemId: selectedId, pageVisible: document.visibilityState === 'visible', editorFocused: document.hasFocus() })
     heartbeat()
     const timer = setInterval(heartbeat, 30_000)
     return () => clearInterval(timer)
-  }, [selectedId, sessionId])
+  }, [data?.manager, selectedId, sessionId])
   useEffect(() => {
     const persistOnExit = () => {
       const currentProblem = problemRef.current
@@ -617,6 +624,22 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     const groupMatch = studentGroupFilter === 'all' || item.currentGroupId === studentGroupFilter
     return queryMatch && statusMatch && groupMatch
   })
+  const problemNames = Object.fromEntries(data.session.Stages.flatMap(stage => stage.Problems.map(item => [item.id, `${item.alias || item.Problem.problemId} · ${item.Problem.title}`])))
+  const attentionParticipants = [...(dashboard?.participants || [])]
+    .filter(item => !item.online || item.progress.some(progress => progress.status === 'STUCK'))
+    .sort((left, right) => Number(right.progress.some(progress => progress.status === 'STUCK')) - Number(left.progress.some(progress => progress.status === 'STUCK')))
+  const selectedParticipant = dashboard?.participants.find(item => item.id === selectedParticipantId)
+  const selectedParticipantStage = selectedParticipant?.activeStageId ? data.session.Stages.find(stage => stage.id === selectedParticipant.activeStageId) : undefined
+  const selectedParticipantGroup = selectedParticipant?.currentGroupId ? data.session.Groups.find(group => group.id === selectedParticipant.currentGroupId) : undefined
+  const currentStageIndex = currentStage ? data.session.Stages.findIndex(stage => stage.id === currentStage.id) : 0
+  const offlineCount = dashboard?.participants.filter(item => !item.online).length || 0
+  const openGroupChange = (item: TrainingDashboardParticipant) => {
+    setGroupChangeParticipant(item)
+    setGroupChangeMode(currentStage ? 'immediate' : 'next_stage')
+    setGroupChangeStageId(futureStages[0]?.id || '')
+    setGroupChangeTarget(currentStage ? item.currentGroupId || '' : '')
+    setGroupChangeReason('')
+  }
   return <PageFrame width="workbench"><div className={styles.stack}>
     <PageHeader
       title={data.session.title}
@@ -628,67 +651,109 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge>
       </div>}
     />
-    {data.manager && <Section title="各组运行进度" description="各训练组可以独立位于不同阶段；批量操作会先展示影响范围并要求确认。">
-      <details className={styles.controlDisclosure}><summary>批量控制</summary><div className={styles.actions}><Button variant="secondary" disabled={commandBusy || batchTargetCount('start_all') === 0} onClick={() => setBatchAction('start_all')}>开始 {batchTargetCount('start_all')} 个待开始组</Button><Button variant="secondary" disabled={commandBusy || batchTargetCount('advance_all') === 0} onClick={() => setBatchAction('advance_all')}>推进 {batchTargetCount('advance_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('pause_all') === 0} onClick={() => setBatchAction('pause_all')}>暂停 {batchTargetCount('pause_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('resume_all') === 0} onClick={() => setBatchAction('resume_all')}>恢复 {batchTargetCount('resume_all')} 个已暂停组</Button></div></details>
-      <div className={styles.grid}>{activeGroups.map(group => {
-        const runtime = group.StageGroups?.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status)) || group.StageGroups?.slice(-1)[0]
-        const stage = data.session.Stages.find(item => item.id === runtime?.stageId)
-        const runtimeStatus = runtime?.status || 'PENDING'
-        return <article className={styles.card} key={group.id}><div className={styles.actions}><strong>{group.name}</strong><StatusBadge variant={runtimeStatus === 'RUNNING' ? 'success' : runtimeStatus === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStageStatusLabel(runtimeStatus)}</StatusBadge></div><p>{stage ? stage.name : runtimeStatus === 'ENDED' ? '已完成全部阶段' : '尚未开始'} · {group.Participants?.length || 0} 人</p><p className={styles.muted}>有效训练 {formatDuration(runtime?.activeElapsedSeconds || 0)}</p><div className={styles.actions}>{!runtime?.stageId && runtimeStatus !== 'ENDED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('start', group.id)}>开始</Button>}{runtimeStatus === 'RUNNING' && <><Button size="sm" variant="secondary" disabled={commandBusy} onClick={() => void runGroupAction('advance', group.id)}>进入下一阶段</Button><Button size="sm" variant="ghost" disabled={commandBusy} onClick={() => void runGroupAction('pause', group.id)}>暂停本组</Button></>}{runtimeStatus === 'PAUSED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('resume', group.id)}>恢复本组</Button>}</div></article>
-      })}</div>
-    </Section>}
-    {currentStage && <Section title={`当前阶段 · ${currentStage.name}`} description={currentStage.description || (data.manager ? '当前课堂阶段的实时状态' : '完成当前要求后等待教师进入下一阶段')}>
-      <div className={styles.summary}>
-        <StageTimeMetrics activeElapsedSeconds={currentUnit?.activeElapsedSeconds || 0} runningSince={currentUnit?.runningSince} plannedDurationSeconds={currentStageLimit} running={status === 'RUNNING'} />
-        {!data.manager && <div className={styles.metric}><strong>{data.participant?.completedCount || 0}/{data.participant?.requiredCount || 0}</strong>当前要求</div>}
-        {data.manager && <div className={styles.metric}><strong>{dashboard?.summary.completed || 0}/{dashboard?.summary.total || 0}</strong>学员完成</div>}
-        {!data.manager && Boolean(currentGroupName) && <div className={styles.metric}><strong>{currentGroupName || '待分组'}</strong>我的分组</div>}
-        {!data.manager && nextScoreGoal != null && <div className={styles.metric}><strong>{currentProblemProgress?.bestScore || 0} → {nextScoreGoal}</strong>当前目标分</div>}
+    {data.manager && <>
+      <TrainingRuntimeHeader
+        status={status}
+        stageName={currentStage?.name}
+        stageIndex={currentStageIndex}
+        stageCount={data.session.Stages.length}
+        activeElapsedSeconds={currentUnit?.activeElapsedSeconds || 0}
+        runningSince={currentUnit?.runningSince}
+        plannedDurationSeconds={currentStageLimit}
+        completed={dashboard?.summary.completed || 0}
+        total={dashboard?.summary.total || 0}
+        stuck={dashboard?.summary.stuck || 0}
+        offline={offlineCount}
+        hasNextStage={Boolean(nextPendingStage)}
+        busy={commandBusy}
+        onStart={() => { if (nextPendingStage) void transitionStage('start', nextPendingStage.id) }}
+        onPause={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}
+        onResume={() => void command('RESUME_SESSION', {}, 'ALL', '')}
+        onAdvance={() => {
+          if (!currentStage) return
+          setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'completed' })
+          setTransitionReason('')
+        }}
+      />
+      <div className={styles.runtimeOverviewGrid}>
+        <TrainingAttentionPanel
+          participants={attentionParticipants}
+          problemNames={problemNames}
+          onOpen={item => setSelectedParticipantId(item.id)}
+          onOpenAll={() => document.getElementById('training-participants')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        />
+        <Section title="各组" description="各训练组可以独立位于不同阶段。">
+          <details className={styles.controlDisclosure}><summary>批量控制</summary><div className={styles.actions}><Button variant="secondary" disabled={commandBusy || batchTargetCount('start_all') === 0} onClick={() => setBatchAction('start_all')}>开始 {batchTargetCount('start_all')} 个待开始组</Button><Button variant="secondary" disabled={commandBusy || batchTargetCount('advance_all') === 0} onClick={() => setBatchAction('advance_all')}>推进 {batchTargetCount('advance_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('pause_all') === 0} onClick={() => setBatchAction('pause_all')}>暂停 {batchTargetCount('pause_all')} 个训练中组</Button><Button variant="ghost" disabled={commandBusy || batchTargetCount('resume_all') === 0} onClick={() => setBatchAction('resume_all')}>恢复 {batchTargetCount('resume_all')} 个已暂停组</Button></div></details>
+          <div className={styles.runtimeGroupList}>{activeGroups.map(group => {
+            const runtime = group.StageGroups?.find(unit => ['RUNNING', 'PAUSED'].includes(unit.status)) || group.StageGroups?.find(unit => unit.status === 'PENDING') || group.StageGroups?.slice(-1)[0]
+            const stage = data.session.Stages.find(item => item.id === runtime?.stageId)
+            const runtimeStatus = runtime?.status || 'PENDING'
+            const groupParticipants = dashboard?.participants.filter(item => item.currentGroupId === group.id) || []
+            const groupCompleted = groupParticipants.filter(item => item.completed).length
+            const groupAttention = groupParticipants.filter(item => !item.online || item.progress.some(progress => progress.status === 'STUCK')).length
+            return <article className={styles.runtimeGroupCard} key={group.id}>
+              <div><strong>{group.name}</strong><StatusBadge variant={runtimeStatus === 'RUNNING' ? 'success' : runtimeStatus === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStageStatusLabel(runtimeStatus)}</StatusBadge></div>
+              <p>{stage ? stage.name : runtimeStatus === 'ENDED' ? '已完成全部阶段' : '尚未开始'}</p>
+              <span>{groupCompleted} / {groupParticipants.length} 完成{groupAttention ? ` · ${groupAttention} 人需要关注` : ''}</span>
+              <div className={styles.actions}>{runtimeStatus === 'PENDING' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('start', group.id)}>开始</Button>}{runtimeStatus === 'RUNNING' && <><Button size="sm" variant="secondary" disabled={commandBusy} onClick={() => void runGroupAction('advance', group.id)}>进入下一阶段</Button><Button size="sm" variant="ghost" disabled={commandBusy} onClick={() => void runGroupAction('pause', group.id)}>暂停本组</Button></>}{runtimeStatus === 'PAUSED' && <Button size="sm" disabled={commandBusy} onClick={() => void runGroupAction('resume', group.id)}>恢复本组</Button>}</div>
+            </article>
+          })}</div>
+        </Section>
       </div>
-    </Section>}
-    {data.session.Overlays.filter(item => item.type === 'MESSAGE').map(item => <div className={styles.message} key={item.id}>{item.payload?.message || '教练消息'}</div>)}
-    {data.manager && <Section title="教练控制" description="控制会实时发送给学员；切换题目前，系统会先保存学员草稿。"><div className={styles.stack}>
-      <div className={styles.actions}>
-        {status === 'SCHEDULED' && nextPendingStage && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void transitionStage('start', nextPendingStage.id)}>开始训练</Button>}
-        {status === 'RUNNING' && <><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>暂停提交（可继续编辑）</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>暂停提交与编辑</Button></>}
-        {status === 'PAUSED' && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void command('RESUME_SESSION', {}, 'ALL', '')}>恢复训练</Button>}
-        {['RUNNING', 'PAUSED'].includes(status) && currentStage && <Button disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'completed' }); setTransitionReason('') }}>{nextPendingStage ? '完成并进入下一阶段' : '完成并结束训练'}</Button>}
-      </div>
-      <details className={styles.controlDisclosure}>
-        <summary>课堂工具</summary>
-        <div className={styles.stack}>
-          <div className={styles.targetBar}>
-            <label className={styles.field}>控制对象<Select aria-label="教练控制对象" value={commandTargetType} onChange={event => { setCommandTargetType(event.target.value); setCommandTargetId('') }}><option value="ALL">全体学员</option>{Boolean(currentStage?.Groups.length) && <option value="GROUP">当前训练分组</option>}<option value="USER">指定学员</option>{data.session.teamId && <option value="TEAM">当前团队</option>}</Select></label>
-            {commandTargetType === 'GROUP' && <label className={styles.field}>分组<Select aria-label="目标分组" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{currentStage?.Groups.map(group => <option value={group.groupId} key={group.id}>{group.name}</option>)}</Select></label>}
-            {commandTargetType === 'USER' && <label className={styles.field}>学员<Select aria-label="目标学员" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{dashboard?.participants.map(item => <option value={item.user.id} key={item.user.id}>{item.user.username}</option>)}</Select></label>}
+      <section className={styles.classroomControlBar} aria-label="课堂控制">
+        <details className={styles.controlDisclosure}>
+          <summary>课堂工具</summary>
+          <div className={styles.stack}>
+            <div className={styles.targetBar}>
+              <label className={styles.field}>控制对象<Select aria-label="教练控制对象" value={commandTargetType} onChange={event => { setCommandTargetType(event.target.value); setCommandTargetId('') }}><option value="ALL">全体学员</option>{Boolean(currentStage?.Groups.length) && <option value="GROUP">当前训练分组</option>}<option value="USER">指定学员</option>{data.session.teamId && <option value="TEAM">当前团队</option>}</Select></label>
+              {commandTargetType === 'GROUP' && <label className={styles.field}>分组<Select aria-label="目标分组" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{currentStage?.Groups.map(group => <option value={group.groupId} key={group.id}>{group.name}</option>)}</Select></label>}
+              {commandTargetType === 'USER' && <label className={styles.field}>学员<Select aria-label="目标学员" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{dashboard?.participants.map(item => <option value={item.user.id} key={item.user.id}>{item.user.username}</option>)}</Select></label>}
+            </div>
+            <div className={styles.actions}>
+              {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
+              {status === 'RUNNING' && <><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>暂停提交（可继续编辑）</Button><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>暂停提交与编辑</Button></>}
+              {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => setMessageOpen(true)}>发送消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
+            </div>
           </div>
+        </details>
+        <details className={styles.controlDisclosure}>
+          <summary>课堂管理</summary>
           <div className={styles.actions}>
-            {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
-            {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => setMessageOpen(true)}>广播消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
+            {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
+            {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(`${pathname}/design?copyStage=${encodeURIComponent(currentStage.id)}`)}>复制当前阶段为未来阶段</Button>}
+            <Button variant="secondary" onClick={() => void openRoster()}>管理学员</Button>
+            <Button variant="secondary" onClick={() => void showReport()}>训练报告</Button>
+            <Button variant="ghost" onClick={() => void load()}>刷新</Button>
           </div>
-        </div>
-      </details>
-      <details className={styles.controlDisclosure}>
-        <summary>课堂管理</summary>
-        <div className={styles.actions}>
-          {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
-          {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(`${pathname}/design?copyStage=${encodeURIComponent(currentStage.id)}`)}>复制当前阶段为未来阶段</Button>}
-          <Button variant="secondary" onClick={() => void openRoster()}>管理学员</Button>
-          <Button variant="secondary" onClick={() => void showReport()}>训练报告</Button>
-          <Button variant="ghost" onClick={() => void load()}>刷新</Button>
-        </div>
-      </details>
-      {['RUNNING', 'PAUSED'].includes(status) && currentStage && <details className={`${styles.controlDisclosure} ${styles.dangerDisclosure}`}>
-        <summary>更多操作</summary>
-        <div className={styles.actions}>
-          <Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前阶段</Button>
-          <Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束整场训练</Button>
-        </div>
-      </details>}
-    </div></Section>}
+        </details>
+        {['RUNNING', 'PAUSED'].includes(status) && currentStage && <details className={`${styles.controlDisclosure} ${styles.dangerDisclosure}`}>
+          <summary>更多操作</summary>
+          <div className={styles.actions}>
+            <Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前阶段</Button>
+            {nextPendingStage && <Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: nextPendingStage.id }); setTransitionReason('') }}>跳过未来阶段</Button>}
+            <Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束整场训练</Button>
+          </div>
+        </details>}
+      </section>
+    </>}
+    {!data.manager && currentStage && <section className={styles.studentMission} aria-label="我的当前训练目标">
+      <div className={styles.studentMissionHeader}>
+        <div><span>阶段 {currentStageIndex + 1} / {data.session.Stages.length}</span><h2>{currentStage.name}</h2></div>
+        <StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge>
+      </div>
+      <div className={styles.studentMissionMetrics}>
+        <StageTimeMetrics activeElapsedSeconds={currentUnit?.activeElapsedSeconds || 0} runningSince={currentUnit?.runningSince} plannedDurationSeconds={currentStageLimit} running={status === 'RUNNING'} />
+        <div className={styles.metric}><strong>{data.participant?.completedCount || 0} / {data.participant?.requiredCount || 0}</strong>当前要求</div>
+        <div className={styles.metric}><strong>{Math.max(0, (data.participant?.requiredCount || 0) - (data.participant?.completedCount || 0))}</strong>还需完成</div>
+      </div>
+      {problem && <div className={styles.studentContinue}>
+        <div><span>继续</span><strong>{problem.alias || problem.Problem.problemId} · {problem.Problem.title}</strong><small>{currentProblemProgress?.bestScore != null ? `当前最高分：${currentProblemProgress.bestScore}` : trainingProgressStatusLabel(currentProblemProgress?.status || 'NOT_STARTED')}{nextScoreGoal != null ? ` · 目标：${nextScoreGoal}` : ''}</small></div>
+        <Button onClick={() => document.getElementById('training-problem-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>继续做题</Button>
+      </div>}
+    </section>}
     <div className={styles.workspace}>
       <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}><div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === activeStageId ? 'success' : 'neutral'}>{trainingStageKindLabel(stage.kind)} · {stage.Groups.map(unit => trainingStageStatusLabel(unit.status)).join(' / ')}</StatusBadge>}</div>{stage.Groups.some(unit => unit.endedAt) && <small>{stage.Groups.map(unit => `${unit.name}：${Math.floor(unit.activeElapsedSeconds / 60)} 分钟${unit.endReason ? ` · ${trainingStageEndReasonLabel(unit.endReason)}` : ''}`).join('；')}</small>}{data.manager && stage.Groups.some(unit => unit.status === 'PENDING') && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此阶段</Button>}{stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? '当前要求' : '本阶段历史'} · {access?.canView ? `${trainingProgressStatusLabel(progress?.status || 'NOT_STARTED')}${progress?.bestScore != null ? ` · ${progress.bestScore} 分` : ''}` : '尚未开放'}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>})}</section>)}</aside>
-      <main className={styles.stack}>{problem ? <>
+      <main id="training-problem-workspace" className={styles.stack}>{problem ? <>
         <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · ${testDataVersion(problem.TestSetRevision.revisionNumber)}` : '使用训练发布时固定的数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>
         <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。">
           <div className={styles.stack}>
@@ -724,9 +789,68 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {data.session.sessionType === 'ACM' && status === 'RUNNING' && activeStrategy && (activeStrategy.decisionDue || activeStrategy.switchRecommended || activeStrategy.switchRequired) && <Section title="策略检查" description={activeStrategy.switchRequired ? '当前策略要求切题；记录切题决定后选择其他开放题目。' : activeStrategy.switchRecommended ? '当前题已持续较久，建议重新评估是否切题。' : '到了本轮策略复盘时间，请记录你的决定。'}><div className={styles.actions}><Button variant="secondary" disabled={activeStrategy.switchRequired} onClick={() => void recordStrategy('CONTINUE')}>继续当前题</Button><Button onClick={() => void recordStrategy('SWITCH')}>决定切题</Button></div></Section>}
         <Section title="分级提示" description="提示支持教练手动、训练时间、提交次数或分数条件开放；使用情况会进入训练报告。" actions={data.manager ? <Button variant="secondary" onClick={() => setHintOpen(true)}>新增提示</Button> : undefined}><div className={styles.actions}>{hints.length ? hints.map(hint => data.manager ? <span className={styles.actions} key={hint.id}><Button variant={hint.globallyOpenedAt ? 'secondary' : 'outline'} disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('OPEN_HINT', { hintId: hint.id })}>{hint.level} 级 · {hint.title || '提示'} · 开放</Button><Button variant="ghost" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('CLOSE_HINT', { hintId: hint.id })}>关闭</Button></span> : <Button key={hint.id} variant="outline" onClick={async () => { const response = await openTrainingHint(sessionId, hint.id); if (response.ok && response.data) setOpenedHint(response.data as Hint); else toast.error(response.ok ? '提示尚未开放' : response.error.message) }}>{hint.opened ? '再次查看' : '打开'} {hint.level} 级提示</Button>) : <p className={styles.muted}>暂无已开放提示。</p>}</div></Section>
       </> : <Section title="请选择训练题目"><p className={styles.muted}>题目可能尚未按当前阶段开放。</p></Section>}</main>
-      {data.manager && <aside className={`${styles.stack} ${styles.coach}`}><Section title="实时概览"><div className={styles.summary}><div className={styles.metric}><strong>{dashboard?.summary.total || 0}</strong>学员</div><div className={styles.metric}><strong>{dashboard?.summary.working || 0}</strong>进行中</div><div className={styles.metric}><strong>{dashboard?.summary.stuck || 0}</strong>可能卡题</div><div className={styles.metric}><strong>{dashboard?.summary.completed || 0}</strong>完成</div></div></Section><Section title="学员状态" description="优先定位需要干预的学生；分组调整会保留既有提交与历史进度。"><div className={styles.stack}><div className={styles.grid}><label className={styles.field}>搜索学生<Input value={studentQuery} onChange={event => setStudentQuery(event.target.value)} placeholder="用户名" /></label><label className={styles.field}>状态<Select value={studentFilter} onChange={event => setStudentFilter(event.target.value)}><option value="all">全部</option><option value="stuck">可能卡题</option><option value="working">进行中</option><option value="completed">已完成</option><option value="offline">离线</option></Select></label>{Boolean(currentStage?.Groups.length) && <label className={styles.field}>分组<Select value={studentGroupFilter} onChange={event => setStudentGroupFilter(event.target.value)}><option value="all">全部分组</option>{currentStage?.Groups.map(group => <option value={group.groupId} key={group.id}>{group.name}</option>)}</Select></label>}</div><div className={styles.timeline}>{filteredParticipants.map(item => <div className={styles.timelineItem} key={item.id}><strong>{item.user.username}</strong><br /><span className={styles.muted}>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 题完成{item.currentGroupId ? ` · ${currentStage?.Groups.find(group => group.groupId === item.currentGroupId)?.name || '已分组'}` : ''}</span><div className={styles.actions}>{selectedId && <><Button variant="ghost" disabled={commandBusy} onClick={() => void command('UNLOCK_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>单独解锁</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void command('SKIP_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>允许跳过</Button><Button variant="ghost" disabled={commandBusy || !item.progress.some(progress => progress.status === 'STUCK')} onClick={() => void command('CLEAR_STUCK_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>清除卡题</Button></>}{Boolean(currentStage || futureStages.length > 0) && <Button variant="ghost" disabled={commandBusy} onClick={() => { setGroupChangeParticipant(item); setGroupChangeMode(currentStage ? 'immediate' : 'next_stage'); setGroupChangeStageId(futureStages[0]?.id || ''); setGroupChangeTarget(currentStage ? item.currentGroupId || '' : ''); setGroupChangeReason('') }}>调整分组</Button>}</div></div>)}</div>{filteredParticipants.length === 0 && <p className={styles.muted}>没有符合当前筛选条件的学员。</p>}</div></Section></aside>}
+      {data.manager && <aside id="training-participants" className={`${styles.stack} ${styles.coach}`}>
+        <Section title="全部学员" description="筛选后点击学员查看详情和课堂干预操作。">
+          <div className={styles.stack}>
+            <div className={styles.participantFilters}>
+              <label className={styles.field}>搜索学生<Input value={studentQuery} onChange={event => setStudentQuery(event.target.value)} placeholder="用户名" /></label>
+              <label className={styles.field}>状态<Select value={studentFilter} onChange={event => setStudentFilter(event.target.value)}><option value="all">全部</option><option value="stuck">可能卡题</option><option value="working">进行中</option><option value="completed">已完成</option><option value="offline">离线</option></Select></label>
+              {Boolean(currentStage?.Groups.length) && <label className={styles.field}>分组<Select value={studentGroupFilter} onChange={event => setStudentGroupFilter(event.target.value)}><option value="all">全部分组</option>{currentStage?.Groups.map(group => <option value={group.groupId} key={group.id}>{group.name}</option>)}</Select></label>}
+            </div>
+            <div className={styles.participantList}>{filteredParticipants.map(item => {
+              const stuck = item.progress.some(progress => progress.status === 'STUCK')
+              return <button type="button" className={styles.participantRow} key={item.id} onClick={() => setSelectedParticipantId(item.id)}>
+                <span className={styles.participantAvatar}>{item.user.username.slice(0, 1).toUpperCase()}</span>
+                <span><strong>{item.user.username}</strong><small>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 题完成{item.currentGroupId ? ` · ${currentStage?.Groups.find(group => group.groupId === item.currentGroupId)?.name || '已分组'}` : ''}</small></span>
+                <StatusBadge variant={stuck ? 'warning' : item.completed ? 'success' : 'neutral'}>{stuck ? '需要关注' : item.completed ? '已完成' : '查看'}</StatusBadge>
+              </button>
+            })}</div>
+            {filteredParticipants.length === 0 && <p className={styles.muted}>没有符合当前筛选条件的学员。</p>}
+          </div>
+        </Section>
+      </aside>}
+
     </div>
     {!data.manager && peerProgress && peerProgress.entries.length > 0 && <Section title="同学训练进度" description={`可见内容：${visibilityLabel[peerProgress.peerVisibility] || peerProgress.peerVisibility} · 排列方式：${rankingLabel[peerProgress.rankingMode] || peerProgress.rankingMode}`}><div className={styles.peerGrid}>{peerProgress.entries.map(item => <article className={styles.peerCard} key={item.user.id}>{item.rank && <span>#{item.rank}</span>}<strong>{item.user.username}</strong><span>完成 {item.completed}/{item.total}</span>{item.score !== undefined && <span>{item.score} 分</span>}{item.penaltyMinutes !== undefined && <span>罚时 {item.penaltyMinutes} 分钟</span>}{item.attempts !== undefined && <span>{item.attempts} 次提交</span>}</article>)}</div></Section>}
+    <TrainingParticipantDrawer
+      participant={selectedParticipant}
+      stageName={selectedParticipantStage?.name}
+      groupName={selectedParticipantGroup?.name}
+      problemName={selectedParticipant?.currentProblemId ? problemNames[selectedParticipant.currentProblemId] : undefined}
+      busy={commandBusy}
+      onClose={() => setSelectedParticipantId(undefined)}
+      onViewProblem={() => {
+        if (!selectedParticipant?.currentProblemId) return
+        void saveDraftRef.current(true).then(saved => {
+          if (saved === false) return
+          setSelectedId(selectedParticipant.currentProblemId)
+          setSelectedParticipantId(undefined)
+          window.requestAnimationFrame(() => document.getElementById('training-problem-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+        })
+      }}
+      onUnlock={() => {
+        if (selectedParticipant?.currentProblemId) void command('UNLOCK_FOR_USER', { stageProblemId: selectedParticipant.currentProblemId }, 'USER', selectedParticipant.user.id)
+      }}
+      onSkip={() => {
+        if (selectedParticipant?.currentProblemId) void command('SKIP_FOR_USER', { stageProblemId: selectedParticipant.currentProblemId }, 'USER', selectedParticipant.user.id)
+      }}
+      onClearStuck={() => {
+        const stuckProblem = selectedParticipant?.progress.find(item => item.status === 'STUCK')?.stageProblemId || selectedParticipant?.currentProblemId
+        if (stuckProblem && selectedParticipant) void command('CLEAR_STUCK_FOR_USER', { stageProblemId: stuckProblem }, 'USER', selectedParticipant.user.id)
+      }}
+      onMessage={() => {
+        if (!selectedParticipant) return
+        setCommandTargetType('USER')
+        setCommandTargetId(selectedParticipant.user.id)
+        setSelectedParticipantId(undefined)
+        setMessageOpen(true)
+      }}
+      onChangeGroup={() => {
+        if (!selectedParticipant) return
+        openGroupChange(selectedParticipant)
+        setSelectedParticipantId(undefined)
+      }}
+    />
     <ConfirmDialog
       isOpen={Boolean(batchAction)}
       onClose={() => setBatchAction(undefined)}

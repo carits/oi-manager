@@ -873,7 +873,7 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
   const context: TrainingPermissionContext = {
     session,
     manager: false,
-    participant,
+    participant: { ...participant, currentGroupId: participant.groupId },
     overrides,
     progressByProblem: new Map(progress.map(item => [item.stageProblemId, item])),
   }
@@ -1025,7 +1025,6 @@ export async function executeStageTransition(userId: string, sessionId: string, 
     await applyV2StageTransition(tx, sessionId, { action, stageId: String(body?.stageId || ''), outcome, actorUserId: userId, reason })
   })
   return getTrainingWorkspace(userId, sessionId)
-  return getTrainingWorkspace(userId, sessionId)
 }
 
 
@@ -1133,13 +1132,20 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const resolvedPermissions = resolveAllTrainingPermissions(permissionContext)
   const permissions = Object.fromEntries(Object.entries(resolvedPermissions).map(([stageProblemId, permission]) => [stageProblemId, { ...permission, canSeeMetadata: manager || permission.canView }]))
   const requirements = participant ? resolveParticipantSessionRequirements(session as any, participant.id, progress) : []
+  const activeRequirements = requirements.filter(item => item.state !== 'RETIRED')
+  const completedRequirements = activeRequirements.filter(item => ['SATISFIED', 'BYPASSED'].includes(item.state))
   const visibleOverlays = manager || !participantView ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participantView, session))
   const snapshotProblem = (problem: any) => ({ ...problem, Problem: { ...problem.Problem, title: problem.titleSnapshot }, Statements: Array.isArray(problem.statementsSnapshot) ? problem.statementsSnapshot : [] })
   const snapshotStage = (stage: any) => ({ ...stage, Groups: stage.Groups.map((unit: any) => ({ ...unit, name: unit.TrainingGroup.name })), Problems: stage.Problems.map((problem: any) => manager || permissions[problem.id]?.canSeeMetadata ? snapshotProblem(problem) : { ...snapshotProblem(problem), alias: null, Statements: [], Problem: { ...problem.Problem, platform: '', problemId: '', title: '未开放题目', difficulty: null } }) })
   return {
     session: { ...session, Stages: session.Stages.map(snapshotStage), Overlays: visibleOverlays, activeUnits: session.Groups.flatMap(group => group.StageGroups.filter(unit => ['RUNNING', 'PAUSED'].includes(unit.status)).map(unit => ({ groupId: group.id, stageId: unit.stageId, status: unit.status }))) },
     manager,
-    participant: participantView ? { ...participantView, requirements: requirements.map(item => ({ stageId: item.stageId, stageProblemId: item.stageProblemId, state: item.state })) } : null,
+    participant: participantView ? {
+      ...participantView,
+      requiredCount: activeRequirements.length,
+      completedCount: completedRequirements.length,
+      requirements: requirements.map(item => ({ stageId: item.stageId, stageProblemId: item.stageProblemId, state: item.state })),
+    } : null,
     progress, permissions, strategy: {},
   }
 }
@@ -1350,6 +1356,11 @@ export async function replaceTrainingStageGroupMatrix(userId: string, sessionId:
       }
       await tx.trainingSessionStageGroup.update({ where: { id: stageGroup.id }, data: {
         mode,
+        accessPolicy: raw.accessPolicy,
+        submissionMode: raw.submissionMode,
+        plannedDurationSeconds: raw.plannedDurationSeconds ?? null,
+        completionThreshold: raw.completionThreshold ?? null,
+        minDurationSeconds: raw.minDurationSeconds ?? null,
         completionPolicy: asJson(raw.completionPolicy),
         transitionPolicy: String(raw.transitionPolicy || 'WAIT_FOR_TEACHER'),
         rules: asJson(raw.rules),

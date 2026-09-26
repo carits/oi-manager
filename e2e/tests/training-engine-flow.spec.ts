@@ -22,13 +22,14 @@ async function trainingWorkspace(request: APIRequestContext, sessionId: string) 
   return apiData(await request.get(`/api/training-sessions/${sessionId}`))
 }
 
-async function createTrainingSession(request: APIRequestContext, title: string, stages: E2EStageInput[]) {
+async function createTrainingSession(request: APIRequestContext, title: string, stages: E2EStageInput[], extra: Record<string, unknown> = {}) {
   return apiData(await request.post('/api/training-sessions', {
     data: {
       title,
       teamId: ids.team,
       participantUserIds: [ids.users.campusStudent],
       settings: { participantTarget: 'custom_students' },
+      ...extra,
       stages,
     },
   }))
@@ -40,7 +41,8 @@ async function publishAndStart(request: APIRequestContext, sessionId: string) {
     data: { expectedRevision: workspace.session.statusRevision },
   }))
   workspace = await trainingWorkspace(request, sessionId)
-  const first = workspace.session.Stages.find((stage: any) => stage.lifecycle === 'PENDING')
+  if (workspace.session.status === 'RUNNING') return workspace
+  const first = workspace.session.Stages.find((stage: any) => stage.Groups.some((group: any) => group.status === 'PENDING'))
   expect(first).toBeTruthy()
   await apiData(await request.post(`/api/training-sessions/${sessionId}/stage-transitions`, {
     data: { expectedRevision: workspace.session.statusRevision, action: 'start', stageId: first.id },
@@ -50,7 +52,7 @@ async function publishAndStart(request: APIRequestContext, sessionId: string) {
 
 async function transitionCurrent(request: APIRequestContext, sessionId: string, action: 'advance' | 'end_session', extra: Record<string, unknown> = {}) {
   const workspace = await trainingWorkspace(request, sessionId)
-  const current = workspace.session.Stages.find((stage: any) => stage.id === workspace.session.currentStageId)
+  const current = workspace.session.Stages.find((stage: any) => stage.Groups.some((group: any) => ['RUNNING', 'PAUSED'].includes(group.status)))
   expect(current).toBeTruthy()
   return apiData(await request.post(`/api/training-sessions/${sessionId}/stage-transitions`, {
     data: {
@@ -146,8 +148,18 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     if (await start.isVisible()) await start.click()
     else await resume.click()
     await expect(coach.locator('span').filter({ hasText: /^进行中$/ }).first()).toBeVisible()
+    const classroomStatus = coach.getByRole('region', { name: '课堂状态' })
+    await expect(classroomStatus).toBeVisible()
+    await expect(classroomStatus.getByRole('button')).toHaveCount(2)
+    await expect(coach.getByRole('heading', { name: '需要关注' })).toBeVisible()
+    await coach.getByRole('button', { name: /student1/ }).last().click()
+    await expect(coach.getByRole('dialog', { name: 'student1' })).toBeVisible()
+    await coach.keyboard.press('Escape')
+    await expect(coach.getByRole('dialog', { name: 'student1' })).toHaveCount(0)
 
     await student.goto(base)
+    await expect(student.getByRole('region', { name: '我的当前训练目标' })).toBeVisible()
+    await expect(student.getByRole('button', { name: '继续做题' })).toBeVisible()
     await expect(student.getByRole('heading', { name: /A.*E2E A Plus B/ })).toBeVisible()
     const editor = student.getByLabel('提交源码')
     await editor.fill('#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}')
@@ -159,7 +171,7 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     await coach.getByRole('button', { name: '聚焦当前题', exact: true }).click()
     await expect(student.getByText('使用训练发布时固定的数据评测', { exact: true })).toBeVisible()
     await coach.getByRole('button', { name: '暂停提交与编辑', exact: true }).click()
-    await expect(student.getByText('已暂停', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(student.getByRole('region', { name: '我的当前训练目标' }).getByText('已暂停', { exact: true })).toBeVisible({ timeout: 10_000 })
     await expect(student.getByRole('button', { name: '提交评测' })).toBeDisabled()
     await expect(student.getByLabel('提交源码')).toHaveAttribute('aria-readonly', 'true')
     await student.reload()
@@ -180,6 +192,7 @@ test.describe('stage-driven training acceptance', () => {
     const student = await studentContext.newPage()
     await student.goto(sessionPath(session.id))
     await expect(student.getByRole('heading', { name: /E2E-1000.*E2E A Plus B/ })).toBeVisible()
+    await expect(student.getByText(/草稿已同步/)).toBeVisible()
     await student.getByLabel('提交源码').fill('#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}')
     const submitResponsePromise = student.waitForResponse(response => response.url().includes(`/api/training-sessions/${session.id}/submit`) && response.request().method() === 'POST')
     await student.getByRole('button', { name: '提交评测' }).click()
@@ -189,6 +202,7 @@ test.describe('stage-driven training acceptance', () => {
 
     const coach = await coachContext.newPage()
     await coach.goto(sessionPath(session.id))
+    await coach.getByText('课堂管理', { exact: true }).click()
     await coach.getByRole('button', { name: '训练报告' }).click()
     await expect(coach.getByRole('dialog', { name: '训练过程报告' })).toBeVisible()
     await expect(coach.getByText('训练汇总', { exact: true })).toBeVisible()
@@ -201,32 +215,19 @@ test.describe('stage-driven training acceptance', () => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const session = await createTrainingSession(coachContext.request, 'E2E B 多阶段', [
       allStage('热身'),
-      {
-        name: '分层训练',
-        kind: 'TRAINING',
-        audienceMode: 'GROUPED',
-        endPolicy: 'MANUAL',
-        accessPolicy: 'ALL_AT_ONCE',
-        accessScope: 'CURRENT_STAGE',
-        submissionMode: 'ENABLED',
-        problems: [],
-        groups: [
-          { clientKey: 'foundation', name: '基础组', participantIds: [ids.users.campusStudent], problems: [{ problemId: ids.problem }] },
-          { clientKey: 'advanced', name: '提高组', participantIds: [], problems: [{ problemId: ids.secondProblem }] },
-        ],
-      },
-      { ...allStage('统一讲解'), kind: 'TEACHING', accessPolicy: 'TEACHER_CONTROLLED', submissionMode: 'DISABLED', problems: [] },
+      allStage('分层训练', ids.secondProblem),
+      { ...allStage('统一讲解'), kind: 'TEACHING', accessPolicy: 'TEACHER_CONTROLLED', submissionMode: 'DISABLED' },
       { ...allStage('自由补题', ids.thirdProblem), kind: 'REVIEW' },
     ])
     let workspace = await publishAndStart(coachContext.request, session.id)
-    expect(workspace.session.Stages.filter((stage: any) => stage.lifecycle === 'RUNNING')).toHaveLength(1)
+    expect(workspace.session.Stages.filter((stage: any) => stage.Groups.some((group: any) => group.status === 'RUNNING'))).toHaveLength(1)
 
     const coach = await coachContext.newPage()
     await coach.goto(sessionPath(session.id))
     for (const expected of ['热身', '分层训练', '统一讲解', '自由补题']) {
-      await expect(coach.getByRole('heading', { name: `当前阶段 · ${expected}` })).toBeVisible()
+      await expect(coach.getByRole('region', { name: '课堂状态' }).getByRole('heading', { name: expected })).toBeVisible()
       workspace = await trainingWorkspace(coachContext.request, session.id)
-      expect(workspace.session.Stages.filter((stage: any) => stage.lifecycle === 'RUNNING')).toHaveLength(1)
+      expect(workspace.session.Stages.filter((stage: any) => stage.Groups.some((group: any) => group.status === 'RUNNING'))).toHaveLength(1)
       if (expected !== '自由补题') {
         await transitionCurrent(coachContext.request, session.id, 'advance')
         await coach.reload()
@@ -242,17 +243,32 @@ test.describe('stage-driven training acceptance', () => {
     const session = await createTrainingSession(coachContext.request, 'E2E C 中途换组', [{
       name: '分层训练',
       kind: 'TRAINING',
-      audienceMode: 'GROUPED',
       endPolicy: 'MANUAL',
       accessPolicy: 'ALL_AT_ONCE',
       accessScope: 'CURRENT_STAGE',
       submissionMode: 'ENABLED',
-      problems: [],
-      groups: [
-        { clientKey: 'foundation', name: '基础组', participantIds: [ids.users.campusStudent], problems: [{ problemId: ids.problem }] },
-        { clientKey: 'advanced', name: '提高组', participantIds: [], problems: [{ problemId: ids.secondProblem }] },
-      ],
-    }])
+      problems: [{ problemId: ids.problem }, { problemId: ids.secondProblem }],
+    }], {
+      grouping: { groups: [
+        { clientKey: 'foundation', name: '基础组', participantIds: [ids.users.campusStudent] },
+        { clientKey: 'advanced', name: '提高组', participantIds: [] },
+      ] },
+    })
+    const design = await apiData(await coachContext.request.get(`/api/training-sessions/${session.id}/design`))
+    const designStage = design.stages[0]
+    const foundationProblem = designStage.Problems.find((problem: any) => problem.Problem.id === ids.problem)
+    const advancedProblem = designStage.Problems.find((problem: any) => problem.Problem.id === ids.secondProblem)
+    expect(foundationProblem).toBeTruthy()
+    expect(advancedProblem).toBeTruthy()
+    await apiData(await coachContext.request.put(`/api/training-sessions/${session.id}/stage-group-matrix`, {
+      data: {
+        expectedRevision: design.statusRevision,
+        stageGroups: design.stageGroups.map((unit: any) => ({
+          ...unit,
+          problemIds: [unit.groupName === '基础组' ? foundationProblem.id : advancedProblem.id],
+        })),
+      },
+    }))
     const started = await publishAndStart(coachContext.request, session.id)
     const stage = started.session.Stages[0]
     const foundation = stage.Groups.find((group: any) => group.name === '基础组')
@@ -265,26 +281,26 @@ test.describe('stage-driven training acceptance', () => {
 
     const student = await studentContext.newPage()
     await student.goto(sessionPath(session.id))
-    await expect(student.getByText('基础组', { exact: true })).toBeVisible()
     await expect(student.getByRole('heading', { name: /E2E-1000.*E2E A Plus B/ })).toBeVisible()
 
     const beforeMove = await trainingWorkspace(coachContext.request, session.id)
+    expect((await trainingWorkspace(studentContext.request, session.id)).participant.currentGroupId).toBe(foundation.groupId)
     await apiData(await coachContext.request.post(`/api/training-sessions/${session.id}/stages/${stage.id}/group-changes`, {
       data: {
         expectedRevision: beforeMove.session.statusRevision,
         participantId: participant.id,
-        toGroupId: advanced.id,
+        toGroupId: advanced.groupId,
         effectiveMode: 'immediate',
         reason: 'E2E 表现达到提高组标准',
       },
     }))
+    expect((await trainingWorkspace(studentContext.request, session.id)).participant.currentGroupId).toBe(advanced.groupId)
     await student.reload()
-    await expect(student.getByText('提高组', { exact: true })).toBeVisible()
     await expect(student.getByRole('heading', { name: /E2E-1001.*E2E Sequence/ })).toBeVisible()
 
     const report = await apiData(await coachContext.request.get(`/api/training-sessions/${session.id}/report`))
     expect(report.groupChanges).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fromGroupId: foundation.id, toGroupId: advanced.id, effectiveMode: 'IMMEDIATE' }),
+      expect.objectContaining({ fromGroupId: foundation.groupId, toGroupId: advanced.groupId, reason: 'E2E 表现达到提高组标准' }),
     ]))
     await coachContext.close()
     await studentContext.close()
@@ -293,8 +309,15 @@ test.describe('stage-driven training acceptance', () => {
   test('D: early end preserves planned time and reports shorter actual time with explicit reason', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const session = await createTrainingSession(coachContext.request, 'E2E D 提前结束', [
-      allStage('40 分钟计划', ids.problem, { plannedDurationSeconds: 2400 }),
+      allStage('40 分钟计划', ids.problem),
     ])
+    const design = await apiData(await coachContext.request.get(`/api/training-sessions/${session.id}/design`))
+    await apiData(await coachContext.request.put(`/api/training-sessions/${session.id}/stage-group-matrix`, {
+      data: {
+        expectedRevision: design.statusRevision,
+        stageGroups: design.stageGroups.map((unit: any) => ({ ...unit, plannedDurationSeconds: 2400 })),
+      },
+    }))
     await publishAndStart(coachContext.request, session.id)
     await transitionCurrent(coachContext.request, session.id, 'end_session', {
       outcome: 'ended_early',
@@ -302,16 +325,17 @@ test.describe('stage-driven training acceptance', () => {
     })
 
     const report = await apiData(await coachContext.request.get(`/api/training-sessions/${session.id}/report`))
-    expect(report.timeline[0].plannedDurationSeconds).toBe(2400)
-    expect(report.timeline[0].actualDurationSeconds).toBeLessThan(2400)
-    expect(report.timeline[0]).toMatchObject({ endReason: 'TEACHER_ENDED_EARLY', endNote: 'E2E 提前完成课堂目标' })
+    expect(report.timeline[0].groups[0].plannedDurationSeconds).toBe(2400)
+    expect(report.timeline[0].groups[0].actualDurationSeconds).toBeLessThan(2400)
+    expect(report.timeline[0].groups[0]).toMatchObject({ endReason: 'E2E 提前完成课堂目标' })
 
     const coach = await coachContext.newPage()
     await coach.goto(sessionPath(session.id))
+    await coach.getByText('课堂管理', { exact: true }).click()
     await coach.getByRole('button', { name: '训练报告' }).click()
     const dialog = coach.getByRole('dialog', { name: '训练过程报告' })
-    await expect(dialog.getByText(/计划 40 分钟/)).toBeVisible()
-    await expect(dialog.getByText(/TEACHER_ENDED_EARLY/)).toBeVisible()
+    await expect(dialog.getByText(/计划 40:00/)).toBeVisible()
+    await expect(dialog.getByText(/E2E 提前完成课堂目标/)).toBeVisible()
 
     await coachContext.close()
   })
@@ -330,7 +354,7 @@ test.describe('stage-driven training acceptance', () => {
 
     const student = await studentContext.newPage()
     await student.goto(sessionPath(session.id))
-    await expect(student.getByText('0 → 30', { exact: true })).toBeVisible()
+    await expect(student.getByRole('region', { name: '我的当前训练目标' }).getByText(/目标：30/)).toBeVisible()
 
     for (const score of [30, 60, 100]) {
       const submission = await prisma.submission.create({
@@ -357,9 +381,9 @@ test.describe('stage-driven training acceptance', () => {
         trainingScoreGoalSnapshot: { score },
       })
       await student.reload()
-      if (score < 100) await expect(student.getByText(`${score} → ${score === 30 ? 60 : 100}`, { exact: true })).toBeVisible()
+      if (score < 100) await expect(student.getByRole('region', { name: '我的当前训练目标' }).getByText(new RegExp(`当前最高分：${score}.*目标：${score === 30 ? 60 : 100}`))).toBeVisible()
     }
-    await expect(student.getByText('1/1', { exact: true })).toBeVisible()
+    await expect(student.getByRole('region', { name: '我的当前训练目标' }).getByText('1 / 1', { exact: true })).toBeVisible()
 
     await coachContext.close()
     await studentContext.close()
@@ -407,4 +431,53 @@ test.describe('stage-driven training acceptance', () => {
     await coachContext.close()
     await studentContext.close()
   })
+
+  test('G: 390x844 课堂状态、学员抽屉与学生任务可见且无横向溢出', async ({ browser }, testInfo) => {
+    const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
+    const studentContext = await browser.newContext({ storageState: accounts.campusStudent.storageState })
+    const session = await createTrainingSession(coachContext.request, 'E2E G 移动端验收', [allStage('移动课堂')])
+    await publishAndStart(coachContext.request, session.id)
+
+    const browserErrors: string[] = []
+    const trackErrors = (page: import('@playwright/test').Page) => {
+      page.on('console', message => {
+        if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`)
+      })
+      page.on('pageerror', error => browserErrors.push(`pageerror: ${error.message}`))
+    }
+    const assertNoHorizontalOverflow = async (page: import('@playwright/test').Page) => {
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    }
+
+    const coach = await coachContext.newPage()
+    await coach.setViewportSize({ width: 390, height: 844 })
+    trackErrors(coach)
+    await coach.goto(sessionPath(session.id))
+    await expect(coach.getByRole('region', { name: '课堂状态' })).toBeVisible()
+    await expect(coach.getByRole('heading', { name: '需要关注' })).toBeVisible()
+    await assertNoHorizontalOverflow(coach)
+    await coach.screenshot({ path: testInfo.outputPath('mobile-coach-runtime.png'), fullPage: true })
+
+    const participantButton = coach.getByRole('button', { name: /student1/ }).last()
+    await expect(participantButton).toBeVisible()
+    await participantButton.click()
+    await expect(coach.getByRole('dialog', { name: 'student1' })).toBeVisible()
+    await assertNoHorizontalOverflow(coach)
+    await coach.screenshot({ path: testInfo.outputPath('mobile-participant-drawer.png'), fullPage: true })
+    await coach.keyboard.press('Escape')
+
+    const student = await studentContext.newPage()
+    await student.setViewportSize({ width: 390, height: 844 })
+    trackErrors(student)
+    await student.goto(sessionPath(session.id))
+    await expect(student.getByRole('region', { name: '我的当前训练目标' })).toBeVisible()
+    await expect(student.getByRole('button', { name: '继续做题' })).toBeVisible()
+    await assertNoHorizontalOverflow(student)
+    await student.screenshot({ path: testInfo.outputPath('mobile-student-mission.png'), fullPage: true })
+
+    expect(browserErrors).toEqual([])
+    await coachContext.close()
+    await studentContext.close()
+  })
+
 })
