@@ -16,8 +16,8 @@ describe('补题作业使用独立 Assignment', () => {
   let adminToken: string
   let studentToken: string
   let outsiderToken: string
-  let finishedTraining: any
-  let ongoingTraining: any
+  let finishedContest: any
+  let ongoingContest: any
   let team: Awaited<ReturnType<typeof createTestTeam>>
   let revisionId: string
 
@@ -47,57 +47,59 @@ describe('补题作业使用独立 Assignment', () => {
     } })
     await prisma.problem.update({ where: { id: problem.id }, data: { latestTestSetRevisionId: revisionId } })
     const now = Date.now()
-    finishedTraining = await prisma.training.create({ data: {
-      teamId: team.id, organizationId: team.organizationId, title: '已结束比赛', format: 'ioi', type: 'contest',
-      startTime: new Date(now - 3 * 86_400_000), endTime: new Date(now - 86_400_000), status: 'finished', createdBy: owner.user.id,
+    finishedContest = await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), teamId: team.id, organizationId: team.organizationId, title: '已结束比赛',
+      contestDate: new Date(now - 3 * 86_400_000), startAt: new Date(now - 3 * 86_400_000), endAt: new Date(now - 86_400_000),
+      format: 'ioi', type: 'contest', scope: 'campus', status: 'finished', createdBy: owner.user.id,
     } })
-    await prisma.trainingProblem.create({ data: {
-      id: crypto.randomUUID(), trainingId: finishedTraining.id, problemId: problem.id, alias: 'A', orderIndex: 0, points: 100,
-      titleSnapshot: problem.title, judgeConfigSnapshot: '{"mode":"acm","cases":[]}', testSetRevisionId: revisionId,
+    await prisma.contestProblem.create({ data: {
+      id: crypto.randomUUID(), contestId: finishedContest.id, canonicalProblemId: problem.id, testSetRevisionId: revisionId,
+      alias: 'A', orderIndex: 0, points: 100, title: problem.title, ojName: problem.platform, problemId: problem.problemId,
     } })
-    ongoingTraining = await prisma.training.create({ data: {
-      teamId: team.id, organizationId: team.organizationId, title: '进行中比赛', format: 'ioi', type: 'contest',
-      startTime: new Date(now - 3_600_000), endTime: new Date(now + 3_600_000), status: 'ongoing', createdBy: owner.user.id,
+    ongoingContest = await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), teamId: team.id, organizationId: team.organizationId, title: '进行中比赛',
+      contestDate: new Date(now - 3_600_000), startAt: new Date(now - 3_600_000), endAt: new Date(now + 3_600_000),
+      format: 'ioi', type: 'contest', scope: 'campus', status: 'ongoing', createdBy: owner.user.id,
     } })
   })
 
   it('团队管理员创建带固定 Revision 的独立补题作业草稿', async () => {
     for (const token of [ownerToken, adminToken]) {
-      const response = await createAuthenticatedRequest(app, token)
-        .post(`/api/contests/${finishedTraining.id}/create-makeup-homework`)
+      const response = await createAuthenticatedRequest(app, token, { organizationId: team.organizationId })
+        .post(`/api/contests/${finishedContest.publicId}/create-makeup-homework`)
         .send({ title: '补题草稿', endTime: new Date(Date.now() + 86_400_000).toISOString() })
       expect(response.status).toBe(200)
       expect(response.body.data.type).toBe('assignment')
-      expect(response.body.data.sourceTrainingId).toBe(finishedTraining.id)
+      expect(response.body.data.sourceContestId).toBe(finishedContest.id)
       const assignment = await prisma.assignment.findUnique({ where: { id: response.body.data.id }, include: { Problems: true, Events: true } })
       expect(assignment?.status).toBe('DRAFT')
       expect(assignment?.rosterMode).toBe('DYNAMIC')
       expect(assignment?.Problems).toHaveLength(1)
       expect(assignment?.Problems[0].testSetRevisionId).toBe(revisionId)
-      expect(assignment?.Events[0].type).toBe('assignment.created_from_activity')
+      expect(assignment?.Events[0].type).toBe('assignment.created_from_contest')
     }
   })
 
   it('学生和非团队管理员不能创建补题作业', async () => {
     for (const token of [studentToken, outsiderToken]) {
-      const response = await createAuthenticatedRequest(app, token)
-        .post(`/api/contests/${finishedTraining.id}/create-makeup-homework`)
+      const response = await createAuthenticatedRequest(app, token, { organizationId: team.organizationId })
+        .post(`/api/contests/${finishedContest.publicId}/create-makeup-homework`)
         .send({ endTime: new Date(Date.now() + 86_400_000).toISOString() })
       expect(response.status).toBe(403)
     }
   })
 
   it('仅允许已结束活动且要求合法时间范围', async () => {
-    const active = await createAuthenticatedRequest(app, ownerToken)
-      .post(`/api/contests/${ongoingTraining.id}/create-makeup-homework`)
+    const active = await createAuthenticatedRequest(app, ownerToken, { organizationId: team.organizationId })
+      .post(`/api/contests/${ongoingContest.publicId}/create-makeup-homework`)
       .send({ endTime: new Date(Date.now() + 86_400_000).toISOString() })
     expect(active.status).toBe(400)
-    expect(active.body.code).toBe('TRAINING_NOT_FINISHED')
-    const missing = await createAuthenticatedRequest(app, ownerToken)
-      .post(`/api/contests/${finishedTraining.id}/create-makeup-homework`).send({})
+    expect(active.body.code).toBe('CONTEST_NOT_FINISHED')
+    const missing = await createAuthenticatedRequest(app, ownerToken, { organizationId: team.organizationId })
+      .post(`/api/contests/${finishedContest.publicId}/create-makeup-homework`).send({})
     expect(missing.status).toBe(400)
-    const invalid = await createAuthenticatedRequest(app, ownerToken)
-      .post(`/api/contests/${finishedTraining.id}/create-makeup-homework`)
+    const invalid = await createAuthenticatedRequest(app, ownerToken, { organizationId: team.organizationId })
+      .post(`/api/contests/${finishedContest.publicId}/create-makeup-homework`)
       .send({ startTime: new Date(Date.now() + 86_400_000).toISOString(), endTime: new Date().toISOString() })
     expect(invalid.status).toBe(400)
   })

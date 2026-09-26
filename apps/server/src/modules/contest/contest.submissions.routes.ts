@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express'
-import { SubmissionContracts } from '@oi-manager/contracts'
+import { ContestContracts, SubmissionContracts } from '@oi-manager/contracts'
 import yaml from 'js-yaml'
 import { authenticate, getAccountRole, getResourceScope, isAdmin, isPersonalContext } from '../../middleware/auth'
 import { logger } from '../../lib/logger'
@@ -283,7 +283,7 @@ contestSubmissionsRouter.get('/contests/:id/submission-users', authenticate, asy
     const contest = await findContestForProblemAccess(id)
     if (!contest || !await canManageContest(req.user!.userId, contest)) return res.status(403).json({ success: false, message: '无权限' })
     const users = await listContestSubmissionUsers(id)
-    res.json({ success: true, data: { users: users.map(user => ({ ...user, displayName: user.username })) } })
+    return sendContractData(res, ContestContracts.submissionUsers, { users: users.map(user => ({ ...user, displayName: user.username })) })
 }, '查询用户失败'))
 
 /**

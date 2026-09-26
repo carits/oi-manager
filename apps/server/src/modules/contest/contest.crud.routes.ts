@@ -3,8 +3,10 @@
  */
 
 import { Router } from 'express'
+import { ContestContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import type { AuthRequest } from '../../middleware/auth'
 import { parseContestId } from './contest.helpers'
 import {
@@ -25,6 +27,7 @@ import {
 export const contestCrudRouter = Router()
 
 function sendContestError(error: unknown, res: any) {
+  if (sendContractError(error, res)) return
   if (!(error instanceof ContestCrudError)) throw error
   return res.status(error.statusCode).json({
     success: false,
@@ -136,12 +139,13 @@ contestCrudRouter.delete('/contests/:id', authenticate, asyncHandler(async (req:
 
 contestCrudRouter.post('/contests/:id/create-makeup-homework', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
+    const body = parseContractBody(ContestContracts.createMakeupHomework, req.body)
     const data = await createMakeupHomework(
       parseContestId(req.params.id),
       req.user!.userId,
-      req.body,
+      body,
     )
-    return res.json({ success: true, data })
+    return sendContractData(res, ContestContracts.createMakeupHomework, data)
   } catch (error) {
     return sendContestError(error, res)
   }

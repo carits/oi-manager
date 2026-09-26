@@ -5,7 +5,6 @@ import unifiedStyles from './ContestDetailPage.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import apiClient from '@/lib/apiClient'
 import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { AsyncRegion, SkeletonRegion } from '@/components/ui/AsyncRegion'
@@ -22,6 +21,7 @@ import { useContestDetail } from '../api/useContestDetail'
 import { useContestRank } from '../api/useContestRank'
 import { useContestSubmissions } from '../api/useContestSubmissions'
 import { useContestActions } from '../api/useContestActions'
+import { createContestMakeupHomework, listContestSubmissionUsers } from '../api/contestApi'
 
 import { ContestRejudgeModal } from './components/ContestRejudgeModal'
 import { ContestRankingSubmissionsModal } from './components/ContestRankingSubmissionsModal'
@@ -123,7 +123,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
   const loadRejudgeUsers = useCallback(async () => {
     setRejudgeUsersLoading(true)
     try {
-      const data = await apiClient.query<{ users: Array<{ id: string; username: string; displayName?: string }> }>('/api/contests/' + contestId + '/submission-users')
+      const data = await listContestSubmissionUsers(contestId)
       setRejudgeUsers(data.users)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '重判用户列表加载失败')
@@ -658,18 +658,15 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
               onClick={async () => {
                 setMakeupLoading(true)
                 try {
-                  const res = await apiClient.post(`/api/contests/${contestId}/create-makeup-homework`, {
+                  const res = await createContestMakeupHomework(contestId, {
                     title: makeupTitle,
                     startTime: makeupStartTime ? new Date(makeupStartTime).toISOString() : undefined,
                     endTime: new Date(makeupEndTime).toISOString(),
                   })
-                  if (res.success && (res.data as { id?: number })?.id) {
-                    setShowMakeupModal(false)
-                    const homeworkHref = resourceHref('homework', navigationContext, (res.data as { id: number }).id)
-                    if (homeworkHref) router.push(homeworkHref)
-                  } else {
-                    toast.error(res.message || '创建失败')
-                  }
+                  if (!res.ok) throw res.error
+                  setShowMakeupModal(false)
+                  const homeworkHref = resourceHref('homework', navigationContext, res.data.id)
+                  if (homeworkHref) router.push(homeworkHref)
                 } catch (err: unknown) {
                   toast.error((err as Error).message || '创建失败')
                 } finally {
