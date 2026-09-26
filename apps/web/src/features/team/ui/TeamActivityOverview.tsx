@@ -2,14 +2,13 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import apiClient from '@/lib/apiClient'
+import { listTeamProblemLists } from '../api/teamApi'
+import { listTeamContests } from '@/features/contest'
+import { listTrainingSessions } from '@/features/training-session'
 import { StatusBadge } from '@/components/ui/Badge'
 import styles from './Team.module.css'
 import { activityStatusLabel } from '@/lib/humanPresentation'
 
-type LegacyActivity = { id: string; title: string; status?: string; startTime?: string; createdAt?: string }
-type CoachSession = { id: string; title: string; status: string; createdAt?: string }
-type ProblemListItem = { problemListId: string; createdAt?: string; problemList: { id: string; title: string } }
 type Activity = { id: string; kind: 'contest' | 'training' | 'problem-list'; title: string; status?: string; at: string }
 
 export function TeamActivityOverview({ teamId, workspaceBase }: { teamId: string; workspaceBase: string }) {
@@ -17,18 +16,24 @@ export function TeamActivityOverview({ teamId, workspaceBase }: { teamId: string
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     let active = true
-    void Promise.all([
-      apiClient.get<LegacyActivity[]>(`/api/teams/${teamId}/contests?type=contest`),
-      apiClient.get<CoachSession[]>(`/api/training-sessions?teamId=${encodeURIComponent(teamId)}`),
-      apiClient.get<ProblemListItem[]>(`/api/teams/${teamId}/problem-lists`),
+    void Promise.allSettled([
+      listTeamContests(teamId),
+      listTrainingSessions({ teamId }),
+      listTeamProblemLists(teamId),
     ]).then(([contests, trainings, lists]) => {
       if (!active) return
+      const contestItems = contests.status === 'fulfilled' ? contests.value : []
+      const trainingResult = trainings.status === 'fulfilled' ? trainings.value : []
+      const trainingItems = Array.isArray(trainingResult) ? trainingResult : trainingResult.items
+      const listItems = lists.status === 'fulfilled' ? lists.value : []
       const merged: Activity[] = [
-        ...(contests.success ? contests.data || [] : []).map(item => ({ id: item.id, kind: 'contest' as const, title: item.title, status: item.status, at: item.startTime || item.createdAt || '' })),
-        ...(trainings.success ? trainings.data || [] : []).map(item => ({ id: item.id, kind: 'training' as const, title: item.title, status: item.status, at: item.createdAt || '' })),
-        ...(lists.success ? lists.data || [] : []).map(item => ({ id: item.problemList.id, kind: 'problem-list' as const, title: item.problemList.title, at: item.createdAt || '' })),
+        ...contestItems.map(item => ({ id: String(item.id), kind: 'contest' as const, title: item.title, status: item.status, at: item.startTime || item.createdAt || '' })),
+        ...trainingItems.map(item => ({ id: item.id, kind: 'training' as const, title: item.title, status: item.status, at: item.createdAt || '' })),
+        ...listItems.map(item => ({ id: item.problemList.id, kind: 'problem-list' as const, title: item.problemList.title, at: item.createdAt || '' })),
       ]
-      setItems(merged.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6)); setLoading(false)
+      setItems(merged.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6))
+    }).finally(() => {
+      if (active) setLoading(false)
     })
     return () => { active = false }
   }, [teamId])

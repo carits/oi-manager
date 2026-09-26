@@ -1,3 +1,4 @@
+export * from './api/contestApi'
 import dynamic from 'next/dynamic'
 
 export const PlatformContestListPage = dynamic(() => import('./ui/PlatformContestListPage').then(module => module.PlatformContestListPage))

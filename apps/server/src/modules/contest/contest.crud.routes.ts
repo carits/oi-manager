@@ -6,7 +6,7 @@ import { Router } from 'express'
 import { ContestContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import type { AuthRequest } from '../../middleware/auth'
 import { parseContestId } from './contest.helpers'
 import {
@@ -55,12 +55,13 @@ contestCrudRouter.post('/platform-contests', authenticate, asyncHandler(async (r
 
 contestCrudRouter.get('/teams/:teamId/contests', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
+    const query = parseContractQuery(ContestContracts.listTeam, req.query)
     const data = await listTeamContests({
       teamId: req.params.teamId,
       user: req.user!,
-      typeFilter: typeof req.query.type === 'string' ? req.query.type : undefined,
+      typeFilter: query.type,
     })
-    return res.json({ success: true, data })
+    return sendContractData(res, ContestContracts.listTeam, data)
   } catch (error) {
     return sendContestError(error, res)
   }

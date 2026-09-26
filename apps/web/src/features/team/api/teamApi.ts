@@ -35,6 +35,10 @@ export function getMyTeams() {
   return apiClient.queryContract(TeamContracts.mine, '/api/teams/mine')
 }
 
+export function listTeamProblemLists(teamId: string) {
+  return apiClient.queryContract(TeamContracts.problemLists, `/api/teams/${encodeURIComponent(teamId)}/problem-lists`)
+}
+
 export function getTeamDetail(teamId: string) {
   return apiClient.queryContract(TeamContracts.detail, `/api/teams/${encodeURIComponent(teamId)}`)
 }

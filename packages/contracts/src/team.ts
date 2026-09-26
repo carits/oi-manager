@@ -106,7 +106,17 @@ const TeamListDataSchema = z.object({
 const TeamActionSchema = z.object({ message: z.string().optional() }).passthrough()
 const EmptyBodySchema = z.object({})
 
+export const TeamProblemListItemSchema = z.object({
+  id: z.string(), problemListId: z.string(), addedBy: z.string(), addedByName: z.string(), addedByRole: z.string(),
+  sortOrder: z.number().int(), createdAt: DateTimeWireSchema,
+  problemList: z.object({
+    id: z.string(), title: z.string(), description: z.string().nullable(), ownerId: z.string(), ownerName: z.string(),
+    ownerType: z.string(), sectionCount: z.number().int().nonnegative(), entryCount: z.number().int().nonnegative(),
+  }),
+})
+
 export const TeamContracts = {
+  problemLists: defineApiEndpoint({ key: 'team.problem-lists', method: 'GET', scope: 'context', data: z.array(TeamProblemListItemSchema) }),
   checkId: defineApiEndpoint({
     key: 'team.checkId', method: 'GET', scope: 'context',
     query: z.object({ id: z.string().trim().min(1).max(50) }),

@@ -166,7 +166,7 @@ export const TrainingReportSchema = z.object({
 
 export const TrainingSessionSummarySchema = z.object({
   id: z.string(), title: z.string(), description: z.string().nullable().optional(), status: z.string(), sessionType: z.string(),
-  statusRevision: z.number().int().optional(), problemCount: z.number().int().optional(), dueAt: DateTimeWireSchema.nullable().optional(), canJoin: z.boolean().optional(),
+  statusRevision: z.number().int().optional(), problemCount: z.number().int().optional(), dueAt: DateTimeWireSchema.nullable().optional(), createdAt: DateTimeWireSchema.optional(), canJoin: z.boolean().optional(),
   teamId: z.string().nullable().optional(), teamName: z.string().nullable().optional(),
   _count: z.object({ Stages: z.number().int(), Participants: z.number().int() }).optional(),
 }).passthrough()

@@ -1,6 +1,8 @@
 import { Router, type Response } from 'express'
+import { TeamContracts } from '@oi-manager/contracts'
 import { authenticate, type AuthRequest } from '../middleware/auth'
 import { asyncHandler, classifyClientError } from '../lib/asyncHandler'
+import { sendContractData, sendContractError } from '../lib/api-contract'
 import {
   addTeamProblemList,
   listTeamProblemLists,
@@ -15,6 +17,7 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
     try {
       await handler(req, res)
     } catch (error) {
+      if (sendContractError(error, res)) return
       if (error instanceof TeamProblemListError) {
         return res.status(error.statusCode).json({ success: false, message: error.message })
       }
@@ -32,7 +35,7 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
 }
 
 teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, endpoint('获取团队题单列表失败', async (req, res) => {
-  res.json({ success: true, data: await listTeamProblemLists(req.user!, req.params.teamId) })
+  return sendContractData(res, TeamContracts.problemLists, await listTeamProblemLists(req.user!, req.params.teamId))
 }))
 
 teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, endpoint('添加团队题单失败', async (req, res) => {

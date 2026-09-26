@@ -152,6 +152,23 @@ describe('题单权限模块', () => {
     })
 
 
+    it('返回通过契约校验的团队题单列表', async () => {
+      const team = await createTestTeam({
+        organizationId: schoolData.school.organizationId!,
+        ownerId: ownerUser.user.id,
+        ownerType: 'teacher',
+      })
+      const request = organizationRequest(ownerToken)
+      expect((await request.post(`/api/teams/${team.id}/problem-lists`).send({ problemListId: testList.list.id })).status).toBe(200)
+
+      const response = await request.get(`/api/teams/${team.id}/problem-lists`)
+      expect(response.status).toBe(200)
+      expect(response.body.data).toEqual(expect.arrayContaining([expect.objectContaining({
+        problemListId: testList.list.id,
+        problemList: expect.objectContaining({ id: testList.list.id, title: testList.list.title }),
+      })]))
+    })
+
     it('不能把另一学校题单挂到当前学校团队', async () => {
       const schoolB = await createTestSchoolWithPrincipal('团队题单第二校园')
       const membershipId = crypto.randomUUID()
