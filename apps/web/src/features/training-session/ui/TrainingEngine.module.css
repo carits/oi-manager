@@ -6,7 +6,7 @@
 .listFilters > * { min-width: 180px; }
 .loadingCopy { min-height: 180px; display: grid; place-items: center; margin: 0; color: var(--text-muted); }
 .sessionGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-3); }
-.sessionCard { display: grid; align-content: start; gap: var(--space-3); min-height: 220px; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.sessionCard { display: grid; align-content: start; gap: var(--space-3); min-height: 220px; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
 .sessionCard > button { justify-self: start; margin-top: auto; }
 .sessionCardHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .sessionCardHeader h3 { margin: 0; font-size: 1rem; line-height: 1.5; }
@@ -19,7 +19,7 @@
 .setupSection h3, .setupSection p, .trainingSetupSummary p { margin: 0; }
 .setupSection > div:first-child p, .trainingSetupSummary p { margin-top: var(--space-1); color: var(--text-muted); font-size: .875rem; line-height: 1.55; }
 .setupProblemList { display: grid; gap: var(--space-2); }
-.setupProblemRow { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.setupProblemRow { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
 .setupProblemRow > div { display: grid; min-width: 0; }
 .setupProblemRow strong, .setupProblemRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .setupProblemRow > div span { color: var(--text-muted); font-size: .875rem; }
@@ -30,7 +30,7 @@
 .trainingSetupSummary dt { color: var(--text-muted); font-size: .8125rem; }
 .trainingSetupSummary dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-3); }
-.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-4); display: grid; gap: var(--space-3); }
+.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); padding: var(--space-4); display: grid; gap: var(--space-3); }
 .card h3, .card p { margin: 0; }
 .muted { color: var(--text-muted); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
@@ -44,7 +44,7 @@
 .stageProblemEditor { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
 .unlockEditor { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border); }
 .conditionRow { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, 180px) auto; gap: var(--space-2); align-items: center; }
-.problemButton { width: 100%; text-align: left; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface); cursor: pointer; color: var(--text-primary); }
+.problemButton { width: 100%; text-align: left; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--bg-card); cursor: pointer; color: var(--text-primary); }
 .problemButton[data-active='true'] { border-color: var(--primary); background: var(--primary-light); }
 .problemButton:disabled { cursor: not-allowed; opacity: .55; }
 .editor { min-height: 360px; font-family: var(--font-mono); resize: vertical; }
@@ -55,7 +55,7 @@
 .timelineItem { border-left: 3px solid var(--border); padding-left: var(--space-3); }
 .message { padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
 .trainingSetupSummary .message p { color: var(--text-primary); }
-.controlDisclosure { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.controlDisclosure { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
 .controlDisclosure > summary { padding: var(--space-3); cursor: pointer; font-weight: 600; color: var(--text-primary); }
 .controlDisclosure[open] > summary { border-bottom: 1px solid var(--border); }
 .controlDisclosure > :not(summary) { margin: var(--space-3); }
@@ -65,11 +65,11 @@
 .draftConflict p { margin: 0; }
 .draftCompare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .draftCompare > div { min-width: 0; display: grid; gap: var(--space-2); }
-.draftCompare pre { max-height: 220px; margin: 0; padding: var(--space-2); overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-family: var(--font-mono); }
+.draftCompare pre { max-height: 220px; margin: 0; padding: var(--space-2); overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-family: var(--font-mono); }
 .peerGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-2); }
-.peerCard { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.peerCard { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
 .peerCard strong { flex: 1; }
-.designSteps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
+.designSteps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; }
 .designSteps > * { border-radius: 0; padding: var(--space-3); text-align: center; border-right: 1px solid var(--border); }
 .designSteps > :last-child { border-right: 0; }
 .designSteps strong { color: var(--primary); background: var(--primary-light); }
@@ -78,12 +78,12 @@
 .issueList > * { justify-content: flex-start; color: var(--danger); }
 .basicGrid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr); gap: var(--space-3); align-items: end; }
 .designWorkspace { display: grid; grid-template-columns: minmax(230px, .8fr) minmax(390px, 1.4fr) minmax(300px, 1fr); gap: var(--space-3); align-items: start; min-width: 0; }
-.designColumn { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
+.designColumn { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; }
 .designColumn > header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--border); background: var(--bg-muted); }
 .designColumn > header > div { display: grid; gap: 2px; }
 .designColumn > header small { color: var(--text-muted); }
 .designColumnBody { display: grid; gap: var(--space-2); padding: var(--space-2); max-height: 72vh; overflow-y: auto; }
-.stageCard, .problemChainCard, .poolProblem { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.stageCard, .problemChainCard, .poolProblem { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
 .stageCard { cursor: pointer; }
 .stageCard > small, .poolProblem small, .poolProblem span { color: var(--text-muted); }
 .activeDesignCard { border-color: var(--primary); background: var(--primary-light); }
@@ -118,8 +118,102 @@
 
 .matrixTable { display: grid; grid-template-columns: minmax(140px, .65fr) repeat(var(--training-stage-count, 3), minmax(180px, 1fr)); gap: 1px; overflow-x: auto; border: 1px solid var(--border); background: var(--border); }
 .matrixRow { display: contents; }
-.matrixHeader, .matrixCell { display: grid; gap: 4px; min-width: 160px; padding: var(--space-3); border: 0; background: var(--surface); color: var(--text); text-align: left; }
+.matrixHeader, .matrixCell { display: grid; gap: 4px; min-width: 160px; padding: var(--space-3); border: 0; background: var(--bg-card); color: var(--text); text-align: left; }
 .matrixHeader { font-weight: 700; background: var(--bg-muted); }
 .matrixHeader small, .matrixCell small { color: var(--text-muted); font-weight: 400; }
 .matrixCell { cursor: pointer; }
 .matrixCell:hover, .matrixCell:focus-visible { background: var(--primary-light); outline: 2px solid var(--primary); outline-offset: -2px; }
+
+
+/* Training designer: flow canvas, progressive panels and stage drawer. */
+.saveState { display: inline-flex; align-items: center; min-height: 34px; padding: 0 var(--space-2); color: var(--success); font-size: .875rem; font-weight: 600; white-space: nowrap; }
+.saveState::before { content: ''; width: 7px; height: 7px; margin-right: var(--space-1); border-radius: 50%; background: currentColor; }
+.saveStateDirty { color: var(--warning); }
+.designerIdentity { display: grid; grid-template-columns: minmax(240px, .75fr) minmax(360px, 1.5fr); gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
+.designerCanvas { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: var(--space-4); align-items: start; min-width: 0; }
+.trainingFlow { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; }
+.trainingFlowHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); background: var(--bg-muted); }
+.trainingFlowHeader h2, .trainingFlowHeader p { margin: 0; }
+.trainingFlowHeader h2 { font-size: 1rem; }
+.trainingFlowHeader p { margin-top: var(--space-1); color: var(--text-muted); font-size: .875rem; }
+.trainingFlowList { display: grid; padding: var(--space-4); }
+.trainingFlowItem { display: grid; }
+.trainingFlow .stageCard { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); min-height: 86px; padding: var(--space-3); cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
+.trainingFlow .stageCard:hover { border-color: color-mix(in srgb, var(--primary) 50%, var(--border)); background: var(--bg-muted); }
+.stageNumber { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--bg-muted); color: var(--text-muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.activeDesignCard .stageNumber { background: var(--primary); color: white; }
+.stageCardContent { display: grid; gap: 3px; min-width: 0; }
+.stageCardContent strong, .stageCardContent span, .stageCardContent small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stageCardContent span, .stageCardContent small { color: var(--text-muted); font-size: .875rem; }
+.stageCardActions { display: flex; align-items: center; gap: 2px; color: var(--text-muted); }
+.stageConnector { display: grid; justify-items: start; height: 24px; padding-left: 33px; }
+.stageConnector span { width: 2px; height: 100%; background: var(--border); }
+.trainingFlowEmpty { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6); color: var(--text-muted); }
+.designerSidebar { position: sticky; top: var(--space-4); display: grid; gap: var(--space-3); }
+.designerSummaryCard { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
+.designerSummaryCard p { margin: 0; color: var(--text-muted); font-size: .875rem; line-height: 1.55; }
+.designerSummaryHeading { display: flex; align-items: center; gap: var(--space-2); color: var(--text-primary); }
+.designerSummaryHeading > div { display: grid; gap: 2px; }
+.designerSummaryHeading span { color: var(--text-muted); font-size: .8125rem; }
+.designerMetrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin: 0; }
+.designerMetrics > div { display: grid; gap: 2px; padding: var(--space-2); border-radius: var(--radius-sm); background: var(--bg-muted); text-align: center; }
+.designerMetrics dt { color: var(--text-muted); font-size: .75rem; }
+.designerMetrics dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.designerSummaryCard .issueList { margin-top: 0; }
+.issueList button, .publishIssues button { border: 0; padding: var(--space-1) 0; background: transparent; color: var(--danger); text-align: left; cursor: pointer; }
+
+.stageDrawerLayer { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; }
+.stageDrawerBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgb(15 23 42 / .42); cursor: default; }
+.stageDrawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(720px, calc(100vw - 48px)); height: 100%; background: var(--bg-card); box-shadow: -12px 0 36px rgb(15 23 42 / .18); }
+.stageDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
+.stageDrawerHeader h2, .stageDrawerHeader p { margin: 0; }
+.stageDrawerHeader h2 { font-size: 1.1rem; }
+.stageDrawerHeader p { margin-top: var(--space-1); color: var(--text-muted); font-size: .875rem; }
+.stageDrawerBody { display: grid; align-content: start; gap: var(--space-4); min-height: 0; padding: var(--space-4); overflow-y: auto; }
+.stageEditor { min-width: 0; }
+.readOnlyNotice { margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); color: var(--text-muted); }
+.stageProblemList { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.stageProblemListHeader { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
+.stageProblemListHeader > div { display: flex; align-items: baseline; gap: var(--space-2); }
+.stageProblemListHeader span, .stageProblemListHeader small { color: var(--text-muted); font-size: .8125rem; }
+.problemChainSummary { display: grid; grid-template-columns: auto 28px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+.problemChainSummary > div { display: grid; min-width: 0; }
+.problemChainSummary > div strong, .problemChainSummary > div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.problemChainSummary > div span { color: var(--text-muted); font-size: .875rem; }
+.problemQuickActions { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-1); }
+.drawerProblemPicker { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-muted); }
+.drawerProblemPicker p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: .875rem; }
+.studentPreview { display: grid; gap: var(--space-4); }
+.studentPreviewGoal { display: grid; gap: var(--space-1); padding: var(--space-4); border-left: 3px solid var(--primary); background: var(--bg-muted); }
+.studentPreviewGoal span, .studentPreviewGoal p { color: var(--text-muted); }
+.studentPreviewGoal p { margin: 0; }
+.studentPreviewFlow { display: grid; gap: var(--space-2); }
+.studentPreviewFlow article { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.studentPreviewFlow article > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--bg-muted); font-weight: 700; }
+.studentPreviewFlow article p { margin: 3px 0 0; color: var(--text-muted); }
+.studentPreviewFlow article small { color: var(--text-muted); }
+.publishReview, .publishIssues { display: grid; gap: var(--space-3); }
+.publishReview dl { display: grid; gap: var(--space-2); margin: 0; }
+.publishReview dl > div { display: flex; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+.publishReview dd { margin: 0; font-weight: 600; }
+.publishIssues { padding: var(--space-3); border: 1px solid var(--danger); border-radius: var(--radius-md); background: var(--danger-light); }
+
+@media (max-width: 980px) {
+  .designerCanvas { grid-template-columns: 1fr; }
+  .designerSidebar { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .designerSummaryCard:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .designerIdentity, .designerSidebar { grid-template-columns: 1fr; }
+  .designerSummaryCard:last-child { grid-column: auto; }
+  .trainingFlowHeader { align-items: stretch; flex-direction: column; }
+  .trainingFlow .stageCard { grid-template-columns: 34px minmax(0, 1fr); }
+  .stageCardActions { grid-column: 1 / -1; justify-content: flex-end; padding-top: var(--space-2); border-top: 1px solid var(--border); }
+  .stageConnector { padding-left: 29px; }
+  .stageDrawer { width: 100vw; }
+  .problemChainSummary { grid-template-columns: auto 28px minmax(0, 1fr); }
+  .problemChainSummary > :last-child { grid-column: 2 / -1; justify-self: start; }
+  .problemQuickActions { justify-content: flex-start; flex-wrap: wrap; }
+  .studentPreviewFlow article { grid-template-columns: 32px minmax(0, 1fr); }
+  .studentPreviewFlow article small { grid-column: 2; }
+}

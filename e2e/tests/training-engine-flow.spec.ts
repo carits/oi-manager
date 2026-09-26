@@ -80,7 +80,7 @@ const allStage = (name: string, problemId = ids.problem, extra: Record<string, u
 })
 
 test.describe('coach-directed training engine @smoke @compact', () => {
-  test('coach creates a draft and visibly arranges stage and problem order', async ({ browser }) => {
+  test('coach creates a draft and visibly arranges the training flow', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const coach = await coachContext.newPage()
     await coach.goto(`/org/org_${ids.school}/training-sessions`)
@@ -94,21 +94,35 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     await setupProblemInput.getByRole('button', { name: '添加' }).click()
     await expect(dialog.getByLabel('已选训练题目').getByText(/E2E A Plus B/)).toBeVisible()
     await dialog.getByRole('button', { name: '转为课堂训练' }).click()
+
     await expect(coach).toHaveURL(/\/training-sessions\/[^/]+\/design$/)
-    await expect(coach.getByRole('region', { name: '阶段时间线' })).toBeVisible()
-    const problemChain = coach.getByRole('region', { name: '当前阶段题目链' })
-    await expect(problemChain).toBeVisible()
+    await expect(coach.getByRole('heading', { name: '训练编排' })).toBeVisible()
+    const flow = coach.getByRole('region', { name: '训练流程' })
+    await expect(flow).toBeVisible()
+    await expect(coach.getByRole('navigation', { name: '训练设计步骤' })).toHaveCount(0)
+    await flow.getByText('训练任务', { exact: true }).click()
+
+    const stageDrawer = coach.getByRole('dialog', { name: '训练任务' })
+    const problemChain = stageDrawer.getByRole('region', { name: '当前阶段题目链' })
     await expect(problemChain.getByText(/E2E A Plus B/)).toBeVisible()
-    await expect(coach.getByRole('heading', { name: '完整流程预览' })).toBeVisible()
+    await expect(problemChain.getByText('高级设置')).toBeVisible()
+    await stageDrawer.getByRole('button', { name: '关闭阶段设置' }).click()
+
+    await coach.getByRole('button', { name: '预览学生视角' }).click()
+    await expect(coach.getByRole('dialog', { name: '学生视角预览' }).getByText('E2E-1000', { exact: true }).first()).toBeVisible()
+    await coach.getByRole('dialog', { name: '学生视角预览' }).getByRole('button', { name: '关闭预览' }).click()
+
+    await coach.getByRole('button', { name: '设置学员与分组' }).click()
+    const rosterDialog = coach.getByRole('dialog', { name: '学员与分组' })
+    await expect(rosterDialog.getByRole('heading', { name: '训练学员' })).toBeVisible()
+    await rosterDialog.getByRole('button', { name: '关闭' }).last().click()
+
+    await coach.getByRole('button', { name: '管理提示' }).click()
+    await expect(coach.getByRole('dialog', { name: '提示' }).getByRole('heading', { name: '提示配置' })).toBeVisible()
+    await coach.getByRole('dialog', { name: '提示' }).getByRole('button', { name: '关闭' }).last().click()
+
     await coach.reload()
-    await expect(coach.getByRole('region', { name: '当前阶段题目链' }).getByText(/E2E A Plus B/)).toBeVisible()
-    await expect(coach.getByRole('heading', { name: '完整流程预览' })).toBeVisible()
-    await coach.getByRole('button', { name: '3 学员与分组' }).click()
-    await expect(coach.getByRole('heading', { name: '训练学员' })).toBeVisible()
-    await coach.getByRole('button', { name: '4 提示配置' }).click()
-    await expect(coach.getByRole('heading', { name: '提示配置' })).toBeVisible()
-    await coach.getByRole('button', { name: '5 发布检查' }).click()
-    await expect(coach.getByRole('heading', { name: '发布检查' })).toBeVisible()
+    await expect(coach.getByRole('region', { name: '训练流程' }).getByText('训练任务', { exact: true })).toBeVisible()
     await coachContext.close()
   })
 
