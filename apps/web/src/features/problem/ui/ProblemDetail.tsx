@@ -6,6 +6,7 @@ import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell }
 import unifiedStyles from './ProblemDetail.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Pagination } from '@/components/ui/Pagination'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/features/auth'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
@@ -19,7 +20,7 @@ import { saveBlobDownload } from '@/lib/download'
 import { getOjProblemUrl, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { TranslateModal } from './TranslateModal'
-import { SubmissionDetailModal, SubmissionIoFields, SubmissionCodeEditor, clearSubmissionDraft, type SubmissionIoValue } from '@/features/submission'
+import { SubmissionDetailModal, SubmissionIoFields, SubmissionCodeEditor, type SubmissionIoValue } from '@/features/submission'
 import { UserProblemContentPanel } from './UserProblemContentPanel'
 import { StatementVersionWorkspace } from './StatementVersionWorkspace'
 import { ProblemHackPanel } from './ProblemHackPanel'
@@ -155,6 +156,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const VALID_TABS: TabType[] = ['statement', 'solution', 'knowledge', 'attachments', 'records', 'hack']
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
+  const [problemError, setProblemError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>(
     searchParams.get('tab') === 'my-content' ? 'solution' : VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'statement'
   )
@@ -164,9 +166,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const [submitCode, setSubmitCode] = useState('')
   const [submitLoading, setSubmitLoading] = useState(false)
   const submitKeyRef = useRef<string | null>(null)
+  const submissionRequestRef = useRef(0)
   const [detailSubmissionId, setDetailSubmissionId] = useState<number | null>(null)
   const [problemSubmissions, setProblemSubmissions] = useState<ProblemSubmission[]>([])
   const [problemSubmissionsLoading, setProblemSubmissionsLoading] = useState(false)
+  const [problemSubmissionsError, setProblemSubmissionsError] = useState<string | null>(null)
+  const [submissionPage, setSubmissionPage] = useState(1)
+  const [submissionPageSize, setSubmissionPageSize] = useState(20)
+  const [submissionTotal, setSubmissionTotal] = useState(0)
+  const [submissionTotalPages, setSubmissionTotalPages] = useState(0)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null)
@@ -266,6 +274,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const fetchProblem = async () => {
     try {
       setLoading(true)
+      setProblemError(null)
       const result = await apiClient.get<Problem>(`/api/problems/${problemId}`)
       if (result.success && result.data) {
         setProblem(result.data)
@@ -277,9 +286,14 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         if (langs.length > 0) {
           setSubmitLanguage(langs[0].id)
         }
+      } else {
+        setProblem(null)
+        setProblemError(result.message || '题目加载失败，请稍后重试')
       }
     } catch (error) {
       console.error('Failed to fetch problem:', error)
+      setProblem(null)
+      setProblemError(errorMessage(error, '题目加载失败，请稍后重试'))
     } finally {
       setLoading(false)
     }
@@ -326,14 +340,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
       if (result.ok && result.data?.submissionId) {
         submitKeyRef.current = null
-        toast.success('提交成功')
-        setShowSubmitPanel(false)
-        clearSubmissionDraft(`${user?.userId || 'account'}:problem:${problem.id}`, submitLanguage)
-        setSubmitCode('')
-        setSubmissionIo(problem.legacyIoSuggestion || { inputFilename: null, outputFilename: null })
-        // 刷新提交记录
-        fetchProblemSubmissions()
-        // 打开状态弹窗
+        toast.success('提交成功，代码和文件 IO 设置已保留，可继续修改')
+        if (submissionPage === 1) void fetchProblemSubmissions(1)
+        else setSubmissionPage(1)
         setDetailSubmissionId(result.data.submissionId)
       } else {
         if (!result.ok && result.error.status > 0 && result.error.status < 500) {
@@ -349,30 +358,40 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   }
 
   // 获取题目提交记录
-  const fetchProblemSubmissions = async () => {
+  const fetchProblemSubmissions = async (page = submissionPage, pageSize = submissionPageSize) => {
     if (!problemId) return
+    const requestId = ++submissionRequestRef.current
     setProblemSubmissionsLoading(true)
+    setProblemSubmissionsError(null)
     try {
       const result = await apiClient.get<{
         submissions: ProblemSubmission[]
+        page: number
+        pageSize: number
         total: number
-      }>(`/api/problems/${problemId}/submissions`)
+        totalPages: number
+      }>(`/api/problems/${problemId}/submissions?page=${page}&pageSize=${pageSize}`)
+      if (requestId !== submissionRequestRef.current) return
       if (result.success && result.data) {
         setProblemSubmissions(result.data.submissions || [])
+        setSubmissionTotal(result.data.total)
+        setSubmissionTotalPages(result.data.totalPages)
+      } else {
+        setProblemSubmissionsError(result.message || '提交记录加载失败，请重试')
       }
     } catch (error) {
+      if (requestId !== submissionRequestRef.current) return
       console.error('Failed to fetch submissions:', error)
+      setProblemSubmissionsError(errorMessage(error, '提交记录加载失败，请重试'))
     } finally {
-      setProblemSubmissionsLoading(false)
+      if (requestId === submissionRequestRef.current) setProblemSubmissionsLoading(false)
     }
   }
 
-  // 当 activeTab 变为 records 时获取提交记录
+  // 当提交记录标签、页码或每页数量变化时加载对应页面。
   useEffect(() => {
-    if (activeTab === 'records') {
-      fetchProblemSubmissions()
-    }
-  }, [activeTab])
+    if (activeTab === 'records') void fetchProblemSubmissions(submissionPage, submissionPageSize)
+  }, [activeTab, submissionPage, submissionPageSize, problemId])
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B'
@@ -528,7 +547,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   if (!problem) {
     return (
       <div className={unifiedStyles.u1}>
-        题目不存在
+        <div role="alert">
+          <strong>{problemError || '题目不存在或当前账号无权访问'}</strong>
+          <p>如果这是临时网络问题，可以重新加载；不会把加载失败误判为题目被删除。</p>
+          <Button variant="secondary" onClick={() => void fetchProblem()}>重新加载</Button>
+        </div>
       </div>
     )
   }
@@ -819,6 +842,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         <span className={[("resource-skeleton-line"), collisionStyles.u3].filter(Boolean).join(' ')}  aria-label="内容正在准备" />
                       </TableCell>
                     </TableRow>
+                  ) : problemSubmissionsError ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className={unifiedStyles.u41}>
+                        <div role="alert">{problemSubmissionsError}</div>
+                        <Button size="sm" variant="secondary" onClick={() => void fetchProblemSubmissions()}>重新加载</Button>
+                      </TableCell>
+                    </TableRow>
                   ) : problemSubmissions.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className={unifiedStyles.u41}>
@@ -828,12 +858,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   ) : (
                     problemSubmissions.map(s => (
                       <TableRow key={s.id} className={unifiedStyles.u42}>
-                        <TableCell
-                          onClick={() => {
-                            router.push(`${pathPrefix}/submissions/${s.id}`)
-                          }}
-                          className={unifiedStyles.u43}
-                        >#{s.id}</TableCell>
+                        <TableCell className={unifiedStyles.u43}>
+                          <Button size="sm" variant="ghost" onClick={() => router.push(`${pathPrefix}/submissions/${s.id}`)}>#{s.id}</Button>
+                        </TableCell>
                         <TableCell className={unifiedStyles.u44}>{s.username}</TableCell>
                         <TableCell className={unifiedStyles.u44}>
                           <span className={unifiedStyles.submissionResult} data-result={s.result}>
@@ -843,11 +870,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         <TableCell className={unifiedStyles.u44}>{s.timeUsed ?? '-'}</TableCell>
                         <TableCell className={unifiedStyles.u44}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</TableCell>
                         <TableCell className={unifiedStyles.u44}>{s.codeLength ?? '-'}</TableCell>
-                        <TableCell
-                          onClick={() => setDetailSubmissionId(s.id)}
-                          className={unifiedStyles.u46}
-                        >
-                          {getLanguageLabel(s.language)}
+                        <TableCell className={unifiedStyles.u46}>
+                          <Button size="sm" variant="ghost" onClick={() => setDetailSubmissionId(s.id)}>{getLanguageLabel(s.language)}</Button>
                         </TableCell>
                         <TableCell className={unifiedStyles.u47}>
                           {s.submittedAt ? new Date(s.submittedAt).toLocaleString('zh-CN') : '-'}
@@ -857,6 +881,14 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   )}
                 </TableBody>
               </TableRoot>
+              <Pagination
+                currentPage={submissionPage}
+                totalPages={submissionTotalPages}
+                total={submissionTotal}
+                pageSize={submissionPageSize}
+                onPageChange={setSubmissionPage}
+                onPageSizeChange={pageSize => { setSubmissionPageSize(pageSize); setSubmissionPage(1) }}
+              />
             </div>
           )}
         </div>
