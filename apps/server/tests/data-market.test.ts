@@ -6,7 +6,6 @@ import { createAuthenticatedRequest, createTestApp } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
-import { ensureCanonicalContestFixtureTx } from './helpers/contest-fixture'
 
 const app = createTestApp()
 
@@ -132,13 +131,20 @@ describe('V1 data product marketplace', () => {
     const team = await prisma.team.create({ data: { id: crypto.randomUUID(), name: 'Licensed contest team', scope: 'personal', isPublic: false } })
     await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: buyer.user.id, userType: 'student', role: 'owner', status: 'active' } })
     await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: outsider.user.id, userType: 'student', role: 'member', status: 'active' } })
-    const practice = await prisma.training.create({ data: { title: 'Practice', type: 'training', scope: 'personal', teamId: team.id, startTime: new Date(), endTime: new Date(Date.now() + 3600_000), status: 'upcoming', createdBy: buyer.user.id } })
-    const rejected = await client(buyer).post(`/api/data-products/${productId}/purchase`).set('Idempotency-Key', crypto.randomUUID()).send({ license: 'CONTEST', contestId: practice.id })
+    const rejected = await client(buyer).post(`/api/data-products/${productId}/purchase`).set('Idempotency-Key', crypto.randomUUID()).send({
+      license: 'CONTEST', contestId: 999_999_999,
+    })
     expect(rejected.status).toBe(403)
 
-    const contest = await prisma.training.create({ data: { title: 'Real contest', type: 'contest', scope: 'personal', teamId: team.id, startTime: new Date(), endTime: new Date(Date.now() + 3600_000), status: 'upcoming', createdBy: buyer.user.id } })
-    await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, contest.id))
-    const purchased = await client(buyer).post(`/api/data-products/${productId}/purchase`).set('Idempotency-Key', crypto.randomUUID()).send({ license: 'CONTEST', contestId: contest.id })
+    const startAt = new Date()
+    const contest = await prisma.contest.create({ data: {
+      id: crypto.randomUUID(), title: 'Real contest', type: 'judged', format: 'ioi',
+      scope: 'personal', organizationId: null, teamId: team.id, contestDate: startAt, startAt,
+      endAt: new Date(Date.now() + 3600_000), status: 'upcoming', createdBy: buyer.user.id,
+    } })
+    const purchased = await client(buyer).post(`/api/data-products/${productId}/purchase`).set('Idempotency-Key', crypto.randomUUID()).send({
+      license: 'CONTEST', contestId: contest.publicId,
+    })
     expect(purchased.status).toBe(201)
     const entitlementId = purchased.body.data.Entitlement.id as string
     expect((await client(outsider).get(`/api/data-entitlements/${entitlementId}`)).status).toBe(404)

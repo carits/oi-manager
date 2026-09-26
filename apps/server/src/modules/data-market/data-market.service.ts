@@ -8,7 +8,7 @@ import {
 } from '@prisma/client'
 import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../prisma'
-import { findContestForLicense, listContestPublicIdsForLicenseScopes } from '../contest/contest-query.facade'
+import { findContestForLicense, listContestIdsForLicenseScopes } from '../contest/contest-query.facade'
 import { postCaritsTransaction } from '../carits/application/carits-ledger.service'
 import { notificationService } from '../notification/notification.service'
 import { canModifyProblem, canViewProblem, isPlatformManager } from '../problem/problem.access'
@@ -231,16 +231,16 @@ async function purchaseScope(user: JwtPayload, licenseType: DataLicenseType, bod
     }
     return { buyerOrganizationId: organizationId, contestId: null, payer: { ownerType: 'ORGANIZATION' as const, organizationId } }
   }
-  const contestId = String(body?.contestId ?? String())
-  if (!/^\d+$/.test(contestId)) policyFail(422, 'DATA_LICENSE_SCOPE_REQUIRED', '比赛许可证必须指定有效的 contestId')
-  const resolved = await findContestForLicense(Number(contestId))
+  const publicContestId = String(body?.contestId ?? String())
+  if (!/^\d+$/.test(publicContestId)) policyFail(422, 'DATA_LICENSE_SCOPE_REQUIRED', '比赛许可证必须指定有效的 contestId')
+  const resolved = await findContestForLicense(Number(publicContestId))
   const contest = resolved?.contest || null
   const teamManager = contest?.Team?.TeamMember.some((member: any) => member.userId === user.userId && member.status === 'active' && ['owner', 'admin'].includes(member.role))
   const organizationManager = contest?.organizationId
     ? await hasOrganizationCapability(user.userId, contest.organizationId, 'contest.manage')
     : false
   if (!contest || (!isPlatformManager(user.accountRole) && !teamManager && !organizationManager)) policyFail(403, 'DATA_LICENSE_SCOPE_FORBIDDEN', '只有真实比赛所属团队或组织的管理员可以购买比赛许可证')
-  return { buyerOrganizationId: contest.organizationId || contest.Team?.organizationId || null, contestId, payer: { ownerType: 'USER' as const, userId: user.userId } }
+  return { buyerOrganizationId: contest.organizationId || contest.Team?.organizationId || null, contestId: resolved!.canonical.id, payer: { ownerType: 'USER' as const, userId: user.userId } }
 }
 
 function requestFingerprint(input: Record<string, unknown>) {
@@ -317,7 +317,7 @@ async function accessibleScopeIds(user: JwtPayload) {
   const organizationIds = authorizations
     .filter(item => item.capabilities.has('contest.manage'))
     .map(item => item.organizationId)
-  const contests = (await listContestPublicIdsForLicenseScopes({
+  const contests = (await listContestIdsForLicenseScopes({
     organizationIds,
     teamIds: teamMemberships.map(item => item.teamId),
   })).map(String)

@@ -80,7 +80,7 @@ export async function findContestForLicense(publicId: number) {
   return { canonical: contest, contest: toContestView(contest), source: 'contest' as const }
 }
 
-export async function listContestPublicIdsForLicenseScopes(input: {
+export async function listContestIdsForLicenseScopes(input: {
   organizationIds: string[]
   teamIds: string[]
 }) {
@@ -92,9 +92,9 @@ export async function listContestPublicIdsForLicenseScopes(input: {
         ...(input.organizationIds.length ? [{ organizationId: { in: input.organizationIds } }] : []),
       ],
     },
-    select: { publicId: true },
+    select: { id: true },
   })
-  return rows.map(row => row.publicId)
+  return rows.map(row => row.id)
 }
 
 export async function listContestsForDashboard(input: {
