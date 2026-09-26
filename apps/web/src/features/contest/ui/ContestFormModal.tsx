@@ -8,7 +8,7 @@ import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { FormDialog } from '@/components/ui/Dialogs'
+import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { Tabs } from '@/components/ui/Tabs'
 import { useAuth } from '@/features/auth'
 import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
@@ -137,11 +137,17 @@ export function ContestFormModal({ isOpen, onClose, teamId, schoolId, organizati
   const [problemRows, setProblemRows] = useState<ProblemRow[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [initialSnapshot, setInitialSnapshot] = useState('')
+  const [baselinePending, setBaselinePending] = useState(false)
+  const [closeRequested, setCloseRequested] = useState(false)
 
   // Reset / load data when modal opens
   useEffect(() => {
     if (!isOpen) return
     setWizardStep(0)
+    setInitialSnapshot('')
+    setBaselinePending(true)
+    setCloseRequested(false)
     setRecoveryContestId(null)
     setRecoveryMessage('')
 
@@ -270,6 +276,39 @@ export function ContestFormModal({ isOpen, onClose, teamId, schoolId, organizati
   useEffect(() => {
     if (!allowedRatingScopes.includes(ratingScope)) setRatingScope('NONE')
   }, [allowedRatingScopes, ratingScope])
+
+  const formSnapshot = JSON.stringify({
+    title,
+    description,
+    format,
+    startTime,
+    endTime,
+    problemIdVisible,
+    solutionVisible,
+    includeAdminInRanking,
+    ratingScope,
+    ratingWeight,
+    organizationRatingMinimum,
+    globalRatingMinimum,
+    problems: problemRows.map(row => ({
+      id: row.contestProblemId || row.resolved?.problemId || row.id,
+      alias: row.alias,
+      points: row.points,
+      statementOptionKey: row.statementOptionKey || null,
+      solutionOptionKey: row.solutionOptionKey || null,
+    })),
+  })
+  useEffect(() => {
+    if (!isOpen || loading || !baselinePending) return
+    setInitialSnapshot(formSnapshot)
+    setBaselinePending(false)
+  }, [baselinePending, formSnapshot, isOpen, loading])
+  const formDirty = !baselinePending && Boolean(initialSnapshot) && formSnapshot !== initialSnapshot
+  const requestClose = () => {
+    if (saving || loading) return
+    if (formDirty) setCloseRequested(true)
+    else onClose()
+  }
 
   const updateRow = (rowId: string, updates: Partial<ProblemRow>) => {
     setProblemRows(prev => prev.map(r => r.id === rowId ? { ...r, ...updates } : r))
@@ -544,21 +583,32 @@ export function ContestFormModal({ isOpen, onClose, teamId, schoolId, organizati
     && Number(globalRatingMinimum) >= 2
     && allowedRatingScopes.includes(ratingScope)
   )
-  const canAdvance = wizardStep === 0
-    ? Boolean(title.trim() && startTime && endTime && new Date(endTime) > new Date(startTime))
-    : wizardStep === 1
-      ? Boolean(format && ratingConfigurationValid)
-      : wizardStep === 2
-      ? problemRows.length > 0 && problemRows.every(row => row.resolved?.found)
-      : true
-  const contestValidationIssues = contestWizard ? [
-    !title.trim() ? '请填写比赛标题' : '',
-    !startTime || !endTime ? '请填写完整的开始与结束时间' : new Date(endTime) <= new Date(startTime) ? '结束时间必须晚于开始时间' : '',
-    problemRows.length === 0 ? '请至少添加一道题目' : problemRows.some(row => !row.resolved?.found) ? '仍有题目未能解析' : '',
-    ratingScope !== 'NONE' && (!Number.isFinite(Number(ratingWeight)) || Number(ratingWeight) < 0.1 || Number(ratingWeight) > 1) ? 'Rating 影响强度必须在 10%～100% 之间' : '',
-    ratingScope !== 'NONE' && (Number(organizationRatingMinimum) < 2 || Number(globalRatingMinimum) < 2) ? 'Rating 最低参赛人数不能小于 2' : '',
-    !allowedRatingScopes.includes(ratingScope) ? '当前比赛范围不允许所选 Rating 类型' : '',
-  ].filter(Boolean) : []
+  const editContestStarted = Boolean(isEdit && originalStartTime && new Date() >= originalStartTime)
+  const stepIssues = (step: number) => {
+    if (step === 0) return [
+      !title.trim() ? '请填写比赛标题' : '',
+      !startTime || !endTime ? '请填写完整的开始与结束时间' : '',
+      startTime && endTime && new Date(endTime) <= new Date(startTime) ? '结束时间必须晚于开始时间' : '',
+      !isEdit && startTime && new Date(startTime) <= new Date() ? '开始时间必须晚于当前时间' : '',
+      editContestStarted && startTime !== originalStartTimeStr ? '比赛已经开始，不能修改开始时间' : '',
+      isEdit && !editContestStarted && startTime !== originalStartTimeStr && new Date(startTime) <= new Date() ? '修改后的开始时间必须晚于当前时间' : '',
+      isEdit && endTime && new Date(endTime) <= new Date() ? '结束时间必须晚于当前时间' : '',
+    ].filter(Boolean)
+    if (step === 1) return [
+      !format ? '请选择赛制' : '',
+      !ratingConfigurationValid ? '请修正 Rating 范围、影响强度或最低参赛人数' : '',
+    ].filter(Boolean)
+    if (step === 2) return [
+      problemRows.length === 0 ? '请至少添加一道题目' : '',
+      problemRows.some(row => !row.resolved?.found) ? '仍有题目未能解析' : '',
+    ].filter(Boolean)
+    return []
+  }
+  const canReachStep = (target: number) => target <= 0 || Array.from({ length: target }, (_, index) => stepIssues(index).length === 0).every(Boolean)
+  const currentStepIssues = contestWizard ? stepIssues(wizardStep) : []
+  const contestValidationIssues = contestWizard
+    ? [0, 1, 2, 3].flatMap(step => stepIssues(step))
+    : []
 
   return (
     <>
@@ -567,11 +617,13 @@ export function ContestFormModal({ isOpen, onClose, teamId, schoolId, organizati
       onClose={onClose}
       title={isEdit ? `编辑${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}` : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`}
       size="xl"
+      dirty={formDirty}
+      loading={saving || loading}
       footer={
         <div className={unifiedStyles.u1}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="secondary" onClick={requestClose} disabled={saving || loading}>取消</Button>
           {contestWizard && wizardStep > 0 && <Button variant="secondary" onClick={() => setWizardStep(step => step - 1)} disabled={saving || loading}>上一步</Button>}
-          {contestWizard && wizardStep < wizardSteps.length - 1 ? <Button onClick={() => setWizardStep(step => step + 1)} disabled={saving || loading || !canAdvance}>下一步</Button> : <Button onClick={handleSave} disabled={saving || loading || Boolean(recoveryContestId) || (contestWizard && contestValidationIssues.length > 0)}>
+          {contestWizard && wizardStep < wizardSteps.length - 1 ? <Button onClick={() => setWizardStep(step => step + 1)} disabled={saving || loading || !canReachStep(wizardStep + 1)}>下一步</Button> : <Button onClick={handleSave} disabled={saving || loading || Boolean(recoveryContestId) || (contestWizard && contestValidationIssues.length > 0)}>
             {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`)}
           </Button>}
         </div>
@@ -582,7 +634,8 @@ export function ContestFormModal({ isOpen, onClose, teamId, schoolId, organizati
           <div className={unifiedStyles.u3}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
         ) : (
           <>
-            {contestWizard && <div className={unifiedStyles.wizardSteps} role="tablist" aria-label="比赛创建步骤">{wizardSteps.map((label, index) => <Button key={label} size="sm" variant={index === wizardStep ? 'primary' : index < wizardStep ? 'secondary' : 'ghost'} disabled={index > wizardStep + 1 || Boolean(recoveryContestId)} onClick={() => index <= wizardStep + 1 && setWizardStep(index)} aria-current={index === wizardStep ? 'step' : undefined}>{index + 1}. {label}</Button>)}</div>}
+            {contestWizard && <div className={unifiedStyles.wizardSteps} role="tablist" aria-label="比赛创建步骤">{wizardSteps.map((label, index) => <Button key={label} size="sm" variant={index === wizardStep ? 'primary' : index < wizardStep ? 'secondary' : 'ghost'} disabled={!canReachStep(index) || Boolean(recoveryContestId) || saving || loading} onClick={() => setWizardStep(index)} aria-current={index === wizardStep ? 'step' : undefined}>{index + 1}. {label}</Button>)}</div>}
+            {contestWizard && currentStepIssues.length > 0 && <section className={unifiedStyles.reviewCard} role="alert"><strong>完成本步骤后可继续</strong><ul className={unifiedStyles.reviewIssues}>{currentStepIssues.map(issue => <li key={issue}>{issue}</li>)}</ul></section>}
             {recoveryContestId && <section className={unifiedStyles.reviewCard} role="alert"><h3>比赛草稿已保留</h3><p>{recoveryMessage || '后续配置未完成。为避免重复创建，请进入已经生成的草稿继续处理。'}</p><Button onClick={() => { const href = organizationId ? `/org/${organizationId}/contests/${recoveryContestId}` : teamId ? `/personal/teams/${teamId}/contests/${recoveryContestId}` : `${user?.accountRole === 'super_admin' ? '/admin' : '/platform-admin'}/contests/${recoveryContestId}`; window.location.assign(href) }}>进入比赛草稿</Button></section>}
             {/* Basic Info */}
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
@@ -768,6 +821,7 @@ export function ContestFormModal({ isOpen, onClose, teamId, schoolId, organizati
         )}
       </div>
     </FormDialog>
+    <ConfirmDialog isOpen={closeRequested} onClose={() => setCloseRequested(false)} onConfirm={() => { setCloseRequested(false); onClose() }} title="放弃未保存的比赛配置？" message="关闭后，本次比赛配置修改将不会保存。" confirmText="放弃修改" danger />
     </>
   )
 }
