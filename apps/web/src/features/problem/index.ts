@@ -12,3 +12,6 @@ export const PlatformProblemManagementPage = dynamic(() =>
 )
 
 export { listProblemLists } from './api/problemListApi'
+
+export { listProblems } from './api/platformProblemAdminApi'
+export { listProblemTestSetRevisions } from './api/problemJudgeSettingsApi'

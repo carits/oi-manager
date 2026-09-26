@@ -5,7 +5,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/FormControls'
 import { FormField } from '@/components/ui/FormField'
-import apiClient from '@/lib/apiClient'
+import { listProblems, listProblemTestSetRevisions } from '@/features/problem'
 import {
   BLOG_REFERENCE_LABELS,
   emptyBlogReference,
@@ -22,15 +22,15 @@ function ProblemReferencePicker({ reference, update }: { reference: BlogDraftRef
   const [revisions, setRevisions] = useState<RevisionOption[]>([])
   useEffect(() => {
     void Promise.all([
-      apiClient.get<{ data: ProblemOption[] }>('/api/problems?library=platform&pageSize=100'),
-      apiClient.get<{ data: ProblemOption[] }>('/api/problems?library=school&pageSize=100'),
-    ]).then(results => setProblems(Array.from(new Map(results.flatMap(result => result.success ? result.data?.data || [] : []).map(item => [item.id, item])).values())))
+      listProblems({ library: 'platform', page: 1, pageSize: 100 }),
+      listProblems({ library: 'school', page: 1, pageSize: 100 }).catch(() => ({ data: [] as ProblemOption[] })),
+    ]).then(results => setProblems(Array.from(new Map(results.flatMap(result => result.data).map(item => [item.id, item])).values())))
   }, [])
   useEffect(() => {
     setRevisions([])
     if (!reference.problemId || reference.type !== 'PROBLEM_REVISION') return
-    void apiClient.get<{ revisions: RevisionOption[] }>(`/api/problems/${reference.problemId}/test-set-revisions`).then(result => {
-      if (result.success) setRevisions(result.data?.revisions || [])
+    void listProblemTestSetRevisions(reference.problemId).then(result => {
+      setRevisions(result.revisions)
     })
   }, [reference.problemId, reference.type])
   return <>

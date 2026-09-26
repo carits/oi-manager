@@ -59,11 +59,13 @@ export const deleteOjFetchJob = (jobId: string) =>
     {},
   )
 
-export const listPlatformManagedProblems = (query: ProblemListQuery) =>
+export const listProblems = (query: ProblemListQuery) =>
   apiClient.queryContract(
     ProblemContracts.listAdmin,
-    withQuery('/api/problems', query),
+    withQuery('/api/problems', ProblemContracts.listAdmin.query.parse(query)),
   )
+
+export const listPlatformManagedProblems = listProblems
 
 export const archivePlatformManagedProblem = (problemId: string) =>
   apiClient.mutateContract(
