@@ -13,7 +13,9 @@ import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormField } from '@/components/ui/FormField'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { SubmissionCodeEditor, clearSubmissionDraft } from '@/features/submission'
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import { SubmissionCodeEditor } from '@/features/submission'
+import { getAssetUrl } from '@/lib/assets'
 import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
 import { Pagination } from '@/components/ui/Pagination'
 import { Section } from '@/components/ui/Section'
@@ -199,6 +201,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
         id: `draft-${problem.id}`, problemId: problem.id, testSetRevisionId: revision.id, orderIndex: 0,
         category: 'REQUIRED', required: true, maxScore: 100, judgeMaxScore: 100, targetScore: 100, weight: 100,
         completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
+        titleSnapshot: problem.title, statementsSnapshot: [],
         Problem: { id: problem.id, platform: problem.platform, problemId: problem.problemCode, title: problem.title, difficulty: problem.difficulty, allowedLanguages: null }, TestSetRevision: revision,
       })
     }
@@ -321,8 +324,6 @@ function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: 
     setSending(false)
     if (!result.ok) return toast.error(result.error.message)
     toast.success(`提交 #${result.data.id} 已进入评测队列`)
-    clearSubmissionDraft(`${user?.userId || 'account'}:assignment:${assignment.id}:${selected.id}`, language)
-    setSelected(null); setCode(''); setInputFilename(''); setOutputFilename('')
     onSubmitted()
   }
   const progressByProblem = new Map(workspace.progress.map(item => [item.assignmentProblemId, item]))
@@ -337,16 +338,63 @@ function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: 
   const requiredProblems = assignment.Problems.filter(item => item.category === 'REQUIRED')
   const incompleteRequired = requiredProblems.filter(item => progressByProblem.get(item.id)?.learningStatus !== 'COMPLETED')
   const nextProblem = problemById.get(pendingCorrections[0]?.assignmentProblemId || '') || incompleteRequired[0]
+  const selectedCanSubmit = selected ? canSubmitProblem(selected.id) : false
+  const selectedStatement = selected?.statementsSnapshot.find(statement => statement.format === 'markdown' && statement.language?.toLowerCase().startsWith('zh'))
+    || selected?.statementsSnapshot.find(statement => statement.format === 'markdown')
+    || selected?.statementsSnapshot[0]
   return <>
-    <Section title="下一步行动" description={`最近截止：${formatAssignmentTime(assignment.dueAt)}`} actions={nextProblem && canSubmitProblem(nextProblem.id) ? <Button onClick={() => setSelected(nextProblem)}>继续处理</Button> : undefined}><div className={styles.nextAction}><strong>{pendingCorrections.length ? `先完成 ${pendingCorrections.length} 项订正` : incompleteRequired.length ? `继续完成 ${incompleteRequired[0].Problem.problemId} · ${incompleteRequired[0].Problem.title}` : '必做题已完成'}</strong><span>必做完成 {requiredProblems.length - incompleteRequired.length}/{requiredProblems.length} · 待订正 {pendingCorrections.length}</span></div></Section>
+    <Section title="下一步行动" description={`最近截止：${formatAssignmentTime(assignment.dueAt)}`} actions={nextProblem && canSubmitProblem(nextProblem.id) ? <Button onClick={() => setSelected(nextProblem)}>继续处理</Button> : undefined}>
+      <div className={styles.nextAction}><strong>{pendingCorrections.length ? `先完成 ${pendingCorrections.length} 项订正` : incompleteRequired.length ? `继续完成 ${incompleteRequired[0].Problem.problemId} · ${incompleteRequired[0].titleSnapshot}` : '必做题已完成'}</strong><span>必做完成 {requiredProblems.length - incompleteRequired.length}/{requiredProblems.length} · 待订正 {pendingCorrections.length}</span></div>
+    </Section>
     {latestGrade && <Section title="已发布成绩" description={`发布于 ${formatAssignmentTime(latestGrade.createdAt)}`}><div className={styles.gradeSummary}><strong>{latestGrade.totalScore}</strong><span>/ {latestGrade.maxScore} 分</span></div></Section>}
-    <Section title="题目" description={normalSubmissionOpen ? '完成题目后提交代码，系统会自动记录最好成绩。' : pendingCorrections.length ? '常规提交已关闭，目前仅可提交待订正题目。' : assignment.status === 'SCHEDULED' ? '作业尚未开放。' : '当前作业已经停止接收提交。'}><div className={styles.problemCards}>{assignment.Problems.map((item, index) => { const progress = progressByProblem.get(item.id); const canSubmit = canSubmitProblem(item.id); return <div className={styles.problemCard} key={item.id}><span className={styles.problemOrder}>{index + 1}</span><span className={styles.problemIdentity}><strong>{item.Problem.problemId} · {item.Problem.title}</strong><span>目标 {item.targetScore}/{item.maxScore}</span>{progress && <span>{learningLabel[progress.learningStatus] || progress.learningStatus} · 得分 {progress.finalScore ?? progress.bestScore ?? 0} · 提交 {progress.attemptCount ?? 0} 次{progress.correctionStatus !== 'NONE' ? ` · ${correctionLabel[progress.correctionStatus] || progress.correctionStatus}` : ''}</span>}</span><Button icon={<Send size={16} />} disabled={!canSubmit} onClick={() => setSelected(item)}>{correctionProblemIds.has(item.id) && !normalSubmissionOpen ? '提交订正' : '提交代码'}</Button></div> })}</div></Section>
+    <Section title="题目" description={normalSubmissionOpen ? '先阅读题面，再在同一工作台提交代码。系统会自动记录最好成绩。' : pendingCorrections.length ? '常规提交已关闭，目前仅可提交待订正题目；所有题面仍可查看。' : assignment.status === 'SCHEDULED' ? '作业尚未开放提交，题面仍可查看。' : '当前作业已经停止接收提交，题面仍可查看。'}>
+      <div className={styles.problemCards}>{assignment.Problems.map((item, index) => {
+        const progress = progressByProblem.get(item.id)
+        const canSubmit = canSubmitProblem(item.id)
+        const actionLabel = canSubmit
+          ? correctionProblemIds.has(item.id) && !normalSubmissionOpen ? '查看并提交订正' : '查看并提交'
+          : '查看题目'
+        return <div className={styles.problemCard} key={item.id}>
+          <span className={styles.problemOrder}>{index + 1}</span>
+          <span className={styles.problemIdentity}><strong>{item.Problem.problemId} · {item.titleSnapshot}</strong><span>目标 {item.targetScore}/{item.maxScore}</span>{progress && <span>{learningLabel[progress.learningStatus] || progress.learningStatus} · 得分 {progress.finalScore ?? progress.bestScore ?? 0} · 提交 {progress.attemptCount ?? 0} 次{progress.correctionStatus !== 'NONE' ? ` · ${correctionLabel[progress.correctionStatus] || progress.correctionStatus}` : ''}</span>}</span>
+          <Button icon={canSubmit ? <Send size={16} /> : undefined} variant={canSubmit ? 'primary' : 'secondary'} onClick={() => setSelected(item)}>{actionLabel}</Button>
+        </div>
+      })}</div>
+    </Section>
     {(workspace.corrections.length > 0 || workspace.feedback.length > 0) && <Section title="订正与教师反馈" description="只显示与你本人有关的批改事实。"><div className={styles.reviewFeed}>
       {workspace.corrections.map(item => <div className={styles.reviewItem} key={item.id}><strong>订正 · {problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}</strong><span>{correctionLabel[item.status] || item.status}{item.requiredScore !== null && item.requiredScore !== undefined ? ` · 要求达到 ${item.requiredScore} 分` : ''}{item.dueAt ? ` · 截止 ${formatAssignmentTime(item.dueAt)}` : ''}</span>{item.reason && <p>{item.reason}</p>}</div>)}
       {workspace.feedback.map(item => <div className={styles.reviewItem} key={item.id}><strong>教师反馈{item.assignmentProblemId ? ` · ${problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}` : ''}</strong><span>{formatAssignmentTime(item.createdAt)}</span><p>{item.content}</p></div>)}
     </div></Section>}
-    <FormDialog isOpen={Boolean(selected)} onClose={() => setSelected(null)} onSubmit={() => void submit()} title={selected ? `提交 ${selected.Problem.problemId} · ${selected.Problem.title}` : '提交代码'} description="提交后会使用作业发布时固定的数据评测，不会因题库更新而改变。" submitText="提交评测" loading={sending} dirty={Boolean(code)} submitDisabled={!code.trim()} size="lg">
-      <div className={styles.stack}><FormField label="语言"><Select value={language} onChange={event => { if (!code || window.confirm('切换后会保存当前语言草稿，并加载目标语言自己的草稿。是否切换？')) setLanguage(event.target.value) }}><option value="cpp17">C++17</option><option value="c11">C11</option><option value="python3">Python3</option></Select></FormField><FormField label="源码" required><SubmissionCodeEditor value={code} onChange={setCode} language={language} draftKey={`${user?.userId || 'account'}:assignment:${assignment.id}:${selected?.id || 'none'}`} /></FormField><div className={styles.settingsGrid}><FormField label="输入文件名" hint="留空表示标准输入"><Input value={inputFilename} onChange={event => setInputFilename(event.target.value)} placeholder="例如 travel.in" /></FormField><FormField label="输出文件名" hint="留空表示标准输出"><Input value={outputFilename} onChange={event => setOutputFilename(event.target.value)} placeholder="例如 travel.out" /></FormField></div></div>
+    <FormDialog
+      isOpen={Boolean(selected)}
+      onClose={() => setSelected(null)}
+      onSubmit={() => void submit()}
+      title={selected ? `${selected.Problem.problemId} · ${selected.titleSnapshot}` : '作业题目'}
+      description="题面和测试数据均固定于作业发布时，不会因题库更新而改变。"
+      submitText={selectedCanSubmit ? '提交评测' : '当前不可提交'}
+      loading={sending}
+      dirty={selectedCanSubmit && Boolean(code)}
+      submitDisabled={!selectedCanSubmit || !code.trim()}
+      size="xl"
+    >
+      <div className={styles.stack}>
+        <section className={styles.statementPanel} aria-labelledby="assignment-statement-title">
+          <h3 id="assignment-statement-title">题目内容</h3>
+          {selectedStatement?.content
+            ? selectedStatement.format === 'markdown'
+              ? <MarkdownRenderer content={selectedStatement.content} />
+              : <pre className={styles.statementText}>{selectedStatement.content}</pre>
+            : selectedStatement?.fileUrl
+              ? <a href={getAssetUrl(selectedStatement.fileUrl)} target="_blank" rel="noreferrer">打开固定题面文件</a>
+              : <p className={styles.muted}>该作业发布时没有可展示的题面正文，请联系教师补充。</p>}
+        </section>
+        {selectedCanSubmit ? <>
+          <div className={styles.submissionDivider}><strong>{correctionProblemIds.has(selected?.id || '') && !normalSubmissionOpen ? '提交订正' : '提交代码'}</strong><span>提交成功后源码草稿会保留，可继续修改。</span></div>
+          <FormField label="语言"><Select value={language} onChange={event => { if (!code || window.confirm('切换后会保存当前语言草稿，并加载目标语言自己的草稿。是否切换？')) setLanguage(event.target.value) }}><option value="cpp17">C++17</option><option value="c11">C11</option><option value="python3">Python3</option></Select></FormField>
+          <FormField label="源码" required><SubmissionCodeEditor value={code} onChange={setCode} language={language} draftKey={`${user?.userId || 'account'}:assignment:${assignment.id}:${selected?.id || 'none'}`} /></FormField>
+          <div className={styles.settingsGrid}><FormField label="输入文件名" hint="留空表示标准输入"><Input value={inputFilename} onChange={event => setInputFilename(event.target.value)} placeholder="例如 travel.in" /></FormField><FormField label="输出文件名" hint="留空表示标准输出"><Input value={outputFilename} onChange={event => setOutputFilename(event.target.value)} placeholder="例如 travel.out" /></FormField></div>
+        </> : <p className={styles.readOnlyNotice}>当前作业不接收这道题的新提交，你仍可查看发布时固定的题面。</p>}
+      </div>
     </FormDialog>
   </>
 }

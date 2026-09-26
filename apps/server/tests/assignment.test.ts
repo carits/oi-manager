@@ -24,6 +24,10 @@ async function configuredProblem(ownerId: string) {
     id, platform: 'carits', problemId: `AS-${id.slice(0, 8)}`, title: '独立作业题目', ownerId,
     visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', judgeConfig,
   } })
+  await prisma.problemStatement.create({ data: {
+    id: crypto.randomUUID(), problemId: id, type: 'statement', format: 'markdown', language: 'zh-CN',
+    content: '# 题面版本一\n\n计算两个整数的和。', isVisible: true,
+  } })
   for (const [filename, content] of [['1.in', '1 2\n'], ['1.out', '3\n']]) {
     await prisma.testdataFile.create({ data: { id: crypto.randomUUID(), problemId: id, filename, size: Buffer.byteLength(content), md5: crypto.createHash('md5').update(content).digest('hex'), sha256: crypto.createHash('sha256').update(content).digest('hex') } })
   }
@@ -71,6 +75,13 @@ describe('independent assignment domain', () => {
     const published = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
     expect(published.status).toBe(200)
     expect(published.body.data.status).toBe('SCHEDULED')
+    expect(published.body.data.Problems[0].titleSnapshot).toBe('独立作业题目')
+    expect(published.body.data.Problems[0].statementsSnapshot[0].content).toContain('题面版本一')
+    await prisma.problemStatement.updateMany({ where: { problemId: problem.id }, data: { content: '# 题面版本二' } })
+    const studentDetail = await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/assignments/${assignmentId}`)
+    expect(studentDetail.status).toBe(200)
+    expect(studentDetail.body.data.Problems[0].statementsSnapshot[0].content).toContain('题面版本一')
+    expect(studentDetail.body.data.Problems[0].statementsSnapshot[0].content).not.toContain('题面版本二')
     const dashboardList = await createAuthenticatedRequest(app, token).get(`/api/assignments?organizationId=${organizationId}&pageSize=1`)
     expect(dashboardList.status).toBe(200)
     expect(dashboardList.body.data.statusCounts.SCHEDULED).toBeGreaterThanOrEqual(1)

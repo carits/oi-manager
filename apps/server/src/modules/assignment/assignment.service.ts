@@ -47,12 +47,55 @@ const ASSIGNMENT_INCLUDE = {
 type AssignmentShape = Prisma.AssignmentGetPayload<{ include: typeof ASSIGNMENT_INCLUDE }>
 type ValidationIssue = { path: string; code: string; message: string }
 
+type AssignmentStatementSnapshot = {
+  id: string
+  format: string
+  language: string | null
+  content: string | null
+  fileUrl: string | null
+}
+
+function readAssignmentProblemSnapshot(settings: Prisma.JsonValue | null, fallbackTitle: string) {
+  const record = settings && typeof settings === 'object' && !Array.isArray(settings)
+    ? settings as Prisma.JsonObject
+    : {}
+  const statements = Array.isArray(record.statementsSnapshot)
+    ? record.statementsSnapshot.flatMap(value => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+      const statement = value as Prisma.JsonObject
+      if (typeof statement.id !== 'string' || typeof statement.format !== 'string') return []
+      return [{
+        id: statement.id,
+        format: statement.format,
+        language: typeof statement.language === 'string' ? statement.language : null,
+        content: typeof statement.content === 'string' ? statement.content : null,
+        fileUrl: typeof statement.fileUrl === 'string' ? statement.fileUrl : null,
+      }]
+    })
+    : []
+  return {
+    titleSnapshot: typeof record.titleSnapshot === 'string' ? record.titleSnapshot : fallbackTitle,
+    statementsSnapshot: statements,
+  }
+}
+
+function assignmentProblemSnapshotSettings(
+  existing: Prisma.JsonValue | null,
+  title: string,
+  statements: AssignmentStatementSnapshot[],
+): Prisma.InputJsonValue {
+  const record = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing as Prisma.JsonObject : {}
+  return { ...record, titleSnapshot: title, statementsSnapshot: statements, statementCapturedAt: new Date().toISOString() } as Prisma.InputJsonValue
+}
 
 function serializeAssignment(item: AssignmentShape, recipients: 'all' | 'none' | string = 'all') {
   const visibleRecipients = recipients === 'all' ? item.Recipients : recipients === 'none' ? [] : item.Recipients.filter(recipient => recipient.userId === recipients)
   return {
     ...item,
-    Problems: item.Problems.map(({ judgeConfigSnapshot: _judgeConfigSnapshot, ...problem }) => problem),
+    Problems: item.Problems.map(({ judgeConfigSnapshot: _judgeConfigSnapshot, settings, ...problem }) => ({
+      ...problem,
+      ...readAssignmentProblemSnapshot(settings, problem.Problem.title),
+    })),
     Recipients: visibleRecipients,
     editable: item.status === 'DRAFT',
     problemCount: item.Problems.length,
@@ -573,6 +616,28 @@ export async function publishAssignment(userId: string, assignmentId: string, ex
       await tx.assignmentRecipient.createMany({ data: recipients.map(recipient => ({ assignmentId, userId: recipient.userId, membershipId: recipient.id, source: 'dynamic_publish', dueAtEffective: assignment!.dueAt, closeAtEffective: assignment!.closeAt })), skipDuplicates: true })
       assignment = (await tx.assignment.findUnique({ where: { id: assignmentId }, include: ASSIGNMENT_INCLUDE }))!
     }
+    const sourceProblems = await tx.problem.findMany({
+      where: { id: { in: assignment.Problems.map(problem => problem.problemId) } },
+      select: {
+        id: true,
+        title: true,
+        ProblemStatement: {
+          where: { type: 'statement', isVisible: true },
+          orderBy: [{ language: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true, format: true, language: true, content: true, fileUrl: true },
+        },
+      },
+    })
+    const sourceByProblem = new Map(sourceProblems.map(problem => [problem.id, problem]))
+    for (const assignmentProblem of assignment.Problems) {
+      const source = sourceByProblem.get(assignmentProblem.problemId)
+      if (!source) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_STRUCTURE', '作业题目已不存在，无法固定题面')
+      await tx.assignmentProblem.update({
+        where: { id: assignmentProblem.id },
+        data: { settings: assignmentProblemSnapshotSettings(assignmentProblem.settings, source.title, source.ProblemStatement) },
+      })
+    }
+    assignment = (await tx.assignment.findUnique({ where: { id: assignmentId }, include: ASSIGNMENT_INCLUDE }))!
     const issues = validateAssignmentForPublish(assignment)
     if (issues.length) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_STRUCTURE', '作业发布检查未通过', { issues })
     await tx.assignmentProblemProgress.createMany({ data: assignment.Recipients.map(recipient => assignment!.Problems.map(problem => ({ assignmentId, assignmentProblemId: problem.id, recipientId: recipient.id }))).flat(), skipDuplicates: true })

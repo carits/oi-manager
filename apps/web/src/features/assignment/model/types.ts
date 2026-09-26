@@ -1,5 +1,13 @@
 export type AssignmentStatus = 'DRAFT' | 'SCHEDULED' | 'OPEN' | 'OVERDUE' | 'CLOSED' | 'REVIEWING' | 'RELEASED' | 'ARCHIVED' | 'CANCELLED'
 
+export interface AssignmentStatementSnapshot {
+  id: string
+  format: string
+  language?: string | null
+  content?: string | null
+  fileUrl?: string | null
+}
+
 export interface AssignmentProblem {
   id: string
   problemId: string
@@ -12,6 +20,8 @@ export interface AssignmentProblem {
   targetScore: number
   weight: number
   completionPolicy: 'AC' | 'TARGET_SCORE' | 'ATTEMPT' | 'MANUAL'
+  titleSnapshot: string
+  statementsSnapshot: AssignmentStatementSnapshot[]
   Problem: { id: string; platform: string; problemId: string; title: string; difficulty?: string | null; allowedLanguages?: string | null }
   TestSetRevision: { id: string; revisionNumber: number; mode: 'acm' | 'oi'; judgeConfigHash: string }
 }
