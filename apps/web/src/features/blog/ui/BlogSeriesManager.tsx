@@ -12,11 +12,17 @@ import { FormField } from '@/components/ui/FormField'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { StatusBadge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { BLOG_VISIBILITY_LABELS, type BlogVisibility } from '../model/blog-contract'
 import styles from './BlogWorkspace.module.css'
 import { listWorkspaces } from '@/features/workspace'
+import {
+  createBlogSeries,
+  getBlogSeries,
+  listBlogSeries,
+  reorderBlogSeries,
+  updateBlogSeries,
+} from '../api/blogManagementApi'
 
 type SeriesSummary = {
   id: string
@@ -60,19 +66,25 @@ export function BlogSeriesManager() {
 
   const loadList = useCallback(async () => {
     setLoading(true); setError('')
-    const result = await apiClient.get<{ items: SeriesSummary[] }>('/api/blog-series?pageSize=100', { accountScoped: true })
-    if (result.success && result.data) {
-      setSeries(result.data.items)
-      setSelectedId(current => current || result.data!.items[0]?.id || '')
-    } else setError(result.message || '系列列表加载失败')
-    setLoading(false)
+    try {
+      const result = await listBlogSeries()
+      setSeries(result.items)
+      setSelectedId(current => current || result.items[0]?.id || '')
+    } catch (listError) {
+      setError(listError instanceof Error ? listError.message : '系列列表加载失败')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   const loadDetails = useCallback(async (seriesId: string) => {
     if (!seriesId) { setDetails(null); setEntries([]); return }
-    const result = await apiClient.get<SeriesDetails>(`/api/blog-series/${seriesId}`, { accountScoped: true })
-    if (!result.success || !result.data) { setError(result.message || '系列详情加载失败'); return }
-    setDetails(result.data); setEntries(result.data.entries); setTitle(result.data.title); setDescription(result.data.description || ''); setVisibility(result.data.visibility)
+    try {
+      const result = await getBlogSeries(seriesId)
+      setDetails(result); setEntries(result.entries); setTitle(result.title); setDescription(result.description || ''); setVisibility(result.visibility)
+    } catch (detailError) {
+      setError(detailError instanceof Error ? detailError.message : '系列详情加载失败')
+    }
   }, [])
 
   useEffect(() => { void loadList(); void listWorkspaces().then(result => setWorkspaces(result.workspaces.filter(item => item.type === 'organization'))).catch(() => setWorkspaces([])) }, [loadList])
@@ -80,27 +92,27 @@ export function BlogSeriesManager() {
 
   const createSeries = async () => {
     setSaving(true)
-    const result = await apiClient.post<SeriesSummary>('/api/blog-series', { ...createForm, organizationId: createForm.organizationId || null }, { accountScoped: true })
+    const result = await createBlogSeries({ ...createForm, description: createForm.description || null, organizationId: createForm.organizationId || null })
     setSaving(false)
-    if (!result.success || !result.data) return toast.error(result.message || '系列创建失败')
+    if (!result.ok) return toast.error(result.error.message)
     setCreating(false); setCreateForm(EMPTY_CREATE); setSelectedId(result.data.id); toast.success('系列已创建'); await loadList()
   }
 
   const saveMetadata = async () => {
     if (!details) return
     setSaving(true)
-    const result = await apiClient.patch<SeriesSummary>(`/api/blog-series/${details.id}`, { expectedRevision: details.revision, title, description: description || null, visibility }, { accountScoped: true })
+    const result = await updateBlogSeries(details.id, { expectedRevision: details.revision, title, description: description || null, visibility })
     setSaving(false)
-    if (!result.success || !result.data) return toast.error(result.message || '系列保存失败')
+    if (!result.ok) return toast.error(result.error.message)
     toast.success('系列信息已保存'); await loadList(); await loadDetails(details.id)
   }
 
   const saveOrder = async () => {
     if (!details) return
     setSaving(true)
-    const result = await apiClient.put<SeriesSummary>(`/api/blog-series/${details.id}/entries`, { expectedRevision: details.revision, postIds: entries.map(entry => entry.post.id) }, { accountScoped: true })
+    const result = await reorderBlogSeries(details.id, { expectedRevision: details.revision, postIds: entries.map(entry => entry.post.id) })
     setSaving(false)
-    if (!result.success) return toast.error(result.message || '文章顺序保存失败')
+    if (!result.ok) return toast.error(result.error.message)
     toast.success('文章顺序已保存'); await loadList(); await loadDetails(details.id)
   }
 

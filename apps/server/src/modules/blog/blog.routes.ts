@@ -1,8 +1,8 @@
 import { Router, type Response } from 'express'
-import { BlogDiscoveryContracts, BlogManagementContracts } from '@oi-manager/contracts'
+import { BlogDiscoveryContracts, BlogManagementContracts, type AnyApiEndpointContract } from '@oi-manager/contracts'
 import { authenticate, optionalAuthenticate, type AuthRequest } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
+import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import type { JwtPayload } from '@oi-manager/shared'
 import {
   archiveBlogPost,
@@ -51,10 +51,15 @@ export const blogRouter = Router()
 
 type AuthenticatedRequest = AuthRequest & { user: JwtPayload }
 
-function endpoint(handler: (req: AuthenticatedRequest) => Promise<unknown>, status = 200) {
+function endpoint(
+  handler: (req: AuthenticatedRequest) => Promise<unknown>,
+  status = 200,
+  contract?: AnyApiEndpointContract,
+) {
   return asyncHandler(async (req: AuthRequest, res: Response) => {
     try {
       const data = await handler(req as AuthenticatedRequest)
+      if (contract) return sendContractData(res, contract, data, status)
       return res.status(status).json({ success: true, data })
     } catch (error) {
       if (sendContractError(error, res)) return
@@ -81,7 +86,7 @@ function publicEndpoint(handler: (req: AuthRequest) => Promise<unknown>, status 
   })
 }
 
-blogRouter.post('/blogs', authenticate, endpoint(req => createBlogPost(req.user, req.body), 201))
+blogRouter.post('/blogs', authenticate, endpoint(req => createBlogPost(req.user, parseContractBody(BlogManagementContracts.create, req.body)), 201, BlogManagementContracts.create))
 blogRouter.get('/blog-discovery', optionalAuthenticate, publicEndpoint(async req => {
   const query = parseContractQuery(BlogDiscoveryContracts.list, req.query)
   return BlogDiscoveryContracts.list.data.parse(await listPublicBlogs(req.user, query))
@@ -110,12 +115,16 @@ blogRouter.get('/blogs', authenticate, asyncHandler(async (req: AuthRequest, res
     throw error
   }
 }))
-blogRouter.get('/blogs/:id', authenticate, endpoint(req => getBlogPost(req.user, req.params.id)))
-blogRouter.patch('/blogs/:id/draft', authenticate, endpoint(req => updateBlogDraft(req.user, req.params.id, req.body)))
-blogRouter.post('/blogs/:id/publish', authenticate, endpoint(req => publishBlogPost(req.user, req.params.id, req.body)))
-blogRouter.post('/blogs/:id/archive', authenticate, endpoint(req => archiveBlogPost(req.user, req.params.id)))
-blogRouter.get('/blogs/:id/versions', authenticate, endpoint(req => listBlogVersions(req.user, req.params.id)))
-blogRouter.get('/blogs/:id/versions/:versionId', authenticate, endpoint(req => getBlogVersion(req.user, req.params.id, req.params.versionId)))
+blogRouter.get('/blogs/:id', authenticate, endpoint(req => getBlogPost(req.user, req.params.id), 200, BlogManagementContracts.detail))
+blogRouter.patch('/blogs/:id/draft', authenticate, endpoint(req => updateBlogDraft(req.user, req.params.id, parseContractBody(BlogManagementContracts.updateDraft, req.body)), 200, BlogManagementContracts.updateDraft))
+blogRouter.post('/blogs/:id/publish', authenticate, endpoint(req => publishBlogPost(req.user, req.params.id, parseContractBody(BlogManagementContracts.publish, req.body)), 200, BlogManagementContracts.publish))
+blogRouter.post('/blogs/:id/archive', authenticate, endpoint(async req => {
+  parseContractBody(BlogManagementContracts.archive, req.body)
+  const post = await archiveBlogPost(req.user, req.params.id)
+  return { id: post.id, status: 'ARCHIVED' as const }
+}, 200, BlogManagementContracts.archive))
+blogRouter.get('/blogs/:id/versions', authenticate, endpoint(req => listBlogVersions(req.user, req.params.id), 200, BlogManagementContracts.versions))
+blogRouter.get('/blogs/:id/versions/:versionId', authenticate, endpoint(req => getBlogVersion(req.user, req.params.id, req.params.versionId), 200, BlogManagementContracts.versionDetail))
 blogRouter.get('/blogs/:id/references', authenticate, endpoint(req => getBlogReferences(req.user, req.params.id)))
 blogRouter.get('/blogs/:id/community', authenticate, endpoint(req => getBlogCommunity(req.user, req.params.id)))
 blogRouter.get('/blogs/:id/comments', authenticate, endpoint(req => listBlogComments(req.user, req.params.id, req.query)))
@@ -143,13 +152,13 @@ blogRouter.post('/blog-drafts/from-solution/:solutionVersionId', authenticate, e
   req => createBlogFromSolution(req.user, req.params.solutionVersionId), 201,
 ))
 
-blogRouter.post('/blog-series', authenticate, endpoint(req => createBlogSeries(req.user, req.body), 201))
-blogRouter.get('/blog-series', authenticate, endpoint(req => listMyBlogSeries(req.user, req.query)))
-blogRouter.get('/blog-series/:seriesId', authenticate, endpoint(req => getBlogSeries(req.user, req.params.seriesId)))
-blogRouter.patch('/blog-series/:seriesId', authenticate, endpoint(req => updateBlogSeries(req.user, req.params.seriesId, req.body)))
-blogRouter.put('/blog-series/:seriesId/entries', authenticate, endpoint(req => reorderBlogSeries(req.user, req.params.seriesId, req.body)))
+blogRouter.post('/blog-series', authenticate, endpoint(req => createBlogSeries(req.user, parseContractBody(BlogManagementContracts.createSeries, req.body)), 201, BlogManagementContracts.createSeries))
+blogRouter.get('/blog-series', authenticate, endpoint(req => listMyBlogSeries(req.user, parseContractQuery(BlogManagementContracts.listSeries, req.query)), 200, BlogManagementContracts.listSeries))
+blogRouter.get('/blog-series/:seriesId', authenticate, endpoint(req => getBlogSeries(req.user, req.params.seriesId), 200, BlogManagementContracts.seriesDetail))
+blogRouter.patch('/blog-series/:seriesId', authenticate, endpoint(req => updateBlogSeries(req.user, req.params.seriesId, parseContractBody(BlogManagementContracts.updateSeries, req.body)), 200, BlogManagementContracts.updateSeries))
+blogRouter.put('/blog-series/:seriesId/entries', authenticate, endpoint(req => reorderBlogSeries(req.user, req.params.seriesId, parseContractBody(BlogManagementContracts.reorderSeries, req.body)), 200, BlogManagementContracts.reorderSeries))
 
-blogRouter.get('/blog-tags', authenticate, endpoint(req => listBlogTags(req.user, req.query)))
+blogRouter.get('/blog-tags', authenticate, endpoint(req => listBlogTags(req.user, parseContractQuery(BlogManagementContracts.listTags, req.query)), 200, BlogManagementContracts.listTags))
 blogRouter.post('/blog-tags', authenticate, endpoint(req => createBlogTag(req.user, req.body), 201))
 blogRouter.post('/platform/blog-tags', authenticate, endpoint(req => createBlogTag(req.user, req.body, true), 201))
 blogRouter.get('/blog-tags/:tagId/blogs', authenticate, endpoint(req => listTagBlogs(req.user, req.params.tagId, req.query)))

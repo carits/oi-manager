@@ -1088,8 +1088,8 @@ export async function listBlogVersions(user: JwtPayload, postId: string) {
   const visible = []
   for (const version of versions) {
     if (await canReadVersion(user, post, version, false)) {
-      const { organizationIdSnapshot: _privateOrganizationId, ...item } = version
-      visible.push(item)
+      const { organizationIdSnapshot: _privateOrganizationId, classificationSnapshot, ...item } = version
+      visible.push({ ...item, classification: classificationSnapshot })
     }
   }
   if (post.authorUserId !== user.userId && visible.length === 0 && !await canReadPost(user, post, true)) fail(404, 'BLOG_NOT_FOUND', '博客不存在')

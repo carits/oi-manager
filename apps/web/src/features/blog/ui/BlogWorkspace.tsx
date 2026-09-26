@@ -14,7 +14,6 @@ import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { StatusBadge } from '@/components/ui/Badge'
 import { Tabs } from '@/components/ui/Tabs'
 import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
-import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
 import { BlogReferenceEditor } from './BlogReferenceEditor'
@@ -36,6 +35,18 @@ import {
 import styles from './BlogWorkspace.module.css'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 import { listWorkspaces } from '@/features/workspace'
+import {
+  archiveBlogPost,
+  createBlogPost,
+  createBlogSeries as createBlogSeriesRequest,
+  getBlogPost,
+  getBlogVersion,
+  listBlogSeries,
+  listBlogTags,
+  listBlogVersions,
+  publishBlogPost,
+  updateBlogDraft,
+} from '../api/blogManagementApi'
 
 type BlogVersion = {
   id: string
@@ -132,28 +143,32 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
   }, [])
 
   const load = useCallback(async () => {
-      if (!postId) return
+    if (!postId) return
     setLoading(true); setError('')
-    const [postResult, versionResult] = await Promise.all([
-      apiClient.get<BlogPost>(`/api/blogs/${postId}`, { accountScoped: true }),
-      apiClient.get<VersionSummary[]>(`/api/blogs/${postId}/versions`, { accountScoped: true }),
-    ])
-    if (postResult.success && postResult.data) applyPost(postResult.data)
-    else setError(postResult.message || '文章加载失败')
-    if (versionResult.success && versionResult.data) setVersions(versionResult.data)
-    setLoading(false)
+    try {
+      const [postResult, versionResult] = await Promise.all([
+        getBlogPost(postId),
+        listBlogVersions(postId),
+      ])
+      applyPost(postResult)
+      setVersions(versionResult)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '文章加载失败')
+    } finally {
+      setLoading(false)
+    }
   }, [applyPost, postId])
 
   useEffect(() => { void load() }, [load])
   useEffect(() => {
     void Promise.all([
       listWorkspaces().catch(() => ({ workspaces: [] })),
-      apiClient.get<{ items: BlogSeriesSummary[] }>('/api/blog-series?pageSize=100', { accountScoped: true }),
-      apiClient.get<{ items: BlogTagSummary[] }>('/api/blog-tags', { accountScoped: true }),
+      listBlogSeries().catch(() => ({ items: [] })),
+      listBlogTags().catch(() => ({ items: [], maxPerPost: 5 })),
     ]).then(([workspaceResult, seriesResult, tagResult]) => {
       setWorkspaces(workspaceResult.workspaces.filter(item => item.type === 'organization'))
-      if (seriesResult.success && seriesResult.data) setSeries(seriesResult.data.items)
-      if (tagResult.success && tagResult.data) setTagSuggestions(tagResult.data.items)
+      setSeries(seriesResult.items)
+      setTagSuggestions(tagResult.items)
     })
   }, [])
   const persistDraft = async (): Promise<{ id: string; revision: number } | null> => {
@@ -162,22 +177,23 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     setSaving(true)
     try {
       if (!post) {
-        const result = await apiClient.post<BlogPost>('/api/blogs', {
+        const result = await createBlogPost({
           ...(slug.trim() ? { slug: slug.trim() } : {}), type, organizationId: organizationId || null,
           title: draft.title, summary: draft.summary || null, contentMarkdown: draft.contentMarkdown, references: draft.references, classification: draft.classification,
-        }, { accountScoped: true })
-        if (!result.success || !result.data?.draft) { toast.error(result.message || '草稿创建失败'); return null }
+        })
+        if (!result.ok || !result.data.draft) { toast.error(result.ok ? '草稿创建失败' : result.error.message); return null }
         applyPost(result.data)
-        window.history.replaceState(null, '', `/personal/blogs/${result.data.id}`)
+        window.history.replaceState(null, '', '/personal/blogs/' + result.data.id)
         return { id: result.data.id, revision: result.data.draft.revision }
       }
       if (!dirty && post.draft) return { id: post.id, revision: post.draft.revision }
-      const result = await apiClient.patch<{ revision: number; title: string; summary?: string | null; contentMarkdown: string; references: BlogDraftReference[]; classification: BlogDraftClassification }>(`/api/blogs/${post.id}/draft`, {
-        expectedRevision: post.draft?.revision, title: draft.title, summary: draft.summary || null, contentMarkdown: draft.contentMarkdown, references: draft.references, classification: draft.classification,
-      }, { accountScoped: true })
-      if (!result.success || !result.data) { toast.error(result.message || '草稿保存失败'); return null }
+      if (!post.draft) { toast.error('草稿状态已变化，请重新加载'); return null }
+      const result = await updateBlogDraft(post.id, {
+        expectedRevision: post.draft.revision, title: draft.title, summary: draft.summary || null, contentMarkdown: draft.contentMarkdown, references: draft.references, classification: draft.classification,
+      })
+      if (!result.ok) { toast.error(result.error.message); return null }
       const next = { title: result.data.title, summary: result.data.summary || '', contentMarkdown: result.data.contentMarkdown, references: result.data.references || [], classification: result.data.classification || { ...EMPTY_BLOG_CLASSIFICATION } }
-      setDraft(next); setAuthorTagsText(next.classification.authorTags.join(', ')); setBaseline(serializeEditorState({ type, slug, organizationId, visibility, draft: next })); setPost(current => current ? { ...current, draft: { ...current.draft!, ...result.data! } } : current)
+      setDraft(next); setAuthorTagsText(next.classification.authorTags.join(', ')); setBaseline(serializeEditorState({ type, slug, organizationId, visibility, draft: next })); setPost(current => current ? { ...current, draft: { ...current.draft!, ...result.data } } : current)
       return { id: post.id, revision: result.data.revision }
     } finally { setSaving(false) }
   }
@@ -188,41 +204,43 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     try {
       const saved = await persistDraft()
       if (!saved) return
-      const result = await apiClient.post<BlogPost>(`/api/blogs/${saved.id}/publish`, { expectedDraftRevision: saved.revision, visibility }, { accountScoped: true })
-      if (!result.success || !result.data) return toast.error(result.message || '发布失败')
-      applyPost(result.data); setVersions([]); setTab('published'); toast.success(`已发布 V${result.data.currentVersion?.version || ''}`)
-      const versionsResult = await apiClient.get<VersionSummary[]>(`/api/blogs/${saved.id}/versions`, { accountScoped: true })
-      if (versionsResult.success && versionsResult.data) setVersions(versionsResult.data)
+      const result = await publishBlogPost(saved.id, { expectedDraftRevision: saved.revision, visibility })
+      if (!result.ok) return toast.error(result.error.message)
+      applyPost(result.data); setVersions([]); setTab('published'); toast.success('已发布 V' + (result.data.currentVersion?.version || ''))
+      setVersions(await listBlogVersions(saved.id))
     } finally { setPublishing(false) }
   }
 
   const openVersion = async (versionId: string) => {
     if (!post) return
-    const result = await apiClient.get<BlogVersion>(`/api/blogs/${post.id}/versions/${versionId}`, { accountScoped: true })
-    if (result.success && result.data) setHistoryVersion(result.data); else toast.error(result.message || '版本加载失败')
+    try {
+      setHistoryVersion(await getBlogVersion(post.id, versionId))
+    } catch (versionError) {
+      toast.error(versionError instanceof Error ? versionError.message : '版本加载失败')
+    }
   }
 
   const archive = async () => {
     if (!post) return
     setSaving(true)
-    const result = await apiClient.post(`/api/blogs/${post.id}/archive`, undefined, { accountScoped: true })
+    const result = await archiveBlogPost(post.id)
     setSaving(false); setArchiveOpen(false)
-    if (result.success) { toast.success('文章已归档'); requestNavigation('/personal/blogs') } else toast.error(result.message || '归档失败')
+    if (result.ok) { toast.success('文章已归档'); requestNavigation('/personal/blogs') } else toast.error(result.error.message)
   }
 
   const createSeries = async () => {
     if (!seriesTitle.trim()) return toast.error('请填写系列名称')
     setSaving(true)
-    const result = await apiClient.post<BlogSeriesSummary>('/api/blog-series', {
+    const result = await createBlogSeriesRequest({
       title: seriesTitle,
       description: seriesDescription || null,
       visibility: seriesVisibility,
       organizationId: organizationId || null,
-    }, { accountScoped: true })
+    })
     setSaving(false)
-    if (!result.success || !result.data) return toast.error(result.message || '系列创建失败')
-    setSeries(current => [result.data!, ...current])
-    setDraft(current => ({ ...current, classification: { ...current.classification, seriesId: result.data!.id } }))
+    if (!result.ok) return toast.error(result.error.message)
+    setSeries(current => [result.data, ...current])
+    setDraft(current => ({ ...current, classification: { ...current.classification, seriesId: result.data.id } }))
     setSeriesDialogOpen(false); setSeriesTitle(''); setSeriesDescription('')
     toast.success('系列已创建并选中')
   }

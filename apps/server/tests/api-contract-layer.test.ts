@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Response } from 'express'
-import { AiGovernanceContracts, AssignmentContracts, AuthContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, ProblemQualityContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
+import { AiGovernanceContracts, AssignmentContracts, AuthContracts, BlogManagementContracts, CaritsContracts, ChatContracts, ContributionContracts, DataMarketContracts, EvaluationCreditContracts, IdentityContracts, NotificationContracts, OjAccountContracts, OjFetcherContracts, OrganizationContracts, PlatformBindingContracts, ProblemContracts, ProblemListContracts, ProblemQualityContracts, RankingContracts, RatingLeaderboardContracts, SubmissionContracts, TeamContracts, TelemetryContracts, TrainingContracts, WorkspaceContracts } from '@oi-manager/contracts'
 import {
   ApiContractError,
   parseContractBody,
@@ -48,6 +48,26 @@ describe('shared API contract adapter', () => {
     })).toThrowError(ApiContractError)
   })
 
+  it('guards blog drafts, publishing and series through shared contracts', () => {
+    const draft = parseContractBody(BlogManagementContracts.updateDraft, {
+      expectedRevision: 2, title: '训练复盘', summary: null, contentMarkdown: '正文',
+      references: [], classification: { seriesId: null, tagIds: [], authorTags: [] },
+    })
+    expect(draft.expectedRevision).toBe(2)
+    expect(() => parseContractBody(BlogManagementContracts.publish, {
+      expectedDraftRevision: 0, visibility: 'PUBLIC',
+    })).toThrowError(ApiContractError)
+
+    const { response, json } = responseStub()
+    sendContractData(response, BlogManagementContracts.versions, [{
+      id: 'version-1', version: 1, title: '训练复盘', summary: null, contentHash: 'hash',
+      sourceVersionId: null, status: 'CURRENT', visibility: 'PUBLIC',
+      classification: { series: null, tags: [] }, publishedAt: new Date('2026-09-16T00:00:00Z'),
+    }])
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ publishedAt: '2026-09-16T00:00:00.000Z' })],
+    }))
+  })
   it('guards account authentication requests and context responses', () => {
     expect(parseContractBody(AuthContracts.login, {
       username: 'teacher1', password: '123456',

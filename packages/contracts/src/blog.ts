@@ -115,6 +115,107 @@ export const MyBlogListItemSchema = z.looseObject({
 })
 export const MyBlogListSchema = paginatedDataSchema(MyBlogListItemSchema)
 
+export const BlogDraftReferenceSchema = z.object({
+  type: z.enum(['PROBLEM', 'PROBLEM_REVISION', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE']),
+  problemId: z.string().optional(),
+  problemRevisionId: z.string().optional(),
+  solutionVersionId: z.string().optional(),
+  standingSnapshotId: z.string().optional(),
+  ratingChangeId: z.string().optional(),
+  relationType: z.enum(['PRIMARY_SUBJECT', 'MENTION', 'SOURCE', 'RESULT']),
+  displayMode: z.enum(['CARD', 'INLINE', 'COMPACT', 'EMBED', 'HIDDEN_METADATA']),
+  positionKey: z.string().optional(),
+})
+
+export const BlogDraftClassificationSchema = z.object({
+  seriesId: z.string().nullable(),
+  tagIds: z.array(z.string()),
+  authorTags: z.array(z.string()),
+})
+
+export const BlogDraftSchema = z.looseObject({
+  revision: z.number().int().positive(),
+  title: z.string(),
+  summary: z.string().nullable().optional(),
+  contentMarkdown: z.string(),
+  references: z.array(BlogDraftReferenceSchema),
+  classification: BlogDraftClassificationSchema,
+  baseVersionId: z.string().nullable().optional(),
+  updatedAt: DateTimeWireSchema.optional(),
+})
+
+export const BlogVersionSchema = z.looseObject({
+  id: z.string(),
+  version: z.number().int().positive(),
+  title: z.string(),
+  summary: z.string().nullable().optional(),
+  contentMarkdown: z.string(),
+  contentHash: z.string(),
+  sourceVersionId: z.string().nullable().optional(),
+  status: z.string(),
+  visibility: BlogVisibilitySchema,
+  classification: BlogClassificationSchema,
+  publishedAt: DateTimeWireSchema,
+  references: z.array(PublishedBlogReferenceSchema),
+})
+
+export const BlogVersionSummarySchema = BlogVersionSchema.pick({
+  id: true, version: true, title: true, summary: true, contentHash: true,
+  sourceVersionId: true, status: true, visibility: true, classification: true, publishedAt: true,
+})
+
+export const BlogManagementPostSchema = z.looseObject({
+  id: z.string(),
+  slug: z.string(),
+  type: BlogPostTypeSchema,
+  status: BlogPostStatusSchema,
+  visibility: BlogVisibilitySchema,
+  organizationId: z.string().nullable().optional(),
+  author: z.looseObject({ id: z.string(), username: z.string(), avatar: z.string().nullable().optional() }),
+  publishedAt: DateTimeWireSchema.nullable().optional(),
+  updatedAt: DateTimeWireSchema,
+  currentVersion: BlogVersionSchema.nullable(),
+  draft: BlogDraftSchema.nullable().optional(),
+})
+
+export const BlogSeriesSummarySchema = z.looseObject({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().nullable().optional(),
+  visibility: BlogVisibilitySchema,
+  organizationId: z.string().nullable().optional(),
+  revision: z.number().int().positive(),
+  archivedAt: DateTimeWireSchema.nullable().optional(),
+  updatedAt: DateTimeWireSchema,
+  owner: z.looseObject({ id: z.string(), username: z.string(), avatar: z.string().nullable().optional() }),
+  entryCount: z.number().int().nonnegative(),
+})
+export const BlogSeriesListSchema = paginatedDataSchema(BlogSeriesSummarySchema)
+export const BlogSeriesDetailsSchema = BlogSeriesSummarySchema.extend({
+  entries: z.array(z.object({
+    orderIndex: z.number().int().nonnegative(),
+    post: BlogManagementPostSchema,
+  })),
+})
+
+export const BlogTagListSchema = z.object({
+  items: z.array(z.object({ id: z.string(), kind: z.enum(['SYSTEM', 'USER']), name: z.string() })),
+  maxPerPost: z.number().int().positive(),
+})
+
+const BlogDraftContentInputSchema = z.object({
+  title: z.string().max(160),
+  summary: z.string().max(1000).nullable(),
+  contentMarkdown: z.string(),
+  references: z.array(BlogDraftReferenceSchema).max(50),
+  classification: BlogDraftClassificationSchema,
+})
+const BlogSeriesContentInputSchema = z.object({
+  title: z.string().trim().min(1).max(120),
+  description: z.string().max(1000).nullable(),
+  visibility: BlogVisibilitySchema,
+})
+
 export const BlogManagementContracts = {
   listMine: defineApiEndpoint({
     key: 'blog.management.list-mine',
@@ -122,6 +223,68 @@ export const BlogManagementContracts = {
     scope: 'account',
     query: PaginationQuerySchema.extend({ status: BlogPostStatusSchema.optional() }),
     data: MyBlogListSchema,
+  }),
+  create: defineApiEndpoint({
+    key: 'blog.management.create', method: 'POST', scope: 'account',
+    body: BlogDraftContentInputSchema.extend({
+      slug: z.string().trim().max(160).optional(),
+      type: BlogPostTypeSchema,
+      organizationId: z.string().nullable().optional(),
+    }),
+    data: BlogManagementPostSchema,
+  }),
+  detail: defineApiEndpoint({
+    key: 'blog.management.detail', method: 'GET', scope: 'account', data: BlogManagementPostSchema,
+  }),
+  updateDraft: defineApiEndpoint({
+    key: 'blog.management.update-draft', method: 'PATCH', scope: 'account',
+    body: BlogDraftContentInputSchema.extend({ expectedRevision: z.number().int().positive() }),
+    data: BlogDraftSchema,
+  }),
+  publish: defineApiEndpoint({
+    key: 'blog.management.publish', method: 'POST', scope: 'account',
+    body: z.object({ expectedDraftRevision: z.number().int().positive(), visibility: BlogVisibilitySchema }),
+    data: BlogManagementPostSchema,
+  }),
+  archive: defineApiEndpoint({
+    key: 'blog.management.archive', method: 'POST', scope: 'account',
+    body: z.undefined(), data: z.object({ id: z.string(), status: z.literal('ARCHIVED') }),
+  }),
+  versions: defineApiEndpoint({
+    key: 'blog.management.versions', method: 'GET', scope: 'account',
+    data: z.array(BlogVersionSummarySchema),
+  }),
+  versionDetail: defineApiEndpoint({
+    key: 'blog.management.version-detail', method: 'GET', scope: 'account',
+    data: BlogVersionSchema,
+  }),
+  listSeries: defineApiEndpoint({
+    key: 'blog.series.list', method: 'GET', scope: 'account',
+    query: PaginationQuerySchema.extend({ includeArchived: z.enum(['true', 'false']).transform(value => value === 'true').or(z.boolean()).optional() }),
+    data: BlogSeriesListSchema,
+  }),
+  seriesDetail: defineApiEndpoint({
+    key: 'blog.series.detail', method: 'GET', scope: 'account', data: BlogSeriesDetailsSchema,
+  }),
+  createSeries: defineApiEndpoint({
+    key: 'blog.series.create', method: 'POST', scope: 'account',
+    body: BlogSeriesContentInputSchema.extend({ organizationId: z.string().nullable() }),
+    data: BlogSeriesSummarySchema,
+  }),
+  updateSeries: defineApiEndpoint({
+    key: 'blog.series.update', method: 'PATCH', scope: 'account',
+    body: BlogSeriesContentInputSchema.partial().extend({ expectedRevision: z.number().int().positive() }),
+    data: BlogSeriesSummarySchema,
+  }),
+  reorderSeries: defineApiEndpoint({
+    key: 'blog.series.reorder', method: 'PUT', scope: 'account',
+    body: z.object({ expectedRevision: z.number().int().positive(), postIds: z.array(z.string()) }),
+    data: BlogSeriesSummarySchema,
+  }),
+  listTags: defineApiEndpoint({
+    key: 'blog.tags.list', method: 'GET', scope: 'account',
+    query: z.object({ q: z.string().trim().max(30).optional() }),
+    data: BlogTagListSchema,
   }),
 } as const
 
@@ -161,3 +324,12 @@ export type ProblemRelatedBlog = z.infer<typeof ProblemRelatedBlogSchema>
 export type ProblemRelatedBlogList = z.infer<typeof ProblemRelatedBlogListSchema>
 export type BlogPostType = z.infer<typeof BlogPostTypeSchema>
 export type BlogVisibility = z.infer<typeof BlogVisibilitySchema>
+
+export type BlogDraft = z.infer<typeof BlogDraftSchema>
+export type BlogVersion = z.infer<typeof BlogVersionSchema>
+export type BlogVersionSummary = z.infer<typeof BlogVersionSummarySchema>
+export type BlogManagementPost = z.infer<typeof BlogManagementPostSchema>
+export type BlogSeriesSummary = z.infer<typeof BlogSeriesSummarySchema>
+export type BlogSeriesList = z.infer<typeof BlogSeriesListSchema>
+export type BlogSeriesDetails = z.infer<typeof BlogSeriesDetailsSchema>
+export type BlogTagList = z.infer<typeof BlogTagListSchema>
