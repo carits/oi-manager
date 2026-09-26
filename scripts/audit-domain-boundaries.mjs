@@ -90,7 +90,7 @@ if (!contestCrud.includes('listPlatformContests')) {
   violations.push('Platform contest list bypasses the Contest query facade')
 }
 const dataMarket = fs.readFileSync(path.join(modulesRoot, 'data-market/data-market.service.ts'), 'utf8')
-if (!dataMarket.includes('findContestForLicense') || !dataMarket.includes('listContestPublicIdsForLicenseScopes')) {
+if (!dataMarket.includes('findContestForLicense') || !dataMarket.includes('listContestIdsForLicenseScopes')) {
   violations.push('Data Market contest license bypasses the Contest query facade')
 }
 const dashboard = fs.readFileSync(path.join(modulesRoot, 'dashboard/application/dashboard.service.ts'), 'utf8')
