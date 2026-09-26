@@ -19,7 +19,6 @@ import {
   JUDGE_RUN_TRANSITIONS,
   legacyResultToAttemptState,
 } from '../src/modules/judge/domain/judge-state'
-import { ensureCanonicalContestFixtureTx } from './helpers/contest-fixture'
 
 describe('Judge domain state machine', () => {
   it('allows only declared JudgeRun transitions', () => {
@@ -216,23 +215,25 @@ describe('Judge lifecycle ownership and retries', () => {
     })
 
     const now = Date.now()
-    const contest = await prisma.training.create({ data: {
-      title: 'Finalized contest rejudge fixture',
-      format: 'ioi',
-      startTime: new Date(now - 7_200_000),
-      endTime: new Date(now - 3_600_000),
-      status: 'finished',
-      createdBy: fixture.userId,
-      type: 'contest',
-      scope: 'platform',
-      finalizationStatus: 'FINALIZED',
-    } })
-    const aggregate = await prisma.$transaction(tx => ensureCanonicalContestFixtureTx(tx, contest.id))
-    if (!aggregate) throw new Error('Contest aggregate missing')
+    const contest = await prisma.contest.create({
+      data: {
+        id: crypto.randomUUID(),
+        title: 'Finalized contest rejudge fixture',
+        format: 'ioi',
+        contestDate: new Date(now - 7_200_000),
+        startAt: new Date(now - 7_200_000),
+        endAt: new Date(now - 3_600_000),
+        status: 'finished',
+        createdBy: fixture.userId,
+        type: 'judged',
+        scope: 'platform',
+        finalizationStatus: 'FINALIZED',
+      },
+    })
     const standingId = crypto.randomUUID()
     await prisma.contestStandingSnapshot.create({ data: {
       id: standingId,
-      contestId: aggregate.id,
+      contestId: contest.id,
       revision: 1,
       scoringMode: 'IOI',
       rulesHash: 'judge-domain-rules',
@@ -241,27 +242,19 @@ describe('Judge lifecycle ownership and retries', () => {
       createdBy: fixture.userId,
       finalizedAt: new Date(),
     } })
-    await prisma.training.update({
-      where: { id: contest.id },
-      data: { finalizedStandingId: standingId },
-    })
-    await prisma.contest.update({ where: { id: aggregate.id }, data: { finalizedStandingId: standingId } })
+    await prisma.contest.update({ where: { id: contest.id }, data: { finalizedStandingId: standingId } })
 
     const queued = await createRejudgeBatch({
       submissionIds: [fixture.submission.id],
       requestedBy: fixture.userId,
-      trainingId: contest.id,
+      contestId: contest.id,
       scopeType: 'contest',
-      scopePayload: { trainingId: contest.id },
+      scopePayload: { contestId: contest.id, publicId: contest.publicId },
     })
     expect(queued.queuedCount).toBe(1)
-    expect(await prisma.training.findUnique({
-      where: { id: contest.id },
-      select: { finalizationStatus: true },
-    })).toMatchObject({ finalizationStatus: 'FINALIZED' })
     expect(await prisma.contest.findUnique({
-      where: { publicId: contest.id },
-      select: { publicId: true, finalizationStatus: true },
-    })).toMatchObject({ publicId: contest.id, finalizationStatus: 'HELD' })
+      where: { id: contest.id },
+      select: { id: true, publicId: true, finalizationStatus: true },
+    })).toMatchObject({ id: contest.id, publicId: contest.publicId, finalizationStatus: 'HELD' })
   })
 })
