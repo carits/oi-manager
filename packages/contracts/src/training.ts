@@ -110,7 +110,7 @@ export const TrainingStageTimeExtensionInputSchema = z.object({ expectedRevision
 export const TrainingStagePlanMatrixInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), stagePlans: z.array(TrainingStagePlanInputSchema).max(1500) })
 export const TrainingGroupingReplaceInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), groups: z.array(TrainingGroupInputSchema).min(1).max(50) })
 export const TrainingGroupingChangeInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), participantId: z.string().min(1), toGroupId: z.string().min(1), reason: z.string().min(1).max(2000) })
-export const TrainingGroupSplitInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), sourceGroupId: z.string().min(1), name: z.string().min(1).max(100), participantIds: z.array(z.string().min(1)).min(1).max(5000), reason: z.string().min(1).max(2000) })
+export const TrainingGroupSplitInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), sourceGroupId: z.string().min(1), name: z.string().min(1).max(100), participantIds: z.array(z.string().min(1)).min(1).max(5000), effectiveMode: z.enum(['immediate', 'next_stage']).default('immediate'), targetStageId: z.string().optional(), reason: z.string().min(1).max(2000) })
 export const TrainingGroupMergeInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), sourceGroupId: z.string().min(1), targetGroupId: z.string().min(1), reason: z.string().min(1).max(2000) })
 export const TrainingStageEndInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), outcome: z.enum(['completed', 'ended_early']).default('completed'), reason: z.string().max(2000).optional(), endSession: z.boolean().default(false) })
 export const TrainingStageCloneInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), name: z.string().trim().min(1).max(200).optional() })
@@ -208,6 +208,7 @@ export const TrainingCoachDashboardSchema = z.object({
     currentStageId: z.string().nullable().optional(),
     currentProblemId: z.string().nullable().optional(),
     currentGroupId: z.string().nullable().optional(),
+    currentPlanId: z.string().nullable().optional(),
     activeSeconds: z.number().int(),
     online: z.boolean(),
     requiredCount: z.number().int(),
@@ -229,10 +230,11 @@ export const TrainingReportSchema = z.object({
     endedAt: DateTimeWireSchema.nullable().optional(),
     endReason: z.string().nullable().optional(),
     plans: z.array(z.object({ id: z.string(), groupId: z.string().nullable(), groupName: z.string().nullable(), isDefault: z.boolean(), inheritsDefault: z.boolean(), problemIds: z.array(z.string()) })),
+    groupCompletions: z.array(z.object({ groupId: z.string(), groupName: z.string(), participantCount: z.number().int(), completedParticipants: z.number().int(), requiredAssignments: z.number().int(), completedAssignments: z.number().int() })).optional(),
     timeAdjustments: z.array(z.object({ id: z.string(), seconds: z.number().int(), reason: z.string() }).passthrough()),
   })),
   participants: z.array(z.object({ id: z.string(), user: TrainingUserSummarySchema, group: z.object({ id: z.string(), name: z.string() }).passthrough(), activeSeconds: z.number().int(), progress: z.array(z.object({ stageProblemId: z.string(), status: z.string() }).passthrough()), scoreEvents: z.array(z.object({ id: z.string() }).passthrough()) })),
-  groupChanges: z.array(z.object({ id: z.string(), participantId: z.string(), fromGroupId: z.string().nullable().optional(), toGroupId: z.string(), reason: z.string(), changedBy: z.string(), createdAt: DateTimeWireSchema }).passthrough()),
+  groupChanges: z.array(z.object({ id: z.string(), participantId: z.string(), fromGroupId: z.string().nullable().optional(), toGroupId: z.string(), targetStageId: z.string().nullable().optional(), effectiveMode: z.string().optional(), status: z.string().optional(), reason: z.string(), changedBy: z.string(), appliedAt: DateTimeWireSchema.nullable().optional(), createdAt: DateTimeWireSchema }).passthrough()),
   rosterEvents: z.array(z.object({ id: z.string(), type: z.string(), targetId: z.string().nullable().optional(), payload: JsonObjectSchema.nullable().optional(), createdAt: DateTimeWireSchema }).passthrough()),
   runtimeProblems: z.array(z.object({ id: z.string(), targetType: z.string(), targetId: z.string().nullable().optional(), stageProblemId: z.string().nullable().optional(), payload: JsonObjectSchema.nullable().optional(), createdAt: DateTimeWireSchema }).passthrough()),
   interventions: z.array(z.object({ id: z.string(), seq: z.number().int(), type: z.string(), targetType: z.string(), targetId: z.string().nullable().optional(), payload: JsonObjectSchema.nullable().optional(), createdBy: z.string(), createdAt: DateTimeWireSchema }).passthrough()),

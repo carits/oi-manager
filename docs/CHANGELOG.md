@@ -5,6 +5,12 @@ last_verified: 2026-09-27
 source_of_truth: Git history
 ---
 
+## 2026-09-27
+
+- Training Engine V2 快速创建支持逐题必做/选做，模拟测试固定全部必做。
+- 顺序开放改为常用条件优先、组合条件高级展开；拆组新增下一阶段生效。
+- 教练看板补充当前 Plan，报告补充每阶段各组完成情况与换组生效阶段。
+
 ## 2026-09-27 - Training Engine global Stage cutover deployed
 
 - TrainingSession now owns one global Stage timeline. Stable Groups only select a default Stage plan or an optional group override; plans no longer own independent runtime lifecycle.

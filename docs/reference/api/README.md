@@ -547,6 +547,9 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/training-sessions/:id/roster` | 查询基础学员名单；不返回 Session 级分组 |
 | `PUT` | `/api/training-sessions/:id/roster` | 事务保存基础学员名单；Stage 分组由结构接口保存 |
 | `POST` | `/api/training-sessions/:id/publish` | 发布训练并固定参与名单；Stage 在实际开始时生成不可变快照 |
+| `POST` | `/api/training-sessions/:id/clone` | 复制可复用定义为新的 DRAFT，不复制参与名单、运行快照、进度或事件 |
+| `POST` | `/api/training-sessions/:id/runtime-participants` | 运行中加入范围内学员，记录迟到/补训语义和原因 |
+| `POST` | `/api/training-sessions/:id/runtime-participants/:participantId/leave` | 记录学员中途退出，保留此前进度、提交和报告历史 |
 | `POST` | `/api/training-sessions/:id/stage-transitions` | 开始、完成/提前结束、跳过 pending Stage 或结束 Session；不支持回滚 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/group-changes` | 即时换组或预设下一 Stage 分组，必须记录原因 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/end` | 结束当前阶段并记录结束原因与备注 |
@@ -554,14 +557,15 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/training-sessions/:id/stages/:stageId/move-participant` | 将学员移动到当前阶段的指定分组并保留历史进度 |
 | `GET` | `/api/training-sessions/:id/stages/:stageId/group-suggestions` | 为尚未开始的 grouped Stage 生成基于前序完成度、分数、尝试次数和有效时间的可解释分组建议；只预览，不自动写入 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/time-extensions` | 追加 Stage 延时记录，不改写计划时长 |
+| `POST` | `/api/training-sessions/:id/stages/:stageId/runtime-problems` | 向当前 Stage 临时追加全体、分组或个人题目；不改写 RuntimeSnapshot |
 | `POST` | `/api/training-sessions/:id/commands` | 执行暂停、Focus、锁定、提示、消息和个人干预；不能改写 Stage 定义 |
 | `GET` | `/api/training-sessions/:id/drafts/:stageProblemId` | 获取指定阶段题目的训练代码草稿 |
 | `PUT` | `/api/training-sessions/:id/drafts/:stageProblemId` | 按阶段题目 ID 乐观锁保存训练代码草稿 |
 | `POST` | `/api/training-sessions/:id/heartbeat` | 上报可见且聚焦的有效训练时间 |
 | `POST` | `/api/training-sessions/:id/submit` | 使用固定 Revision/专项投影创建训练提交 |
-| `GET` | `/api/training-sessions/:id/coach-dashboard` | 教练实时进度和卡题概览 |
+| `GET` | `/api/training-sessions/:id/coach-dashboard` | 教练实时进度、卡题概览以及学员当前实际 StagePlan |
 | `GET` | `/api/training-sessions/:id/peer-progress` | 按训练榜单模式和同学可见性返回服务端裁剪后的进度 |
-| `GET` | `/api/training-sessions/:id/report` | Stage 时间轴、计划/延时/实际时间、快照哈希、换组，以及包含 NOT_STARTED 和当前要求/历史标记的学员过程报告 |
+| `GET` | `/api/training-sessions/:id/report` | Stage 时间轴、各组完成情况、计划/延时/实际时间、快照哈希、带生效 Stage 的换组，以及学员过程报告 |
 | `GET` | `/api/training-sessions/:id/events` | 可补偿的训练 SSE 事件流 |
 | `POST` | `/api/training-sessions/:id/join` | 范围内成员按迟到规则加入训练 |
 | `POST` | `/api/training-sessions/:id/archive` | 归档草稿或已结束训练 |
@@ -632,7 +636,7 @@ Training Session 使用一条全局 Stage 时间轴。设计器通过 `/design`�
 | `POST` | `/api/training-sessions/:id/stages/:stageId/group-changes` | 即时换组或预设目标 Stage 换组 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/time-extensions` | 追加 Stage 延时记录 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/clone` | 将 Stage 定义复制为新的未来 Stage |
-| `POST` | `/api/training-sessions/:id/groups/split` | 拆分稳定分组，不创建运行时间线 |
+| `POST` | `/api/training-sessions/:id/groups/split` | 拆分稳定分组，可立即或在目标 Stage 开始时生效，不创建运行时间线 |
 | `POST` | `/api/training-sessions/:id/groups/merge` | 合并稳定分组，不改变全局当前 Stage |
 
 所有 JSON 请求/响应经过 Training Contracts 校验。Stage 转换采用训练锁与 `statusRevision` CAS；Stage 首次开始时创建不可变 RuntimeSnapshot，开始后的定义和计划不可改写，已结束 Stage 不允许回滚。

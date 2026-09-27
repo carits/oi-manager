@@ -78,6 +78,16 @@ type PeerProgress = { rankingMode: string; peerVisibility: string; entries: Arra
 type TrainingDraft = { code?: string; language?: string; revision?: number; inputFilename?: string | null; outputFilename?: string | null }
 type TrainingSubmitResult = { id: number }
 
+const trainingResponseRevision = (value: unknown) => {
+  if (!value || typeof value !== 'object') return undefined
+  const direct = Reflect.get(value, 'statusRevision')
+  if (typeof direct === 'number') return direct
+  const session = Reflect.get(value, 'session')
+  if (!session || typeof session !== 'object') return undefined
+  const nested = Reflect.get(session, 'statusRevision')
+  return typeof nested === 'number' ? nested : undefined
+}
+
 const formatDuration = (seconds?: number | null) => {
   const value = Math.max(0, Math.floor(seconds || 0))
   const minutes = Math.floor(value / 60)
@@ -102,9 +112,9 @@ function StageTimeMetrics({ activeElapsedSeconds, runningSince, plannedDurationS
 }
   type TrainingReport = {
     session: { id: string; title: string; status: string; startedAt?: string | null; endedAt?: string | null }
-    timeline: Array<{ id: string; name: string; orderIndex: number; kind: string; lifecycle: string; plannedDurationSeconds?: number | null; actualDurationSeconds: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null; plans: Array<{ id: string; groupId?: string | null; groupName?: string | null; isDefault: boolean; inheritsDefault: boolean; problemIds: string[] }>; timeAdjustments: Array<{ id: string; seconds: number; reason: string }> }>
+    timeline: Array<{ id: string; name: string; orderIndex: number; kind: string; lifecycle: string; plannedDurationSeconds?: number | null; actualDurationSeconds: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null; plans: Array<{ id: string; groupId?: string | null; groupName?: string | null; isDefault: boolean; inheritsDefault: boolean; problemIds: string[] }>; groupCompletions?: Array<{ groupId: string; groupName: string; participantCount: number; completedParticipants: number; requiredAssignments: number; completedAssignments: number }>; timeAdjustments: Array<{ id: string; seconds: number; reason: string }> }>
     participants: Array<{ id: string; user: { id: string; username: string }; group: { id: string; name: string }; activeSeconds: number; progress: Array<{ stageProblemId: string; status: string; bestScore?: number | null; attemptCount?: number }> }>
-    groupChanges: Array<{ id: string; participantId: string; fromGroupId?: string | null; toGroupId: string; reason: string; changedBy: string; createdAt: string }>
+    groupChanges: Array<{ id: string; participantId: string; fromGroupId?: string | null; toGroupId: string; targetStageId?: string | null; effectiveMode?: string; status?: string; reason: string; changedBy: string; appliedAt?: string | null; createdAt: string }>
     rosterEvents: Array<{ id: string; type: string; targetId?: string | null; payload?: { reason?: string; historyMode?: string; groupId?: string }; createdAt: string }>
     runtimeProblems: Array<{ id: string; targetType: string; targetId?: string | null; stageProblemId?: string | null; payload?: { reason?: string; required?: boolean; targetScore?: number; platform?: string; problemCode?: string; title?: string }; createdAt: string }>
     interventions: Array<{ id: string; seq: number; type: string; targetType: string; targetId?: string | null; payload?: { message?: string; messageType?: string; stageProblemId?: string; hintId?: string; mode?: string }; createdBy: string; createdAt: string }>
@@ -135,6 +145,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [groupChangeParticipantIds, setGroupChangeParticipantIds] = useState<string[]>([]), [groupChangeTarget, setGroupChangeTarget] = useState(''), [groupChangeReason, setGroupChangeReason] = useState('')
   const [groupChangeMode, setGroupChangeMode] = useState<'immediate' | 'next_stage'>('immediate'), [groupChangeStageId, setGroupChangeStageId] = useState('')
   const [splitSourceGroupId, setSplitSourceGroupId] = useState(''), [splitName, setSplitName] = useState(''), [splitParticipantIds, setSplitParticipantIds] = useState<string[]>([]), [splitReason, setSplitReason] = useState('')
+  const [splitMode, setSplitMode] = useState<'immediate' | 'next_stage'>('immediate'), [splitStageId, setSplitStageId] = useState('')
   const [mergeSourceGroupId, setMergeSourceGroupId] = useState(''), [mergeTargetGroupId, setMergeTargetGroupId] = useState(''), [mergeReason, setMergeReason] = useState('')
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>()
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([])
@@ -446,7 +457,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       await saveDraftRef.current(true)
       const response = await executeTrainingCommand(sessionId, { type: type as 'PAUSE_SESSION', expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, targetType: targetType as 'ALL', targetId: resolvedTargetId, payload })
       if (!response.ok) { toast.error(response.error.message || '训练指令失败'); return false }
-      const responseRevision = (response.data as any)?.session?.statusRevision ?? (response.data as any)?.statusRevision
+      const responseRevision = trainingResponseRevision(response.data)
       if (typeof responseRevision === 'number') statusRevisionRef.current = responseRevision
       await load(); await loadHints(selectedId)
       return true
@@ -478,7 +489,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           toast.error('已处理 ' + completed + ' 人，' + participant.user.username + ' 操作失败：' + (response.error.message || '请求失败'))
           return false
         }
-        const responseRevision = (response.data as any)?.session?.statusRevision ?? (response.data as any)?.statusRevision
+        const responseRevision = trainingResponseRevision(response.data)
         if (typeof responseRevision === 'number') statusRevisionRef.current = responseRevision
         completed += 1
       }
@@ -614,7 +625,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setGroupChangeParticipantIds([]); setSelectedParticipantIds([]); setGroupChangeTarget(''); setGroupChangeReason(''); setGroupChangeMode('immediate'); setGroupChangeStageId(''); await load()
   }
   const submitSplitGroup = async () => {
-    if (!data || !splitSourceGroupId || !splitName.trim() || !splitReason.trim()) return
+    if (!data || !splitSourceGroupId || !splitName.trim() || !splitReason.trim() || (splitMode === 'next_stage' && !splitStageId)) return
     const sourceParticipants = (dashboard?.participants || []).filter(item => item.currentGroupId === splitSourceGroupId)
     if (!splitParticipantIds.length) return toast.error('请至少选择一名学员')
     if (splitParticipantIds.length >= sourceParticipants.length) return toast.error('来源分组必须至少保留一名学员')
@@ -624,12 +635,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       sourceGroupId: splitSourceGroupId,
       name: splitName.trim(),
       participantIds: splitParticipantIds,
+      effectiveMode: splitMode,
+      ...(splitMode === 'next_stage' ? { targetStageId: splitStageId } : {}),
       reason: splitReason.trim(),
     })
     setCommandBusy(false)
     if (!response.ok) return toast.error(response.error.message || '拆组失败')
-    toast.success('新分组已建立，所有学员仍处于当前阶段')
-    setSplitSourceGroupId(''); setSplitName(''); setSplitParticipantIds([]); setSplitReason('')
+    toast.success(splitMode === 'next_stage' ? '新分组已建立，将在目标阶段开始时生效' : '新分组已建立，所有学员仍处于当前阶段')
+    setSplitSourceGroupId(''); setSplitName(''); setSplitParticipantIds([]); setSplitReason(''); setSplitMode('immediate'); setSplitStageId('')
     await load()
   }
   const submitMergeGroup = async () => {
@@ -718,6 +731,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const futureStages = pendingStages
   const groupTargetStage = groupChangeMode === 'next_stage' ? futureStages.find(stage => stage.id === groupChangeStageId) : currentStage
   const reportGroupName = (groupId?: string) => data.session.Groups.find(group => group.id === groupId)?.name || (groupId ? groupId : '未分组')
+  const reportStageName = (stageId?: string | null) => report?.timeline.find(stage => stage.id === stageId)?.name || '未记录阶段'
   const reportParticipantName = (participantId: string) => dashboard?.participants.find(item => item.id === participantId)?.user.username || participantId
   const reportUserName = (userId?: string | null) => report?.participants.find(item => item.user.id === userId)?.user.username || userId || '未知学员'
   const targetedCommandDisabled = commandBusy || ((commandTargetType === 'GROUP' || commandTargetType === 'USER') && !commandTargetId) || (commandTargetType === 'TEAM' && !data.session.teamId)
@@ -1138,7 +1152,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理训练学员" description="这里决定谁参加训练；不同阶段的分组方案在训练设计中配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
     <FormDialog
       isOpen={Boolean(splitSourceGroupId)}
-      onClose={() => { setSplitSourceGroupId(''); setSplitName(''); setSplitParticipantIds([]); setSplitReason('') }}
+      onClose={() => { setSplitSourceGroupId(''); setSplitName(''); setSplitParticipantIds([]); setSplitReason(''); setSplitMode('immediate'); setSplitStageId('') }}
       title="拆分训练组"
       description="从当前分组选择部分学员建立新组。当前阶段不会改变，既有草稿、提交和进度全部保留。"
       onSubmit={() => void submitSplitGroup()}
@@ -1163,6 +1177,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           </div>
         </fieldset>
         <p className={styles.muted}>已选择 {splitParticipantIds.length} 人；来源组必须至少保留 1 人。</p>
+        <label className={styles.field}>生效时间<Select value={splitMode} onChange={event => { setSplitMode(event.target.value as 'immediate' | 'next_stage'); setSplitStageId('') }}><option value="immediate">立即生效</option><option value="next_stage">下一阶段生效</option></Select></label>
+        {splitMode === 'next_stage' && <label className={styles.field}>目标阶段<Select value={splitStageId} onChange={event => setSplitStageId(event.target.value)}><option value="">请选择尚未开始的阶段</option>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}
         <label className={styles.field}>拆组原因<Textarea rows={4} maxLength={2000} value={splitReason} onChange={event => setSplitReason(event.target.value)} /></label>
       </div>
     </FormDialog>
@@ -1274,10 +1290,10 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       <div className={styles.stack}>
         {report && <div className={styles.actions}><Button variant="secondary" onClick={exportReportCsv}>导出学员明细 CSV</Button><Button variant="ghost" onClick={exportReportJson}>导出完整 JSON</Button></div>}
         {report && <Section title="训练汇总"><div className={styles.summary}><div className={styles.metric}><strong>{report.timeline.length}</strong>阶段</div><div className={styles.metric}><strong>{report.participants.length}</strong>学员</div><div className={styles.metric}><strong>{report.groupChanges.length}</strong>换组记录</div></div></Section>}
-        {report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.orderIndex + 1}. {stage.name}</h3><p>状态：{trainingStageStatusLabel(stage.lifecycle)} · 计划 {formatDuration(stage.plannedDurationSeconds)} · 实际 {formatDuration(stage.actualDurationSeconds)}{stage.endReason ? ' · ' + trainingStageEndReasonLabel(stage.endReason) : ''}</p><div className={styles.timeline}>{stage.plans.map(plan => <div className={styles.timelineItem} key={plan.id}><strong>{plan.groupName || '全班默认'}{plan.isDefault ? ' · 默认计划' : plan.inheritsDefault ? ' · 继承默认' : ' · 独立覆盖'}</strong><br /><span>{plan.problemIds.length} 题</span></div>)}</div>{stage.timeAdjustments.length > 0 && <small>延时记录：{stage.timeAdjustments.map(item => formatDuration(item.seconds) + '（' + item.reason + '）').join('；')}</small>}</article>)}
+        {report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.orderIndex + 1}. {stage.name}</h3><p>状态：{trainingStageStatusLabel(stage.lifecycle)} · 计划 {formatDuration(stage.plannedDurationSeconds)} · 实际 {formatDuration(stage.actualDurationSeconds)}{stage.endReason ? ' · ' + trainingStageEndReasonLabel(stage.endReason) : ''}</p><div className={styles.timeline}>{stage.plans.map(plan => <div className={styles.timelineItem} key={plan.id}><strong>{plan.groupName || '全班默认'}{plan.isDefault ? ' · 默认计划' : plan.inheritsDefault ? ' · 继承默认' : ' · 独立覆盖'}</strong><br /><span>{plan.problemIds.length} 题</span></div>)}</div>{Boolean(stage.groupCompletions?.length) && <div className={styles.timeline}>{stage.groupCompletions?.map(group => <div className={styles.timelineItem} key={group.groupId}><strong>{group.groupName} · {group.completedParticipants}/{group.participantCount} 人完成</strong><br /><span>计划要求完成 {group.completedAssignments}/{group.requiredAssignments} 项</span></div>)}</div>}{stage.timeAdjustments.length > 0 && <small>延时记录：{stage.timeAdjustments.map(item => formatDuration(item.seconds) + '（' + item.reason + '）').join('；')}</small>}</article>)}
         {Boolean(report?.runtimeProblems.length) && <Section title="临时追加题目"><div className={styles.timeline}>{report?.runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><strong>{item.payload?.platform || '题库'} · {item.payload?.problemCode || item.stageProblemId} · {item.payload?.title || '训练题'}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? '指定分组' : '指定学员'} · {item.payload?.required === false ? '选做' : '必做'} · 目标 {item.payload?.targetScore ?? 100} 分 · {item.payload?.reason || '未记录原因'}</span></div>)}</div></Section>}
         {Boolean(report?.rosterEvents.length) && <Section title="中途加入与退出"><div className={styles.timeline}>{report?.rosterEvents.map(event => <div className={styles.timelineItem} key={event.id}><strong>{event.type.endsWith('.joined') ? '加入训练' : '退出训练'} · {reportUserName(event.targetId)}</strong><br /><span>{event.payload?.reason || '未记录原因'} · {new Date(event.createdAt).toLocaleString()}</span></div>)}</div></Section>}
-        {Boolean(report?.groupChanges.length) && <Section title="换组时间线"><div className={styles.timeline}>{report?.groupChanges.map(change => <div className={styles.timelineItem} key={change.id}><strong>{reportParticipantName(change.participantId)}</strong><br /><span>{reportGroupName(change.fromGroupId || undefined)} → {reportGroupName(change.toGroupId)} · {change.reason} · {new Date(change.createdAt).toLocaleString()}</span></div>)}</div></Section>}
+        {Boolean(report?.groupChanges.length) && <Section title="换组时间线"><div className={styles.timeline}>{report?.groupChanges.map(change => <div className={styles.timelineItem} key={change.id}><strong>{reportParticipantName(change.participantId)}</strong><br /><span>{reportStageName(change.targetStageId)} · {reportGroupName(change.fromGroupId || undefined)} → {reportGroupName(change.toGroupId)} · {change.reason} · {new Date(change.appliedAt || change.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         {Boolean(report?.interventions.length) && <Section title="课堂干预时间线"><div className={styles.timeline}>{report?.interventions.map(item => <div className={styles.timelineItem} key={item.id}><strong>{interventionLabel[item.type] || item.type}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? reportGroupName(item.targetId || undefined) : item.targetType === 'USER' ? reportUserName(item.targetId) : '当前团队'}{item.payload?.stageProblemId ? ' · ' + (problemNames[item.payload.stageProblemId] || item.payload.stageProblemId) : ''}{item.payload?.message ? ' · ' + item.payload.message : ''} · {new Date(item.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         <div className={styles.grid}>{report?.participants.map(item => <article className={styles.card} key={item.user.id}><h3>{item.user.username}</h3><p>{item.group.name} · 有效训练 {formatDuration(item.activeSeconds)}</p><p>{item.progress.length} 条题目进度</p></article>)}</div>
       </div>

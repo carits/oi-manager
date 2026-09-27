@@ -13,6 +13,7 @@ import {
   createTrainingSessionTemplate,
   executeStageTransition,
   executeTrainingCommand,
+  getCoachDashboard,
   getTrainingDesign,
   getTrainingReport,
   getTrainingPeerProgress,
@@ -431,6 +432,11 @@ describe('Training Engine global Stage domain', () => {
     session = await loaded(session.id)
     expect(session.currentStageId).toBe(currentStageId)
     expect(session.Participants.find(item => item.id === participant.id)?.groupId).toBe(session.Groups[1].id)
+    await expect(prisma.trainingSessionGroupChange.findFirstOrThrow({ where: { participantId: participant.id, status: 'applied' } })).resolves.toMatchObject({ targetStageId: currentStageId, effectiveMode: 'IMMEDIATE' })
+    const dashboard = await getCoachDashboard(coach.user.id, session.id)
+    expect(dashboard.participants.find(item => item.id === participant.id)).toMatchObject({ currentPlanId: expect.any(String) })
+    const report = await getTrainingReport(coach.user.id, session.id)
+    expect(report.timeline[0].groupCompletions.find(item => item.groupId === session.Groups[1].id)).toMatchObject({ participantCount: 2 })
     await expect(prisma.trainingSessionProblemProgress.findUniqueOrThrow({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })).resolves.toMatchObject({ attemptCount: 3, bestScore: 60 })
     await expect(getTrainingWorkspace(participant.userId, session.id)).resolves.toMatchObject({ participant: { latestGroupChange: { fromGroupName: '基础组', toGroupName: '提高组', reason: '课堂调组' } } })
   })
@@ -492,6 +498,37 @@ describe('Training Engine global Stage domain', () => {
     session = await loaded(session.id)
     expect(session.currentStageId).toBe(originalCurrentStageId)
     expect(session.Groups.find(group => group.id === target.id)?.status).toBe('archived')
+  })
+
+  it('defers a split Group assignment until the selected Stage starts', async () => {
+    const created = await createSession(1, 2)
+    let session = await publishAndStart(created!.id)
+    const source = session.Groups[0]
+    const moved = source.Participants[0]
+
+    await splitTrainingGroup(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      sourceGroupId: source.id,
+      name: '下一阶段冲刺组',
+      participantIds: [moved.id],
+      effectiveMode: 'next_stage',
+      targetStageId: session.Stages[1].id,
+      reason: '下一阶段分层',
+    })
+    session = await loaded(session.id)
+    const target = session.Groups.find(group => group.name === '下一阶段冲刺组')!
+    expect(session.Participants.find(item => item.id === moved.id)?.groupId).toBe(source.id)
+    expect(target.Participants).toHaveLength(0)
+
+    await executeStageTransition(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      action: 'advance',
+      stageId: session.Stages[0].id,
+      outcome: 'completed',
+    })
+    session = await loaded(session.id)
+    expect(session.Participants.find(item => item.id === moved.id)?.groupId).toBe(target.id)
+    await expect(prisma.trainingSessionGroupChange.findFirstOrThrow({ where: { participantId: moved.id, toGroupId: target.id } })).resolves.toMatchObject({ targetStageId: session.Stages[1].id, status: 'applied' })
   })
 
   it('advances and ends timed Stages through the scheduler', async () => {

@@ -22,6 +22,7 @@ export type TrainingDashboardParticipant = {
   online: boolean
   currentProblemId?: string
   currentGroupId?: string | null
+  currentPlanId?: string | null
   activeSeconds?: number
   requiredCount: number
   completedCount: number

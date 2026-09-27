@@ -13,6 +13,14 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 # 当前状态
 
+## 2026-09-27 Training Engine V2 product usability closure
+
+- 训练快速创建补齐逐题必做/选做，模拟测试保持全题必做；顺序开放的常用条件改为课堂语言，ANY/ALL 组合规则仅在高级设置中出现。
+- 教练看板返回学员当前实际 Plan；训练报告按全局 Stage 展示各组人数、完成学员和计划要求完成量，换组记录带实际生效 Stage。
+- 拆组支持“立即 / 下一阶段”两种生效方式；下一阶段拆组复用待生效换组事务，目标 Stage 开始前不改变学员归属。
+- 验证通过：Training 领域 19/19、API Contract 37/37、Web 产品化静态测试 23/23，Contracts/Server/Web TypeScript、Server/Web production build、docs/architecture 门禁全部通过；本条仅记录代码侧收口，不表示已部署。
+
+
 ## 2026-09-27 Training Engine global Stage rollout
 
 - Commit `e9d39528` is on `main` and deployed. TrainingSession now has one global current Stage; stable Groups select the default Stage plan or an optional override and no longer own independent runtime state.

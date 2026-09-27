@@ -144,103 +144,162 @@ export function UnlockEditor({
   const conditions = value.conditions?.length
     ? value.conditions
     : [{ type: "AC" as const }];
+  const simpleType =
+    conditions.length === 1 &&
+    ["AC", "SCORE", "TEACHER"].includes(conditions[0].type)
+      ? conditions[0].type
+      : "ADVANCED";
+  const [advancedOpen, setAdvancedOpen] = useState(simpleType === "ADVANCED");
+  useEffect(() => {
+    if (simpleType === "ADVANCED") setAdvancedOpen(true);
+  }, [simpleType]);
   return (
     <div className={styles.unlockEditor}>
       <div className={styles.unlockHeader}>
         <strong>前一道题解锁条件</strong>
         <Select
-          aria-label="条件组合"
-          value={value.mode}
-          onChange={(event) =>
-            onChange({ ...value, mode: event.target.value as "ANY" | "ALL" })
-          }
+          aria-label="开放条件"
+          value={simpleType}
+          onChange={(event) => {
+            const type = event.target.value;
+            if (type === "ADVANCED") {
+              setAdvancedOpen(true);
+              return;
+            }
+            setAdvancedOpen(false);
+            onChange({
+              mode: "ALL",
+              conditions: [
+                type === "SCORE"
+                  ? { type: "SCORE", value: conditions[0]?.type === "SCORE" ? conditions[0].value || 60 : 60 }
+                  : { type: type as "AC" | "TEACHER" },
+              ],
+            });
+          }}
         >
-          <option value="ANY">任意一项 ANY</option>
-          <option value="ALL">全部满足 ALL</option>
+          <option value="AC">完成前一道题后开放</option>
+          <option value="SCORE">前一道题达到目标分后开放</option>
+          <option value="TEACHER">由教师手动开放</option>
+          <option value="ADVANCED">组合条件（高级）</option>
         </Select>
       </div>
-      {conditions.map((condition, index) => (
-        <div className={styles.conditionRow} key={`${condition.type}-${index}`}>
-          <Select
-            value={condition.type}
-            aria-label={`解锁条件 ${index + 1}`}
-            onChange={(event) => {
-              const type = event.target.value as UnlockCondition["type"];
+      {simpleType === "SCORE" && (
+        <label className={styles.field}>
+          目标分
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={conditions[0].value || 60}
+            onChange={(event) =>
               onChange({
-                ...value,
-                conditions: conditions.map((item, current) =>
-                  current === index
-                    ? {
-                        type,
-                        ...(["AC", "TEACHER"].includes(type)
-                          ? {}
-                          : { value: type === "SCORE" ? 60 : 1 }),
-                      }
-                    : item,
-                ),
-              });
-            }}
-          >
-            {Object.entries(conditionLabels).map(([type, label]) => (
-              <option value={type} key={type}>
-                {label}
-              </option>
-            ))}
-          </Select>
-          {!["AC", "TEACHER"].includes(condition.type) && (
-            <Input
-              aria-label="条件值"
-              type="number"
-              min={condition.type === "SCORE" ? 0 : 1}
-              max={
-                condition.type === "SCORE"
-                  ? 100
-                  : condition.type === "ATTEMPTS"
-                    ? 1000
-                    : 604800
-              }
-              value={condition.value || ""}
-              onChange={(event) =>
-                onChange({
-                  ...value,
-                  conditions: conditions.map((item, current) =>
-                    current === index
-                      ? { ...item, value: Number(event.target.value) }
-                      : item,
-                  ),
-                })
-              }
-            />
-          )}
-          <Button
-            iconOnly
-            aria-label="删除解锁条件"
-            variant="text"
-            disabled={conditions.length === 1}
-            onClick={() =>
-              onChange({
-                ...value,
-                conditions: conditions.filter(
-                  (_, current) => current !== index,
-                ),
+                mode: "ALL",
+                conditions: [{ type: "SCORE", value: Number(event.target.value) }],
               })
             }
+          />
+        </label>
+      )}
+      <details open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+        <summary>高级组合条件</summary>
+        <div className={styles.stack}>
+          <label className={styles.field}>
+            多项条件如何生效
+            <Select
+              aria-label="条件组合"
+              value={value.mode}
+              onChange={(event) =>
+                onChange({ ...value, mode: event.target.value as "ANY" | "ALL" })
+              }
+            >
+              <option value="ANY">满足任意一项</option>
+              <option value="ALL">必须全部满足</option>
+            </Select>
+          </label>
+          {conditions.map((condition, index) => (
+            <div className={styles.conditionRow} key={`${condition.type}-${index}`}>
+              <Select
+                value={condition.type}
+                aria-label={`解锁条件 ${index + 1}`}
+                onChange={(event) => {
+                  const type = event.target.value as UnlockCondition["type"];
+                  onChange({
+                    ...value,
+                    conditions: conditions.map((item, current) =>
+                      current === index
+                        ? {
+                            type,
+                            ...(["AC", "TEACHER"].includes(type)
+                              ? {}
+                              : { value: type === "SCORE" ? 60 : 1 }),
+                          }
+                        : item,
+                    ),
+                  });
+                }}
+              >
+                {Object.entries(conditionLabels).map(([type, label]) => (
+                  <option value={type} key={type}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+              {!["AC", "TEACHER"].includes(condition.type) && (
+                <Input
+                  aria-label="条件值"
+                  type="number"
+                  min={condition.type === "SCORE" ? 0 : 1}
+                  max={
+                    condition.type === "SCORE"
+                      ? 100
+                      : condition.type === "ATTEMPTS"
+                        ? 1000
+                        : 604800
+                  }
+                  value={condition.value || ""}
+                  onChange={(event) =>
+                    onChange({
+                      ...value,
+                      conditions: conditions.map((item, current) =>
+                        current === index
+                          ? { ...item, value: Number(event.target.value) }
+                          : item,
+                      ),
+                    })
+                  }
+                />
+              )}
+              <Button
+                iconOnly
+                aria-label="删除解锁条件"
+                variant="text"
+                disabled={conditions.length === 1}
+                onClick={() =>
+                  onChange({
+                    ...value,
+                    conditions: conditions.filter(
+                      (_, current) => current !== index,
+                    ),
+                  })
+                }
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          ))}
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<Plus size={14} />}
+            disabled={conditions.length >= 10}
+            onClick={() =>
+              onChange({ ...value, conditions: [...conditions, { type: "AC" }] })
+            }
           >
-            <Trash2 size={14} />
+            添加条件
           </Button>
         </div>
-      ))}
-      <Button
-        size="sm"
-        variant="outline"
-        icon={<Plus size={14} />}
-        disabled={conditions.length >= 10}
-        onClick={() =>
-          onChange({ ...value, conditions: [...conditions, { type: "AC" }] })
-        }
-      >
-        添加条件
-      </Button>
+      </details>
     </div>
   );
 }
