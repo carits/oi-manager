@@ -9,7 +9,7 @@ import { Empty } from '@/components/ui/Empty'
 import { StatusBadge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { createTrainingHint, deleteTrainingHint, getTrainingGroupSuggestions, getTrainingRoster, listTrainingHints, saveTrainingRoster, updateTrainingHint } from '../api/trainingSessionApi'
-import type { Assignment, Stage, StageGroup, TrainingGrouping } from '../model/trainingDesign'
+import type { Assignment, Stage, TrainingGrouping } from '../model/trainingDesign'
 import { isTrainingGroupingDefinitionLocked, isTrainingStageDefinitionLocked } from '../model/trainingDesign'
 import { trainingHintOpenModeLabel } from '@/lib/humanPresentation'
 import styles from './TrainingEngine.module.css'
@@ -18,7 +18,7 @@ type Roster = { revision: number; candidates: Array<{ userId: string; username: 
 type Hint = { id: string; level: number; title?: string; content?: string; openMode?: string; triggerSeconds?: number; triggerAttempts?: number; triggerScore?: number }
 type GroupSuggestion = { participantId: string; user: { id: string; username: string }; groupId: string; groupName: string; reason: string }
 
-export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChange, grouping, stageGroups, sessionStatus, onGroupingChange, onChanged }: { sessionId: string; mode: 'roster' | 'hints'; stages: Stage[]; onStagesChange?: (updater: (current: Stage[]) => Stage[]) => void; grouping?: TrainingGrouping; stageGroups: StageGroup[]; sessionStatus: string; onGroupingChange?: (value: TrainingGrouping) => void; onChanged: () => Promise<void> }) {
+export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChange, grouping, sessionStatus, onGroupingChange, onChanged }: { sessionId: string; mode: 'roster' | 'hints'; stages: Stage[]; onStagesChange?: (updater: (current: Stage[]) => Stage[]) => void; grouping?: TrainingGrouping; sessionStatus: string; onGroupingChange?: (value: TrainingGrouping) => void; onChanged: () => Promise<void> }) {
   const toast = useToast()
   const [roster, setRoster] = useState<Roster>(), [loading, setLoading] = useState(false), [saving, setSaving] = useState(false)
   const assignments = useMemo(() => stages.flatMap(stage => stage.Problems.filter(problem => problem.assignmentId).map(problem => ({ ...problem, stageId: stage.id, stageName: stage.name }))), [stages])
@@ -96,7 +96,7 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
   const groupedStages = stages
   const groupSource = groupedStages[0]
   const trainingGroups = (grouping?.groups || []).map(group => ({ ...group, Problems: [] as Assignment[], accessPolicy: 'ALL_AT_ONCE' as const, submissionMode: 'ENABLED' as const }))
-  const groupsFrozen = isTrainingGroupingDefinitionLocked(sessionStatus, stageGroups)
+  const groupsFrozen = isTrainingGroupingDefinitionLocked(sessionStatus, stages)
   const updateAllGroupedStages = (update: (groups: typeof trainingGroups) => typeof trainingGroups) => {
     if (!grouping || !onGroupingChange) return
     onGroupingChange({ ...grouping, groups: update(trainingGroups).map(group => ({ id: group.id, clientKey: group.clientKey, name: group.name, orderIndex: group.orderIndex, status: group.status, participantIds: group.participantIds })), memberships: grouping.memberships })
@@ -132,7 +132,7 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
   </div>
 
   const selectedAssignment = assignments.find(item => item.assignmentId === selectedAssignmentId)
-  const hintsFrozen = selectedAssignment ? isTrainingStageDefinitionLocked(selectedAssignment.stageId, stageGroups) : true
+  const hintsFrozen = selectedAssignment ? isTrainingStageDefinitionLocked(selectedAssignment.stageId, stages) : true
   return <Section title="提示配置" description={hintsFrozen ? '该阶段已开始，提示定义已冻结；运行时可在工作台开放或关闭已有提示。' : '提示绑定已保存的题目分配；阶段开始后定义自动冻结。'} actions={<Button onClick={() => openHintEditor()} disabled={!selectedAssignmentId || hintsFrozen}>新增提示</Button>}>
     {!assignments.length ? <Empty title="暂无可配置题目" description="请在“阶段与顺序”中分配题目并先保存。" /> : <div className={styles.stack}><label className={styles.field}>题目分配<Select value={selectedAssignmentId} onChange={event => { setSelectedAssignmentId(event.target.value); void loadHints(event.target.value) }}>{assignments.map(item => <option value={item.assignmentId} key={item.assignmentId}>{item.stageName} · {item.Problem.problemId} {item.Problem.title}</option>)}</Select></label>{loading ? <p className={styles.muted}>正在加载提示…</p> : hints.length ? <div className={styles.hintGrid}>{hints.map(hint => <article className={styles.card} key={hint.id}><div className={styles.actions}><StatusBadge variant="neutral">{hint.level} 级</StatusBadge><StatusBadge variant="info">{trainingHintOpenModeLabel(hint.openMode || 'MANUAL')}</StatusBadge>{!hintsFrozen && <><Button size="sm" variant="ghost" onClick={() => openHintEditor(hint)}>编辑</Button><Button size="sm" variant="ghost" onClick={() => setDeleteHintTarget(hint)}>删除</Button></>}</div><strong>{hint.title || '未命名提示'}</strong><p>{hint.content}</p></article>)}</div> : <Empty title="该题暂无提示" />}</div>}
     <FormDialog isOpen={hintOpen} onClose={resetHintForm} onSubmit={() => void saveHint()} title={editingHint ? '编辑分级提示' : '新增分级提示'} submitText={editingHint ? '保存修改' : '创建提示'} loading={saving} dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>触发值<Input type="number" value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>

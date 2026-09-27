@@ -1,109 +1,114 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-26
+last_verified: 2026-09-27
 source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/schema.prisma, packages/contracts/src/training.ts
 ---
 
-# Training Engine V2：Group × Stage 训练运行系统
+# Training Engine V2：全局 Stage 时间轴与稳定分组
 
 ## 背景与最终模型
 
-真实课堂会同时存在多个分组，并且各组可能处在不同训练阶段。单一的 Session 当前阶段、Stage 自身运行状态或 Participant 当前阶段镜像都无法表达这一事实。
+真实课堂需要一个所有学员共同推进的教学时间轴，同时允许稳定分组在同一阶段使用不同题目计划。此前把 `StageGroup` 同时当作“分组配置”和“独立运行单元”，会造成各组处于不同阶段、暂停与结束语义分裂、教师难以判断全班当前课堂位置。
 
-> TrainingSession 是一堂训练；Stage 只定义有序教学元数据；稳定 Group 承载学员归属；StageGroup 是 Group × Stage 的唯一配置与运行事实。
+> TrainingSession 是一堂训练；Stage 是全班唯一时间轴；稳定 Group 只表达学员归属；StagePlan 表达默认计划与可选分组覆盖，不拥有独立生命周期。
 
 ```text
 TrainingSession
+├─ currentStageId ──> 当前唯一 RUNNING Stage
 ├─ Participant ──belongs to──> stable Group
-├─ Stage[]（有序元数据：名称、说明、kind）
-└─ StageGroup[]（Stage × Group）
-   ├─ mode / access / submission / completion / transition rules
-   ├─ PENDING / RUNNING / PAUSED / ENDED / SKIPPED
-   ├─ planned / active elapsed / end reason
-   └─ ProblemPlan[] ──> StageProblem ──> pinned TestSet Revision
+└─ Stage[]（有序全局时间轴）
+   ├─ lifecycle / timing / end policy / access / submission
+   ├─ StageProblem[] ──> pinned TestSet Revision
+   ├─ default StagePlan（全班默认，必有且唯一）
+   ├─ optional Group override StagePlan[]
+   │  └─ ProblemPlan[]（顺序、必做、解锁、分数、时间、提示）
+   └─ immutable RuntimeSnapshot（首次开始时生成）
 ```
 
-普通训练只是一个 Stage 和一个 Group；模板只生成可编辑骨架，不形成另一套产品模式。Contest 与 Training Engine 已彻底分离，训练接口只使用 `/api/training-sessions/*`。
+普通训练只是一个 Stage。快速创建与模板只生成同一领域模型的初始结构，不形成“普通训练 / 教练带练”第二套模式。Contest 与 Training Engine 独立，训练接口只使用 `/api/training-sessions/*`。
 
 ## 不变量
 
+- 一个 Session 最多一个 `RUNNING` Stage；`currentStageId` 必须指向本 Session 的该 Stage。
+- Stage 生命周期只允许 `PENDING → RUNNING → ENDED | SKIPPED`，不存在分组独立推进或回滚。
+- 暂停属于 Session 时钟；暂停期间 RUNNING Stage 的 `runningSince` 为空，生命周期仍为 RUNNING。
+- 每个 Stage 必须恰好有一个默认计划：`isDefault=true`、`groupId=null`、`inheritsDefault=false`。
+- 分组覆盖计划必须引用本 Session 的稳定 Group；没有覆盖时回退到默认计划。
 - Participant 必须且只能属于当前 Session 的一个有效稳定 Group。
-- 一个 Session 的每个有效 Group 与每个 Stage 恰好形成一个 StageGroup。
-- 同一 Group 最多有一个 `RUNNING` 或 `PAUSED` StageGroup；不同 Group 可以处于不同 Stage。
-- Stage 不保存 audience、规则、生命周期或当前运行位置。
-- Session 和 Participant 不保存 currentStage；当前阶段由该 Group 的活动 StageGroup 推导。
-- StageGroup 是训练方式、访问、提交、时间、完成、转换与运行状态的唯一真相。
-- ProblemPlan 必须通过 `stageGroupId` 指向 StageGroup，并与 StageProblem 属于同一 Stage。
-- 已经运行或结束的 StageGroup 不允许通过设计矩阵改写。
-- 换组只改变稳定 Group 归属并追加 GroupChange；Progress、Draft、Submission 与历史要求不删除。
-- 已结束单元不回滚；需要再次训练时创建未来单元。
+- StageProblem 保存 canonical Problem 与固定 TestSet Revision；ProblemPlan 保存面向计划的训练规则和 `required`。
+- Progress 绑定 Participant + StageProblem，不绑定 Group；换组不得删除 Draft、Submission 或历史 Progress。
+- Stage 首次开始时写入不可变 RuntimeSnapshot；已开始 Stage 的定义和计划不可编辑。
+- 已结束 Stage 不恢复为 RUNNING；需要重复训练时复制为新的未来 Stage。
 
-数据库约束和 `training:consistency` 同时检查跨 Session 引用、重复 StageGroup、同组多个活动单元、孤儿 Progress 与跨 Stage ProblemPlan。
+数据库约束与 `training:consistency` 同时检查：跨 Session 当前阶段、多个 RUNNING Stage、默认计划形状和数量、稳定分组归属、跨 Stage ProblemPlan、待生效换组、快照 Revision/哈希及孤儿 Progress。
 
 ## 设计与运行
 
-设计 DTO 只包含：
+设计 DTO 包含：
 
 ```text
 participants
 groups
 stages
-stageGroups
+stagePlans
 ```
 
-Stage 只编辑名称、说明、用途、顺序和 canonical StageProblem。StageGroup 矩阵编辑每个 Group 在每个 Stage 的训练模式、题目计划、访问/提交/完成/转换规则及时间设置。
+Stage 编辑全局课堂行为：用途、顺序、题目、开放方式、提交方式、结束条件和计划时长。StagePlan 编辑全班默认题目要求及可选的稳定 Group 覆盖。覆盖可以继承默认计划，也可以显式改变题目集合、必做项、访问和提交策略。
 
-发布不会产生全局 currentStage。运行时由教师针对 Group 启动、推进、暂停、恢复或结束 StageGroup。Session 级暂停/恢复会保存各 Group 的本地状态：原本局部暂停的 Group 在全局恢复后仍保持暂停。
+发布后按一个全局时间轴运行。教师通过统一 Stage Transition 开始、推进、提前结束、跳过未来阶段或结束整场；Scheduler 使用相同的锁与 CAS 事务。暂停、恢复、Focus、消息、Hint、个人解锁、临时禁交和延时属于 Runtime Intervention，不改写 Stage 定义。
 
-拆组会继承来源 Group 的当前与未来 StageGroup 配置；合组只允许两个 Group 当前位于同一 Stage。换组到同一 Stage 时复用已有 Progress；跨 Stage 换组不会重置目标 StageGroup 的运行 epoch。
+拆组与合组只改变稳定 Group 及参与者归属，不创建第二条 Stage 时间线。即时换组立刻改变当前计划；下一阶段换组在目标 Stage 开始事务中应用。共有题继续复用 Progress，退出新组当前计划的题只进入“本阶段历史”。
 
 ## 题目、进度与评测
 
-StageProblem 保存 canonical Problem 和固定 TestSet Revision。多个 StageGroup 可以通过各自 ProblemPlan 复用同一 StageProblem，规则包括顺序、解锁、目标分、分数里程碑、Subtask、单题时间、卡题与提示策略。
+每个 StageProblem 固定 TestSet Revision。默认计划和分组覆盖通过各自 ProblemPlan 复用 StageProblem，规则包括顺序、必做/选做、解锁、目标分、分数里程碑、Subtask、单题时间、卡题与提示策略。
 
-Progress 绑定 Participant + StageProblem，不绑定 Group，因此换组不丢成绩。当前要求由 Participant 当前 Group 的活动 StageGroup 及 ProblemPlan 计算，历史 Progress 单独保留。训练提交继续固化 TrainingSession、StageProblem 和实际 TestSet Revision。
+OI 部分分使用同一道题的 `scoreGoals`（例如 30 → 60 → 100），不为每个目标制造独立 Stage。每次提交继续固化训练、StageProblem、实际 TestSet Revision 和当时的评测投影。
 
 题目添加只支持“平台 + 题号”精确解析；不提供题库浏览或题单选题。
 
 ## 并发、权限与实时事件
 
-所有结构和运行写入使用 Session advisory lock 与 `statusRevision` CAS。客户端提交的 Stage、Group、StageGroup、Revision 均由服务端重新校验归属。并发推进、暂停、拆组、合组与矩阵保存只有一个事务成功。
+所有结构和运行写入使用 Session advisory lock 与 `statusRevision` CAS。服务端重新校验 Stage、Group、Plan、Problem 和 Revision 归属；并发推进只有一个事务成功。
 
-JSON API 使用 `packages/contracts` Runtime Contract，Web 只通过 Training Feature API。SSE 是登记的 Raw Transport，用持久 Event 序号补偿断线；重连后客户端重新读取 Workspace 权威状态。
+JSON API 使用 `packages/contracts` Runtime Contract，Web 只通过 Training Feature API。SSE 是登记的 Raw Transport，用持久 Event 序号补偿断线；重连后重新读取 Workspace 权威状态。
 
-学生只能读取当前 Group 已开放的题目和规则。未来单元、锁题、隐藏题号及其他 Group 的内部配置不得通过 DTO 泄露。
+学生只读取全局当前 Stage 以及其稳定 Group 的有效计划。未来 Stage、锁题、隐藏题号和其他 Group 的覆盖配置不得泄露。
 
 ## 创建、设计器与工作台
 
 统一入口为“创建训练”：
 
-- 快速创建：生成一个 Group × 一个 Stage。
-- 模板创建：只生成 Stage/Group 骨架，题目必须显式添加。
-- 设计器：基本信息 → Stage → 稳定分组 → StageGroup 矩阵 → 提示/发布检查。
-- 工作台：按 Group 展示各自当前 Stage、时间、完成度和运行操作，不显示全局“上一阶段/当前阶段”。
+- 快速创建：生成一个全班默认计划和一个 Stage。
+- 模板创建：只生成可编辑 Stage 骨架，不自动复制题目。
+- 设计器：基本信息 → Stage 与规则 → 学员和稳定分组 → 默认计划/分组覆盖 → 提示与发布检查。
+- 工作台：展示全局当前 Stage、计划/实际时间、分组摘要、换组和 Runtime Intervention。
+- 报告：按全局 Stage 时间线展示计划、实际时间、结束原因、快照哈希、各计划要求、Progress、Hint、Command 和换组记录。
 
-报告按 StageGroup 时间线展示每组的计划/实际时间、结束原因、ProblemPlan 要求、Progress、Hint、Command、换组和事件。
+用户界面不得出现“启动某个组的阶段”“组 A 在阶段 1、组 B 在阶段 2”或“上一阶段回滚”等旧语义。
 
 ## 迁移与验证
 
-2026-09-26 最终迁移直接删除重复语义，不提供双写：
+2026-09-27 迁移直接退出分组运行模型，不提供双写：
 
-1. 将历史 StageParticipantAssignment 确定性绑定到 Participant 的稳定 Group。
-2. 将 ProblemPlan 外键从误导性的 `groupId` 原位改名为 `stageGroupId`，保留记录身份。
-3. 删除 Session/Participant currentStage、Stage 运行与规则字段、legacy assignment 字段和旧 stage-scoped GroupChange。
-4. 对 `stageGroupId`、Stage × Group 以及每 Group 单一活动单元增加数据库约束。
-5. 迁移前后引用数量保持一致；歧义数据 fail closed。
+1. 迁移前若存在 RUNNING/PAUSED Session 或已启动的旧分组运行单元则 fail closed。
+2. 将每个 Stage 第一份旧计划的课堂规则迁到 Stage。
+3. 将第一份旧计划转为唯一默认计划，其余保留为显式分组覆盖。
+4. 确保 canonical StageProblem 全部进入默认计划，并将题目策略收口到 ProblemPlan。
+5. 新增全局 `currentStageId`、Stage 生命周期字段、RuntimeSnapshot 和待生效换组字段。
+6. 删除分组运行字段与 `TrainingSessionStageParticipantAssignment`。
+7. 迁移前后 StageProblem、ProblemPlan、Progress、Submission 与 Hint 引用必须对账。
 
 发布验收至少执行：
 
 ```bash
 pnpm training:inventory
 pnpm training:consistency
-pnpm --filter server exec vitest run tests/training-engine.test.ts
+pnpm --filter server exec vitest run tests/training-engine.test.ts tests/training-global-stage-migration.test.ts
 pnpm --filter @oi-manager/contracts build
 pnpm --filter server build
 pnpm --filter web build
 ```
 
-核心领域测试覆盖：单组矩阵、分组独立推进、跨 Stage 换组、同 Stage 换组、拆组继承、同 Stage 合组限制、终态单元不可改写、局部暂停跨全局暂停恢复。
+核心领域测试覆盖：全局唯一 Stage、默认计划与分组覆盖、不可变快照、即时/下一阶段换组、Progress 保留、拆组/合组不产生新时间线、暂停计时、终态冻结和迁移 fail-closed。

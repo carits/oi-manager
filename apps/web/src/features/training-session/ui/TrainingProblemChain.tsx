@@ -48,6 +48,18 @@ export function TrainingProblemChain({
           <label className={styles.field}>题目数量<Input value={problems.length} readOnly /></label>
         </div>
         <label className={styles.field}>阶段说明<Textarea rows={2} value={activeStage.description || ''} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, description: event.target.value }))} /></label>
+        <div className={styles.compactGrid}>
+          <label className={styles.field}>这一阶段怎么练<Select value={activeStage.mode || 'PRACTICE'} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, mode: event.target.value as Stage['mode'] }))}><option value="PRACTICE">自由练习</option><option value="GUIDED">教师带练</option><option value="EXAM">模拟测试</option><option value="REVIEW">复盘讲解</option></Select></label>
+          <label className={styles.field}>题目怎么开放<Select value={activeStage.accessPolicy || 'ALL_AT_ONCE'} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, accessPolicy: event.target.value as Stage['accessPolicy'] }))}><option value="ALL_AT_ONCE">全部开放</option><option value="SEQUENTIAL">按顺序开放</option><option value="TEACHER_CONTROLLED">由教师开放</option></Select></label>
+          <label className={styles.field}>是否允许提交<Select value={activeStage.submissionMode || 'ENABLED'} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, submissionMode: event.target.value as Stage['submissionMode'] }))}><option value="ENABLED">允许提交</option><option value="DISABLED">禁止提交</option></Select></label>
+          <label className={styles.field}>什么时候结束<Select value={activeStage.endPolicy || 'MANUAL'} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, endPolicy: event.target.value as Stage['endPolicy'] }))}><option value="MANUAL">教师手动结束</option><option value="TIME">到达计划时间</option><option value="COMPLETION">达到完成比例</option><option value="HYBRID">时间与完成度共同判断</option></Select></label>
+          {['TIME', 'HYBRID'].includes(activeStage.endPolicy || 'MANUAL') && <label className={styles.field}>计划时长（分钟）<Input type="number" min={1} max={1440} value={Math.round((activeStage.plannedDurationSeconds || 0) / 60) || ''} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, plannedDurationSeconds: event.target.value ? Number(event.target.value) * 60 : null }))} /></label>}
+          {['COMPLETION', 'HYBRID'].includes(activeStage.endPolicy || 'MANUAL') && <label className={styles.field}>完成比例（%）<Input type="number" min={1} max={100} value={activeStage.completionThreshold || 100} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, completionThreshold: Number(event.target.value) || null }))} /></label>}
+        </div>
+        <details className={styles.assignmentPolicy}>
+          <summary>阶段高级设置</summary>
+          <label className={styles.field}>最短持续时间（分钟）<Input type="number" min={0} max={1440} value={Math.round((activeStage.minDurationSeconds || 0) / 60)} onChange={event => onUpdateStage(activeStage.clientKey, stage => ({ ...stage, minDurationSeconds: event.target.value ? Number(event.target.value) * 60 : null }))} /></label>
+        </details>
       </div>
 
       <div className={styles.stageProblemList}>
@@ -85,6 +97,7 @@ export function TrainingProblemChain({
             <summary>高级设置</summary>
             <div className={styles.stack}>
               <label className={styles.field}>移动到阶段<Select aria-label="移动题目到阶段" value={activeStage.clientKey} onChange={event => onMoveProblemToStage(problem, event.target.value)}>{stages.map(stage => <option value={stage.clientKey} key={stage.clientKey}>{stage.name}</option>)}</Select></label>
+              <Checkbox label="必做题" description="必做题计入当前阶段完成度；选做题保留进度但不阻塞阶段完成。" checked={problem.required !== false} onChange={event => onUpdateProblem(problem.clientKey, current => ({ ...current, required: event.target.checked }))} />
               {index === 0 ? <p className={styles.startProblem}>阶段开始后直接开放</p> : <UnlockEditor value={problem.unlockPolicy || { mode: 'ANY', conditions: [{ type: 'AC' }] }} onChange={value => onUpdateProblem(problem.clientKey, current => ({ ...current, unlockPolicy: value }))} />}
               {index > 0 && <p className={styles.muted}>当前开放条件：{unlockLabel(problem.unlockPolicy)}</p>}
               <AssignmentPolicyEditor assignment={problem} stage={activeStage} onChange={value => onUpdateProblem(problem.clientKey, current => ({ ...current, ...value }))} />

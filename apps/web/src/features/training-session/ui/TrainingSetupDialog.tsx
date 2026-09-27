@@ -168,7 +168,14 @@ export function TrainingSetupDialog({
       stages: [{
         name: '训练任务',
         kind: 'TRAINING',
-        problems: selectedProblems.map(problem => ({ problemId: problem.id, allowedSubtaskIds: [] })),
+        mode: 'PRACTICE',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'ENABLED',
+        endPolicy: 'MANUAL',
+        plannedDurationSeconds: null,
+        minDurationSeconds: null,
+        completionThreshold: null,
+        problems: selectedProblems.map(problem => ({ problemId: problem.id, allowedSubtaskIds: [], required: true })),
       }],
     })
     if (!response.ok || !response.data) {

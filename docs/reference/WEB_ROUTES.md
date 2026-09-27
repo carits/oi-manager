@@ -108,5 +108,5 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 
 ## Training Engine V2 路由职责
 
-`/org/:organizationId/training-sessions/:id/design` 与 `/personal/training-sessions/:id/design` 只负责 DRAFT 设计和发布检查；`/training-sessions/:id` 负责 SCHEDULED/RUNNING/PAUSED/ENDED 运行控制。运行工作台展示当前 StageGroup 的要求、独立计时、换组和干预，不把旧的上一阶段回滚作为入口。
+`/org/:organizationId/training-sessions/:id/design` 与 `/personal/training-sessions/:id/design` 负责尚未开始 Stage 的定义、全班默认计划、稳定分组覆盖与发布检查；`/training-sessions/:id` 负责 SCHEDULED/RUNNING/PAUSED/ENDED 运行控制。运行工作台只展示一个全局当前 Stage，并在该 Stage 内解释学员所属稳定 Group 的有效计划、换组和干预；不提供分组独立推进或上一阶段回滚。
 

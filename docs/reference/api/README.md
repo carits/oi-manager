@@ -617,26 +617,22 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 
 ## Training Engine V2 API
 
-设计器使用 `/training-sessions/:id/design`、`/structure/validate` 与 `/structure`；运行期使用 `/stage-transitions`、`/stages/:stageId/group-changes`、`/stages/:stageId/time-extensions`，并可通过 `/groups/split` 与 `/groups/merge` 管理稳定分组。所有 JSON 请求/响应经过 Training Contracts 校验；Stage 转换采用 statusRevision CAS，已开始 Stage 不允许回滚。
+Training Session 使用一条全局 Stage 时间轴。设计器通过 `/design`、`/structure/validate` 与 `/structure` 保存 Stage、稳定 Group、默认 StagePlan 和可选 Group override；运行期使用统一 `/stage-transitions` 推进全班当前 Stage。不存在按组启动、暂停或推进 Stage 的 API。
 
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/training-sessions/:id/design` | 读取 Stage、稳定 Group 和 StagePlan 设计数据 |
+| `POST` | `/api/training-sessions/:id/structure/validate` | 校验尚未开始的训练结构 |
+| `PUT` | `/api/training-sessions/:id/structure` | 以 statusRevision CAS 保存结构 |
+| `GET` | `/api/training-sessions/:id/grouping` | 读取稳定分组与当前成员归属 |
+| `PUT` | `/api/training-sessions/:id/grouping` | 保存尚未开始训练的稳定分组 |
+| `POST` | `/api/training-sessions/:id/grouping/change` | 调整稳定分组归属 |
+| `PUT` | `/api/training-sessions/:id/stage-group-matrix` | 保存默认 StagePlan 与可选分组覆盖；路径名仅对应现有数据库模型，不表示独立运行单元 |
+| `POST` | `/api/training-sessions/:id/stage-transitions` | 开始、推进、跳过未来 Stage 或结束整场训练 |
+| `POST` | `/api/training-sessions/:id/stages/:stageId/group-changes` | 即时换组或预设目标 Stage 换组 |
+| `POST` | `/api/training-sessions/:id/stages/:stageId/time-extensions` | 追加 Stage 延时记录 |
+| `POST` | `/api/training-sessions/:id/stages/:stageId/clone` | 将 Stage 定义复制为新的未来 Stage |
+| `POST` | `/api/training-sessions/:id/groups/split` | 拆分稳定分组，不创建运行时间线 |
+| `POST` | `/api/training-sessions/:id/groups/merge` | 合并稳定分组，不改变全局当前 Stage |
 
-
-Training grouping endpoints (V2/legacy compatibility):
-
-- `GET /api/training-sessions/:id/grouping`
-- `PUT /api/training-sessions/:id/grouping`
-- `POST /api/training-sessions/:id/grouping/change`
-- `PUT /api/training-sessions/:id/stage-group-matrix`
-- `POST /api/training-sessions/:id/group-runtime/actions`
-- `POST /api/training-sessions/:id/group-runtime/batch`
-- `POST /api/training-sessions/:id/groups/split`
-- `POST /api/training-sessions/:id/groups/merge`
-
-| `GET` | `/api/training-sessions/:id/grouping` | 读取训练分组结构 |
-| `PUT` | `/api/training-sessions/:id/grouping` | 保存训练分组结构 |
-| `POST` | `/api/training-sessions/:id/grouping/change` | 变更学员分组 |
-| `PUT` | `/api/training-sessions/:id/stage-group-matrix` | 保存 StageGroup 题目矩阵 |
-| `POST` | `/api/training-sessions/:id/group-runtime/actions` | 执行分组运行控制 |
-| `POST` | `/api/training-sessions/:id/group-runtime/batch` | 批量执行分组运行控制 |
-| `POST` | `/api/training-sessions/:id/groups/split` | 拆分稳定分组 |
-| `POST` | `/api/training-sessions/:id/groups/merge` | 合并稳定分组 |
+所有 JSON 请求/响应经过 Training Contracts 校验。Stage 转换采用训练锁与 `statusRevision` CAS；Stage 首次开始时创建不可变 RuntimeSnapshot，开始后的定义和计划不可改写，已结束 Stage 不允许回滚。

@@ -5,15 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
 import {
-  changeTrainingGrouping,
+  changeTrainingStageGroup,
   createTrainingSession,
+  executeStageTransition,
+  executeTrainingCommand,
   getTrainingDesign,
   getTrainingWorkspace,
-  executeTrainingCommand,
-  executeTrainingGroupRuntimeAction,
   mergeTrainingGroup,
   publishTrainingSession,
-  replaceTrainingStructure,
   replaceTrainingStageGroupMatrix,
   resolveTrainingPermission,
   saveTrainingDraft,
@@ -23,17 +22,49 @@ import {
 import { createTestTeam, createTestUser } from './helpers/testUser'
 
 const directories: string[] = []
+
 async function configuredProblem(ownerId: string) {
-  const id = crypto.randomUUID(); const root = path.join(process.cwd(), 'testdata', id); directories.push(root)
-  await fs.promises.mkdir(root, { recursive: true }); await fs.promises.writeFile(path.join(root, '1.in'), '1 2\n'); await fs.promises.writeFile(path.join(root, '1.out'), '3\n')
-  const problem = await prisma.problem.create({ data: { id, platform: 'carits', problemId: `TE-${id.slice(0, 8)}`, title: '训练引擎题目', ownerId, visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', judgeConfig: 'mode: acm\ncases:\n  - input: 1.in\n    output: 1.out\n' } })
-  for (const [filename, content] of [['1.in', '1 2\n'], ['1.out', '3\n']]) await prisma.testdataFile.create({ data: { id: crypto.randomUUID(), problemId: id, filename, size: Buffer.byteLength(content), md5: crypto.createHash('md5').update(content).digest('hex'), sha256: crypto.createHash('sha256').update(content).digest('hex') } })
-  await ensureInitialTestSetRevision(id, ownerId); return problem
+  const id = crypto.randomUUID()
+  const root = path.join(process.cwd(), 'testdata', id)
+  directories.push(root)
+  await fs.promises.mkdir(root, { recursive: true })
+  await fs.promises.writeFile(path.join(root, '1.in'), '1 2\n')
+  await fs.promises.writeFile(path.join(root, '1.out'), '3\n')
+  const problem = await prisma.problem.create({
+    data: {
+      id,
+      platform: 'carits',
+      problemId: `TE-${id.slice(0, 8)}`,
+      title: '训练引擎题目',
+      ownerId,
+      visibility: 'public',
+      libraryScope: 'platform',
+      libraryKey: 'platform',
+      status: 'published',
+      judgeConfig: 'mode: acm\ncases:\n  - input: 1.in\n    output: 1.out\n',
+    },
+  })
+  for (const [filename, value] of [['1.in', '1 2\n'], ['1.out', '3\n']] as const) {
+    await prisma.testdataFile.create({
+      data: {
+        id: crypto.randomUUID(),
+        problemId: id,
+        filename,
+        size: Buffer.byteLength(value),
+        md5: crypto.createHash('md5').update(value).digest('hex'),
+        sha256: crypto.createHash('sha256').update(value).digest('hex'),
+      },
+    })
+  }
+  await ensureInitialTestSetRevision(id, ownerId)
+  return problem
 }
 
-afterEach(async () => { await Promise.all(directories.splice(0).map(directory => fs.promises.rm(directory, { recursive: true, force: true }))) })
+afterEach(async () => {
+  await Promise.all(directories.splice(0).map(directory => fs.promises.rm(directory, { recursive: true, force: true })))
+})
 
-describe('Training Engine single-model domain', () => {
+describe('Training Engine global Stage domain', () => {
   let coach: Awaited<ReturnType<typeof createTestUser>>
   let first: Awaited<ReturnType<typeof createTestUser>>
   let second: Awaited<ReturnType<typeof createTestUser>>
@@ -45,105 +76,183 @@ describe('Training Engine single-model domain', () => {
     first = await createTestUser({ organization: { role: 'student', organizationId: coach.organization!.organizationId } })
     second = await createTestUser({ organization: { role: 'student', organizationId: coach.organization!.organizationId } })
     team = await createTestTeam({ organizationId: null, scope: 'personal', ownerId: coach.user.id, ownerType: 'user' })
-    for (const user of [first, second]) await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: user.user.id, userType: 'student', role: 'member', status: 'active', joinedAt: new Date() } })
+    for (const user of [first, second]) {
+      await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: user.user.id, userType: 'student', role: 'member', status: 'active', joinedAt: new Date() } })
+    }
     problem = await configuredProblem(coach.user.id)
   })
 
-  async function createSession(groupCount = 1, stageCount = 3, scheduled = true) {
+  async function createSession(groupCount = 1, stageCount = 3, scheduled = false) {
     const users = [first.user.id, second.user.id]
     const grouping = groupCount === 1
       ? { groups: [{ clientKey: 'all', name: '全体学员', participantIds: users }] }
       : { groups: [{ clientKey: 'g1', name: '基础组', participantIds: [users[0]] }, { clientKey: 'g2', name: '提高组', participantIds: [users[1]] }] }
     return createTrainingSession(coach.user.id, {
-      title: 'V2 训练', teamId: team.id, participantUserIds: users, settings: { participantTarget: 'custom_students' }, grouping,
+      title: '全局阶段训练',
+      teamId: team.id,
+      participantUserIds: users,
+      settings: { participantTarget: 'custom_students' },
+      grouping,
       ...(scheduled ? { scheduledStartAt: new Date(Date.now() + 3600_000).toISOString() } : {}),
-      stages: Array.from({ length: stageCount }, (_, index) => ({ name: `阶段 ${index + 1}`, kind: 'TRAINING', problems: [{ problemId: problem.id }] })),
+      stages: Array.from({ length: stageCount }, (_, index) => ({
+        name: `阶段 ${index + 1}`,
+        kind: 'TRAINING',
+        mode: 'PRACTICE',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'ENABLED',
+        endPolicy: 'MANUAL',
+        problems: [{ problemId: problem.id, required: true }],
+      })),
     })
   }
 
   async function loaded(id: string) {
-    return prisma.trainingSession.findUniqueOrThrow({ where: { id }, include: { Groups: { orderBy: { orderIndex: 'asc' }, include: { Participants: true, StageGroups: { include: { Stage: true, ProblemPlans: true }, orderBy: { Stage: { orderIndex: 'asc' } } } } }, Stages: { orderBy: { orderIndex: 'asc' }, include: { Groups: { include: { ProblemPlans: true } }, Problems: true } }, Participants: true } })
-  }
-
-  async function publishAndStart(id: string, groupIndexes: number[] = [0]) {
-    await publishTrainingSession(coach.user.id, id, 0)
-    let session = await loaded(id)
-    for (const index of groupIndexes) { await executeTrainingGroupRuntimeAction(coach.user.id, id, { expectedRevision: session.statusRevision, action: 'start', groupId: session.Groups[index].id }); session = await loaded(id) }
-    return session
-  }
-  it('saves incomplete draft structure but freezes the designer after runtime starts', async () => {
-    const created = await createSession(1, 2)
-    const before = await getTrainingDesign(coach.user.id, created!.id)
-    expect(before.editable).toBe(true)
-
-    const saved = await replaceTrainingStructure(coach.user.id, created!.id, {
-      expectedRevision: before.statusRevision,
-      title: '未完成训练草稿',
-      description: '',
-      stages: [{ clientKey: 'empty-stage', name: '待配置阶段', kind: 'TRAINING', problems: [] }],
+    return prisma.trainingSession.findUniqueOrThrow({
+      where: { id },
+      include: {
+        Groups: { orderBy: { orderIndex: 'asc' }, include: { Participants: true, StageGroups: { include: { ProblemPlans: true } } } },
+        Stages: { orderBy: { orderIndex: 'asc' }, include: { Groups: { include: { ProblemPlans: true } }, Problems: true, RuntimeSnapshot: true } },
+        Participants: true,
+      },
     })
-    expect(saved.stages).toHaveLength(1)
-    expect(saved.stages[0].Problems).toHaveLength(0)
-    expect(saved.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'STAGE_PROBLEM_REQUIRED', severity: 'error' }),
-    ]))
+  }
 
-    const runtime = await publishAndStart((await createSession(1, 2))!.id)
-    const frozen = await getTrainingDesign(coach.user.id, runtime.id)
-    expect(frozen.editable).toBe(false)
-  })
+  async function publishAndStart(id: string) {
+    await publishTrainingSession(coach.user.id, id, 0)
+    return loaded(id)
+  }
 
-
-  it('creates one stable Group and exactly one StageGroup per Stage', async () => {
-    const created = await createSession(1, 3)
+  it('creates stable participant Groups and exactly one default plan per Stage', async () => {
+    const created = await createSession(2, 3)
     const session = await loaded(created!.id)
-    expect(session.Groups).toHaveLength(1)
-    expect(session.Participants.every(item => item.groupId === session.Groups[0].id)).toBe(true)
-    expect(session.Stages.every(stage => stage.Groups.length === 1 && stage.Groups[0].groupId === session.Groups[0].id)).toBe(true)
+    expect(session.Groups).toHaveLength(2)
+    expect(session.Participants.every(item => session.Groups.some(group => group.id === item.groupId))).toBe(true)
+    expect(session.Stages.every(stage => stage.Groups.length === 1 && stage.Groups[0].isDefault && stage.Groups[0].groupId === null)).toBe(true)
+    expect(session.Stages.every(stage => stage.Groups[0].ProblemPlans.length === 1 && stage.Groups[0].ProblemPlans[0].required)).toBe(true)
   })
 
-  it('persists editable StageGroup runtime settings before the session starts', async () => {
-    const created = await createSession(1, 1)
+  it('stores optional group overrides without creating a second runtime timeline', async () => {
+    const created = await createSession(2, 1, true)
     const session = await loaded(created!.id)
     const stage = session.Stages[0]
-    const unit = stage.Groups[0]
+    const fallback = stage.Groups.find(plan => plan.isDefault)!
 
     await replaceTrainingStageGroupMatrix(coach.user.id, session.id, {
       expectedRevision: session.statusRevision,
-      stageGroups: [{
-        id: unit.id,
-        clientKey: unit.id,
-        stageId: stage.id,
-        groupId: unit.groupId,
-        mode: 'EXAM',
-        accessPolicy: 'SEQUENTIAL',
-        submissionMode: 'DISABLED',
-        plannedDurationSeconds: 2400,
-        completionThreshold: 80,
-        minDurationSeconds: 300,
-        completionPolicy: { mode: 'all' },
-        transitionPolicy: 'AUTO_ADVANCE',
-        problemIds: unit.ProblemPlans.map(plan => plan.stageProblemId),
-        rules: { accessScope: 'CURRENT_STAGE' },
-      }],
+      stagePlans: [
+        {
+          id: fallback.id,
+          clientKey: fallback.id,
+          stageId: stage.id,
+          groupId: null,
+          isDefault: true,
+          inheritsDefault: false,
+          accessPolicy: 'ALL_AT_ONCE',
+          submissionMode: 'ENABLED',
+          problemIds: fallback.ProblemPlans.map(item => item.stageProblemId),
+          requiredProblemIds: fallback.ProblemPlans.map(item => item.stageProblemId),
+        },
+        {
+          clientKey: 'override',
+          stageId: stage.id,
+          groupId: session.Groups[1].id,
+          isDefault: false,
+          inheritsDefault: true,
+          accessPolicy: 'SEQUENTIAL',
+          submissionMode: 'DISABLED',
+          problemIds: fallback.ProblemPlans.map(item => item.stageProblemId),
+          requiredProblemIds: [],
+        },
+      ],
     })
 
-    const updated = (await loaded(session.id)).Stages[0].Groups[0]
-    expect(updated).toMatchObject({
-      mode: 'EXAM',
+    const updated = (await loaded(session.id)).Stages[0]
+    expect(updated.lifecycle).toBe('PENDING')
+    expect(updated.Groups).toHaveLength(2)
+    expect(updated.Groups.find(plan => plan.groupId === session.Groups[1].id)).toMatchObject({
+      isDefault: false,
+      inheritsDefault: true,
       accessPolicy: 'SEQUENTIAL',
       submissionMode: 'DISABLED',
-      plannedDurationSeconds: 2400,
-      completionThreshold: 80,
-      minDurationSeconds: 300,
-      transitionPolicy: 'AUTO_ADVANCE',
     })
   })
 
-  it('uses the stable participant group when resolving runtime draft permissions', async () => {
+  it('rejects group commands when a non-inheriting override excludes the default problem', async () => {
+    const created = await createSession(2, 1)
+    let session = await loaded(created!.id)
+    const stage = session.Stages[0]
+    const fallback = stage.Groups.find(plan => plan.isDefault)!
+    const excludedGroupId = session.Groups[1].id
+    const stageProblemId = fallback.ProblemPlans[0].stageProblemId
+
+    await replaceTrainingStageGroupMatrix(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      stagePlans: [
+        {
+          id: fallback.id,
+          clientKey: fallback.id,
+          stageId: stage.id,
+          groupId: null,
+          isDefault: true,
+          inheritsDefault: false,
+          accessPolicy: 'ALL_AT_ONCE',
+          submissionMode: 'ENABLED',
+          problemIds: [stageProblemId],
+          requiredProblemIds: [stageProblemId],
+        },
+        {
+          clientKey: 'exclusive-empty-override',
+          stageId: stage.id,
+          groupId: excludedGroupId,
+          isDefault: false,
+          inheritsDefault: false,
+          accessPolicy: 'ALL_AT_ONCE',
+          submissionMode: 'ENABLED',
+          problemIds: [],
+          requiredProblemIds: [],
+        },
+      ],
+    })
+
+    session = await loaded(session.id)
+    await publishTrainingSession(coach.user.id, session.id, session.statusRevision)
+    session = await loaded(session.id)
+
+    await expect(executeTrainingCommand(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      type: 'FOCUS_PROBLEM',
+      targetType: 'GROUP',
+      targetId: excludedGroupId,
+      payload: { stageProblemId, mode: 'LOCKED_FOCUS' },
+    })).rejects.toMatchObject<Partial<TrainingEngineError>>({
+      code: 'TRAINING_PROBLEM_NOT_IN_CURRENT_STAGE',
+    })
+  })
+
+  it('advances one global Stage for every learner and creates immutable snapshots', async () => {
+    const created = await createSession(2, 3)
+    let session = await publishAndStart(created!.id)
+    expect(session.currentStageId).toBe(session.Stages[0].id)
+    expect(session.Stages.map(stage => stage.lifecycle)).toEqual(['RUNNING', 'PENDING', 'PENDING'])
+    expect(session.Stages[0].RuntimeSnapshot?.configHash).toMatch(/^[a-f0-9]{64}$/)
+
+    await executeStageTransition(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      action: 'advance',
+      stageId: session.Stages[0].id,
+      outcome: 'completed',
+    })
+    session = await loaded(session.id)
+    expect(session.currentStageId).toBe(session.Stages[1].id)
+    expect(session.Stages.map(stage => stage.lifecycle)).toEqual(['ENDED', 'RUNNING', 'PENDING'])
+    expect(session.Stages[0].RuntimeSnapshot?.configHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(session.Stages[1].RuntimeSnapshot?.configHash).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('resolves learner permissions from the global current Stage and stable Group plan', async () => {
     const created = await createSession(1, 1)
     const session = await publishAndStart(created!.id)
-    const stageProblemId = session.Groups[0].StageGroups[0].ProblemPlans[0].stageProblemId
+    const stageProblemId = session.Stages[0].Groups[0].ProblemPlans[0].stageProblemId
 
     await expect(resolveTrainingPermission(first.user.id, session.id, stageProblemId)).resolves.toMatchObject({
       canView: true,
@@ -151,6 +260,7 @@ describe('Training Engine single-model domain', () => {
       reason: 'ALLOWED',
     })
     await expect(getTrainingWorkspace(first.user.id, session.id)).resolves.toMatchObject({
+      session: { currentStageId: session.Stages[0].id },
       participant: { currentGroupId: session.Groups[0].id, requiredCount: 1, completedCount: 0 },
     })
     await expect(saveTrainingDraft(first.user.id, session.id, stageProblemId, {
@@ -159,87 +269,133 @@ describe('Training Engine single-model domain', () => {
     })).resolves.toMatchObject({ stageProblemId, userId: first.user.id })
   })
 
-  it('allows different Groups to run in different Stages', async () => {
-    const created = await createSession(2, 3)
-    let session = await publishAndStart(created!.id, [0, 1])
-    await executeTrainingGroupRuntimeAction(coach.user.id, session.id, { expectedRevision: session.statusRevision, action: 'advance', groupId: session.Groups[1].id })
-    session = await loaded(session.id)
-    expect(session.Groups[0].StageGroups.find(unit => unit.status === 'RUNNING')?.Stage.orderIndex).toBe(0)
-    expect(session.Groups[1].StageGroups.find(unit => unit.status === 'RUNNING')?.Stage.orderIndex).toBe(1)
-  })
-
-  it('moves a participant across Stages without resetting the target StageGroup epoch', async () => {
-    const created = await createSession(2, 3)
-    let session = await publishAndStart(created!.id, [0, 1])
-    await executeTrainingGroupRuntimeAction(coach.user.id, session.id, { expectedRevision: session.statusRevision, action: 'advance', groupId: session.Groups[1].id })
-    session = await loaded(session.id)
-    const sourceParticipant = session.Groups[0].Participants[0]
-    const sourceProblem = session.Groups[0].StageGroups[0].ProblemPlans[0].stageProblemId
-    await prisma.trainingSessionProblemProgress.create({ data: { participantId: sourceParticipant.id, stageProblemId: sourceProblem, status: 'WORKING', attemptCount: 2, bestScore: 40 } })
-    const targetUnit = session.Groups[1].StageGroups.find(unit => unit.status === 'RUNNING')!
-    const epoch = { startedAt: targetUnit.startedAt?.getTime(), activeElapsedSeconds: targetUnit.activeElapsedSeconds }
-    await changeTrainingGrouping(coach.user.id, session.id, { expectedRevision: session.statusRevision, participantId: sourceParticipant.id, toGroupId: session.Groups[1].id, reason: '跨阶段调组' })
-    const after = await loaded(session.id); const unchanged = after.Groups[1].StageGroups.find(unit => unit.id === targetUnit.id)!
-    expect(after.Participants.find(item => item.id === sourceParticipant.id)?.groupId).toBe(session.Groups[1].id)
-    expect({ startedAt: unchanged.startedAt?.getTime(), activeElapsedSeconds: unchanged.activeElapsedSeconds }).toEqual(epoch)
-    expect(await prisma.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: sourceParticipant.id, stageProblemId: sourceProblem } } })).not.toBeNull()
-  })
-
-  it('keeps same-Stage progress when changing stable Group', async () => {
+  it('applies immediate group changes without changing Stage or deleting progress', async () => {
     const created = await createSession(2, 2)
-    let session = await publishAndStart(created!.id, [0, 1])
+    let session = await publishAndStart(created!.id)
     const participant = session.Groups[0].Participants[0]
-    const stageProblemId = session.Groups[0].StageGroups[0].ProblemPlans[0].stageProblemId
+    const stageProblemId = session.Stages[0].Groups[0].ProblemPlans[0].stageProblemId
     await prisma.trainingSessionProblemProgress.create({ data: { participantId: participant.id, stageProblemId, status: 'WORKING', attemptCount: 3, bestScore: 60 } })
-    await changeTrainingGrouping(coach.user.id, session.id, { expectedRevision: session.statusRevision, participantId: participant.id, toGroupId: session.Groups[1].id, reason: '同阶段调组' })
-    const progress = await prisma.trainingSessionProblemProgress.findUniqueOrThrow({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })
-    expect(progress).toMatchObject({ attemptCount: 3, bestScore: 60 })
-  })
+    const currentStageId = session.currentStageId
 
-  it('splits a running Group and inherits its current and future StageGroup units', async () => {
-    const created = await createSession(1, 3)
-    let session = await publishAndStart(created!.id)
-    const source = session.Groups[0]; const moved = source.Participants[0]; const sourceActive = source.StageGroups.find(unit => unit.status === 'RUNNING')!
-    await splitTrainingGroup(coach.user.id, session.id, { expectedRevision: session.statusRevision, sourceGroupId: source.id, name: '拆分组', participantIds: [moved.id], reason: '课堂拆组' })
-    session = await loaded(session.id); const target = session.Groups.find(group => group.name === '拆分组')!
-    expect(target.StageGroups).toHaveLength(3)
-    expect(target.StageGroups.find(unit => unit.status === 'RUNNING')?.stageId).toBe(sourceActive.stageId)
-    expect(target.Participants.map(item => item.id)).toContain(moved.id)
-  })
-
-  it('merges Groups only when both are active in the same Stage', async () => {
-    const created = await createSession(2, 3)
-    let session = await publishAndStart(created!.id, [0, 1])
-    await mergeTrainingGroup(coach.user.id, session.id, { expectedRevision: session.statusRevision, sourceGroupId: session.Groups[0].id, targetGroupId: session.Groups[1].id, reason: '同阶段合组' })
+    await changeTrainingStageGroup(coach.user.id, session.id, currentStageId!, {
+      expectedRevision: session.statusRevision,
+      participantIds: [participant.id],
+      toGroupId: session.Groups[1].id,
+      effectiveMode: 'immediate',
+      reason: '课堂调组',
+    })
     session = await loaded(session.id)
-    expect(session.Groups[0].status).toBe('archived')
-    expect(session.Participants.every(item => item.groupId === session.Groups[1].id)).toBe(true)
-
-    const other = await createSession(2, 3); let mismatch = await publishAndStart(other!.id, [0, 1])
-    await executeTrainingGroupRuntimeAction(coach.user.id, mismatch.id, { expectedRevision: mismatch.statusRevision, action: 'advance', groupId: mismatch.Groups[1].id }); mismatch = await loaded(mismatch.id)
-    await expect(mergeTrainingGroup(coach.user.id, mismatch.id, { expectedRevision: mismatch.statusRevision, sourceGroupId: mismatch.Groups[0].id, targetGroupId: mismatch.Groups[1].id, reason: '错误合组' })).rejects.toMatchObject<Partial<TrainingEngineError>>({ code: 'TRAINING_GROUP_MERGE_STAGE_MISMATCH' })
+    expect(session.currentStageId).toBe(currentStageId)
+    expect(session.Participants.find(item => item.id === participant.id)?.groupId).toBe(session.Groups[1].id)
+    await expect(prisma.trainingSessionProblemProgress.findUniqueOrThrow({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })).resolves.toMatchObject({ attemptCount: 3, bestScore: 60 })
   })
 
-  it('does not rewrite an ended StageGroup when future matrix configuration changes', async () => {
-    const created = await createSession(1, 3)
-    let session = await publishAndStart(created!.id)
-    await executeTrainingGroupRuntimeAction(coach.user.id, session.id, { expectedRevision: session.statusRevision, action: 'advance', groupId: session.Groups[0].id }); session = await loaded(session.id)
-    const ended = session.Groups[0].StageGroups[0]
-    const before = { status: ended.status, endedAt: ended.endedAt?.getTime(), activeElapsedSeconds: ended.activeElapsedSeconds }
-    const stageGroups = session.Stages.flatMap(stage => stage.Groups.map(unit => ({ id: unit.id, clientKey: unit.id, stageId: stage.id, groupId: unit.groupId, mode: unit.mode, accessPolicy: unit.accessPolicy, submissionMode: unit.submissionMode, plannedDurationSeconds: unit.plannedDurationSeconds, completionThreshold: unit.completionThreshold, minDurationSeconds: unit.minDurationSeconds, completionPolicy: unit.completionPolicy as Record<string, unknown> | null, transitionPolicy: unit.transitionPolicy as 'WAIT_FOR_TEACHER' | 'AUTO_ADVANCE', problemIds: unit.ProblemPlans.map(plan => plan.stageProblemId), rules: unit.rules as Record<string, unknown> | null })))
-    await replaceTrainingStageGroupMatrix(coach.user.id, session.id, { expectedRevision: session.statusRevision, stageGroups })
-    const after = (await loaded(session.id)).Groups[0].StageGroups[0]
-    expect({ status: after.status, endedAt: after.endedAt?.getTime(), activeElapsedSeconds: after.activeElapsedSeconds }).toEqual(before)
-  })
-
-  it('preserves a locally paused Group across Session pause and resume', async () => {
+  it('applies a next-stage group change only when that Stage starts', async () => {
     const created = await createSession(2, 2)
-    let session = await publishAndStart(created!.id, [0, 1])
-    await executeTrainingGroupRuntimeAction(coach.user.id, session.id, { expectedRevision: session.statusRevision, action: 'pause', groupId: session.Groups[1].id }); session = await loaded(session.id)
-    await executeTrainingCommand(coach.user.id, session.id, { expectedRevision: session.statusRevision, type: 'PAUSE_SESSION', targetType: 'ALL', payload: { mode: 'SOFT' } }); session = await loaded(session.id)
-    await executeTrainingCommand(coach.user.id, session.id, { expectedRevision: session.statusRevision, type: 'RESUME_SESSION', targetType: 'ALL', payload: {} })
+    let session = await publishAndStart(created!.id)
+    const participant = session.Groups[0].Participants[0]
+    const sourceGroupId = participant.groupId
+    const targetGroupId = session.Groups[1].id
+
+    await changeTrainingStageGroup(coach.user.id, session.id, session.currentStageId!, {
+      expectedRevision: session.statusRevision,
+      participantIds: [participant.id],
+      toGroupId: targetGroupId,
+      effectiveMode: 'next_stage',
+      targetStageId: session.Stages[1].id,
+      reason: '下一阶段分层',
+    })
     session = await loaded(session.id)
-    expect(session.Groups[0].StageGroups.find(unit => unit.status === 'RUNNING')).toBeTruthy()
-    expect(session.Groups[1].StageGroups.find(unit => unit.status === 'PAUSED')).toBeTruthy()
+    expect(session.Participants.find(item => item.id === participant.id)?.groupId).toBe(sourceGroupId)
+
+    await executeStageTransition(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      action: 'advance',
+      stageId: session.Stages[0].id,
+      outcome: 'completed',
+    })
+    session = await loaded(session.id)
+    expect(session.Participants.find(item => item.id === participant.id)?.groupId).toBe(targetGroupId)
+  })
+
+  it('splits and merges Groups without creating independent Stage runtimes', async () => {
+    const created = await createSession(1, 2)
+    let session = await publishAndStart(created!.id)
+    const originalCurrentStageId = session.currentStageId
+    const source = session.Groups[0]
+    const moved = source.Participants[0]
+
+    await splitTrainingGroup(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      sourceGroupId: source.id,
+      name: '拆分组',
+      participantIds: [moved.id],
+      reason: '课堂拆组',
+    })
+    session = await loaded(session.id)
+    const target = session.Groups.find(group => group.name === '拆分组')!
+    expect(session.currentStageId).toBe(originalCurrentStageId)
+    expect(target.Participants.map(item => item.id)).toContain(moved.id)
+    expect(session.Stages.filter(stage => stage.lifecycle === 'RUNNING')).toHaveLength(1)
+
+    await mergeTrainingGroup(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      sourceGroupId: target.id,
+      targetGroupId: source.id,
+      reason: '课堂合组',
+    })
+    session = await loaded(session.id)
+    expect(session.currentStageId).toBe(originalCurrentStageId)
+    expect(session.Groups.find(group => group.id === target.id)?.status).toBe('archived')
+  })
+
+  it('pauses the Session clock without inventing a paused Stage lifecycle', async () => {
+    const created = await createSession(1, 2)
+    let session = await publishAndStart(created!.id)
+    const currentStageId = session.currentStageId!
+
+    await executeTrainingCommand(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      type: 'PAUSE_SESSION',
+      targetType: 'ALL',
+      payload: { mode: 'SOFT' },
+    })
+    session = await loaded(session.id)
+    expect(session.status).toBe('PAUSED')
+    expect(session.Stages.find(stage => stage.id === currentStageId)).toMatchObject({ lifecycle: 'RUNNING', runningSince: null })
+
+    await executeTrainingCommand(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      type: 'RESUME_SESSION',
+      targetType: 'ALL',
+      payload: {},
+    })
+    session = await loaded(session.id)
+    expect(session.status).toBe('RUNNING')
+    expect(session.Stages.find(stage => stage.id === currentStageId)?.runningSince).not.toBeNull()
+  })
+
+  it('rejects edits to a started Stage definition', async () => {
+    const created = await createSession(1, 1)
+    const session = await publishAndStart(created!.id)
+    const stage = session.Stages[0]
+    const plan = stage.Groups[0]
+    await expect(replaceTrainingStageGroupMatrix(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      stagePlans: [{
+        id: plan.id,
+        clientKey: plan.id,
+        stageId: stage.id,
+        groupId: null,
+        isDefault: true,
+        inheritsDefault: false,
+        accessPolicy: plan.accessPolicy,
+        submissionMode: plan.submissionMode,
+        problemIds: plan.ProblemPlans.map(item => item.stageProblemId),
+        requiredProblemIds: plan.ProblemPlans
+          .filter(item => item.required)
+          .map(item => item.stageProblemId),
+      }],
+    })).rejects.toMatchObject<Partial<TrainingEngineError>>({ code: 'TRAINING_STAGE_FROZEN' })
   })
 })

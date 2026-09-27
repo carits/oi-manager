@@ -54,7 +54,7 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
   需要时的团队筛选。普通列表宽度不超过 1240px；只有实际编排工作台使用全宽布局。
 
 - Stage 设置先使用课堂语言：“这一阶段做什么、谁参加、每组练哪些题、题目怎么开放、练多久、什么时候结束”。内部枚举、Subtask、ANY/ALL 和最短持续时间放入高级设置。
-- 基础学员名单与 Stage 分组必须分开呈现；不允许用 Session 级分组暗示学员整堂课永久同组。
+- 基础学员名单与稳定 Group 分配分开呈现；Group 是整场训练内可审计、可换组的当前归属，Stage 只选择默认计划或 Group 覆盖。不得让教师启动某个 Group 的独立 Stage 时间线。
 
 ### Dialog 契约
 
@@ -334,5 +334,5 @@ CSS Module、焦点 Token 与错误契约迁移；后续变更由静态门禁直
 
 ## Training Engine V2 交互
 
-Stage 状态、独立分组和时间调整使用统一 StatusBadge、DetailDialog 与确认表单。运行中修改未来 Stage 必须展示影响摘要；已结束 Stage 显示“如需再次训练，请复制为新阶段”，不提供回滚按钮。
+全局 Stage 状态、稳定分组、计划覆盖和时间调整使用统一 StatusBadge、DetailDialog 与确认表单。运行中修改未来 Stage 必须展示影响摘要；已结束 Stage 显示“如需再次训练，请复制为新阶段”，不提供分组独立推进或回滚按钮。
 

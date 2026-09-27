@@ -76,7 +76,7 @@ erDiagram
 #### 数据与并发约束
 
 - 题目 Revision、训练/比赛 Assignment、聊天会话、经济账本等高竞争写入使用数据库事务锁或 advisory lock，并通过 revision/CAS 防止丢失更新。
-- `TrainingSession` 是一堂课，`TrainingSessionStage` 只保存有序教学元数据；`TrainingSessionGroup` 是整场训练的稳定分组，`TrainingSessionStageGroup` 是 Group × Stage 的唯一配置与运行事实。Participant 通过必填 `groupId` 归属稳定 Group，ProblemPlan 通过必填 `stageGroupId` 归属运行单元。Progress 绑定稳定 StageProblem，与当前组要求分离，因此换组不会删除历史成绩。
+- `TrainingSession` 是一堂课，并以 `currentStageId` 指向全班唯一 RUNNING Stage；`TrainingSessionStage` 保存有序教学定义与全局生命周期。`TrainingSessionGroup` 是整场训练的稳定分组；数据库模型 `TrainingSessionStageGroup` 现在表示默认 StagePlan 或分组覆盖，不再是独立运行单元。Participant 通过必填 `groupId` 归属稳定 Group，ProblemPlan 通过 `stageGroupId` 归属计划。Progress 绑定稳定 StageProblem，因此换组不会删除历史成绩。
 - `TrainingSessionTemplate` 只保存个人、学校或团队可复用的 Stage/分组/规则骨架。模板不会复制题目、学员和运行事实，停用模板也不会改变已经创建的 Session。
 - 正式版本、账本分录、消息、审计、举报证据和发布版本均按追加或不可变方式保存。
 - 用户控制的源码、压缩包、消息、AI 请求、Candidate 和 Judge 输出均有服务端硬上限；前端禁用状态不是安全边界。
@@ -84,8 +84,6 @@ erDiagram
 
 ## Training Engine V2 数据关系补充
 
-V2 的核心关系为 TrainingSession → TrainingSessionStage → TrainingSessionStageGroup（稳定 Group 与 Stage 的交叉单元）→ TrainingSessionStageProblem/ProblemPlan。TrainingSessionGroup 是整场训练的稳定分组，TrainingSessionParticipant.groupId 表示当前归属；StageGroup 保存该阶段的运行状态、计划时长、完成阈值和独立题目计划。迁移和换组不重建已有 Progress 或 Submission。
+V2 的核心关系为 TrainingSession → 全局 TrainingSessionStage 时间轴 → 默认 StagePlan / 可选 Group override → TrainingSessionStageProblemPlan。TrainingSessionGroup 是整场训练的稳定分组，TrainingSessionParticipant.groupId 表示当前归属；Stage 生命周期、计时和结束原因只保存在 Stage。迁移和换组不重建已有 Progress 或 Submission。
 
-
-
-Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`, `TrainingSessionStageParticipantAssignment`, `TrainingSessionStageProblemPlan`, and `TrainingSessionStageTimeAdjustment`.
+Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`（StagePlan）, `TrainingSessionStageProblemPlan`, `TrainingSessionStageRuntimeSnapshot`, and `TrainingSessionStageTimeAdjustment`.

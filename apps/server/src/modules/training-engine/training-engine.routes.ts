@@ -21,8 +21,6 @@ import {
   cloneTrainingStage,
   endTrainingStage,
   executeStageTransition,
-  executeTrainingGroupRuntimeAction,
-  executeTrainingGroupRuntimeBatch,
   splitTrainingGroup,
   mergeTrainingGroup,
   executeTrainingCommand,
@@ -222,14 +220,6 @@ trainingEngineRouter.post('/training-sessions/:id/commands', authenticate, async
     trainingMetrics.recordCommand(false)
     return sendError(error, res)
   }
-}))
-
-trainingEngineRouter.post('/training-sessions/:id/group-runtime/actions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.groupRuntimeAction, await executeTrainingGroupRuntimeAction(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.groupRuntimeAction, req.body))) } catch (error) { return sendError(error, res) }
-}))
-
-trainingEngineRouter.post('/training-sessions/:id/group-runtime/batch', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.groupRuntimeBatch, await executeTrainingGroupRuntimeBatch(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.groupRuntimeBatch, req.body))) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/groups/split', authenticate, asyncHandler(async (req: AuthRequest, res) => {

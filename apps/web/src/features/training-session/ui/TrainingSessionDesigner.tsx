@@ -137,7 +137,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const activeStage =
     stages.find((stage) => stage.clientKey === activeStageKey) || null;
   const stageReadOnly = (stage: Stage | null | undefined) =>
-    isTrainingStageDefinitionLocked(stage?.id, design?.stageGroups || []);
+    isTrainingStageDefinitionLocked(stage?.id, stages);
   const activeStageReadOnly = stageReadOnly(activeStage);
   const updateStage = (clientKey: string, updater: (stage: Stage) => Stage) => {
     const target = stages.find((stage) => stage.clientKey === clientKey);
@@ -162,6 +162,16 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       name: `新阶段 ${stages.length + 1}`,
       description: "",
       kind: "TRAINING",
+      lifecycle: "PENDING",
+      mode: "PRACTICE",
+      accessPolicy: "ALL_AT_ONCE",
+      submissionMode: "ENABLED",
+      endPolicy: "MANUAL",
+      plannedDurationSeconds: null,
+      minDurationSeconds: null,
+      completionThreshold: null,
+      completionPolicy: null,
+      rules: null,
       Problems: [],
     };
     replaceStages((current) => [...current, stage]);
@@ -275,6 +285,15 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       name: stage.name,
       description: stage.description,
       kind: stage.kind,
+      mode: stage.mode || "PRACTICE",
+      accessPolicy: stage.accessPolicy || "ALL_AT_ONCE",
+      submissionMode: stage.submissionMode || "ENABLED",
+      endPolicy: stage.endPolicy || "MANUAL",
+      plannedDurationSeconds: stage.plannedDurationSeconds ?? null,
+      minDurationSeconds: stage.minDurationSeconds ?? null,
+      completionThreshold: stage.completionThreshold ?? null,
+      completionPolicy: stage.completionPolicy || undefined,
+      rules: stage.rules || undefined,
       problems: stage.Problems.map((problem) => ({
         assignmentId: problem.assignmentId,
         clientKey: problem.clientKey,
@@ -288,6 +307,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         stuckPolicy: problem.stuckPolicy || undefined,
         allowedSubtaskIds: problem.allowedSubtaskIds,
         strategyIntervalSeconds: problem.strategyIntervalSeconds ?? null,
+        required: problem.required !== false,
       })),
     })),
   });
@@ -584,7 +604,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           stages={stages}
           onStagesChange={replaceStages}
           grouping={grouping}
-          stageGroups={design.stageGroups}
           sessionStatus={design.session.status}
           onGroupingChange={value => { setGrouping(value); setDirty(true) }}
           onChanged={refreshDesign}
@@ -593,7 +612,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           sessionId={sessionId}
           mode="hints"
           stages={stages}
-          stageGroups={design.stageGroups}
           sessionStatus={design.session.status}
           onChanged={refreshDesign}
         />}
@@ -602,7 +620,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           revision={design.statusRevision}
           stages={stages}
           grouping={grouping}
-          stageGroups={design.stageGroups}
+          stagePlans={design.stagePlans}
           onSaved={refreshDesign}
         />}
       </FormDialog>

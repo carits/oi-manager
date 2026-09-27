@@ -60,7 +60,7 @@ Feature Slice。路由和跨域组件只能从 `@/features/<feature>` 根入口�
 `api/model/ui`，也不得在 `components` 下重新建立同名业务目录。根级按页面入口用于保持 Next.js 路由的切块
 边界，避免一个聚合 barrel 将同一 Feature 的全部管理工作台装入首屏。
 
-Training Session 前端只呈现一套 Stage 驱动模型。创建入口可以“快速创建一个 Stage”或“使用 Stage 模板”，但不得形成普通训练/教练带练两套 DTO。设计器按课堂语言配置 Stage，并通过 `features/training-session/api` 调用共享 Runtime Contract；SSE 是登记的 Raw Transport。基础名单只选择参与者，Stage 分组和题目 Plan 在结构编辑器中维护。题目添加只允许共享的“平台 + 题号”组件，不恢复题库浏览或题单选题。
+Training Session 前端只呈现一套全局 Stage 驱动模型。创建入口可以“快速创建一个 Stage”或“使用 Stage 模板”，但不得形成普通训练/教练带练两套 DTO。设计器按课堂语言配置 Stage，并通过 `features/training-session/api` 调用共享 Runtime Contract；SSE 是登记的 Raw Transport。基础名单选择参与者，稳定 Group 表达当前归属，Stage 编辑唯一默认计划与可选 Group 覆盖。题目添加只允许共享的“平台 + 题号”组件，不恢复题库浏览或题单选题。
 
 普通题目页的多题面工作区以左侧版本栏作为版本名称、身份和创建入口的唯一展示位置；右侧
 只渲染题面正文，不重复标题、作者、语言、格式、来源或派生入口。只有用户自己的版本在右侧

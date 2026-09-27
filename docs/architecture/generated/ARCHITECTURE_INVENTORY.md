@@ -279,9 +279,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingSessionScoreEvent`
 - `TrainingSessionStage`
 - `TrainingSessionStageGroup`
-- `TrainingSessionStageParticipantAssignment`
 - `TrainingSessionStageProblem`
 - `TrainingSessionStageProblemPlan`
+- `TrainingSessionStageRuntimeSnapshot`
 - `TrainingSessionStageTimeAdjustment`
 - `TrainingSessionStrategyDecision`
 - `TrainingSessionTemplate`

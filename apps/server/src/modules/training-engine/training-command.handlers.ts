@@ -60,14 +60,14 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
         increment: Math.max(0, Math.floor((at.getTime() - current.runningSince.getTime()) / 1000)),
       }
     }
-    const runningUnits = await tx.trainingSessionStageGroup.findMany({
-      where: { Stage: { sessionId }, status: 'RUNNING', runningSince: { not: null } },
+    const runningStage = await tx.trainingSessionStage.findFirst({
+      where: { sessionId, lifecycle: 'RUNNING', runningSince: { not: null } },
       select: { id: true, runningSince: true },
     })
-    for (const unit of runningUnits) await tx.trainingSessionStageGroup.update({
-      where: { id: unit.id },
+    if (runningStage) await tx.trainingSessionStage.update({
+      where: { id: runningStage.id },
       data: {
-        activeElapsedSeconds: { increment: unit.runningSince ? Math.max(0, Math.floor((at.getTime() - unit.runningSince.getTime()) / 1000)) : 0 },
+        activeElapsedSeconds: { increment: runningStage.runningSince ? Math.max(0, Math.floor((at.getTime() - runningStage.runningSince.getTime()) / 1000)) : 0 },
         runningSince: null,
       },
     })
@@ -80,23 +80,65 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     update.pausedAt = null
     update.runningSince = new Date()
     update.pauseMode = null
-    await tx.trainingSessionStageGroup.updateMany({
-      where: { Stage: { sessionId }, status: 'RUNNING', runningSince: null },
+    await tx.trainingSessionStage.updateMany({
+      where: { sessionId, lifecycle: 'RUNNING', runningSince: null },
       data: { runningSince: new Date() },
     })
   }
 
   const problemInActiveUnit = async (stageProblemId: string) => {
-    let groupIds: string[] | undefined
-    if (targetType === 'GROUP' && targetId) groupIds = [targetId]
-    if (targetType === 'USER' && targetId) {
-      const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } }, select: { groupId: true } })
-      groupIds = participant?.groupId ? [participant.groupId] : []
-    }
-    const units = await tx.trainingSessionStageGroup.findMany({ where: { ...(groupIds ? { groupId: { in: groupIds } } : {}), status: { in: ['RUNNING', 'PAUSED'] } }, include: { ProblemPlans: { select: { stageProblemId: true } } } })
-    return units.some(unit => unit.ProblemPlans.some(plan => plan.stageProblemId === stageProblemId))
+    const runtime = await tx.trainingSession.findUnique({
+      where: { id: sessionId },
+      select: { currentStageId: true },
+    })
+    if (!runtime?.currentStageId) return false
 
+    let groupIds: string[]
+    if (targetType === 'GROUP' && targetId) {
+      groupIds = [targetId]
+    } else if (targetType === 'USER' && targetId) {
+      const participant = await tx.trainingSessionParticipant.findUnique({
+        where: { sessionId_userId: { sessionId, userId: targetId } },
+        select: { groupId: true },
+      })
+      groupIds = participant ? [participant.groupId] : []
+    } else {
+      const participants = await tx.trainingSessionParticipant.findMany({
+        where: { sessionId, status: 'active' },
+        select: { groupId: true },
+        distinct: ['groupId'],
+      })
+      groupIds = participants.map(participant => participant.groupId)
+    }
+
+    const plans = await tx.trainingSessionStageGroup.findMany({
+      where: {
+        stageId: runtime.currentStageId,
+        OR: [
+          { isDefault: true },
+          ...(groupIds.length > 0 ? [{ groupId: { in: groupIds } }] : []),
+        ],
+      },
+      include: { ProblemPlans: { select: { stageProblemId: true } } },
+    })
+    const defaultPlan = plans.find(plan => plan.isDefault)
+    const defaultHasProblem = Boolean(defaultPlan?.ProblemPlans.some(problem => problem.stageProblemId === stageProblemId))
+    if (groupIds.length === 0) return defaultHasProblem
+
+    return groupIds.every(groupId => {
+      const override = plans.find(plan => plan.groupId === groupId)
+      if (override?.ProblemPlans.some(problem => problem.stageProblemId === stageProblemId)) return true
+      if (override && !override.inheritsDefault) return false
+      return defaultHasProblem
+    })
   }
+
+  const appliesToParticipant = (participant: { groupId: string; userId: string }) => targetApplies(
+    targetType,
+    targetId,
+    { ...participant, currentGroupId: participant.groupId },
+    session,
+  )
 
   const focusProblem = async () => {
     if (current.status !== 'RUNNING') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有进行中的训练可以聚焦题目')
@@ -128,7 +170,7 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
       },
     })
     const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' } })
-    for (const participant of participants.filter(item => targetApplies(targetType, targetId, item, session))) {
+    for (const participant of participants.filter(appliesToParticipant)) {
       await tx.trainingSessionParticipant.update({
         where: { id: participant.id },
         data: {
@@ -157,7 +199,7 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
         returnProblemId: { not: null },
       },
     })
-    await restoreFocusParticipants(tx, session, participants.filter(item => targetApplies(targetType, targetId, item, session)))
+    await restoreFocusParticipants(tx, session, participants.filter(appliesToParticipant))
   }
 
   const createOverlay = async () => {

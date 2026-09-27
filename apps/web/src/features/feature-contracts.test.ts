@@ -175,11 +175,15 @@ describe('feature slice contracts', () => {
         name: '热身',
         kind: 'TRAINING',
         orderIndex: 0,
+        lifecycle: 'PENDING',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'ENABLED',
+        endPolicy: 'MANUAL',
         Problems: [],
       }],
       participants: [{ id: 'participant-1', userId: 'user-1', groupId: 'group-1' }],
       groups: [{ id: 'group-1', clientKey: 'group-1', name: '全体学员', orderIndex: 0, status: 'active', participantIds: ['user-1'] }],
-      stageGroups: [{ id: 'unit-1', clientKey: 'unit-1', stageId: 'stage-1', stageName: '热身', groupId: 'group-1', groupName: '全体学员', mode: 'PRACTICE', accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED', transitionPolicy: 'WAIT_FOR_TEACHER', problemIds: [], status: 'PENDING', activeElapsedSeconds: 0 }],
+      stagePlans: [{ id: 'plan-1', clientKey: 'plan-1', stageId: 'stage-1', stageName: '热身', groupId: null, groupName: null, isDefault: true, inheritsDefault: false, accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED', problemIds: [], requiredProblemIds: [] }],
       issues: [],
     }).success).toBe(true)
 
@@ -197,8 +201,8 @@ describe('feature slice contracts', () => {
 
     expect(TrainingStageTransitionInputSchema.safeParse({ expectedRevision: 3, action: 'advance', stageId: 'stage-1', outcome: 'completed' }).success).toBe(true)
     expect(TrainingStageTransitionInputSchema.safeParse({ expectedRevision: 3, action: 'back', stageId: 'stage-1' }).success).toBe(false)
-    expect(TrainingStageGroupChangeInputSchema.safeParse({ expectedRevision: 3, participantId: 'participant-1', toGroupId: 'group-2', effectiveMode: 'immediate', reason: '根据课堂观察调整' }).success).toBe(true)
-    expect(TrainingStageGroupChangeInputSchema.safeParse({ expectedRevision: 3, participantId: 'participant-1', toGroupId: 'group-2', effectiveMode: 'immediate', reason: '' }).success).toBe(false)
+    expect(TrainingStageGroupChangeInputSchema.safeParse({ expectedRevision: 3, participantIds: ['participant-1'], toGroupId: 'group-2', effectiveMode: 'immediate', reason: '根据课堂观察调整' }).success).toBe(true)
+    expect(TrainingStageGroupChangeInputSchema.safeParse({ expectedRevision: 3, participantIds: ['participant-1'], toGroupId: 'group-2', effectiveMode: 'immediate', reason: '' }).success).toBe(false)
     expect(TrainingStageTimeExtensionInputSchema.safeParse({ expectedRevision: 3, seconds: 600, reason: '课堂需要继续讲解' }).success).toBe(true)
     expect(TrainingStageTimeExtensionInputSchema.safeParse({ expectedRevision: 3, seconds: 30, reason: '太短' }).success).toBe(false)
     expect(TrainingGroupSuggestionSchema.safeParse({

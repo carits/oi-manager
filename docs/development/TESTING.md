@@ -74,5 +74,5 @@ pnpm --filter server exec vitest run tests/security-boundaries.test.ts
 
 ## Training Engine V2 测试矩阵
 
-测试必须覆盖 StageGroup 独立运行、学员 immediate/next-stage 换组、Stage 转换 CAS、暂停不累计时间、延时独立记录、Split/Merge 约束、固定 TestSet Revision 以及 legacy V1 读取兼容。
+测试必须覆盖全局唯一 RUNNING Stage、默认计划与分组覆盖、学员 immediate/next-stage 换组、Stage 转换 CAS、不可变 RuntimeSnapshot、暂停不累计时间、延时独立记录、Split/Merge 不产生新时间线、固定 TestSet Revision，以及旧分组运行表/接口不存在。
 

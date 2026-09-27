@@ -34,10 +34,12 @@ type PermissionProblem = {
 type PermissionGroup = {
   id: string
   groupId?: string | null
-  status?: string
+  isDefault?: boolean
+  inheritsDefault?: boolean
   accessPolicy?: unknown
   submissionMode?: unknown
   rules?: unknown
+  ProblemPlans?: PermissionPlan[]
 }
 
 type PermissionStage = {
@@ -49,7 +51,7 @@ type PermissionStage = {
   endPolicy?: unknown
   defaultTargetScore?: unknown
   rules?: unknown
-  ParticipantAssignments: Array<{ participantId: string; groupId: string }>
+  lifecycle?: string
   Groups: PermissionGroup[]
   Problems: PermissionProblem[]
 }
@@ -61,6 +63,7 @@ export type PermissionSession = {
   pauseMode?: string | null
   allowHints: boolean
   defaultSubmissionMode: string
+  currentStageId?: string | null
   Stages: PermissionStage[]
   Overlays: Array<{
     targetType: TrainingEngineTargetType
@@ -88,7 +91,6 @@ export function targetApplies(
   participant: { id?: string; userId: string; currentGroupId?: string | null },
   session: {
     teamId: string | null
-      Stages?: Array<{ id: string; ParticipantAssignments?: Array<{ participantId: string; groupId: string }> }>
   },
 ) {
   if (targetType === 'ALL') return true
@@ -150,8 +152,8 @@ export function resolveTrainingPermissionLoaded(
     return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'PROBLEM_REQUIRED' }
   }
 
-  const stage = participant.currentGroupId
-    ? session.Stages.find(item => item.Groups.some(group => group.groupId === participant.currentGroupId && ['RUNNING', 'PAUSED'].includes(String(group.status))))
+  const stage = session.currentStageId
+    ? session.Stages.find(item => item.id === session.currentStageId && item.lifecycle === 'RUNNING')
     : null
   const problemStage = session.Stages.find(item => item.Problems.some(problem => problem.id === stageProblemId))
   const stageProblem = problemStage?.Problems.find(problem => problem.id === stageProblemId)
@@ -186,8 +188,11 @@ export function resolveTrainingPermissionLoaded(
     return { canView: true, canSubmit: false, canEdit: false, canOpenHint: session.allowHints, reason: 'HISTORICAL_STAGE' }
   }
 
-  const group = participant.currentGroupId ? stage.Groups.find(item => item.groupId === participant.currentGroupId) : null
-  const plan = stageProblem.Plans.find(item => item.stageGroupId === group?.id)
+  const defaultPlan = stage.Groups.find(item => item.isDefault)
+  const groupOverride = participant.currentGroupId ? stage.Groups.find(item => item.groupId === participant.currentGroupId) : null
+  const group = groupOverride || defaultPlan || null
+  const plan = stageProblem.Plans.find(item => item.stageGroupId === groupOverride?.id)
+    || (groupOverride?.inheritsDefault !== false ? stageProblem.Plans.find(item => item.stageGroupId === defaultPlan?.id) : undefined)
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
   const submissionDisabled = overlays.some(item => item.type === 'DISABLE_SUBMISSION')
   const runtimeOverride = {
@@ -202,10 +207,12 @@ export function resolveTrainingPermissionLoaded(
   }
 
   if (accessPolicy === 'SEQUENTIAL' && !unlocked) {
-    const stageGroupId = group?.id || null
-    const ordered = stage.Problems.flatMap(problem => problem.Plans.map(item => ({ ...item, problem })))
-      .filter(item => item.stageGroupId === stageGroupId)
-      .sort((a, b) => a.orderIndex - b.orderIndex)
+    const defaultRows = stage.Problems.flatMap(problem => problem.Plans.filter(item => item.stageGroupId === defaultPlan?.id).map(item => ({ ...item, problem })))
+    const overrideRows = stage.Problems.flatMap(problem => problem.Plans.filter(item => item.stageGroupId === groupOverride?.id).map(item => ({ ...item, problem })))
+    const merged = new Map(defaultRows.map(item => [item.stageProblemId, item]))
+    if (groupOverride?.inheritsDefault === false) merged.clear()
+    for (const item of overrideRows) merged.set(item.stageProblemId, item)
+    const ordered = [...merged.values()].sort((a, b) => a.orderIndex - b.orderIndex)
     const index = ordered.findIndex(item => item.stageProblemId === stageProblemId)
     if (index > 0) {
       const previous = ordered[index - 1]

@@ -334,7 +334,7 @@ describe('shared API contract adapter', () => {
       participants: [],
       groups: [],
       stages: [],
-      stageGroups: [],
+      stagePlans: [],
       issues: [],
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({

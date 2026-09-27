@@ -185,16 +185,16 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TeamOperationLog` | 以 Prisma schema 为准 |
 | `TeamProblemList` | 以 Prisma schema 为准 |
 | `TestdataFile` | 以 Prisma schema 为准 |
-| `TrainingSession` | 独立训练聚合根；保存范围、生命周期、有效运行时间及 command/event revision，不保存全局 currentStage |
-| `TrainingSessionStage` | 有序教学元数据，只保存名称、说明、顺序和 kind |
+| `TrainingSession` | 独立训练聚合根；保存范围、生命周期、有效运行时间、command/event revision，并以 currentStageId 指向全班唯一运行 Stage |
+| `TrainingSessionStage` | 有序全局课堂时间轴；保存定义、生命周期、计时、结束原因与 definitionRevision |
 | `TrainingSessionStageProblem` | Stage 内 canonical 题目与固定 TestSet Revision 的稳定身份 |
-| `TrainingSessionGroup` | 整场 Session 的稳定分组；Participant 当前归属和 StageGroup 均引用它 |
-| `TrainingSessionGroupChange` | 稳定 Group 之间的学员换组审计 |
-| `TrainingSessionStageGroup` | Group × Stage 的唯一配置与运行事实；保存规则、状态、有效时长和结束原因 |
-| `TrainingSessionStageParticipantAssignment` | 每个 Stage 的学员分组计划/历史映射，groupId 必填 |
-| `TrainingSessionStageProblemPlan` | 通过 stageGroupId 归属 StageGroup 的题目顺序与规则 |
-| `TrainingSessionStageTimeAdjustment` | Stage 延时追加记录 |
-| `TrainingSessionParticipant` | 学员、稳定 groupId、当前题目、心跳和有效活跃时间；不保存 currentStage |
+| `TrainingSessionGroup` | 整场 Session 的稳定分组；Participant 当前归属与可选 Stage 分组覆盖均引用它 |
+| `TrainingSessionGroupChange` | 稳定 Group 之间的即时或目标 Stage 生效换组审计 |
+| `TrainingSessionStageGroup` | StagePlan：一个无 groupId 的唯一默认计划或一个显式分组覆盖；不保存运行生命周期 |
+| `TrainingSessionStageProblemPlan` | 通过 stageGroupId 归属 StagePlan 的题目顺序、必做标记与规则 |
+| `TrainingSessionStageRuntimeSnapshot` | Stage 首次开始时生成的不可变配置、definitionRevision 与 SHA-256 哈希 |
+| `TrainingSessionStageTimeAdjustment` | Stage 延时追加记录，不覆盖原计划时长 |
+| `TrainingSessionParticipant` | 学员、稳定 groupId、当前题目、心跳和有效活跃时间；不保存独立 Stage 位置 |
 | `TrainingSessionProblemProgress` | Participant × StageProblem 的稳定进度；换组不删除 |
 | `TrainingSessionCommand` | 带会话单调序号的教练控制命令审计 |
 | `TrainingSessionOverlay` | 面向全员、组、团队或用户的运行覆盖层 |
@@ -217,9 +217,9 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 ## Training Engine V2 表约束
 
-StageGroup 使用 `(stageId, groupId)` 唯一约束；Participant.groupId、StageAssignment.groupId 和 ProblemPlan.stageGroupId 均为必填。部分唯一索引保证每个稳定 Group 最多一个 RUNNING/PAUSED StageGroup。Session、Stage 和 Participant 不保存重复的 currentStage 或运行镜像。
+每个 Stage 通过部分唯一索引保证恰好一个默认计划；默认计划必须 `groupId = null`，分组覆盖必须引用同 Session 的稳定 Group。Session.currentStageId 全局唯一，服务层和一致性检查同时保证其指向本 Session 唯一 RUNNING Stage。ProblemPlan、StageProblem 与 StagePlan 必须属于同一 Stage。
 
-Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`, `TrainingSessionStageParticipantAssignment`, `TrainingSessionStageProblemPlan`, and `TrainingSessionStageTimeAdjustment`.
+Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`（StagePlan）, `TrainingSessionStageProblemPlan`, `TrainingSessionStageRuntimeSnapshot`, and `TrainingSessionStageTimeAdjustment`.
 
 | `TrainingSessionGroup` | V2 stable session group |
 | `TrainingSessionGroupChange` | V2 participant group change audit |
