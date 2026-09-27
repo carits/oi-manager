@@ -347,6 +347,15 @@ describe('shared API contract adapter', () => {
 
     expect(parseContractBody(TrainingContracts.createTemplate, { name: '分层课堂', scope: 'organization' })).toEqual({ name: '分层课堂', scope: 'organization' })
     expect(() => parseContractBody(TrainingContracts.createTemplate, { name: '', scope: 'organization' })).toThrowError(ApiContractError)
+    expect(parseContractBody(TrainingContracts.joinParticipantRuntime, {
+      expectedRevision: 3, userId: 'user-2', groupId: 'group-1', historyMode: 'absent', reason: '中途到课',
+    })).toMatchObject({ historyMode: 'absent' })
+    expect(parseContractBody(TrainingContracts.appendRuntimeProblem, {
+      expectedRevision: 4, targetType: 'GROUP', targetId: 'group-1', problemId: 'problem-2', required: true, targetScore: 80, reason: '补充练习',
+    })).toMatchObject({ targetType: 'GROUP', targetId: 'group-1', targetScore: 80 })
+    expect(() => parseContractBody(TrainingContracts.appendRuntimeProblem, {
+      expectedRevision: 4, targetType: 'GROUP', problemId: 'problem-2', reason: '缺少目标组',
+    })).toThrowError(ApiContractError)
     sendContractData(response, TrainingContracts.listTemplates, [{
       key: 'database:template-1', name: '分层课堂', sessionType: 'GENERAL', description: '', source: 'organization',
       stages: [{ name: '分层', description: '', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' }],

@@ -115,6 +115,20 @@ export const TrainingGroupMergeInputSchema = z.object({ expectedRevision: z.numb
 export const TrainingStageEndInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), outcome: z.enum(['completed', 'ended_early']).default('completed'), reason: z.string().max(2000).optional(), endSession: z.boolean().default(false) })
 export const TrainingStageCloneInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), name: z.string().trim().min(1).max(200).optional() })
 export const TrainingRosterInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), participants: z.array(z.object({ userId: z.string().min(1) })).max(5000) })
+export const TrainingRuntimeParticipantJoinInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), userId: z.string().min(1), groupId: z.string().min(1), historyMode: z.enum(['absent', 'makeup']), reason: z.string().trim().min(1).max(2000) })
+export const TrainingRuntimeParticipantLeaveInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), reason: z.string().trim().min(1).max(2000) })
+const TrainingRuntimeProblemAppendBaseSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  problemId: z.string().min(1),
+  required: z.boolean().default(true),
+  targetScore: z.number().int().min(0).max(100).default(100),
+  reason: z.string().trim().min(1).max(2000),
+})
+export const TrainingRuntimeProblemAppendInputSchema = z.discriminatedUnion('targetType', [
+  TrainingRuntimeProblemAppendBaseSchema.extend({ targetType: z.literal('ALL'), targetId: z.never().optional() }),
+  TrainingRuntimeProblemAppendBaseSchema.extend({ targetType: z.literal('GROUP'), targetId: z.string().min(1) }),
+  TrainingRuntimeProblemAppendBaseSchema.extend({ targetType: z.literal('USER'), targetId: z.string().min(1) }),
+])
 export const TrainingTemplateStageSchema = z.object({
   name: z.string(), description: z.string(), kind: TrainingStageKindSchema, plannedDurationSeconds: z.number().int().positive().optional(),
   endPolicy: TrainingStageEndPolicySchema, accessPolicy: TrainingStageAccessPolicySchema, submissionMode: z.enum(['ENABLED', 'DISABLED']), rules: JsonObjectSchema.optional(),
@@ -219,6 +233,8 @@ export const TrainingReportSchema = z.object({
   })),
   participants: z.array(z.object({ id: z.string(), user: TrainingUserSummarySchema, group: z.object({ id: z.string(), name: z.string() }).passthrough(), activeSeconds: z.number().int(), progress: z.array(z.object({ stageProblemId: z.string(), status: z.string() }).passthrough()), scoreEvents: z.array(z.object({ id: z.string() }).passthrough()) })),
   groupChanges: z.array(z.object({ id: z.string(), participantId: z.string(), fromGroupId: z.string().nullable().optional(), toGroupId: z.string(), reason: z.string(), changedBy: z.string(), createdAt: DateTimeWireSchema }).passthrough()),
+  rosterEvents: z.array(z.object({ id: z.string(), type: z.string(), targetId: z.string().nullable().optional(), payload: JsonObjectSchema.nullable().optional(), createdAt: DateTimeWireSchema }).passthrough()),
+  runtimeProblems: z.array(z.object({ id: z.string(), targetType: z.string(), targetId: z.string().nullable().optional(), stageProblemId: z.string().nullable().optional(), payload: JsonObjectSchema.nullable().optional(), createdAt: DateTimeWireSchema }).passthrough()),
 })
 
 export const TrainingSessionSummarySchema = z.object({
@@ -291,6 +307,9 @@ export const TrainingContracts = {
   splitGroup: defineApiEndpoint({ key: 'training.group.split', method: 'POST', scope: 'organization', body: TrainingGroupSplitInputSchema, data: TrainingWorkspaceSchema }),
   mergeGroup: defineApiEndpoint({ key: 'training.group.merge', method: 'POST', scope: 'organization', body: TrainingGroupMergeInputSchema, data: TrainingWorkspaceSchema }),
   replaceRoster: defineApiEndpoint({ key: 'training.roster.replace', method: 'PUT', scope: 'organization', body: TrainingRosterInputSchema, data: TrainingWorkspaceSchema }),
+  joinParticipantRuntime: defineApiEndpoint({ key: 'training.roster.runtime.join', method: 'POST', scope: 'organization', body: TrainingRuntimeParticipantJoinInputSchema, data: TrainingWorkspaceSchema }),
+  leaveParticipantRuntime: defineApiEndpoint({ key: 'training.roster.runtime.leave', method: 'POST', scope: 'organization', body: TrainingRuntimeParticipantLeaveInputSchema, data: TrainingWorkspaceSchema }),
+  appendRuntimeProblem: defineApiEndpoint({ key: 'training.problem.runtime.append', method: 'POST', scope: 'organization', body: TrainingRuntimeProblemAppendInputSchema, data: TrainingWorkspaceSchema }),
   getCoachDashboard: defineApiEndpoint({ key: 'training.coach-dashboard', method: 'GET', scope: 'organization', data: TrainingCoachDashboardSchema }),
   getReport: defineApiEndpoint({ key: 'training.report', method: 'GET', scope: 'organization', data: TrainingReportSchema }),
   archiveSession: defineApiEndpoint({ key: 'training.archive', method: 'POST', scope: 'organization', body: TrainingExpectedRevisionSchema, data: TrainingSessionSummarySchema }),

@@ -49,6 +49,12 @@ export const getTrainingRoster = (sessionId: string) =>
 export const saveTrainingRoster = (sessionId: string, body: EndpointBody<typeof TrainingContracts.replaceRoster>) =>
   apiClient.mutateContract(TrainingContracts.replaceRoster, `${sessionPath(sessionId)}/roster`, body)
 
+export const joinTrainingParticipantRuntime = (sessionId: string, body: EndpointBody<typeof TrainingContracts.joinParticipantRuntime>) =>
+  apiClient.mutateContract(TrainingContracts.joinParticipantRuntime, `${sessionPath(sessionId)}/runtime-participants`, body)
+
+export const leaveTrainingParticipantRuntime = (sessionId: string, participantId: string, body: EndpointBody<typeof TrainingContracts.leaveParticipantRuntime>) =>
+  apiClient.mutateContract(TrainingContracts.leaveParticipantRuntime, `${sessionPath(sessionId)}/runtime-participants/${encodeURIComponent(participantId)}/leave`, body)
+
 export const getTrainingCoachDashboard = (sessionId: string) =>
   apiClient.queryContract(TrainingContracts.getCoachDashboard, `${sessionPath(sessionId)}/coach-dashboard`)
 
@@ -63,6 +69,9 @@ export const changeTrainingStageGroup = (sessionId: string, stageId: string, bod
 
 export const extendTrainingStageTime = (sessionId: string, stageId: string, body: EndpointBody<typeof TrainingContracts.extendStageTime>) =>
   apiClient.mutateContract(TrainingContracts.extendStageTime, `${sessionPath(sessionId)}/stages/${encodeURIComponent(stageId)}/time-extensions`, body)
+
+export const appendTrainingRuntimeProblem = (sessionId: string, stageId: string, body: EndpointBody<typeof TrainingContracts.appendRuntimeProblem>) =>
+  apiClient.mutateContract(TrainingContracts.appendRuntimeProblem, `${sessionPath(sessionId)}/stages/${encodeURIComponent(stageId)}/runtime-problems`, body)
 
 export const getTrainingGroupSuggestions = (sessionId: string, stageId: string) =>
   apiClient.queryContract(TrainingContracts.getGroupSuggestions, `${sessionPath(sessionId)}/stages/${encodeURIComponent(stageId)}/group-suggestions`)

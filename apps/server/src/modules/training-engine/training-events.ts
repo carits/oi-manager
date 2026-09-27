@@ -13,6 +13,7 @@ export const TrainingEventTypes = {
   STAGE_TIME_EXTENDED: 'training.stage.time_extended',
   STAGE_CLONED: 'training.stage.cloned',
 
+  PROBLEM_APPENDED: 'training.problem.appended',
   PROBLEM_UNLOCKED: 'training.problem.unlocked',
   PROBLEM_SKIPPED: 'training.problem.skipped',
   PROBLEM_STUCK: 'training.problem.stuck',
@@ -23,6 +24,8 @@ export const TrainingEventTypes = {
   MESSAGE_SHOWN: 'training.message.shown',
 
   ROSTER_UPDATED: 'training.roster.updated',
+  PARTICIPANT_JOINED: 'training.participant.joined',
+  PARTICIPANT_LEFT: 'training.participant.left',
   OVERLAY_EXPIRED: 'training.overlay.expired',
 } as const
 

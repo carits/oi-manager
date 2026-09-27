@@ -12,6 +12,7 @@ import {
   assertTrainingSessionContextForUser,
   assertTrainingTemplateContextForUser,
   archiveTrainingSession,
+  appendTrainingRuntimeProblem,
   createTrainingSessionTemplate,
   createTrainingHint,
   deleteTrainingHint,
@@ -40,6 +41,8 @@ import {
   changeTrainingGrouping,
   getTrainingWorkspace,
   joinTrainingSession,
+  joinTrainingParticipantRuntime,
+  leaveTrainingParticipantRuntime,
   listAvailableHints,
   listTrainingEvents,
   listTrainingSessionTemplates,
@@ -193,6 +196,14 @@ trainingEngineRouter.get('/training-sessions/:id/roster', authenticate, asyncHan
   try { sendContractData(res, TrainingContracts.getRoster, await getTrainingRoster(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
 }))
 
+trainingEngineRouter.post('/training-sessions/:id/runtime-participants', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.joinParticipantRuntime, await joinTrainingParticipantRuntime(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.joinParticipantRuntime, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/runtime-participants/:participantId/leave', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { sendContractData(res, TrainingContracts.leaveParticipantRuntime, await leaveTrainingParticipantRuntime(req.user!.userId, req.params.id, req.params.participantId, parseContractBody(TrainingContracts.leaveParticipantRuntime, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
 trainingEngineRouter.get('/training-sessions/:id/grouping', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try { sendContractData(res, TrainingContracts.getGrouping, await getTrainingGrouping(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
 }))
@@ -289,6 +300,13 @@ trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/time-extension
   try {
     const body = parseContractBody(TrainingContracts.extendStageTime, req.body)
     sendContractData(res, TrainingContracts.extendStageTime, await extendTrainingStageTime(req.user!.userId, req.params.id, req.params.stageId, body))
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/stages/:stageId/runtime-problems', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.appendRuntimeProblem, req.body)
+    sendContractData(res, TrainingContracts.appendRuntimeProblem, await appendTrainingRuntimeProblem(req.user!.userId, req.params.id, req.params.stageId, body), 201)
   } catch (error) { return sendError(error, res) }
 }))
 

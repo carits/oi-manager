@@ -159,6 +159,7 @@ export function TrainingParticipantDrawer({
   onClearStuck,
   onMessage,
   onChangeGroup,
+  onLeave,
 }: {
   participant?: TrainingDashboardParticipant
   stageName?: string
@@ -172,6 +173,7 @@ export function TrainingParticipantDrawer({
   onClearStuck: () => void
   onMessage: () => void
   onChangeGroup: () => void
+  onLeave: () => void
 }) {
   const drawerRef = useRef<HTMLElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
@@ -227,6 +229,7 @@ export function TrainingParticipantDrawer({
           {stuck && <Button variant="outline" disabled={busy} onClick={onClearStuck}>清除卡题状态</Button>}
           <Button variant="outline" disabled={busy} onClick={onMessage}>发送消息</Button>
           <Button variant="outline" disabled={busy} onClick={onChangeGroup}>调整训练分组</Button>
+          <Button variant="danger" disabled={busy} onClick={onLeave}>记录中途退出</Button>
         </div>
         <p className={styles.participantDrawerNote}>课堂临时操作不会删除学员已有草稿、提交或训练记录。</p>
       </div>

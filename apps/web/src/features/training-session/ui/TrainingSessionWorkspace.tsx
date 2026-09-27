@@ -12,8 +12,10 @@ import { ConfirmDialog, DetailDialog, FormDialog } from '@/components/ui/Dialogs
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
+import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
 import { persistSubmissionDraft, SubmissionCodeEditor, SubmissionIoFields, type SubmissionIoValue } from '@/features/submission'
 import {
+  appendTrainingRuntimeProblem,
   changeTrainingStageGroup,
   extendTrainingStageTime,
   getTrainingCoachDashboard,
@@ -23,6 +25,8 @@ import {
   getTrainingRoster,
   getTrainingWorkspace,
   createTrainingHint,
+  joinTrainingParticipantRuntime,
+  leaveTrainingParticipantRuntime,
   executeTrainingCommand,
   listTrainingHints,
   openTrainingHint,
@@ -101,6 +105,8 @@ function StageTimeMetrics({ activeElapsedSeconds, runningSince, plannedDurationS
     timeline: Array<{ id: string; name: string; orderIndex: number; kind: string; lifecycle: string; plannedDurationSeconds?: number | null; actualDurationSeconds: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null; plans: Array<{ id: string; groupId?: string | null; groupName?: string | null; isDefault: boolean; inheritsDefault: boolean; problemIds: string[] }>; timeAdjustments: Array<{ id: string; seconds: number; reason: string }> }>
     participants: Array<{ id: string; user: { id: string; username: string }; group: { id: string; name: string }; activeSeconds: number; progress: Array<{ stageProblemId: string; status: string; bestScore?: number | null; attemptCount?: number }> }>
     groupChanges: Array<{ id: string; participantId: string; fromGroupId?: string | null; toGroupId: string; reason: string; changedBy: string; createdAt: string }>
+    rosterEvents: Array<{ id: string; type: string; targetId?: string | null; payload?: { reason?: string; historyMode?: string; groupId?: string }; createdAt: string }>
+    runtimeProblems: Array<{ id: string; targetType: string; targetId?: string | null; stageProblemId?: string | null; payload?: { reason?: string; required?: boolean; targetScore?: number; platform?: string; problemCode?: string; title?: string }; createdAt: string }>
   }
 
 export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
@@ -118,6 +124,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [commandBusy, setCommandBusy] = useState(false), [rosterSaving, setRosterSaving] = useState(false)
   const [studentQuery, setStudentQuery] = useState(''), [studentFilter, setStudentFilter] = useState('all'), [studentGroupFilter, setStudentGroupFilter] = useState('all')
   const [roster, setRoster] = useState<Roster>(), [rosterOpen, setRosterOpen] = useState(false)
+  const [joinOpen, setJoinOpen] = useState(false), [joinUserId, setJoinUserId] = useState(''), [joinGroupId, setJoinGroupId] = useState(''), [joinHistoryMode, setJoinHistoryMode] = useState<'absent' | 'makeup'>('absent'), [joinReason, setJoinReason] = useState('')
+  const [leaveParticipant, setLeaveParticipant] = useState<Dashboard['participants'][number]>(), [leaveReason, setLeaveReason] = useState('')
   const [hints, setHints] = useState<Hint[]>([]), [hintOpen, setHintOpen] = useState(false), [hintTitle, setHintTitle] = useState(''), [hintContent, setHintContent] = useState(''), [hintLevel, setHintLevel] = useState(1), [openedHint, setOpenedHint] = useState<Hint>()
   const [hintMode, setHintMode] = useState('MANUAL'), [hintTrigger, setHintTrigger] = useState('')
   const [commandTargetType, setCommandTargetType] = useState('ALL'), [commandTargetId, setCommandTargetId] = useState('')
@@ -129,6 +137,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>()
   const [transitionDialog, setTransitionDialog] = useState<{ action: 'advance' | 'skip_pending' | 'end_session'; stageId: string; outcome?: 'completed' | 'ended_early' }>(), [transitionReason, setTransitionReason] = useState('')
   const [extensionOpen, setExtensionOpen] = useState(false), [extensionMinutes, setExtensionMinutes] = useState(10), [extensionReason, setExtensionReason] = useState('')
+  const [runtimeProblemOpen, setRuntimeProblemOpen] = useState(false), [runtimeProblems, setRuntimeProblems] = useState<SelectedCanonicalProblem[]>([]), [runtimeProblemTargetType, setRuntimeProblemTargetType] = useState<'ALL' | 'GROUP' | 'USER'>('ALL'), [runtimeProblemTargetId, setRuntimeProblemTargetId] = useState(''), [runtimeProblemRequired, setRuntimeProblemRequired] = useState(true), [runtimeProblemTargetScore, setRuntimeProblemTargetScore] = useState(100), [runtimeProblemReason, setRuntimeProblemReason] = useState('')
   const [report, setReport] = useState<TrainingReport>(), [reportOpen, setReportOpen] = useState(false)
   const cursor = useRef(0), saveDraftRef = useRef<(quiet?: boolean) => Promise<number | false>>(async () => false)
   const draftRevisionRef = useRef<Record<string, number | undefined>>({})
@@ -480,6 +489,48 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     }
   }
   const openRoster = async () => { const response = await getTrainingRoster(sessionId).catch(() => null); if (!response) return toast.error('学员名单加载失败'); setRoster(response as Roster); setRosterOpen(true) }
+  const openRuntimeJoin = async () => {
+    const response = await getTrainingRoster(sessionId).catch(() => null)
+    if (!response) return toast.error('可加入学员加载失败')
+    const nextRoster = response as Roster
+    setRoster(nextRoster)
+    setJoinUserId('')
+    setJoinGroupId(data?.session.Groups.find(group => group.status === 'active')?.id || '')
+    setJoinHistoryMode('absent')
+    setJoinReason('')
+    setJoinOpen(true)
+  }
+  const submitRuntimeJoin = async () => {
+    if (!data || !joinUserId || !joinGroupId || !joinReason.trim()) return
+    setRosterSaving(true)
+    const response = await joinTrainingParticipantRuntime(sessionId, {
+      expectedRevision: statusRevisionRef.current ?? data.session.statusRevision,
+      userId: joinUserId,
+      groupId: joinGroupId,
+      historyMode: joinHistoryMode,
+      reason: joinReason.trim(),
+    })
+    setRosterSaving(false)
+    if (!response.ok) return toast.error(response.error.message || '加入训练失败')
+    toast.success('学员已加入当前阶段；历史阶段处理方式已记录')
+    setJoinOpen(false)
+    await load()
+  }
+  const submitRuntimeLeave = async () => {
+    if (!data || !leaveParticipant || !leaveReason.trim()) return
+    setRosterSaving(true)
+    const response = await leaveTrainingParticipantRuntime(sessionId, leaveParticipant.id, {
+      expectedRevision: statusRevisionRef.current ?? data.session.statusRevision,
+      reason: leaveReason.trim(),
+    })
+    setRosterSaving(false)
+    if (!response.ok) return toast.error(response.error.message || '退出训练失败')
+    toast.success('已记录中途退出；该学员的提交和进度仍然保留')
+    setLeaveParticipant(undefined)
+    setLeaveReason('')
+    setSelectedParticipantId(undefined)
+    await load()
+  }
   const saveRosterChanges = async () => { if (!roster) return; setRosterSaving(true); const response = await saveTrainingRoster(sessionId, { expectedRevision: roster.revision, participants: roster.candidates.filter(item => item.selected).map(item => ({ userId: item.userId })) }); setRosterSaving(false); if (!response.ok) return toast.error(response.error.message || '学员名单保存失败'); setRosterOpen(false); await load() }
   const createHint = async () => {
     if (!selectedId) return
@@ -547,6 +598,44 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setMergeSourceGroupId(''); setMergeTargetGroupId(''); setMergeReason('')
     await load()
   }
+  const submitRuntimeProblems = async () => {
+    if (!data || !currentStage || !runtimeProblems.length || !runtimeProblemReason.trim()) return
+    if (runtimeProblemTargetType !== 'ALL' && !runtimeProblemTargetId) return toast.error('请选择临时加题对象')
+    setCommandBusy(true)
+    let expectedRevision = statusRevisionRef.current ?? data.session.statusRevision
+    for (const selected of runtimeProblems) {
+      const target = runtimeProblemTargetType === 'ALL'
+        ? { targetType: 'ALL' as const }
+        : runtimeProblemTargetType === 'GROUP'
+          ? { targetType: 'GROUP' as const, targetId: runtimeProblemTargetId }
+          : { targetType: 'USER' as const, targetId: runtimeProblemTargetId }
+      const response = await appendTrainingRuntimeProblem(sessionId, currentStage.id, {
+        expectedRevision,
+        ...target,
+        problemId: selected.id,
+        required: runtimeProblemRequired,
+        targetScore: runtimeProblemTargetScore,
+        reason: runtimeProblemReason.trim(),
+      })
+      if (!response.ok) {
+        setCommandBusy(false)
+        toast.error(response.error.message || '追加训练题失败')
+        await load()
+        return
+      }
+      expectedRevision = response.data.session.statusRevision
+    }
+    setCommandBusy(false)
+    toast.success('临时训练题已追加，原始阶段快照保持不变')
+    setRuntimeProblemOpen(false)
+    setRuntimeProblems([])
+    setRuntimeProblemTargetType('ALL')
+    setRuntimeProblemTargetId('')
+    setRuntimeProblemRequired(true)
+    setRuntimeProblemTargetScore(100)
+    setRuntimeProblemReason('')
+    await load()
+  }
   const submitTransition = async () => {
     if (!transitionDialog) return
     const requiresReason = transitionDialog.action === 'skip_pending' || transitionDialog.outcome === 'ended_early'
@@ -579,6 +668,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const groupTargetStage = groupChangeMode === 'next_stage' ? futureStages.find(stage => stage.id === groupChangeStageId) : currentStage
   const reportGroupName = (groupId?: string) => data.session.Groups.find(group => group.id === groupId)?.name || (groupId ? groupId : '未分组')
   const reportParticipantName = (participantId: string) => dashboard?.participants.find(item => item.id === participantId)?.user.username || participantId
+  const reportUserName = (userId?: string | null) => report?.participants.find(item => item.user.id === userId)?.user.username || userId || '未知学员'
   const targetedCommandDisabled = commandBusy || ((commandTargetType === 'GROUP' || commandTargetType === 'USER') && !commandTargetId) || (commandTargetType === 'TEAM' && !data.session.teamId)
   const runningExtraSeconds = currentStage?.runningSince && status === 'RUNNING' ? Math.max(0, Math.floor((Date.now() - new Date(currentStage.runningSince).getTime()) / 1000)) : 0
   const currentStageElapsed = (currentStage?.activeElapsedSeconds || 0) + runningExtraSeconds
@@ -702,7 +792,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
             <div className={styles.actions}>
               {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
               {status === 'RUNNING' && <><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>暂停提交（可继续编辑）</Button><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>暂停提交与编辑</Button></>}
-              {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => setMessageOpen(true)}>发送消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
+              {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setRuntimeProblemOpen(true); setRuntimeProblems([]); setRuntimeProblemTargetType('ALL'); setRuntimeProblemTargetId(''); setRuntimeProblemRequired(true); setRuntimeProblemTargetScore(100); setRuntimeProblemReason('') }}>追加训练题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => setMessageOpen(true)}>发送消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
             </div>
           </div>
         </details>
@@ -711,7 +801,9 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           <div className={styles.actions}>
             {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
             {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(`${pathname}/design?copyStage=${encodeURIComponent(currentStage.id)}`)}>复制当前阶段为未来阶段</Button>}
-            <Button variant="secondary" onClick={() => void openRoster()}>管理学员</Button>
+            {['DRAFT', 'SCHEDULED'].includes(status)
+              ? <Button variant="secondary" onClick={() => void openRoster()}>管理发布名单</Button>
+              : ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => void openRuntimeJoin()}>加入学员</Button>}
             <Button variant="secondary" onClick={() => void showReport()}>训练报告</Button>
             <Button variant="ghost" onClick={() => void load()}>刷新</Button>
           </div>
@@ -849,7 +941,44 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         openGroupChange(selectedParticipant)
         setSelectedParticipantId(undefined)
       }}
+      onLeave={() => {
+        if (!selectedParticipant) return
+        setLeaveParticipant(selectedParticipant)
+        setLeaveReason('')
+      }}
     />
+    <FormDialog
+      isOpen={joinOpen}
+      onClose={() => setJoinOpen(false)}
+      title="中途加入训练"
+      description="运行中的加入是课堂事件，不会改写发布前名单；加入后从当前全局阶段开始。"
+      onSubmit={() => void submitRuntimeJoin()}
+      submitText="确认加入"
+      loading={rosterSaving}
+      dirty={Boolean(joinUserId || joinReason)}
+    >
+      <div className={styles.stack}>
+        <label className={styles.field}>学员<Select value={joinUserId} onChange={event => setJoinUserId(event.target.value)}><option value="">请选择尚未参加的学员</option>{roster?.candidates.filter(item => !item.selected).map(item => <option key={item.userId} value={item.userId}>{item.displayName}（{item.username}）</option>)}</Select></label>
+        <label className={styles.field}>加入分组<Select value={joinGroupId} onChange={event => setJoinGroupId(event.target.value)}>{data.session.Groups.filter(group => group.status === 'active').map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>
+        <label className={styles.field}>历史阶段处理<Select value={joinHistoryMode} onChange={event => setJoinHistoryMode(event.target.value as 'absent' | 'makeup')}><option value="absent">标记为未参加，不要求补做</option><option value="makeup">保留补做要求记录</option></Select></label>
+        <label className={styles.field}>加入原因<Textarea rows={4} maxLength={2000} value={joinReason} onChange={event => setJoinReason(event.target.value)} /></label>
+      </div>
+    </FormDialog>
+    <FormDialog
+      isOpen={Boolean(leaveParticipant)}
+      onClose={() => { setLeaveParticipant(undefined); setLeaveReason('') }}
+      title="记录中途退出"
+      description="退出后不再参与当前训练；已有草稿、提交、成绩和报告记录全部保留。"
+      onSubmit={() => void submitRuntimeLeave()}
+      submitText="确认退出"
+      loading={rosterSaving}
+      dirty={Boolean(leaveReason)}
+    >
+      <div className={styles.stack}>
+        <p>学员：<strong>{leaveParticipant?.user.username}</strong></p>
+        <label className={styles.field}>退出原因<Textarea rows={5} maxLength={2000} value={leaveReason} onChange={event => setLeaveReason(event.target.value)} /></label>
+      </div>
+    </FormDialog>
     <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理训练学员" description="这里决定谁参加训练；不同阶段的分组方案在训练设计中配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
     <FormDialog
       isOpen={Boolean(splitSourceGroupId)}
@@ -938,6 +1067,32 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         </label>
       </div>
     </FormDialog>
+    <FormDialog
+      isOpen={runtimeProblemOpen}
+      onClose={() => setRuntimeProblemOpen(false)}
+      title="追加训练题"
+      description="临时题只影响当前全局阶段和指定对象，不修改阶段启动时的不可变设计快照，并会写入训练报告。"
+      onSubmit={() => void submitRuntimeProblems()}
+      submitText="确认追加"
+      loading={commandBusy}
+      dirty={Boolean(runtimeProblems.length || runtimeProblemReason)}
+      size="lg"
+    >
+      <div className={styles.stack}>
+        <label className={styles.field}>目标对象<Select value={runtimeProblemTargetType} onChange={event => { setRuntimeProblemTargetType(event.target.value as 'ALL' | 'GROUP' | 'USER'); setRuntimeProblemTargetId('') }}><option value="ALL">全体学员</option><option value="GROUP">指定分组</option><option value="USER">指定学员</option></Select></label>
+        {runtimeProblemTargetType === 'GROUP' && <label className={styles.field}>目标分组<Select value={runtimeProblemTargetId} onChange={event => setRuntimeProblemTargetId(event.target.value)}><option value="">请选择</option>{data.session.Groups.filter(group => group.status === 'active').map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>}
+        {runtimeProblemTargetType === 'USER' && <label className={styles.field}>目标学员<Select value={runtimeProblemTargetId} onChange={event => setRuntimeProblemTargetId(event.target.value)}><option value="">请选择</option>{dashboard?.participants.map(item => <option key={item.user.id} value={item.user.id}>{item.user.username}</option>)}</Select></label>}
+        <QuickProblemInput
+          existingProblemIds={runtimeProblems.map(item => item.id)}
+          onResolved={problems => setRuntimeProblems(current => [...current, ...problems])}
+          label="按平台和题号追加"
+        />
+        {runtimeProblems.length > 0 && <div className={styles.timeline}>{runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><div><strong>{item.platform} · {item.problemCode}</strong><br /><span>{item.title}</span></div><Button size="sm" variant="ghost" onClick={() => setRuntimeProblems(current => current.filter(problem => problem.id !== item.id))}>移除</Button></div>)}</div>}
+        <Checkbox label="作为必做题" description="取消后作为选做题，不计入当前完成要求。" checked={runtimeProblemRequired} onChange={event => setRuntimeProblemRequired(event.target.checked)} />
+        <label className={styles.field}>目标分<Input type="number" min={0} max={100} value={runtimeProblemTargetScore} onChange={event => setRuntimeProblemTargetScore(Math.max(0, Math.min(100, Number(event.target.value) || 0)))} /></label>
+        <label className={styles.field}>加题原因<Textarea rows={4} maxLength={2000} value={runtimeProblemReason} onChange={event => setRuntimeProblemReason(event.target.value)} /></label>
+      </div>
+    </FormDialog>
     <FormDialog isOpen={extensionOpen} onClose={() => setExtensionOpen(false)} title="延长当前阶段" description="延时作为运行记录追加，不会覆盖原计划时长。" onSubmit={() => void extendCurrentStage()} submitText="确认延长" loading={commandBusy} dirty={Boolean(extensionReason)}><div className={styles.stack}><label className={styles.field}>延长分钟数<Input type="number" min={1} max={1440} value={extensionMinutes} onChange={event => setExtensionMinutes(Number(event.target.value))} /></label><label className={styles.field}>原因<Textarea rows={4} maxLength={2000} value={extensionReason} onChange={event => setExtensionReason(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={messageOpen} onClose={() => setMessageOpen(false)} title="发送教练消息" description={`发送给：${commandTargetType === 'ALL' ? '全体学员' : commandTargetType === 'GROUP' ? '指定分组' : commandTargetType === 'USER' ? '指定学员' : '当前团队'}`} onSubmit={() => void command('SHOW_MESSAGE', { message, messageType }).then(success => { if (success) { setMessageOpen(false); setMessage('') } })} submitText="发送消息" dirty={Boolean(message)}><div className={styles.stack}><label className={styles.field}>消息类型<Select value={messageType} onChange={event => setMessageType(event.target.value)}><option value="INFO">信息</option><option value="WARNING">提醒</option><option value="INSTRUCTION">教学指令</option><option value="COUNTDOWN">倒计时</option></Select></label><label className={styles.field}>消息内容<Textarea rows={6} maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={hintOpen} onClose={() => setHintOpen(false)} title="新增分级提示" onSubmit={() => void createHint()} submitText="创建提示" dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>{hintMode === 'TIME' ? '触发秒数' : hintMode === 'ATTEMPT' ? '触发提交次数' : '触发分数'}<Input type="number" min={hintMode === 'TIME' ? 60 : hintMode === 'SCORE' ? 0 : 1} max={hintMode === 'TIME' ? 86400 : 100} value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>
@@ -947,6 +1102,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {report && <div className={styles.actions}><Button variant="secondary" onClick={exportReportCsv}>导出学员明细 CSV</Button><Button variant="ghost" onClick={exportReportJson}>导出完整 JSON</Button></div>}
         {report && <Section title="训练汇总"><div className={styles.summary}><div className={styles.metric}><strong>{report.timeline.length}</strong>阶段</div><div className={styles.metric}><strong>{report.participants.length}</strong>学员</div><div className={styles.metric}><strong>{report.groupChanges.length}</strong>换组记录</div></div></Section>}
         {report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.orderIndex + 1}. {stage.name}</h3><p>状态：{trainingStageStatusLabel(stage.lifecycle)} · 计划 {formatDuration(stage.plannedDurationSeconds)} · 实际 {formatDuration(stage.actualDurationSeconds)}{stage.endReason ? ' · ' + trainingStageEndReasonLabel(stage.endReason) : ''}</p><div className={styles.timeline}>{stage.plans.map(plan => <div className={styles.timelineItem} key={plan.id}><strong>{plan.groupName || '全班默认'}{plan.isDefault ? ' · 默认计划' : plan.inheritsDefault ? ' · 继承默认' : ' · 独立覆盖'}</strong><br /><span>{plan.problemIds.length} 题</span></div>)}</div>{stage.timeAdjustments.length > 0 && <small>延时记录：{stage.timeAdjustments.map(item => formatDuration(item.seconds) + '（' + item.reason + '）').join('；')}</small>}</article>)}
+        {Boolean(report?.runtimeProblems.length) && <Section title="临时追加题目"><div className={styles.timeline}>{report?.runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><strong>{item.payload?.platform || '题库'} · {item.payload?.problemCode || item.stageProblemId} · {item.payload?.title || '训练题'}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? '指定分组' : '指定学员'} · {item.payload?.required === false ? '选做' : '必做'} · 目标 {item.payload?.targetScore ?? 100} 分 · {item.payload?.reason || '未记录原因'}</span></div>)}</div></Section>}
+        {Boolean(report?.rosterEvents.length) && <Section title="中途加入与退出"><div className={styles.timeline}>{report?.rosterEvents.map(event => <div className={styles.timelineItem} key={event.id}><strong>{event.type.endsWith('.joined') ? '加入训练' : '退出训练'} · {reportUserName(event.targetId)}</strong><br /><span>{event.payload?.reason || '未记录原因'} · {new Date(event.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         {Boolean(report?.groupChanges.length) && <Section title="换组时间线"><div className={styles.timeline}>{report?.groupChanges.map(change => <div className={styles.timelineItem} key={change.id}><strong>{reportParticipantName(change.participantId)}</strong><br /><span>{reportGroupName(change.fromGroupId || undefined)} → {reportGroupName(change.toGroupId)} · {change.reason} · {new Date(change.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         <div className={styles.grid}>{report?.participants.map(item => <article className={styles.card} key={item.user.id}><h3>{item.user.username}</h3><p>{item.group.name} · 有效训练 {formatDuration(item.activeSeconds)}</p><p>{item.progress.length} 条题目进度</p></article>)}</div>
       </div>

@@ -1493,6 +1493,71 @@ export async function extendTrainingStageTime(userId: string, sessionId: string,
   return getTrainingWorkspace(userId, sessionId)
 }
 
+export async function appendTrainingRuntimeProblem(userId: string, sessionId: string, stageId: string, body: any) {
+  const session = await assertManage(userId, sessionId)
+  if (!['RUNNING', 'PAUSED'].includes(session.status) || session.currentStageId !== stageId) throw new TrainingEngineError(409, 'TRAINING_RUNTIME_PROBLEM_STAGE_INVALID', '只能向全局当前阶段追加训练题')
+  const expectedRevision = Number(body?.expectedRevision)
+  const targetType = String(body?.targetType || 'ALL').toUpperCase()
+  const targetId = targetType === 'ALL' ? null : String(body?.targetId || '')
+  const required = body?.required !== false
+  const targetScore = boundedInteger(body?.targetScore, 0, 100, '目标分数', false)!
+  const reason = boundedText(body?.reason, 2000, '加题原因', 1)
+  if (!['ALL', 'GROUP', 'USER'].includes(targetType)) throw new TrainingEngineError(422, 'TRAINING_RUNTIME_PROBLEM_TARGET_INVALID', '临时加题对象不受支持')
+  if (targetType !== 'ALL' && !targetId) throw new TrainingEngineError(422, 'TRAINING_RUNTIME_PROBLEM_TARGET_REQUIRED', '请选择临时加题对象')
+  const [hydrated] = await hydrateStages([{
+    name: '运行时追加题',
+    kind: 'TRAINING',
+    accessPolicy: 'ALL_AT_ONCE',
+    submissionMode: 'ENABLED',
+    endPolicy: 'MANUAL',
+    problems: [{ problemId: String(body?.problemId || ''), targetScore }],
+  }], await problemAccessContext(userId, session.organizationId, session.teamId))
+  const source = hydrated?.stageProblems?.[0]
+  if (!source) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_REQUIRED', '请选择需要追加的训练题')
+  await prisma.$transaction(async tx => {
+    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS locked', 'training-session:' + sessionId)
+    const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId } })
+    if (current.statusRevision !== expectedRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+    if (!['RUNNING', 'PAUSED'].includes(current.status) || current.currentStageId !== stageId) throw new TrainingEngineError(409, 'TRAINING_RUNTIME_PROBLEM_STAGE_INVALID', '当前阶段已变化，无法追加题目')
+    if (targetType === 'GROUP' && !await tx.trainingSessionGroup.findFirst({ where: { id: targetId!, sessionId, status: 'active' } })) throw new TrainingEngineError(404, 'TRAINING_GROUP_NOT_FOUND', '目标分组不存在')
+    if (targetType === 'USER' && !await tx.trainingSessionParticipant.findFirst({ where: { sessionId, userId: targetId!, status: 'active' } })) throw new TrainingEngineError(404, 'TRAINING_PARTICIPANT_NOT_FOUND', '目标学员不在当前训练中')
+
+    let stageProblem = await tx.trainingSessionStageProblem.findUnique({ where: { stageId_problemId: { stageId, problemId: source.problem.id } } })
+    if (!stageProblem) {
+      const maximum = await tx.trainingSessionStageProblem.aggregate({ where: { stageId }, _max: { orderIndex: true } })
+      stageProblem = await tx.trainingSessionStageProblem.create({ data: {
+        stageId,
+        problemId: source.problem.id,
+        testSetRevisionId: source.revision.id,
+        alias: null,
+        orderIndex: (maximum._max.orderIndex ?? -1) + 1,
+        titleSnapshot: source.problem.title,
+        statementsSnapshot: asJson(source.problem.ProblemStatement.map((statement: any) => ({
+          type: statement.type,
+          format: statement.format,
+          language: statement.language,
+          content: statement.content,
+          fileUrl: statement.fileUrl,
+        }))),
+      } })
+    }
+    const duplicate = await tx.trainingSessionOverlay.findFirst({ where: { sessionId, type: 'RUNTIME_PROBLEM', status: 'active', stageProblemId: stageProblem.id, targetType: targetType as any, targetId } })
+    if (duplicate) throw new TrainingEngineError(409, 'TRAINING_RUNTIME_PROBLEM_DUPLICATE', '该对象已经追加了这道训练题')
+    const overlay = await tx.trainingSessionOverlay.create({ data: {
+      sessionId,
+      type: 'RUNTIME_PROBLEM',
+      targetType: targetType as any,
+      targetId,
+      stageProblemId: stageProblem.id,
+      payload: asJson({ required, targetScore, reason, runtime: true, problemId: source.problem.id, problemCode: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot, testSetRevisionId: stageProblem.testSetRevisionId }),
+      createdBy: userId,
+    } })
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+    await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_APPENDED, targetType as TrainingEngineTargetType, targetId, { overlayId: overlay.id, stageId, stageProblemId: stageProblem.id, problemId: source.problem.id, problemCode: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot, testSetRevisionId: stageProblem.testSetRevisionId, required, targetScore, reason })
+  })
+  return getTrainingWorkspace(userId, sessionId)
+}
+
 export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const session = await loadSession(sessionId)
   if (!session) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
@@ -1519,7 +1584,9 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
     const effectiveProblemPlan = (problemId: string) => {
       const override = overridePlan?.ProblemPlans.find((plan: any) => plan.stageProblemId === problemId)
       const fallback = defaultPlan?.ProblemPlans.find((plan: any) => plan.stageProblemId === problemId)
-      return override || (overridePlan?.inheritsDefault === false ? null : fallback)
+      const planned = override || (overridePlan?.inheritsDefault === false ? null : fallback)
+      const runtime = [...visibleOverlays].reverse().find((item: any) => item.type === 'RUNTIME_PROBLEM' && item.stageProblemId === problemId)
+      return planned || (runtime ? parseJsonObject(runtime.payload) : null)
     }
     return {
       ...stage,
@@ -1545,6 +1612,7 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
 
 export async function replaceTrainingRoster(userId: string, sessionId: string, body: any) {
   const session = await assertManage(userId, sessionId)
+  if (!['DRAFT', 'SCHEDULED'].includes(session.status)) throw new TrainingEngineError(409, 'TRAINING_ROSTER_DEFINITION_FROZEN', '训练开始后请使用“加入训练”或“退出训练”记录运行时变更')
   const expectedRevision = Number(body?.expectedRevision)
   if (expectedRevision !== session.statusRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练名单已变化，请刷新')
   const participants = Array.isArray(body?.participants) ? body.participants : []
@@ -1567,6 +1635,70 @@ export async function replaceTrainingRoster(userId: string, sessionId: string, b
     await ensureV2MatrixCompleteness(tx, sessionId)
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, settings: asJson({ ...parseJsonObject(session.settings), rosterExplicit: true }) } })
     await appendEvent(tx, sessionId, TrainingEventTypes.ROSTER_UPDATED, 'ALL', null, { participantCount: userIds.length })
+  })
+  return getTrainingWorkspace(userId, sessionId)
+}
+
+export async function joinTrainingParticipantRuntime(userId: string, sessionId: string, body: any) {
+  const session = await assertManage(userId, sessionId)
+  if (!['RUNNING', 'PAUSED'].includes(session.status)) throw new TrainingEngineError(409, 'TRAINING_RUNTIME_ROSTER_UNAVAILABLE', '只有进行中或暂停中的训练可以记录中途加入')
+  const expectedRevision = Number(body?.expectedRevision)
+  const participantUserId = String(body?.userId || '')
+  const groupId = String(body?.groupId || '')
+  const historyMode = String(body?.historyMode || 'absent')
+  const reason = boundedText(body?.reason, 2000, '加入原因', 1)
+  if (!['absent', 'makeup'].includes(historyMode)) throw new TrainingEngineError(422, 'TRAINING_JOIN_HISTORY_MODE_INVALID', '历史阶段处理方式不受支持')
+  const eligible = new Set(await eligibleTrainingParticipantIds(session))
+  if (!eligible.has(participantUserId)) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_OUT_OF_SCOPE', '学员不属于当前学校或团队')
+  await prisma.$transaction(async tx => {
+    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS locked', 'training-session:' + sessionId)
+    const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId } })
+    if (current.statusRevision !== expectedRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+    if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'TRAINING_RUNTIME_ROSTER_UNAVAILABLE', '训练状态已变化，无法加入学员')
+    const group = await tx.trainingSessionGroup.findFirst({ where: { id: groupId, sessionId, status: 'active' } })
+    if (!group) throw new TrainingEngineError(404, 'TRAINING_GROUP_NOT_FOUND', '目标分组不存在')
+    const existing = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: participantUserId } } })
+    if (existing?.status === 'active') throw new TrainingEngineError(409, 'TRAINING_PARTICIPANT_ALREADY_ACTIVE', '学员已经在当前训练中')
+    const joinedAt = new Date()
+    const participant = await tx.trainingSessionParticipant.upsert({
+      where: { sessionId_userId: { sessionId, userId: participantUserId } },
+      update: { status: 'active', groupId, currentProblemId: null, returnProblemId: null, joinedAt },
+      create: { sessionId, userId: participantUserId, groupId, joinedAt },
+    })
+    if (historyMode === 'absent' && current.currentStageId) {
+      const activeStage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId }, select: { orderIndex: true } })
+      if (activeStage) {
+        const historicalProblems = await tx.trainingSessionStageProblem.findMany({
+          where: { Stage: { sessionId, orderIndex: { lt: activeStage.orderIndex } } },
+          select: { id: true },
+        })
+        if (historicalProblems.length) await tx.trainingSessionProblemProgress.createMany({
+          data: historicalProblems.map(problem => ({ participantId: participant.id, stageProblemId: problem.id, status: 'SKIPPED' as const, lastProgressAt: joinedAt })),
+          skipDuplicates: true,
+        })
+      }
+    }
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 } } })
+    await appendEvent(tx, sessionId, TrainingEventTypes.PARTICIPANT_JOINED, 'USER', participantUserId, { groupId, historyMode, reason, joinedBy: userId })
+  })
+  return getTrainingWorkspace(userId, sessionId)
+}
+
+export async function leaveTrainingParticipantRuntime(userId: string, sessionId: string, participantId: string, body: any) {
+  const session = await assertManage(userId, sessionId)
+  if (!['RUNNING', 'PAUSED'].includes(session.status)) throw new TrainingEngineError(409, 'TRAINING_RUNTIME_ROSTER_UNAVAILABLE', '只有进行中或暂停中的训练可以记录中途退出')
+  const expectedRevision = Number(body?.expectedRevision)
+  const reason = boundedText(body?.reason, 2000, '退出原因', 1)
+  await prisma.$transaction(async tx => {
+    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS locked', 'training-session:' + sessionId)
+    const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId } })
+    if (current.statusRevision !== expectedRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+    if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'TRAINING_RUNTIME_ROSTER_UNAVAILABLE', '训练状态已变化，无法退出学员')
+    const participant = await tx.trainingSessionParticipant.findFirst({ where: { id: participantId, sessionId, status: 'active' } })
+    if (!participant) throw new TrainingEngineError(404, 'TRAINING_PARTICIPANT_NOT_FOUND', '活动学员不存在')
+    await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: { status: 'left', currentProblemId: null, returnProblemId: null } })
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 } } })
+    await appendEvent(tx, sessionId, TrainingEventTypes.PARTICIPANT_LEFT, 'USER', participant.userId, { participantId: participant.id, groupId: participant.groupId, reason, leftBy: userId })
   })
   return getTrainingWorkspace(userId, sessionId)
 }
@@ -2194,11 +2326,28 @@ export async function getTrainingReport(userId: string, sessionId: string) {
     timeAdjustments: stage.TimeAdjustments,
   }))
   const groupChanges = await prisma.trainingSessionGroupChange.findMany({ where: { sessionId, ...(manager ? {} : { participantId: { in: participants.map(item => item.id) } }) }, orderBy: { createdAt: 'asc' } })
+  const reportParticipant = participants[0]
+  const runtimeProblems = session.Overlays.filter(overlay => overlay.type === 'RUNTIME_PROBLEM' && (manager || Boolean(reportParticipant && targetApplies(
+    overlay.targetType,
+    overlay.targetId,
+    { id: reportParticipant.id, userId: reportParticipant.userId, currentGroupId: reportParticipant.groupId },
+    session,
+  ))))
+  const rosterEvents = await prisma.trainingSessionEvent.findMany({
+    where: {
+      sessionId,
+      type: { in: [TrainingEventTypes.PARTICIPANT_JOINED, TrainingEventTypes.PARTICIPANT_LEFT] },
+      ...(manager ? {} : { targetType: 'USER', targetId: userId }),
+    },
+    orderBy: { createdAt: 'asc' },
+  })
   return {
     session: { id: session.id, title: session.title, status: session.status, startedAt: session.startedAt, endedAt: session.endedAt },
     timeline,
-    participants: participants.map(participant => ({ id: participant.id, user: participant.User, group: participant.Group, activeSeconds: participant.activeSeconds, progress: participant.Progress, scoreEvents: participant.ScoreEvents })),
+    participants: participants.map(participant => ({ id: participant.id, user: participant.User, group: participant.Group, status: participant.status, joinedAt: participant.joinedAt, activeSeconds: participant.activeSeconds, progress: participant.Progress, scoreEvents: participant.ScoreEvents })),
     groupChanges,
+    rosterEvents,
+    runtimeProblems,
   }
 }
 
@@ -2231,8 +2380,21 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     const overrideGroupPlan = participant.groupId ? stageProblem.Stage.Groups.find(item => item.groupId === participant.groupId) : null
     const defaultProblemPlan = defaultGroupPlan ? stageProblem.Plans.find(item => item.stageGroupId === defaultGroupPlan.id) : undefined
     const overrideProblemPlan = overrideGroupPlan ? stageProblem.Plans.find(item => item.stageGroupId === overrideGroupPlan.id) : undefined
-    const plan = overrideProblemPlan || (overrideGroupPlan?.inheritsDefault === false ? undefined : defaultProblemPlan)
-    const effectiveRule = resolveEffectiveTrainingRule({ stage: stageProblem.Stage, group: overrideGroupPlan || defaultGroupPlan || null, plan })
+    const plannedProblem = overrideProblemPlan || (overrideGroupPlan?.inheritsDefault === false ? undefined : defaultProblemPlan)
+    const runtimeProblem = !plannedProblem ? await tx.trainingSessionOverlay.findFirst({ where: {
+      sessionId: submission.trainingSessionId!,
+      stageProblemId: submission.trainingStageProblemId!,
+      type: 'RUNTIME_PROBLEM',
+      status: 'active',
+      OR: [
+        { targetType: 'ALL' },
+        { targetType: 'USER', targetId: submission.userId },
+        { targetType: 'GROUP', targetId: participant.groupId },
+      ],
+    }, orderBy: { startedAt: 'desc' } }) : null
+    const runtimeRule = runtimeProblem ? parseJsonObject(runtimeProblem.payload) : undefined
+    const plan = plannedProblem || runtimeRule
+    const effectiveRule = resolveEffectiveTrainingRule({ stage: stageProblem.Stage, group: overrideGroupPlan || defaultGroupPlan || null, plan, runtimeOverride: runtimeRule ? { ...runtimeRule, problemAccessPolicy: 'ALL_AT_ONCE' } : undefined })
     const completionScore = effectiveRule.scorePolicy.completionScore
     const completed = accepted || bestScore >= completionScore
     const nextStatus = completed ? 'COMPLETED' : existing?.status === 'STUCK' && !improved ? 'STUCK' : 'WORKING'

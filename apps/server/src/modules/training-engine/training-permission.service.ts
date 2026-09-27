@@ -70,6 +70,7 @@ export type PermissionSession = {
     targetId: string | null
     type: string
     stageProblemId?: string | null
+    payload?: unknown
   }>
 }
 
@@ -168,6 +169,7 @@ export function resolveTrainingPermissionLoaded(
   const submissionOverride = overrides.some(item => item.type === 'ENABLE_SUBMISSION')
   const overlays = session.Overlays.filter(item => targetApplies(item.targetType, item.targetId, participant, session))
   const focus = [...overlays].reverse().find(item => ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'].includes(item.type))
+  const runtimeProblem = [...overlays].reverse().find(item => item.type === 'RUNTIME_PROBLEM' && item.stageProblemId === stageProblemId)
 
   if (focus && focus.type !== 'SOFT_FOCUS' && focus.stageProblemId !== stageProblemId && !unlocked) {
     return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FOCUS_LOCK' }
@@ -191,11 +193,14 @@ export function resolveTrainingPermissionLoaded(
   const defaultPlan = stage.Groups.find(item => item.isDefault)
   const groupOverride = participant.currentGroupId ? stage.Groups.find(item => item.groupId === participant.currentGroupId) : null
   const group = groupOverride || defaultPlan || null
-  const plan = stageProblem.Plans.find(item => item.stageGroupId === groupOverride?.id)
+  const plannedProblem = stageProblem.Plans.find(item => item.stageGroupId === groupOverride?.id)
     || (groupOverride?.inheritsDefault !== false ? stageProblem.Plans.find(item => item.stageGroupId === defaultPlan?.id) : undefined)
+  const runtimeProblemPlan = runtimeProblem ? parseJsonObject(runtimeProblem.payload) : undefined
+  const plan = plannedProblem || runtimeProblemPlan
   if (!plan && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_NOT_ASSIGNED' }
   const submissionDisabled = overlays.some(item => item.type === 'DISABLE_SUBMISSION')
   const runtimeOverride = {
+    ...(runtimeProblemPlan ? { ...runtimeProblemPlan, problemAccessPolicy: 'ALL_AT_ONCE' } : {}),
     ...(submissionOverride ? { submissionPolicy: 'ENABLED' } : submissionDisabled ? { submissionPolicy: 'DISABLED' } : {}),
   }
   const effectiveRule = resolveEffectiveTrainingRule({ stage, group, plan, runtimeOverride })
@@ -206,7 +211,7 @@ export function resolveTrainingPermissionLoaded(
     if (focusedStageProblemId !== stageProblemId) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FOCUS_REQUIRED' }
   }
 
-  if (accessPolicy === 'SEQUENTIAL' && !unlocked) {
+  if (accessPolicy === 'SEQUENTIAL' && !unlocked && !runtimeProblem) {
     const defaultRows = stage.Problems.flatMap(problem => problem.Plans.filter(item => item.stageGroupId === defaultPlan?.id).map(item => ({ ...item, problem })))
     const overrideRows = stage.Problems.flatMap(problem => problem.Plans.filter(item => item.stageGroupId === groupOverride?.id).map(item => ({ ...item, problem })))
     const merged = new Map(defaultRows.map(item => [item.stageProblemId, item]))

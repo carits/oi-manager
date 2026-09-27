@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
 import {
+  appendTrainingRuntimeProblem,
   changeTrainingStageGroup,
   cloneTrainingSession,
   createTrainingHint,
@@ -13,9 +14,13 @@ import {
   executeStageTransition,
   executeTrainingCommand,
   getTrainingDesign,
+  getTrainingReport,
   getTrainingWorkspace,
+  joinTrainingParticipantRuntime,
+  leaveTrainingParticipantRuntime,
   mergeTrainingGroup,
   publishTrainingSession,
+  replaceTrainingRoster,
   replaceTrainingStageGroupMatrix,
   resolveTrainingPermission,
   saveTrainingDraft,
@@ -378,6 +383,114 @@ describe('Training Engine global Stage domain', () => {
     expect(session.Stages.find(stage => stage.id === currentStageId)?.runningSince).not.toBeNull()
   })
 
+
+  it('separates the published roster from runtime join and leave events', async () => {
+    const third = await createTestUser({ organization: { role: 'student', organizationId: coach.organization!.organizationId } })
+    await prisma.teamMember.create({ data: { id: crypto.randomUUID(), teamId: team.id, userId: third.user.id, userType: 'student', role: 'member', status: 'active', joinedAt: new Date() } })
+    const created = await createSession(1, 2)
+    let session = await publishAndStart(created!.id)
+    await executeStageTransition(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      action: 'advance',
+      stageId: session.Stages[0].id,
+      outcome: 'completed',
+    })
+    session = await loaded(session.id)
+
+    await expect(replaceTrainingRoster(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      participants: [{ userId: first.user.id }, { userId: second.user.id }, { userId: third.user.id }],
+    })).rejects.toMatchObject<Partial<TrainingEngineError>>({ code: 'TRAINING_ROSTER_DEFINITION_FROZEN' })
+
+    await joinTrainingParticipantRuntime(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      userId: third.user.id,
+      groupId: session.Groups[0].id,
+      historyMode: 'absent',
+      reason: '课堂中途加入',
+    })
+    session = await loaded(session.id)
+    const participant = session.Participants.find(item => item.userId === third.user.id)!
+    expect(participant).toMatchObject({ status: 'active', groupId: session.Groups[0].id })
+
+    const historicalProblemId = session.Stages[0].Problems[0].id
+    await expect(prisma.trainingSessionProblemProgress.findUniqueOrThrow({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: historicalProblemId } } })).resolves.toMatchObject({ status: 'SKIPPED' })
+    const joinedWorkspace = await getTrainingWorkspace(third.user.id, session.id)
+    expect(joinedWorkspace.participant).toMatchObject({ requiredCount: 2, completedCount: 1 })
+
+    const stageProblemId = session.Stages[1].Problems[0].id
+    await prisma.trainingSessionProblemProgress.create({ data: { participantId: participant.id, stageProblemId, status: 'WORKING', attemptCount: 1, bestScore: 30 } })
+    await leaveTrainingParticipantRuntime(coach.user.id, session.id, participant.id, {
+      expectedRevision: session.statusRevision,
+      reason: '学生提前离开',
+    })
+    session = await loaded(session.id)
+    expect(session.Participants.find(item => item.id === participant.id)?.status).toBe('left')
+    await expect(prisma.trainingSessionProblemProgress.findUniqueOrThrow({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })).resolves.toMatchObject({ bestScore: 30 })
+
+    const report = await getTrainingReport(coach.user.id, session.id)
+    expect(report.rosterEvents.map(event => event.type)).toEqual([
+      'training.participant.joined',
+      'training.participant.left',
+    ])
+  })
+
+
+  it('appends a targeted runtime problem without mutating the Stage snapshot', async () => {
+    const extraProblem = await configuredProblem(coach.user.id)
+    const created = await createSession(2, 1)
+    let session = await publishAndStart(created!.id)
+    const currentStage = session.Stages[0]
+    const targetGroup = session.Groups[0]
+    const otherGroup = session.Groups[1]
+    const snapshotHash = currentStage.RuntimeSnapshot?.configHash
+
+    await appendTrainingRuntimeProblem(coach.user.id, session.id, currentStage.id, {
+      expectedRevision: session.statusRevision,
+      targetType: 'GROUP',
+      targetId: targetGroup.id,
+      problemId: extraProblem.id,
+      required: true,
+      targetScore: 80,
+      reason: '根据课堂进度追加练习',
+    })
+    session = await loaded(session.id)
+    const appended = session.Stages[0].Problems.find(item => item.problemId === extraProblem.id)!
+    expect(appended).toBeTruthy()
+    expect(session.Stages[0].RuntimeSnapshot?.configHash).toBe(snapshotHash)
+
+    const targetUserId = targetGroup.Participants[0].userId
+    const otherUserId = otherGroup.Participants[0].userId
+    const targetWorkspace = await getTrainingWorkspace(targetUserId, session.id)
+    const otherWorkspace = await getTrainingWorkspace(otherUserId, session.id)
+    expect(targetWorkspace.permissions[appended.id]).toMatchObject({ canView: true, canSubmit: true })
+    expect(targetWorkspace.participant?.requiredCount).toBe(2)
+    expect(otherWorkspace.permissions[appended.id]).toMatchObject({ canView: false, canSubmit: false })
+    expect(otherWorkspace.participant?.requiredCount).toBe(1)
+
+    session = await loaded(session.id)
+    await appendTrainingRuntimeProblem(coach.user.id, session.id, currentStage.id, {
+      expectedRevision: session.statusRevision,
+      targetType: 'GROUP',
+      targetId: otherGroup.id,
+      problemId: extraProblem.id,
+      required: false,
+      targetScore: 60,
+      reason: '提高组自选练习',
+    })
+    const optionalWorkspace = await getTrainingWorkspace(otherUserId, session.id)
+    expect(optionalWorkspace.permissions[appended.id]).toMatchObject({ canView: true, canSubmit: true })
+    expect(optionalWorkspace.participant?.requiredCount).toBe(1)
+
+    const report = await getTrainingReport(coach.user.id, session.id)
+    expect(report.runtimeProblems).toHaveLength(2)
+    expect(report.runtimeProblems.map(item => item.payload.targetScore)).toEqual([80, 60])
+    expect(report.runtimeProblems.every(item => item.payload.testSetRevisionId === appended.testSetRevisionId)).toBe(true)
+    const targetReport = await getTrainingReport(targetUserId, session.id)
+    const otherReport = await getTrainingReport(otherUserId, session.id)
+    expect(targetReport.runtimeProblems.map(item => item.payload.targetScore)).toEqual([80])
+    expect(otherReport.runtimeProblems.map(item => item.payload.targetScore)).toEqual([60])
+  })
 
   it('saves and reapplies a full immutable training template', async () => {
     const created = await createSession(2, 2)
