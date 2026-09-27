@@ -162,6 +162,13 @@ function asJson(value: unknown): Prisma.InputJsonValue | undefined {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 }
 
+
+function trainingResultsHidden(session: { settings: unknown; status: string }, manager: boolean) {
+  if (manager) return false
+  const settings = parseJsonObject(session.settings)
+  return settings.resultVisibility === 'AFTER_END' && !['ENDED', 'ARCHIVED'].includes(session.status)
+}
+
 function parseJsonObject(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 }
@@ -1573,10 +1580,14 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const permissionContext: TrainingPermissionContext = { session: session as any, manager, participant: participantView, overrides, progressByProblem }
   const resolvedPermissions = resolveAllTrainingPermissions(permissionContext)
   const permissions = Object.fromEntries(Object.entries(resolvedPermissions).map(([stageProblemId, permission]) => [stageProblemId, { ...permission, canSeeMetadata: manager || permission.canView }]))
+  const resultsHidden = trainingResultsHidden(session, manager)
   const requirements = participant ? resolveParticipantSessionRequirements(session as any, participant.id, progress) : []
   const activeRequirements = requirements.filter(item => item.state !== 'RETIRED')
   const completedRequirements = activeRequirements.filter(item => ['SATISFIED', 'BYPASSED'].includes(item.state))
   const visibleOverlays = manager || !participantView ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participantView, session))
+  const clientProgress = resultsHidden
+    ? progress.map(item => ({ ...item, status: 'HIDDEN', bestScore: null, attemptCount: 0, activeSeconds: 0, continuousActiveSeconds: 0 }))
+    : progress
   const snapshotProblem = (problem: any) => ({ ...problem, Problem: { ...problem.Problem, title: problem.titleSnapshot }, Statements: Array.isArray(problem.statementsSnapshot) ? problem.statementsSnapshot : [] })
   const snapshotStage = (stage: any) => {
     const defaultPlan = stage.Groups.find((plan: any) => plan.isDefault)
@@ -1603,8 +1614,12 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   return {
     session: { ...session, currentStageId: session.currentStageId, currentStage: currentStage ? { id: currentStage.id, name: currentStage.name, orderIndex: currentStage.orderIndex, lifecycle: currentStage.lifecycle } : null, Stages: session.Stages.map(snapshotStage), Overlays: visibleOverlays },
     manager,
-    participant: participantView ? { ...participantView, requiredCount: activeRequirements.length, completedCount: completedRequirements.length, requirements: requirements.map(item => ({ stageId: item.stageId, stageProblemId: item.stageProblemId, state: item.state })) } : null,
-    progress,
+    participant: participantView ? {
+      ...participantView,
+      ...(resultsHidden ? {} : { requiredCount: activeRequirements.length, completedCount: completedRequirements.length }),
+      requirements: resultsHidden ? [] : requirements.map(item => ({ stageId: item.stageId, stageProblemId: item.stageProblemId, state: item.state })),
+    } : null,
+    progress: clientProgress,
     permissions,
     strategy: {},
   }
@@ -2240,6 +2255,7 @@ export async function getCoachDashboard(userId: string, sessionId: string) {
 export async function getTrainingPeerProgress(userId: string, sessionId: string) {
   const session = await assertAccess(userId, sessionId)
   const manager = await canManageSession(userId, session)
+  if (trainingResultsHidden(session, manager)) return { rankingMode: 'OFF', peerVisibility: 'NONE', entries: [] }
   if (!manager && session.peerVisibility === 'NONE') return { rankingMode: session.rankingMode, peerVisibility: session.peerVisibility, entries: [] }
   const participants = await prisma.trainingSessionParticipant.findMany({
     where: { sessionId, status: 'active' },
@@ -2299,6 +2315,7 @@ export async function getTrainingPeerProgress(userId: string, sessionId: string)
 export async function getTrainingReport(userId: string, sessionId: string) {
   const session = await assertAccess(userId, sessionId)
   const manager = await canManageSession(userId, session)
+  if (trainingResultsHidden(session, manager)) throw new TrainingEngineError(403, 'TRAINING_RESULTS_HIDDEN', '模拟测试结束后才能查看结果')
   const participants = await prisma.trainingSessionParticipant.findMany({
     where: manager ? { sessionId } : { sessionId, userId },
     include: { User: { select: { id: true, username: true } }, Group: true, Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } }, ScoreEvents: { orderBy: { createdAt: 'asc' } } },
