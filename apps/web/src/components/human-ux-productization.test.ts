@@ -260,6 +260,16 @@ describe('human UX productization contract', () => {
     expect(note).toContain('内容仍保留在编辑器中')
   })
 
+  it('uses one searchable roster table for large-class grouping', () => {
+    const source = read('../features/training-session/ui/TrainingDesignAuxiliary.tsx')
+    expect(source).toContain('统一维护训练名单与分组')
+    expect(source).toContain('全选当前筛选结果')
+    expect(source).toContain('批量目标分组')
+    expect(source).toContain('移出训练名单')
+    expect(source).toContain('名已选学员尚未分组')
+    expect(source).not.toContain("roster?.candidates.filter(candidate => candidate.selected).map(candidate => <Checkbox")
+  })
+
   it('makes training realtime and batch controls explicit and safe', () => {
     const source = read('../features/training-session/ui/TrainingSessionWorkspace.tsx')
     expect(source).toContain('scheduleReload')

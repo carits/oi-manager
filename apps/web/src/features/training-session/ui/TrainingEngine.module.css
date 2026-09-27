@@ -109,12 +109,27 @@
 .rosterGroups { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-2); align-items: end; }
 .rosterList { display: grid; gap: var(--space-2); }
 .rosterRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 260px); align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.rosterStats { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.rosterStats button { display: grid; min-width: 110px; gap: 2px; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text); text-align: left; cursor: pointer; }
+.rosterStats button:hover, .rosterStats button:focus-visible { border-color: var(--primary); outline: 2px solid color-mix(in srgb, var(--primary) 28%, transparent); }
+.rosterStats button[data-warning='true'] { border-color: var(--warning); background: var(--warning-light); }
+.rosterStats strong { font-size: 1.25rem; }
+.rosterStats span { color: var(--text-muted); font-size: .82rem; }
+.rosterWarning { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--warning-text, var(--text)); }
+.rosterFilters { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(150px, 1fr) minmax(150px, 1fr); gap: var(--space-2); }
+.rosterTable { min-width: 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.rosterTableHeader, .rosterTableRow { display: grid; grid-template-columns: 42px minmax(180px, 1.5fr) minmax(130px, .8fr) minmax(190px, 1fr); align-items: center; min-width: 650px; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+.rosterTableHeader { border-bottom: 1px solid var(--border); background: var(--bg-muted); color: var(--text-muted); font-size: .82rem; font-weight: 700; }
+.rosterTableRow + .rosterTableRow { border-top: 1px solid var(--border); }
+.rosterTableRow > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
+.rosterTableRow small { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.rosterBatchBar { position: sticky; bottom: var(--space-2); z-index: 2; display: grid; grid-template-columns: auto minmax(170px, 1fr) auto auto auto; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--primary); border-radius: var(--radius-lg); background: var(--bg-card); box-shadow: var(--shadow-md); }
 .publishChecklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
 .publishChecklist p { display: grid; gap: var(--space-1); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--bg-muted); }
 .publishChecklist span { font-size: 1.2rem; font-weight: 700; }
 @media (max-width: 1180px) { .designWorkspace { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); } .designColumn:last-child { grid-column: 1 / -1; } }
 @media (max-width: 1000px) { .workspace { grid-template-columns: 220px minmax(0, 1fr); } .coach { grid-column: 1 / -1; } .designSteps { grid-template-columns: 1fr; } .designSteps > * { text-align: left; border-right: 0; border-bottom: 1px solid var(--border); } .basicGrid { grid-template-columns: 1fr; } }
-@media (max-width: 720px) { .draftCompare, .trainingSetupLayout, .setupSection { grid-template-columns: 1fr; } .trainingSetupSummary { position: static; } .sessionGrid { grid-template-columns: 1fr; } .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } }
+@media (max-width: 720px) { .draftCompare, .trainingSetupLayout, .setupSection { grid-template-columns: 1fr; } .trainingSetupSummary { position: static; } .sessionGrid { grid-template-columns: 1fr; } .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } .rosterFilters, .rosterBatchBar { grid-template-columns: 1fr; } .rosterStats button { flex: 1 1 120px; } }
 
 .matrixTable { display: grid; grid-template-columns: minmax(140px, .65fr) repeat(var(--training-stage-count, 3), minmax(180px, 1fr)); gap: 1px; overflow-x: auto; border: 1px solid var(--border); background: var(--border); }
 .matrixRow { display: contents; }

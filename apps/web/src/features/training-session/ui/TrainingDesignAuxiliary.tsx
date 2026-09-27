@@ -18,7 +18,7 @@ type Roster = { revision: number; candidates: Array<{ userId: string; username: 
 type Hint = { id: string; level: number; title?: string; content?: string; openMode?: string; triggerSeconds?: number; triggerAttempts?: number; triggerScore?: number }
 type GroupSuggestion = { participantId: string; user: { id: string; username: string }; groupId: string; groupName: string; reason: string }
 
-export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChange, grouping, sessionStatus, onGroupingChange, onChanged }: { sessionId: string; mode: 'roster' | 'hints'; stages: Stage[]; onStagesChange?: (updater: (current: Stage[]) => Stage[]) => void; grouping?: TrainingGrouping; sessionStatus: string; onGroupingChange?: (value: TrainingGrouping) => void; onChanged: () => Promise<void> }) {
+export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChange, grouping, sessionStatus, onGroupingChange, onRevisionChanged }: { sessionId: string; mode: 'roster' | 'hints'; stages: Stage[]; onStagesChange?: (updater: (current: Stage[]) => Stage[]) => void; grouping?: TrainingGrouping; sessionStatus: string; onGroupingChange?: (value: TrainingGrouping) => void; onRevisionChanged?: (revision: number) => void }) {
   const toast = useToast()
   const [roster, setRoster] = useState<Roster>(), [loading, setLoading] = useState(false), [saving, setSaving] = useState(false)
   const assignments = useMemo(() => stages.flatMap(stage => stage.Problems.filter(problem => problem.assignmentId).map(problem => ({ ...problem, stageId: stage.id, stageName: stage.name }))), [stages])
@@ -26,6 +26,8 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
   const [hintTitle, setHintTitle] = useState(''), [hintContent, setHintContent] = useState(''), [hintLevel, setHintLevel] = useState(1), [hintMode, setHintMode] = useState('MANUAL'), [hintTrigger, setHintTrigger] = useState('')
   const [rawSuggestions, setSuggestions] = useState<{ stageId: string; items: GroupSuggestion[] }>(), [suggestionLoading, setSuggestionLoading] = useState(false)
   const suggestions = rawSuggestions || { stageId: '', items: [] as GroupSuggestion[] }
+  const [rosterQuery, setRosterQuery] = useState(''), [rosterGroupFilter, setRosterGroupFilter] = useState('all'), [rosterStatusFilter, setRosterStatusFilter] = useState('selected')
+  const [checkedRosterIds, setCheckedRosterIds] = useState<string[]>([]), [batchGroupKey, setBatchGroupKey] = useState('')
 
   const loadRoster = useCallback(async () => {
     setLoading(true)
@@ -56,7 +58,8 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     const response = await saveTrainingRoster(sessionId, { expectedRevision: roster.revision, participants: roster.candidates.filter(item => item.selected).map(item => ({ userId: item.userId })) })
     setSaving(false)
     if (!response.ok) return toast.error(response.error.message || '学员名单保存失败')
-    toast.success('训练学员已保存'); await loadRoster(); await onChanged()
+    onRevisionChanged?.(response.data.session.statusRevision)
+    toast.success('训练学员已保存；未保存的分组草稿仍保留'); await loadRoster()
   }
   const resetHintForm = () => { setHintOpen(false); setEditingHint(undefined); setHintTitle(''); setHintContent(''); setHintLevel(1); setHintMode('MANUAL'); setHintTrigger('') }
   const openHintEditor = (hint?: Hint) => {
@@ -120,14 +123,91 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     toast.success('分组建议已写入本地草稿，请检查后保存')
     setSuggestions(undefined)
   }
+  const groupKeyByParticipant = new Map<string, string>()
+  for (const group of trainingGroups) for (const participantId of group.participantIds) groupKeyByParticipant.set(participantId, group.clientKey)
+  const selectedCandidates = roster?.candidates.filter(candidate => candidate.selected) || []
+  const unassignedCount = selectedCandidates.filter(candidate => !groupKeyByParticipant.has(candidate.userId)).length
+  const filteredRosterCandidates = (roster?.candidates || []).filter(candidate => {
+    const query = rosterQuery.trim().toLowerCase()
+    if (query && !candidate.username.toLowerCase().includes(query) && !candidate.displayName.toLowerCase().includes(query)) return false
+    const groupKey = groupKeyByParticipant.get(candidate.userId)
+    if (rosterGroupFilter === 'unassigned' && groupKey) return false
+    if (rosterGroupFilter !== 'all' && rosterGroupFilter !== 'unassigned' && groupKey !== rosterGroupFilter) return false
+    if (rosterStatusFilter === 'selected' && !candidate.selected) return false
+    if (rosterStatusFilter === 'available' && candidate.selected) return false
+    return true
+  })
+  const setCandidateSelected = (userId: string, selected: boolean) => {
+    setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === userId ? { ...candidate, selected } : candidate) } : current)
+    if (!selected) updateAllGroupedStages(groups => groups.map(group => ({ ...group, participantIds: group.participantIds.filter(id => id !== userId) })))
+  }
+  const setCandidateGroup = (userId: string, groupKey: string) => {
+    updateAllGroupedStages(groups => groups.map(group => ({
+      ...group,
+      participantIds: group.clientKey === groupKey
+        ? [...new Set([...group.participantIds, userId])]
+        : group.participantIds.filter(id => id !== userId),
+    })))
+  }
+  const toggleVisibleRosterSelection = (checked: boolean) => {
+    const visibleIds = filteredRosterCandidates.map(candidate => candidate.userId)
+    setCheckedRosterIds(current => checked ? [...new Set([...current, ...visibleIds])] : current.filter(id => !visibleIds.includes(id)))
+  }
+  const applyBatchGroup = () => {
+    const participantIds = checkedRosterIds.filter(id => roster?.candidates.some(candidate => candidate.userId === id && candidate.selected))
+    if (!participantIds.length) return toast.error('请先将所选学员加入训练名单')
+    updateAllGroupedStages(groups => groups.map(group => ({
+      ...group,
+      participantIds: group.clientKey === batchGroupKey
+        ? [...new Set([...group.participantIds, ...participantIds])]
+        : group.participantIds.filter(id => !participantIds.includes(id)),
+    })))
+    toast.success(batchGroupKey ? '已批量调整分组，请保存训练结构' : '已批量设为未分组，请保存训练结构')
+    setCheckedRosterIds([])
+  }
+  const removeBatchFromRoster = () => {
+    if (!checkedRosterIds.length) return
+    setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => checkedRosterIds.includes(candidate.userId) ? { ...candidate, selected: false } : candidate) } : current)
+    updateAllGroupedStages(groups => groups.map(group => ({ ...group, participantIds: group.participantIds.filter(id => !checkedRosterIds.includes(id)) })))
+    setCheckedRosterIds([])
+  }
 
   if (mode === 'roster') return <div className={styles.stack}>
-    <Section title="训练学员" description="这里维护整场训练的参加学生；新增学生默认未分组。" actions={<Button onClick={() => void saveRoster()} loading={saving} disabled={!roster}>保存名单</Button>}>
-      {loading && !roster ? <p className={styles.muted}>正在加载学员…</p> : !roster ? <Empty title="暂无可配置名单" /> : <div className={styles.rosterList}>{roster.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={item.username + ' · ' + item.role} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div>}
+    <Section title="学员与分组" description="统一维护训练名单与分组；支持搜索、筛选和批量移动，不再需要在每个分组里重复勾选全体学生。" actions={<div className={styles.actions}><Button onClick={() => void saveRoster()} loading={saving} disabled={!roster}>保存名单</Button><Button variant="secondary" onClick={addTrainingGroup} disabled={groupsFrozen}>新增分组</Button>{groupSource?.id && <Button variant="secondary" loading={suggestionLoading} onClick={() => void previewSuggestions(groupSource.id!)} disabled={groupsFrozen}>生成分组建议</Button>}</div>}>
+      {loading && !roster ? <p className={styles.muted}>正在加载学员…</p> : !roster ? <Empty title="暂无可配置名单" /> : <div className={styles.stack}>
+        <div className={styles.rosterStats}>
+          <button type="button" onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter('all') }}><strong>{selectedCandidates.length}</strong><span>参加训练</span></button>
+          {trainingGroups.map(group => <button type="button" key={group.clientKey} onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter(group.clientKey) }}><strong>{group.participantIds.filter(id => selectedCandidates.some(candidate => candidate.userId === id)).length}</strong><span>{group.name}</span></button>)}
+          <button type="button" data-warning={unassignedCount > 0} onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter('unassigned') }}><strong>{unassignedCount}</strong><span>未分组</span></button>
+        </div>
+        {unassignedCount > 0 && <p className={styles.rosterWarning} role="status">{unassignedCount} 名已选学员尚未分组，将使用各阶段的默认训练方案。</p>}
+        <div className={styles.rosterFilters}>
+          <label className={styles.field}>搜索<Input value={rosterQuery} onChange={event => setRosterQuery(event.target.value)} placeholder="姓名或用户名" /></label>
+          <label className={styles.field}>分组<Select value={rosterGroupFilter} onChange={event => setRosterGroupFilter(event.target.value)}><option value="all">全部分组</option><option value="unassigned">未分组</option>{trainingGroups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></label>
+          <label className={styles.field}>名单状态<Select value={rosterStatusFilter} onChange={event => setRosterStatusFilter(event.target.value)}><option value="selected">参加训练</option><option value="available">未加入训练</option><option value="all">全部候选</option></Select></label>
+        </div>
+        <div className={styles.rosterTable} role="table" aria-label="训练学员与分组">
+          <div className={styles.rosterTableHeader} role="row">
+            <span role="columnheader"><input type="checkbox" aria-label="全选当前筛选结果" checked={filteredRosterCandidates.length > 0 && filteredRosterCandidates.every(candidate => checkedRosterIds.includes(candidate.userId))} onChange={event => toggleVisibleRosterSelection(event.target.checked)} /></span>
+            <span role="columnheader">学员</span><span role="columnheader">参加训练</span><span role="columnheader">训练分组</span>
+          </div>
+          {filteredRosterCandidates.map(candidate => {
+            const currentGroupKey = groupKeyByParticipant.get(candidate.userId) || ''
+            return <div className={styles.rosterTableRow} role="row" key={candidate.userId}>
+              <span role="cell"><input type="checkbox" aria-label={'选择 ' + candidate.displayName} checked={checkedRosterIds.includes(candidate.userId)} onChange={event => setCheckedRosterIds(current => event.target.checked ? [...new Set([...current, candidate.userId])] : current.filter(id => id !== candidate.userId))} /></span>
+              <span role="cell"><strong>{candidate.displayName}</strong><small>{candidate.username} · {candidate.role}</small></span>
+              <span role="cell"><Checkbox label={candidate.selected ? '已加入' : '未加入'} checked={candidate.selected} onChange={event => setCandidateSelected(candidate.userId, event.target.checked)} /></span>
+              <span role="cell"><Select aria-label={candidate.displayName + '训练分组'} value={currentGroupKey} disabled={groupsFrozen || !candidate.selected} onChange={event => setCandidateGroup(candidate.userId, event.target.value)}><option value="">未分组（使用默认方案）</option>{trainingGroups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></span>
+            </div>
+          })}
+          {!filteredRosterCandidates.length && <p className={styles.muted}>没有符合筛选条件的学员。</p>}
+        </div>
+        {checkedRosterIds.length > 0 && <div className={styles.rosterBatchBar} role="region" aria-label="批量学员操作"><strong>已选择 {checkedRosterIds.length} 人</strong><Select aria-label="批量目标分组" value={batchGroupKey} disabled={groupsFrozen} onChange={event => setBatchGroupKey(event.target.value)}><option value="">设为未分组</option>{trainingGroups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select><Button size="sm" onClick={applyBatchGroup} disabled={groupsFrozen}>应用分组</Button><Button size="sm" variant="ghost" onClick={removeBatchFromRoster}>移出训练名单</Button><Button size="sm" variant="ghost" onClick={() => setCheckedRosterIds([])}>取消选择</Button></div>}
+      </div>}
     </Section>
-    <Section title="训练分组" description={groupsFrozen ? '已有阶段开始运行，训练分组定义只读；现场换组请前往运行工作台。' : '训练分组属于整场训练。不同阶段可以为不同分组配置不同训练方案；每名学生最多属于一个组。'} actions={<div className={styles.actions}><Button variant="secondary" onClick={addTrainingGroup} disabled={groupsFrozen}>新增分组</Button>{groupSource?.id && <Button variant="secondary" loading={suggestionLoading} onClick={() => void previewSuggestions(groupSource.id!)} disabled={groupsFrozen}>生成分组建议</Button>}</div>}>
+    <Section title="分组定义" description={groupsFrozen ? '已有阶段开始运行，训练分组定义只读；现场换组请前往运行工作台。' : '这里只维护分组名称。学生归属请在上方统一表格中编辑；不同阶段的训练方案仍在阶段设计中配置。'}>
       {Boolean(rawSuggestions?.items.length) && <div className={styles.card}><strong>建议预览（尚未应用）</strong>{rawSuggestions?.items.map(item => <p key={item.participantId}><b>{item.user.username}</b> → {item.groupName}<small className={styles.muted}>{item.reason}</small></p>)}<div className={styles.actions}><Button onClick={applySuggestions}>确认应用建议</Button><Button variant="ghost" onClick={() => setSuggestions(undefined)}>取消</Button></div></div>}
-      {!trainingGroups.length ? <Empty title="还没有训练分组" description="新增分组后，学生可以按组获得不同题目。" /> : <div className={styles.grid}>{trainingGroups.map(group => <article className={styles.card} key={group.clientKey}><div className={styles.actions}><Input aria-label={group.name + '名称'} value={group.name} disabled={groupsFrozen} onChange={event => renameTrainingGroup(group.clientKey, event.target.value)} /><Button size="sm" variant="ghost" onClick={() => removeTrainingGroup(group.clientKey)} disabled={groupsFrozen}>删除</Button></div><p className={styles.muted}>{group.Problems.length} 道题 · {group.participantIds.length} 名学员</p><div className={styles.rosterList}>{roster?.candidates.filter(candidate => candidate.selected).map(candidate => <Checkbox key={candidate.userId} label={candidate.displayName} description={candidate.username} checked={group.participantIds.includes(candidate.userId)} disabled={groupsFrozen} onChange={event => assignParticipant(group.clientKey, candidate.userId, event.target.checked)} />)}</div></article>)}</div>}
+      {!trainingGroups.length ? <Empty title="还没有训练分组" description="新增分组后，可以在上方表格批量安排学生，并为各阶段配置分组差异。" /> : <div className={styles.grid}>{trainingGroups.map(group => <article className={styles.card} key={group.clientKey}><div className={styles.actions}><Input aria-label={group.name + '名称'} value={group.name} disabled={groupsFrozen} onChange={event => renameTrainingGroup(group.clientKey, event.target.value)} /><Button size="sm" variant="ghost" onClick={() => removeTrainingGroup(group.clientKey)} disabled={groupsFrozen}>删除</Button></div><p className={styles.muted}>{group.participantIds.length} 名学员 · 各阶段可独立覆盖默认方案</p></article>)}</div>}
     </Section>
   </div>
 

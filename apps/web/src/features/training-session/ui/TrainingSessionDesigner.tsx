@@ -636,14 +636,13 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           grouping={grouping}
           sessionStatus={design.session.status}
           onGroupingChange={value => { setGrouping(value); setDirty(true) }}
-          onChanged={refreshDesign}
+          onRevisionChanged={revision => setDesign(current => current ? { ...current, statusRevision: revision } : current)}
         />}
         {auxiliaryPanel === "hints" && <TrainingDesignAuxiliary
           sessionId={sessionId}
           mode="hints"
           stages={stages}
           sessionStatus={design.session.status}
-          onChanged={refreshDesign}
         />}
         {auxiliaryPanel === "matrix" && <TrainingStageGroupMatrix
           sessionId={sessionId}
