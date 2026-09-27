@@ -138,7 +138,7 @@ export async function rejudgeLocalCode(context: SubmissionCommandContext, submis
   }
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
-    select: { userId: true, workspaceScope: true, organizationId: true, submitMethod: true, problemInternalId: true },
+    select: { userId: true, workspaceScope: true, organizationId: true, submitMethod: true, problemInternalId: true, submitScope: true },
   })
   if (
     !submission
@@ -149,6 +149,9 @@ export async function rejudgeLocalCode(context: SubmissionCommandContext, submis
     throw new SubmissionCommandError(404, 'SUBMISSION_NOT_FOUND', '提交记录不存在')
   }
   if (!submission.problemInternalId) return { success: false, message: '提交缺少题目内部 ID' }
+  if (submission.submitScope === 'contest') {
+    throw new SubmissionCommandError(409, 'CONTEST_REJUDGE_REQUIRES_MANAGER', '比赛提交必须由比赛管理员统一重新评测')
+  }
   const queued = await rejudgeSubmissionWithRun(submissionId, context.userId)
   if (!queued) return { success: false, message: '提交正在排队或评测中，未重复加入队列' }
   logger.info('rejudge_queued', { action: 'rejudge', metadata: { submissionId } })

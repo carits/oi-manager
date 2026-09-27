@@ -10,7 +10,7 @@ import {
   assertJudgeAttemptTransition,
   assertJudgeRunTransition,
 } from '../domain/judge-state'
-import { holdContestFinalizationForRejudgeTx } from '../../contest/contest-command.service'
+import { ensureContestRejudgeBarrierTx } from '../../contest/contest-command.service'
 import { releaseTestSetReader, resolveSubmissionTestSet } from '../../problem/problem.testset-slot.service'
 
 export interface CreateQueuedSubmissionOptions {
@@ -462,7 +462,7 @@ export async function recoverStaleJudgeAttempts(input: {
 async function queueRejudgeRun(
   tx: Prisma.TransactionClient,
   submissionId: number,
-  input: { requestedBy: string; rejudgeBatchId?: string | null },
+  input: { requestedBy: string; rejudgeBatchId?: string | null; contestId?: string | null },
 ) {
   await tx.$queryRaw`SELECT id FROM "Submission" WHERE id = ${submissionId} FOR UPDATE`
   const submission = await tx.submission.findUnique({
@@ -470,6 +470,10 @@ async function queueRejudgeRun(
     include: { CurrentJudgeRun: true },
   })
   if (!submission || !submission.problemInternalId) return false
+  if (
+    submission.submitScope === 'contest'
+    && (!input.contestId || submission.canonicalContestId !== input.contestId)
+  ) return false
   if (submission.CurrentJudgeRun && ['QUEUED', 'RUNNING'].includes(submission.CurrentJudgeRun.status)) return false
 
   const latest = await tx.judgeRun.aggregate({ where: { submissionId }, _max: { runNumber: true } })
@@ -527,6 +531,9 @@ export async function rejudgeSubmissionWithRun(submissionId: number, requestedBy
 /** Queue a scope as a durable batch and create one new Run per eligible submission. */
 export async function createRejudgeBatch(input: RejudgeRequest) {
   return prisma.$transaction(async tx => {
+    if (input.contestId && input.submissionIds.length > 0) {
+      await ensureContestRejudgeBarrierTx(tx, input.contestId)
+    }
     const batchId = crypto.randomUUID()
     await tx.rejudgeBatch.create({
       data: {
@@ -542,7 +549,11 @@ export async function createRejudgeBatch(input: RejudgeRequest) {
     })
     let queuedCount = 0
     for (const submissionId of input.submissionIds) {
-      if (await queueRejudgeRun(tx, submissionId, { requestedBy: input.requestedBy, rejudgeBatchId: batchId })) {
+      if (await queueRejudgeRun(tx, submissionId, {
+        requestedBy: input.requestedBy,
+        rejudgeBatchId: batchId,
+        contestId: input.contestId,
+      })) {
         queuedCount++
       }
     }
@@ -556,9 +567,6 @@ export async function createRejudgeBatch(input: RejudgeRequest) {
         completedAt: new Date(),
       },
     })
-    if (input.contestId && queuedCount > 0) {
-      await holdContestFinalizationForRejudgeTx(tx, input.contestId)
-    }
     return { batch, queuedCount, skippedCount }
   })
 }

@@ -21,6 +21,10 @@ import {
   transitionJudgeMode,
 } from '../src/modules/problem/problem.testset-slot.service'
 import { createTestUser } from './helpers/testUser'
+import {
+  ContestRejudgeBarrierError,
+  ensureContestRejudgeBarrierTx,
+} from '../src/modules/contest/contest-command.service'
 
 const root = path.join(process.cwd(), 'testdata')
 const createdDirectories: string[] = []
@@ -157,6 +161,64 @@ describe('Stable/Evolving current TestSet slots', () => {
     expect(stable.graphHash).toBe(captured.graphHash)
     expect(stable.graphHash).not.toBe(laterEvolving.graphHash)
     expect(job.status).toBe('succeeded')
+  })
+
+  it('re-establishes a Contest barrier only while the captured Stable slot is unchanged', async () => {
+    const { problem, config } = await fixture(false)
+    const stable = await prisma.problemTestSetSlot.findUniqueOrThrow({
+      where: { problemId_slot: { problemId: problem.id, slot: 'STABLE' } },
+    })
+    const contest = await prisma.contest.create({
+      data: {
+        id: crypto.randomUUID(),
+        title: 'Stable barrier fixture',
+        contestDate: new Date(),
+        status: 'finished',
+      },
+    })
+    const contestProblem = await prisma.contestProblem.create({
+      data: {
+        id: crypto.randomUUID(),
+        contestId: contest.id,
+        canonicalProblemId: problem.id,
+        testSetSlot: 'STABLE',
+        testSetGraphHash: stable.graphHash,
+        testSetJudgeConfigHash: stable.judgeConfigHash,
+        testSetFencingToken: stable.fencingToken,
+        orderIndex: 0,
+      },
+    })
+
+    await prisma.$transaction(tx => ensureContestRejudgeBarrierTx(tx, contest.id))
+    const held = await prisma.contestProblem.findUniqueOrThrow({ where: { id: contestProblem.id } })
+    expect(held.testSetReaderId).toBeTruthy()
+    expect((await prisma.problemTestSetSlot.findUniqueOrThrow({
+      where: { problemId_slot: { problemId: problem.id, slot: 'STABLE' } },
+    })).activeReaderCount).toBe(1)
+
+    await releaseTestSetReader(held.testSetReaderId!)
+    await prisma.contestProblem.update({
+      where: { id: contestProblem.id },
+      data: { testSetReaderId: null },
+    })
+    await replaceTestSetSlot({
+      problemId: problem.id,
+      slot: 'STABLE',
+      source: 'admin_edit',
+      sourceId: crypto.randomUUID(),
+      baseConfigText: config,
+      spec: (await loadTestSetSlotSpec(problem.id, 'STABLE'))!,
+      expectedFencingToken: stable.fencingToken,
+    })
+
+    await expect(prisma.$transaction(tx => ensureContestRejudgeBarrierTx(tx, contest.id)))
+      .rejects.toBeInstanceOf(ContestRejudgeBarrierError)
+    expect((await prisma.contestProblem.findUniqueOrThrow({
+      where: { id: contestProblem.id },
+    })).testSetReaderId).toBeNull()
+    expect((await prisma.problemTestSetSlot.findUniqueOrThrow({
+      where: { problemId_slot: { problemId: problem.id, slot: 'STABLE' } },
+    })).activeReaderCount).toBe(0)
   })
 
   it('changes judge mode by replacing the selected slot in place', async () => {

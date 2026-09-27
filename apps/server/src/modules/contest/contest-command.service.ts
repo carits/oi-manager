@@ -9,6 +9,16 @@ import {
 import { toContestView, toContestProblemView } from './contest-view'
 import { acquireTestSetReaderTx, releaseTestSetReaderTx } from '../problem/problem.testset-slot.service'
 
+export class ContestRejudgeBarrierError extends Error {
+  readonly statusCode = 409
+  readonly code = 'CONTEST_TEST_SET_NO_LONGER_AVAILABLE'
+
+  constructor(message = '比赛固定使用的 Stable 数据已被替换，无法再对该比赛执行重新评测') {
+    super(message)
+    this.name = 'ContestRejudgeBarrierError'
+  }
+}
+
 export interface CreateContestInput {
   teamId: string | null
   organizationId: string | null
@@ -438,26 +448,63 @@ export async function prepareDemoContestsTx(
   return refreshed
 }
 
-export async function holdContestFinalizationForRejudgeTx(
+/**
+ * Re-establish the Contest Stable barrier before a rejudge batch. Once a
+ * finalized Contest releases its readers, rejudge is safe only while every
+ * current Stable slot still matches the graph/fence captured at publication.
+ */
+export async function ensureContestRejudgeBarrierTx(
   tx: Prisma.TransactionClient,
   contestId: string,
 ) {
   const identity = await tx.contest.findUnique({ where: { id: contestId }, select: { publicId: true } })
-  if (!identity) return false
+  if (!identity) throw new ContestRejudgeBarrierError('比赛不存在')
   await lockContest(tx, identity.publicId)
-  const contest = await tx.contest.findUnique({ where: { id: contestId } })
-  if (!contest || !contest.finalizedStandingId || contest.finalizationStatus !== 'FINALIZED') return false
-  const updated = await tx.contest.updateMany({
-    where: {
-      id: contest.id,
-      finalizedStandingId: contest.finalizedStandingId,
-      finalizationStatus: 'FINALIZED',
-    },
-    data: {
-      finalizationStatus: 'HELD',
-      statusRevision: { increment: 1 },
-      updatedAt: new Date(),
+  const contest = await tx.contest.findUnique({
+    where: { id: contestId },
+    include: {
+      ContestProblem: {
+        where: { canonicalProblemId: { not: null } },
+        select: {
+          id: true,
+          canonicalProblemId: true,
+          testSetGraphHash: true,
+          testSetFencingToken: true,
+          testSetReaderId: true,
+        },
+      },
     },
   })
-  return updated.count === 1
+  if (!contest) throw new ContestRejudgeBarrierError('比赛不存在')
+  for (const item of contest.ContestProblem) {
+    if (!item.canonicalProblemId || !item.testSetGraphHash || item.testSetFencingToken == null) {
+      throw new ContestRejudgeBarrierError('比赛题目缺少已发布的 Stable 数据快照')
+    }
+    let acquired
+    try {
+      acquired = await acquireTestSetReaderTx(tx, {
+        problemId: item.canonicalProblemId,
+        slot: 'STABLE',
+        ownerType: 'CONTEST_PROBLEM',
+        ownerId: item.id,
+      })
+    } catch {
+      throw new ContestRejudgeBarrierError('Stable 数据正在更新，无法为比赛重新建立评测屏障')
+    }
+    if (acquired.slot.graphHash !== item.testSetGraphHash || acquired.slot.fencingToken !== item.testSetFencingToken) {
+      throw new ContestRejudgeBarrierError()
+    }
+    if (item.testSetReaderId !== acquired.reader.id) {
+      await tx.contestProblem.update({ where: { id: item.id }, data: { testSetReaderId: acquired.reader.id } })
+    }
+  }
+  if (contest.finalizationStatus === 'FINALIZED') {
+    if (!contest.finalizedStandingId) throw new ContestRejudgeBarrierError('比赛结算快照不完整，无法进入重新评测')
+    const held = await tx.contest.updateMany({
+      where: { id: contest.id, finalizationStatus: 'FINALIZED', finalizedStandingId: contest.finalizedStandingId },
+      data: { finalizationStatus: 'HELD', statusRevision: { increment: 1 }, updatedAt: new Date() },
+    })
+    if (held.count !== 1) throw new ContestRejudgeBarrierError('比赛结算状态已变化，请刷新后重试')
+  }
+  return true
 }

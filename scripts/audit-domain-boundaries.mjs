@@ -142,8 +142,8 @@ const contestContent = fs.readFileSync(path.join(modulesRoot, 'contest/applicati
 if (!contestContent.includes('findContestForAccess')) {
   violations.push('Activity content access bypasses the Contest query facade')
 }
-if (!judgeRun.includes('holdContestFinalizationForRejudgeTx')) {
-  violations.push('Judge rejudge finalization bypasses the Contest command service')
+if (!judgeRun.includes('ensureContestRejudgeBarrierTx')) {
+  violations.push('Judge rejudge Stable barrier bypasses the Contest command service')
 }
 if (!contestCrud.includes('createContestTx') || !organizationMember.includes('createContestTx')) {
   violations.push('Contest creation bypasses the Contest command service')

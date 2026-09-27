@@ -25,6 +25,7 @@ import {
   runIdempotent,
 } from '../../lib/idempotency'
 import { createQueuedContestSubmission } from './contest.submission.service'
+import { ContestRejudgeBarrierError } from './contest-command.service'
 import { getContestRuntimeStatus, shouldHideContestProblemSource } from './contest.visibility'
 import { createRejudgeBatch } from '../judge/application/judge-run.service'
 import { normalizeSubmissionIo, SubmissionIoError } from '../judge/domain/submission-io'
@@ -342,13 +343,25 @@ contestSubmissionsRouter.post('/contests/:id/rejudge', authenticate, asyncHandle
     // in Promise.all lets the count observe rows just changed to queuing by this
     // same request, producing impossible summaries such as reset=3, skipped=3.
     const candidates = await listRejudgeCandidates(baseWhere)
-    const batchResult = await createRejudgeBatch({
-      submissionIds: candidates.map(item => item.id),
-      requestedBy: userId,
-      contestId: contest.canonicalContestId,
-      scopeType,
-      scopePayload: scope,
-    })
+    let batchResult
+    try {
+      batchResult = await createRejudgeBatch({
+        submissionIds: candidates.map(item => item.id),
+        requestedBy: userId,
+        contestId: contest.canonicalContestId,
+        scopeType,
+        scopePayload: scope,
+      })
+    } catch (error) {
+      if (error instanceof ContestRejudgeBarrierError) {
+        return res.status(error.statusCode).json({
+          success: false,
+          code: error.code,
+          message: error.message,
+        })
+      }
+      throw error
+    }
     const count = batchResult.queuedCount
     const skippedCount = batchResult.skippedCount
 
