@@ -76,7 +76,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const [loading, setLoading] = useState(true),
     [saving, setSaving] = useState(false),
     [publishing, setPublishing] = useState(false),
-    [dirty, setDirty] = useState(false);
+    [dirty, setDirty] = useState(false),
+    [saveStatus, setSaveStatus] = useState<"saved" | "dirty" | "saving" | "error" | "conflict">("saved");
   const { requestNavigation } = useUnsavedChanges(`training-session-design:${sessionId}`, dirty);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [draggedStage, setDraggedStage] = useState<number | null>(null),
@@ -92,6 +93,15 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   );
   const runtimePath = pathname.replace(/\/design$/, "");
   const copyRequestHandled = useRef(false);
+  const changeVersionRef = useRef(0);
+  const statusRevisionRef = useRef(0);
+  const saveInFlightRef = useRef(false);
+  const saveRef = useRef<(confirmDependentRemoval?: boolean, quiet?: boolean) => Promise<boolean>>(async () => false);
+  const markDirty = useCallback(() => {
+    changeVersionRef.current += 1;
+    setDirty(true);
+    setSaveStatus("dirty");
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,6 +114,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       const source = requestedCopyId ? loadedStages.find(stage => stage.id === requestedCopyId) : undefined;
       const copied = source ? copyStageAsDraft(source) : undefined;
       if (copied) loadedStages = [...loadedStages, copied];
+      statusRevisionRef.current = data.statusRevision;
       setDesign(data);
       setStages(loadedStages);
       setGrouping({ groups: data.groups, memberships: data.participants.map(participant => { const group = data.groups.find(item => item.id === participant.groupId)!; return { participantId: participant.id, userId: participant.userId, groupId: participant.groupId, groupName: group?.name || '' } }) });
@@ -115,7 +126,9 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           ? current
           : copied?.clientKey || loadedStages[0]?.clientKey || "",
       );
+      changeVersionRef.current = copied ? 1 : 0;
       setDirty(Boolean(copied));
+      setSaveStatus(copied ? "dirty" : "saved");
       if (requestedCopyId && typeof window !== "undefined") window.history.replaceState(window.history.state, "", pathname);
       return true;
     } catch {
@@ -155,11 +168,11 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         stage.clientKey === clientKey ? updater(stage) : stage,
       ),
     );
-    setDirty(true);
+    markDirty();
   };
   const replaceStages = (updater: (current: Stage[]) => Stage[]) => {
     setStages(updater);
-    setDirty(true);
+    markDirty();
   };
   const addStage = () => {
     const stage: Stage = {
@@ -279,7 +292,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   };
 
   const requestBody = (confirmDependentRemoval = false) => ({
-    expectedRevision: design?.statusRevision ?? 0,
+    expectedRevision: statusRevisionRef.current || design?.statusRevision || 0,
     title,
     description,
     confirmDependentRemoval,
@@ -356,7 +369,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       setStages(snapshot.stages as Stage[]);
       setGrouping(snapshot.grouping);
       setActiveStageKey(snapshot.stages[0]?.clientKey || "");
-      setDirty(true);
+      markDirty();
       toast.success("已恢复本地编排，请检查后重新保存");
     } catch {
       toast.error("本地编排副本无法读取");
@@ -397,29 +410,95 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     }
     return true;
   };
-  const save = async (confirmDependentRemoval = false) => {
-    if (!design) return;
+  const save = async (confirmDependentRemoval = false, quiet = false): Promise<boolean> => {
+    if (!design || saveInFlightRef.current) return false;
+    saveInFlightRef.current = true;
+    const capturedVersion = changeVersionRef.current;
+    const body = requestBody(confirmDependentRemoval);
     setSaving(true);
-    const response = await saveTrainingDesign(
-      sessionId,
-      requestBody(confirmDependentRemoval),
-    );
+    setSaveStatus("saving");
+    const response = await saveTrainingDesign(sessionId, body).catch(() => null);
+    saveInFlightRef.current = false;
     setSaving(false);
+    if (!response) {
+      setSaveStatus("error");
+      if (!quiet) toast.error("网络异常，修改仍保留，请重试");
+      return false;
+    }
     if (!response.ok) {
-      if (response.error.code === "TRAINING_STRUCTURE_REMOVAL_REQUIRES_CONFIRMATION")
-        return setPendingRemovalConfirm(true);
+      if (response.error.code === "TRAINING_STRUCTURE_REMOVAL_REQUIRES_CONFIRMATION") {
+        setSaveStatus("dirty");
+        setPendingRemovalConfirm(true);
+        return false;
+      }
       if (response.error.code === "TRAINING_SESSION_STALE") {
         persistRecoveryDraft();
+        setSaveStatus("conflict");
         toast.error("另一名管理员已修改训练；完整本地编排已保存，可下载或在载入新版本后恢复");
       } else {
-        toast.error(response.error.message || "保存失败");
+        setSaveStatus("error");
+        if (!quiet) toast.error(response.error.message || "保存失败");
       }
-      return;
+      return false;
+    }
+    const savedDesign = createTrainingDesignDraft(response.data);
+    statusRevisionRef.current = savedDesign.statusRevision;
+    const changedWhileSaving = changeVersionRef.current !== capturedVersion;
+    setDesign(savedDesign);
+    if (changedWhileSaving) {
+      const savedStageByKey = new Map(savedDesign.stages.map(stage => [stage.clientKey, stage]));
+      setStages(current => current.map(stage => {
+        const savedStage = savedStageByKey.get(stage.clientKey);
+        if (!savedStage) return stage;
+        const savedProblemByKey = new Map(savedStage.Problems.map(problem => [problem.clientKey, problem]));
+        return {
+          ...stage,
+          id: savedStage.id,
+          Problems: stage.Problems.map(problem => {
+            const savedProblem = savedProblemByKey.get(problem.clientKey);
+            return savedProblem ? { ...problem, id: savedProblem.id, assignmentId: savedProblem.assignmentId } : problem;
+          }),
+        };
+      }));
+      const savedGroupByKey = new Map(savedDesign.groups.map(group => [group.clientKey, group]));
+      setGrouping(current => current ? { ...current, groups: current.groups.map(group => {
+        const savedGroup = savedGroupByKey.get(group.clientKey);
+        return savedGroup ? { ...group, id: savedGroup.id } : group;
+      }) } : current);
+      setDirty(true);
+      setSaveStatus("dirty");
+    } else {
+      setStages(savedDesign.stages);
+      setGrouping({ groups: savedDesign.groups, memberships: savedDesign.participants.map(participant => {
+        const group = savedDesign.groups.find(item => item.id === participant.groupId);
+        return { participantId: participant.id, userId: participant.userId, groupId: participant.groupId, groupName: group?.name || "" };
+      }) });
+      setTitle(savedDesign.session.title);
+      setDescription(savedDesign.session.description || "");
+      setDirty(false);
+      setSaveStatus("saved");
+      clearRecoveryDraft();
     }
     setPendingRemovalConfirm(false);
-    clearRecoveryDraft();
-    toast.success("编排草稿已保存；未完成项会在发布检查中继续提示");
-    await load();
+    if (!quiet) toast.success("编排草稿已保存；未完成项会在发布检查中继续提示");
+    return true;
+  };
+  saveRef.current = save;
+  useEffect(() => {
+    if (!dirty || saving || pendingRemovalConfirm || saveStatus !== "dirty" || !design?.editable) return;
+    const timer = window.setTimeout(() => { void saveRef.current(false, true); }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [description, design?.editable, dirty, grouping, pendingRemovalConfirm, saveStatus, saving, stages, title]);
+
+  const openAuxiliary = async (panel: "roster" | "hints" | "matrix") => {
+    if (dirty && !(await save(false, true))) return;
+    setAuxiliaryPanel(panel);
+  };
+  const openTemplateDialog = async () => {
+    if (dirty && !(await save(false, true))) return;
+    setTemplateName((title || "未命名训练") + "模板");
+    setTemplateScope(design?.session.teamId ? "team" : design?.session.organizationId ? "organization" : "personal");
+    setTemplateOpen(true);
   };
   const saveAsTemplate = async () => {
     if (dirty) return toast.error("请先保存当前编排，再保存为模板");
@@ -431,11 +510,18 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     setTemplateOpen(false);
     toast.success("训练模板已保存，可在下次创建训练时使用");
   };
+  const preparePublish = async () => {
+    if (!design) return;
+    if (dirty && !(await save(false, true))) return;
+    if (!(await validate())) return;
+    setPublishOpen(true);
+  };
   const publish = async () => {
-    if (!design || dirty) return toast.error("请先保存当前编排");
+    if (!design) return;
+    if (dirty && !(await save(false, true))) return;
     if (!(await validate())) return;
     setPublishing(true);
-    const response = await publishTraining(sessionId, { expectedRevision: design.statusRevision });
+    const response = await publishTraining(sessionId, { expectedRevision: statusRevisionRef.current });
     setPublishing(false);
     if (!response.ok) return toast.error(response.error.message || "发布失败");
     toast.success("训练已发布；阶段开始后其配置固定，运行调整请在训练工作台完成");
@@ -478,7 +564,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           ]}
           actions={<>
             <span className={`${styles.saveState} ${dirty ? styles.saveStateDirty : ""}`} role="status">
-              {saving ? "正在保存…" : dirty ? "有未保存修改" : "已保存"}
+              {saveStatus === "saving" ? "正在自动保存…" : saveStatus === "conflict" ? "发生冲突，已保留本地副本" : saveStatus === "error" ? "保存失败，修改仍保留" : saveStatus === "dirty" ? "等待自动保存…" : "已自动保存"}
             </span>
             <Button variant="ghost" onClick={() => requestNavigation(runtimePath)}>返回课堂工作台</Button>
             <Button iconOnly variant="ghost" aria-label="重新加载" title="重新加载" onClick={requestReload} disabled={saving}><RefreshCw size={16} /></Button>
@@ -487,19 +573,15 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               <Button iconOnly variant="ghost" aria-label="恢复本地副本" title="恢复本地副本" onClick={restoreRecoveryDraft}><RotateCcw size={16} /></Button>
             </>}
             <Button variant="outline" icon={<Eye size={16} />} onClick={() => setPreviewOpen(true)}>预览学生视角</Button>
-            <Button variant="outline" icon={<BookMarked size={16} />} onClick={() => { if (dirty) return toast.error("请先保存当前编排"); setTemplateName((title || "未命名训练") + "模板"); setTemplateScope(design.session.teamId ? "team" : design.session.organizationId ? "organization" : "personal"); setTemplateOpen(true) }}>保存为模板</Button>
-            <Button variant="secondary" onClick={() => void save()} loading={saving} disabled={!dirty}>保存修改</Button>
-            {design.session.status === "DRAFT" && <Button icon={<Send size={16} />} onClick={() => void (async () => {
-              if (dirty) return toast.error("请先保存当前修改")
-              await validate()
-              setPublishOpen(true)
-            })()} loading={publishing}>发布训练</Button>}
+            <Button variant="outline" icon={<BookMarked size={16} />} disabled={saving} onClick={() => void openTemplateDialog()}>保存为模板</Button>
+            <Button variant="secondary" onClick={() => void save()} loading={saving} disabled={!dirty}>{saveStatus === "error" || saveStatus === "conflict" ? "重试保存" : "立即保存"}</Button>
+            {design.session.status === "DRAFT" && <Button icon={<Send size={16} />} onClick={() => void preparePublish()} loading={publishing} disabled={saving}>发布训练</Button>}
           </>}
         />
 
         <section className={styles.designerIdentity} aria-label="训练基本信息">
-          <label className={styles.field}>训练名称<Input value={title} onChange={event => { setTitle(event.target.value); setDirty(true) }} /></label>
-          <label className={styles.field}>训练说明<Textarea rows={2} value={description} onChange={event => { setDescription(event.target.value); setDirty(true) }} /></label>
+          <label className={styles.field}>训练名称<Input value={title} onChange={event => { setTitle(event.target.value); markDirty() }} /></label>
+          <label className={styles.field}>训练说明<Textarea rows={2} value={description} onChange={event => { setDescription(event.target.value); markDirty() }} /></label>
         </section>
 
         <div className={styles.designerCanvas}>
@@ -528,23 +610,14 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             <section className={styles.designerSummaryCard}>
               <div className={styles.designerSummaryHeading}><Users size={18} /><div><strong>学员与分组</strong><span>{design.participants.length} 名学员</span></div></div>
               <p>{(grouping?.groups.length || 0) > 1 ? `已启用分层训练 · ${grouping?.groups.length} 个组` : "所有学生使用相同训练内容"}</p>
-              <Button variant="outline" icon={<Settings2 size={15} />} onClick={() => {
-                if (dirty) return toast.error("请先保存当前修改")
-                setAuxiliaryPanel("roster")
-              }}>设置学员与分组</Button>
-              {(grouping?.groups.length || 0) > 1 && <Button variant="text" onClick={() => {
-                if (dirty) return toast.error("请先保存当前修改")
-                setAuxiliaryPanel("matrix")
-              }}>查看全部分组方案</Button>}
+              <Button variant="outline" icon={<Settings2 size={15} />} disabled={saving} onClick={() => void openAuxiliary("roster")}>设置学员与分组</Button>
+              {(grouping?.groups.length || 0) > 1 && <Button variant="text" disabled={saving} onClick={() => void openAuxiliary("matrix")}>查看全部分组方案</Button>}
             </section>
 
             <section className={styles.designerSummaryCard}>
               <div className={styles.designerSummaryHeading}><Lightbulb size={18} /><div><strong>分级提示</strong><span>按训练题目配置</span></div></div>
               <p>设置手动、时间、提交次数或分数触发的提示。</p>
-              <Button variant="outline" onClick={() => {
-                if (dirty) return toast.error("请先保存当前修改")
-                setAuxiliaryPanel("hints")
-              }}>管理提示</Button>
+              <Button variant="outline" disabled={saving} onClick={() => void openAuxiliary("hints")}>管理提示</Button>
             </section>
 
             <section className={styles.designerSummaryCard}>
@@ -635,8 +708,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           onStagesChange={replaceStages}
           grouping={grouping}
           sessionStatus={design.session.status}
-          onGroupingChange={value => { setGrouping(value); setDirty(true) }}
-          onRevisionChanged={revision => setDesign(current => current ? { ...current, statusRevision: revision } : current)}
+          onGroupingChange={value => { setGrouping(value); markDirty() }}
+          onRevisionChanged={revision => { statusRevisionRef.current = revision; setDesign(current => current ? { ...current, statusRevision: revision } : current) }}
         />}
         {auxiliaryPanel === "hints" && <TrainingDesignAuxiliary
           sessionId={sessionId}
