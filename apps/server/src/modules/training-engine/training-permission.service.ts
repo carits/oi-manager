@@ -11,6 +11,7 @@ export type TrainingPermissionResult = {
   canEdit: boolean
   canOpenHint: boolean
   reason: string
+  blockedByStageProblemId?: string
 }
 
 type PermissionPlan = {
@@ -227,7 +228,14 @@ export function resolveTrainingPermissionLoaded(
       const passed = String(policy.mode || 'ANY') === 'ALL'
         ? conditions.every(item => conditionSatisfied(item, previousProgress))
         : conditions.some(item => conditionSatisfied(item, previousProgress))
-      if (!passed) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SEQUENTIAL_LOCK' }
+      if (!passed) return {
+        canView: false,
+        canSubmit: false,
+        canEdit: false,
+        canOpenHint: false,
+        reason: 'SEQUENTIAL_LOCK',
+        blockedByStageProblemId: previous.stageProblemId,
+      }
     }
   }
 

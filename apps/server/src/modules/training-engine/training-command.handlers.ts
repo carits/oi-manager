@@ -393,6 +393,16 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     }
   }
 
+  const publishResults = async () => {
+    const settings = current.settings && typeof current.settings === 'object' && !Array.isArray(current.settings)
+      ? current.settings as Record<string, unknown>
+      : {}
+    if (settings.resultVisibility !== 'TEACHER_PUBLISHED') {
+      throw new TrainingEngineError(409, 'TRAINING_RESULT_VISIBILITY_INVALID', '当前训练未配置为教师公布成绩')
+    }
+    update.settings = asJson({ ...settings, resultsPublishedAt: settings.resultsPublishedAt || new Date().toISOString() })
+  }
+
   return {
     PAUSE_SESSION: pauseSession,
     RESUME_SESSION: resumeSession,
@@ -409,5 +419,6 @@ export function createTrainingRuntimeCommandHandlers(context: TrainingRuntimeCom
     CLEAR_STUCK_FOR_USER: clearStuckForUser,
     OPEN_HINT: hintControl,
     CLOSE_HINT: hintControl,
+    PUBLISH_RESULTS: publishResults,
   }
 }

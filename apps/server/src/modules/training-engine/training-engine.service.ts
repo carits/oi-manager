@@ -74,10 +74,10 @@ type StructureStage = {
 const COMMANDS = new Set([
   'PAUSE_SESSION', 'RESUME_SESSION',
   'FOCUS_PROBLEM', 'END_FOCUS', 'LOCK_PROBLEM', 'UNLOCK_PROBLEM', 'ENABLE_SUBMISSION', 'DISABLE_SUBMISSION',
-  'OPEN_HINT', 'CLOSE_HINT', 'UNLOCK_FOR_USER', 'SKIP_FOR_USER', 'CLEAR_STUCK_FOR_USER', 'MOVE_GROUP', 'SHOW_MESSAGE', 'CLEAR_MESSAGE',
+  'OPEN_HINT', 'CLOSE_HINT', 'UNLOCK_FOR_USER', 'SKIP_FOR_USER', 'CLEAR_STUCK_FOR_USER', 'MOVE_GROUP', 'SHOW_MESSAGE', 'CLEAR_MESSAGE', 'PUBLISH_RESULTS',
 ])
 const SESSION_WIDE_COMMANDS = new Set([
-  'PAUSE_SESSION', 'RESUME_SESSION',
+  'PAUSE_SESSION', 'RESUME_SESSION', 'PUBLISH_RESULTS',
 ])
 
 const COMMAND_ALLOWED_SESSION_STATUS: Record<string, ReadonlySet<string>> = {
@@ -97,6 +97,7 @@ const COMMAND_ALLOWED_SESSION_STATUS: Record<string, ReadonlySet<string>> = {
   MOVE_GROUP: new Set(['RUNNING', 'PAUSED']),
   SHOW_MESSAGE: new Set(['RUNNING', 'PAUSED']),
   CLEAR_MESSAGE: new Set(['RUNNING', 'PAUSED']),
+  PUBLISH_RESULTS: new Set(['RUNNING', 'PAUSED', 'ENDED']),
 }
 
 function assertTrainingCommandAllowed(type: string, status: string) {
@@ -166,7 +167,9 @@ function asJson(value: unknown): Prisma.InputJsonValue | undefined {
 function trainingResultsHidden(session: { settings: unknown; status: string }, manager: boolean) {
   if (manager) return false
   const settings = parseJsonObject(session.settings)
-  return settings.resultVisibility === 'AFTER_END' && !['ENDED', 'ARCHIVED'].includes(session.status)
+  if (settings.resultVisibility === 'AFTER_END') return !['ENDED', 'ARCHIVED'].includes(session.status)
+  if (settings.resultVisibility === 'TEACHER_PUBLISHED') return !settings.resultsPublishedAt
+  return false
 }
 
 function parseJsonObject(value: unknown): Record<string, any> {
@@ -204,7 +207,11 @@ function normalizeSessionSettings(value: unknown, scheduledStartAt: Date | null)
   const participantTarget = ['team', 'organization_students', 'custom_students'].includes(String(source.participantTarget))
     ? String(source.participantTarget)
     : undefined
-  return { dueAt: dueAt?.toISOString() || null, completionMode, requiredProblemCount, participantTarget }
+  const preset = ['practice', 'oi_exam', 'acm_exam'].includes(String(source.preset)) ? String(source.preset) : 'practice'
+  const resultVisibility = ['LIVE', 'AFTER_END', 'TEACHER_PUBLISHED'].includes(String(source.resultVisibility))
+    ? String(source.resultVisibility)
+    : preset === 'practice' ? 'LIVE' : 'AFTER_END'
+  return { dueAt: dueAt?.toISOString() || null, completionMode, requiredProblemCount, participantTarget, preset, resultVisibility, resultsPublishedAt: null }
 }
 
 export async function loadSession(id: string) {
@@ -1584,7 +1591,19 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const progressByProblem = new Map(progress.map(item => [item.stageProblemId, item]))
   const permissionContext: TrainingPermissionContext = { session: session as any, manager, participant: participantView, overrides, progressByProblem }
   const resolvedPermissions = resolveAllTrainingPermissions(permissionContext)
-  const permissions = Object.fromEntries(Object.entries(resolvedPermissions).map(([stageProblemId, permission]) => [stageProblemId, { ...permission, canSeeMetadata: manager || permission.canView }]))
+  const currentStageProblemIds = new Set(
+    session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.map(problem => problem.id) || [],
+  )
+  const metadataVisibleWhileLocked = new Set(['SEQUENTIAL_LOCK', 'FOCUS_REQUIRED', 'FOCUS_LOCK', 'PROBLEM_LOCKED'])
+  const permissions = Object.fromEntries(Object.entries(resolvedPermissions).map(([stageProblemId, permission]) => [
+    stageProblemId,
+    {
+      ...permission,
+      canSeeMetadata: manager
+        || permission.canView
+        || (currentStageProblemIds.has(stageProblemId) && metadataVisibleWhileLocked.has(permission.reason)),
+    },
+  ]))
   const resultsHidden = trainingResultsHidden(session, manager)
   const requirements = participant ? resolveParticipantSessionRequirements(session as any, participant.id, progress) : []
   const activeRequirements = requirements.filter(item => item.state !== 'RETIRED')
@@ -2224,18 +2243,67 @@ export async function processDueTrainingSessions(now = new Date()) {
     if (dueAt && Number.isFinite(dueAt.getTime()) && dueAt <= now) try {
       await prisma.$transaction(async tx => {
         await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS locked', 'training-session:' + session.id)
-        const current = await tx.trainingSession.findUnique({ where: { id: session.id }, select: { currentStageId: true } })
-        if (current?.currentStageId) {
-          const stage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId } })
-          if (stage?.lifecycle === 'RUNNING') {
-            await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { lifecycle: 'ENDED', runningSince: null, activeElapsedSeconds: { increment: stageElapsed(stage, now) }, endedAt: now, endReason: 'TIME_REACHED' } })
-          }
+        const current = await tx.trainingSession.findUnique({ where: { id: session.id }, select: { status: true, currentStageId: true } })
+        if (!current || current.status !== 'RUNNING') return
+        if (current.currentStageId) {
+          await applyV2StageTransition(tx, session.id, {
+            action: 'end_session',
+            stageId: current.currentStageId,
+            outcome: 'completed',
+            actorUserId: null,
+            reason: '训练截止时间已到',
+          })
+          await tx.trainingSessionStage.update({ where: { id: current.currentStageId }, data: { endReason: 'TIME_REACHED' } })
+        } else {
+          await tx.trainingSessionStage.updateMany({ where: { sessionId: session.id, lifecycle: 'PENDING' }, data: { lifecycle: 'SKIPPED', endedAt: now, endReason: 'SESSION_ENDED' } })
+          await tx.trainingSession.update({ where: { id: session.id }, data: { status: 'ENDED', endedAt: now, runningSince: null, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+          await appendEvent(tx, session.id, TrainingEventTypes.SESSION_ENDED, 'ALL', null, { reason: '训练截止时间已到' })
         }
-        await tx.trainingSession.update({ where: { id: session.id }, data: { status: 'ENDED', currentStageId: null, endedAt: now, runningSince: null, statusRevision: { increment: 1 } } })
         ended++
       })
     } catch { /* another command won */ }
   }
+
+  const timed = await prisma.trainingSession.findMany({
+    where: { status: 'RUNNING', currentStageId: { not: null } },
+    select: { id: true },
+    take: 100,
+  })
+  for (const item of timed) try {
+    await prisma.$transaction(async tx => {
+      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS locked', 'training-session:' + item.id)
+      const current = await tx.trainingSession.findUnique({
+        where: { id: item.id },
+        include: {
+          Stages: {
+            orderBy: { orderIndex: 'asc' },
+            include: { TimeAdjustments: { orderBy: { createdAt: 'asc' } } },
+          },
+        },
+      })
+      if (!current || current.status !== 'RUNNING' || !current.currentStageId) return
+      const stage = current.Stages.find(candidate => candidate.id === current.currentStageId)
+      if (!stage || stage.lifecycle !== 'RUNNING' || !['TIME', 'HYBRID'].includes(stage.endPolicy)) return
+      const effectiveDurationSeconds = Number(stage.plannedDurationSeconds || 0)
+        + stage.TimeAdjustments.reduce((sum, adjustment) => sum + adjustment.seconds, 0)
+      const elapsedSeconds = stage.activeElapsedSeconds + stageElapsed(stage, now)
+      if (effectiveDurationSeconds <= 0 || elapsedSeconds < effectiveDurationSeconds) return
+
+      const next = current.Stages.find(candidate => candidate.orderIndex > stage.orderIndex && candidate.lifecycle === 'PENDING')
+      await applyV2StageTransition(tx, current.id, {
+        action: next ? 'advance' : 'end_session',
+        stageId: stage.id,
+        nextStageId: next?.id || null,
+        outcome: 'completed',
+        actorUserId: null,
+        reason: '阶段计划时长已到',
+      })
+      await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { endReason: 'TIME_REACHED' } })
+      if (next) advanced++
+      else ended++
+    })
+  } catch { /* another scheduler or command won */ }
+
   return { started, advanced, ended }
 }
 
@@ -2362,6 +2430,13 @@ export async function getTrainingReport(userId: string, sessionId: string) {
     { id: reportParticipant.id, userId: reportParticipant.userId, currentGroupId: reportParticipant.groupId },
     session,
   ))))
+  const commandRecords = await prisma.trainingSessionCommand.findMany({ where: { sessionId }, orderBy: { createdAt: 'asc' } })
+  const interventions = commandRecords.filter(command => manager || Boolean(reportParticipant && targetApplies(
+    command.targetType,
+    command.targetId,
+    { id: reportParticipant.id, userId: reportParticipant.userId, currentGroupId: reportParticipant.groupId },
+    session,
+  )))
   const rosterEvents = await prisma.trainingSessionEvent.findMany({
     where: {
       sessionId,
@@ -2377,6 +2452,7 @@ export async function getTrainingReport(userId: string, sessionId: string) {
     groupChanges,
     rosterEvents,
     runtimeProblems,
+    interventions,
   }
 }
 

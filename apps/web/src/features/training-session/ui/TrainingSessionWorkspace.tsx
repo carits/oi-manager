@@ -70,7 +70,7 @@ type StrategyState = {
   lastDecision?: { decision: string; createdAt: string } | null
 }
 type V2RuntimeGroup = { id: string; name: string; orderIndex: number; status: string; Participants?: Array<{ id?: string; userId?: string }> }
-type Workspace = { session: { Groups: V2RuntimeGroup[]; currentStageId?: string | null; currentStage?: { id: string; name: string; orderIndex: number; lifecycle: string } | null; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentGroupId: string; requiredCount?: number; completedCount?: number; latestGroupChange?: { id: string; fromGroupName?: string | null; toGroupName: string; reason: string; appliedAt?: string | null } | null }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string }>; strategy: Record<string, StrategyState> }
+type Workspace = { session: { Groups: V2RuntimeGroup[]; settings?: { resultVisibility?: 'LIVE' | 'AFTER_END' | 'TEACHER_PUBLISHED'; resultsPublishedAt?: string | null }; currentStageId?: string | null; currentStage?: { id: string; name: string; orderIndex: number; lifecycle: string } | null; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentGroupId: string; requiredCount?: number; completedCount?: number; latestGroupChange?: { id: string; fromGroupName?: string | null; toGroupName: string; reason: string; appliedAt?: string | null } | null }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string; blockedByStageProblemId?: string }>; strategy: Record<string, StrategyState> }
 type Dashboard = { participants: TrainingDashboardParticipant[]; summary: { total: number; working: number; stuck: number; completed: number } }
 type Roster = { revision: number; candidates: Array<{ userId: string; username: string; displayName: string; role: string; selected: boolean }> }
 type Hint = { id: string; level: number; title?: string; content?: string; opened: boolean; globallyOpenedAt?: string }
@@ -107,6 +107,7 @@ function StageTimeMetrics({ activeElapsedSeconds, runningSince, plannedDurationS
     groupChanges: Array<{ id: string; participantId: string; fromGroupId?: string | null; toGroupId: string; reason: string; changedBy: string; createdAt: string }>
     rosterEvents: Array<{ id: string; type: string; targetId?: string | null; payload?: { reason?: string; historyMode?: string; groupId?: string }; createdAt: string }>
     runtimeProblems: Array<{ id: string; targetType: string; targetId?: string | null; stageProblemId?: string | null; payload?: { reason?: string; required?: boolean; targetScore?: number; platform?: string; problemCode?: string; title?: string }; createdAt: string }>
+    interventions: Array<{ id: string; seq: number; type: string; targetType: string; targetId?: string | null; payload?: { message?: string; messageType?: string; stageProblemId?: string; hintId?: string; mode?: string }; createdBy: string; createdAt: string }>
   }
 
 export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
@@ -122,7 +123,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [lastSyncedAt, setLastSyncedAt] = useState<number>()
   const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [commandBusy, setCommandBusy] = useState(false), [rosterSaving, setRosterSaving] = useState(false)
-  const [studentQuery, setStudentQuery] = useState(''), [studentFilter, setStudentFilter] = useState('all'), [studentGroupFilter, setStudentGroupFilter] = useState('all')
+  const [studentQuery, setStudentQuery] = useState(''), [studentFilter, setStudentFilter] = useState('all'), [studentGroupFilter, setStudentGroupFilter] = useState('all'), [studentProblemFilter, setStudentProblemFilter] = useState('all')
+  const [studentSort, setStudentSort] = useState<'name' | 'score' | 'attempts' | 'time' | 'status'>('status'), [batchHintId, setBatchHintId] = useState('')
   const [roster, setRoster] = useState<Roster>(), [rosterOpen, setRosterOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false), [joinUserId, setJoinUserId] = useState(''), [joinGroupId, setJoinGroupId] = useState(''), [joinHistoryMode, setJoinHistoryMode] = useState<'absent' | 'makeup'>('absent'), [joinReason, setJoinReason] = useState('')
   const [leaveParticipant, setLeaveParticipant] = useState<Dashboard['participants'][number]>(), [leaveReason, setLeaveReason] = useState('')
@@ -130,7 +132,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [hintMode, setHintMode] = useState('MANUAL'), [hintTrigger, setHintTrigger] = useState('')
   const [commandTargetType, setCommandTargetType] = useState('ALL'), [commandTargetId, setCommandTargetId] = useState('')
   const [messageOpen, setMessageOpen] = useState(false), [message, setMessage] = useState(''), [messageType, setMessageType] = useState('INFO')
-  const [groupChangeParticipant, setGroupChangeParticipant] = useState<Dashboard['participants'][number]>(), [groupChangeTarget, setGroupChangeTarget] = useState(''), [groupChangeReason, setGroupChangeReason] = useState('')
+  const [groupChangeParticipantIds, setGroupChangeParticipantIds] = useState<string[]>([]), [groupChangeTarget, setGroupChangeTarget] = useState(''), [groupChangeReason, setGroupChangeReason] = useState('')
   const [groupChangeMode, setGroupChangeMode] = useState<'immediate' | 'next_stage'>('immediate'), [groupChangeStageId, setGroupChangeStageId] = useState('')
   const [splitSourceGroupId, setSplitSourceGroupId] = useState(''), [splitName, setSplitName] = useState(''), [splitParticipantIds, setSplitParticipantIds] = useState<string[]>([]), [splitReason, setSplitReason] = useState('')
   const [mergeSourceGroupId, setMergeSourceGroupId] = useState(''), [mergeTargetGroupId, setMergeTargetGroupId] = useState(''), [mergeReason, setMergeReason] = useState('')
@@ -603,12 +605,13 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }
   const submitGroupChange = async () => {
     const stageId = groupChangeMode === 'next_stage' ? groupChangeStageId : data?.session.currentStageId
-    if (!data || !stageId || !groupChangeParticipant || !groupChangeTarget || !groupChangeReason.trim()) return
+    if (!data || !stageId || !groupChangeParticipantIds.length || !groupChangeTarget || !groupChangeReason.trim()) return
     setCommandBusy(true)
-    const response = await changeTrainingStageGroup(sessionId, stageId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, participantIds: [groupChangeParticipant.id], toGroupId: groupChangeTarget, effectiveMode: groupChangeMode, ...(groupChangeMode === 'next_stage' ? { targetStageId: groupChangeStageId } : {}), reason: groupChangeReason.trim() })
+    const response = await changeTrainingStageGroup(sessionId, stageId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, participantIds: groupChangeParticipantIds, toGroupId: groupChangeTarget, effectiveMode: groupChangeMode, ...(groupChangeMode === 'next_stage' ? { targetStageId: groupChangeStageId } : {}), reason: groupChangeReason.trim() })
     setCommandBusy(false)
     if (!response.ok) return toast.error(response.error.message || '调整分组失败')
-    setGroupChangeParticipant(undefined); setGroupChangeTarget(''); setGroupChangeReason(''); setGroupChangeMode('immediate'); setGroupChangeStageId(''); await load()
+    toast.success('已调整 ' + groupChangeParticipantIds.length + ' 名学员的训练分组')
+    setGroupChangeParticipantIds([]); setSelectedParticipantIds([]); setGroupChangeTarget(''); setGroupChangeReason(''); setGroupChangeMode('immediate'); setGroupChangeStageId(''); await load()
   }
   const submitSplitGroup = async () => {
     if (!data || !splitSourceGroupId || !splitName.trim() || !splitReason.trim()) return
@@ -707,6 +710,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const activeStageId = data.session.currentStageId || undefined
   const currentStage = data.session.Stages.find(stage => stage.id === activeStageId)
   const examActive = currentStage?.mode === 'EXAM'
+  const resultVisibility = data.session.settings?.resultVisibility || (examActive ? 'AFTER_END' : 'LIVE')
+  const resultsPublished = resultVisibility !== 'TEACHER_PUBLISHED' || Boolean(data.session.settings?.resultsPublishedAt)
   const examTitle = data.session.sessionType === 'ACM' ? 'ACM 模拟赛' : data.session.sessionType === 'OI' ? 'OI 模拟测试' : '模拟测试'
   const pendingStages = data.session.Stages.filter(stage => stage.lifecycle === 'PENDING')
   const nextPendingStage = pendingStages.find(stage => !currentStage || data.session.Stages.indexOf(stage) > data.session.Stages.indexOf(currentStage))
@@ -731,15 +736,35 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const currentProblemProgress = selectedId ? data.progress.find(item => item.stageProblemId === selectedId) : undefined
   const scoreGoals = problem?.scoreGoals?.map(goal => goal.score).sort((a, b) => a - b) || []
   const nextScoreGoal = activeStrategy?.nextScoreTarget ?? scoreGoals.find(score => score > (currentProblemProgress?.bestScore || 0))
+  const participantMetrics = (item: TrainingDashboardParticipant) => {
+    const current = item.progress.find(progress => progress.stageProblemId === item.currentProblemId)
+    return {
+      current,
+      score: current?.bestScore ?? 0,
+      attempts: current?.attemptCount ?? 0,
+      time: current?.activeSeconds ?? item.activeSeconds ?? 0,
+      stuck: item.progress.some(progress => progress.status === 'STUCK'),
+    }
+  }
   const filteredParticipants = (dashboard?.participants || []).filter(item => {
     const queryMatch = !studentQuery.trim() || item.user.username.toLowerCase().includes(studentQuery.trim().toLowerCase())
+    const metrics = participantMetrics(item)
     const statusMatch = studentFilter === 'all'
-      || studentFilter === 'stuck' && item.progress.some(progress => progress.status === 'STUCK')
+      || studentFilter === 'stuck' && metrics.stuck
       || studentFilter === 'completed' && item.completed
       || studentFilter === 'working' && !item.completed && item.progress.some(progress => progress.status === 'WORKING')
       || studentFilter === 'offline' && !item.online
     const groupMatch = studentGroupFilter === 'all' || item.currentGroupId === studentGroupFilter
-    return queryMatch && statusMatch && groupMatch
+    const problemMatch = studentProblemFilter === 'all' || item.currentProblemId === studentProblemFilter
+    return queryMatch && statusMatch && groupMatch && problemMatch
+  }).sort((left, right) => {
+    const leftMetrics = participantMetrics(left)
+    const rightMetrics = participantMetrics(right)
+    if (studentSort === 'score') return rightMetrics.score - leftMetrics.score || left.user.username.localeCompare(right.user.username)
+    if (studentSort === 'attempts') return rightMetrics.attempts - leftMetrics.attempts || left.user.username.localeCompare(right.user.username)
+    if (studentSort === 'time') return rightMetrics.time - leftMetrics.time || left.user.username.localeCompare(right.user.username)
+    if (studentSort === 'status') return Number(rightMetrics.stuck) - Number(leftMetrics.stuck) || Number(!right.online) - Number(!left.online) || Number(right.completed) - Number(left.completed) || left.user.username.localeCompare(right.user.username)
+    return left.user.username.localeCompare(right.user.username)
   })
   const problemNames = Object.fromEntries(data.session.Stages.flatMap(stage => stage.Problems.map(item => [item.id, `${item.alias || item.Problem.problemId} · ${item.Problem.title}`])))
   const attentionParticipants = [...(dashboard?.participants || [])]
@@ -751,20 +776,45 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const currentStageIndex = currentStage ? data.session.Stages.findIndex(stage => stage.id === currentStage.id) : 0
   const offlineCount = dashboard?.participants.filter(item => !item.online).length || 0
   const openGroupChange = (item: TrainingDashboardParticipant) => {
-    setGroupChangeParticipant(item)
+    setGroupChangeParticipantIds([item.id])
     setGroupChangeMode(currentStage ? 'immediate' : 'next_stage')
     setGroupChangeStageId(futureStages[0]?.id || '')
     setGroupChangeTarget(currentStage ? item.currentGroupId || '' : '')
     setGroupChangeReason('')
   }
+  const openBatchGroupChange = () => {
+    if (!selectedParticipantIds.length) return
+    setGroupChangeParticipantIds(selectedParticipantIds)
+    setGroupChangeMode(currentStage ? 'immediate' : 'next_stage')
+    setGroupChangeStageId(futureStages[0]?.id || '')
+    setGroupChangeTarget('')
+    setGroupChangeReason('')
+  }
+  const interventionLabel: Record<string, string> = {
+    FOCUS_PROBLEM: '聚焦题目', END_FOCUS: '结束聚焦', LOCK_PROBLEM: '锁定题目', UNLOCK_PROBLEM: '开放题目',
+    ENABLE_SUBMISSION: '恢复提交', DISABLE_SUBMISSION: '禁止提交', OPEN_HINT: '开放提示', CLOSE_HINT: '关闭提示',
+    UNLOCK_FOR_USER: '单独解锁', SKIP_FOR_USER: '允许跳题', CLEAR_STUCK_FOR_USER: '清除卡题状态',
+    SHOW_MESSAGE: '发送消息', CLEAR_MESSAGE: '清除消息', PAUSE_SESSION: '暂停训练', RESUME_SESSION: '恢复训练',
+    PUBLISH_RESULTS: '公布测试成绩',
+  }
   const renderRailProblem = (stage: Stage, item: StageProblem, requirementLabel: string) => {
     const access = data.permissions[item.id]
     const progress = data.progress.find(entry => entry.stageProblemId === item.id)
+    const blockingProblem = access?.blockedByStageProblemId
+      ? stage.Problems.find(problem => problem.id === access.blockedByStageProblemId)
+      : undefined
+    const lockedLabel = access?.reason === 'SEQUENTIAL_LOCK'
+      ? blockingProblem ? `完成 ${blockingProblem.alias || blockingProblem.Problem.problemId} 后开放` : '完成前一道题后开放'
+      : access?.reason === 'FOCUS_REQUIRED' || access?.reason === 'FOCUS_LOCK'
+        ? '等待教师开放'
+        : access?.reason === 'PROBLEM_LOCKED'
+          ? '题目暂时锁定'
+          : '尚未开放'
     const progressLabel = examActive && !data.manager && stage.id === activeStageId
-      ? '结果结束后公布'
+      ? resultVisibility === 'TEACHER_PUBLISHED' ? resultsPublished ? trainingProgressStatusLabel(progress?.status || 'NOT_STARTED') + (progress?.bestScore != null ? ' · ' + progress.bestScore + ' 分' : '') : '等待教师公布' : resultVisibility === 'LIVE' ? trainingProgressStatusLabel(progress?.status || 'NOT_STARTED') + (progress?.bestScore != null ? ' · ' + progress.bestScore + ' 分' : '') : '结果结束后公布'
       : access?.canView
         ? trainingProgressStatusLabel(progress?.status || 'NOT_STARTED') + (progress?.bestScore != null ? ' · ' + progress.bestScore + ' 分' : '')
-        : '尚未开放'
+        : lockedLabel
     return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? requirementLabel : '本阶段历史'} · {progressLabel}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>
   }
   return <PageFrame width="workbench"><div className={styles.stack}>
@@ -849,6 +899,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
               {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
               {status === 'RUNNING' && <><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>暂停提交（可继续编辑）</Button><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>暂停提交与编辑</Button></>}
               {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setRuntimeProblemOpen(true); setRuntimeProblems([]); setRuntimeProblemTargetType('ALL'); setRuntimeProblemTargetId(''); setRuntimeProblemRequired(true); setRuntimeProblemTargetScore(100); setRuntimeProblemReason('') }}>追加训练题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => { setSelectedParticipantIds([]); setMessageOpen(true) }}>发送消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
+              {resultVisibility === 'TEACHER_PUBLISHED' && !resultsPublished && ['RUNNING', 'PAUSED', 'ENDED'].includes(status) && <Button disabled={commandBusy} onClick={() => void command('PUBLISH_RESULTS', {}, 'ALL', '')}>公布测试成绩</Button>}
+              {resultVisibility === 'TEACHER_PUBLISHED' && resultsPublished && <StatusBadge variant="success">成绩已公布</StatusBadge>}
             </div>
           </div>
         </details>
@@ -888,7 +940,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </div>
       {examActive && <div className={styles.card} role="status">
         <strong>{examTitle}进行中</strong>
-        <p className={styles.muted}>题目同时开放；训练提示不可用；同伴进度不可见。成绩按本场设置在考试结束后展示。</p>
+        <p className={styles.muted}>题目同时开放；训练提示不可用；同伴进度不可见。{resultVisibility === 'LIVE' ? '成绩提交后立即展示。' : resultVisibility === 'TEACHER_PUBLISHED' ? resultsPublished ? '教师已公布成绩。' : '成绩将在教师公布后展示。' : '成绩将在考试结束后展示。'}</p>
       </div>}
       {data.participant?.latestGroupChange && <div className={styles.card} role="status" aria-live="polite">
         <strong>训练安排已调整</strong>
@@ -952,6 +1004,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
               <label className={styles.field}>搜索学生<Input value={studentQuery} onChange={event => setStudentQuery(event.target.value)} placeholder="用户名" /></label>
               <label className={styles.field}>状态<Select value={studentFilter} onChange={event => setStudentFilter(event.target.value)}><option value="all">全部</option><option value="stuck">可能卡题</option><option value="working">进行中</option><option value="completed">已完成</option><option value="offline">离线</option></Select></label>
               {Boolean(data.session.Groups.length) && <label className={styles.field}>分组<Select value={studentGroupFilter} onChange={event => setStudentGroupFilter(event.target.value)}><option value="all">全部分组</option>{data.session.Groups.filter(group => group.status === 'active').map(group => <option value={group.id} key={group.id}>{group.name}</option>)}</Select></label>}
+              <label className={styles.field}>当前题<Select value={studentProblemFilter} onChange={event => setStudentProblemFilter(event.target.value)}><option value="all">全部题目</option>{currentStage?.Problems.map(item => <option value={item.id} key={item.id}>{item.alias || item.Problem.problemId} · {item.Problem.title}</option>)}</Select></label>
+              <label className={styles.field}>排序<Select value={studentSort} onChange={event => setStudentSort(event.target.value as typeof studentSort)}><option value="status">优先需要关注</option><option value="name">按用户名</option><option value="score">按当前题分数</option><option value="attempts">按提交次数</option><option value="time">按有效用时</option></Select></label>
             </div>
             <div className={styles.actions} role="toolbar" aria-label="批量课堂操作">
               <label className={styles.checkboxLabel}>
@@ -966,25 +1020,38 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
               </label>
               <Button size="sm" variant="outline" disabled={commandBusy || selectedParticipantIds.length === 0} onClick={() => void batchCommand('UNLOCK_FOR_USER')}>批量解锁当前题</Button>
               <Button size="sm" variant="outline" disabled={commandBusy || selectedParticipantIds.length === 0} onClick={() => void batchCommand('SKIP_FOR_USER')}>批量允许跳过</Button>
+              <Button size="sm" variant="outline" disabled={commandBusy || selectedParticipantIds.length === 0} onClick={openBatchGroupChange}>批量调整分组</Button>
+              <Select aria-label="批量提示" value={batchHintId} onChange={event => setBatchHintId(event.target.value)} disabled={!hints.length}>
+                <option value="">选择提示</option>
+                {hints.map(hint => <option key={hint.id} value={hint.id}>{hint.level} 级 · {hint.title || '提示'}</option>)}
+              </Select>
+              <Button size="sm" variant="outline" disabled={commandBusy || selectedParticipantIds.length === 0 || !batchHintId} onClick={() => void batchCommand('OPEN_HINT', { hintId: batchHintId })}>批量开放提示</Button>
               <Button size="sm" variant="secondary" disabled={commandBusy || selectedParticipantIds.length === 0} onClick={() => { setMessageOpen(true); setMessage('') }}>批量发送消息</Button>
               {selectedParticipantIds.length > 0 && <span className={styles.muted}>已选 {selectedParticipantIds.length} 人</span>}
             </div>
-            <div className={styles.participantList}>{filteredParticipants.map(item => {
-              const stuck = item.progress.some(progress => progress.status === 'STUCK')
-              return <div className={styles.participantRow} key={item.id}>
-                <input
-                  type="checkbox"
-                  aria-label={'选择 ' + item.user.username}
-                  checked={selectedParticipantIds.includes(item.id)}
-                  onChange={event => setSelectedParticipantIds(current => event.target.checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))}
-                />
-                <button type="button" className={styles.participantRowMain} onClick={() => setSelectedParticipantId(item.id)}>
-                  <span className={styles.participantAvatar}>{item.user.username.slice(0, 1).toUpperCase()}</span>
-                  <span><strong>{item.user.username}</strong><small>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 题完成{item.currentGroupId ? ' · ' + (data.session.Groups.find(group => group.id === item.currentGroupId)?.name || '已分组') : ''}</small></span>
-                  <StatusBadge variant={stuck ? 'warning' : item.completed ? 'success' : 'neutral'}>{stuck ? '需要关注' : item.completed ? '已完成' : '查看'}</StatusBadge>
-                </button>
+            <div className={styles.participantTableWrap}>
+              <div className={styles.participantTable} role="table" aria-label="课堂学员状态">
+                <div className={styles.participantTableHeader} role="row">
+                  <span /><span>学生</span><span>分组</span><span>当前题</span><span>分数</span><span>提交</span><span>用时</span><span>状态</span>
+                </div>
+                {filteredParticipants.map(item => {
+                  const metrics = participantMetrics(item)
+                  const groupName = item.currentGroupId ? data.session.Groups.find(group => group.id === item.currentGroupId)?.name || '已分组' : '未分组'
+                  const statusLabel = metrics.stuck ? '卡题' : !item.online ? '离线' : item.completed ? '已完成' : metrics.current ? trainingProgressStatusLabel(metrics.current.status) : '未开始'
+                  return <div className={styles.participantTableRow} role="row" key={item.id}>
+                    <input type="checkbox" aria-label={'选择 ' + item.user.username} checked={selectedParticipantIds.includes(item.id)} onChange={event => setSelectedParticipantIds(current => event.target.checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))} />
+                    <button type="button" onClick={() => setSelectedParticipantId(item.id)}><strong>{item.user.username}</strong><small>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 完成</small></button>
+                    <span>{groupName}</span>
+                    <span title={item.currentProblemId ? problemNames[item.currentProblemId] : undefined}>{item.currentProblemId ? problemNames[item.currentProblemId] || '训练题' : '—'}</span>
+                    <span>{metrics.current?.bestScore ?? '—'}</span>
+                    <span>{metrics.attempts}</span>
+                    <span>{formatDuration(metrics.time)}</span>
+                    <StatusBadge variant={metrics.stuck ? 'warning' : item.completed ? 'success' : 'neutral'}>{statusLabel}</StatusBadge>
+                  </div>
+                })}
               </div>
-            })}</div>            {filteredParticipants.length === 0 && <p className={styles.muted}>没有符合当前筛选条件的学员。</p>}
+            </div>
+            {filteredParticipants.length === 0 && <p className={styles.muted}>没有符合当前筛选条件的学员。</p>}
           </div>
         </Section>
       </aside>}
@@ -1115,7 +1182,24 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <label className={styles.field}>合组原因<Textarea rows={4} maxLength={2000} value={mergeReason} onChange={event => setMergeReason(event.target.value)} /></label>
       </div>
     </FormDialog>
-    <FormDialog isOpen={Boolean(groupChangeParticipant)} onClose={() => setGroupChangeParticipant(undefined)} title="调整训练分组" description="可立即调整当前要求，也可预设下一阶段；既有草稿、提交和历史进度永不删除。" onSubmit={() => void submitGroupChange()} submitText="确认换组" loading={commandBusy} dirty={Boolean(groupChangeReason)}><div className={styles.stack}><p>学员：<strong>{groupChangeParticipant?.user.username}</strong></p><label className={styles.field}>生效方式<Select value={groupChangeMode} onChange={event => { const mode = event.target.value as 'immediate' | 'next_stage'; setGroupChangeMode(mode); setGroupChangeTarget(''); if (mode === 'next_stage') setGroupChangeStageId(futureStages[0]?.id || '') }}><option value="immediate" disabled={!currentStage}>立即应用到当前阶段</option><option value="next_stage" disabled={!futureStages.length}>预设下一阶段</option></Select></label>{groupChangeMode === 'next_stage' && <label className={styles.field}>目标阶段<Select value={groupChangeStageId} onChange={event => { setGroupChangeStageId(event.target.value); setGroupChangeTarget('') }}>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}<label className={styles.field}>目标分组<Select value={groupChangeTarget} onChange={event => setGroupChangeTarget(event.target.value)}><option value="">请选择</option>{data.session.Groups.filter(group => group.status === 'active').map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label><label className={styles.field}>调整原因<Textarea rows={4} maxLength={2000} value={groupChangeReason} onChange={event => setGroupChangeReason(event.target.value)} /></label></div></FormDialog>
+    <FormDialog
+      isOpen={groupChangeParticipantIds.length > 0}
+      onClose={() => setGroupChangeParticipantIds([])}
+      title="调整训练分组"
+      description="可立即调整当前要求，也可预设下一阶段；既有草稿、提交和历史进度永不删除。"
+      onSubmit={() => void submitGroupChange()}
+      submitText="确认换组"
+      loading={commandBusy}
+      dirty={Boolean(groupChangeReason)}
+    >
+      <div className={styles.stack}>
+        <p>学员：<strong>{groupChangeParticipantIds.length === 1 ? dashboard?.participants.find(item => item.id === groupChangeParticipantIds[0])?.user.username : '已选择 ' + groupChangeParticipantIds.length + ' 人'}</strong></p>
+        <label className={styles.field}>生效方式<Select value={groupChangeMode} onChange={event => { const mode = event.target.value as 'immediate' | 'next_stage'; setGroupChangeMode(mode); setGroupChangeTarget(''); if (mode === 'next_stage') setGroupChangeStageId(futureStages[0]?.id || '') }}><option value="immediate" disabled={!currentStage}>立即应用到当前阶段</option><option value="next_stage" disabled={!futureStages.length}>预设下一阶段</option></Select></label>
+        {groupChangeMode === 'next_stage' && <label className={styles.field}>目标阶段<Select value={groupChangeStageId} onChange={event => { setGroupChangeStageId(event.target.value); setGroupChangeTarget('') }}>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}
+        <label className={styles.field}>目标分组<Select value={groupChangeTarget} onChange={event => setGroupChangeTarget(event.target.value)}><option value="">请选择</option>{data.session.Groups.filter(group => group.status === 'active').map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>
+        <label className={styles.field}>调整原因<Textarea rows={4} maxLength={2000} value={groupChangeReason} onChange={event => setGroupChangeReason(event.target.value)} /></label>
+      </div>
+    </FormDialog>
     <FormDialog
       isOpen={Boolean(transitionDialog)}
       onClose={() => { setTransitionDialog(undefined); setTransitionReason('') }}
@@ -1194,6 +1278,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {Boolean(report?.runtimeProblems.length) && <Section title="临时追加题目"><div className={styles.timeline}>{report?.runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><strong>{item.payload?.platform || '题库'} · {item.payload?.problemCode || item.stageProblemId} · {item.payload?.title || '训练题'}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? '指定分组' : '指定学员'} · {item.payload?.required === false ? '选做' : '必做'} · 目标 {item.payload?.targetScore ?? 100} 分 · {item.payload?.reason || '未记录原因'}</span></div>)}</div></Section>}
         {Boolean(report?.rosterEvents.length) && <Section title="中途加入与退出"><div className={styles.timeline}>{report?.rosterEvents.map(event => <div className={styles.timelineItem} key={event.id}><strong>{event.type.endsWith('.joined') ? '加入训练' : '退出训练'} · {reportUserName(event.targetId)}</strong><br /><span>{event.payload?.reason || '未记录原因'} · {new Date(event.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         {Boolean(report?.groupChanges.length) && <Section title="换组时间线"><div className={styles.timeline}>{report?.groupChanges.map(change => <div className={styles.timelineItem} key={change.id}><strong>{reportParticipantName(change.participantId)}</strong><br /><span>{reportGroupName(change.fromGroupId || undefined)} → {reportGroupName(change.toGroupId)} · {change.reason} · {new Date(change.createdAt).toLocaleString()}</span></div>)}</div></Section>}
+        {Boolean(report?.interventions.length) && <Section title="课堂干预时间线"><div className={styles.timeline}>{report?.interventions.map(item => <div className={styles.timelineItem} key={item.id}><strong>{interventionLabel[item.type] || item.type}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? reportGroupName(item.targetId || undefined) : item.targetType === 'USER' ? reportUserName(item.targetId) : '当前团队'}{item.payload?.stageProblemId ? ' · ' + (problemNames[item.payload.stageProblemId] || item.payload.stageProblemId) : ''}{item.payload?.message ? ' · ' + item.payload.message : ''} · {new Date(item.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         <div className={styles.grid}>{report?.participants.map(item => <article className={styles.card} key={item.user.id}><h3>{item.user.username}</h3><p>{item.group.name} · 有效训练 {formatDuration(item.activeSeconds)}</p><p>{item.progress.length} 条题目进度</p></article>)}</div>
       </div>
     </DetailDialog>

@@ -21,6 +21,7 @@ import styles from './TrainingEngine.module.css'
 type ParticipantTarget = 'team' | 'organization_students' | 'custom_students'
 type CompletionMode = 'all' | 'count'
 type TrainingPreset = 'practice' | 'oi_exam' | 'acm_exam'
+type ExamResultVisibility = 'LIVE' | 'AFTER_END' | 'TEACHER_PUBLISHED'
 type SubmitAction = 'publish' | 'classroom'
 
 type TrainingTemplateOption = { key: string; name: string; description: string; source: "builtin" | "personal" | "organization" | "team"; problemCount?: number; stages: Array<{ name: string }> }
@@ -74,6 +75,7 @@ export function TrainingSetupDialog({
   const [templates, setTemplates] = useState<TrainingTemplateOption[]>([])
   const [templateKey, setTemplateKey] = useState('')
   const [examDurationMinutes, setExamDurationMinutes] = useState(120)
+  const [examResultVisibility, setExamResultVisibility] = useState<ExamResultVisibility>('AFTER_END')
   const [requiredCount, setRequiredCount] = useState(1)
   const [participantPreview, setParticipantPreview] = useState<{ participantCount: number; targetName: string } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -115,6 +117,7 @@ export function TrainingSetupDialog({
     setPreset('practice')
     setTemplateKey('')
     setExamDurationMinutes(120)
+    setExamResultVisibility('AFTER_END')
     setRequiredCount(1)
     setParticipantPreview(null)
     setSchoolWideConfirmed(false)
@@ -190,7 +193,7 @@ export function TrainingSetupDialog({
         requiredProblemCount: completionCount,
         participantTarget,
         preset,
-        resultVisibility: exam ? 'AFTER_END' : 'LIVE',
+        resultVisibility: exam ? examResultVisibility : 'LIVE',
       },
       stages: templateKey ? undefined : [{
         name: exam ? (preset === 'oi_exam' ? 'OI 模拟测试' : 'ACM 模拟测试') : '训练任务',
@@ -245,8 +248,9 @@ export function TrainingSetupDialog({
     ['训练对象', previewLoading ? '正在确认…' : participantPreview ? `${participantPreview.targetName} · ${participantPreview.participantCount} 人` : audienceText],
     ['训练题目', templateKey ? selectedTemplate ? selectedTemplate.name + ' · ' + (selectedTemplate.problemCount || 0) + ' 道固定题目' : '模板加载中' : selectedProblems.length ? selectedProblems.length + ' 道' : '尚未添加'],
     ['完成要求', completionMode === 'all' ? '完成全部题目' : `至少完成 ${completionCount} 道`],
+    ...(preset === 'practice' ? [] : [['成绩公布', examResultVisibility === 'LIVE' ? '提交后立即可见' : examResultVisibility === 'AFTER_END' ? '测试结束后可见' : '由教师手动公布']]),
     ['截止时间', dueAt ? new Date(dueAt).toLocaleString('zh-CN') : '未设置'],
-  ], [audienceText, completionCount, completionMode, dueAt, participantPreview, preset, previewLoading, selectedProblems.length, selectedTemplate, templateKey])
+  ], [audienceText, completionCount, completionMode, dueAt, examResultVisibility, participantPreview, preset, previewLoading, selectedProblems.length, selectedTemplate, templateKey])
 
   return <FormDialog
     isOpen={isOpen}
@@ -267,9 +271,12 @@ export function TrainingSetupDialog({
         <section className={styles.setupSection} aria-labelledby="training-setup-basic">
           <div><h3 id="training-setup-basic">基本信息</h3><p>给学生一个清楚、容易识别的训练名称。</p></div>
           <div className={styles.stack}>
-            <label className={styles.field}>训练模板（可选）<Select value={templateKey} onChange={event => { setTemplateKey(event.target.value); if (event.target.value) setSelectedProblems([]) }}><option value="">空白开始</option>{templates.map(template => <option key={template.key} value={template.key}>{template.name}{template.problemCount ? ' · ' + template.problemCount + ' 题' : ' · 结构骨架'}</option>)}</Select><small>{selectedTemplate?.description || '教师保存的模板会连同阶段、分组方案、题目规则与提示载入。'}</small></label>
-            <label className={styles.field}>使用场景<Select value={preset} onChange={event => setPreset(event.target.value as TrainingPreset)}><option value="practice">日常训练</option><option value="oi_exam">OI 模拟测试</option><option value="acm_exam">ACM 模拟测试</option></Select><small>{preset === 'practice' ? '开放提示与同伴进度，适合日常练习。' : '关闭提示与同伴进度，按时长自动结束；结果在结束后查看。'}</small></label>
-            {preset !== 'practice' && <label className={styles.field}>测试时长（分钟）<Input type="number" min={10} max={1440} value={examDurationMinutes} onChange={event => setExamDurationMinutes(Math.max(10, Number(event.target.value) || 10))} /></label>}
+            <label className={styles.field}>训练模板（可选）<Select value={templateKey} disabled={preset !== 'practice'} onChange={event => { setTemplateKey(event.target.value); if (event.target.value) setSelectedProblems([]) }}><option value="">空白开始</option>{templates.map(template => <option key={template.key} value={template.key}>{template.name}{template.problemCount ? ' · ' + template.problemCount + ' 题' : ' · 结构骨架'}</option>)}</Select><small>{preset !== 'practice' ? '模拟测试使用固定考试预设，不叠加日常训练模板。' : selectedTemplate?.description || '教师保存的模板会连同阶段、分组方案、题目规则与提示载入。'}</small></label>
+            <label className={styles.field}>使用场景<Select value={preset} onChange={event => { const nextPreset = event.target.value as TrainingPreset; setPreset(nextPreset); if (nextPreset !== 'practice') setTemplateKey('') }}><option value="practice">日常训练</option><option value="oi_exam">OI 模拟测试</option><option value="acm_exam">ACM 模拟测试</option></Select><small>{preset === 'practice' ? '开放提示与同伴进度，适合日常练习。' : '关闭提示与同伴进度，按时长自动结束；成绩按所选公布规则展示。'}</small></label>
+            {preset !== 'practice' && <>
+              <label className={styles.field}>测试时长（分钟）<Input type="number" min={10} max={1440} value={examDurationMinutes} onChange={event => setExamDurationMinutes(Math.max(10, Number(event.target.value) || 10))} /></label>
+              <label className={styles.field}>成绩公布<Select value={examResultVisibility} onChange={event => setExamResultVisibility(event.target.value as ExamResultVisibility)}><option value="LIVE">提交后立即可见</option><option value="AFTER_END">测试结束后可见</option><option value="TEACHER_PUBLISHED">由教师手动公布</option></Select><small>未公布前，学生看不到分数、提交统计、完成情况或训练报告。</small></label>
+            </>}
             <label className={styles.field}>训练名称<Input autoFocus value={title} maxLength={200} placeholder="例如：图论专项训练" onChange={event => setTitle(event.target.value)} /></label>
             <label className={styles.field}>训练说明（可选）<Textarea rows={2} value={description} onChange={event => setDescription(event.target.value)} /></label>
           </div>

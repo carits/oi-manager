@@ -21,6 +21,7 @@ import {
   leaveTrainingParticipantRuntime,
   mergeTrainingGroup,
   publishTrainingSession,
+  processDueTrainingSessions,
   replaceTrainingRoster,
   replaceTrainingStageGroupMatrix,
   resolveTrainingPermission,
@@ -91,7 +92,12 @@ describe('Training Engine global Stage domain', () => {
     problem = await configuredProblem(coach.user.id)
   })
 
-  async function createSession(groupCount = 1, stageCount = 3, scheduled = false) {
+  async function createSession(
+    groupCount = 1,
+    stageCount = 3,
+    scheduled = false,
+    sessionSettings: { participantTarget: string; preset?: string; resultVisibility?: string } = { participantTarget: 'custom_students' },
+  ) {
     const users = [first.user.id, second.user.id]
     const grouping = groupCount === 1
       ? { groups: [{ clientKey: 'all', name: '全体学员', participantIds: users }] }
@@ -100,7 +106,7 @@ describe('Training Engine global Stage domain', () => {
       title: '全局阶段训练',
       teamId: team.id,
       participantUserIds: users,
-      settings: { participantTarget: 'custom_students' },
+      settings: sessionSettings,
       grouping,
       ...(scheduled ? { scheduledStartAt: new Date(Date.now() + 3600_000).toISOString() } : {}),
       stages: Array.from({ length: stageCount }, (_, index) => ({
@@ -278,13 +284,71 @@ describe('Training Engine global Stage domain', () => {
     })).resolves.toMatchObject({ stageProblemId, userId: first.user.id })
   })
 
+  it('shows the current Stage sequential lock reason without revealing future Stages', async () => {
+    const secondProblem = await configuredProblem(coach.user.id)
+    const users = [first.user.id, second.user.id]
+    const created = await createTrainingSession(coach.user.id, {
+      title: '顺序解锁训练',
+      teamId: team.id,
+      participantUserIds: users,
+      settings: { participantTarget: 'custom_students' },
+      grouping: { groups: [{ clientKey: 'all', name: '全体学员', participantIds: users }] },
+      stages: [
+        {
+          name: '当前阶段',
+          kind: 'TRAINING',
+          mode: 'PRACTICE',
+          accessPolicy: 'SEQUENTIAL',
+          submissionMode: 'ENABLED',
+          endPolicy: 'MANUAL',
+          problems: [
+            { problemId: problem.id, required: true },
+            {
+              problemId: secondProblem.id,
+              required: true,
+              unlockPolicy: { mode: 'ANY', conditions: [{ type: 'AC' }] },
+            },
+          ],
+        },
+        {
+          name: '未来阶段',
+          kind: 'TRAINING',
+          mode: 'PRACTICE',
+          accessPolicy: 'ALL_AT_ONCE',
+          submissionMode: 'ENABLED',
+          endPolicy: 'MANUAL',
+          problems: [{ problemId: problem.id, required: true }],
+        },
+      ],
+    })
+    const session = await publishAndStart(created!.id)
+    const currentProblems = session.Stages[0].Problems
+    const futureProblem = session.Stages[1].Problems[0]
+    const workspace = await getTrainingWorkspace(first.user.id, session.id)
+
+    expect(workspace.permissions[currentProblems[1].id]).toMatchObject({
+      canView: false,
+      canSeeMetadata: true,
+      reason: 'SEQUENTIAL_LOCK',
+      blockedByStageProblemId: currentProblems[0].id,
+    })
+    expect(workspace.session.Stages[0].Problems[1].Problem.title).not.toBe('未开放题目')
+    expect(workspace.permissions[futureProblem.id]).toMatchObject({
+      canView: false,
+      canSeeMetadata: false,
+      reason: 'FUTURE_STAGE',
+    })
+    expect(workspace.session.Stages[1].Problems[0].Problem.title).toBe('未开放题目')
+  })
+
   it('hides exam results from learners until the session ends', async () => {
-    const created = await createSession(1, 1)
-    await prisma.trainingSession.update({
-      where: { id: created!.id },
-      data: { settings: { participantTarget: 'custom_students', resultVisibility: 'AFTER_END' } },
+    const created = await createSession(1, 1, false, {
+      participantTarget: 'custom_students',
+      preset: 'oi_exam',
+      resultVisibility: 'AFTER_END',
     })
     let session = await publishAndStart(created!.id)
+    expect(session.settings).toMatchObject({ preset: 'oi_exam', resultVisibility: 'AFTER_END' })
     const participant = session.Participants.find(item => item.userId === first.user.id)!
     const stageProblemId = session.Stages[0].Problems[0].id
     await prisma.trainingSessionProblemProgress.create({
@@ -311,6 +375,42 @@ describe('Training Engine global Stage domain', () => {
     const endedWorkspace = await getTrainingWorkspace(first.user.id, session.id)
     expect(endedWorkspace.progress[0]).toMatchObject({ status: 'WORKING', bestScore: 60, attemptCount: 2 })
     await expect(getTrainingReport(first.user.id, session.id)).resolves.toMatchObject({ session: { status: 'ENDED' } })
+  })
+
+  it('publishes teacher-controlled exam results through the runtime command', async () => {
+    const created = await createSession(1, 1, false, {
+      participantTarget: 'custom_students',
+      preset: 'oi_exam',
+      resultVisibility: 'TEACHER_PUBLISHED',
+    })
+    let session = await publishAndStart(created!.id)
+    const participant = session.Participants.find(item => item.userId === first.user.id)!
+    const stageProblemId = session.Stages[0].Problems[0].id
+    await prisma.trainingSessionProblemProgress.create({
+      data: { participantId: participant.id, stageProblemId, status: 'WORKING', attemptCount: 1, bestScore: 80 },
+    })
+
+    let learnerWorkspace = await getTrainingWorkspace(first.user.id, session.id)
+    expect(learnerWorkspace.progress[0]).toMatchObject({ status: 'HIDDEN', bestScore: null, attemptCount: 0 })
+    await expect(getTrainingReport(first.user.id, session.id)).rejects.toMatchObject<Partial<TrainingEngineError>>({
+      code: 'TRAINING_RESULTS_HIDDEN',
+    })
+
+    await executeTrainingCommand(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      type: 'PUBLISH_RESULTS',
+      targetType: 'ALL',
+      payload: {},
+    })
+    session = await loaded(session.id)
+    expect(session.settings).toMatchObject({
+      resultVisibility: 'TEACHER_PUBLISHED',
+      resultsPublishedAt: expect.any(String),
+    })
+
+    learnerWorkspace = await getTrainingWorkspace(first.user.id, session.id)
+    expect(learnerWorkspace.progress[0]).toMatchObject({ status: 'WORKING', bestScore: 80, attemptCount: 1 })
+    await expect(getTrainingReport(first.user.id, session.id)).resolves.toMatchObject({ session: { id: session.id } })
   })
 
   it('applies immediate group changes without changing Stage or deleting progress', async () => {
@@ -392,6 +492,52 @@ describe('Training Engine global Stage domain', () => {
     session = await loaded(session.id)
     expect(session.currentStageId).toBe(originalCurrentStageId)
     expect(session.Groups.find(group => group.id === target.id)?.status).toBe('archived')
+  })
+
+  it('advances and ends timed Stages through the scheduler', async () => {
+    const users = [first.user.id, second.user.id]
+    const created = await createTrainingSession(coach.user.id, {
+      title: '定时模拟测试',
+      teamId: team.id,
+      participantUserIds: users,
+      settings: { participantTarget: 'custom_students', preset: 'oi_exam', resultVisibility: 'AFTER_END' },
+      grouping: { groups: [{ clientKey: 'all', name: '全体学员', participantIds: users }] },
+      stages: [0, 1].map(index => ({
+        name: `测试阶段 ${index + 1}`,
+        kind: 'TRAINING',
+        mode: 'EXAM',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'ENABLED',
+        endPolicy: 'TIME',
+        plannedDurationSeconds: 60,
+        problems: [{ problemId: problem.id, required: true }],
+      })),
+    })
+    let session = await publishAndStart(created!.id)
+    const firstStageId = session.Stages[0].id
+    const secondStageId = session.Stages[1].id
+    const firstDeadline = new Date()
+    await prisma.trainingSessionStage.update({
+      where: { id: firstStageId },
+      data: { runningSince: new Date(firstDeadline.getTime() - 61_000) },
+    })
+
+    await expect(processDueTrainingSessions(firstDeadline)).resolves.toMatchObject({ advanced: 1 })
+    session = await loaded(session.id)
+    expect(session).toMatchObject({ status: 'RUNNING', currentStageId: secondStageId })
+    expect(session.Stages[0]).toMatchObject({ lifecycle: 'ENDED', endReason: 'TIME_REACHED' })
+    expect(session.Stages[1]).toMatchObject({ lifecycle: 'RUNNING' })
+
+    const secondDeadline = new Date(firstDeadline.getTime() + 62_000)
+    await prisma.trainingSessionStage.update({
+      where: { id: secondStageId },
+      data: { runningSince: new Date(secondDeadline.getTime() - 61_000) },
+    })
+    await expect(processDueTrainingSessions(secondDeadline)).resolves.toMatchObject({ ended: 1 })
+    session = await loaded(session.id)
+    expect(session.status).toBe('ENDED')
+    expect(session.currentStageId).toBeNull()
+    expect(session.Stages[1]).toMatchObject({ lifecycle: 'ENDED', endReason: 'TIME_REACHED' })
   })
 
   it('pauses the Session clock without inventing a paused Stage lifecycle', async () => {
@@ -519,14 +665,26 @@ describe('Training Engine global Stage domain', () => {
     expect(optionalWorkspace.permissions[appended.id]).toMatchObject({ canView: true, canSubmit: true })
     expect(optionalWorkspace.participant?.requiredCount).toBe(1)
 
+    session = await loaded(session.id)
+    await executeTrainingCommand(coach.user.id, session.id, {
+      type: 'UNLOCK_FOR_USER',
+      expectedRevision: session.statusRevision,
+      targetType: 'USER',
+      targetId: targetUserId,
+      payload: { stageProblemId: currentStage.Problems[0].id },
+    })
+
     const report = await getTrainingReport(coach.user.id, session.id)
     expect(report.runtimeProblems).toHaveLength(2)
     expect(report.runtimeProblems.map(item => item.payload.targetScore)).toEqual([80, 60])
     expect(report.runtimeProblems.every(item => item.payload.testSetRevisionId === appended.testSetRevisionId)).toBe(true)
+    expect(report.interventions.map(item => item.type)).toContain('UNLOCK_FOR_USER')
     const targetReport = await getTrainingReport(targetUserId, session.id)
     const otherReport = await getTrainingReport(otherUserId, session.id)
     expect(targetReport.runtimeProblems.map(item => item.payload.targetScore)).toEqual([80])
     expect(otherReport.runtimeProblems.map(item => item.payload.targetScore)).toEqual([60])
+    expect(targetReport.interventions.map(item => item.type)).toContain('UNLOCK_FOR_USER')
+    expect(otherReport.interventions.map(item => item.type)).not.toContain('UNLOCK_FOR_USER')
   })
 
   it('saves and reapplies a full immutable training template', async () => {

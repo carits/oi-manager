@@ -270,7 +270,7 @@
 .classroomControlBar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
 .classroomControlBar .controlDisclosure > summary { text-align: center; }
 .classroomControlBar .controlDisclosure[open] { grid-column: 1 / -1; }
-.participantFilters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.participantFilters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2); }
 .participantList { display: grid; gap: var(--space-1); }
 .participantRow { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
 .participantRow:hover, .participantRow:focus-visible { border-color: var(--border); background: var(--bg-muted); outline: none; }
@@ -278,6 +278,15 @@
 .participantRowMain:focus-visible { outline: none; border-radius: var(--radius-sm); box-shadow: var(--focus-ring); }
 .participantRowMain > span:nth-child(2) { display: grid; min-width: 0; }
 .participantRow small { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.participantTableWrap { width: 100%; overflow-x: auto; }
+.participantTable { min-width: 760px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.participantTableHeader, .participantTableRow { display: grid; grid-template-columns: 28px minmax(110px, 1.2fr) minmax(90px, .8fr) minmax(150px, 1.5fr) 56px 56px 64px 90px; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+.participantTableHeader { background: var(--bg-muted); color: var(--text-muted); font-size: .78rem; font-weight: 700; }
+.participantTableRow { border-top: 1px solid var(--border); font-size: .84rem; }
+.participantTableRow:hover { background: var(--bg-muted); }
+.participantTableRow > button { display: grid; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.participantTableRow > button:focus-visible { outline: none; border-radius: var(--radius-sm); box-shadow: var(--focus-ring); }
+.participantTableRow > button small, .participantTableRow > span { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
 .participantAvatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: var(--primary); font-weight: 700; }
 .participantDrawerLayer { position: fixed; inset: 0; z-index: 1210; display: flex; justify-content: flex-end; }
 .participantDrawerBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgb(15 23 42 / .42); }
