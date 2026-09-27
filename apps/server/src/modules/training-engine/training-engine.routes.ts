@@ -19,6 +19,7 @@ import {
   deleteTrainingSessionTemplate,
   changeTrainingStageGroup,
   cloneTrainingStage,
+  cloneTrainingSession,
   endTrainingStage,
   executeStageTransition,
   splitTrainingGroup,
@@ -110,6 +111,13 @@ trainingEngineRouter.post('/training-sessions', authenticate, asyncHandler(async
     const body = parseContractBody(TrainingContracts.createSession, req.body)
     await assertTrainingScopeContext(req, body)
     sendContractData(res, TrainingContracts.createSession, await createTrainingSession(req.user!.userId, body), 201)
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/clone', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    await assertTrainingSessionContext(req, req.params.id)
+    sendContractData(res, TrainingContracts.cloneSession, await cloneTrainingSession(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.cloneSession, req.body)), 201)
   } catch (error) { return sendError(error, res) }
 }))
 

@@ -6,7 +6,10 @@ import { prisma } from '../src/prisma'
 import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
 import {
   changeTrainingStageGroup,
+  cloneTrainingSession,
+  createTrainingHint,
   createTrainingSession,
+  createTrainingSessionTemplate,
   executeStageTransition,
   executeTrainingCommand,
   getTrainingDesign,
@@ -373,6 +376,86 @@ describe('Training Engine global Stage domain', () => {
     session = await loaded(session.id)
     expect(session.status).toBe('RUNNING')
     expect(session.Stages.find(stage => stage.id === currentStageId)?.runningSince).not.toBeNull()
+  })
+
+
+  it('saves and reapplies a full immutable training template', async () => {
+    const created = await createSession(2, 2)
+    const source = await loaded(created!.id)
+    const sourceProblem = source.Stages[0].Problems[0]
+    await createTrainingHint(coach.user.id, source.id, {
+      stageProblemId: sourceProblem.id,
+      level: 1,
+      title: '第一层提示',
+      content: '先检查输入边界',
+      openMode: 'MANUAL',
+    })
+
+    const template = await createTrainingSessionTemplate(coach.user.id, source.id, {
+      name: '完整训练模板',
+      scope: 'personal',
+    })
+    expect(template).toMatchObject({
+      name: '完整训练模板',
+      source: 'personal',
+      problemCount: 2,
+    })
+    expect(template.key).toMatch(/^database:/)
+
+    const recreated = await createTrainingSession(coach.user.id, {
+      title: '从模板创建',
+      teamId: team.id,
+      participantUserIds: [],
+      templateKey: template.key,
+    })
+    const restored = await loaded(recreated!.id)
+    const restoredHints = await prisma.trainingSessionHint.findMany({ where: { sessionId: restored.id } })
+
+    expect(restored.status).toBe('DRAFT')
+    expect(restored.Groups.map(group => group.name)).toEqual(source.Groups.map(group => group.name))
+    expect(restored.Stages.map(stage => stage.name)).toEqual(source.Stages.map(stage => stage.name))
+    expect(restored.Stages.map(stage => stage.Problems.map(item => [item.problemId, item.testSetRevisionId])))
+      .toEqual(source.Stages.map(stage => stage.Problems.map(item => [item.problemId, item.testSetRevisionId])))
+    expect(restored.Stages.map(stage => stage.Groups.map(plan => ({
+      group: plan.TrainingGroup?.name || null,
+      isDefault: plan.isDefault,
+      required: plan.ProblemPlans.map(item => item.required),
+    })))).toEqual(source.Stages.map(stage => stage.Groups.map(plan => ({
+      group: plan.TrainingGroup?.name || null,
+      isDefault: plan.isDefault,
+      required: plan.ProblemPlans.map(item => item.required),
+    }))))
+    expect(restoredHints).toHaveLength(1)
+    expect(restoredHints[0]).toMatchObject({ level: 1, title: '第一层提示', content: '先检查输入边界' })
+  })
+
+  it('clones only the reusable training definition into a new draft', async () => {
+    const created = await createSession(2, 2)
+    const source = await loaded(created!.id)
+    await createTrainingHint(coach.user.id, source.id, {
+      stageProblemId: source.Stages[1].Problems[0].id,
+      level: 2,
+      content: '第二阶段提示',
+      openMode: 'ATTEMPT',
+      triggerAttempts: 2,
+    })
+
+    const clone = await cloneTrainingSession(coach.user.id, source.id, {
+      expectedRevision: source.statusRevision,
+      title: '训练副本',
+    })
+    const copied = await loaded(clone!.id)
+    const copiedHints = await prisma.trainingSessionHint.findMany({ where: { sessionId: copied.id } })
+
+    expect(copied.id).not.toBe(source.id)
+    expect(copied).toMatchObject({ title: '训练副本', status: 'DRAFT', currentStageId: null })
+    expect(copied.Participants).toHaveLength(0)
+    expect(copied.Groups.map(group => group.name)).toEqual(source.Groups.map(group => group.name))
+    expect(copied.Stages.map(stage => stage.lifecycle)).toEqual(['PENDING', 'PENDING'])
+    expect(copied.Stages.map(stage => stage.Problems.map(item => [item.problemId, item.testSetRevisionId])))
+      .toEqual(source.Stages.map(stage => stage.Problems.map(item => [item.problemId, item.testSetRevisionId])))
+    expect(copiedHints).toHaveLength(1)
+    expect(copiedHints[0]).toMatchObject({ level: 2, content: '第二阶段提示', triggerAttempts: 2 })
   })
 
   it('rejects edits to a started Stage definition', async () => {

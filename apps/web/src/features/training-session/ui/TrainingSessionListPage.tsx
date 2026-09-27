@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus } from 'lucide-react'
+import { Copy, Plus } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -14,7 +14,7 @@ import { StatusBadge } from '@/components/ui/Badge'
 import { Empty } from '@/components/ui/Empty'
 import { useToast } from '@/components/ui/Toast'
 import { trainingStatusLabel } from '@/lib/humanPresentation'
-import { joinTrainingSession, listManagedTrainingTeams, listTrainingSessions } from '../api/trainingSessionApi'
+import { cloneTrainingSession, joinTrainingSession, listManagedTrainingTeams, listTrainingSessions } from '../api/trainingSessionApi'
 import { buildTrainingListQuery, resolveTrainingListTeamId } from '../model/trainingListScope'
 import { TrainingSetupDialog, type TrainingSetupTeam } from './TrainingSetupDialog'
 import styles from './TrainingEngine.module.css'
@@ -25,6 +25,7 @@ type Session = {
   title: string
   description?: string
   status: string
+  statusRevision?: number
   problemCount?: number
   dueAt?: string | null
   canJoin?: boolean
@@ -81,6 +82,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [setupOpen, setSetupOpen] = useState(false)
+  const [cloningId, setCloningId] = useState<string>()
   const [listFilter, setListFilter] = useState<ListFilter>('active')
   const [listQuery, setListQuery] = useState('')
   const [listTeamId, setListTeamId] = useState(urlTeamId)
@@ -184,6 +186,15 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     }
     router.push(`${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${item.id}${item.status === 'DRAFT' ? '/design' : ''}`)
   }
+  const cloneSession = async (item: Session) => {
+    if (cloningId) return
+    setCloningId(item.id)
+    const result = await cloneTrainingSession(item.id, { expectedRevision: item.statusRevision || 0 })
+    setCloningId(undefined)
+    if (!result.ok) return toast.error(result.error.message || '复制训练失败')
+    toast.success('已复制为新的训练草稿')
+    router.push((organizationId ? '/org/' + organizationId : '/personal') + '/training-sessions/' + result.data.id + '/design')
+  }
   const actionLabel = (item: Session) =>
     item.canJoin ? '加入训练'
       : item.status === 'DRAFT' ? '继续编辑'
@@ -206,7 +217,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     <Section title={managerView ? '训练列表' : '我的训练'} description={loading ? '正在准备训练列表…' : listTotal ? `共 ${listTotal} 个` : undefined}>
       {loading ? <p className={styles.loadingCopy}>正在准备训练列表…</p>
         : !sessions.length ? <Empty title={emptyCopy[0]} description={emptyCopy[1]} action={canCreateTraining && listFilter === 'active' ? <Button icon={<Plus size={16} />} onClick={() => setSetupOpen(true)}>布置训练</Button> : undefined} />
-          : <div className={styles.sessionGrid}>{sessions.map(item => <article className={styles.sessionCard} key={item.id}><div className={styles.sessionCardHeader}><h3>{item.title}</h3><StatusBadge variant={statusVariant(item.status)}>{trainingStatusLabel(item.status)}</StatusBadge></div><p className={styles.sessionAudience}>{sessionFacts(item)}</p>{item.description && <p className={styles.muted}>{item.description}</p>}<p className={styles.sessionProgress}>{sessionProgress(item)}</p><Button variant={item.status === 'DRAFT' || item.canJoin || item.status === 'RUNNING' ? 'primary' : 'secondary'} onClick={() => void openSession(item)}>{actionLabel(item)}</Button></article>)}</div>}
+          : <div className={styles.sessionGrid}>{sessions.map(item => <article className={styles.sessionCard} key={item.id}><div className={styles.sessionCardHeader}><h3>{item.title}</h3><StatusBadge variant={statusVariant(item.status)}>{trainingStatusLabel(item.status)}</StatusBadge></div><p className={styles.sessionAudience}>{sessionFacts(item)}</p>{item.description && <p className={styles.muted}>{item.description}</p>}<p className={styles.sessionProgress}>{sessionProgress(item)}</p><div className={styles.actions}><Button variant={item.status === 'DRAFT' || item.canJoin || item.status === 'RUNNING' ? 'primary' : 'secondary'} onClick={() => void openSession(item)}>{actionLabel(item)}</Button>{managerView && <Button variant="outline" icon={<Copy size={15} />} loading={cloningId === item.id} disabled={Boolean(cloningId)} onClick={() => void cloneSession(item)}>复制训练</Button>}</div></article>)}</div>}
       {listTotalPages > 1 && <div className={styles.pagination}><span>共 {listTotal} 个 · 第 {listPage}/{listTotalPages} 页</span><div className={styles.actions}><Button size="sm" variant="secondary" disabled={listPage <= 1 || loading} onClick={() => setListPage(page => page - 1)}>上一页</Button><Button size="sm" variant="secondary" disabled={listPage >= listTotalPages || loading} onClick={() => setListPage(page => page + 1)}>下一页</Button></div></div>}
     </Section>
     <TrainingSetupDialog isOpen={setupOpen} organizationId={organizationId} fixedTeamId={teamId} teams={teams} onClose={() => setSetupOpen(false)} onPublished={load} />

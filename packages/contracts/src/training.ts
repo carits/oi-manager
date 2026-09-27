@@ -119,7 +119,7 @@ export const TrainingTemplateStageSchema = z.object({
   name: z.string(), description: z.string(), kind: TrainingStageKindSchema, plannedDurationSeconds: z.number().int().positive().optional(),
   endPolicy: TrainingStageEndPolicySchema, accessPolicy: TrainingStageAccessPolicySchema, submissionMode: z.enum(['ENABLED', 'DISABLED']), rules: JsonObjectSchema.optional(),
 })
-export const TrainingTemplateSchema = z.object({ key: z.string(), name: z.string(), sessionType: z.enum(['OI', 'ACM', 'GENERAL']), description: z.string(), source: z.enum(['builtin', 'personal', 'organization', 'team']), stages: z.array(TrainingTemplateStageSchema) })
+export const TrainingTemplateSchema = z.object({ key: z.string(), name: z.string(), sessionType: z.enum(['OI', 'ACM', 'GENERAL']), description: z.string(), source: z.enum(['builtin', 'personal', 'organization', 'team']), problemCount: z.number().int().nonnegative().optional(), stages: z.array(TrainingTemplateStageSchema) })
 export const TrainingTemplateListQuerySchema = z.object({ organizationId: z.string().optional(), teamId: z.string().optional() })
 export const TrainingTemplateCreateInputSchema = z.object({ name: z.string().trim().min(1).max(100), scope: z.enum(['personal', 'organization', 'team']) })
 export const TrainingTemplateDeleteResultSchema = z.object({ deleted: z.literal(true) })
@@ -245,6 +245,7 @@ export const TrainingSessionCreateInputSchema = z.object({
   defaultAccessPolicy: TrainingStageAccessPolicySchema.optional(), defaultSubmissionMode: z.enum(['ENABLED', 'DISABLED']).optional(),
   settings: JsonObjectSchema.optional(), stages: z.array(TrainingSessionCreateStageInputSchema).min(1).max(30).optional(),
 })
+export const TrainingSessionCloneInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), title: z.string().trim().min(1).max(200).optional() })
 export const TrainingParticipantPreviewInputSchema = z.object({ organizationId: z.string().optional(), teamId: z.string().optional(), participantTarget: z.enum(['team', 'organization_students', 'custom_students']), participantUserIds: z.array(z.string()).max(5000).optional() })
 export const TrainingParticipantPreviewSchema = z.object({ participantCount: z.number().int(), targetName: z.string() })
 export const TrainingExpectedRevisionSchema = z.object({ expectedRevision: z.number().int().nonnegative() })
@@ -265,6 +266,7 @@ export const TrainingGroupSuggestionSchema = z.object({ stageId: z.string(), sug
 export const TrainingContracts = {
   listSessions: defineApiEndpoint({ key: 'training.sessions.list', method: 'GET', scope: 'organization', query: TrainingSessionListQuerySchema, data: TrainingSessionListSchema }),
   createSession: defineApiEndpoint({ key: 'training.sessions.create', method: 'POST', scope: 'organization', body: TrainingSessionCreateInputSchema, data: TrainingSessionSummarySchema }),
+  cloneSession: defineApiEndpoint({ key: 'training.sessions.clone', method: 'POST', scope: 'organization', body: TrainingSessionCloneInputSchema, data: TrainingSessionSummarySchema }),
   previewParticipants: defineApiEndpoint({ key: 'training.participants.preview', method: 'POST', scope: 'organization', body: TrainingParticipantPreviewInputSchema, data: TrainingParticipantPreviewSchema }),
   listTemplates: defineApiEndpoint({ key: 'training.templates.list', method: 'GET', scope: 'account', query: TrainingTemplateListQuerySchema, data: z.array(TrainingTemplateSchema) }),
   createTemplate: defineApiEndpoint({ key: 'training.templates.create', method: 'POST', scope: 'account', body: TrainingTemplateCreateInputSchema, data: TrainingTemplateSchema }),

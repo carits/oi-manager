@@ -76,6 +76,9 @@ export const listTrainingSessions = (query: Record<string, string | undefined>) 
 export const createTrainingSession = (body: EndpointBody<typeof TrainingContracts.createSession>) =>
   apiClient.mutateContract(TrainingContracts.createSession, '/api/training-sessions', body)
 
+export const cloneTrainingSession = (sessionId: string, body: EndpointBody<typeof TrainingContracts.cloneSession>) =>
+  apiClient.mutateContract(TrainingContracts.cloneSession, sessionPath(sessionId) + '/clone', body)
+
 export const previewTrainingParticipants = (body: EndpointBody<typeof TrainingContracts.previewParticipants>) =>
   apiClient.mutateContract(TrainingContracts.previewParticipants, '/api/training-sessions/participant-preview', body)
 

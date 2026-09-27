@@ -356,13 +356,16 @@ export async function listTrainingSessionTemplates(userId: string, query: any) {
 }
 
 function templateRecord(template: any) {
+  const definition = parseJsonObject(template.settings)
+  const storedStages = Array.isArray(definition.stages) ? definition.stages : null
   return {
-    key: `database:${template.id}`,
+    key: 'database:' + template.id,
     name: template.name,
     sessionType: template.sessionType,
     description: template.description || '',
     source: template.organizationId ? 'organization' as const : template.teamId ? 'team' as const : 'personal' as const,
-    stages: template.Stages.map((stage: any) => {
+    problemCount: storedStages ? storedStages.reduce((sum: number, stage: any) => sum + (Array.isArray(stage.problems) ? stage.problems.length : 0), 0) : 0,
+    stages: storedStages || template.Stages.map((stage: any) => {
       const storedRules = parseJsonObject(stage.rules)
       const stageSettings = parseJsonObject(storedRules._templateStage)
       const { _templateGroups: _discarded, _templateStage: _discardedStage, ...rules } = storedRules
@@ -381,6 +384,7 @@ function templateRecord(template: any) {
         ...(Object.keys(rules).length ? { rules } : {}),
       }
     }),
+    definition: Number(definition.version) >= 2 ? definition : null,
   }
 }
 
@@ -419,11 +423,97 @@ export async function createTrainingSessionTemplate(userId: string, sessionId: s
   } else if (scope !== 'personal') {
     throw new TrainingEngineError(422, 'TRAINING_TEMPLATE_SCOPE_INVALID', '模板范围不受支持')
   }
-  const key = `custom-${crypto.randomUUID()}`
+  const hints = await prisma.trainingSessionHint.findMany({ where: { sessionId }, orderBy: [{ stageProblemId: 'asc' }, { level: 'asc' }] })
+  const hintsByProblem = new Map<string, any[]>()
+  for (const hint of hints) hintsByProblem.set(hint.stageProblemId, [...(hintsByProblem.get(hint.stageProblemId) || []), hint])
+  const definition = {
+    version: 2,
+    defaults: {
+      defaultAccessPolicy: session.defaultAccessPolicy,
+      defaultSubmissionMode: session.defaultSubmissionMode,
+      allowHints: session.allowHints,
+      rankingMode: session.rankingMode,
+      peerVisibility: session.peerVisibility,
+      joinMode: session.joinMode,
+    },
+    groups: session.Groups.map(group => ({ name: group.name, orderIndex: group.orderIndex })),
+    stages: session.Stages.map(stage => {
+      const defaultPlan = stage.Groups.find(plan => plan.isDefault)
+      return {
+        name: stage.name,
+        description: stage.description || '',
+        kind: stage.kind,
+        mode: stage.mode,
+        accessPolicy: stage.accessPolicy,
+        submissionMode: stage.submissionMode,
+        endPolicy: stage.endPolicy,
+        plannedDurationSeconds: stage.plannedDurationSeconds,
+        minDurationSeconds: stage.minDurationSeconds,
+        completionThreshold: stage.completionThreshold,
+        completionPolicy: stage.completionPolicy,
+        rules: stage.rules,
+        problems: stage.Problems.map(problem => {
+          const plan = defaultPlan?.ProblemPlans.find(item => item.stageProblemId === problem.id)
+          return {
+            problemId: problem.problemId,
+            testSetRevisionId: problem.testSetRevisionId,
+            alias: problem.alias,
+            required: plan?.required !== false,
+            unlockPolicy: plan?.unlockPolicy,
+            targetScore: plan?.targetScore,
+            scoreGoals: plan?.scoreGoals,
+            timePolicy: plan?.timePolicy,
+            stuckPolicy: plan?.stuckPolicy,
+            hintPolicy: plan?.hintPolicy,
+            allowedSubtaskIds: plan?.allowedSubtaskIds,
+            strategyIntervalSeconds: plan?.strategyIntervalSeconds,
+          }
+        }),
+        plans: stage.Groups.map(plan => ({
+          groupName: plan.TrainingGroup?.name || null,
+          isDefault: plan.isDefault,
+          inheritsDefault: plan.inheritsDefault,
+          accessPolicy: plan.accessPolicy,
+          submissionMode: plan.submissionMode,
+          completionPolicy: plan.completionPolicy,
+          rules: plan.rules,
+          problems: plan.ProblemPlans.map(problemPlan => {
+            const problem = stage.Problems.find(item => item.id === problemPlan.stageProblemId)
+            return {
+              problemId: problem?.problemId,
+              required: problemPlan.required,
+              orderIndex: problemPlan.orderIndex,
+              unlockPolicy: problemPlan.unlockPolicy,
+              targetScore: problemPlan.targetScore,
+              scoreGoals: problemPlan.scoreGoals,
+              timePolicy: problemPlan.timePolicy,
+              stuckPolicy: problemPlan.stuckPolicy,
+              hintPolicy: problemPlan.hintPolicy,
+              allowedSubtaskIds: problemPlan.allowedSubtaskIds,
+              judgeConfigProjection: problemPlan.judgeConfigProjection,
+              strategyIntervalSeconds: problemPlan.strategyIntervalSeconds,
+              rules: problemPlan.rules,
+            }
+          }).filter(item => item.problemId),
+        })),
+        hints: stage.Problems.flatMap(problem => (hintsByProblem.get(problem.id) || []).map(hint => ({
+          problemId: problem.problemId,
+          level: hint.level,
+          title: hint.title,
+          content: hint.content,
+          openMode: hint.openMode,
+          triggerSeconds: hint.triggerSeconds,
+          triggerAttempts: hint.triggerAttempts,
+          triggerScore: hint.triggerScore,
+        }))),
+      }
+    }),
+  }
+  const key = 'custom-' + crypto.randomUUID()
   const created = await prisma.trainingSessionTemplate.create({
     data: {
       organizationId, teamId, key, name, sessionType: session.sessionType,
-      description: session.description || null, createdBy: userId,
+      description: session.description || null, createdBy: userId, settings: asJson(definition),
       Stages: { create: session.Stages.map((stage, orderIndex) => ({
         name: stage.name, description: stage.description, orderIndex, kind: stage.kind,
         plannedDurationSeconds: stage.plannedDurationSeconds,
@@ -642,16 +732,175 @@ async function createGroupsAndParticipants(tx: Prisma.TransactionClient, session
   for (const userId of participantUserIds) await tx.trainingSessionParticipant.create({ data: { sessionId, userId, groupId: assigned.get(userId) || groups[0].id } })
 }
 
-export async function createTrainingSession(userId: string, body: any) {
+async function applyTrainingTemplateDefinition(tx: any, sessionId: string, definition: any, createdBy: string) {
+  if (!definition || Number(definition.version) < 2 || !Array.isArray(definition.stages)) return
+  const [stages, groups] = await Promise.all([
+    tx.trainingSessionStage.findMany({ where: { sessionId }, orderBy: { orderIndex: 'asc' }, include: { Problems: true } }),
+    tx.trainingSessionGroup.findMany({ where: { sessionId }, orderBy: { orderIndex: 'asc' } }),
+  ])
+  const groupByName = new Map(groups.map((group: any) => [group.name, group]))
+  for (const [stageIndex, storedStage] of definition.stages.entries()) {
+    const stage = stages[stageIndex]
+    if (!stage) continue
+    const problemByCanonicalId = new Map(stage.Problems.map((problem: any) => [problem.problemId, problem]))
+    if (Array.isArray(storedStage.plans) && storedStage.plans.length) {
+      await tx.trainingSessionStageGroup.deleteMany({ where: { stageId: stage.id } })
+      for (const storedPlan of storedStage.plans) {
+        const trainingGroup = storedPlan.groupName ? groupByName.get(String(storedPlan.groupName)) as any : null
+        if (storedPlan.groupName && !trainingGroup) throw new TrainingEngineError(422, 'TRAINING_TEMPLATE_GROUP_INVALID', '模板引用了不存在的训练组')
+        const plan = await tx.trainingSessionStageGroup.create({ data: {
+          stageId: stage.id,
+          groupId: trainingGroup?.id || null,
+          isDefault: Boolean(storedPlan.isDefault),
+          inheritsDefault: storedPlan.inheritsDefault !== false,
+          accessPolicy: enumValue(storedPlan.accessPolicy, ACCESS_POLICIES, stage.accessPolicy, '模板开放方式') as any,
+          submissionMode: enumValue(storedPlan.submissionMode, SUBMISSION_MODES, stage.submissionMode, '模板提交方式') as any,
+          completionPolicy: asJson(storedPlan.completionPolicy),
+          rules: asJson(storedPlan.rules),
+        } })
+        for (const [orderIndex, storedProblem] of (Array.isArray(storedPlan.problems) ? storedPlan.problems : []).entries()) {
+          const problem = problemByCanonicalId.get(String(storedProblem.problemId)) as any
+          if (!problem) throw new TrainingEngineError(422, 'TRAINING_TEMPLATE_PROBLEM_INVALID', '模板分组方案引用了不存在的训练题')
+          await tx.trainingSessionStageProblemPlan.create({ data: {
+            stageId: stage.id,
+            stageProblemId: problem.id,
+            stageGroupId: plan.id,
+            required: storedProblem.required !== false,
+            orderIndex,
+            unlockPolicy: asJson(storedProblem.unlockPolicy),
+            targetScore: storedProblem.targetScore == null ? null : Number(storedProblem.targetScore),
+            scoreGoals: asJson(storedProblem.scoreGoals),
+            timePolicy: asJson(storedProblem.timePolicy),
+            stuckPolicy: asJson(storedProblem.stuckPolicy),
+            hintPolicy: asJson(storedProblem.hintPolicy),
+            allowedSubtaskIds: asJson(storedProblem.allowedSubtaskIds),
+            judgeConfigProjection: storedProblem.judgeConfigProjection || null,
+            strategyIntervalSeconds: storedProblem.strategyIntervalSeconds == null ? null : Number(storedProblem.strategyIntervalSeconds),
+            rules: asJson(storedProblem.rules),
+          } })
+        }
+      }
+    }
+    for (const storedHint of (Array.isArray(storedStage.hints) ? storedStage.hints : [])) {
+      const problem = problemByCanonicalId.get(String(storedHint.problemId)) as any
+      if (!problem) continue
+      await tx.trainingSessionHint.create({ data: {
+        sessionId,
+        stageProblemId: problem.id,
+        level: Number(storedHint.level),
+        title: storedHint.title || null,
+        content: String(storedHint.content || ''),
+        openMode: storedHint.openMode || 'MANUAL',
+        triggerSeconds: storedHint.triggerSeconds == null ? null : Number(storedHint.triggerSeconds),
+        triggerAttempts: storedHint.triggerAttempts == null ? null : Number(storedHint.triggerAttempts),
+        triggerScore: storedHint.triggerScore == null ? null : Number(storedHint.triggerScore),
+        createdBy,
+      } })
+    }
+  }
+}
+
+function trainingDefinitionSnapshot(session: any, hints: any[]) {
+  const hintsByProblem = new Map<string, any[]>()
+  for (const hint of hints) hintsByProblem.set(hint.stageProblemId, [...(hintsByProblem.get(hint.stageProblemId) || []), hint])
+  return {
+    version: 2,
+    defaults: {
+      defaultAccessPolicy: session.defaultAccessPolicy,
+      defaultSubmissionMode: session.defaultSubmissionMode,
+      allowHints: session.allowHints,
+      rankingMode: session.rankingMode,
+      peerVisibility: session.peerVisibility,
+      joinMode: session.joinMode,
+    },
+    groups: session.Groups.map((group: any) => ({ name: group.name, orderIndex: group.orderIndex })),
+    stages: session.Stages.map((stage: any) => {
+      const defaultPlan = stage.Groups.find((plan: any) => plan.isDefault)
+      return {
+        name: stage.name,
+        description: stage.description || '',
+        kind: stage.kind,
+        mode: stage.mode,
+        accessPolicy: stage.accessPolicy,
+        submissionMode: stage.submissionMode,
+        endPolicy: stage.endPolicy,
+        plannedDurationSeconds: stage.plannedDurationSeconds,
+        minDurationSeconds: stage.minDurationSeconds,
+        completionThreshold: stage.completionThreshold,
+        completionPolicy: stage.completionPolicy,
+        rules: stage.rules,
+        problems: stage.Problems.map((problem: any) => {
+          const plan = defaultPlan?.ProblemPlans.find((item: any) => item.stageProblemId === problem.id)
+          return {
+            problemId: problem.problemId,
+            testSetRevisionId: problem.testSetRevisionId,
+            alias: problem.alias,
+            required: plan?.required !== false,
+            unlockPolicy: plan?.unlockPolicy,
+            targetScore: plan?.targetScore,
+            scoreGoals: plan?.scoreGoals,
+            timePolicy: plan?.timePolicy,
+            stuckPolicy: plan?.stuckPolicy,
+            hintPolicy: plan?.hintPolicy,
+            allowedSubtaskIds: plan?.allowedSubtaskIds,
+            strategyIntervalSeconds: plan?.strategyIntervalSeconds,
+          }
+        }),
+        plans: stage.Groups.map((plan: any) => ({
+          groupName: plan.TrainingGroup?.name || null,
+          isDefault: plan.isDefault,
+          inheritsDefault: plan.inheritsDefault,
+          accessPolicy: plan.accessPolicy,
+          submissionMode: plan.submissionMode,
+          completionPolicy: plan.completionPolicy,
+          rules: plan.rules,
+          problems: plan.ProblemPlans.map((problemPlan: any) => {
+            const problem = stage.Problems.find((item: any) => item.id === problemPlan.stageProblemId)
+            return {
+              problemId: problem?.problemId,
+              required: problemPlan.required,
+              orderIndex: problemPlan.orderIndex,
+              unlockPolicy: problemPlan.unlockPolicy,
+              targetScore: problemPlan.targetScore,
+              scoreGoals: problemPlan.scoreGoals,
+              timePolicy: problemPlan.timePolicy,
+              stuckPolicy: problemPlan.stuckPolicy,
+              hintPolicy: problemPlan.hintPolicy,
+              allowedSubtaskIds: problemPlan.allowedSubtaskIds,
+              judgeConfigProjection: problemPlan.judgeConfigProjection,
+              strategyIntervalSeconds: problemPlan.strategyIntervalSeconds,
+              rules: problemPlan.rules,
+            }
+          }).filter((item: any) => item.problemId),
+        })),
+        hints: stage.Problems.flatMap((problem: any) => (hintsByProblem.get(problem.id) || []).map((hint: any) => ({
+          problemId: problem.problemId,
+          level: hint.level,
+          title: hint.title,
+          content: hint.content,
+          openMode: hint.openMode,
+          triggerSeconds: hint.triggerSeconds,
+          triggerAttempts: hint.triggerAttempts,
+          triggerScore: hint.triggerScore,
+        }))),
+      }
+    }),
+  }
+}
+
+export async function createTrainingSession(userId: string, body: any, definitionOverride?: any) {
   assertTrainingDefinitionWritesEnabled()
   const scope = await assertScopeManagement(userId, body || {})
   const template = await resolveTrainingTemplate(userId, body?.templateKey, scope)
+  const storedDefinition = (template as any)?.definition && Number((template as any).definition.version) >= 2 ? (template as any).definition : null
+  const templateDefinition = definitionOverride || storedDefinition
+  const templateDefaults = parseJsonObject(templateDefinition?.defaults)
   const sessionType = enumValue(body?.sessionType || template?.sessionType, SESSION_TYPES, 'GENERAL', '训练类型')
-  const defaultAccessPolicy = enumValue(body?.defaultAccessPolicy, ACCESS_POLICIES, 'ALL_AT_ONCE', '默认题目开放方式')
-  const defaultSubmissionMode = enumValue(body?.defaultSubmissionMode, SUBMISSION_MODES, 'ENABLED', '默认提交方式')
-  const rankingMode = enumValue(body?.rankingMode, RANKING_MODES, 'PROGRESS_ONLY', '训练榜单方式')
-  const peerVisibility = enumValue(body?.peerVisibility, PEER_VISIBILITY, 'PROGRESS', '同学状态可见性')
-  const joinMode = enumValue(body?.joinMode, JOIN_MODES, 'CURRENT_STAGE', '迟到加入方式')
+  const defaultAccessPolicy = enumValue(body?.defaultAccessPolicy || templateDefaults.defaultAccessPolicy, ACCESS_POLICIES, 'ALL_AT_ONCE', '默认题目开放方式')
+  const defaultSubmissionMode = enumValue(body?.defaultSubmissionMode || templateDefaults.defaultSubmissionMode, SUBMISSION_MODES, 'ENABLED', '默认提交方式')
+  const rankingMode = enumValue(body?.rankingMode || templateDefaults.rankingMode, RANKING_MODES, 'PROGRESS_ONLY', '训练榜单方式')
+  const peerVisibility = enumValue(body?.peerVisibility || templateDefaults.peerVisibility, PEER_VISIBILITY, 'PROGRESS', '同学状态可见性')
+  const joinMode = enumValue(body?.joinMode || templateDefaults.joinMode, JOIN_MODES, 'CURRENT_STAGE', '迟到加入方式')
   const scheduledStartAt = optionalDate(body?.scheduledStartAt, '计划开始时间')
   const settings = normalizeSessionSettings(body?.settings, scheduledStartAt)
   const rawStages = Array.isArray(body?.stages) && body.stages.length ? body.stages : template?.stages || [{ name: '训练', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [] }]
@@ -667,13 +916,45 @@ export async function createTrainingSession(userId: string, body: any) {
       id, title, description: body?.description ? boundedText(body.description, 5000, '训练说明') : null,
       sessionType: sessionType as any, ...scope, createdBy: userId, scheduledStartAt,
       defaultAccessPolicy: defaultAccessPolicy as any, defaultSubmissionMode: defaultSubmissionMode as any,
-      allowHints: body?.allowHints !== false, rankingMode: rankingMode as any, peerVisibility: peerVisibility as any, joinMode: joinMode as any,
+      allowHints: body?.allowHints !== undefined ? body.allowHints !== false : templateDefaults.allowHints !== false, rankingMode: rankingMode as any, peerVisibility: peerVisibility as any, joinMode: joinMode as any,
       settings: asJson(requestedParticipantIds.length ? { ...settings, rosterExplicit: true } : settings),
     } })
-    await createGroupsAndParticipants(tx, id, requestedParticipantIds, body?.grouping)
+    const templateGrouping = templateDefinition && Array.isArray(templateDefinition.groups) && templateDefinition.groups.length
+      ? { groups: templateDefinition.groups.map((group: any, index: number) => ({ clientKey: 'template-group-' + index, name: String(group.name), participantIds: [] })) }
+      : undefined
+    await createGroupsAndParticipants(tx, id, requestedParticipantIds, body?.grouping || templateGrouping)
     for (const entry of hydrated) await createStageGraph(tx, id, entry)
+    await applyTrainingTemplateDefinition(tx, id, templateDefinition, userId)
   })
   return loadSession(id)
+}
+
+export async function cloneTrainingSession(userId: string, sessionId: string, body: any) {
+  const source = await assertManage(userId, sessionId)
+  const expectedRevision = Number(body?.expectedRevision)
+  if (expectedRevision !== source.statusRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+  const hints = await prisma.trainingSessionHint.findMany({ where: { sessionId }, orderBy: [{ stageProblemId: 'asc' }, { level: 'asc' }] })
+  const definition = trainingDefinitionSnapshot(source, hints)
+  const title = body?.title ? boundedText(body.title, 200, '训练名称', 1) : boundedText(source.title + '（副本）', 200, '训练名称', 1)
+  const { participantTarget: _participantTarget, rosterExplicit: _rosterExplicit, ...cloneSettings } = parseJsonObject(source.settings)
+  return createTrainingSession(userId, {
+    title,
+    description: source.description || undefined,
+    organizationId: source.organizationId || undefined,
+    teamId: source.teamId || undefined,
+    participantUserIds: [],
+    sessionType: source.sessionType,
+    scheduledStartAt: null,
+    rankingMode: source.rankingMode,
+    peerVisibility: source.peerVisibility,
+    joinMode: source.joinMode,
+    allowHints: source.allowHints,
+    defaultAccessPolicy: source.defaultAccessPolicy,
+    defaultSubmissionMode: source.defaultSubmissionMode,
+    settings: { ...cloneSettings, clonedFromSessionId: source.id },
+    grouping: { groups: definition.groups.map((group: any, index: number) => ({ clientKey: 'clone-group-' + index, name: group.name, participantIds: [] })) },
+    stages: definition.stages,
+  }, definition)
 }
 
 export async function previewTrainingParticipants(userId: string, body: any) {
