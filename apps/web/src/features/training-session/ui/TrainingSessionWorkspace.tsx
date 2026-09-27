@@ -53,7 +53,7 @@ import styles from './TrainingEngine.module.css'
 
 const visibilityLabel: Record<string, string> = { NONE: '仅自己', PROGRESS: '完成进度', SCORE: '成绩与进度', FULL: '详细进度' }
 const rankingLabel: Record<string, string> = { OFF: '不排名', PROGRESS_ONLY: '按完成进度', SCORE: '按得分', ACM_RANKING: '按通过题数和罚时' }
-type StageProblem = { id: string; problemId: string; alias?: string; targetScore?: number; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>; timePolicy?: { mode: string; limitSeconds?: number }; stuckPolicy?: { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Statements?: Array<{ type?: string; format: string; language?: string | null; content?: string | null; fileUrl?: string | null }>; Problem: { problemId: string; title: string; platform: string }; TestSetRevision: { revisionNumber: number; mode: string } }
+type StageProblem = { id: string; problemId: string; required?: boolean; alias?: string; targetScore?: number; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>; timePolicy?: { mode: string; limitSeconds?: number }; stuckPolicy?: { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Statements?: Array<{ type?: string; format: string; language?: string | null; content?: string | null; fileUrl?: string | null }>; Problem: { problemId: string; title: string; platform: string }; TestSetRevision: { revisionNumber: number; mode: string } }
 type StagePlan = { id: string; groupId?: string | null; name: string; isDefault: boolean; inheritsDefault: boolean; accessPolicy: string; submissionMode: string }
 type Stage = { id: string; name: string; description?: string; orderIndex: number; kind: string; mode: string; lifecycle: 'PENDING' | 'RUNNING' | 'ENDED' | 'SKIPPED'; plannedDurationSeconds?: number | null; runningSince?: string | null; activeElapsedSeconds: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null; Plans: StagePlan[]; Problems: StageProblem[] }
 type StrategyState = {
@@ -70,7 +70,7 @@ type StrategyState = {
   lastDecision?: { decision: string; createdAt: string } | null
 }
 type V2RuntimeGroup = { id: string; name: string; orderIndex: number; status: string; Participants?: Array<{ id?: string; userId?: string }> }
-type Workspace = { session: { Groups: V2RuntimeGroup[]; currentStageId?: string | null; currentStage?: { id: string; name: string; orderIndex: number; lifecycle: string } | null; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentGroupId: string; requiredCount?: number; completedCount?: number }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string }>; strategy: Record<string, StrategyState> }
+type Workspace = { session: { Groups: V2RuntimeGroup[]; currentStageId?: string | null; currentStage?: { id: string; name: string; orderIndex: number; lifecycle: string } | null; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentGroupId: string; requiredCount?: number; completedCount?: number; latestGroupChange?: { id: string; fromGroupName?: string | null; toGroupName: string; reason: string; appliedAt?: string | null } | null }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string }>; strategy: Record<string, StrategyState> }
 type Dashboard = { participants: TrainingDashboardParticipant[]; summary: { total: number; working: number; stuck: number; completed: number } }
 type Roster = { revision: number; candidates: Array<{ userId: string; username: string; displayName: string; role: string; selected: boolean }> }
 type Hint = { id: string; level: number; title?: string; content?: string; opened: boolean; globallyOpenedAt?: string }
@@ -757,6 +757,16 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setGroupChangeTarget(currentStage ? item.currentGroupId || '' : '')
     setGroupChangeReason('')
   }
+  const renderRailProblem = (stage: Stage, item: StageProblem, requirementLabel: string) => {
+    const access = data.permissions[item.id]
+    const progress = data.progress.find(entry => entry.stageProblemId === item.id)
+    const progressLabel = examActive && !data.manager && stage.id === activeStageId
+      ? '结果结束后公布'
+      : access?.canView
+        ? trainingProgressStatusLabel(progress?.status || 'NOT_STARTED') + (progress?.bestScore != null ? ' · ' + progress.bestScore + ' 分' : '')
+        : '尚未开放'
+    return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? requirementLabel : '本阶段历史'} · {progressLabel}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>
+  }
   return <PageFrame width="workbench"><div className={styles.stack}>
     <PageHeader
       title={data.session.title}
@@ -871,15 +881,21 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </div>
       <div className={styles.studentMissionMetrics}>
         <StageTimeMetrics activeElapsedSeconds={currentStage?.activeElapsedSeconds || 0} runningSince={currentStage?.runningSince} plannedDurationSeconds={currentStageLimit} running={status === 'RUNNING'} />
-        <div className={styles.metric}><strong>{data.participant?.completedCount || 0} / {data.participant?.requiredCount || 0}</strong>当前要求</div>
-        <div className={styles.metric}><strong>{Math.max(0, (data.participant?.requiredCount || 0) - (data.participant?.completedCount || 0))}</strong>还需完成</div>
+        {examActive ? <div className={styles.metric}><strong>结束后公布</strong>成绩与完成情况</div> : <>
+          <div className={styles.metric}><strong>{data.participant?.completedCount || 0} / {data.participant?.requiredCount || 0}</strong>当前要求</div>
+          <div className={styles.metric}><strong>{Math.max(0, (data.participant?.requiredCount || 0) - (data.participant?.completedCount || 0))}</strong>还需完成</div>
+        </>}
       </div>
       {examActive && <div className={styles.card} role="status">
         <strong>{examTitle}进行中</strong>
         <p className={styles.muted}>题目同时开放；训练提示不可用；同伴进度不可见。成绩按本场设置在考试结束后展示。</p>
       </div>}
+      {data.participant?.latestGroupChange && <div className={styles.card} role="status" aria-live="polite">
+        <strong>训练安排已调整</strong>
+        <p className={styles.muted}>{data.participant.latestGroupChange.fromGroupName ? data.participant.latestGroupChange.fromGroupName + ' → ' : ''}{data.participant.latestGroupChange.toGroupName} · {data.participant.latestGroupChange.reason}</p>
+      </div>}
       {problem && <div className={styles.studentContinue}>
-        <div><span>继续</span><strong>{problem.alias || problem.Problem.problemId} · {problem.Problem.title}</strong><small>{currentProblemProgress?.bestScore != null ? `当前最高分：${currentProblemProgress.bestScore}` : trainingProgressStatusLabel(currentProblemProgress?.status || 'NOT_STARTED')}{nextScoreGoal != null ? ` · 目标：${nextScoreGoal}` : ''}</small></div>
+        <div><span>继续</span><strong>{problem.alias || problem.Problem.problemId} · {problem.Problem.title}</strong><small>{examActive ? '已提交记录将在结束后公布' : currentProblemProgress?.bestScore != null ? '当前最高分：' + currentProblemProgress.bestScore + (nextScoreGoal != null ? ' · 目标：' + nextScoreGoal : '') : trainingProgressStatusLabel(currentProblemProgress?.status || 'NOT_STARTED')}</small></div>
         <Button onClick={() => document.getElementById('training-problem-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>继续做题</Button>
       </div>}
     </section>}
@@ -888,7 +904,10 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === activeStageId ? 'success' : 'neutral'}>{trainingStageKindLabel(stage.kind)} · {trainingStageStatusLabel(stage.lifecycle)}</StatusBadge>}</div>
         {stage.endedAt && <small>{Math.floor(stage.activeElapsedSeconds / 60)} 分钟{stage.endReason ? ' · ' + trainingStageEndReasonLabel(stage.endReason) : ''}</small>}
         {data.manager && stage.lifecycle === 'PENDING' && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此阶段</Button>}
-        {stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? '当前要求' : '本阶段历史'} · {access?.canView ? trainingProgressStatusLabel(progress?.status || 'NOT_STARTED') + (progress?.bestScore != null ? ' · ' + progress.bestScore + ' 分' : '') : '尚未开放'}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>})}
+        {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).some(item => item.required !== false) && <small className={styles.problemGroupLabel}>必做题</small>}
+        {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).filter(item => item.required !== false).map(item => renderRailProblem(stage, item, '当前必做'))}
+        {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).some(item => item.required === false) && <small className={styles.problemGroupLabel}>选做题</small>}
+        {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).filter(item => item.required === false).map(item => renderRailProblem(stage, item, '当前选做'))}
       </section>)}</aside>
       <main id="training-problem-workspace" className={styles.stack}>{problem ? <>
         <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · ${testDataVersion(problem.TestSetRevision.revisionNumber)}` : '使用训练发布时固定的数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>

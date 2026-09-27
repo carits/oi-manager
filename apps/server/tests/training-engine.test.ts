@@ -15,6 +15,7 @@ import {
   executeTrainingCommand,
   getTrainingDesign,
   getTrainingReport,
+  getTrainingPeerProgress,
   getTrainingWorkspace,
   joinTrainingParticipantRuntime,
   leaveTrainingParticipantRuntime,
@@ -277,6 +278,41 @@ describe('Training Engine global Stage domain', () => {
     })).resolves.toMatchObject({ stageProblemId, userId: first.user.id })
   })
 
+  it('hides exam results from learners until the session ends', async () => {
+    const created = await createSession(1, 1)
+    await prisma.trainingSession.update({
+      where: { id: created!.id },
+      data: { settings: { participantTarget: 'custom_students', resultVisibility: 'AFTER_END' } },
+    })
+    let session = await publishAndStart(created!.id)
+    const participant = session.Participants.find(item => item.userId === first.user.id)!
+    const stageProblemId = session.Stages[0].Problems[0].id
+    await prisma.trainingSessionProblemProgress.create({
+      data: { participantId: participant.id, stageProblemId, status: 'WORKING', attemptCount: 2, bestScore: 60 },
+    })
+
+    const learnerWorkspace = await getTrainingWorkspace(first.user.id, session.id)
+    expect(learnerWorkspace.progress[0]).toMatchObject({ status: 'HIDDEN', bestScore: null, attemptCount: 0 })
+    expect(learnerWorkspace.participant).not.toHaveProperty('requiredCount')
+    await expect(getTrainingPeerProgress(first.user.id, session.id)).resolves.toMatchObject({ rankingMode: 'OFF', peerVisibility: 'NONE', entries: [] })
+    await expect(getTrainingReport(first.user.id, session.id)).rejects.toMatchObject<Partial<TrainingEngineError>>({ code: 'TRAINING_RESULTS_HIDDEN' })
+
+    const managerWorkspace = await getTrainingWorkspace(coach.user.id, session.id)
+    expect(managerWorkspace.progress).toEqual([])
+    await expect(getTrainingReport(coach.user.id, session.id)).resolves.toMatchObject({ session: { id: session.id } })
+
+    await executeStageTransition(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      action: 'end_session',
+      stageId: session.Stages[0].id,
+      outcome: 'completed',
+    })
+    session = await loaded(session.id)
+    const endedWorkspace = await getTrainingWorkspace(first.user.id, session.id)
+    expect(endedWorkspace.progress[0]).toMatchObject({ status: 'WORKING', bestScore: 60, attemptCount: 2 })
+    await expect(getTrainingReport(first.user.id, session.id)).resolves.toMatchObject({ session: { status: 'ENDED' } })
+  })
+
   it('applies immediate group changes without changing Stage or deleting progress', async () => {
     const created = await createSession(2, 2)
     let session = await publishAndStart(created!.id)
@@ -296,6 +332,7 @@ describe('Training Engine global Stage domain', () => {
     expect(session.currentStageId).toBe(currentStageId)
     expect(session.Participants.find(item => item.id === participant.id)?.groupId).toBe(session.Groups[1].id)
     await expect(prisma.trainingSessionProblemProgress.findUniqueOrThrow({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })).resolves.toMatchObject({ attemptCount: 3, bestScore: 60 })
+    await expect(getTrainingWorkspace(participant.userId, session.id)).resolves.toMatchObject({ participant: { latestGroupChange: { fromGroupName: '基础组', toGroupName: '提高组', reason: '课堂调组' } } })
   })
 
   it('applies a next-stage group change only when that Stage starts', async () => {

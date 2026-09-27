@@ -1571,9 +1571,14 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const manager = await canManageSession(userId, session)
   const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
   if (!manager && (participant?.status !== 'active' || session.status === 'DRAFT')) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
-  const [progress, overrides] = await Promise.all([
+  const [progress, overrides, latestGroupChange] = await Promise.all([
     participant ? prisma.trainingSessionProblemProgress.findMany({ where: { participantId: participant.id } }) : Promise.resolve([]),
     participant && !manager ? prisma.trainingSessionUserOverride.findMany({ where: { sessionId, userId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } }) : Promise.resolve([]),
+    participant && !manager ? prisma.trainingSessionGroupChange.findFirst({
+      where: { sessionId, participantId: participant.id, status: 'applied', appliedAt: { not: null } },
+      orderBy: { appliedAt: 'desc' },
+      include: { FromGroup: { select: { name: true } }, ToGroup: { select: { name: true } } },
+    }) : Promise.resolve(null),
   ])
   const participantView = participant ? { ...participant, currentGroupId: participant.groupId } : null
   const progressByProblem = new Map(progress.map(item => [item.stageProblemId, item]))
@@ -1618,6 +1623,13 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
       ...participantView,
       ...(resultsHidden ? {} : { requiredCount: activeRequirements.length, completedCount: completedRequirements.length }),
       requirements: resultsHidden ? [] : requirements.map(item => ({ stageId: item.stageId, stageProblemId: item.stageProblemId, state: item.state })),
+      latestGroupChange: latestGroupChange ? {
+        id: latestGroupChange.id,
+        fromGroupName: latestGroupChange.FromGroup?.name || null,
+        toGroupName: latestGroupChange.ToGroup.name,
+        reason: latestGroupChange.reason,
+        appliedAt: latestGroupChange.appliedAt,
+      } : null,
     } : null,
     progress: clientProgress,
     permissions,
