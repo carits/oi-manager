@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-26
+last_verified: 2026-09-27
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
@@ -12,6 +12,12 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 
 # 当前状态
+
+## 2026-09-27 Training Engine global Stage rollout
+
+- Commit `e9d39528` is on `main` and deployed. TrainingSession now has one global current Stage; stable Groups select the default Stage plan or an optional override and no longer own independent runtime state.
+- Migration `20260927_training_global_stage_model` was applied after a verified 28 MiB backup. The production consistency check reports 0 errors; inventory is 1 DRAFT Session, 3 PENDING Stages, 1 stable Group, 3 default Stage plans, and no StageProblem, Progress, or RuntimeSnapshot records.
+- API is active on slot 3303. Web BUILD_ID `lEqLwt4Uqoz-KjzESqIO5` passed canary and production chat probes (message seq 356-359). Router, API, Worker, Executor, Judge, and Web are active; readiness is healthy.
 
 - 架构迁移的机器可读事实源为 [architecture-progress.json](architecture-progress.json)；数字由 `pnpm architecture:progress` 生成，不在本文件手工重复维护。
 - 当前公网仍为 HTTP；生产 HTTPS、Secure Cookie、CSP、HSTS 和外部 HTTPS 探针以机器状态中的五项证据为准。

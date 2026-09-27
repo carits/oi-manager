@@ -1,19 +1,19 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-26
+last_verified: 2026-09-27
 source_of_truth: Git history
 ---
 
-## ## 2026-09-27 - Training Engine global Stage cutover (validated, not deployed)
+## 2026-09-27 - Training Engine global Stage cutover deployed
 
 - TrainingSession now owns one global Stage timeline. Stable Groups only select a default Stage plan or an optional group override; plans no longer own independent runtime lifecycle.
 - Added immutable Stage runtime snapshots, global transitions, pending next-Stage group changes, required/optional problem plans, and fail-closed migration checks for active legacy runtimes.
 - Removed group-runtime HTTP commands, participant Stage assignments, activeUnits responses, and group-level runtime controls from Server, Contracts, Web, scripts, and E2E seed data.
-- Isolated PostgreSQL validation passed: Training domain 10/10, migration 2/2, related Server suites 55/55 plus 11/11, Web model/contract suites 30/30, consistency 0 errors, E2E seed, Contracts/Shared/Server/Web builds, docs gate, and type checks. Production preflight is read-only and reports 0 active sessions and 0 started legacy units.
-- This entry records the candidate branch only. Production schema and runtime remain on the previously deployed model until the migration and rollout are completed.
+- Isolated PostgreSQL validation passed: Training domain 10/10, migration 2/2, related Server suites 55/55 plus 11/11, Web model/contract suites 30/30, consistency 0 errors, E2E seed, Contracts/Shared/Server/Web builds, docs gate, and type checks.
+- Production migration ran after a verified 28 MiB backup. Post-migration inventory is 1 DRAFT Session, 3 PENDING Stages, 1 stable Group, 3 default Stage plans, and 0 consistency errors. API promoted 3302 to 3303; Web BUILD_ID lEqLwt4Uqoz-KjzESqIO5 passed canary and production chat probes (message seq 356-359). Router, API, Worker, Executor, Judge, and Web are active.
 
-2026-09-27 — Problem / Solution Runtime Contract 发布
+## 2026-09-27 — Problem / Solution Runtime Contract 发布
 
 - 题目详情、评测程序、题面版本、AI Validator、数据生成、Candidate Pool / Wrong Corpus、贡献与 Hack，以及题解审核的 JSON 边界统一接入共享 Runtime Contract 与 Feature API；旧 Route/Component transport 保持 0/0，契约边界增至 210，Feature 内直接 transport 降至 3 文件/44 调用。
 - Contracts、Server/Web TypeScript、Server/Judge/Web production build、Candidate/AI Validator/题解/JudgeRun 定向回归及文档/架构门禁通过；Candidate Contract 夹具同步补齐 affectedSubtaskIds，真实 Candidate API 9/9 与策略 6/6 保持通过。
