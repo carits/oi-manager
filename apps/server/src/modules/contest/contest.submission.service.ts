@@ -15,9 +15,11 @@ export interface QueuedContestSubmissionInput {
   }
   contestProblem: {
     id: string
-    testSetRevisionId?: string | null
-    TestSetRevision?: { judgeConfigHash: string } | null
-    Problem: { id: string; platform: string; problemId: string; latestTestSetRevisionId?: string | null; LatestTestSetRevision?: { judgeConfigHash: string } | null }
+    testSetSlot?: 'STABLE' | 'EVOLVING' | null
+    testSetGraphHash?: string | null
+    testSetFencingToken?: number | null
+    testSetJudgeConfigHash?: string | null
+    Problem: { id: string; platform: string; problemId: string }
   }
   language: string
   code: string
@@ -53,8 +55,10 @@ export async function createQueuedContestSubmission(input: QueuedContestSubmissi
             submitMethod: input.submitMethod,
       problemInternalId: input.contestProblem.Problem.id,
       submitScope: 'contest',
-      testSetRevisionId: input.contestProblem.testSetRevisionId || input.contestProblem.Problem.latestTestSetRevisionId || null,
-      judgeConfigHash: input.contestProblem.TestSetRevision?.judgeConfigHash || input.contestProblem.Problem.LatestTestSetRevision?.judgeConfigHash || null,
+      testSetSlot: 'STABLE',
+      testSetGraphHash: input.contestProblem.testSetGraphHash || null,
+      testSetFencingToken: input.contestProblem.testSetFencingToken || null,
+      judgeConfigHash: input.contestProblem.testSetJudgeConfigHash || null,
       inputFilename: input.inputFilename || null,
       outputFilename: input.outputFilename || null,
       ioAdapterVersion: input.ioAdapterVersion ?? 1,

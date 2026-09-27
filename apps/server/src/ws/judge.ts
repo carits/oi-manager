@@ -19,7 +19,11 @@ import yaml from 'js-yaml'
 import { resolveSubmissionIoSnapshot } from '../modules/judge/domain/submission-io'
 import { getHeartbeatAction } from './judge-protocol'
 import { finalizeHackResult } from '../modules/problem/problem.hack.service'
-import { transitionHackAttempt, transitionHackAttempts } from '../modules/problem/problem.hack-state'
+import {
+  transitionHackAttempt,
+  transitionHackAttempts,
+  updateHackAttemptMetadata,
+} from '../modules/problem/problem.hack-state'
 import {
   claimNextQueuedSubmission,
   finalizeOwnedJudgeAttempt,
@@ -32,6 +36,7 @@ import { claimJudgeProgramVerificationJob, finalizeJudgeProgramVerificationJob, 
 import { judgeLaneForDispatch } from '../modules/judge/domain/judge-lane-policy'
 import { claimCandidateEvaluationRun, finalizeCandidateEvaluationRun, recoverCandidateEvaluationRuns } from '../modules/problem/problem.candidate-evaluation.service'
 import { claimQualityVerificationJob, finalizeQualityVerificationJob, recoverQualityVerificationJobs } from '../modules/problem/problem.quality.service'
+import { acquireTestSetReaderTx, testSetSlotAbsolutePath } from '../modules/problem/problem.testset-slot.service'
 
 // 简单的随机 ID 生成（替代 nanoid）
 const generateId = () => Math.random().toString(36).substring(2, 10)
@@ -138,19 +143,14 @@ class JudgeConsumer {
     try {
       claimed = await claimNextQueuedSubmission(this.judgeId)
       if (!claimed) return null
-      const problem = await prisma.problem.findUnique({
-        where: { id: claimed.problemInternalId },
-        select: { judgeConfig: true, latestTestSetRevisionId: true },
+      if (!claimed.testSetSlot) throw new Error('JudgeRun 缺少测试数据槽')
+      const slot = await prisma.problemTestSetSlot.findUnique({
+        where: { problemId_slot: { problemId: claimed.problemInternalId, slot: claimed.testSetSlot } },
       })
-      const revisionId = claimed.testSetRevisionId || problem?.latestTestSetRevisionId
-      const revision = revisionId
-        ? await prisma.problemTestSetRevision.findFirst({
-            where: { id: revisionId, problemId: claimed.problemInternalId },
-            select: { judgeConfig: true, testdataPath: true },
-          })
-        : null
-      const testdataRoot = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
-      const config = yaml.load(claimed.judgeConfigSnapshot || revision?.judgeConfig || problem?.judgeConfig || '{}') as any
+      if (!slot || slot.fencingToken !== claimed.testSetFencingToken || slot.graphHash !== claimed.testSetGraphHash) {
+        throw new Error('JudgeRun 的测试数据槽已失效')
+      }
+      const config = yaml.load(claimed.judgeConfigSnapshot || slot.judgeConfig || '{}') as any
       const io = resolveSubmissionIoSnapshot(claimed, config)
       return {
         taskType: 'submission' as const,
@@ -161,9 +161,7 @@ class JudgeConsumer {
         judgeRunId: claimed.judgeRunId,
         judgeAttemptId: claimed.judgeAttemptId,
         fencingToken: claimed.fencingToken,
-        testdataPath: revision
-          ? path.join(testdataRoot, claimed.problemInternalId, revision.testdataPath)
-          : path.join(testdataRoot, claimed.problemInternalId),
+        testdataPath: testSetSlotAbsolutePath(claimed.problemInternalId, slot),
         config,
         ioAdapterVersion: io.ioAdapterVersion,
         io: { inputFile: io.inputFile, outputFile: io.outputFile },
@@ -206,14 +204,35 @@ class JudgeConsumer {
         const attempt = await tx.problemHackAttempt.findUnique({ where: { id: candidate.id } })
         if (!attempt) return null
         const [problem, hackConfig] = await Promise.all([
-          tx.problem.findUnique({ where: { id: attempt.problemId }, select: { judgeConfig: true, testGraphRevision: true, latestTestSetRevisionId: true } }),
+          tx.problem.findUnique({ where: { id: attempt.problemId }, select: { judgeConfig: true, testGraphRevision: true } }),
           tx.problemHackConfig.findUnique({ where: { problemId: attempt.problemId } }),
         ])
-        const baseRevision = attempt.baseTestSetRevisionId
-          ? await tx.problemTestSetRevision.findFirst({ where: { id: attempt.baseTestSetRevisionId, problemId: attempt.problemId } })
+        let reader = attempt.testSetReaderId
+          ? await tx.problemTestSetReader.findUnique({ where: { id: attempt.testSetReaderId }, include: { Slot: true } })
           : null
-        if (!problem || !hackConfig?.enabled || !baseRevision || hackConfig.revision !== attempt.hackConfigRevision ||
-            baseRevision.judgeConfigHash !== attempt.judgeConfigHash ||
+        if (!reader) {
+          const acquired = await acquireTestSetReaderTx(tx, {
+            problemId: attempt.problemId,
+            slot: 'EVOLVING',
+            ownerType: 'HACK_ATTEMPT',
+            ownerId: attempt.id,
+          })
+          await updateHackAttemptMetadata(tx, {
+            id: attempt.id,
+            state: 'queuing',
+            data: {
+              testSetReaderId: acquired.reader.id,
+              baseSlot: 'EVOLVING',
+              baseGraphHash: acquired.slot.graphHash,
+              baseFencingToken: acquired.slot.fencingToken,
+              judgeConfigHash: acquired.slot.judgeConfigHash,
+            },
+          })
+          reader = { ...acquired.reader, Slot: acquired.slot }
+        }
+        const baseSlot = reader.Slot
+        if (!problem || !hackConfig?.enabled || reader.status !== 'ACTIVE' || hackConfig.revision !== attempt.hackConfigRevision ||
+            baseSlot.judgeConfigHash !== attempt.judgeConfigHash ||
             (hackConfig.mode === 'oi' && problem.testGraphRevision !== attempt.testGraphRevision)) {
           await transitionHackAttempt(tx, {
             id: attempt.id,
@@ -230,13 +249,12 @@ class JudgeConsumer {
           data: { judgeId: this.judgeId, judgeStarted: new Date() },
         })
         if (claimed.count !== 1) return null
-        const testdataRoot = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
         return {
           taskType: 'hack' as const,
           hackAttemptId: attempt.id,
           problemId: attempt.problemId,
-          testdataPath: path.join(testdataRoot, attempt.problemId, baseRevision.testdataPath),
-          config: yaml.load(baseRevision.judgeConfig || '{}'),
+          testdataPath: testSetSlotAbsolutePath(attempt.problemId, baseSlot),
+          config: yaml.load(baseSlot.judgeConfig || '{}'),
           judgeConfigHash: attempt.judgeConfigHash,
           hackConfigRevision: attempt.hackConfigRevision,
           hackMode: hackConfig.mode as 'acm' | 'oi',

@@ -172,7 +172,7 @@ describe('shared API contract adapter', () => {
     expect(parseContractBody(DataMarketContracts.purchase, { license: 'PERSONAL' })).toEqual({ license: 'PERSONAL' })
     expect(parseContractBody(DataMarketContracts.purchase, { license: 'PERSONAL', amountCarits: 1 })).toEqual({ license: 'PERSONAL', amountCarits: 1 })
     expect(parseContractBody(DataMarketContracts.createIncident, {
-      revisionId: 'revision-1', severity: 'MAJOR', type: '答案错误',
+      problemId: 'problem-1', slot: 'STABLE', severity: 'MAJOR', type: '答案错误',
       description: '该版本包含可以稳定复现的错误答案数据。',
     }).severity).toBe('MAJOR')
   })
@@ -605,8 +605,8 @@ describe('shared API contract adapter', () => {
   })
 
   it('guards problem quality commands and dashboard projection', () => {
-    expect(parseContractBody(ProblemQualityContracts.requestEvaluation, { revisionId: 'revision-1' }))
-      .toEqual({ revisionId: 'revision-1' })
+    expect(parseContractBody(ProblemQualityContracts.requestEvaluation, { slot: 'EVOLVING' }))
+      .toEqual({ slot: 'EVOLVING' })
     expect(() => parseContractBody(ProblemQualityContracts.submitExpert, {
       algorithmicValueScore: 21, editorialScore: 5, originalityScore: 5, comment: 'a'.repeat(30),
     })).toThrowError(ApiContractError)
@@ -617,14 +617,14 @@ describe('shared API contract adapter', () => {
 
     const dashboard = responseStub()
     sendContractData(dashboard.response, ProblemQualityContracts.dashboard, {
-      permissions: { canManage: true, canExpertReview: false }, latestTestSetRevisionId: null,
+      permissions: { canManage: true, canExpertReview: false }, stableTestSet: null,
       testSetQuality: null, problemQuality: null, jobs: [], qualityHistory: [], solutionProfiles: [],
       internalCorpusIdentity: 'must-not-leak',
     })
     expect(dashboard.json).toHaveBeenCalledWith({
       success: true,
       data: {
-        permissions: { canManage: true, canExpertReview: false }, latestTestSetRevisionId: null,
+        permissions: { canManage: true, canExpertReview: false }, stableTestSet: null,
         testSetQuality: null, problemQuality: null, jobs: [], qualityHistory: [], solutionProfiles: [],
       },
     })
@@ -777,8 +777,8 @@ describe('shared API contract adapter', () => {
 
   it('guards OI Test Graph edits and normalizes workspace dates', () => {
     const body = parseContractBody(ProblemContracts.saveTestGraph, {
-      revision: 3,
-      expectedLatestRevisionId: 'revision-3',
+      slot: 'EVOLVING',
+      expectedFencingToken: 3,
       subtasks: [{
         id: 1, score: 100, if: [], groups: [
           { key: 'official-1', name: '官方测试组', kind: 'official', score: 100, type: 'min', cases: [] },
@@ -786,21 +786,22 @@ describe('shared API contract adapter', () => {
         ],
       }],
     })
-    expect(body.revision).toBe(3)
+    expect(body.expectedFencingToken).toBe(3)
     expect(() => parseContractBody(ProblemContracts.registerTestGraphTestcases, { pairs: [] })).toThrowError(ApiContractError)
 
     const { response, json } = responseStub()
     sendContractData(response, ProblemContracts.getTestGraph, {
-      revision: 3,
-      revisionId: 'revision-3',
-      createdAt: new Date('2026-09-14T00:00:00Z'),
+      slot: 'EVOLVING',
+      graphHash: 'graph-3',
+      fencingToken: 3,
+      updatedAt: new Date('2026-09-14T00:00:00Z'),
       migrated: true,
       subtasks: body.subtasks,
       files: [], pairs: [], unmatchedFiles: [], testcases: [],
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
-      data: expect.objectContaining({ createdAt: '2026-09-14T00:00:00.000Z' }),
+      data: expect.objectContaining({ updatedAt: '2026-09-14T00:00:00.000Z' }),
     }))
   })
 
@@ -907,7 +908,7 @@ describe('shared API contract adapter', () => {
       cases: [{ name: 'large', args: ['100000'], seed: '42' }],
     }).cases[0]?.name).toBe('large')
     expect(() => parseContractBody(ProblemContracts.promoteDataGenerationJob, {
-      expectedLatestRevisionId: '',
+      expectedEvolvingFencingToken: -1,
       caseIds: [],
     })).toThrowError(ApiContractError)
 
@@ -915,11 +916,10 @@ describe('shared API contract adapter', () => {
     sendContractData(response, ProblemContracts.getDataGenerationJob, {
       id: 'job-1',
       status: 'running',
-      expectedLatestRevisionId: 'revision-1',
-      promotedRevisionId: null,
+      expectedEvolvingFencingToken: 1,
+      promotedGraphHash: null,
       createdAt: new Date('2026-09-27T00:00:00Z'),
-      judgeId: 'internal-judge',
-      fencingToken: 'internal-fence',
+      writerId: 'internal-writer',
       cases: [{
         id: 'case-1',
         name: 'large',
@@ -936,8 +936,7 @@ describe('shared API contract adapter', () => {
         cases: [expect.objectContaining({ name: 'large' })],
       }),
     }))
-    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('judgeId')
-    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('fencingToken')
+    expect(json.mock.calls[0]?.[0]?.data).not.toHaveProperty('writerId')
   })
 
   it('guards Candidate policy, selector and Wrong Corpus manager boundaries', () => {

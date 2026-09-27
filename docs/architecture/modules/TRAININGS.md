@@ -19,7 +19,7 @@ TrainingSession
 ├─ Participant ──belongs to──> stable Group
 └─ Stage[]（有序全局时间轴）
    ├─ lifecycle / timing / end policy / access / submission
-   ├─ StageProblem[] ──> pinned TestSet Revision
+   ├─ StageProblem[] ──> canonical Problem；提交时动态读取 Evolving
    ├─ default StagePlan（全班默认，必有且唯一）
    ├─ optional Group override StagePlan[]
    │  └─ ProblemPlan[]（顺序、必做、解锁、分数、时间、提示）
@@ -36,12 +36,12 @@ TrainingSession
 - 每个 Stage 必须恰好有一个默认计划：`isDefault=true`、`groupId=null`、`inheritsDefault=false`。
 - 分组覆盖计划必须引用本 Session 的稳定 Group；没有覆盖时回退到默认计划。
 - Participant 必须且只能属于当前 Session 的一个有效稳定 Group。
-- StageProblem 保存 canonical Problem 与固定 TestSet Revision；ProblemPlan 保存面向计划的训练规则和 `required`。
+- StageProblem 只保存 canonical Problem；ProblemPlan 保存面向计划的训练规则和 `required`。每次训练提交在创建 JudgeRun 时动态取得该题当时最新 Evolving；题目没有 Evolving 时回退 Stable。
 - Progress 绑定 Participant + StageProblem，不绑定 Group；换组不得删除 Draft、Submission 或历史 Progress。
 - Stage 首次开始时写入不可变 RuntimeSnapshot；已开始 Stage 的定义和计划不可编辑。
 - 已结束 Stage 不恢复为 RUNNING；需要重复训练时复制为新的未来 Stage。
 
-数据库约束与 `training:consistency` 同时检查：跨 Session 当前阶段、多个 RUNNING Stage、默认计划形状和数量、稳定分组归属、跨 Stage ProblemPlan、待生效换组、快照 Revision/哈希及孤儿 Progress。
+数据库约束与 `training:consistency` 同时检查：跨 Session 当前阶段、多个 RUNNING Stage、默认计划形状和数量、稳定分组归属、跨 Stage ProblemPlan、待生效换组、快照定义哈希、动态槽选择及孤儿 Progress。
 
 ## 设计与运行
 
@@ -62,15 +62,15 @@ Stage 编辑全局课堂行为：用途、顺序、题目、开放方式、提�
 
 ## 题目、进度与评测
 
-每个 StageProblem 固定 TestSet Revision。默认计划和分组覆盖通过各自 ProblemPlan 复用 StageProblem，规则包括顺序、必做/选做、解锁、目标分、分数里程碑、Subtask、单题时间、卡题与提示策略。
+StageProblem 不固定测试数据版本。默认计划和分组覆盖通过各自 ProblemPlan 复用 StageProblem，规则包括顺序、必做/选做、解锁、目标分、分数里程碑、Subtask、单题时间、卡题与提示策略。
 
-OI 部分分使用同一道题的 `scoreGoals`（例如 30 → 60 → 100），不为每个目标制造独立 Stage。每次提交继续固化训练、StageProblem、实际 TestSet Revision 和当时的评测投影。
+OI 部分分使用同一道题的 `scoreGoals`（例如 30 → 60 → 100），不为每个目标制造独立 Stage。每次提交取得当时 Evolving（缺失时 Stable）的 Reader，并固化 `testSetSlot + fencingToken + graphHash` 和 Judge 投影；提交终态后释放 Reader。
 
 题目添加只支持“平台 + 题号”精确解析；不提供题库浏览或题单选题。
 
 ## 并发、权限与实时事件
 
-所有结构和运行写入使用 Session advisory lock 与 `statusRevision` CAS。服务端重新校验 Stage、Group、Plan、Problem 和 Revision 归属；并发推进只有一个事务成功。
+所有结构和运行写入使用 Session advisory lock 与 `statusRevision` CAS。服务端重新校验 Stage、Group、Plan、Problem 和当前 TestSet 槽可用性；并发推进只有一个事务成功。
 
 JSON API 使用 `packages/contracts` Runtime Contract，Web 只通过 Training Feature API。SSE 是登记的 Raw Transport，用持久 Event 序号补偿断线；重连后重新读取 Workspace 权威状态。
 

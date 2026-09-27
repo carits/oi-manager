@@ -21,7 +21,7 @@ export const ContributionEventSchema = z.object({
   evidence: z.object({
     problemId: z.string().optional(),
     candidateId: z.string().optional(),
-    promotedRevisionId: z.string().optional(),
+    promotedGraphHash: z.string().optional(),
     candidateSource: z.string().optional(),
     selectionMode: z.string().optional(),
     rewardCarits: z.string().optional(),
@@ -58,10 +58,10 @@ export type ContributionAuditPage = z.infer<typeof AuditPageSchema>
 const EmptyBodySchema = z.object({}).default({})
 const ReasonBodySchema = z.object({ reason: z.string().trim().min(10).max(2000) })
 const AuditQuerySchema = PaginationQuerySchema.extend({ status: z.enum(['pending', 'accepted', 'rejected', 'revoked']).optional() })
-const EvidenceQuerySchema = z.object({ kind: z.enum(['candidate', 'revision']) })
+const EvidenceQuerySchema = z.object({ kind: z.enum(['candidate', 'evolving']) })
 const EvidenceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('candidate'), problemId: z.string(), candidate: z.object({ id: z.string() }).passthrough() }),
-  z.object({ kind: z.literal('revision'), problemId: z.string(), revision: z.object({ id: z.string() }).passthrough() }),
+  z.object({ kind: z.literal('evolving'), problemId: z.string(), graphHash: z.string(), isCurrent: z.boolean(), current: z.object({ graphHash: z.string(), fencingToken: z.number().int(), updatedAt: DateTimeWireSchema }).nullable() }),
 ])
 export type ContributionEvidence = z.infer<typeof EvidenceSchema>
 

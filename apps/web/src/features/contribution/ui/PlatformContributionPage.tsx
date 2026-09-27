@@ -31,7 +31,7 @@ import {
 import styles from "./PlatformContributionPage.module.css";
 
 type EvidenceDetail = {
-  kind: "candidate" | "revision";
+  kind: "candidate" | "evolving";
   title: string;
   data: ContributionEvidence | null;
   error: string;
@@ -161,12 +161,12 @@ export default function PlatformContributionPage() {
   const openEvidenceDetail = async (kind: EvidenceDetail["kind"]) => {
     const resourceId = kind === "candidate"
       ? selected?.evidence?.candidateId
-      : selected?.evidence?.promotedRevisionId;
+      : selected?.evidence?.promotedGraphHash;
     if (!selected || !resourceId) {
       toast.error("该贡献没有可用的详情引用");
       return;
     }
-    const title = kind === "candidate" ? "Candidate 详情" : "TestSet Revision 详情";
+    const title = kind === "candidate" ? "Candidate 详情" : "Evolving 图哈希详情";
     setEvidenceDetail({ kind, title, data: null, error: "" });
     setEvidenceLoading(true);
     const result = await getContributionEvidence(selected.id, kind).then(
@@ -187,7 +187,7 @@ export default function PlatformContributionPage() {
         accept: {
           title: "接受贡献并发放奖励",
           description:
-            "请核对题目、Candidate 和正式 Revision 证据。接受后会创建奖励任务。",
+            "请核对题目、Candidate 和Evolving 图哈希证据。接受后会创建奖励任务。",
           submitText: "确认接受",
         },
         reject: {
@@ -485,15 +485,15 @@ export default function PlatformContributionPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt>晋升 Revision</dt>
+                  <dt>Evolving 图哈希</dt>
                   <dd>
-                    {selected.evidence?.promotedRevisionId ? (
+                    {selected.evidence?.promotedGraphHash ? (
                       <span className={styles.evidenceAction}>
-                        <code>{selected.evidence.promotedRevisionId}</code>
+                        <code>{selected.evidence.promotedGraphHash}</code>
                         <Button
                           size="sm"
                           variant="text"
-                          onClick={() => void openEvidenceDetail("revision")}
+                          onClick={() => void openEvidenceDetail("evolving")}
                         >
                           查看详情
                         </Button>
@@ -566,7 +566,7 @@ export default function PlatformContributionPage() {
             if (!evidenceLoading) setEvidenceDetail(null);
           }}
           title={evidenceDetail?.title || "贡献证据详情"}
-          description="以下内容来自现有 Candidate / TestSet Revision 详情接口，审核前请核对状态、哈希和晋升投影。"
+          description="以下内容来自现有 Candidate / Evolving 数据槽详情接口，审核前请核对状态、哈希和晋升投影。"
           size="xl"
           footer={(
             <Button

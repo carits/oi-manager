@@ -166,7 +166,7 @@ export const ProblemContributionCaseSchema = z.object({
   stage: z.string(),
   candidateId: z.string().optional(),
   candidateStatus: z.string().optional(),
-  promotedRevisionId: z.string().optional(),
+  promotedGraphHash: z.string().optional(),
   message: z.string().nullable().optional(),
 });
 
@@ -235,15 +235,15 @@ export const ProblemHackAttemptSchema = z.object({
   affectedSubtaskIds: z.array(z.number().int().positive()),
   acceptedTestcaseId: z.string().nullable().optional(),
   testGraphRevision: z.number().int().nullable().optional(),
-  baseTestSetRevisionId: z.string().nullable().optional(),
+  baseSlot: z.enum(["STABLE", "EVOLVING"]).nullable().optional(),
+  baseGraphHash: z.string().nullable().optional(),
+  baseFencingToken: z.number().int().nonnegative().nullable().optional(),
   candidateTestcaseId: z.string().nullable().optional(),
-  promotedRevisionId: z.string().nullable().optional(),
+  promotedGraphHash: z.string().nullable().optional(),
   canonicalStatus: z.string().nullable().optional(),
   testcaseCandidateId: z.string().nullable().optional(),
   testcaseCandidateStatus: z.string().nullable().optional(),
   promotionRetries: z.number().int().nonnegative().optional(),
-  baseTestSetRevision: z.number().int().positive().nullable().optional(),
-  promotedRevision: z.number().int().positive().nullable().optional(),
   failureStage: z.string().nullable().optional(),
   message: z.string().nullable().optional(),
   acceptedInputFile: z.string().nullable().optional(),
@@ -561,22 +561,59 @@ export const ProblemTestdataSchema = z.object({
   pairs: z.array(ProblemTestCasePairSchema),
 });
 
-export const ProblemTestSetRevisionSummarySchema = z.object({
-  id: z.string(),
-  revisionNumber: z.number().int().positive(),
-  parentRevisionId: z.string().nullable().optional(),
+export const ProblemTestSetSlotSchema = z.object({
+  problemId: z.string(),
+  slot: z.enum(["STABLE", "EVOLVING"]),
   mode: z.enum(["acm", "oi"]),
   source: z.string(),
   judgeConfigHash: z.string(),
   graphHash: z.string(),
-  createdBy: z.string().nullable().optional(),
-  hackAttemptId: z.string().nullable().optional(),
-  createdAt: DateTimeWireSchema,
+  fencingToken: z.number().int().nonnegative(),
+  writerGateClosed: z.boolean(),
+  activeReaderCount: z.number().int().nonnegative(),
+  updatedAt: DateTimeWireSchema,
 });
 
-export const ProblemTestSetRevisionListSchema = z.object({
-  latestTestSetRevisionId: z.string().nullable(),
-  revisions: z.array(ProblemTestSetRevisionSummarySchema),
+export const ProblemTestSetSlotListSchema = z.object({
+  slots: z.array(ProblemTestSetSlotSchema),
+});
+
+export const ProblemTestSetWriterSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  slot: z.enum(["STABLE", "EVOLVING"]),
+  sourceType: z.string(),
+  status: z.enum(["QUEUED", "DRAINING", "APPLYING", "SUCCEEDED", "FAILED", "CANCELLED"]),
+  requestedAt: DateTimeWireSchema,
+  startedAt: DateTimeWireSchema.nullable(),
+  finishedAt: DateTimeWireSchema.nullable(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+});
+
+export const ProblemTestSetPromotionJobSchema = z.object({
+  id: z.string(),
+  problemId: z.string(),
+  status: z.string(),
+  evolvingGraphHash: z.string(),
+  evolvingFencingToken: z.number().int().nonnegative(),
+  validatorPassed: z.boolean().nullable(),
+  standardPassed: z.boolean().nullable(),
+  acceptedReplayPassed: z.boolean().nullable(),
+  failureReason: z.string().nullable(),
+  createdAt: DateTimeWireSchema,
+  startedAt: DateTimeWireSchema.nullable(),
+  finishedAt: DateTimeWireSchema.nullable(),
+});
+
+export const ProblemTestSetPromotionCaptureSchema = z.object({
+  jobId: z.string(),
+  graphHash: z.string(),
+  fencingToken: z.number().int().nonnegative(),
+});
+
+export const ProblemTestSetPromotionCompleteInputSchema = z.object({
+  qualitySnapshotId: z.string().min(1),
 });
 
 export const ProblemTestGraphCaseSchema = z.object({
@@ -644,10 +681,11 @@ export const ProblemTestGraphTestcaseSchema = z.object({
 });
 
 export const ProblemTestGraphWorkspaceSchema = z.object({
-  revision: z.number().int().nonnegative(),
-  revisionId: z.string().optional(),
+  slot: z.enum(["STABLE", "EVOLVING"]),
+  graphHash: z.string(),
+  fencingToken: z.number().int().nonnegative(),
   source: z.string().optional(),
-  createdAt: DateTimeWireSchema.optional(),
+  updatedAt: DateTimeWireSchema.optional(),
   migrated: z.boolean(),
   canMigrate: z.boolean().optional(),
   migrationIssues: z.array(z.string()).optional(),
@@ -659,8 +697,8 @@ export const ProblemTestGraphWorkspaceSchema = z.object({
 });
 
 export const ProblemTestGraphSaveInputSchema = z.object({
-  revision: z.number().int().nonnegative(),
-  expectedLatestRevisionId: z.string().optional(),
+  slot: z.enum(["STABLE", "EVOLVING"]).optional(),
+  expectedFencingToken: z.number().int().nonnegative(),
   subtasks: z.array(ProblemTestGraphSubtaskSchema),
   overrideReason: z.string().optional(),
 });
@@ -686,7 +724,7 @@ export const ProblemTestcaseProtectionResultSchema = z.object({
   protectedUntil: DateTimeWireSchema.nullable().optional(),
 }).passthrough();
 
-const ProblemRevisionCaseSpecSchema = z.object({
+const ProblemSlotCaseSpecSchema = z.object({
   testcaseId: z.string().nullable().optional(),
   inputName: z.string(),
   outputName: z.string(),
@@ -698,8 +736,8 @@ const ProblemRevisionCaseSpecSchema = z.object({
   memory: z.string().nullable().optional(),
 });
 
-export const ProblemTestSetRevisionSpecSchema = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("acm"), cases: z.array(ProblemRevisionCaseSpecSchema) }),
+export const ProblemTestSetSlotSpecSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("acm"), cases: z.array(ProblemSlotCaseSpecSchema) }),
   z.object({
     mode: z.literal("oi"),
     subtasks: z.array(z.object({
@@ -712,16 +750,11 @@ export const ProblemTestSetRevisionSpecSchema = z.discriminatedUnion("mode", [
         kind: z.enum(["official", "hack_gate"]),
         score: z.number(),
         type: z.enum(["min", "max", "sum"]),
-        cases: z.array(ProblemRevisionCaseSpecSchema),
+        cases: z.array(ProblemSlotCaseSpecSchema),
       })),
     })),
   }),
 ]);
-
-export const ProblemTestSetRevisionDetailSchema = ProblemTestSetRevisionSummarySchema.extend({
-  judgeConfig: z.string(),
-  spec: ProblemTestSetRevisionSpecSchema.nullable(),
-}).passthrough();
 
 export const JudgeProgramKindSchema = z.enum(["standard", "validator", "classifier", "generator"]);
 export const JudgeProgramFixtureSchema = z.object({
@@ -1001,15 +1034,15 @@ export const DataGenerationCaseSchema = z.object({
 export const DataGenerationJobSchema = z.object({
   id: z.string(),
   status: z.string(),
-  expectedLatestRevisionId: z.string().nullable(),
-  promotedRevisionId: z.string().nullable(),
+  expectedEvolvingFencingToken: z.number().int().nonnegative().nullable(),
+  promotedGraphHash: z.string().nullable(),
   createdAt: DateTimeWireSchema,
 });
 export const DataGenerationJobDetailSchema = DataGenerationJobSchema.extend({
   cases: z.array(DataGenerationCaseSchema),
 });
 export const DataGenerationJobPromoteInputSchema = z.object({
-  expectedLatestRevisionId: z.string().min(1).nullable().optional(),
+  expectedEvolvingFencingToken: z.number().int().nonnegative(),
   caseIds: z.array(z.string().min(1)).max(512).optional(),
   assignments: z.array(z.object({
     caseId: z.string().min(1),
@@ -1056,8 +1089,8 @@ export const CandidateRetirementSchema = z.object({
   subtaskId: z.number().int().positive(),
   testcaseId: z.string(),
   replacementTestcaseId: z.string().nullable(),
-  fromRevisionId: z.string(),
-  toRevisionId: z.string(),
+  fromGraphHash: z.string(),
+  toGraphHash: z.string(),
   reason: z.string(),
   createdAt: DateTimeWireSchema,
 });
@@ -1082,7 +1115,7 @@ export const CandidateSelectorDecisionSchema = z.object({
 export const CandidateSelectorResultSchema = z.object({
   promoted: z.boolean(),
   reason: z.string().optional(),
-  revisionId: z.string().optional(),
+  graphHash: z.string().optional(),
   decisions: z.array(CandidateSelectorDecisionSchema).optional(),
   publishRateLimited: z.boolean().optional(),
 });
@@ -1182,7 +1215,8 @@ export const AiValidatorSaveInputSchema = z.object({
 
 export const ProblemJudgeModeTransitionInputSchema = z.object({
   targetMode: z.enum(["acm", "oi"]),
-  expectedLatestRevisionId: z.string().min(1),
+  slot: z.enum(["STABLE", "EVOLVING"]),
+  expectedFencingToken: z.number().int().nonnegative(),
 });
 
 export const ProblemContracts = {
@@ -1386,17 +1420,23 @@ export const ProblemContracts = {
     key: "problem.testdata.delete", method: "DELETE", scope: "context",
     body: z.object({}), data: z.object({}),
   }),
-  listTestSetRevisions: defineApiEndpoint({
-    key: "problem.test-set-revisions.list",
+  listTestSetSlots: defineApiEndpoint({
+    key: "problem.test-set-slots.list",
     method: "GET",
     scope: "context",
-    data: ProblemTestSetRevisionListSchema,
+    data: ProblemTestSetSlotListSchema,
   }),
-  getTestSetRevision: defineApiEndpoint({
-    key: "problem.test-set-revision.get",
-    method: "GET",
-    scope: "context",
-    data: ProblemTestSetRevisionDetailSchema,
+  listTestSetPromotionJobs: defineApiEndpoint({
+    key: "problem.test-set-promotion-jobs.list", method: "GET", scope: "context",
+    data: z.object({ jobs: z.array(ProblemTestSetPromotionJobSchema) }),
+  }),
+  captureTestSetPromotion: defineApiEndpoint({
+    key: "problem.test-set-promotion-jobs.capture", method: "POST", scope: "context",
+    body: z.object({}), data: ProblemTestSetPromotionCaptureSchema,
+  }),
+  completeTestSetPromotion: defineApiEndpoint({
+    key: "problem.test-set-promotion-jobs.complete", method: "POST", scope: "context",
+    body: ProblemTestSetPromotionCompleteInputSchema, data: ProblemTestSetWriterSchema,
   }),
   getTestGraph: defineApiEndpoint({
     key: "problem.test-graph.get",
@@ -1554,7 +1594,7 @@ export const ProblemContracts = {
   }),
   promoteDataGenerationJob: defineApiEndpoint({
     key: "problem.data-generation.promote", method: "POST", scope: "context",
-    body: DataGenerationJobPromoteInputSchema, data: ProblemTestSetRevisionSummarySchema,
+    body: DataGenerationJobPromoteInputSchema, data: ProblemTestSetWriterSchema,
   }),
 
   generateAiValidator: defineApiEndpoint({
@@ -1587,7 +1627,7 @@ export const ProblemContracts = {
     method: "POST",
     scope: "context",
     body: ProblemJudgeModeTransitionInputSchema,
-    data: ProblemTestSetRevisionSummarySchema,
+    data: ProblemTestSetWriterSchema,
   }),
 } as const;
 
@@ -1630,8 +1670,8 @@ export type ProblemTestGraphWorkspace = z.infer<typeof ProblemTestGraphWorkspace
 export type ProblemTestGraphSubtask = z.infer<typeof ProblemTestGraphSubtaskSchema>;
 export type ProblemTestGraphSaveInput = z.infer<typeof ProblemTestGraphSaveInputSchema>;
 export type ProblemTestGraphPairInput = z.infer<typeof ProblemTestGraphPairInputSchema>;
-export type ProblemTestSetRevisionDetail = z.infer<typeof ProblemTestSetRevisionDetailSchema>;
-export type ProblemTestSetRevisionSummary = z.infer<typeof ProblemTestSetRevisionSummarySchema>;
+export type ProblemTestSetSlot = z.infer<typeof ProblemTestSetSlotSchema>;
+export type ProblemTestSetWriter = z.infer<typeof ProblemTestSetWriterSchema>;
 export type JudgeProgramKind = z.infer<typeof JudgeProgramKindSchema>;
 export type JudgeProgramFixture = z.infer<typeof JudgeProgramFixtureSchema>;
 export type JudgeProgramParameterRule = z.infer<typeof JudgeProgramParameterRuleSchema>;

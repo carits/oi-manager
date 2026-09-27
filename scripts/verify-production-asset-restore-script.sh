@@ -25,7 +25,7 @@ fs.writeFileSync(file, `${JSON.stringify({
   backupName,
   backupSha256,
   backupSize: Number(backupSize),
-  counts: { tables: 0, migrations: 0, users: 0, problems: 0, submissions: 0, files: 0, testSetRevisions: 0 },
+  counts: { tables: 0, migrations: 0, users: 0, problems: 0, submissions: 0, files: 0, testSetSlots: 0 },
 }, null, 2)}\n`, { mode: 0o600 })
 NODE
 

@@ -97,7 +97,7 @@ NODE
 mkdir -p "$TEST_ROOT/tampered-backups"
 printf 'not-a-real-dump\n' > "$TEST_ROOT/tampered-backups/oi_manager_20260829_000000.dump"
 cat > "$TEST_ROOT/tampered-backups/oi_manager_20260829_000000.dump.manifest.json" <<'JSON'
-{"schemaVersion":1,"backupName":"oi_manager_20260829_000000.dump","backupSha256":"0000000000000000000000000000000000000000000000000000000000000000","backupSize":16,"counts":{"tables":1,"migrations":1,"users":1,"problems":1,"submissions":1,"files":1,"testSetRevisions":1}}
+{"schemaVersion":1,"backupName":"oi_manager_20260829_000000.dump","backupSha256":"0000000000000000000000000000000000000000000000000000000000000000","backupSize":16,"counts":{"tables":1,"migrations":1,"users":1,"problems":1,"submissions":1,"files":1,"testSetSlots":1}}
 JSON
 if RESTORE_BACKUP_DIR="$TEST_ROOT/tampered-backups" \
   RESTORE_VERIFICATION_STATE_FILE="$TEST_ROOT/tampered-backups/restore-verification.json" \

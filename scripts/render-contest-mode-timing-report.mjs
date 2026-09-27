@@ -123,7 +123,7 @@ ${pairTable}
 
 ## 解释边界
 
-- 两场活动分别固定自己的不可变 TestSet Revision；本报告验证的是同源官方测试数据在 ACM Fast-Fail 与 IOI SUM 计分下的执行差异。
+- 两场活动分别持有自己的 Stable Reader；本报告验证的是同一 Stable 数据在 ACM Fast-Fail 与 IOI SUM 计分下的执行差异。
 - IOI 的最终 Verdict 仍反映最严重失败状态，分数由 Official Group 的 \`sum\` 聚合计算；ACM 只使用 0/100 与最终 Verdict。
 - 本报告在当前单台开发预览服务器、当前 Judge 并发与当时系统负载下生成，不作为生产容量承诺。
 `

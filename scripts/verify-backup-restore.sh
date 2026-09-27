@@ -24,15 +24,15 @@ user_count=0
 problem_count=0
 submission_count=0
 file_count=0
-revision_count=0
+slot_count=0
 
 write_state() {
   local status="$1"
   node - "$STATE_FILE" "$status" "$backup_name" "$backup_sha256" "$backup_size" "$manifest_sha256" \
-    "$table_count" "$migration_count" "$user_count" "$problem_count" "$submission_count" "$file_count" "$revision_count" <<'NODE'
+    "$table_count" "$migration_count" "$user_count" "$problem_count" "$submission_count" "$file_count" "$slot_count" <<'NODE'
 const fs = require('node:fs')
 const path = require('node:path')
-const [file, status, backupName, backupSha256, backupSize, manifestSha256, tables, migrations, users, problems, submissions, files, revisions] = process.argv.slice(2)
+const [file, status, backupName, backupSha256, backupSize, manifestSha256, tables, migrations, users, problems, submissions, files, slots] = process.argv.slice(2)
 const now = new Date().toISOString()
 const payload = {
   schemaVersion: 2,
@@ -49,7 +49,7 @@ const payload = {
   problems: Number(problems || 0),
   submissions: Number(submissions || 0),
   files: Number(files || 0),
-  testSetRevisions: Number(revisions || 0),
+  testSetSlots: Number(slots || 0),
 }
 fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
 const temporary = `${file}.next.${process.pid}`
@@ -78,13 +78,13 @@ if [ ! -s "$manifest_file" ]; then
 fi
 manifest_sha256="$(sha256sum "$manifest_file" | cut -d' ' -f1)"
 if ! IFS=$'\t' read -r expected_sha expected_size expected_tables expected_migrations expected_users \
-  expected_problems expected_submissions expected_files expected_revisions < <(node - "$manifest_file" "$backup_name" <<'NODE'
+  expected_problems expected_submissions expected_files expected_slots < <(node - "$manifest_file" "$backup_name" <<'NODE'
 const fs = require('node:fs')
 const [file, expectedName] = process.argv.slice(2)
 const value = JSON.parse(fs.readFileSync(file, 'utf8'))
 if (value.schemaVersion !== 1 || value.backupName !== expectedName) throw new Error('Backup manifest identity mismatch')
 const counts = value.counts || {}
-const fields = [value.backupSha256, value.backupSize, counts.tables, counts.migrations, counts.users, counts.problems, counts.submissions, counts.files, counts.testSetRevisions]
+const fields = [value.backupSha256, value.backupSize, counts.tables, counts.migrations, counts.users, counts.problems, counts.submissions, counts.files, counts.testSetSlots]
 if (!/^[a-f0-9]{64}$/.test(String(fields[0])) || fields.slice(1).some(item => !Number.isInteger(Number(item)) || Number(item) < 0)) {
   throw new Error('Backup manifest contains invalid values')
 }
@@ -145,16 +145,16 @@ submission_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_
   'SELECT count(*) FROM public."Submission"')"
 file_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_db" -tAc \
   'SELECT count(*) FROM public."File"')"
-revision_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_db" -tAc \
-  'SELECT count(*) FROM public."ProblemTestSetRevision"')"
+slot_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_db" -tAc \
+  'SELECT count(*) FROM public."ProblemTestSetSlot"')"
 
-actual_counts="$table_count $migration_count $user_count $problem_count $submission_count $file_count $revision_count"
-expected_counts="$expected_tables $expected_migrations $expected_users $expected_problems $expected_submissions $expected_files $expected_revisions"
+actual_counts="$table_count $migration_count $user_count $problem_count $submission_count $file_count $slot_count"
+expected_counts="$expected_tables $expected_migrations $expected_users $expected_problems $expected_submissions $expected_files $expected_slots"
 if [ "$table_count" -le 0 ] || [ "$migration_count" -le 0 ] || [ "$actual_counts" != "$expected_counts" ]; then
   echo "Restored database failed manifest validation: expected=[$expected_counts] actual=[$actual_counts]" >&2
   exit 1
 fi
 
-printf 'backup=%s temporary_database=%s tables=%s migrations=%s users=%s problems=%s submissions=%s files=%s revisions=%s\n' \
+printf 'backup=%s temporary_database=%s tables=%s migrations=%s users=%s problems=%s submissions=%s files=%s slots=%s\n' \
   "$BACKUP_FILE" "$restore_db" "$table_count" "$migration_count" "$user_count" "$problem_count" \
-  "$submission_count" "$file_count" "$revision_count"
+  "$submission_count" "$file_count" "$slot_count"

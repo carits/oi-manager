@@ -18,7 +18,6 @@ type Props = {
   onUpdateStage: (clientKey: string, updater: (stage: Stage) => Stage) => void
   onUpdateProblem: (clientKey: string, updater: (problem: Assignment) => Assignment) => void
   onMoveProblemToStage: (problem: Assignment, targetStageKey: string) => void
-  onUpdateToLatest: (problem: Assignment) => Promise<void>
   readOnly?: boolean
 }
 
@@ -30,7 +29,6 @@ export function TrainingProblemChain({
   onUpdateStage,
   onUpdateProblem,
   onMoveProblemToStage,
-  onUpdateToLatest,
   readOnly = false,
 }: Props) {
   const problems = activeStage?.Problems || []
@@ -88,7 +86,7 @@ export function TrainingProblemChain({
             <StatusBadge variant="neutral">目标：{problem.targetScore ?? 100} 分</StatusBadge>
           </div>
           <div className={styles.problemQuickActions}>
-            {problem.latestRevision && problem.latestRevision.id !== problem.testSetRevisionId && <Button variant="text" size="sm" onClick={() => void onUpdateToLatest(problem)}>更新测试数据</Button>}
+            <StatusBadge variant="neutral">提交时使用当前 Evolving</StatusBadge>
             <Button iconOnly aria-label="上移题目" variant="text" disabled={index === 0} onClick={() => updateProblems(items => normalizeProblemOrder(moveItem(items, index, index - 1)))}><ArrowUp size={14} /></Button>
             <Button iconOnly aria-label="下移题目" variant="text" disabled={index === problems.length - 1} onClick={() => updateProblems(items => normalizeProblemOrder(moveItem(items, index, index + 1)))}><ArrowDown size={14} /></Button>
             <Button iconOnly aria-label="移除题目" variant="text" onClick={() => updateProblems(items => normalizeProblemOrder(items.filter(item => item.clientKey !== problem.clientKey)))}><Trash2 size={14} /></Button>

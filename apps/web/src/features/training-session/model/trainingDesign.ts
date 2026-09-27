@@ -1,7 +1,6 @@
 import type { TrainingDesign as TrainingDesignContract } from '@oi-manager/contracts'
 
 export type Subtask = { id: number; score: number; dependencies?: number[] }
-export type Revision = { id: string; revisionNumber: number; mode?: string }
 export type ProblemSummary = { id: string; platform: string; problemId: string; title: string; difficulty?: string | null }
 export type UnlockCondition = { type: 'AC' | 'SCORE' | 'TIME' | 'ATTEMPTS' | 'TEACHER'; value?: number }
 export type UnlockPolicy = { mode: 'ANY' | 'ALL'; conditions: UnlockCondition[] }
@@ -9,10 +8,10 @@ export type ProblemTimeAction = 'REMIND' | 'RECOMMEND_SWITCH' | 'LOCK_SUBMISSION
 export type ProblemTimePolicy = { mode: 'NONE' } | { mode: ProblemTimeAction; action?: ProblemTimeAction; limitSeconds: number }
 export type StuckPolicy = { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }
 export type Assignment = {
-  id?: string; assignmentId?: string; clientKey: string; problemId: string; testSetRevisionId: string; alias?: string | null; required?: boolean
+  id?: string; assignmentId?: string; clientKey: string; problemId: string; alias?: string | null; required?: boolean
   unlockPolicy?: UnlockPolicy | null; targetScore?: number | null; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }> | null
   timePolicy?: ProblemTimePolicy | null; stuckPolicy?: StuckPolicy | null; strategyIntervalSeconds?: number | null; allowedSubtaskIds: number[]
-  Problem: ProblemSummary; TestSetRevision: Revision; latestRevision?: Revision | null; subtasks: Subtask[]
+  Problem: ProblemSummary; currentData?: { slot: 'STABLE' | 'EVOLVING'; graphHash: string; mode?: string } | null; subtasks: Subtask[]
 }
 export type TrainingGroup = { id?: string; clientKey: string; name: string; orderIndex?: number; status?: string; participantIds: string[] }
 export type Stage = { id?: string; clientKey: string; name: string; description?: string | null; orderIndex?: number; kind: 'TRAINING' | 'TEACHING' | 'REVIEW'; lifecycle?: 'PENDING' | 'RUNNING' | 'ENDED' | 'SKIPPED'; mode?: 'PRACTICE' | 'EXAM' | 'GUIDED' | 'REVIEW'; accessPolicy?: 'ALL_AT_ONCE' | 'SEQUENTIAL' | 'TEACHER_CONTROLLED'; submissionMode?: 'ENABLED' | 'DISABLED'; endPolicy?: 'MANUAL' | 'TIME' | 'COMPLETION' | 'HYBRID'; plannedDurationSeconds?: number | null; minDurationSeconds?: number | null; completionThreshold?: number | null; completionPolicy?: Record<string, unknown> | null; rules?: Record<string, unknown> | null; Problems: Assignment[] }
@@ -30,7 +29,7 @@ export type Design = {
   participants: Array<{ id: string; userId: string; groupId: string }>
   groups: TrainingGroup[]; stages: Stage[]; stagePlans: StagePlan[]; issues: Issue[]
 }
-export type DesignProblem = ProblemSummary & { revision: Revision; subtasks: Subtask[] }
+export type DesignProblem = ProblemSummary & { data: { slot: 'STABLE' | 'EVOLVING'; graphHash: string; mode: string }; subtasks: Subtask[] }
 export type ProblemPage = { data: ProblemSummary[]; total?: number; page?: number; totalPages?: number }
 export type SourceGroup = 'school' | 'carits' | 'external'
 

@@ -7,7 +7,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import { getTestdataBlobStore, problemBlobKey } from '../storage/blob-store'
 import { canModifyProblem, canViewProblem, isPlatformManager } from './problem.access'
-import { revisionAbsolutePath } from './problem.testset-revision.service'
+import { acquireTestSetReader, acquireTestSetReaderTx, releaseTestSetReader, releaseTestSetReaderTx, testSetSlotAbsolutePath } from './problem.testset-slot.service'
 
 export const QUALITY_RULE_VERSION = 'QUALITY_RULE_V1'
 export const PROBLEM_QUALITY_RULE_VERSION = 'PROBLEM_QUALITY_RULE_V1'
@@ -69,7 +69,8 @@ type PinnedSolutionProfile = {
   definitionRevision: number
   source: {
     submissionId: number
-    evaluatedRevisionId: string | null
+    evaluatedSlot: 'STABLE' | 'EVOLVING' | null
+    evaluatedGraphHash: string | null
     result: string | null
     score: number | null
     subtasks: Array<{ subtaskId: number; score: number }>
@@ -83,14 +84,15 @@ type QualityInputSnapshot = {
   // the same evidence set idempotent, while allowing a later retrospective
   // assessment to record a genuinely newer observation date.
   asOfDate: string
-  revision: {
-    id: string
-    revisionNumber: number
+  testSet: {
+    slot: 'STABLE' | 'EVOLVING'
     mode: string
-    createdAt: string
+    updatedAt: string
     graphHash: string
     judgeConfigHash: string
-    testdataPath: string
+    judgeConfig: string
+    materializedPath: string
+    fencingToken: number
   }
   cases: PinnedCase[]
   objects: PinnedObject[]
@@ -184,16 +186,16 @@ function checkerAssetName(config: JsonObject) {
   return normalized
 }
 
-async function pinnedChecker(problemId: string, revision: { testdataPath: string }, config: JsonObject): Promise<QualityInputSnapshot['checker']> {
+async function pinnedChecker(problemId: string, testSet: { materializedPath: string }, config: JsonObject): Promise<QualityInputSnapshot['checker']> {
   const kind = String(config.checker_type ?? config.checkerType ?? 'default').toLowerCase()
   const expectsAsset = !['default', 'strict'].includes(kind)
   const fileName = checkerAssetName(config)
   let asset: QualityInputSnapshot['checker']['asset'] = null
   if (fileName) {
     try {
-      const revisionRoot = await revisionAbsolutePath(problemId, revision)
-      const absolute = path.resolve(revisionRoot, fileName)
-      if (absolute !== revisionRoot && absolute.startsWith(`${revisionRoot}${path.sep}`)) {
+      const slotRoot = testSetSlotAbsolutePath(problemId, testSet)
+      const absolute = path.resolve(slotRoot, fileName)
+      if (absolute !== slotRoot && absolute.startsWith(`${slotRoot}${path.sep}`)) {
         const content = await fs.promises.readFile(absolute)
         asset = { fileName, sha256: sha256(content), size: content.length }
       }
@@ -278,194 +280,151 @@ async function manageableProblem(user: JwtPayload, problemId: string) {
   return problem
 }
 
-async function buildPinnedInput(problemId: string, revisionId: string, corpusRevisionId?: string | null): Promise<QualityInputSnapshot> {
-  const revision = await prisma.problemTestSetRevision.findFirst({ where: { id: revisionId, problemId } })
-  if (!revision) fail(404, 'TEST_SET_REVISION_NOT_FOUND', '测试集版本不存在')
-  const corpus = corpusRevisionId
-    ? await prisma.wrongCorpusRevision.findFirst({ where: { id: corpusRevisionId, problemId } })
-    : await prisma.wrongCorpusRevision.findFirst({ where: { problemId, status: 'active' }, orderBy: { revisionNumber: 'desc' } })
-  if (!corpus) fail(409, 'QUALITY_CORPUS_NOT_READY', '题目尚无可用的 Wrong Behavior Corpus 版本')
 
-  const [acmCases, groupCases, revisionSubtasks, revisionGroups, dependencies, clusters, features, programs, candidates, submissionCount, submissions, validHackCount, criticalIncidents, solutionProfiles] = await Promise.all([
-    prisma.problemTestSetRevisionCase.findMany({ where: { revisionId }, orderBy: { orderIndex: 'asc' } }),
-    prisma.problemTestSetRevisionGroupCase.findMany({ where: { revisionId }, include: { Group: { include: { Subtask: true } } }, orderBy: [{ groupId: 'asc' }, { orderIndex: 'asc' }] }),
-    prisma.problemTestSetRevisionSubtask.findMany({ where: { revisionId }, orderBy: { orderIndex: 'asc' } }),
-    prisma.problemTestSetRevisionGroup.findMany({ where: { revisionId }, orderBy: [{ subtaskId: 'asc' }, { orderIndex: 'asc' }] }),
-    prisma.problemTestSetRevisionDependency.findMany({ where: { Subtask: { revisionId } }, include: { Subtask: true, DependsOn: true } }),
-    prisma.wrongBehaviorCluster.findMany({ where: { problemId, corpusRevisionId: corpus.id }, orderBy: { id: 'asc' } }),
-    prisma.problemFeatureDefinition.findMany({ where: { problemId }, orderBy: [{ orderIndex: 'asc' }, { key: 'asc' }] }),
-    prisma.problemJudgeProgram.findMany({ where: { problemId }, select: { kind: true, currentVersionId: true, status: true } }),
-    prisma.testcaseCandidate.findMany({ where: { problemId, OR: [{ corpusRevisionId: corpus.id }, { promotedRevisionId: revisionId }, { promotedTestcaseId: { not: null } }] }, select: { promotedTestcaseId: true, featureFingerprint: true, semanticFingerprint: true, selectionOutcome: true } }),
-    prisma.judgeRun.count({ where: { status: 'FINALIZED', testSetRevisionId: revisionId, result: { notIn: ['system_error'] }, Submission: { problemInternalId: problemId } } }),
-    prisma.submission.findMany({
-      where: {
-        problemInternalId: problemId,
-        CurrentJudgeRun: { is: { status: 'FINALIZED', testSetRevisionId: revisionId, result: { notIn: ['system_error'] } } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 1000,
-      select: {
-        code: true, language: true, inputFilename: true, outputFilename: true,
-        CurrentJudgeRun: { select: { result: true, score: true } },
-      },
-    }),
-    prisma.problemHackAttempt.count({ where: { problemId, canonicalStatus: 'promoted', finishedAt: { lte: new Date() } } }),
-    prisma.testSetQualityIncident.findMany({
-      where: { problemId, revisionId, severity: 'CRITICAL', status: 'CONFIRMED' },
-      orderBy: [{ confirmedAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, type: true, status: true, discoveredAt: true, confirmedAt: true },
-    }),
-    prisma.problemSolutionProfile.findMany({
-      where: { problemId, status: 'active' },
-      orderBy: [{ key: 'asc' }, { id: 'asc' }],
-      include: { Submission: { select: {
-        id: true,
-        CurrentJudgeRun: { select: { status: true, testSetRevisionId: true, result: true, score: true, subtasks: true } },
-      } } },
-    }),
-  ])
-  const versionIds = programs.map(item => item.currentVersionId).filter((id): id is string => Boolean(id))
-  const versions = versionIds.length ? await prisma.problemJudgeProgramVersion.findMany({ where: { id: { in: versionIds }, problemId }, select: { id: true, compileStatus: true, lifecycleStatus: true, sourceSha256: true } }) : []
-  const standardVersion = activeProgramVersion(programs, versions, 'standard')
-  const validatorVersion = activeProgramVersion(programs, versions, 'validator')
-  const classifierVersion = activeProgramVersion(programs, versions, 'classifier')
+async function buildPinnedInput(problemId: string, slot: 'STABLE' | 'EVOLVING', corpusRevisionId?: string | null): Promise<QualityInputSnapshot> {
+  const ownerId = crypto.randomUUID()
+  const acquired = await acquireTestSetReader({ problemId, slot, ownerType: 'QUALITY_SNAPSHOT', ownerId, expiresAt: new Date(Date.now() + 5 * 60_000) })
+  try {
+    const testSet = acquired.slot
+    const corpus = corpusRevisionId
+      ? await prisma.wrongCorpusRevision.findFirst({ where: { id: corpusRevisionId, problemId } })
+      : await prisma.wrongCorpusRevision.findFirst({ where: { problemId, status: 'active' }, orderBy: { revisionNumber: 'desc' } })
+    if (!corpus) fail(409, 'QUALITY_CORPUS_NOT_READY', '题目尚无可用的 Wrong Behavior Corpus 版本')
 
-  const cases: PinnedCase[] = revision.mode === 'acm'
-    ? acmCases.map(item => ({ testcaseId: item.testcaseId, inputObjectId: item.inputObjectId, outputObjectId: item.outputObjectId, inputName: item.inputName, outputName: item.outputName, source: item.source, subtaskId: null, groupKey: null, groupKind: null }))
-    : groupCases.map(item => ({ testcaseId: item.testcaseId, inputObjectId: item.inputObjectId, outputObjectId: item.outputObjectId, inputName: item.inputName, outputName: item.outputName, source: item.source, subtaskId: item.Group.Subtask.subtaskId, groupKey: item.Group.key, groupKind: item.Group.kind }))
-  const objectRoles = new Map<string, 'input' | 'output'>()
-  for (const item of cases) {
-    objectRoles.set(item.inputObjectId, 'input')
-    objectRoles.set(item.outputObjectId, 'output')
-  }
-  const objectRows = objectRoles.size ? await prisma.testdataObject.findMany({ where: { problemId, id: { in: [...objectRoles.keys()] } }, orderBy: { id: 'asc' } }) : []
-  const objects = objectRows.map(item => ({ id: item.id, sha256: item.sha256, size: item.size, storageKey: item.storageKey, role: objectRoles.get(item.id)! }))
+    const [acmCases, groupCases, slotSubtasks, slotGroups, dependencies, clusters, features, programs, candidates, submissionCount, submissions, validHackCount, criticalIncidents, solutionProfiles] = await Promise.all([
+      prisma.problemTestSetSlotCase.findMany({ where: { problemId, slot }, orderBy: { orderIndex: 'asc' } }),
+      prisma.problemTestSetSlotGroupCase.findMany({ where: { problemId, slot }, include: { Group: { include: { Subtask: true } } }, orderBy: [{ groupId: 'asc' }, { orderIndex: 'asc' }] }),
+      prisma.problemTestSetSlotSubtask.findMany({ where: { problemId, slot }, orderBy: { orderIndex: 'asc' } }),
+      prisma.problemTestSetSlotGroup.findMany({ where: { problemId, slot }, orderBy: [{ subtaskId: 'asc' }, { orderIndex: 'asc' }] }),
+      prisma.problemTestSetSlotDependency.findMany({ where: { Subtask: { problemId, slot } }, include: { Subtask: true, DependsOn: true } }),
+      prisma.wrongBehaviorCluster.findMany({ where: { problemId, corpusRevisionId: corpus.id }, orderBy: { id: 'asc' } }),
+      prisma.problemFeatureDefinition.findMany({ where: { problemId }, orderBy: [{ orderIndex: 'asc' }, { key: 'asc' }] }),
+      prisma.problemJudgeProgram.findMany({ where: { problemId }, select: { kind: true, currentVersionId: true, status: true } }),
+      prisma.testcaseCandidate.findMany({ where: { problemId, OR: [{ corpusRevisionId: corpus.id }, { promotedGraphHash: testSet.graphHash }, { promotedTestcaseId: { not: null } }] }, select: { promotedTestcaseId: true, featureFingerprint: true, semanticFingerprint: true, selectionOutcome: true } }),
+      prisma.judgeRun.count({ where: { status: 'FINALIZED', testSetSlot: slot, testSetGraphHash: testSet.graphHash, result: { notIn: ['system_error'] }, Submission: { problemInternalId: problemId } } }),
+      prisma.submission.findMany({
+        where: { problemInternalId: problemId, CurrentJudgeRun: { is: { status: 'FINALIZED', testSetSlot: slot, testSetGraphHash: testSet.graphHash, result: { notIn: ['system_error'] } } } },
+        orderBy: { createdAt: 'desc' },
+        take: 1000,
+        select: { code: true, language: true, inputFilename: true, outputFilename: true, CurrentJudgeRun: { select: { result: true, score: true } } },
+      }),
+      prisma.problemHackAttempt.count({ where: { problemId, canonicalStatus: 'promoted', promotedGraphHash: testSet.graphHash, finishedAt: { lte: new Date() } } }),
+      prisma.testSetQualityIncident.findMany({
+        where: { problemId, slot, affectedGraphHash: testSet.graphHash, severity: 'CRITICAL', status: 'CONFIRMED' },
+        orderBy: [{ confirmedAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, type: true, status: true, discoveredAt: true, confirmedAt: true },
+      }),
+      prisma.problemSolutionProfile.findMany({
+        where: { problemId, status: 'active' },
+        orderBy: [{ key: 'asc' }, { id: 'asc' }],
+        include: { Submission: { select: { id: true, CurrentJudgeRun: { select: { status: true, testSetSlot: true, testSetGraphHash: true, result: true, score: true, subtasks: true } } } } },
+      }),
+    ])
+    const versionIds = programs.map(item => item.currentVersionId).filter((id): id is string => Boolean(id))
+    const versions = versionIds.length ? await prisma.problemJudgeProgramVersion.findMany({ where: { id: { in: versionIds }, problemId }, select: { id: true, compileStatus: true, lifecycleStatus: true, sourceSha256: true } }) : []
+    const standardVersion = activeProgramVersion(programs, versions, 'standard')
+    const validatorVersion = activeProgramVersion(programs, versions, 'validator')
+    const classifierVersion = activeProgramVersion(programs, versions, 'classifier')
 
-  const killMap = new Map<string, Set<string>>()
-  const featureEvidence: QualityInputSnapshot['featureEvidence'] = []
-  for (const candidate of candidates) {
-    if (candidate.promotedTestcaseId) featureEvidence.push({ testcaseId: candidate.promotedTestcaseId, featureIds: featureIds(candidate.featureFingerprint), fingerprint: candidate.semanticFingerprint })
-    for (const evidence of parseKillEvidence(candidate.selectionOutcome)) {
-      const keys = killMap.get(evidence.clusterId) || new Set<string>()
-      for (const key of evidence.caseKeys) keys.add(key === 'candidate' && candidate.promotedTestcaseId ? candidate.promotedTestcaseId : key)
-      killMap.set(evidence.clusterId, keys)
+    const cases: PinnedCase[] = testSet.mode === 'acm'
+      ? acmCases.map(item => ({ testcaseId: item.testcaseId, inputObjectId: item.inputObjectId, outputObjectId: item.outputObjectId, inputName: item.inputName, outputName: item.outputName, source: item.source, subtaskId: null, groupKey: null, groupKind: null }))
+      : groupCases.map(item => ({ testcaseId: item.testcaseId, inputObjectId: item.inputObjectId, outputObjectId: item.outputObjectId, inputName: item.inputName, outputName: item.outputName, source: item.source, subtaskId: item.Group.Subtask.subtaskId, groupKey: item.Group.key, groupKind: item.Group.kind }))
+    const objectRoles = new Map<string, 'input' | 'output'>()
+    for (const item of cases) {
+      objectRoles.set(item.inputObjectId, 'input')
+      objectRoles.set(item.outputObjectId, 'output')
     }
-  }
+    const objectRows = objectRoles.size ? await prisma.testdataObject.findMany({ where: { problemId, id: { in: [...objectRoles.keys()] } }, orderBy: { id: 'asc' } }) : []
+    const objects = objectRows.map(item => ({ id: item.id, sha256: item.sha256, size: item.size, storageKey: item.storageKey, role: objectRoles.get(item.id)! }))
 
-  const config = parseConfig(revision.judgeConfig)
-  const checker = await pinnedChecker(problemId, revision, config)
-  const subtaskById = new Map(revisionSubtasks.map(item => [item.id, item]))
-  const groupsBySubtask = new Map<string, typeof revisionGroups>()
-  for (const group of revisionGroups) groupsBySubtask.set(group.subtaskId, [...(groupsBySubtask.get(group.subtaskId) || []), group])
-  const depsBySubtask = new Map<string, number[]>()
-  for (const dependency of dependencies) depsBySubtask.set(dependency.subtaskId, [...(depsBySubtask.get(dependency.subtaskId) || []), dependency.DependsOn.subtaskId])
-  const caseCount = new Map<string, number>()
-  for (const item of groupCases) caseCount.set(item.groupId, (caseCount.get(item.groupId) || 0) + 1)
-
-  return {
-    problemId,
-    asOfDate: new Date().toISOString().slice(0, 10),
-    revision: { id: revision.id, revisionNumber: revision.revisionNumber, mode: revision.mode, createdAt: revision.createdAt.toISOString(), graphHash: revision.graphHash, judgeConfigHash: revision.judgeConfigHash, testdataPath: revision.testdataPath },
-    cases,
-    objects,
-    subtasks: revisionSubtasks.map(subtask => ({
-      id: subtask.subtaskId,
-      score: subtask.score,
-      dependencies: (depsBySubtask.get(subtask.id) || []).sort((a, b) => a - b),
-      groups: (groupsBySubtask.get(subtask.id) || []).map(group => ({ key: group.key, kind: group.kind, score: group.score, aggregation: group.aggregation, caseCount: caseCount.get(group.id) || 0 })),
-    })),
-    corpus: { id: corpus.id, revisionNumber: corpus.revisionNumber, corpusHash: corpus.corpusHash, sampleCount: corpus.sampleCount, clusters: clusters.map(item => ({ id: item.id, weight: Math.max(1, item.weight), frequency: Math.max(1, item.frequency), partition: item.partition, categoryId: item.categoryId })) },
-    features: features.map(item => ({ key: item.key, kind: item.kind, importance: importanceOf(item.config), config: asObject(item.config) })),
-    killEvidence: [...killMap.entries()].map(([clusterId, keys]) => ({ clusterId, caseKeys: [...keys].sort() })).sort((a, b) => a.clusterId.localeCompare(b.clusterId)),
-    featureEvidence: [...new Map(featureEvidence.map(item => [item.testcaseId, item])).values()].sort((a, b) => a.testcaseId.localeCompare(b.testcaseId)),
-    submissions: {
-      count: submissionCount,
-      outcomes: submissions.map(item => ({
-        fingerprint: stableHash({ language: item.language, code: item.code.replace(/\r\n/g, '\n').trim(), input: item.inputFilename || 'stdin', output: item.outputFilename || 'stdout' }),
-        outcome: `${item.CurrentJudgeRun?.result || 'system_error'}:${item.CurrentJudgeRun?.score ?? ''}`,
-      })),
-    },
-    hacks: { count: validHackCount },
-    criticalIncidents: criticalIncidents.map(incident => ({
-      id: incident.id,
-      type: incident.type,
-      status: incident.status,
-      discoveredAt: incident.discoveredAt.toISOString(),
-      confirmedAt: incident.confirmedAt?.toISOString() || null,
-    })),
-    solutionProfiles: solutionProfiles.map(profile => {
-      const run = profile.Submission.CurrentJudgeRun?.status === 'FINALIZED' ? profile.Submission.CurrentJudgeRun : null
-      return {
-        id: profile.id,
-        key: profile.key,
-        name: profile.name,
-        expectedClass: profile.expectedClass,
-        expectedComplexity: profile.expectedComplexity,
-        expectedScoreMin: profile.expectedScoreMin,
-        expectedScoreMax: profile.expectedScoreMax,
-        expectedSubtaskScores: expectedSubtaskScores(profile.expectedSubtaskScores),
-        definitionHash: profile.definitionHash,
-        definitionRevision: profile.revision,
-        source: {
-          submissionId: profile.Submission.id,
-          evaluatedRevisionId: run?.testSetRevisionId || null,
-          result: run?.result || 'system_error',
-          score: run?.score ?? null,
-          subtasks: observedSubtaskScores(run?.subtasks || null),
-        },
+    const killMap = new Map<string, Set<string>>()
+    const featureEvidence: QualityInputSnapshot['featureEvidence'] = []
+    for (const candidate of candidates) {
+      if (candidate.promotedTestcaseId) featureEvidence.push({ testcaseId: candidate.promotedTestcaseId, featureIds: featureIds(candidate.featureFingerprint), fingerprint: candidate.semanticFingerprint })
+      for (const evidence of parseKillEvidence(candidate.selectionOutcome)) {
+        const keys = killMap.get(evidence.clusterId) || new Set<string>()
+        for (const key of evidence.caseKeys) keys.add(key === 'candidate' && candidate.promotedTestcaseId ? candidate.promotedTestcaseId : key)
+        killMap.set(evidence.clusterId, keys)
       }
-    }),
-    programs: {
-      standardVersionId: standardVersion?.id || null,
-      standardSourceSha256: standardVersion?.sourceSha256 || null,
-      validatorVersionId: validatorVersion?.id || null,
-      validatorSourceSha256: validatorVersion?.sourceSha256 || null,
-      classifierVersionId: classifierVersion?.id || null,
-      classifierSourceSha256: classifierVersion?.sourceSha256 || null,
-    },
-    checker,
+    }
+
+    const config = parseConfig(testSet.judgeConfig)
+    const checker = await pinnedChecker(problemId, testSet, config)
+    const groupsBySubtask = new Map<string, typeof slotGroups>()
+    for (const group of slotGroups) groupsBySubtask.set(group.subtaskId, [...(groupsBySubtask.get(group.subtaskId) || []), group])
+    const depsBySubtask = new Map<string, number[]>()
+    for (const dependency of dependencies) depsBySubtask.set(dependency.subtaskId, [...(depsBySubtask.get(dependency.subtaskId) || []), dependency.DependsOn.subtaskId])
+    const caseCount = new Map<string, number>()
+    for (const item of groupCases) caseCount.set(item.groupId, (caseCount.get(item.groupId) || 0) + 1)
+
+    return {
+      problemId,
+      asOfDate: new Date().toISOString().slice(0, 10),
+      testSet: { slot, mode: testSet.mode, updatedAt: testSet.updatedAt.toISOString(), graphHash: testSet.graphHash, judgeConfigHash: testSet.judgeConfigHash, judgeConfig: testSet.judgeConfig, materializedPath: testSet.materializedPath, fencingToken: testSet.fencingToken },
+      cases,
+      objects,
+      subtasks: slotSubtasks.map(subtask => ({
+        id: subtask.subtaskId,
+        score: subtask.score,
+        dependencies: (depsBySubtask.get(subtask.id) || []).sort((a, b) => a - b),
+        groups: (groupsBySubtask.get(subtask.id) || []).map(group => ({ key: group.key, kind: group.kind, score: group.score, aggregation: group.aggregation, caseCount: caseCount.get(group.id) || 0 })),
+      })),
+      corpus: { id: corpus.id, revisionNumber: corpus.revisionNumber, corpusHash: corpus.corpusHash, sampleCount: corpus.sampleCount, clusters: clusters.map(item => ({ id: item.id, weight: Math.max(1, item.weight), frequency: Math.max(1, item.frequency), partition: item.partition, categoryId: item.categoryId })) },
+      features: features.map(item => ({ key: item.key, kind: item.kind, importance: importanceOf(item.config), config: asObject(item.config) })),
+      killEvidence: [...killMap.entries()].map(([clusterId, keys]) => ({ clusterId, caseKeys: [...keys].sort() })).sort((a, b) => a.clusterId.localeCompare(b.clusterId)),
+      featureEvidence: [...new Map(featureEvidence.map(item => [item.testcaseId, item])).values()].sort((a, b) => a.testcaseId.localeCompare(b.testcaseId)),
+      submissions: {
+        count: submissionCount,
+        outcomes: submissions.map(item => ({
+          fingerprint: stableHash({ language: item.language, code: item.code.replace(/\r\n/g, '\n').trim(), input: item.inputFilename || 'stdin', output: item.outputFilename || 'stdout' }),
+          outcome: `${item.CurrentJudgeRun?.result || 'system_error'}:${item.CurrentJudgeRun?.score ?? ''}`,
+        })),
+      },
+      hacks: { count: validHackCount },
+      criticalIncidents: criticalIncidents.map(incident => ({ id: incident.id, type: incident.type, status: incident.status, discoveredAt: incident.discoveredAt.toISOString(), confirmedAt: incident.confirmedAt?.toISOString() || null })),
+      solutionProfiles: solutionProfiles.map(profile => {
+        const run = profile.Submission.CurrentJudgeRun?.status === 'FINALIZED' ? profile.Submission.CurrentJudgeRun : null
+        return {
+          id: profile.id, key: profile.key, name: profile.name, expectedClass: profile.expectedClass, expectedComplexity: profile.expectedComplexity,
+          expectedScoreMin: profile.expectedScoreMin, expectedScoreMax: profile.expectedScoreMax,
+          expectedSubtaskScores: expectedSubtaskScores(profile.expectedSubtaskScores), definitionHash: profile.definitionHash, definitionRevision: profile.revision,
+          source: { submissionId: profile.Submission.id, evaluatedSlot: run?.testSetSlot || null, evaluatedGraphHash: run?.testSetGraphHash || null, result: run?.result || 'system_error', score: run?.score ?? null, subtasks: observedSubtaskScores(run?.subtasks || null) },
+        }
+      }),
+      programs: {
+        standardVersionId: standardVersion?.id || null, standardSourceSha256: standardVersion?.sourceSha256 || null,
+        validatorVersionId: validatorVersion?.id || null, validatorSourceSha256: validatorVersion?.sourceSha256 || null,
+        classifierVersionId: classifierVersion?.id || null, classifierSourceSha256: classifierVersion?.sourceSha256 || null,
+      },
+      checker,
+    }
+  } finally {
+    await releaseTestSetReader(acquired.reader.id)
   }
 }
 
-export async function enqueueQualityEvaluationForRevision(input: { problemId: string; revisionId: string; createdBy: string; corpusRevisionId?: string | null }) {
-  const snapshot = await buildPinnedInput(input.problemId, input.revisionId, input.corpusRevisionId)
+export async function enqueueQualityEvaluationForSlot(input: { problemId: string; slot?: 'STABLE' | 'EVOLVING'; createdBy: string; corpusRevisionId?: string | null }) {
+  const slot = input.slot || 'STABLE'
+  const snapshot = await buildPinnedInput(input.problemId, slot, input.corpusRevisionId)
   const featureSchemaHash = stableHash(snapshot.features)
   const solutionProfileSchemaHash = stableHash(snapshot.solutionProfiles.map(profile => ({ id: profile.id, definitionHash: profile.definitionHash, definitionRevision: profile.definitionRevision })))
   const inputHash = stableHash({ rule: RULE_CONFIG, snapshot })
-  // The same Revision/Corpus may be evaluated again when a Feature schema,
-  // active program, rule input or evidence corpus changes. Only a byte-for-byte
-  // equivalent pinned input is idempotent; older certificates remain history.
   const existingSnapshot = await prisma.testSetQualitySnapshot.findFirst({ where: { inputHash } })
   if (existingSnapshot) return { queued: false, jobId: existingSnapshot.evaluationJobId, snapshotId: existingSnapshot.id, status: 'SUCCEEDED' as const }
   const existing = await prisma.qualityEvaluationJob.findUnique({ where: { inputHash } })
   if (existing) {
     if (existing.status === 'FAILED') {
-      const retried = await prisma.qualityEvaluationJob.updateMany({
-        where: { id: existing.id, status: 'FAILED' },
-        data: { status: 'QUEUED', attempts: 0, leaseOwner: null, leaseExpiresAt: null, fencingToken: null, startedAt: null, finishedAt: null, errorCode: null, errorMessage: null },
-      })
+      const retried = await prisma.qualityEvaluationJob.updateMany({ where: { id: existing.id, status: 'FAILED' }, data: { status: 'QUEUED', attempts: 0, leaseOwner: null, leaseExpiresAt: null, fencingToken: null, startedAt: null, finishedAt: null, errorCode: null, errorMessage: null } })
       if (retried.count) return { queued: true, jobId: existing.id, status: 'QUEUED' as const }
     }
     return { queued: existing.status === 'QUEUED' || existing.status === 'RUNNING', jobId: existing.id, status: existing.status }
   }
   try {
     const job = await prisma.qualityEvaluationJob.create({ data: {
-      id: crypto.randomUUID(),
-      problemId: input.problemId,
-      revisionId: input.revisionId,
-      corpusRevisionId: snapshot.corpus.id,
-      qualityRuleVersion: QUALITY_RULE_VERSION,
-      ruleConfig: RULE_CONFIG as unknown as Prisma.InputJsonValue,
-      inputSnapshot: snapshot as unknown as Prisma.InputJsonValue,
-      inputHash,
-      featureSchemaHash,
-      solutionProfileSchemaHash,
-      standardVersionId: snapshot.programs.standardVersionId,
-      validatorVersionId: snapshot.programs.validatorVersionId,
-      classifierVersionId: snapshot.programs.classifierVersionId,
-      checkerHash: snapshot.checker.hash,
-      judgeConfigHash: snapshot.revision.judgeConfigHash,
-      createdBy: input.createdBy,
+      id: crypto.randomUUID(), problemId: input.problemId, slot, graphHash: snapshot.testSet.graphHash, corpusRevisionId: snapshot.corpus.id,
+      qualityRuleVersion: QUALITY_RULE_VERSION, ruleConfig: RULE_CONFIG as unknown as Prisma.InputJsonValue, inputSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+      inputHash, featureSchemaHash, solutionProfileSchemaHash, standardVersionId: snapshot.programs.standardVersionId, validatorVersionId: snapshot.programs.validatorVersionId,
+      classifierVersionId: snapshot.programs.classifierVersionId, checkerHash: snapshot.checker.hash, judgeConfigHash: snapshot.testSet.judgeConfigHash, createdBy: input.createdBy,
     } })
     return { queued: true, jobId: job.id, status: job.status }
   } catch (error) {
@@ -515,7 +474,7 @@ export async function claimQualityVerificationJob(judgeId: string) {
     const validVersion = (version: typeof standard, expectedHash: string | null) => Boolean(version && version.compileStatus === 'passed' && version.lifecycleStatus === 'active' && version.sourceSha256 === expectedHash && sha256(version.source) === expectedHash)
     const prerequisitesReady = validVersion(standard, input.programs.standardSourceSha256)
       && validVersion(validator, input.programs.validatorSourceSha256)
-      && (input.revision.mode !== 'oi' || validVersion(classifier, input.programs.classifierSourceSha256))
+      && (input.testSet.mode !== 'oi' || validVersion(classifier, input.programs.classifierSourceSha256))
       && input.checker.configured
     if (!prerequisitesReady) {
       await tx.qualityEvaluationJob.update({
@@ -524,12 +483,18 @@ export async function claimQualityVerificationJob(judgeId: string) {
       })
       return null
     }
+    const held = await acquireTestSetReaderTx(tx, { problemId: job.problemId, slot: job.slot, ownerType: 'QUALITY_VERIFICATION', ownerId: job.id, expiresAt: new Date(Date.now() + 60 * 60_000) })
+    if (held.slot.graphHash !== job.graphHash || held.slot.fencingToken !== input.testSet.fencingToken) {
+      await releaseTestSetReaderTx(tx, held.reader.id)
+      await tx.qualityEvaluationJob.update({ where: { id: job.id }, data: { verificationStatus: 'complete', verificationReport: { outcome: 'not_ready', code: 'QUALITY_TEST_SET_STALE' } } })
+      return null
+    }
     const fencingToken = crypto.randomUUID()
     const changed = await tx.qualityEvaluationJob.updateMany({
       where: { id: job.id, status: 'QUEUED', verificationStatus: 'pending' },
       data: {
         verificationStatus: 'running', verificationJudgeId: judgeId, verificationFencingToken: fencingToken,
-        verificationLeaseExpiresAt: new Date(Date.now() + 60 * 60_000), verificationAttempts: { increment: 1 },
+        verificationLeaseExpiresAt: new Date(Date.now() + 60 * 60_000), verificationAttempts: { increment: 1 }, testSetReaderId: held.reader.id,
       },
     })
     if (changed.count !== 1) return null
@@ -550,8 +515,8 @@ export async function claimQualityVerificationJob(judgeId: string) {
       jobId: job.id,
       problemId: job.problemId,
       fencingToken,
-      testdataPath: path.join(testdataRoot, job.problemId, input.revision.testdataPath),
-      problemConfig: parseConfig((await tx.problemTestSetRevision.findUniqueOrThrow({ where: { id: job.revisionId }, select: { judgeConfig: true } })).judgeConfig),
+      testdataPath: path.join(testdataRoot, job.problemId, input.testSet.materializedPath),
+      problemConfig: parseConfig(input.testSet.judgeConfig),
       standard: { language: standard!.language, source: standard!.source },
       validator: { language: validator!.language, source: validator!.source },
       classifier: classifier ? { language: classifier.language, source: classifier.source } : null,
@@ -565,58 +530,50 @@ export async function finalizeQualityVerificationJob(judgeId: string, payload: a
   const jobId = String(payload?.jobId || '')
   const fencingToken = String(payload?.fencingToken || '')
   if (!jobId || !fencingToken) return false
-  if (payload?.retryable) {
-    const changed = await prisma.qualityEvaluationJob.updateMany({
-      where: { id: jobId, status: 'QUEUED', verificationStatus: 'running', verificationJudgeId: judgeId, verificationFencingToken: fencingToken },
-      data: { verificationStatus: 'pending', verificationJudgeId: null, verificationFencingToken: null, verificationLeaseExpiresAt: null },
-    })
-    return changed.count === 1
-  }
   const report = asObject(payload?.report)
-  if (!['passed', 'not_ready', 'critical'].includes(String(report.outcome || ''))) throw new Error('QUALITY_VERIFICATION_REPORT_INVALID')
-  const changed = await prisma.qualityEvaluationJob.updateMany({
-    where: { id: jobId, status: 'QUEUED', verificationStatus: 'running', verificationJudgeId: judgeId, verificationFencingToken: fencingToken },
-    data: {
-      verificationStatus: 'complete', verificationReport: report as Prisma.InputJsonValue,
-      verificationJudgeId: null, verificationFencingToken: null, verificationLeaseExpiresAt: null,
-    },
+  if (!payload?.retryable && !['passed', 'not_ready', 'critical'].includes(String(report.outcome || ''))) throw new Error('QUALITY_VERIFICATION_REPORT_INVALID')
+  return prisma.$transaction(async tx => {
+    const job = await tx.qualityEvaluationJob.findFirst({ where: { id: jobId, status: 'QUEUED', verificationStatus: 'running', verificationJudgeId: judgeId, verificationFencingToken: fencingToken } })
+    if (!job) return false
+    const changed = await tx.qualityEvaluationJob.updateMany({
+      where: { id: jobId, status: 'QUEUED', verificationStatus: 'running', verificationJudgeId: judgeId, verificationFencingToken: fencingToken },
+      data: payload?.retryable
+        ? { verificationStatus: 'pending', verificationJudgeId: null, verificationFencingToken: null, verificationLeaseExpiresAt: null, testSetReaderId: null }
+        : { verificationStatus: 'complete', verificationReport: report as Prisma.InputJsonValue, verificationJudgeId: null, verificationFencingToken: null, verificationLeaseExpiresAt: null, testSetReaderId: null },
+    })
+    if (changed.count === 1 && job.testSetReaderId) await releaseTestSetReaderTx(tx, job.testSetReaderId)
+    return changed.count === 1
   })
-  return changed.count === 1
 }
 
 export async function recoverQualityVerificationJobs(judgeId: string) {
-  return prisma.qualityEvaluationJob.updateMany({
-    where: { status: 'QUEUED', verificationStatus: 'running', verificationJudgeId: judgeId },
-    data: { verificationStatus: 'pending', verificationJudgeId: null, verificationFencingToken: null, verificationLeaseExpiresAt: null },
+  return prisma.$transaction(async tx => {
+    const jobs = await tx.qualityEvaluationJob.findMany({ where: { status: 'QUEUED', verificationStatus: 'running', verificationJudgeId: judgeId }, select: { id: true, testSetReaderId: true } })
+    const result = await tx.qualityEvaluationJob.updateMany({
+      where: { status: 'QUEUED', verificationStatus: 'running', verificationJudgeId: judgeId },
+      data: { verificationStatus: 'pending', verificationJudgeId: null, verificationFencingToken: null, verificationLeaseExpiresAt: null, testSetReaderId: null },
+    })
+    for (const job of jobs) if (job.testSetReaderId) await releaseTestSetReaderTx(tx, job.testSetReaderId)
+    return result
   })
 }
 
 export async function requestQualityEvaluation(user: JwtPayload, problemId: string, body: unknown) {
-  const problem = await manageableProblem(user, problemId)
+  await manageableProblem(user, problemId)
   const request = asObject(body)
-  const revisionId = typeof request.revisionId === 'string' ? request.revisionId : problem.latestTestSetRevisionId
-  if (!revisionId) fail(409, 'TEST_SET_REVISION_NOT_READY', '题目尚无正式测试集版本')
-  return enqueueQualityEvaluationForRevision({ problemId, revisionId, createdBy: user.userId, corpusRevisionId: typeof request.corpusRevisionId === 'string' ? request.corpusRevisionId : null })
+  const slot = request.slot === 'EVOLVING' ? 'EVOLVING' : 'STABLE'
+  return enqueueQualityEvaluationForSlot({ problemId, slot, createdBy: user.userId, corpusRevisionId: typeof request.corpusRevisionId === 'string' ? request.corpusRevisionId : null })
 }
 
 export async function enqueueLatestQualityAfterEvidenceChange(problemId: string, createdBy: string) {
-  const [problem, corpus] = await Promise.all([
-    prisma.problem.findUnique({ where: { id: problemId }, select: { latestTestSetRevisionId: true } }),
+  const [slot, corpus] = await Promise.all([
+    prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId, slot: 'STABLE' } }, select: { graphHash: true } }),
     prisma.wrongCorpusRevision.findFirst({ where: { problemId, status: 'active' }, orderBy: { revisionNumber: 'desc' }, select: { id: true } }),
   ])
-  if (!problem?.latestTestSetRevisionId || !corpus) return null
+  if (!slot || !corpus) return null
   try {
-    return await enqueueQualityEvaluationForRevision({
-      problemId,
-      revisionId: problem.latestTestSetRevisionId,
-      corpusRevisionId: corpus.id,
-      createdBy,
-    })
+    return await enqueueQualityEvaluationForSlot({ problemId, slot: 'STABLE', corpusRevisionId: corpus.id, createdBy })
   } catch (error) {
-    // Updating an evidence definition is authoritative even when a quality job
-    // cannot currently be queued (for example, while a Revision is being
-    // published). The old certificate is still surfaced as STALE and the next
-    // publication/manual request will enqueue the fixed input set.
     console.warn('[quality-evaluation] evidence change enqueue skipped', { problemId, error: (error as Error).message })
     return null
   }
@@ -676,27 +633,27 @@ async function parseSolutionProfileDefinition(user: JwtPayload, problemId: strin
   })
   if (new Set(parsedSubtasks.map(item => item.subtaskId)).size !== parsedSubtasks.length) fail(422, 'INVALID_SOLUTION_PROFILE', '同一个 Subtask 只能配置一次预期分')
 
-  const problem = await prisma.problem.findUnique({ where: { id: problemId }, select: { latestTestSetRevisionId: true } })
+  const stableSlot = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId, slot: 'STABLE' } }, select: { graphHash: true } })
   const [submission, revisionSubtasks] = await Promise.all([
     prisma.submission.findFirst({
       where: {
         id: submissionId, problemInternalId: problemId, submitMethod: 'local',
         ...(!isPlatformManager(user.accountRole) ? { userId: user.userId } : {}),
       },
-      select: { id: true, CurrentJudgeRun: { select: { status: true, testSetRevisionId: true, result: true } } },
+      select: { id: true, CurrentJudgeRun: { select: { status: true, testSetSlot: true, testSetGraphHash: true, result: true } } },
     }),
-    problem?.latestTestSetRevisionId
-      ? prisma.problemTestSetRevisionSubtask.findMany({ where: { revisionId: problem.latestTestSetRevisionId }, select: { subtaskId: true, score: true } })
+    stableSlot
+      ? prisma.problemTestSetSlotSubtask.findMany({ where: { problemId, slot: 'STABLE' }, select: { subtaskId: true, score: true } })
       : Promise.resolve([]),
   ])
   if (!submission) fail(422, 'SOLUTION_PROFILE_SUBMISSION_INVALID', 'Reference Solution 必须是本题可追溯的本地提交')
   const unstableResults = new Set(['queuing', 'judging', 'compiling', 'system_error'])
   const run = submission.CurrentJudgeRun
-  const currentRunFinalized = run?.status === 'FINALIZED' && Boolean(run.testSetRevisionId) && Boolean(run.result) && !unstableResults.has(String(run.result).toLowerCase())
-  const evaluatedRevisionId = currentRunFinalized ? run!.testSetRevisionId : null
-  if (!evaluatedRevisionId) fail(422, 'SOLUTION_PROFILE_SUBMISSION_NOT_FINALIZED', 'Reference Solution 尚未形成固定 Revision 的终态评测')
+  const currentRunFinalized = run?.status === 'FINALIZED' && run.testSetSlot === 'STABLE' && run.testSetGraphHash === stableSlot?.graphHash && Boolean(run.result) && !unstableResults.has(String(run.result).toLowerCase())
+  const evaluatedGraphHash = currentRunFinalized ? run!.testSetGraphHash : null
+  if (!evaluatedGraphHash) fail(422, 'SOLUTION_PROFILE_SUBMISSION_NOT_FINALIZED', 'Reference Solution 尚未形成当前 Stable 数据的终态评测')
   const validSubtaskIds = new Set(revisionSubtasks.map(item => item.subtaskId))
-  if (parsedSubtasks.some(item => !validSubtaskIds.has(item.subtaskId))) fail(422, 'SOLUTION_PROFILE_SUBTASK_INVALID', '预期分包含当前正式 Revision 不存在的 Subtask')
+  if (parsedSubtasks.some(item => !validSubtaskIds.has(item.subtaskId))) fail(422, 'SOLUTION_PROFILE_SUBTASK_INVALID', '预期分包含当前 Stable 数据中不存在的 Subtask')
   const subtaskFullScores = new Map(revisionSubtasks.map(item => [item.subtaskId, item.score]))
   const scoreAboveSubtaskMaximum = parsedSubtasks.find(item => item.max > (subtaskFullScores.get(item.subtaskId) ?? 0))
   if (scoreAboveSubtaskMaximum) {
@@ -728,7 +685,8 @@ function solutionProfileDto(profile: any) {
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
     observed: profile.Submission ? {
-      revisionId: run?.testSetRevisionId || null,
+      evaluatedSlot: run?.testSetSlot || null,
+      evaluatedGraphHash: run?.testSetGraphHash || null,
       result: run?.result || 'system_error',
       score: run?.score ?? null,
       subtasks: observedSubtaskScores(run?.subtasks || null),
@@ -738,7 +696,7 @@ function solutionProfileDto(profile: any) {
 
 const solutionProfileSubmission = { select: {
   id: true,
-  CurrentJudgeRun: { select: { status: true, testSetRevisionId: true, result: true, score: true, subtasks: true } },
+  CurrentJudgeRun: { select: { status: true, testSetSlot: true, testSetGraphHash: true, result: true, score: true, subtasks: true } },
 } } as const
 
 export async function listSolutionProfiles(user: JwtPayload, problemId: string) {
@@ -826,26 +784,27 @@ async function verifyObjectIntegrity(problemId: string, objects: PinnedObject[])
   return issues
 }
 
-async function verifyCheckerIntegrity(problemId: string, revision: { testdataPath: string }, checker: QualityInputSnapshot['checker']) {
+async function verifyCheckerIntegrity(problemId: string, testSet: { materializedPath: string }, checker: QualityInputSnapshot['checker']) {
   if (!checker.asset) return [] as Array<{ code: string; objectId: string; message: string }>
   try {
-    const revisionRoot = await revisionAbsolutePath(problemId, revision)
-    const absolute = path.resolve(revisionRoot, checker.asset.fileName)
-    if (absolute === revisionRoot || !absolute.startsWith(`${revisionRoot}${path.sep}`)) throw new Error('invalid checker path')
+    const slotRoot = testSetSlotAbsolutePath(problemId, testSet)
+    const absolute = path.resolve(slotRoot, checker.asset.fileName)
+    if (absolute === slotRoot || !absolute.startsWith(`${slotRoot}${path.sep}`)) throw new Error('invalid checker path')
     const content = await fs.promises.readFile(absolute)
     if (content.length !== checker.asset.size || sha256(content) !== checker.asset.sha256) {
-      return [{ code: 'CHECKER_ASSET_HASH_MISMATCH', objectId: checker.asset.fileName, message: 'Revision 中的 Checker 文件大小或哈希不一致' }]
+      return [{ code: 'CHECKER_ASSET_HASH_MISMATCH', objectId: checker.asset.fileName, message: '当前数据槽中的的 Checker 文件大小或哈希不一致' }]
     }
     return []
   } catch {
-    return [{ code: 'CHECKER_ASSET_MISSING', objectId: checker.asset.fileName, message: 'Revision 中固定的 Checker 文件不可读' }]
+    return [{ code: 'CHECKER_ASSET_MISSING', objectId: checker.asset.fileName, message: '当前数据槽中的固定的 Checker 文件不可读' }]
   }
 }
 
 export async function calculateQualitySnapshot(job: {
   id: string
   problemId: string
-  revisionId: string
+  slot: 'STABLE' | 'EVOLVING'
+  graphHash: string
   corpusRevisionId: string
   qualityRuleVersion: string
   ruleConfig: Prisma.JsonValue
@@ -871,7 +830,8 @@ export async function calculateQualitySnapshot(job: {
     || stableHash(job.ruleConfig) !== stableHash(RULE_CONFIG)
     || stableHash({ rule: job.ruleConfig, snapshot: input }) !== job.inputHash
     || job.problemId !== input.problemId
-    || job.revisionId !== input.revision.id
+    || job.slot !== input.testSet.slot
+    || job.graphHash !== input.testSet.graphHash
     || job.corpusRevisionId !== input.corpus.id
     || job.featureSchemaHash !== stableHash(input.features)
     || job.solutionProfileSchemaHash !== stableHash(input.solutionProfiles.map(profile => ({ id: profile.id, definitionHash: profile.definitionHash, definitionRevision: profile.definitionRevision })))
@@ -879,42 +839,42 @@ export async function calculateQualitySnapshot(job: {
     || (job.validatorVersionId ?? null) !== (input.programs.validatorVersionId ?? null)
     || (job.classifierVersionId ?? null) !== (input.programs.classifierVersionId ?? null)
     || job.checkerHash !== input.checker.hash
-    || job.judgeConfigHash !== input.revision.judgeConfigHash) {
+    || job.judgeConfigHash !== input.testSet.judgeConfigHash) {
     throw new Error('QUALITY_EVALUATION_PINNED_INPUT_MISMATCH')
   }
   const criticalIssues = await verifyObjectIntegrity(job.problemId, input.objects)
-  criticalIssues.push(...await verifyCheckerIntegrity(job.problemId, input.revision, input.checker))
+  criticalIssues.push(...await verifyCheckerIntegrity(job.problemId, input.testSet, input.checker))
   if (verification?.outcome === 'critical') {
     for (const item of verification.cases || []) {
       if (item.validatorPassed && item.classifierPassed !== false) continue
       criticalIssues.push({
         code: item.code || (!item.validatorPassed ? 'VALIDATOR_REJECTED_CANONICAL_INPUT' : 'CLASSIFIER_SUBTASK_MISMATCH'),
         objectId: item.key,
-        message: !item.validatorPassed ? 'Validator 拒绝正式测试点输入' : 'Classifier 结果与 Revision 的 Subtask 关系不一致',
+        message: !item.validatorPassed ? 'Validator 拒绝正式测试点输入' : 'Classifier 结果与当前数据槽的 Subtask 关系不一致',
       })
     }
-    if (!verification.standard?.passed) criticalIssues.push({ code: 'STANDARD_CHECKER_SELF_TEST_FAILED', objectId: job.revisionId, message: 'STD 无法通过当前 Revision 与 Checker 的全量自检' })
-    if (!verification.checker?.passed) criticalIssues.push({ code: 'CHECKER_NEGATIVE_PROBE_ACCEPTED', objectId: job.revisionId, message: 'Checker 接受了确定错误的负向探针输出' })
+    if (!verification.standard?.passed) criticalIssues.push({ code: 'STANDARD_CHECKER_SELF_TEST_FAILED', objectId: job.graphHash, message: 'STD 无法通过当前数据槽 与 Checker 的全量自检' })
+    if (!verification.checker?.passed) criticalIssues.push({ code: 'CHECKER_NEGATIVE_PROBE_ACCEPTED', objectId: job.graphHash, message: 'Checker 接受了确定错误的负向探针输出' })
   }
   for (const incident of input.criticalIncidents || []) {
     criticalIssues.push({
       code: 'CONFIRMED_CRITICAL_INCIDENT',
       objectId: incident.id,
-      message: `该 Revision 存在已确认的严重质量事故（${incident.type}）`,
+      message: `该数据槽 存在已确认的严重质量事故（${incident.type}）`,
     })
   }
   const warnings: Array<{ code: string; message: string }> = []
-  const actualRevision = await prisma.problemTestSetRevision.findUnique({ where: { id: job.revisionId }, select: { judgeConfig: true, judgeConfigHash: true, graphHash: true } })
-  if (!actualRevision || sha256(actualRevision.judgeConfig) !== input.revision.judgeConfigHash || actualRevision.judgeConfigHash !== input.revision.judgeConfigHash || actualRevision.graphHash !== input.revision.graphHash) {
-    criticalIssues.push({ code: 'REVISION_INTEGRITY_MISMATCH', objectId: job.revisionId, message: '不可变测试集投影完整性校验失败' })
+  const currentSlot = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId: job.problemId, slot: job.slot } }, select: { judgeConfig: true, judgeConfigHash: true, graphHash: true } })
+  if (!currentSlot || sha256(currentSlot.judgeConfig) !== input.testSet.judgeConfigHash || currentSlot.judgeConfigHash !== input.testSet.judgeConfigHash || currentSlot.graphHash !== input.testSet.graphHash) {
+    criticalIssues.push({ code: 'TEST_SET_SLOT_INTEGRITY_MISMATCH', objectId: job.graphHash, message: '不可变测试集投影完整性校验失败' })
   }
   const uniqueObjects = new Set(input.objects.map(item => item.id))
-  const revisionComplete = input.cases.length > 0 && uniqueObjects.size === new Set(input.cases.flatMap(item => [item.inputObjectId, item.outputObjectId])).size
+  const testSetComplete = input.cases.length > 0 && uniqueObjects.size === new Set(input.cases.flatMap(item => [item.inputObjectId, item.outputObjectId])).size
   const physicalCases = [...new Map(input.cases.map(item => [`${item.inputObjectId}:${item.outputObjectId}`, item])).values()]
   const verificationReady = verification?.outcome === 'passed'
   const standardReady = Boolean(input.programs.standardVersionId) && verificationReady && verification.standard.passed
   const validatorReady = Boolean(input.programs.validatorVersionId) && verificationReady && verification.validator.failed === 0
-  const classifierReady = input.revision.mode !== 'oi' || Boolean(input.programs.classifierVersionId) && verificationReady && verification.classifier.failed === 0
+  const classifierReady = input.testSet.mode !== 'oi' || Boolean(input.programs.classifierVersionId) && verificationReady && verification.classifier.failed === 0
   const evaluationClusters = input.corpus.clusters.filter(item => item.partition === 'evaluation')
   const holdoutClusters = input.corpus.clusters.filter(item => item.partition === 'holdout')
   const corpusReady = evaluationClusters.length > 0 && holdoutClusters.length > 0
@@ -923,11 +883,11 @@ export async function calculateQualitySnapshot(job: {
   if (!input.corpus.clusters.some(item => item.partition === 'holdout')) warnings.push({ code: 'HOLDOUT_EMPTY', message: 'Hidden Holdout 为空，区分能力置信度受限' })
 
   const checkerReady = input.checker.configured && verificationReady && verification.checker.passed
-  const qualityStatus = criticalIssues.length ? 'CRITICAL' as const : !standardReady || !validatorReady || !checkerReady || !revisionComplete || !corpusReady ? 'NOT_READY' as const : 'READY' as const
+  const qualityStatus = criticalIssues.length ? 'CRITICAL' as const : !standardReady || !validatorReady || !checkerReady || !testSetComplete || !corpusReady ? 'NOT_READY' as const : 'READY' as const
   const generatedCases = physicalCases.filter(item => item.source === 'generated' || item.source === 'hack')
   const generatedEvidence = new Set(input.featureEvidence.map(item => item.testcaseId))
   const generatorReproducibility = generatedCases.length ? generatedCases.filter(item => item.testcaseId && generatedEvidence.has(item.testcaseId)).length / generatedCases.length : 1
-  const config = actualRevision ? parseConfig(actualRevision.judgeConfig) : {}
+  const config = currentSlot ? parseConfig(currentSlot.judgeConfig) : {}
   const configComplete = Boolean(config.mode && (config.time || config.timeLimit) && (config.memory || config.memoryLimit))
   const correctnessScore = rounded(
     (standardReady ? 6 : 0) +
@@ -935,7 +895,7 @@ export async function calculateQualitySnapshot(job: {
     (checkerReady ? 5 : 0) +
     4 * generatorReproducibility +
     (classifierReady ? 4 : 0) +
-    (criticalIssues.length ? 0 : revisionComplete ? 3 : 0) +
+    (criticalIssues.length ? 0 : testSetComplete ? 3 : 0) +
     (configComplete ? 2 : 0), 30,
   )
 
@@ -953,7 +913,7 @@ export async function calculateQualitySnapshot(job: {
   const criticalFeatures = input.features.filter(item => item.importance === 'critical')
   const featureCoverage = totalFeatureWeight ? coveredFeatureWeight / totalFeatureWeight : 0
   const criticalFeatureCoverage = criticalFeatures.length ? criticalFeatures.filter(item => coveredFeatures.has(item.key)).length / criticalFeatures.length : (input.features.length ? 1 : 0)
-  const subtaskCoverage = input.revision.mode === 'oi'
+  const subtaskCoverage = input.testSet.mode === 'oi'
     ? (input.subtasks.length ? input.subtasks.filter(item => input.cases.some(testcase => testcase.subtaskId === item.id)).length / input.subtasks.length : 0)
     : (input.cases.length ? 1 : 0)
   const inputSizes = input.objects.filter(item => item.role === 'input').map(item => item.size)
@@ -981,7 +941,17 @@ export async function calculateQualitySnapshot(job: {
   let subtaskQualityScore = 10
   let solutionProfileAlignment: number | null = null
   let evaluatedSolutionProfileCount = 0
-  if (input.revision.mode === 'oi') {
+  const acceptedProfiles = input.solutionProfiles.filter(profile => ['correct', 'accepted'].includes(profile.expectedClass.toLowerCase()))
+  const acceptedReplayPassed = acceptedProfiles.length > 0 && acceptedProfiles.every(profile => {
+    if (profile.source.evaluatedSlot !== input.testSet.slot || profile.source.evaluatedGraphHash !== input.testSet.graphHash || profile.source.score == null) return false
+    if (profile.source.score < profile.expectedScoreMin || profile.source.score > profile.expectedScoreMax) return false
+    const actualSubtasks = new Map(profile.source.subtasks.map(item => [item.subtaskId, item.score]))
+    return profile.expectedSubtaskScores.every(expected => {
+      const observed = actualSubtasks.get(expected.subtaskId)
+      return observed != null && observed >= expected.min && observed <= expected.max
+    })
+  })
+  if (input.testSet.mode === 'oi') {
     const ids = new Set(input.subtasks.map(item => item.id))
     const totalScoreValid = input.subtasks.reduce((sum, item) => sum + item.score, 0) === 100
     const dependenciesValid = input.subtasks.every(item => item.dependencies.every(id => ids.has(id) && id !== item.id))
@@ -989,12 +959,12 @@ export async function calculateQualitySnapshot(job: {
     const gatesValid = input.subtasks.every(item => item.groups.filter(group => group.kind === 'hack_gate').length === 1)
     const groupScoresValid = input.subtasks.every(item => item.groups.filter(group => group.kind === 'official').reduce((sum, group) => sum + group.score, 0) === item.score)
     const structureScore = [totalScoreValid, dependenciesValid, officialValid, gatesValid, groupScoresValid].filter(Boolean).length
-    const evaluatedProfiles = input.solutionProfiles.filter(profile => profile.source.evaluatedRevisionId === input.revision.id && profile.source.score != null)
+    const evaluatedProfiles = input.solutionProfiles.filter(profile => profile.source.evaluatedSlot === input.testSet.slot && profile.source.evaluatedGraphHash === input.testSet.graphHash && profile.source.score != null)
     evaluatedSolutionProfileCount = evaluatedProfiles.length
     if (!input.solutionProfiles.length) {
       warnings.push({ code: 'SOLUTION_PROFILE_EMPTY', message: '未配置 Reference Solution Profile，Subtask 只能获得结构分' })
     } else if (evaluatedProfiles.length !== input.solutionProfiles.length) {
-      warnings.push({ code: 'SOLUTION_PROFILE_EVIDENCE_INCOMPLETE', message: '部分 Reference Solution Profile 尚未在当前 Revision 上形成终态评分' })
+      warnings.push({ code: 'SOLUTION_PROFILE_EVIDENCE_INCOMPLETE', message: '部分 Reference Solution Profile 尚未在当前数据槽 上形成终态评分' })
     }
     if (evaluatedProfiles.length) {
       const aligned = evaluatedProfiles.filter(profile => {
@@ -1029,29 +999,30 @@ export async function calculateQualitySnapshot(job: {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.asOfDate) || !Number.isFinite(evaluationTime)) {
     throw new Error('QUALITY_EVALUATION_AS_OF_DATE_INVALID')
   }
-  const revisionAgeDays = Math.max(0, Math.floor((evaluationTime - new Date(input.revision.createdAt).getTime()) / 86_400_000))
+  const testSetAgeDays = Math.max(0, Math.floor((evaluationTime - new Date(input.testSet.updatedAt).getTime()) / 86_400_000))
   const confidenceScore = rounded(
     20 * ratio(input.corpus.sampleCount, 100) +
     25 * ratio(behaviorClusterCount, 30) +
     20 * ratio(holdoutClusterCount, 50) +
     15 * ratio(input.submissions.count, 5000) +
     10 * ratio(input.hacks.count, 10) +
-    5 * ratio(revisionAgeDays, 90) +
+    5 * ratio(testSetAgeDays, 90) +
     5 * crossJudgeStability, 100,
   )
   const confidenceLevel = confidenceScore < 25 ? 'VERY_LOW' as const : confidenceScore < 45 ? 'LOW' as const : confidenceScore < 65 ? 'MEDIUM' as const : confidenceScore < 85 ? 'HIGH' as const : 'VERY_HIGH' as const
   const provisionalOverall = correctnessScore + discriminationScore + coverageScore + diversityScore + subtaskQualityScore + stabilityScore
   const overallScore = qualityStatus === 'READY' ? provisionalOverall : null
   let maturityLevel: 'EXPERIMENTAL' | 'VALIDATED' | 'PROVEN' | 'MATURE' | 'BATTLE_TESTED' = 'EXPERIMENTAL'
-  if (qualityStatus === 'READY' && input.submissions.count >= 20000 && input.hacks.count >= 10 && behaviorClusterCount >= 30 && revisionAgeDays >= 90) maturityLevel = 'BATTLE_TESTED'
-  else if (qualityStatus === 'READY' && input.submissions.count >= 5000 && behaviorClusterCount >= 20 && revisionAgeDays >= 30) maturityLevel = 'MATURE'
-  else if (qualityStatus === 'READY' && input.submissions.count >= 500 && behaviorClusterCount >= 10 && revisionAgeDays >= 14) maturityLevel = 'PROVEN'
+  if (qualityStatus === 'READY' && input.submissions.count >= 20000 && input.hacks.count >= 10 && behaviorClusterCount >= 30 && testSetAgeDays >= 90) maturityLevel = 'BATTLE_TESTED'
+  else if (qualityStatus === 'READY' && input.submissions.count >= 5000 && behaviorClusterCount >= 20 && testSetAgeDays >= 30) maturityLevel = 'MATURE'
+  else if (qualityStatus === 'READY' && input.submissions.count >= 500 && behaviorClusterCount >= 10 && testSetAgeDays >= 14) maturityLevel = 'PROVEN'
   else if (qualityStatus === 'READY' && provisionalOverall >= 70 && confidenceScore >= 45) maturityLevel = 'VALIDATED'
 
   return {
     id: crypto.randomUUID(),
     problemId: job.problemId,
-    revisionId: job.revisionId,
+    slot: job.slot,
+    graphHash: job.graphHash,
     corpusRevisionId: job.corpusRevisionId,
     evaluationJobId: job.id,
     qualityRuleVersion: job.qualityRuleVersion,
@@ -1077,13 +1048,13 @@ export async function calculateQualitySnapshot(job: {
     criticalFeatureCoverage: clamp01(criticalFeatureCoverage),
     realSubmissionCount: input.submissions.count,
     validHackCount: input.hacks.count,
-    revisionAgeDays,
+    testSetAgeDays,
     criticalIssueCount: criticalIssues.length,
     warningCount: warnings.length,
     qualityStatus,
     evidence: {
       pinnedInputs: {
-        revisionId: input.revision.id,
+        slot: input.testSet.slot,
         asOfDate: input.asOfDate,
         corpusRevisionId: input.corpus.id,
         corpusHash: input.corpus.corpusHash,
@@ -1103,11 +1074,11 @@ export async function calculateQualitySnapshot(job: {
         checkerKind: input.checker.kind,
         checkerAssetFileName: input.checker.asset?.fileName || null,
         checkerAssetSha256: input.checker.asset?.sha256 || null,
-        judgeConfigHash: input.revision.judgeConfigHash,
-        graphHash: input.revision.graphHash,
+        judgeConfigHash: input.testSet.judgeConfigHash,
+        graphHash: input.testSet.graphHash,
         verificationReportHash: verification ? stableHash(verification) : null,
       },
-      gates: { standardReady, validatorReady, checkerReady, revisionComplete, classifierReady, corpusReady, semanticVerification: verification?.outcome || 'missing' },
+      gates: { standardReady, validatorReady, checkerReady, testSetComplete, classifierReady, corpusReady, acceptedReplayPassed, semanticVerification: verification?.outcome || 'missing' },
       criticalIssues,
       warnings,
       scoring: { generatorReproducibility, crossJudgeStability, distributionCoverage, subtaskCoverage, solutionProfileAlignment, evaluatedSolutionProfileCount, solutionProfileCount: input.solutionProfiles.length, provisionalOverall },
@@ -1121,10 +1092,24 @@ export async function claimQualityEvaluationJob(workerId: string) {
     await tx.qualityEvaluationJob.updateMany({ where: { status: 'RUNNING', leaseExpiresAt: { lte: new Date() }, attempts: { gte: 3 } }, data: { status: 'FAILED', leaseOwner: null, fencingToken: null, leaseExpiresAt: null, errorCode: 'QUALITY_EVALUATION_RETRY_EXHAUSTED', errorMessage: '质量评估连续三次未完成', finishedAt: new Date() } })
     const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "QualityEvaluationJob" WHERE status = 'QUEUED' AND "verificationStatus" = 'complete' ORDER BY "queuedAt" ASC FOR UPDATE SKIP LOCKED LIMIT 1`
     if (!rows[0]) return null
+    const job = await tx.qualityEvaluationJob.findUnique({ where: { id: rows[0].id } })
+    if (!job) return null
+    const held = await acquireTestSetReaderTx(tx, { problemId: job.problemId, slot: job.slot, ownerType: 'QUALITY_EVALUATION', ownerId: job.id, expiresAt: new Date(Date.now() + 15 * 60_000) })
+    if (held.slot.graphHash !== job.graphHash) {
+      await releaseTestSetReaderTx(tx, held.reader.id)
+      await tx.qualityEvaluationJob.update({ where: { id: job.id }, data: { status: 'FAILED', errorCode: 'QUALITY_TEST_SET_STALE', errorMessage: '数据槽已更新，请重新创建质量评估', finishedAt: new Date() } })
+      return null
+    }
     const fencingToken = crypto.randomUUID()
-    const changed = await tx.qualityEvaluationJob.updateMany({ where: { id: rows[0].id, status: 'QUEUED', verificationStatus: 'complete' }, data: { status: 'RUNNING', leaseOwner: workerId, fencingToken, leaseExpiresAt: new Date(Date.now() + 10 * 60_000), startedAt: new Date(), attempts: { increment: 1 }, errorCode: null, errorMessage: null } })
-    if (!changed.count) return null
-    return tx.qualityEvaluationJob.findUnique({ where: { id: rows[0].id } })
+    const changed = await tx.qualityEvaluationJob.updateMany({
+      where: { id: job.id, status: 'QUEUED', verificationStatus: 'complete' },
+      data: { status: 'RUNNING', leaseOwner: workerId, fencingToken, leaseExpiresAt: new Date(Date.now() + 10 * 60_000), startedAt: new Date(), attempts: { increment: 1 }, errorCode: null, errorMessage: null, testSetReaderId: held.reader.id },
+    })
+    if (!changed.count) {
+      await releaseTestSetReaderTx(tx, held.reader.id)
+      return null
+    }
+    return tx.qualityEvaluationJob.findUnique({ where: { id: job.id } })
   })
 }
 
@@ -1142,7 +1127,8 @@ export async function processNextQualityEvaluationJob(workerId = `quality-${proc
     const result = await calculateQualitySnapshot(job)
     let finalized = false
     await prisma.$transaction(async tx => {
-      const changed = await tx.qualityEvaluationJob.updateMany({ where: { id: job.id, status: 'RUNNING', leaseOwner: workerId, fencingToken: job.fencingToken }, data: { status: 'SUCCEEDED', leaseOwner: null, fencingToken: null, leaseExpiresAt: null, finishedAt: new Date() } })
+      const changed = await tx.qualityEvaluationJob.updateMany({ where: { id: job.id, status: 'RUNNING', leaseOwner: workerId, fencingToken: job.fencingToken }, data: { status: 'SUCCEEDED', leaseOwner: null, fencingToken: null, leaseExpiresAt: null, finishedAt: new Date(), testSetReaderId: null } })
+      if (changed.count === 1 && job.testSetReaderId) await releaseTestSetReaderTx(tx, job.testSetReaderId)
       if (changed.count !== 1) throw new Error('QUALITY_EVALUATION_FENCING_TOKEN_STALE')
       await tx.testSetQualitySnapshot.create({ data: result })
       finalized = true
@@ -1151,7 +1137,8 @@ export async function processNextQualityEvaluationJob(workerId = `quality-${proc
   } catch (error) {
     const message = String((error as Error).message).slice(0, 4000)
     const retry = job.attempts < 3
-    const changed = await prisma.qualityEvaluationJob.updateMany({ where: { id: job.id, status: 'RUNNING', leaseOwner: workerId, fencingToken: job.fencingToken }, data: retry ? { status: 'QUEUED', leaseOwner: null, fencingToken: null, leaseExpiresAt: null, startedAt: null, errorCode: 'QUALITY_EVALUATION_RETRY', errorMessage: message } : { status: 'FAILED', leaseOwner: null, fencingToken: null, leaseExpiresAt: null, errorCode: 'QUALITY_EVALUATION_FAILED', errorMessage: message, finishedAt: new Date() } })
+    const changed = await prisma.qualityEvaluationJob.updateMany({ where: { id: job.id, status: 'RUNNING', leaseOwner: workerId, fencingToken: job.fencingToken }, data: retry ? { status: 'QUEUED', leaseOwner: null, fencingToken: null, leaseExpiresAt: null, startedAt: null, errorCode: 'QUALITY_EVALUATION_RETRY', errorMessage: message, testSetReaderId: null } : { status: 'FAILED', leaseOwner: null, fencingToken: null, leaseExpiresAt: null, errorCode: 'QUALITY_EVALUATION_FAILED', errorMessage: message, finishedAt: new Date(), testSetReaderId: null } })
+    if (changed.count && job.testSetReaderId) await releaseTestSetReader(job.testSetReaderId)
     return { processed: changed.count, succeeded: 0, failed: !retry && changed.count ? 1 : 0 }
   } finally { clearInterval(heartbeat) }
 }
@@ -1178,7 +1165,8 @@ function publicSnapshot(snapshot: any) {
   return {
     id: snapshot.id,
     problemId: snapshot.problemId,
-    revisionId: snapshot.revisionId,
+    slot: snapshot.slot,
+    graphHash: snapshot.graphHash,
     qualityRuleVersion: snapshot.qualityRuleVersion,
     correctnessScore: snapshot.correctnessScore,
     discriminationScore: snapshot.discriminationScore,
@@ -1228,103 +1216,29 @@ function publicProblemQualityAssessment(assessment: any) {
 
 async function staleness(snapshot: any) {
   if (!snapshot) return { isStale: false, reasons: [] as string[] }
-  const [corpus, pinnedCorpusClusters, features, solutionProfiles, programs, criticalIncidents, revision] = await Promise.all([
-    prisma.wrongCorpusRevision.findFirst({ where: { problemId: snapshot.problemId, status: 'active' }, orderBy: { revisionNumber: 'desc' }, select: { id: true, revisionNumber: true, corpusHash: true, sampleCount: true } }),
-    prisma.wrongBehaviorCluster.findMany({
-      where: { problemId: snapshot.problemId, corpusRevisionId: snapshot.corpusRevisionId },
-      orderBy: { id: 'asc' },
-      select: { id: true, weight: true, frequency: true, partition: true, categoryId: true },
-    }),
-    prisma.problemFeatureDefinition.findMany({ where: { problemId: snapshot.problemId }, orderBy: [{ orderIndex: 'asc' }, { key: 'asc' }] }),
-    prisma.problemSolutionProfile.findMany({
-      where: { problemId: snapshot.problemId, status: 'active' },
-      orderBy: [{ key: 'asc' }, { id: 'asc' }],
-      include: { Submission: solutionProfileSubmission },
-    }),
-    prisma.problemJudgeProgram.findMany({ where: { problemId: snapshot.problemId }, select: { kind: true, currentVersionId: true, status: true } }),
-    prisma.testSetQualityIncident.findMany({
-      where: { revisionId: snapshot.revisionId, severity: 'CRITICAL', status: 'CONFIRMED' },
-      orderBy: [{ confirmedAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, type: true, status: true, discoveredAt: true, confirmedAt: true },
-    }),
-    prisma.problemTestSetRevision.findFirst({
-      where: { id: snapshot.revisionId, problemId: snapshot.problemId },
-      select: { judgeConfig: true, judgeConfigHash: true, graphHash: true, testdataPath: true },
-    }),
-  ])
-  const versionIds = programs.map(item => item.currentVersionId).filter((id): id is string => Boolean(id))
-  const versions = versionIds.length
-    ? await prisma.problemJudgeProgramVersion.findMany({ where: { id: { in: versionIds }, problemId: snapshot.problemId }, select: { id: true, compileStatus: true, lifecycleStatus: true, sourceSha256: true } })
-    : []
-  const evidence = asObject(snapshot.evidence)
-  const pinned = asObject(evidence.pinnedInputs)
   const reasons: string[] = []
-  try {
-    const currentInput = await buildPinnedInput(snapshot.problemId, snapshot.revisionId, snapshot.corpusRevisionId)
-    if (typeof pinned.asOfDate === 'string') currentInput.asOfDate = pinned.asOfDate
-    if (stableHash({ rule: RULE_CONFIG, snapshot: currentInput }) !== snapshot.inputHash) reasons.push('QUALITY_EVIDENCE_CHANGED')
-  } catch {
-    reasons.push('QUALITY_EVIDENCE_UNAVAILABLE')
-  }
-  if (!revision
-    || (pinned.judgeConfigHash && pinned.judgeConfigHash !== revision.judgeConfigHash)
-    || (pinned.graphHash && pinned.graphHash !== revision.graphHash)
-    || (revision && sha256(revision.judgeConfig) !== revision.judgeConfigHash)) reasons.push('TEST_SET_REVISION_CHANGED')
-  if (revision) {
-    const currentChecker = await pinnedChecker(snapshot.problemId, revision, parseConfig(revision.judgeConfig))
-    if (pinned.checkerHash && pinned.checkerHash !== currentChecker.hash) reasons.push('CHECKER_CHANGED')
-  }
-  if ((corpus?.id ?? null) !== snapshot.corpusRevisionId) reasons.push('WRONG_CORPUS_REVISION_CHANGED')
-  const currentCorpusEvidenceHash = corpus && corpus.id === snapshot.corpusRevisionId
-    ? stableHash({
-      id: corpus.id,
-      revisionNumber: corpus.revisionNumber,
-      corpusHash: corpus.corpusHash,
-      sampleCount: corpus.sampleCount,
-      clusters: pinnedCorpusClusters.map(item => ({ ...item, weight: Math.max(1, item.weight), frequency: Math.max(1, item.frequency) })),
-    })
-    : null
-  if (pinned.corpusEvidenceHash && pinned.corpusEvidenceHash !== currentCorpusEvidenceHash) reasons.push('WRONG_CORPUS_EVIDENCE_CHANGED')
-  const currentFeatureHash = stableHash(features.map(item => ({ key: item.key, kind: item.kind, importance: importanceOf(item.config), config: asObject(item.config) })))
-  if (pinned.featureSchemaHash && pinned.featureSchemaHash !== currentFeatureHash) reasons.push('FEATURE_SCHEMA_CHANGED')
-  const currentSolutionProfileHash = stableHash(solutionProfiles.map(profile => ({ id: profile.id, definitionHash: profile.definitionHash, definitionRevision: profile.revision })))
-  if (pinned.solutionProfileSchemaHash && pinned.solutionProfileSchemaHash !== currentSolutionProfileHash) reasons.push('SOLUTION_PROFILE_CHANGED')
-  const currentSolutionProfileEvidenceHash = stableHash(solutionProfiles.map(profile => {
-    const run = profile.Submission.CurrentJudgeRun?.status === 'FINALIZED' ? profile.Submission.CurrentJudgeRun : null
-    return {
-      id: profile.id,
-      source: {
-        submissionId: profile.Submission.id,
-        evaluatedRevisionId: run?.testSetRevisionId || null,
-        result: run?.result || 'system_error',
-        score: run?.score ?? null,
-        subtasks: observedSubtaskScores(run?.subtasks || null),
-      },
-    }
-  }))
-  if (pinned.solutionProfileEvidenceHash && pinned.solutionProfileEvidenceHash !== currentSolutionProfileEvidenceHash) reasons.push('SOLUTION_PROFILE_EVIDENCE_CHANGED')
-  const currentPrograms = {
-    standard: activeProgramVersion(programs, versions, 'standard'),
-    validator: activeProgramVersion(programs, versions, 'validator'),
-    classifier: activeProgramVersion(programs, versions, 'classifier'),
-  }
-  if ((pinned.standardVersionId ?? null) !== (currentPrograms.standard?.id ?? null)
-    || (pinned.standardSourceSha256 ?? null) !== (currentPrograms.standard?.sourceSha256 ?? null)
-    || (pinned.validatorVersionId ?? null) !== (currentPrograms.validator?.id ?? null)
-    || (pinned.validatorSourceSha256 ?? null) !== (currentPrograms.validator?.sourceSha256 ?? null)
-    || (pinned.classifierVersionId ?? null) !== (currentPrograms.classifier?.id ?? null)
-    || (pinned.classifierSourceSha256 ?? null) !== (currentPrograms.classifier?.sourceSha256 ?? null)) reasons.push('JUDGE_PROGRAM_CHANGED')
-  const currentCriticalIncidentHash = stableHash(criticalIncidents.map(incident => ({
-    id: incident.id,
-    type: incident.type,
-    status: incident.status,
-    discoveredAt: incident.discoveredAt.toISOString(),
-    confirmedAt: incident.confirmedAt?.toISOString() || null,
-  })))
-  if (pinned.criticalIncidentHash
-    ? pinned.criticalIncidentHash !== currentCriticalIncidentHash
-    : criticalIncidents.length > 0) reasons.push('CRITICAL_INCIDENT_REPORTED')
+  const [slot, corpus] = await Promise.all([
+    prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId: snapshot.problemId, slot: snapshot.slot } } }),
+    prisma.wrongCorpusRevision.findFirst({ where: { problemId: snapshot.problemId, status: 'active' }, orderBy: { revisionNumber: 'desc' }, select: { id: true } }),
+  ])
+  if (!slot || slot.graphHash !== snapshot.graphHash) reasons.push('TEST_SET_SLOT_CHANGED')
+  if ((corpus?.id ?? null) !== snapshot.corpusRevisionId) reasons.push('WRONG_CORPUS_CHANGED')
   if (snapshot.qualityRuleVersion !== QUALITY_RULE_VERSION) reasons.push('QUALITY_RULE_CHANGED')
+  const criticalIncident = await prisma.testSetQualityIncident.findFirst({
+    where: { problemId: snapshot.problemId, slot: snapshot.slot, affectedGraphHash: snapshot.graphHash, severity: 'CRITICAL', status: 'CONFIRMED' },
+    select: { id: true },
+  })
+  if (criticalIncident) reasons.push('CRITICAL_INCIDENT_REPORTED')
+  if (slot && slot.graphHash === snapshot.graphHash) {
+    try {
+      const input = await buildPinnedInput(snapshot.problemId, snapshot.slot, snapshot.corpusRevisionId)
+      const pinned = asObject(asObject(snapshot.evidence).pinnedInputs)
+      if (typeof pinned.asOfDate === 'string') input.asOfDate = pinned.asOfDate
+      if (stableHash({ rule: RULE_CONFIG, snapshot: input }) !== snapshot.inputHash) reasons.push('QUALITY_EVIDENCE_CHANGED')
+    } catch {
+      reasons.push('QUALITY_EVIDENCE_UNAVAILABLE')
+    }
+  }
   return { isStale: reasons.length > 0, reasons }
 }
 
@@ -1355,99 +1269,60 @@ async function problemAssessmentStaleness(problemId: string, assessment: any) {
 
 export async function enqueueStaleQualityEvaluations(limit = 10) {
   const take = Math.max(1, Math.min(limit, 50))
-  let problems = await prisma.problem.findMany({
-    where: { latestTestSetRevisionId: { not: null } },
-    orderBy: { id: 'asc' },
+  let slots = await prisma.problemTestSetSlot.findMany({
+    where: { slot: 'STABLE' },
+    orderBy: { problemId: 'asc' },
     take,
-    ...(qualityStaleScanCursor ? { cursor: { id: qualityStaleScanCursor }, skip: 1 } : {}),
-    select: { id: true, ownerId: true, latestTestSetRevisionId: true },
+    ...(qualityStaleScanCursor ? { cursor: { problemId_slot: { problemId: qualityStaleScanCursor, slot: 'STABLE' } }, skip: 1 } : {}),
+    select: { problemId: true, graphHash: true, Problem: { select: { ownerId: true } } },
   })
-  if (!problems.length && qualityStaleScanCursor) {
+  if (!slots.length && qualityStaleScanCursor) {
     qualityStaleScanCursor = undefined
-    problems = await prisma.problem.findMany({
-      where: { latestTestSetRevisionId: { not: null } },
-      orderBy: { id: 'asc' },
-      take,
-      select: { id: true, ownerId: true, latestTestSetRevisionId: true },
-    })
+    slots = await prisma.problemTestSetSlot.findMany({ where: { slot: 'STABLE' }, orderBy: { problemId: 'asc' }, take, select: { problemId: true, graphHash: true, Problem: { select: { ownerId: true } } } })
   }
-  qualityStaleScanCursor = problems.at(-1)?.id
+  qualityStaleScanCursor = slots.at(-1)?.problemId
   let queued = 0
-  for (const problem of problems) {
-    if (!problem.latestTestSetRevisionId) continue
-    const snapshot = await prisma.testSetQualitySnapshot.findFirst({
-      where: { revisionId: problem.latestTestSetRevisionId },
-      orderBy: { createdAt: 'desc' },
-      include: { EvaluationJob: { select: { createdBy: true } } },
-    })
+  for (const slot of slots) {
+    const snapshot = await prisma.testSetQualitySnapshot.findFirst({ where: { problemId: slot.problemId, slot: 'STABLE', graphHash: slot.graphHash }, orderBy: { createdAt: 'desc' }, include: { EvaluationJob: { select: { createdBy: true } } } })
     if (snapshot && !(await staleness(snapshot)).isStale) continue
     try {
-      const result = await enqueueQualityEvaluationForRevision({
-        problemId: problem.id,
-        revisionId: problem.latestTestSetRevisionId,
-        createdBy: snapshot?.EvaluationJob.createdBy || problem.ownerId,
-      })
+      const result = await enqueueQualityEvaluationForSlot({ problemId: slot.problemId, slot: 'STABLE', createdBy: snapshot?.EvaluationJob.createdBy || slot.Problem.ownerId })
       if (result.queued) queued++
     } catch (error) {
-      if (!(error instanceof ProblemQualityError && error.code === 'QUALITY_CORPUS_NOT_READY')) {
-        console.warn('[quality-evaluation] stale scan enqueue skipped', { problemId: problem.id, error: (error as Error).message })
-      }
+      if (!(error instanceof ProblemQualityError && error.code === 'QUALITY_CORPUS_NOT_READY')) console.warn('[quality-evaluation] stale scan enqueue skipped', { problemId: slot.problemId, error: (error as Error).message })
     }
   }
-  return { scanned: problems.length, queued }
+  return { scanned: slots.length, queued }
 }
 
 export async function getProblemQuality(user: JwtPayload, problemId: string) {
   const problem = await visibleProblem(user, problemId)
   const manager = canModifyProblem(user, problem)
+  const stableSlot = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId, slot: 'STABLE' } }, select: { graphHash: true, fencingToken: true, updatedAt: true } })
   const [assessment, snapshot, jobs, historyRows, profileRows] = await Promise.all([
     prisma.problemQualityAssessment.findFirst({ where: { problemId }, orderBy: { evaluatedAt: 'desc' } }),
-    problem.latestTestSetRevisionId ? prisma.testSetQualitySnapshot.findFirst({ where: { revisionId: problem.latestTestSetRevisionId }, orderBy: { createdAt: 'desc' } }) : null,
-    manager ? prisma.qualityEvaluationJob.findMany({
-      where: { problemId },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-      select: {
-        id: true, revisionId: true, corpusRevisionId: true, qualityRuleVersion: true,
-        status: true, attempts: true, errorCode: true, errorMessage: true,
-        queuedAt: true, startedAt: true, finishedAt: true,
-      },
-    }) : Promise.resolve([]),
-    manager ? prisma.testSetQualitySnapshot.findMany({
-      where: { problemId },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: { Revision: { select: { revisionNumber: true, source: true } } },
-    }) : Promise.resolve([]),
-    manager ? prisma.problemSolutionProfile.findMany({
-      where: { problemId },
-      orderBy: [{ status: 'asc' }, { key: 'asc' }],
-      include: { Submission: solutionProfileSubmission },
-    }) : Promise.resolve([]),
+    stableSlot ? prisma.testSetQualitySnapshot.findFirst({ where: { problemId, slot: 'STABLE', graphHash: stableSlot.graphHash }, orderBy: { createdAt: 'desc' } }) : null,
+    manager ? prisma.qualityEvaluationJob.findMany({ where: { problemId }, orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, slot: true, graphHash: true, corpusRevisionId: true, qualityRuleVersion: true, status: true, attempts: true, errorCode: true, errorMessage: true, queuedAt: true, startedAt: true, finishedAt: true } }) : Promise.resolve([]),
+    manager ? prisma.testSetQualitySnapshot.findMany({ where: { problemId }, orderBy: { createdAt: 'desc' }, take: 100 }) : Promise.resolve([]),
+    manager ? prisma.problemSolutionProfile.findMany({ where: { problemId }, orderBy: [{ status: 'asc' }, { key: 'asc' }], include: { Submission: solutionProfileSubmission } }) : Promise.resolve([]),
   ])
   const stale = await staleness(snapshot)
   const assessmentStale = await problemAssessmentStaleness(problemId, assessment)
-  const qualityHistory = manager
-    ? await Promise.all(historyRows.map(async item => ({ ...item, ...await staleness(item) })))
-    : []
+  const qualityHistory = manager ? await Promise.all(historyRows.map(async item => ({ ...item, ...await staleness(item) }))) : []
   return {
     permissions: { canManage: manager, canExpertReview: isPlatformManager(user.accountRole) },
-    latestTestSetRevisionId: problem.latestTestSetRevisionId,
+    stableTestSet: stableSlot,
     testSetQuality: snapshot ? { ...(manager ? snapshot : publicSnapshot(snapshot)), isStale: stale.isStale, ...(manager ? { reasons: stale.reasons } : {}) } : null,
-    problemQuality: assessment ? {
-      ...(manager ? assessment : publicProblemQualityAssessment(assessment)),
-      isStale: assessmentStale.isStale,
-      ...(manager ? { staleReasons: assessmentStale.reasons } : {}),
-    } : null,
+    problemQuality: assessment ? { ...(manager ? assessment : publicProblemQualityAssessment(assessment)), isStale: assessmentStale.isStale, ...(manager ? { staleReasons: assessmentStale.reasons } : {}) } : null,
     ...(manager ? { jobs, qualityHistory, solutionProfiles: profileRows.map(solutionProfileDto) } : {}),
   }
 }
 
-export async function getRevisionQuality(user: JwtPayload, problemId: string, revisionId: string) {
+export async function getSlotQuality(user: JwtPayload, problemId: string, slot: 'STABLE' | 'EVOLVING') {
   const problem = await visibleProblem(user, problemId)
-  const revision = await prisma.problemTestSetRevision.findFirst({ where: { id: revisionId, problemId }, select: { id: true } })
-  if (!revision) fail(404, 'TEST_SET_REVISION_NOT_FOUND', '测试集版本不存在')
-  const snapshot = await prisma.testSetQualitySnapshot.findFirst({ where: { revisionId }, orderBy: { createdAt: 'desc' } })
+  const current = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId, slot } }, select: { graphHash: true } })
+  if (!current) fail(404, 'TEST_SET_SLOT_NOT_FOUND', '测试数据槽不存在')
+  const snapshot = await prisma.testSetQualitySnapshot.findFirst({ where: { problemId, slot, graphHash: current.graphHash }, orderBy: { createdAt: 'desc' } })
   if (!snapshot) return null
   const manager = canModifyProblem(user, problem)
   const stale = await staleness(snapshot)
@@ -1470,14 +1345,14 @@ function textContains(content: string, patterns: RegExp[]) { return patterns.som
 
 export async function runAutomatedProblemQualityAssessment(user: JwtPayload, problemId: string) {
   const problem = await manageableProblem(user, problemId)
-  const [statements, solutions, programs, latestQuality, submissionCount, resultGroups, latestRevision] = await Promise.all([
+  const stableSlot = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId, slot: 'STABLE' } }, include: { Subtasks: { include: { Groups: { include: { Cases: true } } } } } })
+  const [statements, solutions, programs, latestQuality, submissionCount, resultGroups] = await Promise.all([
     prisma.problemStatement.findMany({ where: { problemId, isVisible: true }, orderBy: { updatedAt: 'desc' } }),
     prisma.problemSolution.findMany({ where: { problemId, status: 'PUBLISHED' }, include: { CurrentVersion: true }, orderBy: { updatedAt: 'desc' } }),
     prisma.problemJudgeProgram.findMany({ where: { problemId, status: 'active' }, select: { kind: true, currentVersionId: true } }),
-    problem.latestTestSetRevisionId ? prisma.testSetQualitySnapshot.findFirst({ where: { revisionId: problem.latestTestSetRevisionId }, orderBy: { createdAt: 'desc' } }) : null,
+    stableSlot ? prisma.testSetQualitySnapshot.findFirst({ where: { problemId, slot: 'STABLE', graphHash: stableSlot.graphHash }, orderBy: { createdAt: 'desc' } }) : null,
     prisma.judgeRun.count({ where: { status: 'FINALIZED', result: { notIn: ['system_error'] }, Submission: { problemInternalId: problemId, submitMethod: 'local' } } }),
     prisma.judgeRun.groupBy({ by: ['result'], where: { status: 'FINALIZED', result: { notIn: ['system_error'] }, Submission: { problemInternalId: problemId, submitMethod: 'local' } }, _count: { _all: true } }),
-    problem.latestTestSetRevisionId ? prisma.problemTestSetRevision.findUnique({ where: { id: problem.latestTestSetRevisionId }, include: { Subtasks: { include: { Groups: { include: { Cases: true } } } } } }) : null,
   ])
   const versionIds = programs.map(item => item.currentVersionId).filter((id): id is string => Boolean(id))
   const versions = versionIds.length ? await prisma.problemJudgeProgramVersion.findMany({ where: { id: { in: versionIds }, lifecycleStatus: 'active', compileStatus: 'passed' }, select: { id: true } }) : []
@@ -1499,16 +1374,16 @@ export async function runAutomatedProblemQualityAssessment(user: JwtPayload, pro
   const distinctOutcomes = resultGroups.length
   const difficultyDesignScore = rounded((problem.difficulty ? 3 : 0) + 4 * ratio(submissionCount, 50) + (distinctOutcomes >= 2 ? 4 : 0) + (submissionCount >= 20 && distinctOutcomes >= 3 ? 4 : 0), 15)
   const constraintDesignScore = rounded((validatorReady ? 4 : 0) + (problem.timeLimit ? 2 : 0) + (problem.memoryLimit ? 2 : 0) + (textContains(statementText, [/-?\d+\s*(?:<=|\u2264|<)/, /范围/, /约束/]) ? 2 : 0), 10)
-  const subtaskDesignScore = latestRevision?.mode !== 'oi' ? 5 : rounded(5 * ([
-    latestRevision.Subtasks.reduce((sum, item) => sum + item.score, 0) === 100,
-    latestRevision.Subtasks.every(item => item.Groups.some(group => group.kind === 'official' && group.Cases.length > 0)),
-    latestRevision.Subtasks.every(item => item.Groups.filter(group => group.kind === 'hack_gate').length === 1),
+  const subtaskDesignScore = stableSlot?.mode !== 'oi' ? 5 : rounded(5 * ([
+    stableSlot.Subtasks.reduce((sum, item) => sum + item.score, 0) === 100,
+    stableSlot.Subtasks.every(item => item.Groups.some(group => group.kind === 'official' && group.Cases.length > 0)),
+    stableSlot.Subtasks.every(item => item.Groups.filter(group => group.kind === 'hack_gate').length === 1),
   ].filter(Boolean).length / 3), 5)
   const automatedScore = statementScore + solutionCorrectnessScore + difficultyDesignScore + constraintDesignScore + subtaskDesignScore
   const confidenceScore = rounded(20 * ratio(statements.length, 1) + 20 * (standardReady ? 1 : 0) + 20 * (validatorReady ? 1 : 0) + 20 * ratio(submissionCount, 500) + 20 * (latestQuality ? Math.max(0.25, latestQuality.confidenceScore / 100) : 0), 100)
   const confidenceLevel = confidenceScore < 25 ? 'VERY_LOW' as const : confidenceScore < 45 ? 'LOW' as const : confidenceScore < 65 ? 'MEDIUM' as const : confidenceScore < 85 ? 'HIGH' as const : 'VERY_HIGH' as const
   const subjectVersionHash = stableHash({
-    problem: { title: problem.title, description: problem.description, difficulty: problem.difficulty, timeLimit: problem.timeLimit, memoryLimit: problem.memoryLimit, latestTestSetRevisionId: problem.latestTestSetRevisionId },
+    problem: { title: problem.title, description: problem.description, difficulty: problem.difficulty, timeLimit: problem.timeLimit, memoryLimit: problem.memoryLimit, stableGraphHash: stableSlot?.graphHash || null },
     statements: statements.map(item => ({ id: item.id, type: item.type, format: item.format, language: item.language, content: item.content, fileUrl: item.fileUrl, updatedAt: item.updatedAt.toISOString() })),
     solutions: solutions.map(item => ({ id: item.id, currentVersionId: item.currentVersionId, updatedAt: item.updatedAt.toISOString() })),
     programs: programs.map(item => ({ kind: item.kind, currentVersionId: item.currentVersionId })),

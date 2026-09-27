@@ -39,7 +39,6 @@ Markdown URL 不是事实索引。发布时 `BlogPublishService` 解析草稿中
 | 引用 | 固定规则 |
 |---|---|
 | PROBLEM | 可跟随题目当前基本信息，仍在发布时检查题目权限 |
-| PROBLEM_REVISION | `problemId + ProblemTestSetRevision.id` 必须同题 |
 | SOLUTION_VERSION | 必须固定 `ProblemSolutionVersion`，并按该版本固化的 `visibilityPolicy` 授权 |
 | CONTEST_STANDING | 只允许本人参加过的 FINALIZED/SUPERSEDED StandingSnapshot |
 | RATING_CHANGE | 只允许本人的已应用/已超越 RatingChange |
@@ -71,7 +70,7 @@ Markdown URL 不是事实索引。发布时 `BlogPublishService` 解析草稿中
 
 全站只有根布局创建 `AuthProvider`，根布局用服务器 Session 初始化身份；受保护的 `RoleLayout` 只负责鉴权和工作区外壳，禁止再创建第二份客户端身份状态。导航上下文由账号角色和 URL 共同解析：全局管理员优先固定为平台上下文，普通账号再按 `/org` 或个人路径区分。`/account/*` 不得把全局管理员误判为个人工作区；Logo、知识入口和固定引用必须使用同一个导航上下文。组织上下文失效时统一返回 `/identity?organizationUnavailable=1` 重新选择有效身份。
 
-公共阅读顺序为标题作者、标签系列、正文、固定引用、系列导航、互动和评论。系列上一篇/下一篇由服务端逐篇执行当前访问者权限后生成，不能泄露不可见条目；匿名写操作统一跳转登录并携带经过站内路径校验的原文 `next`，已登录用户访问登录入口时直接回到该安全路径。分类和引用使用公共共享展示组件，作者工作台与公共页面不再维护两套解释。题目与 Revision 链接由当前导航上下文决定个人、组织或平台管理路径；匿名公共阅读在没有公开 canonical 资源页时不生成伪造的私有内部链接。题解、榜单与 Rating 同样遵循该规则；脱敏 Submission Snapshot 只允许在当前卡片展开其固定安全字段，不生成可枚举私人提交记录的链接。
+公共阅读顺序为标题作者、标签系列、正文、固定引用、系列导航、互动和评论。系列上一篇/下一篇由服务端逐篇执行当前访问者权限后生成，不能泄露不可见条目；匿名写操作统一跳转登录并携带经过站内路径校验的原文 `next`，已登录用户访问登录入口时直接回到该安全路径。分类和引用使用公共共享展示组件，作者工作台与公共页面不再维护两套解释。题目链接由当前导航上下文决定个人、组织或平台管理路径；匿名公共阅读在没有公开 canonical 资源页时不生成伪造的私有内部链接。题解、榜单与 Rating 同样遵循该规则；脱敏 Submission Snapshot 只允许在当前卡片展开其固定安全字段，不生成可枚举私人提交记录的链接。
 
 社区读取使用 `loading / ready / error` 三态。传输错误、5xx 或不完整响应必须展示请求错误与局部重试，不能渲染成 0 次互动或空评论。公共文章页由服务器生成标题、摘要与 canonical metadata；互动区仍为客户端组件。
 

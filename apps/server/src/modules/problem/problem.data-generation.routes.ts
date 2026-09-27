@@ -50,7 +50,7 @@ problemDataGenerationRouter.post('/:id/data-generation-jobs/:jobId/promote', aut
       problemId: req.params.id,
       jobId: req.params.jobId,
       ...body,
-      expectedLatestRevisionId: String(body.expectedLatestRevisionId || ""),
+      expectedEvolvingFencingToken: Number(body.expectedEvolvingFencingToken),
     }))
   } catch (error) { return send(error, res) }
 }))

@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client'
 import WebSocket from 'ws'
 import { sessionCookie, loginAs } from '../fixtures/api'
 import { loadRuntimeSecrets } from '../fixtures/runtime'
+import { ensureInitialTestSetSlots, loadTestSetSlotSpec, replaceTestSetSlot } from '../../apps/server/src/modules/problem/problem.testset-slot.service'
 
 const databaseUrl = process.env.E2E_DATABASE_URL!
 const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
@@ -66,10 +67,15 @@ test('sandbox and database interruptions retry without losing or mis-scoring sub
   const problem = await prisma.problem.findUniqueOrThrow({ where: { id: 'e2e-problem' } })
   const config = JSON.stringify({ mode: 'acm', type: 'default', time: '5000ms', memory: '256MB',
     cases: [{ input: '1.in', output: '1.out' }] })
-  await prisma.problem.update({ where: { id: problem.id }, data: { judgeConfig: config } })
-  if (problem.latestTestSetRevisionId) {
-    await prisma.problemTestSetRevision.update({ where: { id: problem.latestTestSetRevisionId }, data: { judgeConfig: config } })
-  }
+  const stableSlots = await ensureInitialTestSetSlots(problem.id, 'e2e-campus-principal')
+  const stable = stableSlots.find(item => item.slot === 'STABLE')!
+  const stableSpec = await loadTestSetSlotSpec(problem.id, 'STABLE')
+  expect(stableSpec).toBeTruthy()
+  const stableWriter = await replaceTestSetSlot({
+    problemId: problem.id, slot: 'STABLE', source: 'admin_edit', requestedBy: 'e2e-campus-principal',
+    baseConfigText: config, spec: stableSpec!, expectedFencingToken: stable.fencingToken,
+  })
+  expect(stableWriter.status).toBe('SUCCEEDED')
   const databaseSubmission = await submit(request, student.cookie,
     '#include <chrono>\n#include <iostream>\n#include <thread>\nint main(){int a,b;std::cin>>a>>b;std::this_thread::sleep_for(std::chrono::milliseconds(1800));std::cout<<a+b;}')
   await expect.poll(async () => (
@@ -110,10 +116,13 @@ test('sandbox and database interruptions retry without losing or mis-scoring sub
   })
   expect(statuses).toEqual([{ result: 'accepted', _count: 2 }])
 
+  await prisma.problem.update({ where: { id: 'e2e-problem' }, data: { dataContributionEnabled: true } })
+  await ensureInitialTestSetSlots('e2e-problem', 'e2e-campus-principal')
   const hackProblem = await prisma.problem.findUniqueOrThrow({
-    where: { id: 'e2e-problem' }, include: { LatestTestSetRevision: true },
+    where: { id: 'e2e-problem' }, include: { TestSetSlots: true },
   })
-  expect(hackProblem.LatestTestSetRevision).toBeTruthy()
+  const evolving = hackProblem.TestSetSlots.find(item => item.slot === 'EVOLVING')
+  expect(evolving).toBeTruthy()
   await prisma.problemHackConfig.upsert({
     where: { problemId: hackProblem.id },
     create: {
@@ -130,12 +139,12 @@ test('sandbox and database interruptions retry without losing or mis-scoring sub
     id: faultHackId, problemId: hackProblem.id, userId: 'e2e-campus-student',
     status: 'judging', inputMode: 'data', inputData: '271 314\n',
     hackSource: 'int main(){return 0;}', hackLanguage: 'cpp17',
-    hackConfigRevision: 1, judgeConfigHash: hackProblem.LatestTestSetRevision!.judgeConfigHash,
+    hackConfigRevision: 1, judgeConfigHash: evolving!.judgeConfigHash,
     testGraphRevision: hackProblem.testGraphRevision,
-    baseTestSetRevisionId: hackProblem.latestTestSetRevisionId,
+    baseSlot: 'EVOLVING', baseGraphHash: evolving!.graphHash, baseFencingToken: evolving!.fencingToken,
     judgeId: faultHackJudgeId, judgeStarted: new Date(),
   } })
-  const revisionsBeforeHack = await prisma.problemTestSetRevision.count({ where: { problemId: hackProblem.id } })
+  const graphBeforeHack = evolving!.graphHash
   const faultHackJudge = await connectJudge('ws://127.0.0.1:3512/ws/judge', faultHackJudgeId)
   const dropHackDatabase = await fetch('http://127.0.0.1:15434/__fault/drop?ms=3000', { method: 'POST' })
   expect(dropHackDatabase.status).toBe(204)
@@ -155,8 +164,10 @@ test('sandbox and database interruptions retry without losing or mis-scoring sub
   faultHackJudge.close()
   const faultHack = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: faultHackId } })
   expect(faultHack).toMatchObject({ canonicalStatus: 'promoted', baselineResult: 'Accepted', candidateResult: 'Wrong Answer' })
-  expect(faultHack.promotedRevisionId).toBeTruthy()
-  expect(await prisma.problemTestSetRevision.count({ where: { problemId: hackProblem.id } })).toBe(revisionsBeforeHack + 1)
+  expect(faultHack.promotedGraphHash).toBeTruthy()
+  const evolvingAfterHack = await prisma.problemTestSetSlot.findUniqueOrThrow({ where: { problemId_slot: { problemId: hackProblem.id, slot: 'EVOLVING' } } })
+  expect(evolvingAfterHack.graphHash).toBe(faultHack.promotedGraphHash)
+  expect(evolvingAfterHack.graphHash).not.toBe(graphBeforeHack)
   expect(await prisma.problemTestcase.count({ where: { hackAttemptId: faultHackId } })).toBe(1)
   const problemFiles = fs.readdirSync(path.join(process.env.TESTDATA_DIR!, hackProblem.id))
   expect(problemFiles.filter(file => file.includes(faultHackId) && file.endsWith('.pending'))).toEqual([])

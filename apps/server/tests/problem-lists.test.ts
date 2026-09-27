@@ -523,13 +523,14 @@ describe('题单权限模块', () => {
       expect(res.body.message).toBe('题单中没有题目，无法发布')
     })
 
-    it('创建 DRAFT Assignment 并固定题单题目的当前 Revision', async () => {
+    it('创建 DRAFT Assignment 并读取题单题目的当前 Stable', async () => {
       const team = await createTestTeam({ organizationId: schoolData.school.organizationId!, ownerId: ownerUser.user.id })
-      const revision = await prisma.problemTestSetRevision.create({ data: {
-        id: crypto.randomUUID(), problemId: testProblem.id, revisionNumber: 1, mode: 'acm', source: 'initial',
-        judgeConfig: '{"mode":"acm","cases":[]}', judgeConfigHash: 'problem-list-config', graphHash: 'problem-list-graph', testdataPath: '.', createdBy: ownerUser.user.id,
+      const judgeConfig = '{"mode":"acm","cases":[]}'
+      await prisma.problem.update({ where: { id: testProblem.id }, data: { judgeConfig } })
+      await prisma.problemTestSetSlot.create({ data: {
+        problemId: testProblem.id, slot: 'STABLE', mode: 'acm', source: 'initial', judgeConfig,
+        judgeConfigHash: 'problem-list-config', graphHash: 'problem-list-graph', materializedPath: 'slots/stable', fencingToken: 1,
       } })
-      await prisma.problem.update({ where: { id: testProblem.id }, data: { latestTestSetRevisionId: revision.id } })
       await organizationRequest(ownerToken)
         .post(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/single`)
         .send({ ojName: 'carits', problemCode: testProblem.problemId, problemId: testProblem.id })
@@ -540,7 +541,7 @@ describe('题单权限模块', () => {
       const assignment = await prisma.assignment.findUnique({ where: { id: res.body.data.assignmentId }, include: { Problems: true, Events: true } })
       expect(assignment?.status).toBe('DRAFT')
       expect(assignment?.rosterMode).toBe('DYNAMIC')
-      expect(assignment?.Problems[0].testSetRevisionId).toBe(revision.id)
+      expect(assignment?.Problems[0]).toMatchObject({ judgeConfigHash: 'problem-list-config' })
       expect(assignment?.Events[0].type).toBe('assignment.created_from_problem_list')
     })
   })

@@ -31,12 +31,13 @@ source_of_truth: scripts/architecture-progress.mjs, scripts/audit-route-boundari
 
 ## 核心事实源
 
-- 发布后的 TestSet Revision 不可变；活动固定 Revision，题库新版本不得传播到既有活动。
-- Judge 执行配置只能由 Revision/Test Graph 单向投影，不允许 YAML 反向覆盖关系图。
+- 每个 Problem 最多只有 Stable 与 Evolving 两个当前 TestSet 槽，不得新增历史版本、latest 指针、revisionId 或第三槽。
+- TestSet 槽更新必须经过 writer-priority Reader/Writer 屏障和 fencing；Judge 执行配置由当前槽/Test Graph 单向投影，不允许 YAML 反向覆盖关系图。
+- Contest/Exam 长期持有 Stable Reader；Training 每次提交读取 Evolving（缺失回退 Stable）；Assignment 每次提交读取 Stable。Promotion 的验证副本只能存在于事务临时文件。
 - 重测创建新的 JudgeRun；Submission 是用户提交意图，JudgeAttempt 是物理执行记录。
 - 新 Assignment 和 TrainingSession 不得写入旧 `Training(type=homework|training)`。
 - 新 Contest 能力必须通过 Contest Facade/Command 边界；不得新增直接依赖旧 Training 比赛事实的路径。
-- Posted Ledger、不可变内容版本、举报证据和历史 Revision 不得原地修改或删除。
+- Posted Ledger、不可变内容版本与举报证据不得原地修改或删除；TestSet 不属于历史版本体系，只维护当前双槽。
 - 数据库新装只从 `prisma/baselines/current.json` 指向的不可变 Epoch 启动，再真实执行后续 migration；历史 migration、Baseline Snapshot 和冻结 supplement 不得改写。
 
 ## 浏览器与展示
@@ -52,7 +53,7 @@ source_of_truth: scripts/architecture-progress.mjs, scripts/audit-route-boundari
 
 - 公网应用入口只能是 Nginx 的 80/443；Web、API slot、Judge 服务和 canary 只监听 loopback 或受控内部网络。
 - `/api/health` 只表达进程存活，`/api/readiness` 表达关键依赖，领域一致性进入受保护诊断与周期监控。
-- 蓝绿切换、数据库迁移、Revision 发布和经济账本必须使用现有 CAS、advisory lock、fencing 或幂等边界。
+- 蓝绿切换、数据库迁移、TestSet 槽替换和经济账本必须使用现有 CAS、advisory lock、fencing 或幂等边界。
 - 架构债基线只能下降；任何新增例外都必须先更新本页、对应领域文档和自动门禁，不能只扩大白名单。
 - `pnpm architecture:check` 必须同时通过 API Contract/Feature Slice 门禁；契约边界数量和已迁移切片只能增加，
   旧组件目录、App 深层导入和 Feature 内 `any` 均属于构建失败。
@@ -66,7 +67,7 @@ source_of_truth: scripts/architecture-progress.mjs, scripts/audit-route-boundari
 ## 保留的架构决定
 
 - 保持模块化单体 Server 与独立 Judge Runtime，不因代码规模直接拆微服务。
-- 保留 `Submission → JudgeRun → JudgeAttempt`、不可变 TestSet Revision、独立 Assignment/TrainingSession、Carits 与 Evaluation Credits 分域、Chat 持久事件补偿和 BlobStore Port。
+- 保留 `Submission → JudgeRun → JudgeAttempt`、Stable/Evolving 双槽与读写屏障、独立 Assignment/TrainingSession、Carits 与 Evaluation Credits 分域、Chat 持久事件补偿和 BlobStore Port。
 - 扩容优先完成真实对象存储恢复演练和 Judge 主机隔离，不重写已经稳定的业务状态机。
 
 相关说明：[系统总览](SYSTEM_OVERVIEW.md)、[认证与权限](AUTHORIZATION.md)、[数据模型](DATA_MODEL.md)、[Judge 领域](JUDGE_DOMAIN.md)。

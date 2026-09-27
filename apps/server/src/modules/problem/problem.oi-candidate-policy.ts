@@ -1,4 +1,4 @@
-import type { RevisionCaseSpec, RevisionSubtaskSpec, TestSetRevisionSpec } from './problem.testset-revision.service'
+import type { SlotCaseSpec, SlotSubtaskSpec, TestSetSlotSpec } from './problem.testset-slot.service'
 import crypto from 'node:crypto'
 
 export const OI_CANDIDATE_LIMITS = Object.freeze({
@@ -37,9 +37,9 @@ export function parseSubtaskIds(value: string | null | undefined): number[] {
   }
 }
 
-export function uniqueSubtaskCases(subtask: RevisionSubtaskSpec): RevisionCaseSpec[] {
+export function uniqueSubtaskCases(subtask: SlotSubtaskSpec): SlotCaseSpec[] {
   const seen = new Set<string>()
-  const result: RevisionCaseSpec[] = []
+  const result: SlotCaseSpec[] = []
   for (const group of subtask.groups) for (const item of group.cases) {
     const key = item.testcaseId || `${item.inputObjectId}\0${item.outputObjectId}`
     if (seen.has(key)) continue
@@ -51,7 +51,7 @@ export function uniqueSubtaskCases(subtask: RevisionSubtaskSpec): RevisionCaseSp
 
 export type OiFormalLimitIssue = { code: string; path: string; message: string }
 
-export function validateOiFormalLimits(spec: TestSetRevisionSpec): OiFormalLimitIssue[] {
+export function validateOiFormalLimits(spec: TestSetSlotSpec): OiFormalLimitIssue[] {
   if (spec.mode !== 'oi') return []
   const subtasks = spec.subtasks || []
   const issues: OiFormalLimitIssue[] = []

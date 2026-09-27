@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
-import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../src/modules/problem/problem.testset-slot.service'
 import {
   appendTrainingRuntimeProblem,
   changeTrainingStageGroup,
@@ -67,7 +67,7 @@ async function configuredProblem(ownerId: string) {
       },
     })
   }
-  await ensureInitialTestSetRevision(id, ownerId)
+  await ensureInitialTestSetSlots(id, ownerId)
   return problem
 }
 
@@ -714,7 +714,6 @@ describe('Training Engine global Stage domain', () => {
     const report = await getTrainingReport(coach.user.id, session.id)
     expect(report.runtimeProblems).toHaveLength(2)
     expect(report.runtimeProblems.map(item => item.payload.targetScore)).toEqual([80, 60])
-    expect(report.runtimeProblems.every(item => item.payload.testSetRevisionId === appended.testSetRevisionId)).toBe(true)
     expect(report.interventions.map(item => item.type)).toContain('UNLOCK_FOR_USER')
     const targetReport = await getTrainingReport(targetUserId, session.id)
     const otherReport = await getTrainingReport(otherUserId, session.id)
@@ -759,8 +758,8 @@ describe('Training Engine global Stage domain', () => {
     expect(restored.status).toBe('DRAFT')
     expect(restored.Groups.map(group => group.name)).toEqual(source.Groups.map(group => group.name))
     expect(restored.Stages.map(stage => stage.name)).toEqual(source.Stages.map(stage => stage.name))
-    expect(restored.Stages.map(stage => stage.Problems.map(item => [item.problemId, item.testSetRevisionId])))
-      .toEqual(source.Stages.map(stage => stage.Problems.map(item => [item.problemId, item.testSetRevisionId])))
+    expect(restored.Stages.map(stage => stage.Problems.map(item => item.problemId)))
+      .toEqual(source.Stages.map(stage => stage.Problems.map(item => item.problemId)))
     expect(restored.Stages.map(stage => stage.Groups.map(plan => ({
       group: plan.TrainingGroup?.name || null,
       isDefault: plan.isDefault,
@@ -797,8 +796,8 @@ describe('Training Engine global Stage domain', () => {
     expect(copied.Participants).toHaveLength(0)
     expect(copied.Groups.map(group => group.name)).toEqual(source.Groups.map(group => group.name))
     expect(copied.Stages.map(stage => stage.lifecycle)).toEqual(['PENDING', 'PENDING'])
-    expect(copied.Stages.map(stage => stage.Problems.map(item => [item.problemId, item.testSetRevisionId])))
-      .toEqual(source.Stages.map(stage => stage.Problems.map(item => [item.problemId, item.testSetRevisionId])))
+    expect(copied.Stages.map(stage => stage.Problems.map(item => item.problemId)))
+      .toEqual(source.Stages.map(stage => stage.Problems.map(item => item.problemId)))
     expect(copiedHints).toHaveLength(1)
     expect(copiedHints[0]).toMatchObject({ level: 2, content: '第二阶段提示', triggerAttempts: 2 })
   })

@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
-import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../src/modules/problem/problem.testset-slot.service'
 import { processDueAssignments, syncAssignmentSubmission } from '../src/modules/assignment/assignment.service'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestUser } from './helpers/testUser'
@@ -31,7 +31,7 @@ async function configuredProblem(ownerId: string) {
   for (const [filename, content] of [['1.in', '1 2\n'], ['1.out', '3\n']]) {
     await prisma.testdataFile.create({ data: { id: crypto.randomUUID(), problemId: id, filename, size: Buffer.byteLength(content), md5: crypto.createHash('md5').update(content).digest('hex'), sha256: crypto.createHash('sha256').update(content).digest('hex') } })
   }
-  await ensureInitialTestSetRevision(id, ownerId)
+  await ensureInitialTestSetSlots(id, ownerId)
   return problem
 }
 
@@ -54,7 +54,7 @@ describe('independent assignment domain', () => {
     problem = await configuredProblem(teacher.user.id)
   })
 
-  it('creates a draft, pins revisions and atomically publishes a recipient snapshot', async () => {
+  it('creates a draft and publishes a recipient snapshot without pinning test data', async () => {
     const token = generateTokenFromUser(teacher.user)
     const now = Date.now()
     const created = await createAuthenticatedRequest(app, token).post('/api/assignments').send({
@@ -63,13 +63,11 @@ describe('independent assignment domain', () => {
     })
     expect(created.status).toBe(201)
     const assignmentId = created.body.data.id
-    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
     const withProblems = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({
       expectedRevision: 0,
-      problems: [{ problemId: problem.id, testSetRevisionId: revision.id, maxScore: 100, targetScore: 100 }],
+      problems: [{ problemId: problem.id, maxScore: 100, targetScore: 100 }],
     })
     expect(withProblems.status).toBe(200)
-    expect(withProblems.body.data.Problems[0].testSetRevisionId).toBe(revision.id)
     const roster = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
     expect(roster.status).toBe(200)
     const published = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
@@ -204,10 +202,9 @@ describe('independent assignment domain', () => {
       closeAt: new Date(now + 180_000),
     })
     const assignmentId = created.body.data.id
-    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
     await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({
       expectedRevision: 0,
-      problems: [{ problemId: problem.id, testSetRevisionId: revision.id }],
+      problems: [{ problemId: problem.id }],
     })
     await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
     await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
@@ -222,16 +219,11 @@ describe('independent assignment domain', () => {
     expect((await createAuthenticatedRequest(app, studentToken).get(`/api/assignments/${assignmentId}`)).status).toBe(200)
   })
 
-  it('rejects stale edits and invalid cross-problem revisions', async () => {
+  it('rejects stale edits without accepting a client-side test data identity', async () => {
     const token = generateTokenFromUser(teacher.user)
     const now = Date.now()
     const created = await createAuthenticatedRequest(app, token).post('/api/assignments').send({ organizationId, title: '并发作业', openAt: new Date(now + 60_000), dueAt: new Date(now + 120_000), closeAt: new Date(now + 180_000) })
     const assignmentId = created.body.data.id
-    const second = await configuredProblem(teacher.user.id)
-    const foreignRevision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: second.id } })
-    const invalid = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id, testSetRevisionId: foreignRevision.id }] })
-    expect(invalid.status).toBe(422)
-    expect(invalid.body.code).toBe('ASSIGNMENT_REVISION_INVALID')
     const updated = await createAuthenticatedRequest(app, token).patch(`/api/assignments/${assignmentId}`).send({ expectedRevision: 0, title: '第一次修改' })
     expect(updated.status).toBe(200)
     const stale = await createAuthenticatedRequest(app, token).patch(`/api/assignments/${assignmentId}`).send({ expectedRevision: 0, title: '覆盖修改' })
@@ -244,8 +236,8 @@ describe('independent assignment domain', () => {
     const now = Date.now()
     const created = await createAuthenticatedRequest(app, token).post('/api/assignments').send({ organizationId, title: '提交闭环', openAt: new Date(now - 60_000), dueAt: new Date(now + 60_000), closeAt: new Date(now + 120_000) })
     const assignmentId = created.body.data.id
-    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
-    const problems = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id, testSetRevisionId: revision.id }] })
+    const stable = await prisma.problemTestSetSlot.findUniqueOrThrow({ where: { problemId_slot: { problemId: problem.id, slot: 'STABLE' } } })
+    const problems = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id }] })
     const assignmentProblemId = problems.body.data.Problems[0].id
     await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
     await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
@@ -254,8 +246,9 @@ describe('independent assignment domain', () => {
     const stored = await prisma.submission.findUniqueOrThrow({ where: { id: submitted.body.data.id }, include: { CurrentJudgeRun: true } })
     expect(stored.submitScope).toBe('assignment')
     expect(stored.submissionPhase).toBe('ORIGINAL')
-    expect(stored.testSetRevisionId).toBe(revision.id)
-    expect(stored.CurrentJudgeRun?.judgeConfigHash).toBe(revision.judgeConfigHash)
+    expect(stored.testSetSlot).toBe('STABLE')
+    expect(stored.testSetGraphHash).toBe(stable.graphHash)
+    expect(stored.CurrentJudgeRun?.judgeConfigHash).toBe(stable.judgeConfigHash)
     await prisma.judgeRun.update({
       where: { id: stored.currentJudgeRunId! },
       data: { status: 'FINALIZED', result: 'accepted', score: 100, finalizedAt: new Date() },
@@ -289,8 +282,7 @@ describe('independent assignment domain', () => {
     const now = Date.now()
     const created = await createAuthenticatedRequest(app, token).post('/api/assignments').send({ organizationId, title: '批改闭环', openAt: new Date(now - 60_000), dueAt: new Date(now + 60_000), closeAt: new Date(now + 120_000) })
     const assignmentId = created.body.data.id
-    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
-    const withProblem = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id, testSetRevisionId: revision.id }] })
+    const withProblem = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id }] })
     const assignmentProblemId = withProblem.body.data.Problems[0].id
     const withRoster = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
     const recipientId = withRoster.body.data.Recipients[0].id
@@ -334,10 +326,9 @@ describe('independent assignment domain', () => {
       organizationId, title: '人工完成作业', openAt: new Date(now - 60_000), dueAt: new Date(now + 60_000), closeAt: new Date(now + 120_000),
     })
     const assignmentId = created.body.data.id
-    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
     await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({
       expectedRevision: 0,
-      problems: [{ problemId: problem.id, testSetRevisionId: revision.id, completionPolicy: 'MANUAL' }],
+      problems: [{ problemId: problem.id, completionPolicy: 'MANUAL' }],
     })
     await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
     await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
@@ -374,8 +365,7 @@ describe('independent assignment domain', () => {
       openAt: new Date(now - 60_000), dueAt: new Date(now + 60_000), closeAt: new Date(now + 120_000),
     })
     const assignmentId = created.body.data.id
-    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
-    await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id, testSetRevisionId: revision.id, targetScore: 80 }] })
+    await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id, targetScore: 80 }] })
     await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
     await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
     await prisma.assignment.update({ where: { id: assignmentId }, data: { dueAt: new Date(now - 1_000) } })

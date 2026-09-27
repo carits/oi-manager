@@ -11,13 +11,13 @@ source_of_truth: Prisma JudgeRun/JudgeAttempt models and judge domain services
 
 `Submission` 表达不可变用户行为；`JudgeRun` 表达一次逻辑判定；`JudgeAttempt` 表达一次物理执行；`RejudgeBatch` 聚合一次范围重测请求。
 
-一个 Run 固定 `testSetRevisionId` 与 `judgeConfigHash`。一个 Attempt 只属于一个 Run，拥有唯一 `fencingToken`。`Submission.currentJudgeRunId` 和 `JudgeRun.currentAttemptId` 是读取指针，不改变历史记录。
+一个 Run 固定 `testSetSlot`、`testSetFencingToken`、`testSetGraphHash` 与 `judgeConfigHash`，并持有对应 Reader 直到终态。一个 Attempt 只属于一个 Run，拥有唯一 `fencingToken`。`Submission.currentJudgeRunId` 和 `JudgeRun.currentAttemptId` 是读取指针，不改变历史记录。
 
 ## Candidate 评估车道
 
 普通提交、Hack 与 Candidate 共用 Judge 连接但使用独立持久化领域记录。调度成功次数按 `8:1:1` 轮转；首选车道为空时可借用空闲容量，因此 Candidate 不能让普通提交饥饿。当前生产资源只允许一个贡献型数据生成任务处于 `running/finalizing`。
 
-Candidate 的技术验证顺序为 Generator/直接输入、Validator、STD、Checker、Classifier 与去重；通过后进入有界池，不创建 Submission 或 JudgeRun。技术有效 Hack 还必须保存前后 Verdict/分数证据，但技术成功与正式入选是两个独立状态。正式发布只能由 Selector 或审计紧急发布调用 Revision CAS，不能从 Judge 回调直接修改活动快照。
+Candidate 的技术验证顺序为 Generator/直接输入、Validator、STD、Checker、Classifier 与去重；通过后进入有界池，不创建 Submission 或 JudgeRun。技术有效 Hack 还必须保存前后 Verdict/分数证据，但技术成功与正式入选是两个独立状态。Selector 或审计紧急写入只能排队替换 Evolving；Judge 回调不能直接修改 Stable、Evolving 或活动快照。
 
 Evaluation Credits 在每轮持久评估创建后、进入可领取队列前，同时预占用户日账户和平台日账户；同一轮 L1/L2/Holdout 共享唯一预算 ID，完成后按执行次数、CPU 毫秒和生成字节结算。租约和 fencing token 拒绝迟到回传，基础设施错误最多重试三次。直接 Candidate/Hack 最多 400 次沙箱执行与 60 秒 CPU，Generator 最多 4000 次与 300 秒；非 Holdout 阶段会预留至少一个 Hidden Holdout 样本额度，未完成 Holdout 时 fail closed。Generator v1 使用服务器选择的 Seed 和 JSON stdin；同一请求重复执行所得 SHA-256 不一致时以 `GENERATOR_NON_DETERMINISTIC` 终止。
 
@@ -73,23 +73,24 @@ Switch read 由 `judge-read-projection.ts` 作为唯一边界：Run 的 `QUEUED/
 - `Submission` 代码、语言、用户、题目和活动上下文在创建后不因重试或重测改变。
 - 正常远程评测仍可保存 `ojRemoteId`；已退役的远端代码归档记录不再允许创建。
 
-## Hack 候选与正式版本
+## Hack 候选与 Evolving
 
-Hack 的技术判定和题库正式数据晋升是两个不同生命周期：
+Hack 的技术判定和 TestSet 槽更新是两个不同生命周期：
 
 ```text
 ProblemHackAttempt（技术判定）
   -> TestcaseCandidate ADMITTED
   -> EVALUATING_L1 -> EVALUATING_L2 -> EVALUATING_HOLDOUT
   -> ELIGIBLE | ELIGIBLE_NOT_SELECTED | WAITING_REPLACEMENT
-  -> SELECTED -> PROMOTED | STALE | FAILED
-  -> ProblemTestSetRevision（仅 PROMOTED）
+  -> SELECTED -> PROMOTED | REDUNDANT | FAILED
+  -> queued Writer -> current EVOLVING slot
 ```
 
-Candidate 固定输入/答案内容对象、基线 Revision、命中 Subtask 和逻辑文件名。重复输入不会创建新 Revision；并发 CAS 失败保留为 `STALE`。Selector 按 Subtask 独立执行集合价值计算和 11 选 10，只有全部硬约束及增益门槛通过才晋升。正式晋升必须在同一事务中完成 Candidate、Hack Attempt、成员 retirement、Problem latest pointer 和 Revision 的提交，不能出现 Hack 显示已纳入但正式版本不存在。
+Candidate 固定输入/答案内容对象、基线 slot/graph/fencing token、命中 Subtask 和逻辑文件名。重复输入不创建新对象关系；Selector 按 Subtask 计算集合价值。所有 Hack/贡献写入同一 `(problem, EVOLVING)` writer queue，只有队首在 Reader 清空且 fence 未变化时才能原子替换。陈旧 Writer 失败并让 Candidate 回到可重新评估状态，不能覆盖更新后的 Evolving。
 
-测试内容只能通过 `BlobStore` port 读写。当前 `LocalBlobStore` 以内容寻址文件为事实源；S3/阿里云 OSS 通过注入 adapter 实现同一 `put/get/exists/delete/materialize` 契约，题目和 Hack 领域不得依赖供应商 SDK。
+Promotion 与 Candidate 写入分离：捕获 Evolving 到事务临时目录，执行 Validator、STD、Accepted/Wrong replay 和质量校验，成功后排队替换 Stable。捕获后 Evolving 可以继续前进；临时目录不形成业务版本或第三槽。
 
+测试内容只能通过 `BlobStore` port 读写。当前 `LocalBlobStore` 以内容寻址文件为事实源；槽关系复用既有 TestdataObject/Blob，不复制整套数据。
 ## 数据生成任务
 
 `ProblemDataGenerationJob` 是独立于 Submission/JudgeRun 的持久任务。Server 每次只向 Judge
@@ -108,6 +109,4 @@ Generator 参数以 argv 传入，并只注入 `CASE_INDEX`、`CASE_SEED`；输�
 copy-out 返回。系统 STD/Validator/Checker 使用现有编译缓存，用户 Generator 按任务独立编译
 并在结束后释放。
 
-`COMPLETED` 仅代表候选数据生成和验证完毕，不改变题库正式数据。管理员发布时复用 TestSet
-Revision 的 advisory lock、CAS、内容寻址对象与单向 Judge Projection 事务；Revision 冲突不
-删除候选点。这个边界保证生成队列重试、API 蓝绿并存或管理员并发保存时不会产生半成品版本。
+`COMPLETED` 仅代表候选数据生成和验证完毕，不改变题库正式数据。管理员发布时把已验证数据排队写入 Evolving，并复用 TestSet 槽 advisory lock、writer-priority 屏障、fencing、内容寻址对象与单向 Judge Projection；冲突不删除候选点。这个边界保证生成队列重试、API 蓝绿并存或管理员并发保存时不会产生半成品槽。

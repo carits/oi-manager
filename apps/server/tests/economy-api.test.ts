@@ -105,27 +105,22 @@ describe('contribution economy HTTP permissions', () => {
     expect(filtered.body.data.items[0]).toMatchObject({ userId: user.user.id, contributionScore: 100 })
   })
 
-  it('lets platform auditors inspect bound Candidate and Revision evidence through the audit API', async () => {
+  it('lets platform auditors inspect bound Candidate and slot evidence through the audit API', async () => {
     const problem = await createTestProblem({ ownerId: user.user.id, title: '贡献证据测试题' })
-    const revisionId = crypto.randomUUID()
+    const promotedGraphHash = 'b'.repeat(64)
     const candidateId = crypto.randomUUID()
-    await prisma.problemTestSetRevision.create({ data: {
-      id: revisionId, problemId: problem.id, revisionNumber: 1, mode: 'acm', source: 'hack',
-      judgeConfig: JSON.stringify({ mode: 'acm', cases: [] }), judgeConfigHash: 'a'.repeat(64),
-      graphHash: 'b'.repeat(64), testdataPath: `revisions/${revisionId}`, createdBy: user.user.id,
-    } })
     await prisma.testcaseCandidate.create({ data: {
       id: candidateId, problemId: problem.id, source: 'hack', targetRole: 'hack_gate', status: 'PROMOTED',
       evaluationStage: 'completed', inputSha256: '1'.repeat(64), outputSha256: '2'.repeat(64),
       inputSize: 4, outputSize: 2, inputFileName: 'hack.in', outputFileName: 'hack.out',
-      createdBy: user.user.id, promotedRevisionId: revisionId, promotedAt: new Date(),
+      createdBy: user.user.id, promotedGraphHash, promotedAt: new Date(),
     } })
     const contributionId = crypto.randomUUID()
     await prisma.contributionEvent.create({ data: {
       id: contributionId, actorUserId: user.user.id, type: 'hack_promoted', sourceType: 'testcase_candidate', sourceId: candidateId,
       score: 150, ruleCode: 'canonical_testcase_promoted', ruleVersion: 1, dedupeKey: `evidence:${contributionId}`,
       status: 'accepted', occurredAt: new Date(), acceptedAt: new Date(), evidence: {
-        problemId: problem.id, candidateId, promotedRevisionId: revisionId,
+        problemId: problem.id, candidateId, promotedGraphHash,
         candidateSource: 'hack', selectionMode: 'auto', rewardCarits: '30', organizationRewardCarits: '0',
       },
     } })
@@ -135,10 +130,14 @@ describe('contribution economy HTTP permissions', () => {
     expect((await userClient.get(`/api/platform/contributions/${contributionId}/evidence?kind=candidate`)).status).toBe(403)
     const candidate = await platformClient.get(`/api/platform/contributions/${contributionId}/evidence?kind=candidate`)
     expect(candidate.status).toBe(200)
-    expect(candidate.body.data).toMatchObject({ kind: 'candidate', problemId: problem.id, candidate: { id: candidateId, promotedRevisionId: revisionId } })
-    const revision = await platformClient.get(`/api/platform/contributions/${contributionId}/evidence?kind=revision`)
-    expect(revision.status).toBe(200)
-    expect(revision.body.data).toMatchObject({ kind: 'revision', problemId: problem.id, revision: { id: revisionId, revisionNumber: 1, spec: { mode: 'acm', cases: [] } } })
+    expect(candidate.body.data).toMatchObject({ kind: 'candidate', problemId: problem.id, candidate: { id: candidateId, promotedGraphHash } })
+    await prisma.problemTestSetSlot.create({ data: {
+      problemId: problem.id, slot: 'EVOLVING', mode: 'acm', source: 'hack', judgeConfig: '{"mode":"acm","cases":[]}',
+      judgeConfigHash: 'a'.repeat(64), graphHash: promotedGraphHash, materializedPath: 'slots/evolving', fencingToken: 1,
+    } })
+    const evolving = await platformClient.get('/api/platform/contributions/' + contributionId + '/evidence?kind=evolving')
+    expect(evolving.status).toBe(200)
+    expect(evolving.body.data).toMatchObject({ kind: 'evolving', problemId: problem.id, graphHash: promotedGraphHash, isCurrent: true })
   })
 
   it('uses the authenticated user for purchases and preserves HTTP idempotency', async () => {

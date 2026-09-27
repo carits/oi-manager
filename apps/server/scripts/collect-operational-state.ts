@@ -117,8 +117,8 @@ async function collect() {
     prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS count
       FROM "Problem" problem
-      JOIN "ProblemTestSetRevision" revision ON revision.id = problem."latestTestSetRevisionId"
-      WHERE problem."judgeConfig" IS DISTINCT FROM revision."judgeConfig"
+      JOIN "ProblemTestSetSlot" slot ON slot."problemId" = problem.id AND slot.slot = 'STABLE'
+      WHERE problem."judgeConfig" IS DISTINCT FROM slot."judgeConfig"
     `,
   ])
 

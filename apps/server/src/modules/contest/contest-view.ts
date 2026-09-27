@@ -11,8 +11,8 @@ export const contestProblemInclude = {
       _count: { select: { ProblemAttachment: true } },
     },
   },
-  TestSetRevision: true,
   ContestResource: true,
+  TestSetReader: { include: { Slot: true } },
 } satisfies Prisma.ContestProblemInclude
 
 export const contestInclude = {
@@ -41,17 +41,18 @@ export function toContestProblemView(problem: any, publicContestId: number) {
     solutionType: problem.solutionType,
     solutionMarkdown: problem.solutionMarkdown,
     solutionVisible: problem.solutionVisible,
-    testSetRevisionId: problem.testSetRevisionId,
+    testSetSlot: problem.testSetSlot,
+    testSetGraphHash: problem.testSetGraphHash,
+    testSetFencingToken: problem.testSetFencingToken,
     sourcePlatform: problem.ojName || canonical?.platform || null,
     sourceProblemId: problem.problemId || canonical?.problemId || null,
     timeLimit: canonical?.timeLimit ?? null,
     memoryLimit: canonical?.memoryLimit ?? null,
-    judgeConfig: problem.TestSetRevision?.judgeConfig || canonical?.judgeConfig || null,
+    judgeConfig: problem.TestSetReader?.Slot?.judgeConfig || canonical?.judgeConfig || null,
     allowedLanguages: canonical?.allowedLanguages || null,
     createdAt: problem.createdAt,
     updatedAt: problem.updatedAt,
     Problem: canonical,
-    TestSetRevision: problem.TestSetRevision || null,
     ContestResource: resources,
     ContestSolution: problem.solutionMarkdown === null && problem.solutionType === 'none'
       ? null

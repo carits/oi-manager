@@ -1,7 +1,7 @@
 import type { BlogPostType, BlogVisibility } from '@oi-manager/contracts'
 
 export type { BlogPostType, BlogVisibility } from '@oi-manager/contracts'
-export type BlogReferenceType = 'PROBLEM' | 'PROBLEM_REVISION' | 'SOLUTION_VERSION' | 'CONTEST_STANDING' | 'RATING_CHANGE' | 'SUBMISSION_SNAPSHOT'
+export type BlogReferenceType = 'PROBLEM' | 'SOLUTION_VERSION' | 'CONTEST_STANDING' | 'RATING_CHANGE' | 'SUBMISSION_SNAPSHOT'
 export type PublishedBlogReferenceType = BlogReferenceType
 export type BlogReferenceRelation = 'PRIMARY_SUBJECT' | 'MENTION' | 'SOURCE' | 'RESULT' | 'SOLUTION' | 'FOLLOW_UP'
 export type BlogReferenceDisplay = 'CARD' | 'INLINE' | 'COMPACT' | 'EMBED' | 'HIDDEN_METADATA'
@@ -9,7 +9,6 @@ export type BlogReferenceDisplay = 'CARD' | 'INLINE' | 'COMPACT' | 'EMBED' | 'HI
 export type BlogDraftReference = {
   type: BlogReferenceType
   problemId?: string
-  problemRevisionId?: string
   solutionVersionId?: string
   standingSnapshotId?: string
   ratingChangeId?: string
@@ -53,7 +52,6 @@ export const BLOG_VISIBILITY_LABELS: Record<BlogVisibility, string> = {
 
 export const BLOG_REFERENCE_LABELS: Record<BlogReferenceType, string> = {
   PROBLEM: '题目（跟随当前信息）',
-  PROBLEM_REVISION: '题目测试数据（固定内容）',
   SOLUTION_VERSION: '题解（固定内容）',
   CONTEST_STANDING: '比赛榜单（固定内容）',
   RATING_CHANGE: 'Rating 变化（固定记录）',
@@ -81,7 +79,6 @@ export function validateBlogDraft(input: { title: string; contentMarkdown: strin
   for (const [index, reference] of input.references.entries()) {
     const prefix = `第 ${index + 1} 个引用`
     if (reference.type === 'PROBLEM' && !reference.problemId?.trim()) return `${prefix}尚未选择题目`
-    if (reference.type === 'PROBLEM_REVISION' && (!reference.problemId?.trim() || !reference.problemRevisionId?.trim())) return `${prefix}必须选择题目和固定的数据版本`
     if (reference.type === 'SOLUTION_VERSION' && !reference.solutionVersionId?.trim()) return `${prefix}尚未关联题解，请从题解页面重新进入写作`
     if (reference.type === 'CONTEST_STANDING' && !reference.standingSnapshotId?.trim()) return `${prefix}尚未关联比赛榜单，请从榜单页面重新进入写作`
     if (reference.type === 'RATING_CHANGE' && !reference.ratingChangeId?.trim()) return `${prefix}尚未关联 Rating 记录，请从 Rating 页面重新进入写作`
@@ -95,7 +92,7 @@ export function referenceSnapshotTitle(reference: { type: PublishedBlogReference
     ? reference.snapshot as Record<string, unknown>
     : {}
   const text = (value: unknown, fallback: string) => typeof value === 'string' && value ? value : fallback
-  if (reference.type === 'PROBLEM' || reference.type === 'PROBLEM_REVISION') return text(snapshot.title, text(snapshot.problemId, '题目'))
+  if (reference.type === 'PROBLEM') return text(snapshot.title, text(snapshot.problemId, '题目'))
   if (reference.type === 'SOLUTION_VERSION') return text(snapshot.title, '题解版本')
   if (reference.type === 'CONTEST_STANDING') return text(snapshot.title, '比赛榜单')
   if (reference.type === 'RATING_CHANGE') {

@@ -88,11 +88,9 @@ type BlogTagSummary = { id: string; kind: 'SYSTEM' | 'USER'; name: string }
 
 function initialReference(search: URLSearchParams): BlogDraftReference[] {
   const problemId = search.get('problemId')
-  const problemRevisionId = search.get('problemRevisionId')
   const solutionVersionId = search.get('solutionVersionId')
   const standingSnapshotId = search.get('standingSnapshotId')
   const ratingChangeId = search.get('ratingChangeId')
-  if (problemId && problemRevisionId) return [{ ...emptyBlogReference('PROBLEM_REVISION'), problemId, problemRevisionId, relationType: 'PRIMARY_SUBJECT' }]
   if (problemId) return [{ ...emptyBlogReference('PROBLEM'), problemId, relationType: 'PRIMARY_SUBJECT' }]
   if (solutionVersionId) return [{ ...emptyBlogReference('SOLUTION_VERSION'), solutionVersionId, relationType: 'SOURCE' }]
   if (standingSnapshotId) return [{ ...emptyBlogReference('CONTEST_STANDING'), standingSnapshotId, relationType: 'PRIMARY_SUBJECT' }]

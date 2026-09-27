@@ -59,7 +59,7 @@ OI 赛中脱敏，不能通过切换 URL 绕过活动规则。OI 隐藏响应固
 
 ## 提交级文件 IO Adapter
 
-传统 `freopen` 程序的文件名属于一次提交的执行意图，不属于测试数据或 TestSet Revision。题库提交、
+传统 `freopen` 程序的文件名属于一次提交的执行意图，不属于 Stable/Evolving 测试数据槽。题库提交、
 活动提交和 Hack 证明程序都可独立选择标准输入/文件输入与标准输出/文件输出；四种组合均由同一
 IO Adapter 执行。`Submission` 固化用户选择，创建 `JudgeRun` 时再次复制，任务领取后只读取
 `JudgeRun` 快照；重新评测沿用原 Submission 的 IO，不允许改变历史执行意图。
@@ -76,7 +76,7 @@ IO Adapter 执行。`Submission` 固化用户选择，创建 `JudgeRun` 时再�
 
 历史 `judgeConfig.filename` 仅供 `ioAdapterVersion=0` 的旧任务兜底。超级管理员通过
 `GET/POST /api/admin/submission-io/migration` 检查并幂等回填旧 Submission/JudgeRun；新任务为 version 1，
-完全忽略 Revision 中的旧文件名前缀。迁移不修改 Revision、活动快照、历史结果、成绩或排行榜。
+完全忽略旧题目级文件名前缀。迁移不修改活动快照、历史结果、成绩或排行榜。
 
 ## 比赛远程提交 ID 可见性
 
@@ -142,7 +142,7 @@ LIMIT 1;
 ```
 
 同一事务把任务更新为 `judging` 并记录 `judgeId/judgeStarted`。多个 Judge 不会领取
-同一任务。新提交保存实际 `testSetRevisionId`；Judge 优先读取该不可变 Revision 的目录和投影，历史未固定提交才回退活动快照或当前题目配置。
+同一任务。创建 JudgeRun 时先取得 `(Problem, STABLE|EVOLVING)` Reader；Submission/JudgeRun 固化 `testSetSlot + fencingToken + graphHash + judgeConfigSnapshot`。Judge 从 Reader 对应的物化槽目录读取数据，终态后释放 Reader；不存在 Revision ID 或历史版本回退。
 
 ## 状态恢复
 
@@ -184,8 +184,8 @@ Hack 使用独立的 `ProblemHackAttempt` 队列，不创建 `Submission`：
 5. 两次确定性最终 Verdict 不同时接受；测试点编号、耗时或 message 变化不算有效。
 
 有效结果限定为 Accepted、WA、PE、TLE、MLE、RE 和 OLE；CE、System Error 或通信失败
-不能构成有效 Hack。有效输入以 `hack_<attemptId>.in/.out` 自动晋升为题库下一正式 TestSet Revision，
-ACM 中所有已接受 Hack 位于普通测试点之前。Hack 不查询或修改任何比赛、训练和作业；历史提交、成绩和排行榜不重新评测。
+不能构成有效 Hack。技术有效数据形成 Candidate，经去重、质量评估和 Selector 后串行写入 Evolving；不会直接改写 Stable。
+ACM 中被选择的 Hack 数据在 Evolving 内按规则排序。Hack 不查询或修改任何比赛、训练和作业；历史提交、成绩和排行榜不重新评测。
 
 同一用户同题最多一个排队或评测中的任务，同一题最多一个正在评测的 Hack；PostgreSQL
 部分唯一索引提供最终并发约束。配置 revision 或评测配置哈希变化会把旧任务标记为 stale，
@@ -207,19 +207,18 @@ OI Hack 由 Classifier 返回候选数据命中的全部 Subtask，并把通过 
 提交不自动重测。关系型 Test Graph 是 Subtask、Official Group、Hack Gate 和 Testcase 关系的唯一
 编辑事实源，`Problem.judgeConfig` 仅为 Judge 执行投影。
 
-## 不可变 TestSet Revision
+## Stable / Evolving 双槽与读写屏障
 
-- `Problem.latestTestSetRevisionId` 指向题库 Practice 使用的最新版；管理员保存数据、显式 ACM/OI 转换或经 Selector 入选的 Candidate 才创建下一 Revision，禁止原地修改。技术有效 Hack 本身不等于正式版本变更。
-- 测试输入/答案使用 `(problemId, sha256)` 内容寻址对象；Revision 目录固化逻辑文件名和文件型 Checker/Interactor/Manager。输入输出由 `TestdataFile` 管理，Checker 由独立 `ProblemChecker` 管理，迁移审计不会混用两类元数据；旧 Revision 永久保持可复现。
-- `TrainingProblem.testSetRevisionId` 在活动添加题目时固定。活动未开始且无提交时管理员可以手动更新；开始、结束或已有提交后统一返回 `409 TEST_SET_REVISION_FROZEN`。
-- 发布使用 `pg_advisory_xact_lock(problemId)` 与 expected-latest CAS；Test Graph、Judge 投影、最新版指针、Candidate/Hack 状态和成员替换审计在同一事务提交。并发写入只能有一个 CAS 成功，不允许 Judge 回调直接拼接 YAML 或活动快照。
-- 普通 Judge Config PUT 不允许隐式改变模式；`POST /api/problems/:id/judge-mode-transition` 创建保留历史的转换 Revision，并关闭 Hack 等待重新配置。
-- 历史迁移接受数字测试点简写 `cases: [1]` 并映射为 `1.in/1.ans`，旧 `scoring` 字段与当前
-  `type` 等价；其他缺少明确输入/答案文件名的结构拒绝迁移，不猜测文件。
-- 同一题若历史上已有多个等价投影哈希，迁移固定复用 revision number 最大的版本；重复执行迁移不得
-  再发布等价 Revision。已经发布的重复历史 Revision 保留为不可变审计记录，不做破坏性删除。
-- 内容对象写入失败或 CAS 丢失留下的无引用对象超过 24 小时后由锁内 GC 删除。
-
+- 每个 Problem 最多只有 `STABLE` 与 `EVOLVING` 两条 `ProblemTestSetSlot`。普通题只有 Stable；启用 Hack/贡献后创建 Evolving。没有历史版本表、latest 指针或 revisionId。
+- 测试输入/答案继续复用 `(problemId, sha256)` 内容寻址的 `TestdataObject`；槽只保存当前关系图、Judge 投影、哈希、fencing token 和物化目录。槽替换不会复制对象字节。
+- Reader 以 `(problemId, slot, ownerType, ownerId)` 持有当前槽。Writer 排队时先关闭该槽 gate，阻止新 Reader；已有 Reader 全部释放后，队首 Writer 才能以 staging → rename → 数据库事务原子替换槽。
+- Writer 使用期望 fencing token。排队期间槽已变化的写入以 `TEST_SET_SLOT_FENCE_CONFLICT` 失败，必须重新验证；同题 Evolving 的 Hack、贡献和管理写入因此严格串行。
+- 普通题库提交和 Assignment 每次提交动态读取当时 Stable。Training 每次提交动态读取当时 Evolving，若题目没有 Evolving 则回退 Stable。
+- Contest/Exam 发布或开始强逻辑前取得长生命周期 Stable Reader；比赛及其 Judge/Rejudge 全部结束后才释放。Stable 更新在此期间保持排队，不能穿透屏障。
+- ContestProblem 只保存 `testSetSlot=STABLE`、graph/judge hash、fencing token 和 readerId，用于审计实际数据身份；不是历史版本引用。
+- Promotion 先把当前 Evolving 捕获到事务临时目录并执行 Validator、STD、Accepted/Wrong replay 与质量门禁。验证通过后排队原子替换 Stable；临时副本不进入业务模型，也不形成第三槽。Evolving 可在捕获后继续前进，Promotion 仍验证捕获时的哈希/fence。
+- 普通 Judge Config PUT 与 ACM/OI 转换同样经过槽 Writer；`POST /api/problems/:id/judge-mode-transition` 必须携带目标槽和 expected fencing token。
+- 无引用内容对象由 GC 回收；STABLE/EVOLVING 当前关系、ACTIVE Reader、排队 Writer staging 和 Promotion 临时目录都纳入活跃判断。
 ## OI 数据与分组工作台
 
 题目管理者在评测设置的“数据与分组”中使用三栏工作台维护 Subtask、Official Group 和 Testcase 池。
@@ -229,10 +228,10 @@ Validator 和 Classifier。未迁移历史题必须先查看检查结果并显�
 
 测试数据上传后先按 `.in` 与 `.out/.ans` 配对，再注册为稳定 `ProblemTestcase`，同一测试点可以关联多个
 Official Group。被 Group 或 Hack Gate 引用的文件返回 `409 TESTDATA_IN_USE`，不能直接删除；同名替换
-保留文件 ID 并同步 Testcase 哈希。整图保存携带 revision，陈旧写入返回 `409 TEST_GRAPH_STALE`，结构
+保留文件 ID 并同步 Testcase 哈希。整图保存携带 expected fencing token，陈旧写入返回 `409 TEST_GRAPH_STALE`，结构
 错误返回 `422 INVALID_TEST_GRAPH`，成功后重新生成 YAML 投影。
 
 OI 正式图还有不可绕过的产品边界：最多 15 个 Subtask；每个 Subtask 在全部 Group 中去重后最多
 10 个测试点；至少保留 3 个 Official Core。题目管理者可填写原因永久保护测试点。自动 Selector 在
 Subtask 达到 10 点时执行 11 选 10，并保护手工点、新增 7 天点、有效 Hack 14 天点；退出成员只在
-`TestcaseMembershipRetirement` 中记录，不删除旧 Revision 或内容对象。
+`TestcaseMembershipRetirement` 中记录，只记录成员替换审计，不保留旧槽快照；仍被当前槽或其他业务引用的内容对象不会删除。

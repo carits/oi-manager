@@ -8,7 +8,7 @@ export const EVALUATION_LIMITS = Object.freeze({
   maxCandidateBytes: 16 * 1024 * 1024,
   normalDailyCredits: 10_000, managerDailyCredits: 100_000, platformDailyCredits: 250_000,
   maxPurchasedDailyCredits: 50_000, maxHotCandidates: 5_000, maxHotBytes: 2 * 1024 * 1024 * 1024,
-  maxTopK: 1_000, maxCorpusClusters: 512, maxFeatures: 128, maxSubtasks: 15, maxRevisions: 10_000,
+  maxTopK: 1_000, maxCorpusClusters: 512, maxFeatures: 128, maxSubtasks: 15,
 })
 
 export class EvaluationBudgetError extends Error {

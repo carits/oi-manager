@@ -79,7 +79,7 @@ describe('bounded Candidate HTTP boundary', () => {
     const contribution = await studentClient.post(`/api/problems/${problem.id}/candidates/data`).send({ inputData: '9 10\n' })
     expect(contribution.status).toBe(202)
     await prisma.problemDataGenerationJob.update({ where: { id: contribution.body.data.jobId }, data: { status: 'completed', finishedAt: new Date() } })
-    const response = await managerClient.post(`/api/problems/${problem.id}/data-generation-jobs/${contribution.body.data.jobId}/promote`).send({ expectedLatestRevisionId: problem.latestTestSetRevisionId })
+    const response = await managerClient.post(`/api/problems/${problem.id}/data-generation-jobs/${contribution.body.data.jobId}/promote`).send({ expectedEvolvingFencingToken: 0 })
     expect(response.status).toBe(409)
     expect(response.body.code).toBe('CONTRIBUTION_PROMOTION_MANAGED_BY_SELECTOR')
   })

@@ -26,9 +26,9 @@ export async function loadContestProblemForSubmission(contestId: number, contest
   const row = await prisma.contestProblem.findFirst({
     where: { id: contestProblemId, contestId: contest.id },
     include: {
-      TestSetRevision: true,
       ContestResource: true,
-      CanonicalProblem: { include: { LatestTestSetRevision: true } },
+      CanonicalProblem: true,
+      TestSetReader: { include: { Slot: true } },
     },
   })
   return row ? toContestProblemView(row, contest.publicId) : null

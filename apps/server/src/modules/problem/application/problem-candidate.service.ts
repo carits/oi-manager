@@ -38,7 +38,7 @@ export async function contributeCandidateGenerator(user: JwtPayload, problemId: 
   const job = await createDataGenerationJob({ user, problemId, body: { contribution: true, contributionOrganizationId, sourceMode: 'generator', generatorSource: source, generatorLanguage: language, generatorManifest: normalizedManifest, cases: profiles } })
   return { jobId: job.id, status: job.status }
 }
-export async function listMyCandidates(user: JwtPayload, problemId: string) { await problemFor(user, problemId); return prisma.testcaseCandidate.findMany({ where: { problemId, createdBy: user.userId }, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, source: true, targetRole: true, status: true, evaluationStage: true, message: true, createdAt: true, updatedAt: true, promotedRevisionId: true } }) }
+export async function listMyCandidates(user: JwtPayload, problemId: string) { await problemFor(user, problemId); return prisma.testcaseCandidate.findMany({ where: { problemId, createdBy: user.userId }, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, source: true, targetRole: true, status: true, evaluationStage: true, message: true, createdAt: true, updatedAt: true, promotedGraphHash: true } }) }
 
 function safeMessage(value: string | null | undefined, manager: boolean) {
   if (!value) return null
@@ -95,7 +95,7 @@ function serializeContribution(job: any, manager: boolean) {
       stage: publicContributionStage(job, item),
       candidateId: item.candidate?.id || item.candidateId || undefined,
       candidateStatus: item.candidate?.status,
-      promotedRevisionId: item.candidate?.promotedRevisionId || undefined,
+      promotedGraphHash: item.candidate?.promotedGraphHash || undefined,
       message: safeMessage(item.message || item.candidate?.message, manager),
     })),
   }
@@ -117,7 +117,7 @@ export async function listMyContributions(user: JwtPayload, problemId: string) {
   const casesByJob = new Map<string, typeof cases>()
   for (const item of cases) casesByJob.set(item.jobId, [...(casesByJob.get(item.jobId) || []), item])
   const candidateIds = cases.map(item => item.candidateId).filter((id): id is string => Boolean(id))
-  const candidates = candidateIds.length ? await prisma.testcaseCandidate.findMany({ where: { id: { in: candidateIds } }, select: { id: true, status: true, evaluationStage: true, message: true, promotedRevisionId: true } }) : []
+  const candidates = candidateIds.length ? await prisma.testcaseCandidate.findMany({ where: { id: { in: candidateIds } }, select: { id: true, status: true, evaluationStage: true, message: true, promotedGraphHash: true } }) : []
   const byId = new Map(candidates.map(item => [item.id, item]))
   return jobs.map(job => serializeContribution({ ...job, cases: (casesByJob.get(job.id) || []).map(item => ({ ...item, candidate: item.candidateId ? byId.get(item.candidateId) : null })) }, context.canManage))
 }
@@ -131,7 +131,7 @@ export async function getContribution(user: JwtPayload, problemId: string, jobId
   if (!job) fail(404, 'CONTRIBUTION_NOT_FOUND', '贡献任务不存在')
   const cases = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id }, orderBy: { orderIndex: 'asc' } })
   const candidateIds = cases.map(item => item.candidateId).filter((id): id is string => Boolean(id))
-  const candidates = candidateIds.length ? await prisma.testcaseCandidate.findMany({ where: { id: { in: candidateIds } }, select: { id: true, status: true, evaluationStage: true, message: true, promotedRevisionId: true } }) : []
+  const candidates = candidateIds.length ? await prisma.testcaseCandidate.findMany({ where: { id: { in: candidateIds } }, select: { id: true, status: true, evaluationStage: true, message: true, promotedGraphHash: true } }) : []
   const byId = new Map(candidates.map(item => [item.id, item]))
   return serializeContribution({ ...job, cases: cases.map(item => ({ ...item, candidate: item.candidateId ? byId.get(item.candidateId) : null })) }, context.canManage)
 }
@@ -146,7 +146,7 @@ export async function cancelCandidate(user: JwtPayload, problemId: string, candi
 }
 export async function getCandidatePool(user: JwtPayload, problemId: string) {
   const problem = await problemFor(user, problemId, true)
-  const [policy, candidates, activeCount, hot, subtasks, retirements] = await Promise.all([prisma.problemCandidatePolicy.upsert({ where: { problemId }, update: {}, create: { id: crypto.randomUUID(), problemId, updatedBy: user.userId } }), prisma.testcaseCandidate.findMany({ where: { problemId }, orderBy: [{ status: 'asc' }, { marginalValue: 'desc' }, { createdAt: 'desc' }], take: 500 }), prisma.testcaseCandidate.count({ where: { problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } } }), prisma.testcaseCandidate.aggregate({ where: { problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } }, _sum: { inputSize: true, outputSize: true } }), resolveSubtaskReadiness(problemId, problem.latestTestSetRevisionId), prisma.testcaseMembershipRetirement.findMany({ where: { problemId }, orderBy: { createdAt: 'desc' }, take: 100 })])
+  const [policy, candidates, activeCount, hot, subtasks, retirements] = await Promise.all([prisma.problemCandidatePolicy.upsert({ where: { problemId }, update: {}, create: { id: crypto.randomUUID(), problemId, updatedBy: user.userId } }), prisma.testcaseCandidate.findMany({ where: { problemId }, orderBy: [{ status: 'asc' }, { marginalValue: 'desc' }, { createdAt: 'desc' }], take: 500 }), prisma.testcaseCandidate.count({ where: { problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } } }), prisma.testcaseCandidate.aggregate({ where: { problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } }, _sum: { inputSize: true, outputSize: true } }), resolveSubtaskReadiness(problemId), prisma.testcaseMembershipRetirement.findMany({ where: { problemId }, orderBy: { createdAt: 'desc' }, take: 100 })])
   return { policy: { ...policy, maxHotBytes: policy.maxHotBytes.toString() }, activeCount, hotBytes: Number(hot._sum.inputSize || 0) + Number(hot._sum.outputSize || 0), subtasks, candidates: candidates.map(serializeCandidateForManager), retirements }
 }
 export async function updateCandidatePolicy(user: JwtPayload, problemId: string, body: any) {
@@ -154,8 +154,7 @@ export async function updateCandidatePolicy(user: JwtPayload, problemId: string,
   if (!Number.isInteger(expected) || expected !== current.revision) fail(409, 'CANDIDATE_POLICY_STALE', 'Candidate 策略已被其他管理员更新')
   const selectorMode = body?.selectorMode === 'auto' ? 'auto' : 'observe', maxHotCandidates = Math.min(Math.max(Number(body?.maxHotCandidates || current.maxHotCandidates), 100), EVALUATION_LIMITS.maxHotCandidates), topK = Math.min(Math.max(Number(body?.topK || current.topK), 10), EVALUATION_LIMITS.maxTopK)
   if (selectorMode === 'auto') {
-    const problem = await prisma.problem.findUnique({ where: { id: problemId }, select: { latestTestSetRevisionId: true } })
-    const subtasks = await resolveSubtaskReadiness(problemId, problem?.latestTestSetRevisionId || null)
+    const subtasks = await resolveSubtaskReadiness(problemId)
     if (subtasks.length && !subtasks.some(item => item.autoSelection)) fail(409, 'WRONG_CORPUS_INSUFFICIENT_FOR_AUTO_SELECTION', '尚无 Subtask 同时具备至少 5 个错误程序和 3 个行为簇，不能启用自动替换')
   }
   const changed = await prisma.problemCandidatePolicy.updateMany({ where: { id: current.id, revision: expected }, data: { selectorMode, maxHotCandidates, topK, updatedBy: user.userId, revision: { increment: 1 } } })
@@ -167,7 +166,7 @@ export async function previewSelector(user: JwtPayload, problemId: string) {
   const [policy, candidates] = await Promise.all([prisma.problemCandidatePolicy.upsert({ where: { problemId }, update: {}, create: { id: crypto.randomUUID(), problemId, updatedBy: user.userId } }), prisma.testcaseCandidate.findMany({ where: { problemId, targetRole: 'hack_gate', status: { in: ['ELIGIBLE', 'ELIGIBLE_NOT_SELECTED', 'WAITING_REPLACEMENT'] } }, orderBy: [{ marginalValue: 'desc' }, { inputSize: 'asc' }], take: Math.min(25, EVALUATION_LIMITS.maxTopK), select: { id: true, source: true, status: true, marginalValue: true, inputSize: true } })])
   const previews = []
   for (const candidate of candidates) previews.push({ ...candidate, ...(await previewCandidateSelection(candidate.id)) })
-  return { mode: 'preview', policyRevision: policy.revision, candidates: previews, publishable: previews.some(item => item.reason === 'preview_selected'), note: '逐个 Candidate 相对当前正式 Revision 进行真实 dry-run；不会创建 Selection Run 或 Revision。' }
+  return { mode: 'preview', policyRevision: policy.revision, candidates: previews, publishable: previews.some(item => item.reason === 'preview_selected'), note: '逐个 Candidate 相对当前 Evolving 数据进行真实 dry-run；不会修改 Stable 数据。' }
 }
 export async function emergencyPublish(user: JwtPayload, problemId: string, body: any) {
   await problemFor(user, problemId, true)

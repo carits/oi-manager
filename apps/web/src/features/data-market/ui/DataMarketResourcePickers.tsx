@@ -6,20 +6,20 @@ import { useToast } from '@/components/ui/Toast'
 import { activityStatusLabel } from '@/lib/humanPresentation'
 import { listWorkspaces } from '@/features/workspace'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
-import { getDataMarketQuality, listDataMarketContests, listDataMarketProblems, listDataMarketRevisions, type DataMarketContest as Contest, type DataMarketProblem as Problem, type DataMarketQuality as Quality, type DataMarketRevision as Revision } from '../api/dataMarketApi'
+import { getDataMarketQuality, listDataMarketContests, listDataMarketProblems, listDataMarketSlots, type DataMarketContest as Contest, type DataMarketProblem as Problem, type DataMarketQuality as Quality, type DataMarketSlot as Slot } from '../api/dataMarketApi'
 
 
-export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, onRevisionChange, onQualityChange, requireQuality = false, lockProblem = false }: {
+export function ProblemSlotPicker({ problemId, slot, onProblemChange, onSlotChange, onQualityChange, requireQuality = false, lockProblem = false }: {
   problemId: string
-  revisionId: string
+  slot: string
   onProblemChange: (id: string) => void
-  onRevisionChange: (id: string) => void
+  onSlotChange: (slot: string) => void
   onQualityChange?: (id: string) => void
   requireQuality?: boolean
   lockProblem?: boolean
 }) {
   const [problems, setProblems] = useState<Problem[]>([])
-  const [revisions, setRevisions] = useState<Revision[]>([])
+  const [slots, setSlots] = useState<Slot[]>([])
   const [quality, setQuality] = useState<Quality | null>(null)
   const toast = useToast()
 
@@ -27,36 +27,36 @@ export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, 
     void listDataMarketProblems().then(setProblems).catch(error => { setProblems([]); toast.error(error instanceof Error ? error.message : '题目列表加载失败') })
   }, [])
   useEffect(() => {
-    setRevisions([]); setQuality(null)
+    setSlots([]); setQuality(null)
     if (!problemId) return
-    void listDataMarketRevisions(problemId).then(setRevisions).catch(error => { setRevisions([]); toast.error(error instanceof Error ? error.message : '测试数据版本加载失败') })
+    void listDataMarketSlots(problemId).then(setSlots).catch(error => { setSlots([]); toast.error(error instanceof Error ? error.message : '测试数据槽加载失败') })
   }, [problemId])
   useEffect(() => {
     setQuality(null); onQualityChange?.('')
-    if (!problemId || !revisionId || !requireQuality) return
-    void getDataMarketQuality(problemId, revisionId).then(snapshot => {
+    if (!problemId || !slot || !requireQuality) return
+    void getDataMarketQuality(problemId, slot as 'STABLE' | 'EVOLVING').then(snapshot => {
       setQuality(snapshot)
       if (snapshot?.qualityStatus === 'READY' && snapshot.criticalIssueCount === 0) onQualityChange?.(snapshot.id)
     }).catch(error => { setQuality(null); toast.error(error instanceof Error ? error.message : '质量证书加载失败') })
   // Callback identity must not retrigger resource loading.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [problemId, requireQuality, revisionId, toast])
+  }, [problemId, requireQuality, slot, toast])
 
   return <>
     <label>题目
-      <Select value={problemId} disabled={lockProblem} onChange={event => { onProblemChange(event.target.value); onRevisionChange(''); onQualityChange?.('') }}>
+      <Select value={problemId} disabled={lockProblem} onChange={event => { onProblemChange(event.target.value); onSlotChange(''); onQualityChange?.('') }}>
         <option value="">请选择题目</option>
         {problems.map(problem => <option key={problem.id} value={problem.id}>{problem.platform} · {problem.problemId} · {problem.title}</option>)}
       </Select>
     </label>
-    <label>测试数据版本
-      <Select value={revisionId} disabled={!problemId} onChange={event => onRevisionChange(event.target.value)}>
-        <option value="">请选择版本</option>
-        {revisions.map(revision => <option key={revision.id} value={revision.id}>数据版本 R{revision.revisionNumber} · {revision.mode.toUpperCase()}</option>)}
+    <label>测试数据槽
+      <Select value={slot} disabled={!problemId} onChange={event => onSlotChange(event.target.value)}>
+        <option value="">请选择数据槽</option>
+        {slots.map(item => <option key={item.slot} value={item.slot}>{item.slot === 'STABLE' ? 'Stable 正式数据' : 'Evolving 演进数据'} · {item.mode.toUpperCase()} · {item.graphHash.slice(0, 8)}</option>)}
       </Select>
     </label>
-    {requireQuality && revisionId && <p aria-live="polite">
-      {!quality ? '正在读取质量证书…' : quality.qualityStatus === 'READY' && quality.criticalIssueCount === 0 ? `已选择可用质量证书（${quality.overallScore ?? '—'} 分）` : '该版本尚无可用的质量证书'}
+    {requireQuality && slot && <p aria-live="polite">
+      {!quality ? '正在读取质量证书…' : quality.qualityStatus === 'READY' && quality.criticalIssueCount === 0 ? `已选择可用质量证书（${quality.overallScore ?? '—'} 分）` : '该数据槽尚无可用的质量证书'}
     </p>}
   </>
 }

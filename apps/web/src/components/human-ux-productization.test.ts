@@ -216,8 +216,8 @@ describe('human UX productization contract', () => {
   it('keeps student views free of internal revision terminology', () => {
     const assignment = read('../features/assignment/ui/AssignmentWorkspace.tsx')
     const training = read('../features/training-session/ui/TrainingSessionWorkspace.tsx')
-    expect(assignment).toContain('题面和测试数据均固定于作业发布时')
-    expect(training).toContain('使用训练发布时固定的数据评测')
+    expect(assignment).toContain('每次提交动态使用当时的 Stable 测试数据')
+    expect(training).toContain('提交时使用当前 Evolving（缺失时回退 Stable）')
     expect(assignment).not.toContain('TestSet Revision 与学生名单')
     expect(assignment).not.toContain('版本号并发校验')
     expect(assignment).not.toContain('成绩快照 v')
@@ -232,7 +232,7 @@ describe('human UX productization contract', () => {
 
   it('does not ask users to type resource IDs in the data market', () => {
     const source = read('../features/data-market/ui/DataMarketplace.tsx')
-    expect(source).toContain('<ProblemRevisionPicker')
+    expect(source).toContain('<ProblemSlotPicker')
     expect(source).toContain('<LicenseScopePicker')
     expect(source).not.toContain('Problem ID')
     expect(source).not.toContain('组织 ID')

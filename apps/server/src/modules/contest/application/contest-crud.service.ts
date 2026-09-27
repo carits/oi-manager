@@ -377,7 +377,7 @@ export async function createMakeupHomework(id: number, userId: string, input: an
       Team: { select: { organizationId: true } },
       ContestProblem: {
         orderBy: { orderIndex: 'asc' },
-        include: { TestSetRevision: true, CanonicalProblem: { include: { LatestTestSetRevision: true } } },
+        include: { CanonicalProblem: { include: { TestSetSlots: { where: { slot: 'STABLE' } } } } },
       },
     },
   })
@@ -413,15 +413,15 @@ export async function createMakeupHomework(id: number, userId: string, input: an
       const canonical = problem.CanonicalProblem
       if (!canonical || seen.has(canonical.id)) continue
       seen.add(canonical.id)
-      const revision = problem.TestSetRevision || canonical.LatestTestSetRevision
-      if (!revision) fail(422, 'ASSIGNMENT_REVISION_REQUIRED', `题目 ${problem.title || canonical.problemId} 没有可固定的 TestSet Revision`)
+      const stable = canonical.TestSetSlots[0]
+      if (!stable) fail(422, 'ASSIGNMENT_STABLE_REQUIRED', `题目 ${problem.title || canonical.problemId} 尚无 Stable 测试数据`)
       const maxScore = problem.points && problem.points > 0 ? problem.points : 100
       await tx.assignmentProblem.create({ data: {
-        assignmentId: created.id, problemId: canonical.id, testSetRevisionId: revision.id,
+        assignmentId: created.id, problemId: canonical.id,
         orderIndex: index, category: 'REQUIRED', required: true, maxScore,
-        judgeMaxScore: judgeMaxScoreFromSnapshot(revision.judgeConfig, revision.mode), targetScore: maxScore,
-        weight: 100, completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
-        judgeConfigSnapshot: revision.judgeConfig, judgeConfigHash: revision.judgeConfigHash,
+        judgeMaxScore: judgeMaxScoreFromSnapshot(stable.judgeConfig, stable.mode), targetScore: maxScore,
+        weight: 100, completionPolicy: stable.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
+        judgeConfigSnapshot: stable.judgeConfig, judgeConfigHash: stable.judgeConfigHash,
         settings: { sourceContestId: contest.id, sourceContestProblemId: problem.id, alias: problem.alias },
       } })
     }

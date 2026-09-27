@@ -7,7 +7,7 @@ import {
   runIdempotent,
 } from '../../../lib/idempotency'
 import { findUsableProblemByExternalId } from '../../problem/problem.access'
-import { ensureInitialTestSetRevision } from '../../problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../../problem/problem.testset-slot.service'
 import {
   createQueuedSubmissionWithRun,
   rejudgeSubmissionWithRun,
@@ -64,16 +64,17 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
     throw new SubmissionCommandError(409, 'LOCAL_JUDGE_NOT_CONFIGURED', '该题尚未配置完整的本地评测配置和测试数据，请联系题目管理员')
   }
 
-  let revision
+  let stable
   try {
-    revision = await ensureInitialTestSetRevision(problem.id, context.userId)
+    await ensureInitialTestSetSlots(problem.id, context.userId)
+    stable = await prisma.problemTestSetSlot.findUniqueOrThrow({ where: { problemId_slot: { problemId: problem.id, slot: 'STABLE' } } })
   } catch (error: any) {
-    throw new SubmissionCommandError(409, 'TEST_SET_REVISION_REQUIRED', error.message)
+    throw new SubmissionCommandError(409, 'TEST_SET_STABLE_REQUIRED', error.message)
   }
 
   let submissionIo
   try {
-    const config = yaml.load(revision?.judgeConfig || problem.judgeConfig || '{}') as any
+    const config = yaml.load(stable?.judgeConfig || problem.judgeConfig || '{}') as any
     submissionIo = normalizeSubmissionIo({
       inputFilename: input.inputFilename,
       outputFilename: input.outputFilename,
@@ -106,8 +107,10 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
                 submitMethod: 'local',
         submitScope: 'problem',
         isGlobalVisible: true,
-        testSetRevisionId: revision?.id || null,
-        judgeConfigHash: revision?.judgeConfigHash || null,
+        testSetSlot: 'STABLE',
+        testSetFencingToken: stable?.fencingToken || null,
+        testSetGraphHash: stable?.graphHash || null,
+        judgeConfigHash: stable?.judgeConfigHash || null,
         ...submissionIo,
       }, { requestedBy: context.userId }),
     )

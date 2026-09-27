@@ -1,5 +1,6 @@
 import type { ContestFinalizationStatus, Prisma } from '@prisma/client'
 import logger from '../../lib/logger'
+import { releaseTestSetReaderTx } from '../problem/problem.testset-slot.service'
 
 async function lockContestFinalizationTx(
   tx: Prisma.TransactionClient,
@@ -53,6 +54,13 @@ export async function completeContestFinalizationTx(
       updatedAt: new Date(),
     },
   })
+  if (updated.count === 1) {
+    const readers = await tx.contestProblem.findMany({ where: { contestId: contest.id, testSetReaderId: { not: null } }, select: { id: true, testSetReaderId: true } })
+    for (const item of readers) {
+      if (item.testSetReaderId) await releaseTestSetReaderTx(tx, item.testSetReaderId)
+      await tx.contestProblem.update({ where: { id: item.id }, data: { testSetReaderId: null } })
+    }
+  }
   return updated.count === 1
 }
 
@@ -89,5 +97,12 @@ export async function completeContestRatingRebuildTx(
       updatedAt: new Date(),
     },
   })
+  if (updated.count === 1) {
+    const readers = await tx.contestProblem.findMany({ where: { contestId: contest.id, testSetReaderId: { not: null } }, select: { id: true, testSetReaderId: true } })
+    for (const item of readers) {
+      if (item.testSetReaderId) await releaseTestSetReaderTx(tx, item.testSetReaderId)
+      await tx.contestProblem.update({ where: { id: item.id }, data: { testSetReaderId: null } })
+    }
+  }
   return updated.count === 1
 }

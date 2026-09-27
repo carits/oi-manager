@@ -19,7 +19,7 @@ import {
   deleteProblemChecker,
   listProblemCheckers,
   listProblemTestdata,
-  listProblemTestSetRevisions,
+  listProblemTestSetSlots,
   saveProblemJudgeSettings,
   transitionProblemJudgeMode,
   uploadProblemChecker,
@@ -405,23 +405,14 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     if (!problemId) { setJudgeMode(pendingJudgeMode); setLoadedJudgeMode(pendingJudgeMode); setPendingJudgeMode(null); return }
     setTransitioningMode(true)
     try {
-      const revisions = await listProblemTestSetRevisions(problemId)
-      if (!revisions.latestTestSetRevisionId) {
-        setJudgeMode(pendingJudgeMode)
-        setLoadedJudgeMode(pendingJudgeMode)
-        if (pendingJudgeMode === 'acm' && checkerType === 'lemon') {
-          setCheckerType('default'); setCheckerFile(''); setCheckerCategory('preset')
-        }
-        if (pendingJudgeMode === 'oi' && subtasks.length === 0) {
-          const cases = problemId ? testdataPairs : stagedPairs
-          setSubtasks([{ id: 1, score: 100, type: 'min', cases }])
-        }
-        setPendingJudgeMode(null)
-        return
-      }
+      const slotState = await listProblemTestSetSlots(problemId)
+      const targetSlot = slotState.slots.find(item => item.slot === 'STABLE')
+        || slotState.slots.find(item => item.slot === 'EVOLVING')
+      if (!targetSlot) return toast.error('题目尚无可迁移的测试数据槽')
       const result = await transitionProblemJudgeMode(problemId, {
         targetMode: pendingJudgeMode,
-        expectedLatestRevisionId: revisions.latestTestSetRevisionId,
+        slot: targetSlot.slot,
+        expectedFencingToken: targetSlot.fencingToken,
       })
       if (!result.ok) return toast.error(result.error.message || '评测模式迁移失败')
       toast.success('评测模式迁移完成，Hack 已关闭并需要重新确认')

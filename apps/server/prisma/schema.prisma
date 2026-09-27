@@ -244,7 +244,6 @@ enum BlogPostVersionStatus {
 
 enum BlogReferenceType {
   PROBLEM
-  PROBLEM_REVISION
   SOLUTION_VERSION
   CONTEST_STANDING
   RATING_CHANGE
@@ -369,6 +368,26 @@ enum TestSetQualityIncidentStatus {
   OPEN
   CONFIRMED
   RESOLVED
+}
+
+enum ProblemTestSetSlotKind {
+  STABLE
+  EVOLVING
+}
+
+enum ProblemTestSetReaderStatus {
+  ACTIVE
+  RELEASED
+  EXPIRED
+}
+
+enum ProblemTestSetWriterStatus {
+  QUEUED
+  DRAINING
+  APPLYING
+  SUCCEEDED
+  FAILED
+  CANCELLED
 }
 
 enum AssignmentGradingPolicy {
@@ -621,37 +640,40 @@ model ContestParticipant {
 }
 
 model ContestProblem {
-  id                  String                     @id
-  contestId           String
-  canonicalProblemId  String?
-  testSetRevisionId   String?
-  orderIndex          Int
-  alias               String?
-  title               String?
-  description         String?
-  ojName              String?
-  problemId           String?
-  isCustom            Boolean                    @default(false)
-  difficulty          String?
-  points              Int?
-  statementType       String                     @default("none")
-  statementMarkdown   String?
-  solutionType        String                     @default("none")
-  solutionMarkdown    String?
-  solutionVisible     Boolean                    @default(false)
-  createdAt           DateTime                   @default(now())
-  updatedAt           DateTime                   @default(now())
-  Contest             Contest                    @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  CanonicalProblem    Problem?                   @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
-  TestSetRevision     ProblemTestSetRevision?    @relation("ContestProblemTestSetRevision", fields: [testSetRevisionId], references: [id], onDelete: Restrict)
-  ContestProblemScore ContestProblemScore[]
-  ContestResource     ContestResource[]
-  ContestStatuses     ContestUserProblemStatus[] @relation("CanonicalContestProblemStatuses")
-  Submissions         Submission[]               @relation("CanonicalContestProblemSubmissions")
+  id                     String                     @id
+  contestId              String
+  canonicalProblemId     String?
+  testSetSlot            ProblemTestSetSlotKind     @default(STABLE)
+  testSetGraphHash       String?
+  testSetJudgeConfigHash String?
+  testSetFencingToken    Int?
+  testSetReaderId        String?                    @unique
+  orderIndex             Int
+  alias                  String?
+  title                  String?
+  description            String?
+  ojName                 String?
+  problemId              String?
+  isCustom               Boolean                    @default(false)
+  difficulty             String?
+  points                 Int?
+  statementType          String                     @default("none")
+  statementMarkdown      String?
+  solutionType           String                     @default("none")
+  solutionMarkdown       String?
+  solutionVisible        Boolean                    @default(false)
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @default(now())
+  Contest                Contest                    @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  CanonicalProblem       Problem?                   @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
+  TestSetReader          ProblemTestSetReader?      @relation("ContestProblemTestSetReader", fields: [testSetReaderId], references: [id], onDelete: SetNull)
+  ContestProblemScore    ContestProblemScore[]
+  ContestResource        ContestResource[]
+  ContestStatuses        ContestUserProblemStatus[] @relation("CanonicalContestProblemStatuses")
+  Submissions            Submission[]               @relation("CanonicalContestProblemSubmissions")
 
   @@unique([contestId, orderIndex])
   @@index([canonicalProblemId])
-  @@index([testSetRevisionId])
 }
 
 model ContestProblemScore {
@@ -1133,7 +1155,7 @@ model Problem {
   createdAt                          DateTime                             @default(now())
   updatedAt                          DateTime                             @default(now())
   testGraphRevision                  Int                                  @default(0)
-  latestTestSetRevisionId            String?
+  dataContributionEnabled            Boolean                              @default(false)
   allowedLanguages                   String?
   ojBindings                         String?
   ProblemAttachment                  ProblemAttachment[]
@@ -1158,8 +1180,10 @@ model Problem {
   ProblemSubtask                     ProblemSubtask[]
   ProblemTestGroup                   ProblemTestGroup[]
   TestdataObject                     TestdataObject[]
-  TestSetRevision                    ProblemTestSetRevision[]             @relation("ProblemTestSetRevisions")
-  LatestTestSetRevision              ProblemTestSetRevision?              @relation("ProblemLatestTestSetRevision", fields: [latestTestSetRevisionId], references: [id], onDelete: SetNull)
+  TestSetSlots                       ProblemTestSetSlot[]
+  TestSetReaders                     ProblemTestSetReader[]
+  TestSetWriters                     ProblemTestSetWriter[]
+  TestSetPromotionJobs               ProblemTestSetPromotionJob[]
   QualityEvaluationJobs              QualityEvaluationJob[]
   TestSetQualitySnapshots            TestSetQualitySnapshot[]
   QualityAssessments                 ProblemQualityAssessment[]
@@ -1174,6 +1198,7 @@ model Problem {
   CopiedProblems                     Problem[]                            @relation("ProblemCopies")
   BlogReferences                     BlogReference[]                      @relation("BlogReferenceProblem")
   ContestProblems                    ContestProblem[]                     @relation("ContestCanonicalProblem")
+  DataEntitlement                    DataEntitlement[]
 
   @@unique([libraryKey, platform, problemId])
   @@index([createdAt])
@@ -1183,7 +1208,6 @@ model Problem {
   @@index([sourceProblemId])
   @@index([visibility])
   @@index([visibility, status])
-  @@index([latestTestSetRevisionId])
 }
 
 model ProblemHackConfig {
@@ -1369,8 +1393,9 @@ model ProblemDataGenerationJob {
   problemId                  String
   createdBy                  String
   status                     String                      @default("queued")
-  baseTestSetRevisionId      String?
-  expectedLatestRevisionId   String?
+  baseTestSetGraphHash       String?
+  baseTestSetFencingToken    Int?
+  expectedEvolvingFence      Int?
   generatorVersionId         String?
   standardVersionId          String
   validatorVersionId         String
@@ -1380,17 +1405,19 @@ model ProblemDataGenerationJob {
   leaseExpiresAt             DateTime?
   startedAt                  DateTime?
   finishedAt                 DateTime?
-  promotedRevisionId         String?
+  promotedGraphHash          String?
   errorCode                  String?
   errorMessage               String?                     @db.Text
   contribution               Boolean                     @default(false)
   targetRole                 String                      @default("official")
   reservedCredits            Int                         @default(0)
   contributionOrganizationId String?
+  testSetReaderId            String?                     @unique
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   Problem                    Problem                     @relation(fields: [problemId], references: [id], onDelete: Cascade)
   ContributionOrganization   Organization?               @relation("DataGenerationContributionOrganization", fields: [contributionOrganizationId], references: [id], onDelete: SetNull)
+  TestSetReader              ProblemTestSetReader?       @relation("DataGenerationTestSetReader", fields: [testSetReaderId], references: [id], onDelete: SetNull)
   Cases                      ProblemDataGenerationCase[]
 
   @@index([problemId, createdAt])
@@ -1434,17 +1461,17 @@ model ProblemDataGenerationCase {
 }
 
 model ProblemHackAttempt {
-  id                         String                  @id
+  id                         String                 @id
   problemId                  String
   userId                     String
   contributionOrganizationId String?
-  status                     String                  @default("queuing")
+  status                     String                 @default("queuing")
   inputMode                  String
-  inputData                  String?                 @db.Text
-  generatorSource            String?                 @db.Text
+  inputData                  String?                @db.Text
+  generatorSource            String?                @db.Text
   generatorLanguage          String?
   generatorProtocol          String?
-  hackSource                 String                  @db.Text
+  hackSource                 String                 @db.Text
   hackLanguage               String
   inputFilename              String?
   outputFilename             String?
@@ -1457,35 +1484,35 @@ model ProblemHackAttempt {
   scoreDelta                 Int?
   affectedSubtaskIds         String?
   acceptedTestcaseId         String?
-  testGraphRevision          Int                     @default(0)
-  baseTestSetRevisionId      String?
+  testGraphRevision          Int                    @default(0)
+  baseSlot                   ProblemTestSetSlotKind @default(EVOLVING)
+  baseGraphHash              String?
+  baseFencingToken           Int?
+  testSetReaderId            String?                @unique
   candidateTestcaseId        String?
-  promotedRevisionId         String?
+  promotedGraphHash          String?
   canonicalStatus            String?
-  promotionRetries           Int                     @default(0)
+  promotionRetries           Int                    @default(0)
   failureStage               String?
-  message                    String?                 @db.Text
+  message                    String?                @db.Text
   inputSha256                String?
   outputSha256               String?
   acceptedInputFile          String?
   acceptedOutputFile         String?
   judgeId                    String?
   judgeStarted               DateTime?
-  createdAt                  DateTime                @default(now())
-  updatedAt                  DateTime                @updatedAt
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
   finishedAt                 DateTime?
-  Problem                    Problem                 @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  User                       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ContributionOrganization   Organization?           @relation("HackContributionOrganization", fields: [contributionOrganizationId], references: [id], onDelete: SetNull)
-  BaseTestSetRevision        ProblemTestSetRevision? @relation("HackBaseTestSetRevision", fields: [baseTestSetRevisionId], references: [id], onDelete: SetNull)
-  PromotedRevision           ProblemTestSetRevision? @relation("HackPromotedTestSetRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
+  Problem                    Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  User                       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ContributionOrganization   Organization?          @relation("HackContributionOrganization", fields: [contributionOrganizationId], references: [id], onDelete: SetNull)
   Candidate                  TestcaseCandidate?
+  TestSetReader              ProblemTestSetReader?  @relation("HackAttemptTestSetReader", fields: [testSetReaderId], references: [id], onDelete: SetNull)
 
   @@index([problemId, status, createdAt])
   @@index([status, judgeId])
   @@index([userId, problemId, createdAt])
-  @@index([baseTestSetRevisionId])
-  @@index([promotedRevisionId])
   @@index([contributionOrganizationId])
 }
 
@@ -1497,7 +1524,9 @@ model TestcaseCandidate {
   targetRole                 String                  @default("hack_gate")
   status                     TestcaseCandidateStatus @default(VALIDATED)
   evaluationStage            String                  @default("admission")
-  baseTestSetRevisionId      String?
+  baseSlot                   ProblemTestSetSlotKind  @default(EVOLVING)
+  baseGraphHash              String?
+  baseFencingToken           Int?
   inputObjectId              String?
   outputObjectId             String?
   inputSha256                String
@@ -1525,7 +1554,7 @@ model TestcaseCandidate {
   createdBy                  String
   contributionOrganizationId String?
   promotedTestcaseId         String?
-  promotedRevisionId         String?
+  promotedGraphHash          String?
   message                    String?                 @db.Text
   provenance                 Json?
   selectionOutcome           Json?
@@ -1535,19 +1564,15 @@ model TestcaseCandidate {
   Problem                    Problem                 @relation(fields: [problemId], references: [id], onDelete: Cascade)
   ContributionOrganization   Organization?           @relation("CandidateContributionOrganization", fields: [contributionOrganizationId], references: [id], onDelete: SetNull)
   HackAttempt                ProblemHackAttempt?     @relation(fields: [hackAttemptId], references: [id], onDelete: SetNull)
-  BaseTestSetRevision        ProblemTestSetRevision? @relation("CandidateBaseTestSetRevision", fields: [baseTestSetRevisionId], references: [id], onDelete: SetNull)
   InputObject                TestdataObject?         @relation("CandidateInputObject", fields: [inputObjectId], references: [id], onDelete: Restrict)
   OutputObject               TestdataObject?         @relation("CandidateOutputObject", fields: [outputObjectId], references: [id], onDelete: Restrict)
-  PromotedRevision           ProblemTestSetRevision? @relation("CandidatePromotedRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
 
   @@index([problemId, status, createdAt])
   @@index([problemId, targetRole, status, marginalValue])
   @@index([createdBy, createdAt])
   @@index([expiresAt])
-  @@index([baseTestSetRevisionId])
   @@index([inputObjectId])
   @@index([outputObjectId])
-  @@index([promotedRevisionId])
   @@index([contributionOrganizationId])
 }
 
@@ -1622,7 +1647,8 @@ model WrongCorpusRevision {
 model QualityEvaluationJob {
   id                         String                     @id
   problemId                  String
-  revisionId                 String
+  slot                       ProblemTestSetSlotKind
+  graphHash                  String
   corpusRevisionId           String
   qualityRuleVersion         String
   ruleConfig                 Json
@@ -1636,6 +1662,7 @@ model QualityEvaluationJob {
   checkerHash                String
   judgeConfigHash            String
   verificationStatus         String                     @default("pending")
+  testSetReaderId            String?                    @unique
   verificationReport         Json?
   verificationJudgeId        String?
   verificationLeaseExpiresAt DateTime?
@@ -1655,16 +1682,16 @@ model QualityEvaluationJob {
   createdAt                  DateTime                   @default(now())
   updatedAt                  DateTime                   @updatedAt
   Problem                    Problem                    @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  Revision                   ProblemTestSetRevision     @relation(fields: [revisionId], references: [id], onDelete: Restrict)
   CorpusRevision             WrongCorpusRevision        @relation(fields: [corpusRevisionId], references: [id], onDelete: Restrict)
   Creator                    User                       @relation("QualityEvaluationJobCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  TestSetReader              ProblemTestSetReader?      @relation("QualityEvaluationTestSetReader", fields: [testSetReaderId], references: [id], onDelete: SetNull)
   Snapshot                   TestSetQualitySnapshot?
 
   @@index([status, queuedAt])
   @@index([verificationStatus, queuedAt])
   @@index([verificationLeaseExpiresAt])
   @@index([problemId, createdAt])
-  @@index([revisionId, qualityRuleVersion])
+  @@index([problemId, slot, qualityRuleVersion])
   @@index([leaseExpiresAt])
 }
 
@@ -1698,11 +1725,12 @@ model ProblemSolutionProfile {
 }
 
 model TestSetQualitySnapshot {
-  id                      String                    @id
+  id                      String                 @id
   problemId               String
-  revisionId              String
+  slot                    ProblemTestSetSlotKind
+  graphHash               String
   corpusRevisionId        String
-  evaluationJobId         String                    @unique
+  evaluationJobId         String                 @unique
   qualityRuleVersion      String
   inputHash               String
   correctnessScore        Int
@@ -1715,32 +1743,30 @@ model TestSetQualitySnapshot {
   confidenceScore         Int
   confidenceLevel         QualityConfidenceLevel
   maturityLevel           QualityMaturityLevel
-  wrongProgramCount       Int                       @default(0)
-  behaviorClusterCount    Int                       @default(0)
-  evaluationClusterCount  Int                       @default(0)
-  holdoutClusterCount     Int                       @default(0)
-  weightedKillCoverage    Float                     @default(0)
-  evaluationCoverage      Float                     @default(0)
-  holdoutCoverage         Float                     @default(0)
-  featureCoverage         Float                     @default(0)
-  criticalFeatureCoverage Float                     @default(0)
-  realSubmissionCount     Int                       @default(0)
-  validHackCount          Int                       @default(0)
-  revisionAgeDays         Int                       @default(0)
-  criticalIssueCount      Int                       @default(0)
-  warningCount            Int                       @default(0)
+  wrongProgramCount       Int                    @default(0)
+  behaviorClusterCount    Int                    @default(0)
+  evaluationClusterCount  Int                    @default(0)
+  holdoutClusterCount     Int                    @default(0)
+  weightedKillCoverage    Float                  @default(0)
+  evaluationCoverage      Float                  @default(0)
+  holdoutCoverage         Float                  @default(0)
+  featureCoverage         Float                  @default(0)
+  criticalFeatureCoverage Float                  @default(0)
+  realSubmissionCount     Int                    @default(0)
+  validHackCount          Int                    @default(0)
+  testSetAgeDays          Int                    @default(0)
+  criticalIssueCount      Int                    @default(0)
+  warningCount            Int                    @default(0)
   qualityStatus           TestSetQualityStatus
   evidence                Json
-  createdAt               DateTime                  @default(now())
-  Problem                 Problem                   @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  Revision                ProblemTestSetRevision    @relation(fields: [revisionId], references: [id], onDelete: Restrict)
-  CorpusRevision          WrongCorpusRevision       @relation(fields: [corpusRevisionId], references: [id], onDelete: Restrict)
-  EvaluationJob           QualityEvaluationJob      @relation(fields: [evaluationJobId], references: [id], onDelete: Restrict)
+  createdAt               DateTime               @default(now())
+  Problem                 Problem                @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  CorpusRevision          WrongCorpusRevision    @relation(fields: [corpusRevisionId], references: [id], onDelete: Restrict)
+  EvaluationJob           QualityEvaluationJob   @relation(fields: [evaluationJobId], references: [id], onDelete: Restrict)
   DataProducts            DataProduct[]
   DataPurchases           DataPurchase[]
-  EntitlementRevisions    DataEntitlementRevision[]
 
-  @@unique([revisionId, qualityRuleVersion, corpusRevisionId, inputHash])
+  @@unique([problemId, slot, graphHash, qualityRuleVersion, corpusRevisionId, inputHash])
   @@index([problemId, createdAt])
   @@index([qualityStatus, confidenceLevel])
 }
@@ -1782,36 +1808,35 @@ model ProblemQualityAssessment {
 }
 
 model DataProduct {
-  id                   String                    @id
+  id                   String                  @id
   problemId            String
-  revisionId           String
+  slot                 ProblemTestSetSlotKind  @default(STABLE)
+  graphHash            String
   qualitySnapshotId    String
   sellerType           DataProductSellerType
   sellerUserId         String
   sellerOrganizationId String?
   grade                DataProductGrade
-  updatePolicy         DataProductUpdatePolicy   @default(SNAPSHOT)
-  status               DataProductStatus         @default(ACTIVE)
+  updatePolicy         DataProductUpdatePolicy @default(SNAPSHOT)
+  status               DataProductStatus       @default(ACTIVE)
   includes             Json
-  publishedAt          DateTime                  @default(now())
+  publishedAt          DateTime                @default(now())
   suspendedAt          DateTime?
   suspensionReason     String?
   suspensionIncidentId String?
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
-  Problem              Problem                   @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  Revision             ProblemTestSetRevision    @relation(fields: [revisionId], references: [id], onDelete: Restrict)
-  QualitySnapshot      TestSetQualitySnapshot    @relation(fields: [qualitySnapshotId], references: [id], onDelete: Restrict)
-  SellerUser           User                      @relation("DataProductSellerUser", fields: [sellerUserId], references: [id], onDelete: Restrict)
-  SellerOrganization   Organization?             @relation("DataProductSellerOrganization", fields: [sellerOrganizationId], references: [id], onDelete: Restrict)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  Problem              Problem                 @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  QualitySnapshot      TestSetQualitySnapshot  @relation(fields: [qualitySnapshotId], references: [id], onDelete: Restrict)
+  SellerUser           User                    @relation("DataProductSellerUser", fields: [sellerUserId], references: [id], onDelete: Restrict)
+  SellerOrganization   Organization?           @relation("DataProductSellerOrganization", fields: [sellerOrganizationId], references: [id], onDelete: Restrict)
   Prices               DataProductPrice[]
   Purchases            DataPurchase[]
-  EntitlementRevisions DataEntitlementRevision[]
-  SuspensionIncident   TestSetQualityIncident?   @relation("QualityIncidentSuspendedProducts", fields: [suspensionIncidentId], references: [id], onDelete: Restrict)
+  SuspensionIncident   TestSetQualityIncident? @relation("QualityIncidentSuspendedProducts", fields: [suspensionIncidentId], references: [id], onDelete: Restrict)
 
-  @@unique([revisionId, qualitySnapshotId, updatePolicy])
+  @@unique([problemId, slot, graphHash, qualitySnapshotId, updatePolicy])
   @@index([problemId, status, grade])
-  @@index([revisionId, status])
+  @@index([problemId, slot, status])
   @@index([sellerUserId, status])
   @@index([sellerOrganizationId, status])
   @@index([suspensionIncidentId])
@@ -1840,7 +1865,7 @@ model DataPurchase {
   buyerOrganizationId        String?
   contestId                  String?
   licenseType                DataLicenseType
-  purchasedRevisionId        String
+  purchasedGraphHash         String
   qualitySnapshotId          String
   amountCarits               BigInt
   status                     DataPurchaseStatus     @default(POSTED)
@@ -1854,7 +1879,6 @@ model DataPurchase {
   BuyerUser                  User                   @relation(fields: [buyerUserId], references: [id], onDelete: Restrict)
   BuyerOrganization          Organization?          @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
   Contest                    Contest?               @relation(fields: [contestId], references: [id], onDelete: Restrict)
-  PurchasedRevision          ProblemTestSetRevision @relation(fields: [purchasedRevisionId], references: [id], onDelete: Restrict)
   QualitySnapshot            TestSetQualitySnapshot @relation(fields: [qualitySnapshotId], references: [id], onDelete: Restrict)
   CaritsTransaction          CaritsTransaction      @relation(fields: [caritsTransactionId], references: [id], onDelete: Restrict)
   Entitlement                DataEntitlement?
@@ -1863,86 +1887,63 @@ model DataPurchase {
   @@index([buyerOrganizationId, createdAt])
   @@index([contestId, createdAt])
   @@index([dataProductId, licenseType, status])
-  @@index([purchasedRevisionId])
+  @@index([purchasedGraphHash])
 }
 
 model DataEntitlement {
-  id                  String                    @id
-  purchaseId          String                    @unique
+  id                  String          @id
+  purchaseId          String          @unique
+  problemId           String
   buyerUserId         String
   buyerOrganizationId String?
   contestId           String?
   licenseType         DataLicenseType
-  downloadAllowed     Boolean                   @default(true)
-  importAllowed       Boolean                   @default(true)
+  downloadAllowed     Boolean         @default(true)
+  importAllowed       Boolean         @default(true)
   updatesUntil        DateTime?
   revokedAt           DateTime?
   revokeReason        String?
-  createdAt           DateTime                  @default(now())
-  Purchase            DataPurchase              @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
-  BuyerUser           User                      @relation(fields: [buyerUserId], references: [id], onDelete: Restrict)
-  BuyerOrganization   Organization?             @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
-  Contest             Contest?                  @relation(fields: [contestId], references: [id], onDelete: Restrict)
-  Revisions           DataEntitlementRevision[]
+  createdAt           DateTime        @default(now())
+  Purchase            DataPurchase    @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  Problem             Problem         @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  BuyerUser           User            @relation(fields: [buyerUserId], references: [id], onDelete: Restrict)
+  BuyerOrganization   Organization?   @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  Contest             Contest?        @relation(fields: [contestId], references: [id], onDelete: Restrict)
 
+  @@index([problemId, revokedAt])
   @@index([buyerUserId, revokedAt, createdAt])
   @@index([buyerOrganizationId, revokedAt])
   @@index([contestId, revokedAt])
 }
 
-model DataEntitlementRevision {
-  id                String                     @id
-  entitlementId     String
-  sequence          Int
-  dataProductId     String?
-  testSetRevisionId String
-  qualitySnapshotId String
-  grantReason       DataEntitlementGrantReason
-  sourceIncidentId  String?
-  createdAt         DateTime                   @default(now())
-  Entitlement       DataEntitlement            @relation(fields: [entitlementId], references: [id], onDelete: Restrict)
-  Product           DataProduct?               @relation(fields: [dataProductId], references: [id], onDelete: Restrict)
-  TestSetRevision   ProblemTestSetRevision     @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
-  QualitySnapshot   TestSetQualitySnapshot     @relation(fields: [qualitySnapshotId], references: [id], onDelete: Restrict)
-  SourceIncident    TestSetQualityIncident?    @relation("QualityIncidentEntitlementRevisions", fields: [sourceIncidentId], references: [id], onDelete: Restrict)
-
-  @@unique([entitlementId, sequence])
-  @@unique([entitlementId, testSetRevisionId])
-  @@unique([entitlementId, sourceIncidentId])
-  @@index([testSetRevisionId])
-  @@index([dataProductId])
-}
-
 model TestSetQualityIncident {
-  id                   String                         @id
-  problemId            String
-  revisionId           String
-  severity             TestSetQualityIncidentSeverity
-  type                 String
-  description          String                         @db.Text
-  evidence             Json
-  status               TestSetQualityIncidentStatus   @default(OPEN)
-  discoveredByUserId   String
-  confirmedByUserId    String?
-  resolvedByUserId     String?
-  fixedByRevisionId    String?
-  discoveredAt         DateTime                       @default(now())
-  confirmedAt          DateTime?
-  resolvedAt           DateTime?
-  createdAt            DateTime                       @default(now())
-  updatedAt            DateTime                       @updatedAt
-  Problem              Problem                        @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  Revision             ProblemTestSetRevision         @relation("QualityIncidentAffectedRevision", fields: [revisionId], references: [id], onDelete: Restrict)
-  FixedByRevision      ProblemTestSetRevision?        @relation("QualityIncidentFixedRevision", fields: [fixedByRevisionId], references: [id], onDelete: Restrict)
-  DiscoveredBy         User                           @relation("QualityIncidentDiscoverer", fields: [discoveredByUserId], references: [id], onDelete: Restrict)
-  ConfirmedBy          User?                          @relation("QualityIncidentConfirmer", fields: [confirmedByUserId], references: [id], onDelete: Restrict)
-  ResolvedBy           User?                          @relation("QualityIncidentResolver", fields: [resolvedByUserId], references: [id], onDelete: Restrict)
-  SuspendedProducts    DataProduct[]                  @relation("QualityIncidentSuspendedProducts")
-  EntitlementRevisions DataEntitlementRevision[]      @relation("QualityIncidentEntitlementRevisions")
+  id                 String                         @id
+  problemId          String
+  slot               ProblemTestSetSlotKind
+  affectedGraphHash  String
+  severity           TestSetQualityIncidentSeverity
+  type               String
+  description        String                         @db.Text
+  evidence           Json
+  status             TestSetQualityIncidentStatus   @default(OPEN)
+  discoveredByUserId String
+  confirmedByUserId  String?
+  resolvedByUserId   String?
+  fixedByGraphHash   String?
+  discoveredAt       DateTime                       @default(now())
+  confirmedAt        DateTime?
+  resolvedAt         DateTime?
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+  Problem            Problem                        @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  DiscoveredBy       User                           @relation("QualityIncidentDiscoverer", fields: [discoveredByUserId], references: [id], onDelete: Restrict)
+  ConfirmedBy        User?                          @relation("QualityIncidentConfirmer", fields: [confirmedByUserId], references: [id], onDelete: Restrict)
+  ResolvedBy         User?                          @relation("QualityIncidentResolver", fields: [resolvedByUserId], references: [id], onDelete: Restrict)
+  SuspendedProducts  DataProduct[]                  @relation("QualityIncidentSuspendedProducts")
 
   @@index([problemId, status, severity])
-  @@index([revisionId, status])
-  @@index([fixedByRevisionId])
+  @@index([problemId, slot, status])
+  @@index([fixedByGraphHash])
 }
 
 model BugCategory {
@@ -1958,30 +1959,32 @@ model BugCategory {
 }
 
 model CandidateEvaluationRun {
-  id               String    @id
+  id               String                @id
   candidateId      String
   problemId        String
   corpusRevisionId String?
   stage            String
-  status           String    @default("queued")
+  status           String                @default("queued")
   budgetTaskId     String?
-  budgetCredits    Int       @default(400)
-  executionCount   Int       @default(0)
-  cpuMilliseconds  Int       @default(0)
-  generatedBytes   BigInt    @default(0)
-  newClusterWeight Int       @default(0)
-  newCategoryCount Int       @default(0)
-  newFeatureCount  Int       @default(0)
-  similarity       Float     @default(0)
-  value            Float     @default(0)
-  message          String?   @db.Text
+  budgetCredits    Int                   @default(400)
+  executionCount   Int                   @default(0)
+  cpuMilliseconds  Int                   @default(0)
+  generatedBytes   BigInt                @default(0)
+  newClusterWeight Int                   @default(0)
+  newCategoryCount Int                   @default(0)
+  newFeatureCount  Int                   @default(0)
+  similarity       Float                 @default(0)
+  value            Float                 @default(0)
+  message          String?               @db.Text
   judgeId          String?
   fencingToken     String?
   leaseExpiresAt   DateTime?
-  attempts         Int       @default(0)
+  attempts         Int                   @default(0)
   startedAt        DateTime?
   finishedAt       DateTime?
-  createdAt        DateTime  @default(now())
+  testSetReaderId  String?               @unique
+  TestSetReader    ProblemTestSetReader? @relation("CandidateEvaluationTestSetReader", fields: [testSetReaderId], references: [id], onDelete: SetNull)
+  createdAt        DateTime              @default(now())
 
   @@index([candidateId, stage])
   @@index([budgetTaskId])
@@ -1990,27 +1993,27 @@ model CandidateEvaluationRun {
 }
 
 model CanonicalSelectionRun {
-  id                    String    @id
-  problemId             String
-  baseTestSetRevisionId String
-  corpusRevisionId      String?
-  policyRevision        Int
-  status                String    @default("queued")
-  mode                  String    @default("observe")
-  baselineQuality       Float     @default(0)
-  candidateQuality      Float     @default(0)
-  qualityDelta          Float     @default(0)
-  holdoutRegressed      Boolean   @default(false)
-  selectedCandidateIds  Json?
-  promotedRevisionId    String?
-  publishReason         String?
-  errorCode             String?
-  errorMessage          String?   @db.Text
-  createdAt             DateTime  @default(now())
-  finishedAt            DateTime?
+  id                   String    @id
+  problemId            String
+  baseGraphHash        String
+  corpusRevisionId     String?
+  policyRevision       Int
+  status               String    @default("queued")
+  mode                 String    @default("observe")
+  baselineQuality      Float     @default(0)
+  candidateQuality     Float     @default(0)
+  qualityDelta         Float     @default(0)
+  holdoutRegressed     Boolean   @default(false)
+  selectedCandidateIds Json?
+  promotedGraphHash    String?
+  publishReason        String?
+  errorCode            String?
+  errorMessage         String?   @db.Text
+  createdAt            DateTime  @default(now())
+  finishedAt           DateTime?
 
   @@index([problemId, status, createdAt])
-  @@index([promotedRevisionId])
+  @@index([promotedGraphHash])
 }
 
 model ProblemCandidatePolicy {
@@ -2424,7 +2427,8 @@ model SolutionContribution {
   citation                  String?
   licenseDeclarationVersion Int
   licenseAcceptedAt         DateTime
-  targetTestSetRevisionId   String
+  targetTestSetSlot         ProblemTestSetSlotKind         @default(STABLE)
+  targetTestSetGraphHash    String
   statementSnapshotHash     String
   status                    SolutionContributionStatus     @default(DRAFT)
   currentRevision           Int                            @default(0)
@@ -2438,7 +2442,6 @@ model SolutionContribution {
   Organization              Organization?                  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   BaseSolution              ProblemSolution?               @relation("SolutionContributionBaseSolution", fields: [baseSolutionId], references: [id], onDelete: Restrict)
   BaseVersion               ProblemSolutionVersion?        @relation("SolutionContributionBaseVersion", fields: [baseVersionId], references: [id], onDelete: Restrict)
-  TargetTestSetRevision     ProblemTestSetRevision         @relation("SolutionContributionTargetRevision", fields: [targetTestSetRevisionId], references: [id], onDelete: Restrict)
   Revisions                 SolutionContributionRevision[]
   Reviews                   SolutionReview[]
 
@@ -2446,7 +2449,6 @@ model SolutionContribution {
   @@index([authorUserId, status, updatedAt])
   @@index([organizationId, status])
   @@index([baseSolutionId])
-  @@index([targetTestSetRevisionId])
 }
 
 model SolutionContributionRevision {
@@ -2469,11 +2471,11 @@ model SolutionContributionRevision {
   licenseAcceptedAt         DateTime
   statementSnapshot         Json
   statementSnapshotHash     String
-  targetTestSetRevisionId   String
+  targetTestSetSlot         ProblemTestSetSlotKind    @default(STABLE)
+  targetTestSetGraphHash    String
   contentHash               String
   submittedAt               DateTime                  @default(now())
   Contribution              SolutionContribution      @relation(fields: [contributionId], references: [id], onDelete: Restrict)
-  TargetTestSetRevision     ProblemTestSetRevision    @relation("SolutionContributionRevisionTarget", fields: [targetTestSetRevisionId], references: [id], onDelete: Restrict)
   Verification              SolutionVerification?
   Reviews                   SolutionReview[]
   PublishedVersion          ProblemSolutionVersion?
@@ -2482,31 +2484,29 @@ model SolutionContributionRevision {
   SimilarityMatches         SolutionSimilarityCheck[] @relation("SolutionSimilarityContributionMatch")
 
   @@unique([contributionId, revision])
-  @@index([targetTestSetRevisionId])
   @@index([contentHash])
 }
 
 model SolutionVerification {
-  id                        String                       @id
-  contributionRevisionId    String                       @unique
-  submissionId              Int?                         @unique
-  verifiedTestSetRevisionId String
-  status                    SolutionVerificationStatus   @default(QUEUED)
-  compilePassed             Boolean?
-  officialVerdict           String?
-  officialScore             Int?
-  errorMessage              String?                      @db.Text
-  startedAt                 DateTime?
-  completedAt               DateTime?
-  createdAt                 DateTime                     @default(now())
-  updatedAt                 DateTime                     @updatedAt
-  ContributionRevision      SolutionContributionRevision @relation(fields: [contributionRevisionId], references: [id], onDelete: Restrict)
-  Submission                Submission?                  @relation(fields: [submissionId], references: [id], onDelete: Restrict)
-  VerifiedTestSetRevision   ProblemTestSetRevision       @relation("SolutionVerificationTestSetRevision", fields: [verifiedTestSetRevisionId], references: [id], onDelete: Restrict)
-  PublishedVersion          ProblemSolutionVersion?
+  id                       String                       @id
+  contributionRevisionId   String                       @unique
+  submissionId             Int?                         @unique
+  verifiedTestSetSlot      ProblemTestSetSlotKind       @default(STABLE)
+  verifiedTestSetGraphHash String
+  status                   SolutionVerificationStatus   @default(QUEUED)
+  compilePassed            Boolean?
+  officialVerdict          String?
+  officialScore            Int?
+  errorMessage             String?                      @db.Text
+  startedAt                DateTime?
+  completedAt              DateTime?
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+  ContributionRevision     SolutionContributionRevision @relation(fields: [contributionRevisionId], references: [id], onDelete: Restrict)
+  Submission               Submission?                  @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  PublishedVersion         ProblemSolutionVersion?
 
   @@index([status, createdAt])
-  @@index([verifiedTestSetRevisionId])
 }
 
 model SolutionReview {
@@ -2573,7 +2573,8 @@ model ProblemSolutionVersion {
   licenseDeclarationVersion    Int
   statementSnapshot            Json
   statementSnapshotHash        String
-  verifiedTestSetRevisionId    String
+  verifiedTestSetSlot          ProblemTestSetSlotKind       @default(STABLE)
+  verifiedTestSetGraphHash     String
   sourceContributionRevisionId String                       @unique
   verificationId               String                       @unique
   contentHash                  String
@@ -2584,7 +2585,6 @@ model ProblemSolutionVersion {
   createdAt                    DateTime                     @default(now())
   Solution                     ProblemSolution              @relation("ProblemSolutionVersions", fields: [solutionId], references: [id], onDelete: Restrict)
   CurrentForSolution           ProblemSolution?             @relation("ProblemSolutionCurrentVersion")
-  VerifiedTestSetRevision      ProblemTestSetRevision       @relation("SolutionVersionTestSetRevision", fields: [verifiedTestSetRevisionId], references: [id], onDelete: Restrict)
   SourceContributionRevision   SolutionContributionRevision @relation(fields: [sourceContributionRevisionId], references: [id], onDelete: Restrict)
   Verification                 SolutionVerification         @relation(fields: [verificationId], references: [id], onDelete: Restrict)
   PublishedBy                  User                         @relation("SolutionVersionPublisher", fields: [publishedByUserId], references: [id], onDelete: Restrict)
@@ -2593,7 +2593,6 @@ model ProblemSolutionVersion {
   SimilarityMatches            SolutionSimilarityCheck[]    @relation("SolutionSimilarityPublishedMatch")
 
   @@unique([solutionId, version])
-  @@index([verifiedTestSetRevisionId])
   @@index([status, publishedAt])
 }
 
@@ -3142,7 +3141,10 @@ model JudgeRun {
   runNumber                 Int
   runType                   JudgeRunType
   status                    JudgeRunStatus          @default(QUEUED)
-  testSetRevisionId         String?
+  testSetSlot               ProblemTestSetSlotKind?
+  testSetFencingToken       Int?
+  testSetGraphHash          String?
+  testSetReaderId           String?                 @unique
   judgeConfigHash           String?
   judgeConfigSnapshot       String?                 @db.Text
   inputFilename             String?
@@ -3169,14 +3171,14 @@ model JudgeRun {
   updatedAt                 DateTime                @updatedAt
   Submission                Submission              @relation("SubmissionJudgeRuns", fields: [submissionId], references: [id], onDelete: Cascade)
   CurrentForSubmission      Submission?             @relation("SubmissionCurrentJudgeRun")
-  TestSetRevision           ProblemTestSetRevision? @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
   RejudgeBatch              RejudgeBatch?           @relation(fields: [rejudgeBatchId], references: [id], onDelete: SetNull)
   Attempts                  JudgeAttempt[]          @relation("JudgeRunAttempts")
   CurrentAttempt            JudgeAttempt?           @relation("JudgeRunCurrentAttempt", fields: [currentAttemptId], references: [id], onDelete: SetNull)
+  TestSetReader             ProblemTestSetReader?   @relation("JudgeRunTestSetReader", fields: [testSetReaderId], references: [id], onDelete: SetNull)
 
   @@unique([submissionId, runNumber])
   @@index([status, createdAt])
-  @@index([testSetRevisionId])
+  @@index([testSetSlot])
   @@index([rejudgeBatchId])
 }
 
@@ -3251,7 +3253,9 @@ model Submission {
   submissionPhase           String?
   canonicalContestId        String?
   canonicalContestProblemId String?
-  testSetRevisionId         String?
+  testSetSlot               ProblemTestSetSlotKind?
+  testSetFencingToken       Int?
+  testSetGraphHash          String?
   judgeConfigHash           String?
   judgeConfigSnapshot       String?                      @db.Text
   inputFilename             String?
@@ -3268,7 +3272,6 @@ model Submission {
   CanonicalContest          Contest?                     @relation("CanonicalContestSubmissions", fields: [canonicalContestId], references: [id], onDelete: Restrict)
   CanonicalContestProblem   ContestProblem?              @relation("CanonicalContestProblemSubmissions", fields: [canonicalContestProblemId], references: [id], onDelete: Restrict)
   User                      User                         @relation(fields: [userId], references: [id])
-  TestSetRevision           ProblemTestSetRevision?      @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
   JudgeRuns                 JudgeRun[]                   @relation("SubmissionJudgeRuns")
   CurrentJudgeRun           JudgeRun?                    @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
   SolutionVerification      SolutionVerification?
@@ -3295,7 +3298,7 @@ model Submission {
   @@index([assignmentRecipientId, createdAt])
   @@index([userId])
   @@index([userId, oj, problemId])
-  @@index([testSetRevisionId])
+  @@index([testSetSlot])
 }
 
 model Team {
@@ -3481,47 +3484,47 @@ model TestdataFile {
 }
 
 model TestdataObject {
-  id               String                            @id
+  id               String                        @id
   problemId        String
   sha256           String
   size             Int
   storageKey       String
-  createdAt        DateTime                          @default(now())
-  Problem          Problem                           @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  AcmInputs        ProblemTestSetRevisionCase[]      @relation("RevisionCaseInputObject")
-  AcmOutputs       ProblemTestSetRevisionCase[]      @relation("RevisionCaseOutputObject")
-  GroupInputs      ProblemTestSetRevisionGroupCase[] @relation("RevisionGroupCaseInputObject")
-  GroupOutputs     ProblemTestSetRevisionGroupCase[] @relation("RevisionGroupCaseOutputObject")
-  CandidateInputs  TestcaseCandidate[]               @relation("CandidateInputObject")
-  CandidateOutputs TestcaseCandidate[]               @relation("CandidateOutputObject")
+  createdAt        DateTime                      @default(now())
+  Problem          Problem                       @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  SlotCaseInputs   ProblemTestSetSlotCase[]      @relation("SlotCaseInputObject")
+  SlotCaseOutputs  ProblemTestSetSlotCase[]      @relation("SlotCaseOutputObject")
+  SlotGroupInputs  ProblemTestSetSlotGroupCase[] @relation("SlotGroupCaseInputObject")
+  SlotGroupOutputs ProblemTestSetSlotGroupCase[] @relation("SlotGroupCaseOutputObject")
+  CandidateInputs  TestcaseCandidate[]           @relation("CandidateInputObject")
+  CandidateOutputs TestcaseCandidate[]           @relation("CandidateOutputObject")
 
   @@unique([problemId, sha256])
   @@index([problemId])
 }
 
 model ProblemTestcase {
-  id                  String                            @id
+  id                  String                        @id
   problemId           String
   inputFileId         String
   outputFileId        String
-  source              String                            @default("official")
+  source              String                        @default("official")
   hackerId            String?
   hackAttemptId       String?
   inputSha256         String?
   outputSha256        String?
   semanticFingerprint String?
-  enabled             Boolean                           @default(true)
-  orderIndex          Int                               @default(0)
-  isProtected         Boolean                           @default(false)
+  enabled             Boolean                       @default(true)
+  orderIndex          Int                           @default(0)
+  isProtected         Boolean                       @default(false)
   protectionReason    String?
   protectedUntil      DateTime?
-  createdAt           DateTime                          @default(now())
-  Problem             Problem                           @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  InputFile           TestdataFile                      @relation("ProblemTestcaseInput", fields: [inputFileId], references: [id], onDelete: Restrict)
-  OutputFile          TestdataFile                      @relation("ProblemTestcaseOutput", fields: [outputFileId], references: [id], onDelete: Restrict)
+  createdAt           DateTime                      @default(now())
+  Problem             Problem                       @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  InputFile           TestdataFile                  @relation("ProblemTestcaseInput", fields: [inputFileId], references: [id], onDelete: Restrict)
+  OutputFile          TestdataFile                  @relation("ProblemTestcaseOutput", fields: [outputFileId], references: [id], onDelete: Restrict)
   GroupLinks          ProblemTestcaseGroup[]
-  RevisionCases       ProblemTestSetRevisionCase[]
-  RevisionGroupCases  ProblemTestSetRevisionGroupCase[]
+  SlotCases           ProblemTestSetSlotCase[]
+  SlotGroupCases      ProblemTestSetSlotGroupCase[]
 
   @@unique([problemId, inputFileId, outputFileId])
   @@index([problemId, source, enabled])
@@ -3536,8 +3539,8 @@ model TestcaseMembershipRetirement {
   groupKey               String
   replacementCandidateId String?
   replacementTestcaseId  String?
-  fromRevisionId         String
-  toRevisionId           String
+  fromGraphHash          String
+  toGraphHash            String
   oldMarginalValue       Float    @default(0)
   newMarginalValue       Float    @default(0)
   reason                 String
@@ -3548,7 +3551,7 @@ model TestcaseMembershipRetirement {
   @@index([problemId, createdAt])
   @@index([testcaseId])
   @@index([replacementCandidateId])
-  @@index([fromRevisionId, toRevisionId])
+  @@index([fromGraphHash, toGraphHash])
 }
 
 model ProblemSubtask {
@@ -3614,59 +3617,35 @@ model ProblemTestcaseGroup {
   @@index([groupId, orderIndex])
 }
 
-model ProblemTestSetRevision {
-  id                              String                            @id
-  problemId                       String
-  revisionNumber                  Int
-  parentRevisionId                String?
-  mode                            String
-  source                          String
-  judgeConfig                     String                            @db.Text
-  judgeConfigHash                 String
-  graphHash                       String
-  testdataPath                    String
-  createdBy                       String?
-  hackAttemptId                   String?
-  createdAt                       DateTime                          @default(now())
-  Problem                         Problem                           @relation("ProblemTestSetRevisions", fields: [problemId], references: [id], onDelete: Cascade)
-  LatestForProblem                Problem[]                         @relation("ProblemLatestTestSetRevision")
-  Parent                          ProblemTestSetRevision?           @relation("TestSetRevisionParent", fields: [parentRevisionId], references: [id], onDelete: SetNull)
-  Children                        ProblemTestSetRevision[]          @relation("TestSetRevisionParent")
-  AcmCases                        ProblemTestSetRevisionCase[]
-  Subtasks                        ProblemTestSetRevisionSubtask[]
-  TrainingSessionStageProblems    TrainingSessionStageProblem[]
-  AssignmentProblems              AssignmentProblem[]
-  Submissions                     Submission[]
-  HackAttemptsBasedOn             ProblemHackAttempt[]              @relation("HackBaseTestSetRevision")
-  PromotedHackAttempts            ProblemHackAttempt[]              @relation("HackPromotedTestSetRevision")
-  CandidateBases                  TestcaseCandidate[]               @relation("CandidateBaseTestSetRevision")
-  PromotedCandidates              TestcaseCandidate[]               @relation("CandidatePromotedRevision")
-  JudgeRuns                       JudgeRun[]
-  SolutionContributions           SolutionContribution[]            @relation("SolutionContributionTargetRevision")
-  ContestProblems                 ContestProblem[]                  @relation("ContestProblemTestSetRevision")
-  SolutionContributionRevisions   SolutionContributionRevision[]    @relation("SolutionContributionRevisionTarget")
-  SolutionVerifications           SolutionVerification[]            @relation("SolutionVerificationTestSetRevision")
-  SolutionVersions                ProblemSolutionVersion[]          @relation("SolutionVersionTestSetRevision")
-  QualityEvaluationJobs           QualityEvaluationJob[]
-  QualitySnapshots                TestSetQualitySnapshot[]
-  DataProducts                    DataProduct[]
-  DataPurchases                   DataPurchase[]
-  EntitlementRevisions            DataEntitlementRevision[]
-  QualityIncidents                TestSetQualityIncident[]          @relation("QualityIncidentAffectedRevision")
-  FixedQualityIncidents           TestSetQualityIncident[]          @relation("QualityIncidentFixedRevision")
-  ProblemTestSetRevisionGroup     ProblemTestSetRevisionGroup[]
-  ProblemTestSetRevisionGroupCase ProblemTestSetRevisionGroupCase[]
-  BlogReferences                  BlogReference[]                   @relation("BlogReferenceProblemRevision")
+model ProblemTestSetSlot {
+  problemId         String
+  slot              ProblemTestSetSlotKind
+  mode              String
+  source            String
+  judgeConfig       String                        @db.Text
+  judgeConfigHash   String
+  graphHash         String
+  materializedPath  String
+  fencingToken      Int                           @default(1)
+  writerGateClosed  Boolean                       @default(false)
+  activeReaderCount Int                           @default(0)
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  Problem           Problem                       @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Cases             ProblemTestSetSlotCase[]
+  Subtasks          ProblemTestSetSlotSubtask[]
+  Groups            ProblemTestSetSlotGroup[]
+  GroupCases        ProblemTestSetSlotGroupCase[]
+  Readers           ProblemTestSetReader[]
 
-  @@unique([problemId, revisionNumber])
-  @@index([problemId, createdAt])
-  @@index([parentRevisionId])
-  @@index([judgeConfigHash])
+  @@id([problemId, slot])
+  @@index([slot, writerGateClosed])
 }
 
-model ProblemTestSetRevisionCase {
+model ProblemTestSetSlotCase {
   id             String                 @id
-  revisionId     String
+  problemId      String
+  slot           ProblemTestSetSlotKind
   testcaseId     String?
   inputObjectId  String
   outputObjectId String
@@ -3677,84 +3656,151 @@ model ProblemTestSetRevisionCase {
   time           String?
   memory         String?
   source         String                 @default("official")
-  Revision       ProblemTestSetRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  Slot           ProblemTestSetSlot     @relation(fields: [problemId, slot], references: [problemId, slot], onDelete: Cascade)
   Testcase       ProblemTestcase?       @relation(fields: [testcaseId], references: [id], onDelete: SetNull)
-  InputObject    TestdataObject         @relation("RevisionCaseInputObject", fields: [inputObjectId], references: [id], onDelete: Restrict)
-  OutputObject   TestdataObject         @relation("RevisionCaseOutputObject", fields: [outputObjectId], references: [id], onDelete: Restrict)
+  InputObject    TestdataObject         @relation("SlotCaseInputObject", fields: [inputObjectId], references: [id], onDelete: Restrict)
+  OutputObject   TestdataObject         @relation("SlotCaseOutputObject", fields: [outputObjectId], references: [id], onDelete: Restrict)
 
-  @@unique([revisionId, orderIndex])
-  @@index([revisionId])
+  @@unique([problemId, slot, orderIndex])
   @@index([testcaseId])
 }
 
-model ProblemTestSetRevisionSubtask {
-  id           String                             @id
-  revisionId   String
+model ProblemTestSetSlotSubtask {
+  id           String                         @id
+  problemId    String
+  slot         ProblemTestSetSlotKind
   subtaskId    Int
   score        Int
   orderIndex   Int
-  Revision     ProblemTestSetRevision             @relation(fields: [revisionId], references: [id], onDelete: Cascade)
-  Groups       ProblemTestSetRevisionGroup[]
-  Dependencies ProblemTestSetRevisionDependency[] @relation("RevisionDependencySource")
-  RequiredBy   ProblemTestSetRevisionDependency[] @relation("RevisionDependencyTarget")
+  Slot         ProblemTestSetSlot             @relation(fields: [problemId, slot], references: [problemId, slot], onDelete: Cascade)
+  Groups       ProblemTestSetSlotGroup[]
+  Dependencies ProblemTestSetSlotDependency[] @relation("SlotDependencySource")
+  RequiredBy   ProblemTestSetSlotDependency[] @relation("SlotDependencyTarget")
 
-  @@unique([revisionId, subtaskId])
-  @@index([revisionId, orderIndex])
+  @@unique([problemId, slot, subtaskId])
+  @@index([problemId, slot, orderIndex])
 }
 
-model ProblemTestSetRevisionDependency {
-  id          String                        @id
+model ProblemTestSetSlotDependency {
+  id          String                    @id
   subtaskId   String
   dependsOnId String
-  Subtask     ProblemTestSetRevisionSubtask @relation("RevisionDependencySource", fields: [subtaskId], references: [id], onDelete: Cascade)
-  DependsOn   ProblemTestSetRevisionSubtask @relation("RevisionDependencyTarget", fields: [dependsOnId], references: [id], onDelete: Cascade)
+  Subtask     ProblemTestSetSlotSubtask @relation("SlotDependencySource", fields: [subtaskId], references: [id], onDelete: Cascade)
+  DependsOn   ProblemTestSetSlotSubtask @relation("SlotDependencyTarget", fields: [dependsOnId], references: [id], onDelete: Cascade)
 
   @@unique([subtaskId, dependsOnId])
   @@index([dependsOnId])
 }
 
-model ProblemTestSetRevisionGroup {
-  id          String                            @id
-  revisionId  String
+model ProblemTestSetSlotGroup {
+  id          String                        @id
+  problemId   String
+  slot        ProblemTestSetSlotKind
   subtaskId   String
   key         String
   name        String
   kind        String
-  score       Int                               @default(0)
-  aggregation String                            @default("min")
-  orderIndex  Int                               @default(0)
-  Revision    ProblemTestSetRevision            @relation(fields: [revisionId], references: [id], onDelete: Cascade)
-  Subtask     ProblemTestSetRevisionSubtask     @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
-  Cases       ProblemTestSetRevisionGroupCase[]
+  score       Int                           @default(0)
+  aggregation String                        @default("min")
+  orderIndex  Int                           @default(0)
+  Slot        ProblemTestSetSlot            @relation(fields: [problemId, slot], references: [problemId, slot], onDelete: Cascade)
+  Subtask     ProblemTestSetSlotSubtask     @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
+  Cases       ProblemTestSetSlotGroupCase[]
 
   @@unique([subtaskId, key])
-  @@index([revisionId, kind])
+  @@index([problemId, slot, kind])
 }
 
-model ProblemTestSetRevisionGroupCase {
-  id             String                      @id
-  revisionId     String
+model ProblemTestSetSlotGroupCase {
+  id             String                  @id
+  problemId      String
+  slot           ProblemTestSetSlotKind
   groupId        String
   testcaseId     String?
   inputObjectId  String
   outputObjectId String
   inputName      String
   outputName     String
-  orderIndex     Int                         @default(0)
+  orderIndex     Int                     @default(0)
   score          Int?
   time           String?
   memory         String?
-  source         String                      @default("official")
-  Revision       ProblemTestSetRevision      @relation(fields: [revisionId], references: [id], onDelete: Cascade)
-  Group          ProblemTestSetRevisionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  Testcase       ProblemTestcase?            @relation(fields: [testcaseId], references: [id], onDelete: SetNull)
-  InputObject    TestdataObject              @relation("RevisionGroupCaseInputObject", fields: [inputObjectId], references: [id], onDelete: Restrict)
-  OutputObject   TestdataObject              @relation("RevisionGroupCaseOutputObject", fields: [outputObjectId], references: [id], onDelete: Restrict)
+  source         String                  @default("official")
+  Slot           ProblemTestSetSlot      @relation(fields: [problemId, slot], references: [problemId, slot], onDelete: Cascade)
+  Group          ProblemTestSetSlotGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  Testcase       ProblemTestcase?        @relation(fields: [testcaseId], references: [id], onDelete: SetNull)
+  InputObject    TestdataObject          @relation("SlotGroupCaseInputObject", fields: [inputObjectId], references: [id], onDelete: Restrict)
+  OutputObject   TestdataObject          @relation("SlotGroupCaseOutputObject", fields: [outputObjectId], references: [id], onDelete: Restrict)
 
   @@unique([groupId, testcaseId])
-  @@index([revisionId])
-  @@index([groupId, orderIndex])
-  @@index([testcaseId])
+  @@index([problemId, slot, groupId, orderIndex])
+}
+
+model ProblemTestSetReader {
+  id                     String                     @id @default(uuid())
+  problemId              String
+  slot                   ProblemTestSetSlotKind
+  ownerType              String
+  ownerId                String
+  status                 ProblemTestSetReaderStatus @default(ACTIVE)
+  fencingToken           Int
+  acquiredAt             DateTime                   @default(now())
+  renewedAt              DateTime                   @default(now())
+  expiresAt              DateTime?
+  releasedAt             DateTime?
+  Problem                Problem                    @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Slot                   ProblemTestSetSlot         @relation(fields: [problemId, slot], references: [problemId, slot], onDelete: Cascade)
+  ContestProblem         ContestProblem?            @relation("ContestProblemTestSetReader")
+  JudgeRun               JudgeRun?                  @relation("JudgeRunTestSetReader")
+  HackAttempt            ProblemHackAttempt?        @relation("HackAttemptTestSetReader")
+  CandidateEvaluationRun CandidateEvaluationRun?    @relation("CandidateEvaluationTestSetReader")
+  DataGenerationJob      ProblemDataGenerationJob?  @relation("DataGenerationTestSetReader")
+  QualityEvaluationJob   QualityEvaluationJob?      @relation("QualityEvaluationTestSetReader")
+
+  @@unique([problemId, slot, ownerType, ownerId])
+  @@index([problemId, slot, status, expiresAt])
+}
+
+model ProblemTestSetWriter {
+  id           String                     @id @default(uuid())
+  problemId    String
+  slot         ProblemTestSetSlotKind
+  sourceType   String
+  sourceId     String?
+  requestedBy  String?
+  requestHash  String
+  status       ProblemTestSetWriterStatus @default(QUEUED)
+  requestedAt  DateTime                   @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  errorCode    String?
+  errorMessage String?                    @db.Text
+  stagingPath  String?
+  Problem      Problem                    @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, slot, requestHash])
+  @@index([problemId, slot, status, requestedAt])
+}
+
+model ProblemTestSetPromotionJob {
+  id                      String    @id @default(uuid())
+  problemId               String
+  status                  String    @default("queued")
+  evolvingGraphHash       String
+  evolvingFencingToken    Int
+  validationReport        Json?
+  validatorPassed         Boolean?
+  standardPassed          Boolean?
+  acceptedReplayPassed    Boolean?
+  knownWrongReplaySummary Json?
+  requestedBy             String?
+  startedAt               DateTime?
+  finishedAt              DateTime?
+  failureReason           String?
+  createdAt               DateTime  @default(now())
+  Problem                 Problem   @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([problemId, status, createdAt])
 }
 
 enum TrainingEngineSessionType {
@@ -3885,7 +3931,7 @@ model TrainingSession {
   pausedAt              DateTime?
   endedAt               DateTime?
   archivedAt            DateTime?
-  currentStageId        String?                          @unique
+  currentStageId        String?                         @unique
   activeElapsedSeconds  Int                             @default(0)
   statusRevision        Int                             @default(0)
   commandSeq            Int                             @default(0)
@@ -3902,8 +3948,8 @@ model TrainingSession {
   updatedAt             DateTime                        @updatedAt
   Organization          Organization?                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   Team                  Team?                           @relation(fields: [teamId], references: [id], onDelete: Restrict)
-  Stages                TrainingSessionStage[]           @relation("TrainingSessionStages")
-  CurrentStage          TrainingSessionStage?            @relation("TrainingSessionCurrentStage", fields: [currentStageId], references: [id], onDelete: SetNull)
+  Stages                TrainingSessionStage[]          @relation("TrainingSessionStages")
+  CurrentStage          TrainingSessionStage?           @relation("TrainingSessionCurrentStage", fields: [currentStageId], references: [id], onDelete: SetNull)
   Groups                TrainingSessionGroup[]
   GroupChanges          TrainingSessionGroupChange[]
   Participants          TrainingSessionParticipant[]
@@ -3922,33 +3968,33 @@ model TrainingSession {
 }
 
 model TrainingSessionStage {
-  id                     String                                      @id @default(uuid())
+  id                     String                               @id @default(uuid())
   sessionId              String
   name                   String
-  description            String?                                     @db.Text
+  description            String?                              @db.Text
   orderIndex             Int
-  kind                   TrainingEngineStageKind                     @default(TRAINING)
-  mode                   String                                      @default("PRACTICE")
-  accessPolicy           TrainingEngineStageAccessPolicy             @default(ALL_AT_ONCE)
-  submissionMode         TrainingEngineSubmissionMode                @default(ENABLED)
-  endPolicy              TrainingEngineStageEndPolicy                @default(MANUAL)
+  kind                   TrainingEngineStageKind              @default(TRAINING)
+  mode                   String                               @default("PRACTICE")
+  accessPolicy           TrainingEngineStageAccessPolicy      @default(ALL_AT_ONCE)
+  submissionMode         TrainingEngineSubmissionMode         @default(ENABLED)
+  endPolicy              TrainingEngineStageEndPolicy         @default(MANUAL)
   plannedDurationSeconds Int?
   minDurationSeconds     Int?
   completionThreshold    Int?
   completionPolicy       Json?
   rules                  Json?
-  lifecycle              TrainingEngineStageLifecycle                @default(PENDING)
+  lifecycle              TrainingEngineStageLifecycle         @default(PENDING)
   startedAt              DateTime?
   runningSince           DateTime?
-  activeElapsedSeconds   Int                                         @default(0)
+  activeElapsedSeconds   Int                                  @default(0)
   endedAt                DateTime?
   endReason              TrainingEngineStageEndReason?
   endedBy                String?
-  definitionRevision     Int                                         @default(0)
-  createdAt              DateTime                                    @default(now())
-  updatedAt              DateTime                                    @updatedAt
-  Session                TrainingSession                             @relation("TrainingSessionStages", fields: [sessionId], references: [id], onDelete: Cascade)
-  CurrentForSession      TrainingSession?                            @relation("TrainingSessionCurrentStage")
+  definitionRevision     Int                                  @default(0)
+  createdAt              DateTime                             @default(now())
+  updatedAt              DateTime                             @updatedAt
+  Session                TrainingSession                      @relation("TrainingSessionStages", fields: [sessionId], references: [id], onDelete: Cascade)
+  CurrentForSession      TrainingSession?                     @relation("TrainingSessionCurrentStage")
   Problems               TrainingSessionStageProblem[]
   ProblemPlans           TrainingSessionStageProblemPlan[]
   Groups                 TrainingSessionStageGroup[]
@@ -3961,49 +4007,46 @@ model TrainingSessionStage {
 }
 
 model TrainingSessionStageProblem {
-  id                      String                            @id @default(uuid())
-  stageId                 String
-  problemId               String
-  testSetRevisionId       String
-  alias                   String?
-  orderIndex              Int
-  titleSnapshot           String
-  statementsSnapshot      Json?
-  createdAt               DateTime                          @default(now())
-  updatedAt               DateTime                          @updatedAt
-  Stage                   TrainingSessionStage              @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  Problem                 Problem                           @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  TestSetRevision         ProblemTestSetRevision            @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
-  Progress                TrainingSessionProblemProgress[]
-  Drafts                  TrainingSessionProblemDraft[]
-  Hints                   TrainingSessionHint[]
-  ScoreEvents             TrainingSessionScoreEvent[]
-  StrategyDecisions       TrainingSessionStrategyDecision[]
-  Submissions             Submission[]
-  Plans                   TrainingSessionStageProblemPlan[]
+  id                 String                            @id @default(uuid())
+  stageId            String
+  problemId          String
+  alias              String?
+  orderIndex         Int
+  titleSnapshot      String
+  statementsSnapshot Json?
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+  Stage              TrainingSessionStage              @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  Problem            Problem                           @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Progress           TrainingSessionProblemProgress[]
+  Drafts             TrainingSessionProblemDraft[]
+  Hints              TrainingSessionHint[]
+  ScoreEvents        TrainingSessionScoreEvent[]
+  StrategyDecisions  TrainingSessionStrategyDecision[]
+  Submissions        Submission[]
+  Plans              TrainingSessionStageProblemPlan[]
 
   @@unique([stageId, problemId])
   @@unique([stageId, orderIndex])
   @@index([problemId])
-  @@index([testSetRevisionId])
 }
 
 model TrainingSessionParticipant {
-  id                String                                      @id @default(uuid())
+  id                String                            @id @default(uuid())
   sessionId         String
   userId            String
   groupId           String
-  status            String                                      @default("active")
+  status            String                            @default("active")
   currentProblemId  String?
   returnProblemId   String?
-  joinedAt          DateTime                                    @default(now())
+  joinedAt          DateTime                          @default(now())
   lastHeartbeatAt   DateTime?
-  activeSeconds     Int                                         @default(0)
-  createdAt         DateTime                                    @default(now())
-  updatedAt         DateTime                                    @updatedAt
-  Session           TrainingSession                             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  User              User                                        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  Group             TrainingSessionGroup                        @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  activeSeconds     Int                               @default(0)
+  createdAt         DateTime                          @default(now())
+  updatedAt         DateTime                          @updatedAt
+  Session           TrainingSession                   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  User              User                              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  Group             TrainingSessionGroup              @relation(fields: [groupId], references: [id], onDelete: Restrict)
   Progress          TrainingSessionProblemProgress[]
   HintAccess        TrainingSessionHintAccess[]
   ScoreEvents       TrainingSessionScoreEvent[]
@@ -4016,18 +4059,18 @@ model TrainingSessionParticipant {
 }
 
 model TrainingSessionGroup {
-  id               String                                      @id @default(uuid())
-  sessionId        String
-  name             String
-  orderIndex       Int                                         @default(0)
-  status           String                                      @default("active")
-  createdAt        DateTime                                    @default(now())
-  updatedAt        DateTime                                    @updatedAt
-  Session          TrainingSession                             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  Participants     TrainingSessionParticipant[]
-  StageGroups      TrainingSessionStageGroup[]
-  ChangesFrom      TrainingSessionGroupChange[]                @relation("TrainingGroupChangeFrom")
-  ChangesTo        TrainingSessionGroupChange[]                @relation("TrainingGroupChangeTo")
+  id           String                       @id @default(uuid())
+  sessionId    String
+  name         String
+  orderIndex   Int                          @default(0)
+  status       String                       @default("active")
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+  Session      TrainingSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  Participants TrainingSessionParticipant[]
+  StageGroups  TrainingSessionStageGroup[]
+  ChangesFrom  TrainingSessionGroupChange[] @relation("TrainingGroupChangeFrom")
+  ChangesTo    TrainingSessionGroupChange[] @relation("TrainingGroupChangeTo")
 
   @@unique([sessionId, name])
   @@unique([sessionId, orderIndex])
@@ -4035,24 +4078,24 @@ model TrainingSessionGroup {
 }
 
 model TrainingSessionGroupChange {
-  id            String                     @id @default(uuid())
+  id            String                                 @id @default(uuid())
   sessionId     String
   participantId String
   fromGroupId   String?
   toGroupId     String
-  reason        String                     @db.Text
+  reason        String                                 @db.Text
   changedBy     String
   effectiveMode TrainingEngineGroupChangeEffectiveMode @default(IMMEDIATE)
   targetStageId String?
-  status        String                     @default("applied")
+  status        String                                 @default("applied")
   appliedAt     DateTime?
-  createdAt     DateTime                   @default(now())
-  effectiveAt   DateTime                   @default(now())
-  Session       TrainingSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  Participant   TrainingSessionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  FromGroup     TrainingSessionGroup?      @relation("TrainingGroupChangeFrom", fields: [fromGroupId], references: [id], onDelete: SetNull)
-  ToGroup       TrainingSessionGroup       @relation("TrainingGroupChangeTo", fields: [toGroupId], references: [id], onDelete: Restrict)
-  TargetStage   TrainingSessionStage?      @relation(fields: [targetStageId], references: [id], onDelete: SetNull)
+  createdAt     DateTime                               @default(now())
+  effectiveAt   DateTime                               @default(now())
+  Session       TrainingSession                        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  Participant   TrainingSessionParticipant             @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  FromGroup     TrainingSessionGroup?                  @relation("TrainingGroupChangeFrom", fields: [fromGroupId], references: [id], onDelete: SetNull)
+  ToGroup       TrainingSessionGroup                   @relation("TrainingGroupChangeTo", fields: [toGroupId], references: [id], onDelete: Restrict)
+  TargetStage   TrainingSessionStage?                  @relation(fields: [targetStageId], references: [id], onDelete: SetNull)
 
   @@index([sessionId, createdAt])
   @@index([participantId, createdAt])
@@ -4060,20 +4103,20 @@ model TrainingSessionGroupChange {
 }
 
 model TrainingSessionStageGroup {
-  id                     String                                      @id @default(uuid())
-  stageId                String
-  groupId                String?
-  isDefault              Boolean                                     @default(false)
-  inheritsDefault        Boolean                                     @default(true)
-  accessPolicy           TrainingEngineStageAccessPolicy             @default(ALL_AT_ONCE)
-  submissionMode         TrainingEngineSubmissionMode                @default(ENABLED)
-  rules                  Json?
-  completionPolicy       Json?
-  createdAt              DateTime                                    @default(now())
-  updatedAt              DateTime                                    @updatedAt
-  Stage                  TrainingSessionStage                        @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  TrainingGroup          TrainingSessionGroup?                       @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  ProblemPlans           TrainingSessionStageProblemPlan[]
+  id               String                            @id @default(uuid())
+  stageId          String
+  groupId          String?
+  isDefault        Boolean                           @default(false)
+  inheritsDefault  Boolean                           @default(true)
+  accessPolicy     TrainingEngineStageAccessPolicy   @default(ALL_AT_ONCE)
+  submissionMode   TrainingEngineSubmissionMode      @default(ENABLED)
+  rules            Json?
+  completionPolicy Json?
+  createdAt        DateTime                          @default(now())
+  updatedAt        DateTime                          @updatedAt
+  Stage            TrainingSessionStage              @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  TrainingGroup    TrainingSessionGroup?             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  ProblemPlans     TrainingSessionStageProblemPlan[]
 
   @@unique([stageId, groupId])
   @@index([groupId])
@@ -4419,7 +4462,6 @@ model AssignmentProblem {
   id                  String                      @id @default(uuid())
   assignmentId        String
   problemId           String
-  testSetRevisionId   String
   orderIndex          Int
   category            AssignmentProblemCategory   @default(REQUIRED)
   required            Boolean                     @default(true)
@@ -4435,7 +4477,6 @@ model AssignmentProblem {
   updatedAt           DateTime                    @updatedAt
   Assignment          Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   Problem             Problem                     @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  TestSetRevision     ProblemTestSetRevision      @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
   Progress            AssignmentProblemProgress[]
   Corrections         AssignmentCorrection[]
   Feedback            AssignmentFeedback[]
@@ -4445,7 +4486,6 @@ model AssignmentProblem {
   @@unique([assignmentId, problemId])
   @@unique([assignmentId, orderIndex])
   @@index([problemId])
-  @@index([testSetRevisionId])
 }
 
 model AssignmentRecipient {
@@ -5110,7 +5150,6 @@ model BlogReference {
   accessMode           BlogVisibility
   status               BlogReferenceStatus       @default(CURRENT)
   problemId            String?
-  problemRevisionId    String?
   solutionVersionId    String?
   contestId            String?
   standingSnapshotId   String?
@@ -5119,7 +5158,6 @@ model BlogReference {
   createdAt            DateTime                  @default(now())
   PostVersion          BlogPostVersion           @relation(fields: [postVersionId], references: [id], onDelete: Restrict)
   Problem              Problem?                  @relation("BlogReferenceProblem", fields: [problemId], references: [id], onDelete: Restrict)
-  ProblemRevision      ProblemTestSetRevision?   @relation("BlogReferenceProblemRevision", fields: [problemRevisionId], references: [id], onDelete: Restrict)
   SolutionVersion      ProblemSolutionVersion?   @relation(fields: [solutionVersionId], references: [id], onDelete: Restrict)
   Contest              Contest?                  @relation(fields: [contestId], references: [id], onDelete: Restrict)
   StandingSnapshot     ContestStandingSnapshot?  @relation(fields: [standingSnapshotId], references: [id], onDelete: Restrict)
@@ -5133,7 +5171,6 @@ model BlogReference {
   @@index([contestId, relationType])
   @@index([standingSnapshotId])
   @@index([ratingChangeId])
-  @@index([problemRevisionId])
   @@index([submissionSnapshotId])
 }
 

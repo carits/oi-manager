@@ -21,7 +21,7 @@ export interface QuickProblemInputProps {
 const statusText: Record<ResolvedProblemSelection['status'], string> = {
   resolved: '已加入',
   not_found: '未找到',
-  revision_unavailable: '无正式评测版本',
+  stable_unavailable: '无 Stable 评测数据',
 }
 
 export function QuickProblemInput({ existingProblemIds, onResolved, autoFocus = true, disabled, label = '按题号添加' }: QuickProblemInputProps) {

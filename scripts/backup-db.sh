@@ -71,14 +71,14 @@ user_count="$(query_count 'SELECT count(*) FROM public."User"')"
 problem_count="$(query_count 'SELECT count(*) FROM public."Problem"')"
 submission_count="$(query_count 'SELECT count(*) FROM public."Submission"')"
 file_count="$(query_count 'SELECT count(*) FROM public."File"')"
-revision_count="$(query_count 'SELECT count(*) FROM public."ProblemTestSetRevision"')"
+slot_count="$(query_count 'SELECT count(*) FROM public."ProblemTestSetSlot"')"
 docker exec "$CONTAINER" dropdb -U "$DB_USER" "$audit_db"
 audit_db=""
 
 node - "$manifest_temp" "$(basename "$backup_file")" "$backup_sha256" "$backup_size" \
-  "$table_count" "$migration_count" "$user_count" "$problem_count" "$submission_count" "$file_count" "$revision_count" <<'NODE'
+  "$table_count" "$migration_count" "$user_count" "$problem_count" "$submission_count" "$file_count" "$slot_count" <<'NODE'
 const fs = require('node:fs')
-const [file, backupName, backupSha256, backupSize, tables, migrations, users, problems, submissions, files, revisions] = process.argv.slice(2)
+const [file, backupName, backupSha256, backupSize, tables, migrations, users, problems, submissions, files, slots] = process.argv.slice(2)
 const payload = {
   schemaVersion: 1,
   createdAt: new Date().toISOString(),
@@ -92,7 +92,7 @@ const payload = {
     problems: Number(problems),
     submissions: Number(submissions),
     files: Number(files),
-    testSetRevisions: Number(revisions),
+    testSetSlots: Number(slots),
   },
 }
 fs.writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })

@@ -6,8 +6,8 @@ const base = (problemId: string) => `/api/problems/${encodeURIComponent(problemI
 export const getProblemQualityDashboard = (problemId: string) =>
   apiClient.queryContract(ProblemQualityContracts.dashboard, `${base(problemId)}/quality`)
 
-export const requestProblemQualityEvaluation = (problemId: string, revisionId: string) =>
-  apiClient.mutateContract(ProblemQualityContracts.requestEvaluation, `${base(problemId)}/quality-evaluation-jobs`, { revisionId })
+export const requestProblemQualityEvaluation = (problemId: string, slot: 'STABLE' | 'EVOLVING' = 'STABLE') =>
+  apiClient.mutateContract(ProblemQualityContracts.requestEvaluation, `${base(problemId)}/quality-evaluation-jobs`, { slot })
 
 export const runAutomatedProblemQuality = (problemId: string) =>
   apiClient.mutateContract(ProblemQualityContracts.runAutomated, `${base(problemId)}/problem-quality-assessments/automated`, {})

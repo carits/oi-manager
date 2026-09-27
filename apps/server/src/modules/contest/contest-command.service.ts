@@ -7,6 +7,7 @@ import {
   trackForFormat,
 } from '../rating/application/contest-rating.service'
 import { toContestView, toContestProblemView } from './contest-view'
+import { acquireTestSetReaderTx, releaseTestSetReaderTx } from '../problem/problem.testset-slot.service'
 
 export interface CreateContestInput {
   teamId: string | null
@@ -64,7 +65,6 @@ type ContestProblemCreateInput = {
   problemId: string
   alias?: string | null
   points?: number | null
-  testSetRevisionId?: string | null
   title?: string | null
   description?: string | null
   sourcePlatform?: string | null
@@ -175,6 +175,8 @@ export async function createContestProblemTx(
   }
   const problem = await tx.problem.findUnique({ where: { id: data.problemId } })
   if (!problem) return { conflict: 'problem' as const, problem: null }
+  const stable = await tx.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId: problem.id, slot: 'STABLE' } } })
+  if (!stable) return { conflict: 'test_set' as const, problem: null }
   const maxOrder = await tx.contestProblem.aggregate({
     where: { contestId: contest.id },
     _max: { orderIndex: true },
@@ -184,7 +186,10 @@ export async function createContestProblemTx(
       id: data.id || crypto.randomUUID(),
       contestId: contest.id,
       canonicalProblemId: problem.id,
-      testSetRevisionId: data.testSetRevisionId || problem.latestTestSetRevisionId,
+      testSetSlot: 'STABLE',
+      testSetGraphHash: stable.graphHash,
+      testSetJudgeConfigHash: stable.judgeConfigHash,
+      testSetFencingToken: stable.fencingToken,
       orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
       alias: data.alias ?? null,
       title: data.title || problem.title,
@@ -265,6 +270,8 @@ export async function deleteContestProblemTx(
   await lockContest(tx, publicId)
   const contest = await tx.contest.findUnique({ where: { publicId }, select: { id: true } })
   if (!contest) return { conflict: 'scope' as const }
+  const item = await tx.contestProblem.findFirst({ where: { id: contestProblemId, contestId: contest.id }, select: { testSetReaderId: true } })
+  if (item?.testSetReaderId) await releaseTestSetReaderTx(tx, item.testSetReaderId)
   const deleted = await tx.contestProblem.deleteMany({
     where: { id: contestProblemId, contestId: contest.id },
   })
@@ -344,6 +351,27 @@ export async function transitionContestLifecycleTx(
   const contestView = toContestView(contest)
   if (contest.status !== input.expectedStatus) {
     return { changed: false, visibleSubmissionCount: 0, contest: contestView }
+  }
+  if (['upcoming', 'ongoing'].includes(input.targetStatus)) {
+    for (const item of contest.ContestProblem) {
+      if (!item.canonicalProblemId || item.testSetReaderId) continue
+      const acquired = await acquireTestSetReaderTx(tx, {
+        problemId: item.canonicalProblemId,
+        slot: 'STABLE',
+        ownerType: 'CONTEST_PROBLEM',
+        ownerId: item.id,
+      })
+      await tx.contestProblem.update({
+        where: { id: item.id },
+        data: {
+          testSetReaderId: acquired.reader.id,
+          testSetSlot: 'STABLE',
+          testSetGraphHash: acquired.slot.graphHash,
+          testSetJudgeConfigHash: acquired.slot.judgeConfigHash,
+          testSetFencingToken: acquired.slot.fencingToken,
+        },
+      })
+    }
   }
   const update = await tx.contest.updateMany({
     where: { id: contest.id, status: input.expectedStatus },

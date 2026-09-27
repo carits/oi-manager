@@ -1,10 +1,7 @@
 import crypto from 'crypto'
-import fs from 'fs'
-import path from 'path'
 import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../prisma'
-import { getTestdataBlobStore, problemBlobKey } from '../storage/blob-store'
-import { ingestTestdataObject, loadRevisionSpec, publishTestSetRevision, TestSetRevisionConflict, type RevisionCaseSpec } from './problem.testset-revision.service'
+import { acquireTestSetReaderTx, ensureInitialTestSetSlots, ingestTestdataObject, loadTestSetSlotSpec, releaseTestSetReader, replaceTestSetSlot, TestSetSlotFenceConflict, type SlotCaseSpec } from './problem.testset-slot.service'
 import { requireProgramProblem } from './problem.judge-program.service'
 import yaml from 'js-yaml'
 import { canModifyProblem } from './problem.access'
@@ -15,7 +12,6 @@ import { resolveSubtaskReadiness } from './problem.subtask-readiness.service'
 import { OI_CANDIDATE_LIMITS, uniqueSubtaskCases, validateOiFormalLimits } from './problem.oi-candidate-policy'
 import { queueCandidateEvaluation } from './problem.candidate-evaluation.service'
 
-const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 const MAX_CASES = Number(process.env.DATA_GENERATION_MAX_CASES || 50)
 const ACTIVE = ['queued', 'running', 'finalizing']
 export class DataGenerationError extends Error { constructor(public statusCode: number, public code: string, message: string, public data?: unknown) { super(message) } }
@@ -92,6 +88,9 @@ export async function createDataGenerationJob(input: { user: JwtPayload; problem
   if (sourceMode === 'generator' && ephemeralGenerator) cases = normalizeGeneratorV1Cases(cases, ephemeralGenerator.protocolConfig)
   if (sourceMode === 'generator' && !ephemeralGenerator && generator?.version.protocol === 'oj.generator/v1') cases = normalizeGeneratorV1Cases(cases, generator.version.protocolConfig)
   if (sourceMode === 'generator' && !ephemeralGenerator && generator?.version.protocol !== 'oj.generator/v1' && cases.some(item => item.profile || item.params)) fail(422, 'GENERATOR_PROTOCOL_MISMATCH', '历史 Generator 只能使用旧参数协议；请新建 Generator V1')
+  await ensureInitialTestSetSlots(problem.id, input.user.userId)
+  const evolving = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId: problem.id, slot: 'EVOLVING' } } })
+  if (!evolving) fail(409, 'EVOLVING_TEST_SET_REQUIRED', '数据生成需要 Evolving 测试数据槽')
   const jobId = crypto.randomUUID()
   const reservedCredits = contribution ? (sourceMode === 'generator' ? 4_000 : 400) : 0
   const config: any = { sourceMode, cases, generator: ephemeralGenerator, generatorManifest: ephemeralGenerator?.protocolConfig || null, mode: readiness?.mode, classifierVersionId: readiness?.classifierProgram?.version.id || null }
@@ -107,8 +106,8 @@ export async function createDataGenerationJob(input: { user: JwtPayload; problem
     }
     if (reservedCredits) await reserveEvaluationCreditsInTransaction(tx, { userId: input.user.userId, manager, taskType: 'candidate_generation', taskId: jobId, credits: reservedCredits, metadata: { problemId: problem.id, sourceMode } })
     const job = await tx.problemDataGenerationJob.create({ data: {
-      id: jobId, problemId: problem.id, createdBy: input.user.userId, baseTestSetRevisionId: problem.latestTestSetRevisionId,
-      expectedLatestRevisionId: problem.latestTestSetRevisionId, generatorVersionId: generator?.version.id || null,
+      id: jobId, problemId: problem.id, createdBy: input.user.userId, baseTestSetGraphHash: evolving.graphHash,
+      baseTestSetFencingToken: evolving.fencingToken, expectedEvolvingFence: evolving.fencingToken, generatorVersionId: generator?.version.id || null,
       standardVersionId: standard.version.id, validatorVersionId: validator.version.id, config,
       contribution, contributionOrganizationId: contribution ? input.body?.contributionOrganizationId || null : null,
       targetRole: manager && input.body?.targetRole === 'official' ? 'official' : 'hack_gate', reservedCredits,
@@ -152,33 +151,116 @@ export async function claimDataGenerationJob(judgeId: string) {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "ProblemDataGenerationJob" WHERE status = 'queued' ORDER BY "createdAt" ASC FOR UPDATE SKIP LOCKED LIMIT 1`
     if (!rows[0]) return null
     const job = await tx.problemDataGenerationJob.findUniqueOrThrow({ where: { id: rows[0].id } })
-    const classifierVersionId = typeof (job.config as any)?.classifierVersionId === 'string' ? (job.config as any).classifierVersionId : null
-    const [generator, standard, validator, classifier, cases, candidateHashes, testcaseHashes, problem, baseRevision] = await Promise.all([
+    const classifierVersionId = typeof (job.config as any)?.classifierVersionId === 'string'
+      ? (job.config as any).classifierVersionId
+      : null
+    const [generator, standard, validator, classifier, cases, candidateHashes, slotObjects, problem] = await Promise.all([
       job.generatorVersionId ? tx.problemJudgeProgramVersion.findUnique({ where: { id: job.generatorVersionId }, include: { Program: true } }) : null,
       tx.problemJudgeProgramVersion.findUnique({ where: { id: job.standardVersionId }, include: { Program: true } }),
       tx.problemJudgeProgramVersion.findUnique({ where: { id: job.validatorVersionId }, include: { Program: true } }),
       classifierVersionId ? tx.problemJudgeProgramVersion.findUnique({ where: { id: classifierVersionId }, include: { Program: true } }) : null,
       tx.problemDataGenerationCase.findMany({ where: { jobId: job.id }, orderBy: { orderIndex: 'asc' } }),
       tx.testcaseCandidate.findMany({ where: { problemId: job.problemId }, select: { inputSha256: true } }),
-      tx.problemTestcase.findMany({ where: { problemId: job.problemId, enabled: true, inputSha256: { not: null } }, select: { inputSha256: true } }),
-      tx.problem.findUnique({ where: { id: job.problemId }, include: { LatestTestSetRevision: true } }),
-      job.baseTestSetRevisionId ? tx.problemTestSetRevision.findFirst({ where: { id: job.baseTestSetRevisionId, problemId: job.problemId } }) : null,
+      tx.testdataObject.findMany({
+        where: {
+          problemId: job.problemId,
+          OR: [
+            { SlotCaseInputs: { some: { problemId: job.problemId, slot: 'EVOLVING' } } },
+            { SlotGroupInputs: { some: { problemId: job.problemId, slot: 'EVOLVING' } } },
+          ],
+        },
+        select: { sha256: true },
+      }),
+      tx.problem.findUnique({ where: { id: job.problemId } }),
     ])
     const config = job.config as any
-    const isExecutable = (version: typeof standard, kind: string) => Boolean(version && version.problemId === job.problemId && version.compileStatus === 'passed' && version.lifecycleStatus === 'active' && version.Program.kind === kind && version.Program.status === 'active' && version.Program.currentVersionId === version.id)
-    const assetsValid = isExecutable(standard, 'standard') && isExecutable(validator, 'validator') && (!generator || isExecutable(generator, 'generator')) && (!classifierVersionId || isExecutable(classifier, 'classifier'))
+    const isExecutable = (version: typeof standard, kind: string) => Boolean(
+      version
+      && version.problemId === job.problemId
+      && version.compileStatus === 'passed'
+      && version.lifecycleStatus === 'active'
+      && version.Program.kind === kind
+      && version.Program.status === 'active'
+      && version.Program.currentVersionId === version.id,
+    )
+    const assetsValid = isExecutable(standard, 'standard')
+      && isExecutable(validator, 'validator')
+      && (!generator || isExecutable(generator, 'generator'))
+      && (!classifierVersionId || isExecutable(classifier, 'classifier'))
     if (!problem || !assetsValid) {
       const message = !problem ? '题目已不存在' : '任务固定的评测程序版本已停用；请使用当前激活版本重新创建任务'
-      await tx.problemDataGenerationJob.update({ where: { id: job.id }, data: { status: 'failed', errorCode: 'PROGRAM_VERSION_NOT_ACTIVE', errorMessage: message, finishedAt: new Date() } })
-      await tx.problemDataGenerationCase.updateMany({ where: { jobId: job.id, status: 'pending' }, data: { status: 'failed', failureStage: 'assets', message } })
-      if (job.reservedCredits) await releaseEvaluationCreditsInTransaction(tx, { taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, reason: '固定的评测程序版本已停用' })
+      await tx.problemDataGenerationJob.update({
+        where: { id: job.id },
+        data: { status: 'failed', errorCode: 'PROGRAM_VERSION_NOT_ACTIVE', errorMessage: message, finishedAt: new Date() },
+      })
+      await tx.problemDataGenerationCase.updateMany({
+        where: { jobId: job.id, status: 'queued' },
+        data: { status: 'failed', failureStage: 'assets', message },
+      })
+      if (job.reservedCredits) {
+        await releaseEvaluationCreditsInTransaction(tx, {
+          taskType: 'candidate_generation',
+          taskId: job.id,
+          reserved: job.reservedCredits,
+          reason: '固定的评测程序版本已停用',
+        })
+      }
       return null
     }
-    const fencingToken = crypto.randomUUID(), leaseExpiresAt = new Date(Date.now() + Number(process.env.DATA_GENERATION_LEASE_MS || 60 * 60_000))
-    const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'queued' }, data: { status: 'running', judgeId, fencingToken, leaseExpiresAt, startedAt: new Date() } })
+
+    const acquired = await acquireTestSetReaderTx(tx, {
+      problemId: job.problemId,
+      slot: 'EVOLVING',
+      ownerType: 'DATA_GENERATION',
+      ownerId: job.id,
+    })
+    const fencingToken = crypto.randomUUID()
+    const leaseExpiresAt = new Date(Date.now() + Number(process.env.DATA_GENERATION_LEASE_MS || 60 * 60_000))
+    const changed = await tx.problemDataGenerationJob.updateMany({
+      where: { id: job.id, status: 'queued' },
+      data: {
+        status: 'running',
+        judgeId,
+        fencingToken,
+        testSetReaderId: acquired.reader.id,
+        baseTestSetGraphHash: acquired.slot.graphHash,
+        baseTestSetFencingToken: acquired.slot.fencingToken,
+        expectedEvolvingFence: acquired.slot.fencingToken,
+        leaseExpiresAt,
+        startedAt: new Date(),
+      },
+    })
     if (!changed.count) return null
-    const generatorConfig = config.generator || (generator ? { language: generator.language, source: generator.source, protocol: generator.protocol || 'legacy-args-v1' } : null)
-    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(baseRevision?.judgeConfig || problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig || '{}'), knownInputSha256: [...new Set([...candidateHashes.map(item => item.inputSha256), ...testcaseHashes.map(item => item.inputSha256).filter((value): value is string => Boolean(value))])], generator: generatorConfig, standard: { language: standard!.language, source: standard!.source }, validator: { language: validator!.language, source: validator!.source, protocol: validator!.protocol }, classifier: classifier ? { language: classifier.language, source: classifier.source, protocol: classifier.protocol } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
+
+    const generatorConfig = config.generator || (generator
+      ? { language: generator.language, source: generator.source, protocol: generator.protocol || 'legacy-args-v1' }
+      : null)
+    return {
+      taskType: 'data_generation' as const,
+      jobId: job.id,
+      problemId: job.problemId,
+      fencingToken,
+      sourceMode: config.sourceMode,
+      maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024,
+      problemConfig: yaml.load(acquired.slot.judgeConfig || '{}'),
+      knownInputSha256: [...new Set([
+        ...candidateHashes.map(item => item.inputSha256),
+        ...slotObjects.map(item => item.sha256),
+      ])],
+      generator: generatorConfig,
+      standard: { language: standard!.language, source: standard!.source },
+      validator: { language: validator!.language, source: validator!.source, protocol: validator!.protocol },
+      classifier: classifier ? { language: classifier.language, source: classifier.source, protocol: classifier.protocol } : null,
+      cases: cases.map((item, index) => ({
+        id: item.id,
+        name: item.name,
+        args: item.args,
+        seed: item.seed,
+        inputData: config.cases?.[index]?.inputData,
+        profile: config.cases?.[index]?.profile,
+        params: config.cases?.[index]?.params,
+      })),
+    }
   })
 }
 
@@ -207,7 +289,7 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
       if (job.contribution) {
         const mode = (job.config as any)?.mode === 'oi' ? 'oi' : 'acm'
         const affectedSubtaskIds = Array.isArray(result.affectedSubtaskIds) ? result.affectedSubtaskIds.map(Number).filter(Number.isInteger) : []
-        const subtaskReadiness = mode === 'oi' ? await resolveSubtaskReadiness(job.problemId, job.baseTestSetRevisionId) : []
+        const subtaskReadiness = mode === 'oi' ? await resolveSubtaskReadiness(job.problemId, 'EVOLVING') : []
         const eligibleSubtask = mode !== 'oi' || subtaskReadiness.some(item => affectedSubtaskIds.includes(item.subtaskId) && item.contributionMode !== 'closed')
         const bootstrapReady = mode === 'oi' && job.targetRole === 'official' && subtaskReadiness.some(item => affectedSubtaskIds.includes(item.subtaskId) && item.bootstrapAvailable)
         const evaluationStage = mode === 'oi' && (!result.classificationStatus || result.classificationStatus !== 'classified' || !affectedSubtaskIds.length)
@@ -217,7 +299,7 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
             : !eligibleSubtask
             ? 'awaiting_corpus'
             : 'awaiting_evaluator'
-        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, contributionOrganizationId: job.contributionOrganizationId, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, affectedSubtaskIds, status: 'ADMITTED', evaluationStage, provenance: { protocol: (job.config as any)?.generator?.protocol || null, context: (job.config as any)?.cases?.[current.orderIndex] || null, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, timings: { generatorMs: result.generatorTimeMs || 0, validatorMs: result.validatorTimeMs || 0, standardMs: result.standardTimeMs || 0 }, inputSha256: inputObject.sha256, outputSha256: outputObject.sha256 } })
+        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, contributionOrganizationId: job.contributionOrganizationId, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseSlot: 'EVOLVING', baseGraphHash: job.baseTestSetGraphHash, baseFencingToken: job.baseTestSetFencingToken, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, affectedSubtaskIds, status: 'ADMITTED', evaluationStage, provenance: { protocol: (job.config as any)?.generator?.protocol || null, context: (job.config as any)?.cases?.[current.orderIndex] || null, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, timings: { generatorMs: result.generatorTimeMs || 0, validatorMs: result.validatorTimeMs || 0, standardMs: result.standardTimeMs || 0 }, inputSha256: inputObject.sha256, outputSha256: outputObject.sha256 } })
         duplicateCandidate = admitted.duplicate
         candidateId = admitted.duplicate ? null : admitted.candidate.id
         if (candidateId && evaluationStage === 'awaiting_evaluator') candidatesToEvaluate.push(candidateId)
@@ -233,101 +315,222 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
     const cases = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id } })
     const actual = job.reservedCredits ? usageCredits({ executions: cases.length * 4, cpuMs: cases.reduce((sum, item) => sum + (item.generatorTimeMs || 0) + (item.validatorTimeMs || 0) + (item.standardTimeMs || 0), 0), generatedBytes: cases.reduce((sum, item) => sum + (item.inputSize || 0) + (item.outputSize || 0), 0) }) : 0
     await prisma.$transaction(async tx => {
-      const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'completed', judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
+      const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'completed', judgeId: null, testSetReaderId: null, leaseExpiresAt: null, finishedAt: new Date() } })
       if (!changed.count) throw new Error('数据生成任务终态已变化')
       if (job.reservedCredits) await settleEvaluationCreditsInTransaction(tx, { taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual, metadata: { status: 'completed' } })
     })
+    if (job.testSetReaderId) await releaseTestSetReader(job.testSetReaderId).catch(() => undefined)
     for (const candidateId of candidatesToEvaluate) await queueCandidateEvaluation(candidateId).catch(() => undefined)
     return { stale: false }
   } catch (error) {
     await prisma.$transaction(async tx => {
-      const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'failed', errorCode: 'GENERATION_PERSIST_FAILED', errorMessage: String((error as Error).message).slice(0, 4000), judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
+      const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'failed', errorCode: 'GENERATION_PERSIST_FAILED', errorMessage: String((error as Error).message).slice(0, 4000), judgeId: null, testSetReaderId: null, leaseExpiresAt: null, finishedAt: new Date() } })
       if (changed.count && job.reservedCredits) await settleEvaluationCreditsInTransaction(tx, { taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual: Math.min(job.reservedCredits, 1), metadata: { status: 'failed' } })
     })
+    if (job.testSetReaderId) await releaseTestSetReader(job.testSetReaderId).catch(() => undefined)
     throw error
   }
 }
 
-async function materializeCurrentFile(problemId: string, name: string, object: { id: string; storageKey: string; size: number; sha256: string }) {
-  const root = path.resolve(TESTDATA_ROOT, problemId), target = path.resolve(root, name)
-  if (!target.startsWith(`${root}${path.sep}`)) throw new Error('非法测试数据文件名')
-  await fs.promises.mkdir(root, { recursive: true })
-  await getTestdataBlobStore().materialize(problemBlobKey(problemId, object.storageKey), target)
-  return prisma.testdataFile.create({ data: { id: crypto.randomUUID(), problemId, filename: name, size: object.size, sha256: object.sha256 } })
+export async function reconcileDataGenerationWriters(limit = 100) {
+  const jobs = await prisma.problemDataGenerationJob.findMany({
+    where: { status: 'promotion_pending' },
+    orderBy: { updatedAt: 'asc' },
+    take: limit,
+  })
+  let completed = 0
+  for (const job of jobs) {
+    const writer = await prisma.problemTestSetWriter.findFirst({
+      where: { problemId: job.problemId, slot: 'EVOLVING', sourceId: job.id },
+      orderBy: { requestedAt: 'desc' },
+    })
+    if (!writer) continue
+    if (writer.status === 'SUCCEEDED') {
+      const slot = await prisma.problemTestSetSlot.findUnique({
+        where: { problemId_slot: { problemId: job.problemId, slot: 'EVOLVING' } },
+      })
+      if (!slot) continue
+      await prisma.$transaction(async tx => {
+        await tx.problemDataGenerationJob.updateMany({
+          where: { id: job.id, status: 'promotion_pending' },
+          data: { status: 'promoted', promotedGraphHash: slot.graphHash },
+        })
+        await tx.problemDataGenerationCase.updateMany({
+          where: { jobId: job.id, status: 'validated' },
+          data: { status: 'promoted' },
+        })
+      })
+      completed++
+    } else if (writer.status === 'FAILED' || writer.status === 'CANCELLED') {
+      await prisma.problemDataGenerationJob.updateMany({
+        where: { id: job.id, status: 'promotion_pending' },
+        data: { status: 'completed', errorCode: 'EVOLVING_WRITE_FAILED', errorMessage: writer.errorMessage },
+      })
+    }
+  }
+  return { checked: jobs.length, completed }
 }
 
-export async function promoteDataGenerationJob(input: { user: JwtPayload; problemId: string; jobId: string; expectedLatestRevisionId: string; caseIds?: string[]; assignments?: Array<{ caseId: string; subtaskId: number; groupKey: string }>; overrideReason?: string }) {
+export async function promoteDataGenerationJob(input: {
+  user: JwtPayload
+  problemId: string
+  jobId: string
+  expectedEvolvingFencingToken: number
+  caseIds?: string[]
+  assignments?: Array<{ caseId: string; subtaskId: number; groupKey: string }>
+  overrideReason?: string
+}) {
   const problem = await requireProgramProblem(input.user, input.problemId)
-  const job = await prisma.problemDataGenerationJob.findFirst({ where: { id: input.jobId, problemId: problem.id, status: 'completed' } })
+  await ensureInitialTestSetSlots(problem.id, input.user.userId)
+  const [job, evolving] = await Promise.all([
+    prisma.problemDataGenerationJob.findFirst({ where: { id: input.jobId, problemId: problem.id, status: 'completed' } }),
+    prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId: problem.id, slot: 'EVOLVING' } } }),
+  ])
   if (!job) fail(409, 'GENERATION_JOB_NOT_READY', '数据生成任务尚未完成或已经发布')
-  if (job.contribution) fail(409, 'CONTRIBUTION_PROMOTION_MANAGED_BY_SELECTOR', '用户贡献数据只能由 Candidate Selector 选入正式版本')
-  if (problem.latestTestSetRevisionId !== input.expectedLatestRevisionId) fail(409, 'TEST_SET_REVISION_STALE', '题目正式测试版本已变化')
-  const selected = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id, status: 'validated', ...(input.caseIds?.length ? { id: { in: input.caseIds } } : {}) }, orderBy: { orderIndex: 'asc' } })
-  if (!selected.length) fail(400, 'GENERATION_CASES_EMPTY', '没有选择可发布的候选测试点')
+  if (job.contribution) fail(409, 'CONTRIBUTION_PROMOTION_MANAGED_BY_SELECTOR', '用户贡献数据只能由 Candidate Selector 写入 Evolving')
+  if (!evolving) fail(409, 'EVOLVING_TEST_SET_REQUIRED', '题目尚无 Evolving 测试数据')
+  if (evolving.fencingToken !== input.expectedEvolvingFencingToken) {
+    fail(409, 'EVOLVING_FENCE_CONFLICT', 'Evolving 数据已变化，请刷新后重试')
+  }
+
+  const selected = await prisma.problemDataGenerationCase.findMany({
+    where: {
+      jobId: job.id,
+      status: 'validated',
+      ...(input.caseIds?.length ? { id: { in: input.caseIds } } : {}),
+    },
+    orderBy: { orderIndex: 'asc' },
+  })
+  if (!selected.length) fail(400, 'GENERATION_CASES_EMPTY', '没有选择可写入的候选测试点')
   const selectedHashes = selected.map(item => item.inputSha256!)
   if (new Set(selectedHashes).size !== selectedHashes.length) {
     fail(409, 'GENERATION_INPUT_DUPLICATE', '所选候选测试点中存在重复输入')
   }
-  const duplicate = await prisma.testdataObject.findFirst({ where: { problemId: problem.id, sha256: { in: selected.map(item => item.inputSha256!) }, OR: [{ AcmInputs: { some: { revisionId: problem.latestTestSetRevisionId! } } }, { GroupInputs: { some: { revisionId: problem.latestTestSetRevisionId! } } }] } })
-  if (duplicate) fail(409, 'GENERATION_INPUT_DUPLICATE', '候选输入与当前正式版本中的测试点重复')
-  const objects = await prisma.testdataObject.findMany({ where: { id: { in: selected.flatMap(item => [item.inputObjectId!, item.outputObjectId!]) }, problemId: problem.id } })
-  const byId = new Map(objects.map(item => [item.id, item])); const createdFiles: string[] = []; const createdFileIds: string[] = []; const createdTestcaseIds: string[] = []
+  const duplicate = await prisma.testdataObject.findFirst({
+    where: {
+      problemId: problem.id,
+      sha256: { in: selectedHashes },
+      OR: [
+        { SlotCaseInputs: { some: { problemId: problem.id, slot: 'EVOLVING' } } },
+        { SlotGroupInputs: { some: { problemId: problem.id, slot: 'EVOLVING' } } },
+      ],
+    },
+  })
+  if (duplicate) fail(409, 'GENERATION_INPUT_DUPLICATE', '候选输入与当前 Evolving 数据重复')
+
+  const objects = await prisma.testdataObject.findMany({
+    where: {
+      id: { in: selected.flatMap(item => [item.inputObjectId!, item.outputObjectId!]) },
+      problemId: problem.id,
+    },
+  })
+  const byId = new Map(objects.map(item => [item.id, item]))
+  const candidateCases: Array<SlotCaseSpec & { caseId: string }> = selected.map(item => {
+    const stem = `generated_${job.id.slice(0, 8)}_${String(item.orderIndex + 1).padStart(3, '0')}`
+    const inputObject = byId.get(item.inputObjectId!)
+    const outputObject = byId.get(item.outputObjectId!)
+    if (!inputObject || !outputObject) fail(409, 'GENERATION_OBJECT_MISSING', '生成数据对象不完整')
+    return {
+      caseId: item.id,
+      testcaseId: null,
+      inputName: `${stem}.in`,
+      outputName: `${stem}.out`,
+      inputObjectId: inputObject.id,
+      outputObjectId: outputObject.id,
+      source: 'generated',
+      score: null,
+    }
+  })
+
+  const spec = await loadTestSetSlotSpec(problem.id, 'EVOLVING')
+  if (!spec) fail(409, 'EVOLVING_TEST_SET_REQUIRED', '题目尚无 Evolving 测试数据')
+  if (spec.mode === 'acm') {
+    spec.cases = [...(spec.cases || []), ...candidateCases]
+  } else {
+    const assignments = input.assignments || []
+    for (const candidate of candidateCases) {
+      const links = assignments.filter(item => item.caseId === candidate.caseId)
+      if (!links.length) fail(422, 'GENERATION_GROUP_REQUIRED', `${candidate.inputName} 尚未分配 Official Group`)
+      for (const link of links) {
+        const subtask = spec.subtasks?.find(item => item.id === Number(link.subtaskId))
+        const group = subtask?.groups.find(item => item.key === link.groupKey)
+        if (!group || group.kind !== 'official') {
+          fail(422, 'GENERATION_GROUP_INVALID', '候选测试点只能加入当前题目的 Official Group')
+        }
+        group.cases.push(candidate)
+      }
+    }
+    const limitIssues = validateOiFormalLimits(spec)
+    if (limitIssues.length) fail(409, limitIssues[0].code, limitIssues[0].message, { issues: limitIssues })
+    const readiness = await resolveSubtaskReadiness(problem.id, 'EVOLVING')
+    const assignedSubtasks = [...new Set(assignments.map(item => Number(item.subtaskId)).filter(Number.isInteger))]
+    const overrideReason = String(input.overrideReason || '').trim()
+    for (const subtaskId of assignedSubtasks) {
+      const state = readiness.find(item => item.subtaskId === subtaskId)
+      const next = spec.subtasks?.find(item => item.id === subtaskId)
+      if (!state || !next || state.contributionMode !== 'closed') continue
+      const nextCount = uniqueSubtaskCases(next).length
+      if (state.caseCount < OI_CANDIDATE_LIMITS.MIN_BOOTSTRAP_CASES && nextCount <= OI_CANDIDATE_LIMITS.MIN_BOOTSTRAP_CASES) continue
+      if (overrideReason.length < 10) {
+        fail(409, 'WRONG_CORPUS_REQUIRED', `Subtask ${subtaskId} 尚无可用于价值评估的错误程序；管理员强制写入需填写至少 10 字原因`)
+      }
+    }
+  }
+
   try {
-    const candidateCases: Array<RevisionCaseSpec & { caseId: string; testcaseId: string }> = []
-    for (const item of selected) {
-      const stem = `generated_${job.id.slice(0, 8)}_${String(item.orderIndex + 1).padStart(3, '0')}`
-      const inputName = `${stem}.in`, outputName = `${stem}.out`, inputObject = byId.get(item.inputObjectId!)!, outputObject = byId.get(item.outputObjectId!)!
-      const [inputFile, outputFile] = await Promise.all([materializeCurrentFile(problem.id, inputName, inputObject), materializeCurrentFile(problem.id, outputName, outputObject)])
-      createdFiles.push(inputName, outputName); createdFileIds.push(inputFile.id, outputFile.id)
-      const testcase = await prisma.problemTestcase.create({ data: { id: crypto.randomUUID(), problemId: problem.id, inputFileId: inputFile.id, outputFileId: outputFile.id, source: 'generated', inputSha256: inputObject.sha256, outputSha256: outputObject.sha256, orderIndex: item.orderIndex, protectedUntil: new Date(Date.now() + OI_CANDIDATE_LIMITS.NEW_CASE_PROTECTION_DAYS * 24 * 60 * 60_000), protectionReason: 'new_case' } })
-      createdTestcaseIds.push(testcase.id)
-      candidateCases.push({ caseId: item.id, testcaseId: testcase.id, inputName, outputName, inputObjectId: inputObject.id, outputObjectId: outputObject.id, source: 'generated' as const, score: null })
-    }
-    const spec = await loadRevisionSpec(problem.latestTestSetRevisionId!)
-    if (!spec) throw new Error('当前正式测试版本不存在')
-    if (spec.mode === 'acm') spec.cases = [...(spec.cases || []), ...candidateCases]
-    else {
-      const assignments = input.assignments || []
-      for (const candidate of candidateCases) {
-        const links = assignments.filter(item => item.caseId === candidate.caseId)
-        if (!links.length) fail(422, 'GENERATION_GROUP_REQUIRED', `${candidate.inputName} 尚未分配 Official Group`)
-        for (const link of links) {
-          const subtask = spec.subtasks?.find(item => item.id === Number(link.subtaskId)); const group = subtask?.groups.find(item => item.key === link.groupKey)
-          if (!group || group.kind !== 'official') fail(422, 'GENERATION_GROUP_INVALID', '候选测试点只能加入当前题目的 Official Group')
-          group.cases.push(candidate)
+    const writer = await replaceTestSetSlot({
+      problemId: problem.id,
+      slot: 'EVOLVING',
+      source: 'admin_edit',
+      sourceId: job.id,
+      requestedBy: input.user.userId,
+      baseConfigText: evolving.judgeConfig,
+      spec,
+      expectedFencingToken: input.expectedEvolvingFencingToken,
+    })
+    if (writer.status === 'SUCCEEDED') {
+      const current = await prisma.problemTestSetSlot.findUniqueOrThrow({
+        where: { problemId_slot: { problemId: problem.id, slot: 'EVOLVING' } },
+      })
+      await prisma.$transaction(async tx => {
+        await tx.problemDataGenerationJob.update({
+          where: { id: job.id },
+          data: { status: 'promoted', promotedGraphHash: current.graphHash },
+        })
+        await tx.problemDataGenerationCase.updateMany({
+          where: { id: { in: candidateCases.map(item => item.caseId) } },
+          data: { status: 'promoted' },
+        })
+        if (String(input.overrideReason || '').trim()) {
+          await tx.platformAuditLog.create({
+            data: {
+              id: crypto.randomUUID(),
+              actorUserId: input.user.userId,
+              action: 'candidate_force_promoted',
+              targetType: 'problem',
+              targetId: problem.id,
+              metadata: {
+                reason: String(input.overrideReason).trim().slice(0, 1000),
+                slot: 'EVOLVING',
+                fromGraphHash: evolving.graphHash,
+                toGraphHash: current.graphHash,
+                caseIds: candidateCases.map(item => item.caseId),
+              },
+            },
+          })
         }
-      }
-      const limitIssues = validateOiFormalLimits(spec)
-      if (limitIssues.length) fail(409, limitIssues[0].code, limitIssues[0].message, { issues: limitIssues })
-      const readiness = await resolveSubtaskReadiness(problem.id, problem.latestTestSetRevisionId)
-      const assignedSubtasks = [...new Set(assignments.map(item => Number(item.subtaskId)).filter(Number.isInteger))]
-      const overrideReason = String(input.overrideReason || '').trim()
-      const bootstrapSubtasks = new Set<number>()
-      for (const subtaskId of assignedSubtasks) {
-        const state = readiness.find(item => item.subtaskId === subtaskId)
-        const next = spec.subtasks?.find(item => item.id === subtaskId)
-        if (!state || !next) continue
-        const nextCount = uniqueSubtaskCases(next).length
-        if (state.contributionMode !== 'closed') continue
-        if (state.caseCount < OI_CANDIDATE_LIMITS.MIN_BOOTSTRAP_CASES && nextCount <= OI_CANDIDATE_LIMITS.MIN_BOOTSTRAP_CASES) {
-          bootstrapSubtasks.add(subtaskId)
-          continue
-        }
-        if (overrideReason.length < 10) fail(409, 'WRONG_CORPUS_REQUIRED', `Subtask ${subtaskId} 已具备基础测试数据，但尚无可用于价值评估的错误程序；管理员强制发布需填写至少 10 字原因`)
-      }
-      if (bootstrapSubtasks.size) await prisma.problemTestcase.updateMany({ where: { id: { in: candidateCases.filter(candidate => assignments.some(link => link.caseId === candidate.caseId && bootstrapSubtasks.has(Number(link.subtaskId)))).map(candidate => candidate.testcaseId) } }, data: { isProtected: true, protectionReason: 'bootstrap_core', protectedUntil: null } })
+      })
+    } else {
+      await prisma.problemDataGenerationJob.update({
+        where: { id: job.id },
+        data: { status: 'promotion_pending' },
+      })
     }
-    const revision = await publishTestSetRevision({ problemId: problem.id, expectedLatestRevisionId: input.expectedLatestRevisionId, source: 'admin_edit', createdBy: input.user.userId, baseConfigText: problem.judgeConfig, spec, transactionHook: async (tx, next) => {
-      await tx.problemDataGenerationJob.update({ where: { id: job.id }, data: { status: 'promoted', promotedRevisionId: next.id } })
-      for (const candidate of candidateCases) await tx.problemDataGenerationCase.update({ where: { id: candidate.caseId }, data: { status: 'promoted', promotedTestcaseId: candidate.testcaseId } })
-      if (String(input.overrideReason || '').trim()) await tx.platformAuditLog.create({ data: { id: crypto.randomUUID(), actorUserId: input.user.userId, action: 'candidate_force_promoted', targetType: 'problem', targetId: problem.id, metadata: { reason: String(input.overrideReason).trim().slice(0, 1000), fromRevisionId: input.expectedLatestRevisionId, toRevisionId: next.id, testcaseIds: candidateCases.map(item => item.testcaseId) } } })
-    } })
-    return revision
+    return writer
   } catch (error) {
-    await prisma.problemTestcase.deleteMany({ where: { id: { in: createdTestcaseIds } } }).catch(() => undefined)
-    await prisma.testdataFile.deleteMany({ where: { id: { in: createdFileIds } } }).catch(() => undefined)
-    await Promise.allSettled(createdFiles.map(name => fs.promises.rm(path.join(TESTDATA_ROOT, problem.id, name), { force: true })))
-    if (error instanceof TestSetRevisionConflict) fail(409, 'TEST_SET_REVISION_STALE', '题目正式测试版本已变化')
+    if (error instanceof TestSetSlotFenceConflict || (error as any)?.code === 'TEST_SET_SLOT_FENCE_CONFLICT') {
+      fail(409, 'EVOLVING_FENCE_CONFLICT', 'Evolving 数据已变化，请刷新后重试')
+    }
     throw error
   }
 }

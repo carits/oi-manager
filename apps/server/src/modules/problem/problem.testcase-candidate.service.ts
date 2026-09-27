@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import type { Prisma, TestcaseCandidateStatus } from '@prisma/client'
 import { prisma } from '../../prisma'
-import { ingestTestdataObject } from './problem.testset-revision.service'
+import { ingestTestdataObject } from './problem.testset-slot.service'
 import { EVALUATION_LIMITS, EvaluationBudgetError } from './problem.evaluation-budget.service'
 import { putReferencedBlob } from '../storage/content-blob.service'
 import { genericInputFeatures, semanticInputFingerprint } from './problem.oi-candidate-policy'
@@ -32,7 +32,9 @@ export async function createAdmittedCandidate(params: {
   contributionOrganizationId?: string | null
   source: 'direct_data' | 'generator' | 'hack' | 'admin_import'
   targetRole: 'official' | 'hack_gate'
-  baseTestSetRevisionId?: string | null
+  baseSlot?: 'STABLE' | 'EVOLVING'
+  baseGraphHash?: string | null
+  baseFencingToken?: number | null
   input: Buffer
   output: Buffer
   inputFileName: string
@@ -62,16 +64,23 @@ export async function createAdmittedCandidate(params: {
     const [count, size, latest] = await Promise.all([
       tx.testcaseCandidate.count({ where: { problemId: params.problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } } }),
       tx.testcaseCandidate.aggregate({ where: { problemId: params.problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } }, _sum: { inputSize: true, outputSize: true } }),
-      tx.problem.findUnique({ where: { id: params.problemId }, select: { latestTestSetRevisionId: true } }),
+      tx.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId: params.problemId, slot: params.baseSlot || 'EVOLVING' } } }),
     ])
     const bytes = Number(size._sum.inputSize || 0) + Number(size._sum.outputSize || 0)
     if (count >= EVALUATION_LIMITS.maxHotCandidates || bytes + params.input.length + params.output.length > EVALUATION_LIMITS.maxHotBytes) throw new EvaluationBudgetError(429, 'CANDIDATE_POOL_CAPACITY_EXCEEDED', '该题候选池已达到硬上限，请等待低价值候选淘汰')
-    const canonicalDuplicate = params.status !== 'REDUNDANT' && latest?.latestTestSetRevisionId ? await tx.testdataObject.findFirst({ where: { problemId: params.problemId, sha256: inputSha256, OR: [{ AcmInputs: { some: { revisionId: latest.latestTestSetRevisionId } } }, { GroupInputs: { some: { revisionId: latest.latestTestSetRevisionId } } }] } }) : null
-    if (canonicalDuplicate) throw new EvaluationBudgetError(409, 'CANDIDATE_CANONICAL_DUPLICATE', '候选输入已存在于正式测试版本')
+    const canonicalDuplicate = params.status !== 'REDUNDANT' && latest ? await tx.testdataObject.findFirst({ where: {
+      problemId: params.problemId,
+      sha256: inputSha256,
+      OR: [
+        { SlotCaseInputs: { some: { problemId: params.problemId, slot: latest.slot } } },
+        { SlotGroupInputs: { some: { problemId: params.problemId, slot: latest.slot } } },
+      ],
+    } }) : null
+    if (canonicalDuplicate) throw new EvaluationBudgetError(409, 'CANDIDATE_CANONICAL_DUPLICATE', '候选输入已存在于当前测试数据')
     const candidate = await tx.testcaseCandidate.create({ data: {
       id: params.id || crypto.randomUUID(), problemId: params.problemId, hackAttemptId: params.hackAttemptId || null,
       source: params.source, targetRole: params.targetRole, status: params.status || 'ADMITTED', evaluationStage: params.evaluationStage || 'awaiting_evaluator',
-      baseTestSetRevisionId: params.baseTestSetRevisionId || null, inputObjectId: inputObject.id, outputObjectId: outputObject.id,
+      baseSlot: params.baseSlot || 'EVOLVING', baseGraphHash: params.baseGraphHash || latest?.graphHash || null, baseFencingToken: params.baseFencingToken ?? latest?.fencingToken ?? null, inputObjectId: inputObject.id, outputObjectId: outputObject.id,
       inputSha256, outputSha256, inputSize: params.input.length, outputSize: params.output.length,
       inputFileName: params.inputFileName, outputFileName: params.outputFileName,
       affectedSubtaskIds: params.affectedSubtaskIds?.length ? JSON.stringify(params.affectedSubtaskIds) : null,
@@ -103,7 +112,9 @@ export async function createValidatedHackCandidate(params: {
   hackAttemptId: string
   createdBy: string
   contributionOrganizationId?: string | null
-  baseTestSetRevisionId: string
+  baseSlot?: 'STABLE' | 'EVOLVING'
+  baseGraphHash: string
+  baseFencingToken: number
   input: Buffer
   output: Buffer
   inputFileName: string
@@ -136,7 +147,9 @@ export async function createValidatedHackCandidate(params: {
     update: {
       status: 'ELIGIBLE',
       evaluationStage: 'technical_validated',
-      baseTestSetRevisionId: params.baseTestSetRevisionId,
+      baseSlot: params.baseSlot || 'EVOLVING',
+      baseGraphHash: params.baseGraphHash,
+      baseFencingToken: params.baseFencingToken,
       inputObjectId: inputObject.id,
       outputObjectId: outputObject.id,
       contributionOrganizationId: params.contributionOrganizationId || null,
@@ -150,7 +163,9 @@ export async function createValidatedHackCandidate(params: {
       source: 'hack',
       status: 'ELIGIBLE',
       evaluationStage: 'technical_validated',
-      baseTestSetRevisionId: params.baseTestSetRevisionId,
+      baseSlot: params.baseSlot || 'EVOLVING',
+      baseGraphHash: params.baseGraphHash,
+      baseFencingToken: params.baseFencingToken,
       inputObjectId: inputObject.id,
       outputObjectId: outputObject.id,
       inputSha256,
@@ -176,14 +191,14 @@ export async function beginCandidatePromotion(candidateId: string) {
 
 export function completeCandidatePromotion(
   tx: Prisma.TransactionClient,
-  params: { candidateId: string; testcaseId: string; revisionId: string; message?: string | null },
+  params: { candidateId: string; testcaseId: string; graphHash: string; message?: string | null },
 ) {
   return tx.testcaseCandidate.updateMany({
     where: { id: params.candidateId, status: 'PROMOTING' },
     data: {
       status: 'PROMOTED',
       promotedTestcaseId: params.testcaseId,
-      promotedRevisionId: params.revisionId,
+      promotedGraphHash: params.graphHash,
       message: params.message || null,
       promotedAt: new Date(),
     },

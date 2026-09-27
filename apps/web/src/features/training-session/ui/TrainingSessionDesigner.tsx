@@ -223,7 +223,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const assignmentFromProblem = (problem: DesignProblem): Assignment => ({
     clientKey: newKey(),
     problemId: problem.id,
-    testSetRevisionId: problem.revision.id,
     allowedSubtaskIds: [],
     Problem: {
       id: problem.id,
@@ -232,8 +231,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       title: problem.title,
       difficulty: problem.difficulty,
     },
-    TestSetRevision: problem.revision,
-    latestRevision: problem.revision,
+    currentData: problem.data,
     subtasks: problem.subtasks,
     unlockPolicy: { mode: "ANY", conditions: [{ type: "AC" }] },
   });
@@ -284,12 +282,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     );
     setActiveStageKey(targetStageKey);
   };
-  const updateToLatest = async (problem: Assignment) => {
-    const detail = await fetchDesignProblem(problem.problemId);
-    if (!detail) return;
-    const updater = (current: Assignment) => ({ ...current, testSetRevisionId: detail.revision.id, TestSetRevision: detail.revision, latestRevision: detail.revision, subtasks: detail.subtasks, allowedSubtaskIds: current.allowedSubtaskIds.filter(id => detail.subtasks.some(subtask => subtask.id === id)) });
-    updateProblem(problem.clientKey, updater);
-  };
+
 
   const requestBody = (confirmDependentRemoval = false) => ({
     expectedRevision: statusRevisionRef.current || design?.statusRevision || 0,
@@ -316,7 +309,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         assignmentId: problem.assignmentId,
         clientKey: problem.clientKey,
         problemId: problem.problemId,
-        testSetRevisionId: problem.testSetRevisionId,
         alias: problem.alias || null,
         unlockPolicy: problem.unlockPolicy || undefined,
         targetScore: problem.targetScore ?? null,
@@ -653,11 +645,10 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           onUpdateStage={updateStage}
           onUpdateProblem={updateProblem}
           onMoveProblemToStage={moveProblemToStage}
-          onUpdateToLatest={updateToLatest}
           readOnly={activeStageReadOnly}
         />
         <section className={styles.drawerProblemPicker} aria-label="按题号添加">
-          <div><strong>添加题目</strong><p>题目将固定当前正式评测版本。</p></div>
+          <div><strong>添加题目</strong><p>训练提交时动态使用当前 Evolving；未配置 Evolving 时回退 Stable。</p></div>
           <label className={styles.field}>添加到<Select value={problemTarget} onChange={event => {
             const next = event.target.value as "current" | "multiple"
             setProblemTarget(next)

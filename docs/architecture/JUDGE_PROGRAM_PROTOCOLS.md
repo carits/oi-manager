@@ -73,7 +73,7 @@ Generator 与 STD。普通贡献者只提交直接输入或 Generator；STD、Va
 逻辑程序仍 active 且 `currentVersionId` 一致，防止排队期间被退役的版本继续执行。
 
 普通用户上传 Generator 必须提供完整 `oj.generator/v1` Manifest，包括语言、入口、参数 Schema 和有限
-Profile；Seed 由服务端生成并和 Profile、参数、程序版本、基础 TestSet Revision 一起固化到任务。
+Profile；Seed 由服务端生成并和 Profile、参数、程序版本、基础 TestSet slot/graph/fence 一起固化到任务。
 Validator 通过后先按输入 SHA-256 去重，重复输入不再运行 STD。管理员历史任务可以读取
 `legacy-args-v1`，新贡献接口不能创建旧协议任务。
 
@@ -81,7 +81,7 @@ Validator 通过后先按输入 SHA-256 去重，重复输入不再运行 STD。
 
 - 源码限 256 KiB、拒绝 NUL 和二进制内容；Python 只提供固定解释器和标准库，无网络。
 - stdout、stderr、CPU、内存、进程和生成数据大小均由 go-judge 限制。
-- 老版本、历史 Candidate、Hack 和 TestSet Revision 不被原地改写。
+- 程序老版本、历史 Candidate 与 Hack 证据不被改写；TestSet 只维护 Stable/Evolving 当前槽。
 - ProgramVersion 保存协议、模板、源码哈希、运行元数据、预检报告和激活时间，便于复现与审计。
 - `pnpm judge:templates:check` 校验 8 个模板的静态契约与本地编译；`pnpm judge:protocols:smoke`
   通过真实 go-judge Runner 执行全部非 DSL 模板 Fixture、Generator 双运行确定性及联调链。

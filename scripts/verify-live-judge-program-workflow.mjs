@@ -161,8 +161,7 @@ async function main() {
       }],
     },
   })
-  const initialRevisionId = configured.latestTestSetRevisionId
-  if (!initialRevisionId) throw new Error('initial TestSet Revision was not created')
+  if (!configured.id) throw new Error('judge config update did not return the problem')
 
   const validator = await createAndActivate(problemId, {
     kind: 'validator', name: '协议探针 Validator', language: 'cpp17', protocol: 'oj.validator/v1', source: validatorSource,
@@ -188,6 +187,16 @@ async function main() {
     }],
   })
 
+  await request('PUT', `/api/problems/${problemId}/hack-config`, {
+    enabled: true,
+    standardProgramVersionId: standard.versionId,
+    validatorProgramVersionId: validator.versionId,
+    classifierProgramVersionId: classifier.versionId,
+  })
+  const slotState = await request('GET', `/api/problems/${problemId}/test-set-slots`)
+  const initialEvolving = slotState.slots.find(item => item.slot === 'EVOLVING')
+  if (!initialEvolving) throw new Error('Evolving slot was not created')
+
   const readiness = await request('GET', `/api/problems/${problemId}/contribution-readiness`)
   if (!readiness.canContribute || readiness.standard.status !== 'active' || readiness.validator.status !== 'active' || readiness.classifier.status !== 'active') {
     throw new Error(`unexpected readiness: ${JSON.stringify(readiness)}`)
@@ -205,11 +214,13 @@ async function main() {
   if (!generatedCase) throw new Error(`manager generation produced no validated case: ${JSON.stringify(managerResult.cases)}`)
 
   const promoted = await request('POST', `/api/problems/${problemId}/data-generation-jobs/${managerJob.id}/promote`, {
-    expectedLatestRevisionId: initialRevisionId,
+    expectedEvolvingFencingToken: initialEvolving.fencingToken,
     caseIds: [generatedCase.id],
     assignments: [{ caseId: generatedCase.id, subtaskId: 1, groupKey: 'official-1' }],
   })
-  if (promoted.revisionNumber !== 2) throw new Error(`expected Revision 2, got ${promoted.revisionNumber}`)
+  if (promoted.slot !== 'EVOLVING' || !['SUCCEEDED', 'QUEUED', 'DRAINING'].includes(promoted.status)) {
+    throw new Error(`unexpected Evolving writer: ${JSON.stringify(promoted)}`)
+  }
 
   const contribution = await request('POST', `/api/problems/${problemId}/candidates/generator`, {
     language: 'python3',
@@ -236,8 +247,9 @@ async function main() {
     type: 'judge_program_workflow_probe',
     problemId,
     problemNumber: problem.problemId,
-    initialRevision: 1,
-    promotedRevision: promoted.revisionNumber,
+    initialEvolvingFence: initialEvolving.fencingToken,
+    evolvingWriterId: promoted.id,
+    evolvingWriterStatus: promoted.status,
     activePrograms: {
       validator: validator.versionId,
       standard: standard.versionId,

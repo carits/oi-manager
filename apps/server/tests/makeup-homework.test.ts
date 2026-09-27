@@ -19,7 +19,7 @@ describe('补题作业使用独立 Assignment', () => {
   let finishedContest: any
   let ongoingContest: any
   let team: Awaited<ReturnType<typeof createTestTeam>>
-  let revisionId: string
+  let stableGraphHash: string
 
   beforeEach(async () => {
     const school = await createTestSchoolWithPrincipal()
@@ -40,12 +40,13 @@ describe('补题作业使用独立 Assignment', () => {
       id: crypto.randomUUID(), platform: 'carits', problemId: String(Date.now()), title: '补题题目', ownerId: owner.user.id,
       visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', publishedAt: new Date(),
     } })
-    revisionId = crypto.randomUUID()
-    await prisma.problemTestSetRevision.create({ data: {
-      id: revisionId, problemId: problem.id, revisionNumber: 1, mode: 'acm', source: 'initial',
-      judgeConfig: '{"mode":"acm","cases":[]}', judgeConfigHash: 'makeup-config', graphHash: 'makeup-graph', testdataPath: '.', createdBy: owner.user.id,
+    stableGraphHash = 'makeup-graph'
+    const judgeConfig = '{"mode":"acm","cases":[]}'
+    await prisma.problem.update({ where: { id: problem.id }, data: { judgeConfig } })
+    await prisma.problemTestSetSlot.create({ data: {
+      problemId: problem.id, slot: 'STABLE', mode: 'acm', source: 'initial', judgeConfig,
+      judgeConfigHash: 'makeup-config', graphHash: stableGraphHash, materializedPath: 'slots/stable', fencingToken: 1,
     } })
-    await prisma.problem.update({ where: { id: problem.id }, data: { latestTestSetRevisionId: revisionId } })
     const now = Date.now()
     finishedContest = await prisma.contest.create({ data: {
       id: crypto.randomUUID(), teamId: team.id, organizationId: team.organizationId, title: '已结束比赛',
@@ -53,7 +54,7 @@ describe('补题作业使用独立 Assignment', () => {
       format: 'ioi', type: 'contest', scope: 'campus', status: 'finished', createdBy: owner.user.id,
     } })
     await prisma.contestProblem.create({ data: {
-      id: crypto.randomUUID(), contestId: finishedContest.id, canonicalProblemId: problem.id, testSetRevisionId: revisionId,
+      id: crypto.randomUUID(), contestId: finishedContest.id, canonicalProblemId: problem.id, testSetSlot: 'STABLE', testSetGraphHash: stableGraphHash, testSetJudgeConfigHash: 'makeup-config', testSetFencingToken: 1,
       alias: 'A', orderIndex: 0, points: 100, title: problem.title, ojName: problem.platform, problemId: problem.problemId,
     } })
     ongoingContest = await prisma.contest.create({ data: {
@@ -63,7 +64,7 @@ describe('补题作业使用独立 Assignment', () => {
     } })
   })
 
-  it('团队管理员创建带固定 Revision 的独立补题作业草稿', async () => {
+  it('团队管理员创建使用当前 Stable 的独立补题作业草稿', async () => {
     for (const token of [ownerToken, adminToken]) {
       const response = await createAuthenticatedRequest(app, token, { organizationId: team.organizationId })
         .post(`/api/contests/${finishedContest.publicId}/create-makeup-homework`)
@@ -75,7 +76,7 @@ describe('补题作业使用独立 Assignment', () => {
       expect(assignment?.status).toBe('DRAFT')
       expect(assignment?.rosterMode).toBe('DYNAMIC')
       expect(assignment?.Problems).toHaveLength(1)
-      expect(assignment?.Problems[0].testSetRevisionId).toBe(revisionId)
+      expect(assignment?.Problems[0]).toMatchObject({ judgeConfigHash: 'makeup-config' })
       expect(assignment?.Events[0].type).toBe('assignment.created_from_contest')
     }
   })

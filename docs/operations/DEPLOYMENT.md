@@ -58,6 +58,20 @@ pnpm security:audit
 8. 重启唯一 `oi-manager-worker.service` Scheduler 和 Executor 实例；第二个 Scheduler 必须被 leader lock 拒绝，多个 Executor 通过逐任务 lease 协作。
 9. 验证 Judge 已重新注册、队列继续消费且没有残留 `judging/finalizing` 任务。
 
+### TestSet 双槽不可兼容迁移
+
+删除 TestSet Revision 的 migration 不支持旧 API 双运行，必须使用一次性停写切换：
+
+1. 完成备份并停止 Router 新写入、两套 API、Worker、Executor 与 Judge；确认没有 QUEUED/RUNNING JudgeRun，也没有 RUNNING/PAUSED Contest。
+2. 执行 `prisma migrate deploy`；migration 会在阻断条件不满足时 fail closed，并将每题当前正式数据映射为 Stable，需要贡献能力的题同时建立 Evolving。
+3. 在任何 API/Judge 启动前执行：
+```bash
+pnpm --filter server migrate:testset-slots:materialize
+```
+4. 核对每个数据库槽都有对应 `slots/stable` 或 `slots/evolving` manifest，旧 `ProblemTestSetRevision*` 表和 revisionId 列不存在。
+5. 启动候选 API、Worker、Executor 和 Judge，验证 Stable Practice、Evolving Training、Contest Stable Reader 以及 Promotion 闭环后再恢复 Router 流量。
+6. 本迁移删除旧表且不保留双读；失败时只能保持停写并按已验证备份整体恢复，不允许让旧 API 连接新 Schema。
+
 ### 经济闭环扩展发布
 
 涉及 Contribution Reward、Carits 账本或 Evaluation Credits Schema 时，必须在 API 提升前额外执行：
@@ -91,14 +105,14 @@ pnpm preview:promote
 
 Validator / Classifier / STD / Generator 改动发布后，使用短期超级管理员
 Session Token（通过 Cookie 发送） 在不可见的草稿题上执行一次完整线上闭环。探针会创建初始 OI
-Revision、异步编译并预检四类程序、激活版本、生成正式测试点并发布下一
-Revision，最后提交一个 Generator Candidate 并确认 Classifier 命中 Subtask：
+Stable 槽、异步编译并预检四类程序、激活版本、生成 Candidate 更新 Evolving，
+再验证 Promotion 原子更新 Stable，并确认 Classifier 命中 Subtask：
 
 ```bash
 BASE_URL=http://127.0.0.1:3002 SESSION_TOKEN='<short-lived token>' pnpm judge:workflow:live
 ```
 
-探针不输出认证信息或程序源码，只输出草稿题 ID、版本号、程序版本 ID 和候选
+探针不输出认证信息或程序源码，只输出草稿题 ID、槽 fencing token、程序版本 ID 和候选
 阶段。草稿题保留为发布审计证据，不出现在普通题库；不得使用真实用户题目代替
 探针题。
 

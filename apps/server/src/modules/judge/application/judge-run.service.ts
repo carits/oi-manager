@@ -11,6 +11,7 @@ import {
   assertJudgeRunTransition,
 } from '../domain/judge-state'
 import { holdContestFinalizationForRejudgeTx } from '../../contest/contest-command.service'
+import { releaseTestSetReader, resolveSubmissionTestSet } from '../../problem/problem.testset-slot.service'
 
 export interface CreateQueuedSubmissionOptions {
   runType?: JudgeRunType
@@ -22,7 +23,10 @@ export interface ClaimedSubmissionLifecycle {
   submissionId: number
   problemInternalId: string
   trainingStageProblemId: string | null
-  testSetRevisionId: string | null
+  testSetSlot: 'STABLE' | 'EVOLVING' | null
+  testSetFencingToken: number | null
+  testSetGraphHash: string | null
+  testSetReaderId: string | null
   judgeConfigSnapshot: string | null
   code: string
   language: string
@@ -92,11 +96,33 @@ export async function createQueuedSubmissionWithRun(
       judgeStarted: _judgeStarted,
       ...submissionData
     } = data as Prisma.SubmissionUncheckedCreateInput & Record<string, unknown>
-    const submission = await tx.submission.create({
+    let submission = await tx.submission.create({
       data: submissionData as Prisma.SubmissionUncheckedCreateInput,
     })
     const runId = crypto.randomUUID()
     const attemptId = crypto.randomUUID()
+    const acquired = submission.problemInternalId
+      ? await resolveSubmissionTestSet({
+          problemId: submission.problemInternalId,
+          ownerType: 'JUDGE_RUN',
+          ownerId: runId,
+          slot: submission.testSetSlot || undefined,
+          useEvolving: ['training', 'training_engine'].includes(submission.submitScope),
+          transaction: tx,
+        })
+      : null
+    if (acquired) {
+      submission = await tx.submission.update({
+        where: { id: submission.id },
+        data: {
+          testSetSlot: acquired.slot.slot,
+          testSetFencingToken: acquired.slot.fencingToken,
+          testSetGraphHash: acquired.slot.graphHash,
+          judgeConfigHash: acquired.slot.judgeConfigHash,
+          judgeConfigSnapshot: acquired.slot.judgeConfig,
+        },
+      })
+    }
     await tx.judgeRun.create({
       data: {
         id: runId,
@@ -104,9 +130,12 @@ export async function createQueuedSubmissionWithRun(
         runNumber: 1,
         runType: options.runType || 'NORMAL',
         status: 'QUEUED',
-        testSetRevisionId: submission.testSetRevisionId,
-        judgeConfigHash: submission.judgeConfigHash,
-        judgeConfigSnapshot: submission.judgeConfigSnapshot,
+        testSetSlot: acquired?.slot.slot || submission.testSetSlot,
+        testSetFencingToken: acquired?.slot.fencingToken || submission.testSetFencingToken,
+        testSetGraphHash: acquired?.slot.graphHash || submission.testSetGraphHash,
+        testSetReaderId: acquired?.reader.id || null,
+        judgeConfigHash: acquired?.slot.judgeConfigHash || submission.judgeConfigHash,
+        judgeConfigSnapshot: acquired?.slot.judgeConfig || submission.judgeConfigSnapshot,
         inputFilename: submission.inputFilename,
         outputFilename: submission.outputFilename,
         ioAdapterVersion: submission.ioAdapterVersion,
@@ -196,11 +225,13 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
         id: true,
         problemInternalId: true,
         trainingStageProblemId: true,
-        testSetRevisionId: true,
+        testSetSlot: true,
+        testSetFencingToken: true,
+        testSetGraphHash: true,
         judgeConfigSnapshot: true,
         code: true,
         language: true,
-        CurrentJudgeRun: { select: { inputFilename: true, outputFilename: true, ioAdapterVersion: true, judgeConfigSnapshot: true } },
+        CurrentJudgeRun: { select: { inputFilename: true, outputFilename: true, ioAdapterVersion: true, judgeConfigSnapshot: true, testSetReaderId: true } },
       },
     })
     if (!submission.problemInternalId) throw new Error('Queued local submission has no internal problem')
@@ -208,7 +239,10 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
       submissionId: submission.id,
       problemInternalId: submission.problemInternalId,
       trainingStageProblemId: submission.trainingStageProblemId,
-      testSetRevisionId: submission.testSetRevisionId,
+      testSetSlot: submission.testSetSlot,
+      testSetFencingToken: submission.testSetFencingToken,
+      testSetGraphHash: submission.testSetGraphHash,
+      testSetReaderId: submission.CurrentJudgeRun?.testSetReaderId || null,
       judgeConfigSnapshot: submission.CurrentJudgeRun?.judgeConfigSnapshot || submission.judgeConfigSnapshot || null,
       code: submission.code,
       language: submission.language,
@@ -237,7 +271,7 @@ export async function finalizeOwnedJudgeAttempt(input: {
     runLatencyMs?: number | null
   }
 }) {
-  return prisma.$transaction(async tx => {
+  const finalized = await prisma.$transaction(async tx => {
     assertJudgeAttemptTransition('RUNNING', 'FINALIZING')
     const finalizing = await tx.judgeAttempt.updateMany({
       where: {
@@ -328,8 +362,11 @@ export async function finalizeOwnedJudgeAttempt(input: {
         assignmentRecipientId: true,
       },
     })
-    return { ...submission, result: input.projection.result, score: input.projection.score ?? null }
+    const run = await tx.judgeRun.findUnique({ where: { id: input.judgeRunId }, select: { testSetReaderId: true } })
+    return { ...submission, result: input.projection.result, score: input.projection.score ?? null, testSetReaderId: run?.testSetReaderId || null }
   })
+  if (finalized?.testSetReaderId) await releaseTestSetReader(finalized.testSetReaderId)
+  return finalized
 }
 
 async function retryAttemptTransaction(
@@ -438,6 +475,14 @@ async function queueRejudgeRun(
   const latest = await tx.judgeRun.aggregate({ where: { submissionId }, _max: { runNumber: true } })
   const runId = crypto.randomUUID()
   const attemptId = crypto.randomUUID()
+  const acquired = await resolveSubmissionTestSet({
+    problemId: submission.problemInternalId,
+    ownerType: 'JUDGE_RUN',
+    ownerId: runId,
+    slot: submission.testSetSlot || undefined,
+    useEvolving: ['training', 'training_engine'].includes(submission.submitScope),
+    transaction: tx,
+  })
   await tx.judgeRun.create({
     data: {
       id: runId,
@@ -445,9 +490,12 @@ async function queueRejudgeRun(
       runNumber: (latest._max.runNumber || 0) + 1,
       runType: 'REJUDGE',
       status: 'QUEUED',
-      testSetRevisionId: submission.testSetRevisionId,
-      judgeConfigHash: submission.judgeConfigHash,
-      judgeConfigSnapshot: submission.judgeConfigSnapshot,
+      testSetSlot: acquired.slot.slot,
+      testSetFencingToken: acquired.slot.fencingToken,
+      testSetGraphHash: acquired.slot.graphHash,
+      testSetReaderId: acquired.reader.id,
+      judgeConfigHash: acquired.slot.judgeConfigHash,
+      judgeConfigSnapshot: acquired.slot.judgeConfig,
       inputFilename: submission.inputFilename,
       outputFilename: submission.outputFilename,
       ioAdapterVersion: submission.ioAdapterVersion,

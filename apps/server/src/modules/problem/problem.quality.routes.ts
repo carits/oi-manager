@@ -6,7 +6,7 @@ import {
   ProblemQualityError,
   getProblemQuality,
   getQualityJob,
-  getRevisionQuality,
+  getSlotQuality,
   listSolutionProfiles,
   listProblemQualityAssessments,
   listQualityJobs,
@@ -31,8 +31,10 @@ problemQualityRouter.get('/:id/quality', authenticate, asyncHandler(async (req, 
   catch (error) { return sendQualityError(error, res) }
 }))
 
-problemQualityRouter.get('/:id/test-set-revisions/:revisionId/quality', authenticate, asyncHandler(async (req, res) => {
-  try { res.json({ success: true, data: await getRevisionQuality(req.user!, req.params.id, req.params.revisionId) }) }
+problemQualityRouter.get('/:id/test-set-slots/:slot/quality', authenticate, asyncHandler(async (req, res) => {
+  const slot = String(req.params.slot || '').toUpperCase()
+  if (slot !== 'STABLE' && slot !== 'EVOLVING') return res.status(422).json({ success: false, code: 'TEST_SET_SLOT_INVALID', message: '数据槽必须是 Stable 或 Evolving' })
+  try { res.json({ success: true, data: await getSlotQuality(req.user!, req.params.id, slot) }) }
   catch (error) { return sendQualityError(error, res) }
 }))
 

@@ -1,9 +1,16 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-27
+last_verified: 2026-09-28
 source_of_truth: Git history
 ---
+
+## 2026-09-28 — TestSet Stable / Evolving 双槽收口
+
+- 删除 TestSet Revision、所有 revisionId/latest 指针与历史版本 API，Problem 只保留 Stable 和可选 Evolving 当前槽。
+- 新增按 Problem + Slot 的持久化写优先屏障、Reader 生命周期、Writer 队列、fencing token、崩溃恢复和原子目录替换。
+- Contest 固定持有 Stable；Training 按提交动态读取 Evolving；Assignment 动态读取 Stable；Hack/贡献串行写 Evolving。
+- Promotion 使用非业务临时快照验证并原子更新 Stable，复用 TestdataObject，不创建第三槽或历史版本。
 
 ## 2026-09-27
 

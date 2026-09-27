@@ -39,7 +39,7 @@ import {
   submitTrainingSolution,
   transitionTrainingStage,
 } from '../api/trainingSessionApi'
-import { testDataVersion, trainingProgressStatusLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from '@/lib/humanPresentation'
+import { trainingProgressStatusLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from '@/lib/humanPresentation'
 import { csvCell, saveBlobDownload } from '@/lib/download'
 import { arbitrateTrainingDraft, type TrainingDraftSnapshot } from '../model/trainingDraftArbitration'
 import {
@@ -53,7 +53,7 @@ import styles from './TrainingEngine.module.css'
 
 const visibilityLabel: Record<string, string> = { NONE: '仅自己', PROGRESS: '完成进度', SCORE: '成绩与进度', FULL: '详细进度' }
 const rankingLabel: Record<string, string> = { OFF: '不排名', PROGRESS_ONLY: '按完成进度', SCORE: '按得分', ACM_RANKING: '按通过题数和罚时' }
-type StageProblem = { id: string; problemId: string; required?: boolean; alias?: string; targetScore?: number; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>; timePolicy?: { mode: string; limitSeconds?: number }; stuckPolicy?: { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Statements?: Array<{ type?: string; format: string; language?: string | null; content?: string | null; fileUrl?: string | null }>; Problem: { problemId: string; title: string; platform: string }; TestSetRevision: { revisionNumber: number; mode: string } }
+type StageProblem = { id: string; problemId: string; required?: boolean; alias?: string; targetScore?: number; scoreGoals?: Array<{ score: number; allowedSubtaskIds?: number[] }>; timePolicy?: { mode: string; limitSeconds?: number }; stuckPolicy?: { minActiveSeconds: number; minAttempts: number; noImprovementSeconds: number }; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Statements?: Array<{ type?: string; format: string; language?: string | null; content?: string | null; fileUrl?: string | null }>; Problem: { problemId: string; title: string; platform: string } }
 type StagePlan = { id: string; groupId?: string | null; name: string; isDefault: boolean; inheritsDefault: boolean; accessPolicy: string; submissionMode: string }
 type Stage = { id: string; name: string; description?: string; orderIndex: number; kind: string; mode: string; lifecycle: 'PENDING' | 'RUNNING' | 'ENDED' | 'SKIPPED'; plannedDurationSeconds?: number | null; runningSince?: string | null; activeElapsedSeconds: number; startedAt?: string | null; endedAt?: string | null; endReason?: string | null; Plans: StagePlan[]; Problems: StageProblem[] }
 type StrategyState = {
@@ -829,7 +829,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       : access?.canView
         ? trainingProgressStatusLabel(progress?.status || 'NOT_STARTED') + (progress?.bestScore != null ? ' · ' + progress.bestScore + ' 分' : '')
         : lockedLabel
-    return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? requirementLabel : '本阶段历史'} · {progressLabel}{data.manager ? ' · 已固定测试数据' : ''}</small></span></Button>
+    return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? requirementLabel : '本阶段历史'} · {progressLabel}{data.manager ? ' · 动态 Evolving' : ''}</small></span></Button>
   }
   return <PageFrame width="workbench"><div className={styles.stack}>
     <PageHeader
@@ -976,7 +976,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).filter(item => item.required === false).map(item => renderRailProblem(stage, item, '当前选做'))}
       </section>)}</aside>
       <main id="training-problem-workspace" className={styles.stack}>{problem ? <>
-        <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · ${testDataVersion(problem.TestSetRevision.revisionNumber)}` : '使用训练发布时固定的数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>
+        <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · 提交时使用当前 Evolving（缺失时回退 Stable）` : '提交时使用当前训练数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>
         <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。">
           <div className={styles.stack}>
             <label className={styles.field}>语言<Select value={language} disabled={!data.permissions[problem.id]?.canEdit} onChange={event => { if (!code || window.confirm('将保留当前代码并切换语言。是否继续？')) handleLanguageChange(event.target.value) }}><option value="cpp17">C++17</option><option value="python3">Python3</option><option value="c">C</option></Select></label>
