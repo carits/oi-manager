@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-19
+last_verified: 2026-09-27
 source_of_truth: playwright.config.ts and e2e directory
 ---
 
@@ -26,20 +26,17 @@ Playwright 不复用 `3000/3002` 开发服务：
 
 ## 角色与数据
 
-固定角色包括超级管理员、平台管理员、学校负责人、教师、校园学生和个人学生；前五个账号
-同时用于全角色工作/个人双模式矩阵。
+固定角色包括超级管理员、平台管理员、学校负责人、教师、校园学生和个人学生。负责人、教师和校园学生覆盖组织工作区；普通用户角色按 workspaceMode 切换个人工作区，管理员工作区不进入个人或组织工作区。
 `auth.setup.ts` 通过登录 API 生成 `storageState`，不提交 JWT、Cookie 或真实密码。
 
 fixture 固定创建学校、团队、题目、题单、作业、比赛和提交。动态页面使用
 `e2e/fixtures/routes.ts` 中的 ID 解析，不依赖开发库现有数据。
 
-校园学生和个人学生分别拥有独立团队 fixture。个人团队使用 `schoolId=null` 和通用 `user`
-成员关系；个人团队、首页和排名只显示 `username`，不得返回真实姓名、学校、职称或后台岗位。
+校园学生和个人学生分别拥有独立团队 fixture。个人团队使用 scope=personal、organizationId=null 和通用 user 成员关系；组织团队使用 scope=campus 与当前 organizationId。个人团队、首页和排名只显示 username，不得返回真实姓名、学校、职称或后台岗位。
 
 ## 全角色工作区隔离计划
 
-`workspace-mode.spec.ts` 是全角色切换门禁，`student-mode-isolation.spec.ts` 保留旧学生会话与
-旧 URL 兼容验证。两者覆盖以下矩阵：
+workspace-mode.spec.ts 与 workspace-isolation.spec.ts 是全角色工作区切换和缓存隔离门禁；旧 /teacher/*、/student/* 地址由 middleware 明确返回 410，不再作为业务兼容流程测试。两者覆盖以下矩阵：
 
 | 范围 | 校园模式 | 个人模式 | 跨模式访问 |
 |------|----------|----------|--------------|
@@ -52,7 +49,7 @@ fixture 固定创建学校、团队、题目、题单、作业、比赛和提交
 
 五种角色的个人 UI 冒烟访问首页、团队、排名、题库、题单、比赛和提交记录；个人学生额外覆盖
 动态详情和写流程。
-每个页面检查未捕获异常、控制台错误、意外 `4xx/5xx`、无限加载和横向溢出。模式切换测试必须
+每个页面检查未捕获异常、控制台错误、意外 4xx/5xx、无限加载和横向溢出；旧端路径必须稳定返回 410。模式切换测试必须
 先看到个人团队，再切换到校园模式并只看到校园团队，以防缓存串用。
 
 `workspace-knowledge-flow.spec.ts` 是全局内容与工作区导航边界门禁。它从教师、校园学生、个人账号、超级管理员和平台管理员的真实工作区侧栏进入知识广场，要求 URL、AppShell、主导航和身份上下文保持不变；公共 `/blog` 只用于匿名分享。套件还必须覆盖真实已发布文章互动、匿名登录 `next` 返回、社区读取错误不冒充零数据、Blog 元数据字段触发未保存确认、管理员 `/account/*` Logo 直接回管理首页，以及已登录用户访问安全 `next` 时不经过身份选择页。

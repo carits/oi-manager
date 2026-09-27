@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-13
+last_verified: 2026-09-27
 source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 ---
 
@@ -83,7 +83,7 @@ UX 全路由套件使用隔离的 E2E schema 和 `3100/3102`，不会访问开�
 `workspace-mode.spec.ts` 对五种数据库角色逐一检查工作区切换、七个个人导航页面、岗位保持、
 身份脱敏、工作接口拒绝、教师个人团队隔离以及切换失败回滚。
 
-2026-08-01 验收快照：核心 Chromium/Firefox 冒烟组合覆盖 70/70；90 路由在
+2026-08-01 验收快照：核心 Chromium/Firefox 冒烟组合覆盖 70/70；92 路由在
 `1440×900` 与 `1280×720` 的主跑为 176/186，整改 5 条集中失败路由后聚焦复跑
 10/10，组合覆盖 186/186。Critical Axe 扫描保留在核心路由，全路由继续检查异常、
 失败请求、横向溢出、重复 Shell、语义标题、焦点和图标按钮标签。

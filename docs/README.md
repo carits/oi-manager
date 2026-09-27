@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-29
+last_verified: 2026-09-27
 source_of_truth: repository structure, deploy/systemd, generated architecture inventory and active documentation
 ---
 

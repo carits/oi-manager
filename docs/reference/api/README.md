@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-14
+last_verified: 2026-09-27
 source_of_truth: apps/server/src/modules, packages/contracts/src, scripts/generate-architecture-inventory.mjs
 ---
 
@@ -16,12 +16,12 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 或页面私有响应类型作为事实源。Training 结构保存成功响应固定为重新读取后的 Design DTO，而非内部 Session 记录。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 614 个端点中 600 个必须认证，14 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 593 个端点中 579 个必须认证，14 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
 
 列表上下文与通知一致性约定：团队关联的比赛、训练和题单统一使用 `teamId` 查询参数，并由服务端重新校验当前用户的团队关系；教师读取团队管理邀请时必须同时提供当前 `organizationId`，避免跨学校聚合。通知列表使用真实游标分页，读取接口返回权威 `unreadCount`；客户端不得通过本地减一推断未读数，超过首批 50 条时必须继续分页。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 614 个无会话请求：600 个受保护端点必须返回
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 593 个无会话请求：579 个受保护端点必须返回
 401，14 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 

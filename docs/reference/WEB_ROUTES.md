@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-19
+last_verified: 2026-09-27
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 

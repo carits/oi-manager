@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-19
+last_verified: 2026-09-27
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
@@ -149,7 +149,7 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - 页面结构：`PageFrame`、面包屑页头、工具栏、Tab 和工作区宽度变体。
 - 控件：统一按钮、表格、分页、表单字段、状态、空状态和带焦点管理的 Modal。
 - 高频页面：首页、团队、作业、比赛、题库、题单、排名、训练和提交已进入新体系。
-- 测试：90 路由在 `1440×900` 与 `1280×720` 均进入 UX 健康检查。
+- 测试：92 路由在 `1440×900` 与 `1280×720` 均进入 UX 健康检查。
 
 学校、用户、OJ 管理、复杂导入、题目评测设置和活动工作台已经完成统一 Shell、控件、
 CSS Module、焦点 Token 与错误契约迁移；后续变更由静态门禁直接阻止重新引入业务层

@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-13
+last_verified: 2026-09-27
 source_of_truth: problem modules, OJ routes, adapter registry
 ---
 
@@ -14,13 +14,13 @@ source_of_truth: problem modules, OJ routes, adapter registry
 | 题库 | `libraryKey` | 可见范围 | 管理者 |
 |------|--------------|------------|--------|
 | 平台题库 | `platform` | 已发布题可供教学和个人工作区使用 | 平台管理员和超级管理员 |
-| 校内题库 | `school:<schoolId>` | 仅本校教师和负责人 | 作者管理自己的题，负责人管理本校全部题 |
+| 校内题库 | `organization:<organizationId>` | 仅当前组织教师和负责人 | 作者管理自己的题，负责人管理本校全部题 |
 
 校内题默认为 `draft`。同校教师只能看到其他作者的 `published`
 题目；学生不能浏览题库，但可在已授权的题单、作业或比赛中阅读题面。
 跨校资源、学校题对平台管理员及超管均表现为 `404`，不泄露是否存在。
 
-`libraryKey + platform + problemId` 是唯一命名空间，因此不同学校可以分别
+`libraryKey + platform + problemId` 是唯一命名空间，因此不同组织可以分别
 导入同一道外部 OJ 题并独立修改。教师可将已发布的平台题复制为本校草稿；
 题面、题解、Judge 配置、附件和测试数据一并复制，后续不与平台副本同步。
 

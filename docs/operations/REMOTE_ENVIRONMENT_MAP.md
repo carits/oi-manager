@@ -1,8 +1,8 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-29
-source_of_truth: 47.99.222.76 systemd units, listeners, Nginx config and active main worktree
+last_verified: 2026-09-27
+source_of_truth: 47.99.222.76 systemd units, listeners, Nginx config and deployed worktree Git HEAD
 ---
 
 # 远端环境与运行拓扑
@@ -13,8 +13,9 @@ PM2 配置为准。
 
 ## 当前结论
 
-- 唯一项目事实源：`/data/oi-manager-response-refactor` 的 `main`。
-- 当前核验提交：`c554aa8`；后续以 `git rev-parse HEAD` 为准。
+- 唯一运行时事实源：/data/oi-manager-response-refactor；当前分支为 codex/training-ux-pr4，HEAD 为 ccf39a1ab68ca137eb86d3bf3819195421234156，与 origin/main 同提交。
+- 文档刷新工作树为 /data/oi-manager-docs-refresh-20260927，仅用于文档审阅和提交，不承载公网流量。
+- 运行目录、systemd 单元和 Git HEAD 已在 2026-09-27 核对；后续发布仍以 systemctl show、监听端口、readiness 和 canary/promote 结果为准。
 - 公网入口：Nginx `:80/:443` → loopback Next.js `127.0.0.1:3000`。未完成 TLS 切换前 `:80` 仅是过渡入口；取得域名和证书后必须跳转 HTTPS。
 - 稳定 API：Nginx → Router `127.0.0.1:3002` → 活动蓝绿 slot `3302` 或 `3303`。
 - PostgreSQL `127.0.0.1:5432` 与 go-judge `127.0.0.1:5050` 由 Docker 管理。

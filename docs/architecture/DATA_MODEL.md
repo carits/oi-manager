@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-13
+last_verified: 2026-09-27
 source_of_truth: apps/server/prisma/schema.prisma, docs/architecture/generated/ARCHITECTURE_INVENTORY.md
 ---
 

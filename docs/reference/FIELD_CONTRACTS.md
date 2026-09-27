@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-09-14
+last_verified: 2026-09-27
 source_of_truth: packages/contracts/src and apps/web/src/lib/apiClient.ts
 ---
 
@@ -94,9 +94,7 @@ Schema 与 TypeScript 类型均来自 `packages/contracts/src/auth.ts`。登录�
 { workspaceMode: 'work' | 'personal' }
 ```
 
-旧客户端可传 `mode: 'campus' | 'personal'`。成功响应返回 `role` 和
-`workspaceMode`，并刷新 HttpOnly 会话 Cookie；浏览器响应不包含 Token。切入 `personal` 会按需创建
-`PersonalProfile`。
+旧 mode、role 和 studentMode 字段不属于当前契约，会被严格拒绝。成功响应返回 accountRole 和 workspaceMode，并刷新 HttpOnly 会话 Cookie；浏览器响应不包含 Token。切入 personal 会按需创建 PersonalProfile。
 
 `GET /api/auth/me` 不带组织请求头时只返回账号上下文，不自动选择任一学校。携带
 `X-OI-Organization-ID` 时只返回该组织的 Membership 身份。认证依赖失败使用

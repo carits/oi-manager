@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-29
+last_verified: 2026-09-27
 source_of_truth: apps/web, apps/server, apps/judge, packages/shared
 ---
 
@@ -42,8 +42,7 @@ flowchart TD
   Student --> ProblemList
 ```
 
-`Training.type` 区分训练、作业和比赛。团队和学校是任务发布范围，题单是可复用内容
-组织，提交通过 scope 字段关联题目、训练或比赛。
+TrainingSession 是阶段驱动训练聚合，Assignment 是独立作业聚合，Contest 是独立比赛聚合；三者共享题目、固定 TestSet Revision 和 JudgeRun，但不再通过 Training 兼容字段互相投影。团队和组织是发布范围，题单是可复用内容组织，提交通过明确的 activity scope 关联题目、作业、训练或比赛。
 
 ## 应用组成
 

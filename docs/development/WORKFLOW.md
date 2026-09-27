@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-19
+last_verified: 2026-09-27
 source_of_truth: AGENTS.md, package.json and workspace package manifests
 ---
 
@@ -84,9 +84,7 @@ intentional raw transport 必须登记；Feature 内部 transport 是观察指�
 
 ## 数据库变化
 
-开发阶段可使用 `prisma:push` 快速同步本地 schema；需要保留升级历史或准备正式环境
-时必须创建迁移。任何命令执行前先确认 `DATABASE_URL` 的数据库和 schema，测试只能
-使用 `test` 或 `e2e`。
+共享开发、预览和正式环境只使用版本化 Prisma migration；先确认 DATABASE_URL 的数据库和 schema，再执行 pnpm --filter server exec prisma migrate deploy。一次性数据修复只能通过仓库内受控离线任务，不得用浏览器接口或临时 SQL 写入。临时本地实验如需 prisma db push，必须使用独立 disposable 数据库，不能把该命令写进发布流程。测试只能使用 test 或 e2e schema。
 
 历史 migration 及其校验和不可修改。新增迁移必须同时验证全新空库与最新正式备份恢复库，二者规范结构签名一致后才允许部署。生产迁移前必须生成并校验备份。
 

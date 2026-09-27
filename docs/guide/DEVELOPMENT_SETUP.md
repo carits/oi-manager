@@ -77,7 +77,7 @@ NEXT_PUBLIC_APP_ENV=development
 
 ```bash
 pnpm --filter server prisma:generate
-pnpm --filter server prisma:push
+pnpm --filter server exec prisma migrate deploy
 pnpm --filter server prisma:seed
 ```
 

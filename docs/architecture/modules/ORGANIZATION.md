@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-13
+last_verified: 2026-09-27
 source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/organization, apps/server/src/modules/organization-join, apps/server/src/modules/organization-creation, apps/server/src/modules/authorization, apps/server/src/routes/workspaces.ts
 ---
 
