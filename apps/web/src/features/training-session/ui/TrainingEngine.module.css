@@ -271,9 +271,11 @@
 .classroomControlBar .controlDisclosure[open] { grid-column: 1 / -1; }
 .participantFilters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
 .participantList { display: grid; gap: var(--space-1); }
-.participantRow { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
+.participantRow { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
 .participantRow:hover, .participantRow:focus-visible { border-color: var(--border); background: var(--bg-muted); outline: none; }
-.participantRow > span:nth-child(2) { display: grid; min-width: 0; }
+.participantRowMain { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); min-width: 0; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.participantRowMain:focus-visible { outline: none; border-radius: var(--radius-sm); box-shadow: var(--focus-ring); }
+.participantRowMain > span:nth-child(2) { display: grid; min-width: 0; }
 .participantRow small { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
 .participantAvatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: var(--primary); font-weight: 700; }
 .participantDrawerLayer { position: fixed; inset: 0; z-index: 1210; display: flex; justify-content: flex-end; }

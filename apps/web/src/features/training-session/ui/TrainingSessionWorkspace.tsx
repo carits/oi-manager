@@ -135,6 +135,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [splitSourceGroupId, setSplitSourceGroupId] = useState(''), [splitName, setSplitName] = useState(''), [splitParticipantIds, setSplitParticipantIds] = useState<string[]>([]), [splitReason, setSplitReason] = useState('')
   const [mergeSourceGroupId, setMergeSourceGroupId] = useState(''), [mergeTargetGroupId, setMergeTargetGroupId] = useState(''), [mergeReason, setMergeReason] = useState('')
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>()
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([])
   const [transitionDialog, setTransitionDialog] = useState<{ action: 'advance' | 'skip_pending' | 'end_session'; stageId: string; outcome?: 'completed' | 'ended_early' }>(), [transitionReason, setTransitionReason] = useState('')
   const [extensionOpen, setExtensionOpen] = useState(false), [extensionMinutes, setExtensionMinutes] = useState(10), [extensionReason, setExtensionReason] = useState('')
   const [runtimeProblemOpen, setRuntimeProblemOpen] = useState(false), [runtimeProblems, setRuntimeProblems] = useState<SelectedCanonicalProblem[]>([]), [runtimeProblemTargetType, setRuntimeProblemTargetType] = useState<'ALL' | 'GROUP' | 'USER'>('ALL'), [runtimeProblemTargetId, setRuntimeProblemTargetId] = useState(''), [runtimeProblemRequired, setRuntimeProblemRequired] = useState(true), [runtimeProblemTargetScore, setRuntimeProblemTargetScore] = useState(100), [runtimeProblemReason, setRuntimeProblemReason] = useState('')
@@ -443,13 +444,58 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       await saveDraftRef.current(true)
       const response = await executeTrainingCommand(sessionId, { type: type as 'PAUSE_SESSION', expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, targetType: targetType as 'ALL', targetId: resolvedTargetId, payload })
       if (!response.ok) { toast.error(response.error.message || '训练指令失败'); return false }
-      if (response.data && 'statusRevision' in response.data && typeof response.data.statusRevision === 'number') statusRevisionRef.current = response.data.statusRevision
+      const responseRevision = (response.data as any)?.session?.statusRevision ?? (response.data as any)?.statusRevision
+      if (typeof responseRevision === 'number') statusRevisionRef.current = responseRevision
       await load(); await loadHints(selectedId)
       return true
     } finally {
       commandInFlight.current = false
       setCommandBusy(false)
     }
+  }
+  const batchCommand = async (type: string, payload: Record<string, unknown> = {}) => {
+    if (!data || commandInFlight.current || selectedParticipantIds.length === 0) return false
+    commandInFlight.current = true
+    setCommandBusy(true)
+    try {
+      await saveDraftRef.current(true)
+      let completed = 0
+      for (const participantId of selectedParticipantIds) {
+        const participant = dashboard?.participants.find(item => item.id === participantId)
+        const targetId = participant?.user.id
+        const stageProblemId = participant?.currentProblemId || payload.stageProblemId
+        if (!targetId || ((type === 'UNLOCK_FOR_USER' || type === 'SKIP_FOR_USER') && !stageProblemId)) continue
+        const response = await executeTrainingCommand(sessionId, {
+          type: type as 'PAUSE_SESSION',
+          expectedRevision: statusRevisionRef.current ?? data.session.statusRevision,
+          targetType: 'USER',
+          targetId,
+          payload: { ...payload, ...(type === 'UNLOCK_FOR_USER' || type === 'SKIP_FOR_USER' ? { stageProblemId } : {}) },
+        })
+        if (!response.ok) {
+          toast.error('已处理 ' + completed + ' 人，' + participant.user.username + ' 操作失败：' + (response.error.message || '请求失败'))
+          return false
+        }
+        const responseRevision = (response.data as any)?.session?.statusRevision ?? (response.data as any)?.statusRevision
+        if (typeof responseRevision === 'number') statusRevisionRef.current = responseRevision
+        completed += 1
+      }
+      if (completed === 0) { toast.error('所选学员当前没有可执行该操作的题目'); return false }
+      await load()
+      await loadHints(selectedId)
+      setSelectedParticipantIds([])
+      toast.success('已向 ' + completed + ' 名学员执行操作')
+      return true
+    } finally {
+      commandInFlight.current = false
+      setCommandBusy(false)
+    }
+  }
+  const submitCoachMessage = async () => {
+    const success = selectedParticipantIds.length
+      ? await batchCommand('SHOW_MESSAGE', { message, messageType })
+      : await command('SHOW_MESSAGE', { message, messageType })
+    if (success) { setMessageOpen(false); setMessage('') }
   }
   const transitionStage = async (action: 'start' | 'advance' | 'skip_pending' | 'end_session', stageId: string, extra: Record<string, unknown> = {}) => {
     if (!data) return false
@@ -792,7 +838,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
             <div className={styles.actions}>
               {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
               {status === 'RUNNING' && <><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>暂停提交（可继续编辑）</Button><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>暂停提交与编辑</Button></>}
-              {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setRuntimeProblemOpen(true); setRuntimeProblems([]); setRuntimeProblemTargetType('ALL'); setRuntimeProblemTargetId(''); setRuntimeProblemRequired(true); setRuntimeProblemTargetScore(100); setRuntimeProblemReason('') }}>追加训练题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => setMessageOpen(true)}>发送消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
+              {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setRuntimeProblemOpen(true); setRuntimeProblems([]); setRuntimeProblemTargetType('ALL'); setRuntimeProblemTargetId(''); setRuntimeProblemRequired(true); setRuntimeProblemTargetScore(100); setRuntimeProblemReason('') }}>追加训练题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => { setSelectedParticipantIds([]); setMessageOpen(true) }}>发送消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
             </div>
           </div>
         </details>
@@ -888,15 +934,38 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
               <label className={styles.field}>状态<Select value={studentFilter} onChange={event => setStudentFilter(event.target.value)}><option value="all">全部</option><option value="stuck">可能卡题</option><option value="working">进行中</option><option value="completed">已完成</option><option value="offline">离线</option></Select></label>
               {Boolean(data.session.Groups.length) && <label className={styles.field}>分组<Select value={studentGroupFilter} onChange={event => setStudentGroupFilter(event.target.value)}><option value="all">全部分组</option>{data.session.Groups.filter(group => group.status === 'active').map(group => <option value={group.id} key={group.id}>{group.name}</option>)}</Select></label>}
             </div>
+            <div className={styles.actions} role="toolbar" aria-label="批量课堂操作">
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={filteredParticipants.length > 0 && filteredParticipants.every(item => selectedParticipantIds.includes(item.id))}
+                  onChange={event => setSelectedParticipantIds(current => event.target.checked
+                    ? [...new Set([...current, ...filteredParticipants.map(item => item.id)])]
+                    : current.filter(id => !filteredParticipants.some(item => item.id === id)))}
+                />
+                全选当前筛选（{filteredParticipants.length}）
+              </label>
+              <Button size="sm" variant="outline" disabled={commandBusy || selectedParticipantIds.length === 0} onClick={() => void batchCommand('UNLOCK_FOR_USER')}>批量解锁当前题</Button>
+              <Button size="sm" variant="outline" disabled={commandBusy || selectedParticipantIds.length === 0} onClick={() => void batchCommand('SKIP_FOR_USER')}>批量允许跳过</Button>
+              <Button size="sm" variant="secondary" disabled={commandBusy || selectedParticipantIds.length === 0} onClick={() => { setMessageOpen(true); setMessage('') }}>批量发送消息</Button>
+              {selectedParticipantIds.length > 0 && <span className={styles.muted}>已选 {selectedParticipantIds.length} 人</span>}
+            </div>
             <div className={styles.participantList}>{filteredParticipants.map(item => {
               const stuck = item.progress.some(progress => progress.status === 'STUCK')
-              return <button type="button" className={styles.participantRow} key={item.id} onClick={() => setSelectedParticipantId(item.id)}>
-                <span className={styles.participantAvatar}>{item.user.username.slice(0, 1).toUpperCase()}</span>
-                <span><strong>{item.user.username}</strong><small>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 题完成{item.currentGroupId ? ` · ${data.session.Groups.find(group => group.id === item.currentGroupId)?.name || '已分组'}` : ''}</small></span>
-                <StatusBadge variant={stuck ? 'warning' : item.completed ? 'success' : 'neutral'}>{stuck ? '需要关注' : item.completed ? '已完成' : '查看'}</StatusBadge>
-              </button>
-            })}</div>
-            {filteredParticipants.length === 0 && <p className={styles.muted}>没有符合当前筛选条件的学员。</p>}
+              return <div className={styles.participantRow} key={item.id}>
+                <input
+                  type="checkbox"
+                  aria-label={'选择 ' + item.user.username}
+                  checked={selectedParticipantIds.includes(item.id)}
+                  onChange={event => setSelectedParticipantIds(current => event.target.checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))}
+                />
+                <button type="button" className={styles.participantRowMain} onClick={() => setSelectedParticipantId(item.id)}>
+                  <span className={styles.participantAvatar}>{item.user.username.slice(0, 1).toUpperCase()}</span>
+                  <span><strong>{item.user.username}</strong><small>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 题完成{item.currentGroupId ? ' · ' + (data.session.Groups.find(group => group.id === item.currentGroupId)?.name || '已分组') : ''}</small></span>
+                  <StatusBadge variant={stuck ? 'warning' : item.completed ? 'success' : 'neutral'}>{stuck ? '需要关注' : item.completed ? '已完成' : '查看'}</StatusBadge>
+                </button>
+              </div>
+            })}</div>            {filteredParticipants.length === 0 && <p className={styles.muted}>没有符合当前筛选条件的学员。</p>}
           </div>
         </Section>
       </aside>}
@@ -933,6 +1002,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         if (!selectedParticipant) return
         setCommandTargetType('USER')
         setCommandTargetId(selectedParticipant.user.id)
+        setSelectedParticipantIds([])
         setSelectedParticipantId(undefined)
         setMessageOpen(true)
       }}
@@ -1094,7 +1164,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </div>
     </FormDialog>
     <FormDialog isOpen={extensionOpen} onClose={() => setExtensionOpen(false)} title="延长当前阶段" description="延时作为运行记录追加，不会覆盖原计划时长。" onSubmit={() => void extendCurrentStage()} submitText="确认延长" loading={commandBusy} dirty={Boolean(extensionReason)}><div className={styles.stack}><label className={styles.field}>延长分钟数<Input type="number" min={1} max={1440} value={extensionMinutes} onChange={event => setExtensionMinutes(Number(event.target.value))} /></label><label className={styles.field}>原因<Textarea rows={4} maxLength={2000} value={extensionReason} onChange={event => setExtensionReason(event.target.value)} /></label></div></FormDialog>
-    <FormDialog isOpen={messageOpen} onClose={() => setMessageOpen(false)} title="发送教练消息" description={`发送给：${commandTargetType === 'ALL' ? '全体学员' : commandTargetType === 'GROUP' ? '指定分组' : commandTargetType === 'USER' ? '指定学员' : '当前团队'}`} onSubmit={() => void command('SHOW_MESSAGE', { message, messageType }).then(success => { if (success) { setMessageOpen(false); setMessage('') } })} submitText="发送消息" dirty={Boolean(message)}><div className={styles.stack}><label className={styles.field}>消息类型<Select value={messageType} onChange={event => setMessageType(event.target.value)}><option value="INFO">信息</option><option value="WARNING">提醒</option><option value="INSTRUCTION">教学指令</option><option value="COUNTDOWN">倒计时</option></Select></label><label className={styles.field}>消息内容<Textarea rows={6} maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></label></div></FormDialog>
+    <FormDialog isOpen={messageOpen} onClose={() => setMessageOpen(false)} title="发送教练消息" description={selectedParticipantIds.length ? '发送给已选的 ' + selectedParticipantIds.length + ' 名学员' : '发送给：' + (commandTargetType === 'ALL' ? '全体学员' : commandTargetType === 'GROUP' ? '指定分组' : commandTargetType === 'USER' ? '指定学员' : '当前团队')} onSubmit={() => void submitCoachMessage()} submitText="发送消息" dirty={Boolean(message)}><div className={styles.stack}><label className={styles.field}>消息类型<Select value={messageType} onChange={event => setMessageType(event.target.value)}><option value="INFO">信息</option><option value="WARNING">提醒</option><option value="INSTRUCTION">教学指令</option><option value="COUNTDOWN">倒计时</option></Select></label><label className={styles.field}>消息内容<Textarea rows={6} maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={hintOpen} onClose={() => setHintOpen(false)} title="新增分级提示" onSubmit={() => void createHint()} submitText="创建提示" dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>{hintMode === 'TIME' ? '触发秒数' : hintMode === 'ATTEMPT' ? '触发提交次数' : '触发分数'}<Input type="number" min={hintMode === 'TIME' ? 60 : hintMode === 'SCORE' ? 0 : 1} max={hintMode === 'TIME' ? 86400 : 100} value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>
     <DetailDialog isOpen={Boolean(openedHint)} onClose={() => setOpenedHint(undefined)} title={`${openedHint?.level || ''} 级提示 · ${openedHint?.title || '提示'}`} size="md"><p>{openedHint?.content}</p></DetailDialog>
     <DetailDialog isOpen={reportOpen} onClose={() => setReportOpen(false)} title="训练过程报告" description="按阶段和训练组展示真实运行历史。" size="xl">
