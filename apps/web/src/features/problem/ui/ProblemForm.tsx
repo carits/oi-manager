@@ -1,5 +1,9 @@
 'use client'
 
+import { useAuth } from '@/features/auth'
+import { normalizeOjPlatformKey } from '@/lib/oj-platforms'
+import { ProblemPrimaryIdentity, type ProblemPrimaryIdentityValue } from './ProblemPrimaryIdentity'
+
 import { useState, useEffect, useRef } from 'react'
 import collisionStyles from './ProblemForm.collision.module.css'
 import unifiedStyles from './ProblemForm.unified.module.css'
@@ -15,7 +19,7 @@ import { ProblemContentVersions, type ProblemContentVersion } from './ProblemCon
 import { ProblemPublishingSettings, type ProblemOjBinding } from './ProblemPublishingSettings'
 import { ProblemAttachments } from './ProblemAttachments'
 import { createProblem, getProblemEditorDetail, updateProblem } from '../api/problemEditorApi'
-import type { ProblemAttachment, ProblemCreateInput } from '@oi-manager/contracts'
+import type { ProblemAttachment, ProblemEditorMutation } from '@oi-manager/contracts'
 import {
   deleteProblemAttachment, deleteProblemStatement, downloadOjProblemAttachment, fetchOjProblem,
   listProblemAttachments, uploadProblemAttachment, uploadProblemStatementPdf, uploadProblemTestdata,
@@ -45,9 +49,21 @@ interface ProblemFormProps {
   problemId?: string
 }
 
-let problemDraftBootstrap: ReturnType<typeof createProblem> | null = null
+const problemDraftBootstraps = new Map<string, ReturnType<typeof createProblem>>()
+type EditorDraft = Omit<ProblemEditorMutation, "expectedUpdatedAt">
 
 export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
+  const { user, sessionKey } = useAuth()
+  const editorVersionRef = useRef('')
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+  const contextRef = useRef('')
+  const fingerprintRef = useRef('')
+  const [primaryIdentity, setPrimaryIdentity] = useState<ProblemPrimaryIdentityValue>({ platform: '', problemId: '' })
+  const [identityDraft, setIdentityDraft] = useState<ProblemPrimaryIdentityValue>({ platform: '', problemId: '' })
+  const [editingIdentity, setEditingIdentity] = useState(false)
+  const [identityEditable, setIdentityEditable] = useState(false)
+  const [stableReady, setStableReady] = useState(false)
+  const [editorError, setEditorError] = useState('')
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -79,14 +95,21 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   // 获取路径前缀
   const pathPrefix = currentWorkspacePrefix(pathname, role === 'admin' ? '/platform-admin' : '/personal')
 
+  const editorContext = `${sessionKey}:${pathPrefix}:${problemId || 'new'}`
+  contextRef.current = editorContext
+  useEffect(() => () => { contextRef.current = '' }, [editorContext])
+
   // New problem creation is materialized immediately as a private draft so every
   // following editor (PDF, testdata and judge assets included) has a stable owner.
   useEffect(() => {
-    if (mode !== 'create') return
+    if (mode !== 'create' || !user) return
     const bootstrap = async () => {
-      const request = problemDraftBootstrap ||= createProblem({ title: '未命名题目', status: 'draft', statements: [], solutions: [] })
+      const context = editorContext
+      const request = problemDraftBootstraps.get(context) || createProblem({ platform: 'carits', title: '未命名题目', status: 'draft', statements: [], solutions: [] })
+      problemDraftBootstraps.set(context, request)
       const result = await request
-      window.setTimeout(() => { if (problemDraftBootstrap === request) problemDraftBootstrap = null }, 1000)
+      window.setTimeout(() => { if (problemDraftBootstraps.get(context) === request) problemDraftBootstraps.delete(context) }, 1000)
+      if (contextRef.current !== context) return
       if (!result.ok || !result.data.id) {
         setLoading(false); toast.error(result.ok ? '无法创建题目草稿，请重试' : result.error.message)
         return
@@ -94,7 +117,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       router.replace(`${pathPrefix}/problems/${result.data.id}/edit?new=1`)
     }
     void bootstrap()
-  }, [mode, pathPrefix, router, toast])
+  }, [mode, pathPrefix, router, toast, editorContext, user?.userId])
 
   useEffect(() => {
     const tab = searchParams.get('tab') as TabType
@@ -133,8 +156,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const [solutions, setSolutions] = useState<Statement[]>([])
   const [ojBindings, setOjBindings] = useState<OjBinding[]>([])
 
-  const buildProblemPayload = (): ProblemCreateInput => {
-    const data: ProblemCreateInput = {
+  const buildProblemPayload = (): EditorDraft => {
+    const data: EditorDraft = {
       title: form.title.trim() || '未命名题目',
       difficulty: form.difficulty || null,
       timeLimit: form.timeLimit ? parseInt(form.timeLimit) : null,
@@ -144,13 +167,19 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       solutions: solutions.map(s => ({ id: s.id, format: s.format, language: s.language, content: s.content, fileUrl: s.fileUrl, isVisible: s.isVisible })),
     }
     if (role === 'admin') data.visibility = form.visibility
-    const validBindings = ojBindings.filter(binding => binding.platform && binding.problemId.trim())
-    if (validBindings.length) data.ojBindings = validBindings
+    data.ojBindings = ojBindings.filter(binding => binding.platform || binding.problemId.trim()).map(binding => ({
+      ...binding, platform: normalizeOjPlatformKey(binding.platform) || binding.platform, problemId: binding.problemId.trim(),
+    }))
+    if (editingIdentity && (identityDraft.platform !== primaryIdentity.platform || identityDraft.problemId.trim() !== primaryIdentity.problemId)) {
+      data.platform = identityDraft.platform
+      data.problemId = identityDraft.problemId.trim()
+    }
     return data
   }
 
   const isAutoSaveDraft = mode === 'edit' && searchParams.get('new') === '1'
   const currentFingerprint = JSON.stringify(buildProblemPayload())
+  fingerprintRef.current = currentFingerprint
   const formDirty = savedFingerprintRef.current !== null && savedFingerprintRef.current !== currentFingerprint
   const { requestNavigation } = useUnsavedChanges(`problem-draft:${problemId || 'new'}`, formDirty || autoSaveStatus === 'saving', `${currentFingerprint}\\0${autoSaveStatus}`)
   useEffect(() => {
@@ -172,8 +201,40 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     }
   }, [mode, problemId])
 
+  const persistEditorDraft = (draft: EditorDraft) => {
+    const context = editorContext
+    const fingerprint = JSON.stringify(draft)
+    const task = saveQueueRef.current.catch(() => undefined).then(async () => {
+      if (contextRef.current !== context || !problemId || !editorVersionRef.current) throw new Error('编辑上下文已改变，请重新打开题目')
+      setAutoSaveStatus('saving')
+      const result = await updateProblem(problemId, { ...draft, expectedUpdatedAt: editorVersionRef.current })
+      if (contextRef.current !== context) return result
+      if (!result.ok) {
+        setAutoSaveStatus('failed')
+        setEditorError(result.error.message || '保存失败，草稿已保留')
+        return result
+      }
+      editorVersionRef.current = result.data.updatedAt
+      savedFingerprintRef.current = fingerprint
+      if (draft.platform !== undefined && fingerprintRef.current === fingerprint) {
+        const identity = { platform: result.data.platform, problemId: result.data.problemId }
+        setPrimaryIdentity(identity)
+        setIdentityDraft(identity)
+        setEditingIdentity(false)
+        const { platform: _platform, problemId: _number, ...content } = draft
+        savedFingerprintRef.current = JSON.stringify(content)
+      }
+      if (draft.status === 'published' || draft.status === 'archived') setIdentityEditable(false)
+      setEditorError('')
+      setAutoSaveStatus(fingerprintRef.current === fingerprint ? 'saved' : 'dirty')
+      return result
+    })
+    saveQueueRef.current = task
+    return task
+  }
+
   useEffect(() => {
-    if (loading || !isAutoSaveDraft || !problemId) return
+    if (loading || !isAutoSaveDraft || !problemId || editingIdentity || editorError) return
     if (savedFingerprintRef.current === null) {
       savedFingerprintRef.current = currentFingerprint
       setAutoSaveStatus('saved')
@@ -181,26 +242,32 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     }
     if (savedFingerprintRef.current === currentFingerprint) return
     setAutoSaveStatus('dirty')
-    const timer = window.setTimeout(async () => {
-      setAutoSaveStatus('saving')
-      const fingerprint = currentFingerprint
-      const result = await updateProblem(problemId, buildProblemPayload())
-      if (result.ok) {
-        savedFingerprintRef.current = fingerprint
-        setAutoSaveStatus('saved')
-      } else {
+    const draft = buildProblemPayload()
+    const timer = window.setTimeout(() => {
+      void persistEditorDraft(draft).catch(error => {
+        if (contextRef.current !== editorContext) return
         setAutoSaveStatus('failed')
-      }
+        setEditorError(requestErrorMessage(error, '保存失败，草稿已保留'))
+      })
     }, 800)
     return () => window.clearTimeout(timer)
-    // Payload is intentionally represented by its stable JSON fingerprint.
+    // Payload is represented by its fingerprint; identity changes require an explicit save.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFingerprint, isAutoSaveDraft, loading, problemId])
+  }, [currentFingerprint, isAutoSaveDraft, loading, problemId, editorContext, editingIdentity, editorError])
 
   const fetchProblem = async () => {
+    const context = editorContext
     try {
       setLoading(true)
       const p = await getProblemEditorDetail(problemId || '')
+      if (contextRef.current !== context) return
+      editorVersionRef.current = p.updatedAt
+      const identity = { platform: p.platform, problemId: p.problemId }
+      setPrimaryIdentity(identity)
+      setIdentityDraft(identity)
+      setEditingIdentity(false)
+      setIdentityEditable(p.permissions.canEditIdentity)
+      setStableReady(p.readiness.stable)
         if (!p.permissions?.canEdit) {
           toast.error('你没有权限编辑这道题')
           router.replace(`${pathPrefix}/problems/${problemId}`)
@@ -215,8 +282,12 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           visibility: p.visibility || 'private',
           status: p.status
         })
-        if (p.ojBindings) {
-          setOjBindings(typeof p.ojBindings === 'string' ? JSON.parse(p.ojBindings) : p.ojBindings)
+        try {
+          const bindings: unknown = p.ojBindings ? JSON.parse(p.ojBindings) : []
+          if (!Array.isArray(bindings) || bindings.some(item => !item || typeof item.platform !== 'string' || typeof item.problemId !== 'string')) throw new Error('invalid bindings')
+          setOjBindings(bindings)
+        } catch {
+          setEditorError('历史附加来源格式无效，未自动清空；请联系管理员核对后再保存。')
         }
         // 加载多版本数据
         const normalizeContent = (item: (typeof p.statements)[number]): Statement => ({
@@ -304,31 +375,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   }
 
   // 删除题面版本
-  const removeStatement = async (index: number) => {
-    const stmt = statements[index]
-    if (stmt.id && mode === 'edit' && problemId) {
-      // 如果是已保存的版本，调用 API 删除
-      try {
-        await deleteProblemStatement(problemId, stmt.id)
-      } catch (error) {
-        console.error('Failed to delete statement:', error)
-      }
-    }
-    setStatements(prev => prev.filter((_, i) => i !== index))
-  }
-
-  // 删除题解版本
-  const removeSolution = async (index: number) => {
-    const sol = solutions[index]
-    if (sol.id && mode === 'edit' && problemId) {
-      try {
-        await deleteProblemStatement(problemId, sol.id)
-      } catch (error) {
-        console.error('Failed to delete solution:', error)
-      }
-    }
-    setSolutions(prev => prev.filter((_, i) => i !== index))
-  }
+  const removeStatement = async (index: number) => setStatements(current => current.filter((_, i) => i !== index))
+  const removeSolution = async (index: number) => setSolutions(current => current.filter((_, i) => i !== index))
 
   // 上传 PDF
   const uploadPdf = async (type: 'statement' | 'solution', index: number, file: File) => {
@@ -502,21 +550,21 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
       const data = buildProblemPayload()
 
-      let result
-      if (mode === 'create') {
-        result = await createProblem(data)
-      } else {
-        result = await updateProblem(problemId || '', data)
-      }
+      if (mode === 'create' || !problemId) throw new Error('草稿尚未创建完成，请稍候')
+      if (ojBindings.some(binding => Boolean(binding.platform) !== Boolean(binding.problemId.trim()))) throw new Error('附加来源必须同时填写平台和题号')
+      const savedFingerprint = JSON.stringify(data)
+      const result = await persistEditorDraft(data)
+      if (!result.ok) { toast.error(result.error.message || '保存失败，草稿已保留'); return }
+      if (contextRef.current !== editorContext) return
+      if (fingerprintRef.current !== savedFingerprint) { toast.success('当前版本已保存，后续修改仍在草稿中'); return }
 
       if (result.ok) {
-        savedFingerprintRef.current = JSON.stringify(data)
         fingerprintProblemIdRef.current = problemId || result.data.id || null
         setAutoSaveStatus('saved')
         const createdId = result.data.id || problemId
 
         // 创建模式：上传暂存的评测数据 + 保存评测配置
-        if (mode === 'create') {
+        if (!loadedProblemIdRef.current) {
           const stagedFiles = judgeSettingsRef.current?.getStagedFiles?.()
           if (stagedFiles && stagedFiles.length > 0) {
             try {
@@ -543,7 +591,9 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       }
     } catch (error) {
       console.error('Failed to save problem:', error)
-      toast.error('保存失败')
+      setAutoSaveStatus('failed')
+      setEditorError(requestErrorMessage(error, '保存失败，草稿已保留'))
+      toast.error(requestErrorMessage(error, '保存失败，草稿已保留'))
     } finally {
       setSaving(false)
     }
@@ -554,7 +604,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     try {
       await judgeSettingsRef.current?.saveConfig()
     } catch (e) {
-      console.error('Failed to save judge config:', e)
+      toast.error(requestErrorMessage(e, '评测配置保存失败，题目内容已保存；配置草稿仍保留'))
+      return
     }
     setShowJudgeConfigConfirm(false)
     if (pendingSaveData) {
@@ -596,9 +647,13 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
             <h2 className={unifiedStyles.u6}>
               {mode === 'create' ? '正在创建题目草稿' : isAutoSaveDraft ? '题目草稿' : '编辑题目'}
             </h2>
-            {isAutoSaveDraft && <p aria-live="polite" className={unifiedStyles.u8}>
-              {autoSaveStatus === 'saving' ? '正在自动保存…' : autoSaveStatus === 'failed' ? '自动保存失败，请使用页面底部的保存按钮重试' : autoSaveStatus === 'dirty' ? '有更改待保存' : '已自动保存为不可见草稿'}
+            {<p aria-live="polite" className={unifiedStyles.u8}>
+              {autoSaveStatus === 'saving' ? '正在自动保存…' : autoSaveStatus === 'failed' ? '自动保存失败，请使用页面底部的保存按钮重试' : autoSaveStatus === 'dirty' ? '有更改待保存' : '当前版本已保存'}
             </p>}
+            {editorError && <p role="alert" className={unifiedStyles.u32}>{editorError}</p>}
+            <ProblemPrimaryIdentity current={primaryIdentity} value={identityDraft} editing={editingIdentity}
+              editable={identityEditable} disabled={saving || autoSaveStatus === 'saving'} stable={stableReady}
+              published={form.status === 'published'} onEditing={setEditingIdentity} onChange={setIdentityDraft} />
             <div className={unifiedStyles.u7}>
               <div>
                 <label className={unifiedStyles.u8}>标题 *</label>

@@ -48,13 +48,14 @@ export function ProblemPublishingSettings({
         >
           <option value="draft">草稿</option>
           <option value="published">已发布</option>
+          {status === "archived" && <option value="archived">已归档</option>}
         </Select>
       </div>
       <div className={unifiedStyles.u30}>
-        <label className={unifiedStyles.u8}>OJ 题目绑定</label>
-        <p className={unifiedStyles.u32}>绑定外部 OJ 题目，最多可添加 3 个</p>
+        <label className={unifiedStyles.u8}>附加来源</label>
+        <p className={unifiedStyles.u32}>仅记录来源，最多 3 项；不参与题号检索，不决定主 OJ 或主题号。拉取是独立的管理操作。</p>
         {bindings.map((binding, index) => (
-          <div key={`${binding.platform}-${binding.problemId}-${index}`} className={unifiedStyles.u33}>
+          <div key={index} className={unifiedStyles.u33}>
             <Select
               aria-label="选择 OJ 平台"
               value={binding.platform}

@@ -1,3 +1,5 @@
+import { normalizeOjPlatformKey } from '@oi-manager/shared'
+import { ProblemIdentityError, normalizePrimaryProblemIdentity, normalizeProblemOjBindings, assertPrimaryIdentityAvailable, canChangePrimaryIdentity } from '../problem.identity'
 import crypto from 'crypto'
 import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../../prisma'
@@ -121,7 +123,9 @@ export async function listProblems(input: {
   } else if (sourceGroup === 'external' && !(typeof platform === 'string' && platform)) {
     where.platform = { not: 'carits' }
   } else if (typeof platform === 'string' && platform) {
-    where.platform = platform
+    const canonicalPlatform = normalizeOjPlatformKey(platform)
+    if (!canonicalPlatform) fail(400, 'INVALID_OJ_PLATFORM', '平台名称未注册')
+    where.platform = canonicalPlatform
   }
 
   const [problems, total] = await Promise.all([
@@ -192,24 +196,18 @@ export async function createProblem(user: JwtPayload, body: any) {
   const libraryScope = organizationCreator ? 'school' : 'platform'
   const organizationId = libraryScope === 'school' ? user.organizationId! : null
   const libraryKey = problemLibraryKey(libraryScope, user.organizationId)
-  let platform = 'carits'
-  let problemId = await generateCaritsProblemId()
-  const ojBindings = body?.ojBindings
-  if (ojBindings !== undefined && !Array.isArray(ojBindings)) {
-    fail(400, 'INVALID_OJ_BINDINGS', 'OJ 绑定格式无效')
-  }
-  if (Array.isArray(ojBindings) && ojBindings.length > 0) {
-    platform = String(ojBindings[0]?.platform || 'carits')
-    problemId = String(ojBindings[0]?.problemId || '')
-    if (!problemId) fail(400, 'PROBLEM_ID_REQUIRED', '题号不能为空')
-    if (platform === 'carits' && !/^\d+$/.test(problemId)) {
-      fail(400, 'INVALID_CARITS_PROBLEM_ID', 'Carits 题号必须是纯数字')
-    }
-  }
+  const canonicalPlatform = typeof body?.platform === 'string' ? normalizeOjPlatformKey(body.platform) : null
+  if (!canonicalPlatform) fail(400, 'INVALID_OJ_PLATFORM', '必须明确选择已注册的主 OJ')
+  const identity = normalizePrimaryProblemIdentity(canonicalPlatform,
+    canonicalPlatform === 'carits' && body?.problemId === undefined ? await generateCaritsProblemId() : body?.problemId)
+  const { platform, problemId } = identity
+  if (platform === 'carits' && !/^\d+$/.test(problemId)) fail(400, 'INVALID_CARITS_PROBLEM_ID', 'Carits 题号必须是纯数字')
+  const ojBindings = normalizeProblemOjBindings(body?.ojBindings)
 
   let problem
   try {
     problem = await prisma.$transaction(async tx => {
+      await assertPrimaryIdentityAvailable(tx, libraryKey, identity)
       const duplicate = await tx.problem.findUnique({
         where: { libraryKey_platform_problemId: { libraryKey, platform, problemId } },
         select: { id: true },
@@ -382,6 +380,7 @@ export async function getProblemDetail(user: JwtPayload, problemId: string) {
         orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }],
       },
       ProblemHackConfig: { select: { enabled: true } },
+      TestSetSlots: { select: { slot: true } },
     },
   })
   if (!problem || !canViewProblem(user, problem)) {
@@ -397,7 +396,7 @@ export async function getProblemDetail(user: JwtPayload, problemId: string) {
   const acceptedHackCount = await prisma.problemHackAttempt.count({
     where: { problemId: problem.id, status: 'accepted' },
   })
-  const { ProblemStatement, ProblemHackConfig, Owner, ...data } = problem
+  const { ProblemStatement, ProblemHackConfig, Owner, TestSetSlots, ...data } = problem
   const permissions = problemPermissions(user, data)
   const judgeConfig = parseJudgeConfig(data.judgeConfig)
   const hackable = isHackableJudgeConfig(judgeConfig)
@@ -413,6 +412,7 @@ export async function getProblemDetail(user: JwtPayload, problemId: string) {
     platforms: parsePlatforms(data),
     permissions: {
       ...permissions,
+      canEditIdentity: canEdit && await canChangePrimaryIdentity(prisma, problem),
       canSubmit: data.status === 'published' && permissions.canView,
     },
     hack: {
@@ -424,6 +424,7 @@ export async function getProblemDetail(user: JwtPayload, problemId: string) {
         && permissions.canView,
       mode: resolveJudgeMode(judgeConfig),
     },
+    readiness: { stable: TestSetSlots.some(slot => slot.slot === 'STABLE'), published: data.status === 'published' },
     legacyIoSuggestion: legacyIo ? { inputFilename: legacyIo.inputFilename, outputFilename: legacyIo.outputFilename } : null,
   }
 }
@@ -434,8 +435,10 @@ async function syncStatements(
   statements: unknown,
   solutions: unknown,
 ) {
-  const versions = normalizeVersions(statements, solutions)
-  const existing = await client.problemStatement.findMany({ where: { problemId } })
+  const kinds = [statements !== undefined ? 'statement' : null, solutions !== undefined ? 'solution' : null].filter(Boolean)
+  if (!kinds.length) return
+  const versions = normalizeVersions(statements ?? [], solutions ?? [])
+  const existing = await client.problemStatement.findMany({ where: { problemId, type: { in: kinds } } })
   const retained = new Set<string>()
   for (const version of versions) {
     if (!validateVersion(version)) continue
@@ -473,82 +476,54 @@ async function syncStatements(
     }
   }
   await client.problemStatement.deleteMany({
-    where: { problemId, id: { notIn: Array.from(retained) } },
+    where: { problemId, type: { in: kinds }, id: { notIn: Array.from(retained) } },
   })
 }
 
 export async function updateProblem(user: JwtPayload, problemId: string, body: any) {
-  const existing = await prisma.problem.findUnique({ where: { id: problemId } })
-  if (!existing || !canModifyProblem(user, existing)) {
-    fail(404, 'PROBLEM_NOT_FOUND', '题目不存在')
-  }
-  if (body?.status !== undefined && !['draft', 'published', 'archived'].includes(body.status)) {
-    fail(400, 'INVALID_PROBLEM_STATUS', '题目状态无效')
-  }
-  if (body?.title !== undefined && !String(body.title).trim()) {
-    fail(400, 'PROBLEM_TITLE_REQUIRED', '标题不能为空')
-  }
-
-  const updateData: any = {
-    title: body?.title === undefined ? undefined : String(body.title).trim(),
-    description: body?.description,
-    statementType: body?.statementType,
-    solutionType: body?.solutionType,
-    solutionMarkdown: body?.solutionMarkdown,
-    solutionVisible: body?.solutionVisible,
-    difficulty: body?.difficulty,
-    timeLimit: normalizeOptionalNumber(body?.timeLimit, '时间限制'),
-    memoryLimit: normalizeOptionalNumber(body?.memoryLimit, '内存限制'),
-    status: body?.status,
-    publishedAt: body?.status === undefined
-      ? undefined
-      : body.status === 'published'
-        ? existing.publishedAt || new Date()
-        : null,
-    visibility: existing.libraryScope === 'school' ? 'private' : 'public',
-  }
-  if (body?.ojBindings !== undefined) {
-    if (!Array.isArray(body.ojBindings)) fail(400, 'INVALID_OJ_BINDINGS', 'OJ 绑定格式无效')
-    updateData.ojBindings = JSON.stringify(body.ojBindings)
-    if (body.ojBindings.length > 0) {
-      const platform = String(body.ojBindings[0]?.platform || existing.platform)
-      const nextProblemId = String(body.ojBindings[0]?.problemId || '')
-      if (!nextProblemId) fail(400, 'PROBLEM_ID_REQUIRED', '题号不能为空')
-      if (platform === 'carits' && !/^\d+$/.test(nextProblemId)) {
-        fail(400, 'INVALID_CARITS_PROBLEM_ID', 'Carits 题号必须是纯数字')
-      }
-      updateData.platform = platform
-      updateData.problemId = nextProblemId
-    }
-  }
-
+  const expected = typeof body?.expectedUpdatedAt === 'string' ? new Date(body.expectedUpdatedAt) : null
+  if (!expected || !Number.isFinite(expected.getTime())) fail(428, 'PROBLEM_VERSION_REQUIRED', '请刷新编辑器后保存，缺少题目版本')
+  if (body?.status !== undefined && !['draft', 'published', 'archived'].includes(body.status)) fail(400, 'INVALID_PROBLEM_STATUS', '题目状态无效')
+  if (body?.title !== undefined && !String(body.title).trim()) fail(400, 'PROBLEM_TITLE_REQUIRED', '题目标题不能为空')
+  const identityRequested = body?.platform !== undefined || body?.problemId !== undefined
+  const identity = identityRequested ? normalizePrimaryProblemIdentity(body.platform, body.problemId) : undefined
+  const bindings = normalizeProblemOjBindings(body?.ojBindings)
   let problem
   try {
     problem = await prisma.$transaction(async tx => {
-      const updated = await tx.problem.update({ where: { id: existing.id }, data: updateData })
-      if (body?.statements !== undefined || body?.solutions !== undefined) {
-        await syncStatements(
-          tx,
-          existing.id,
-          body.statements || [],
-          body.solutions || [],
-        )
+      await tx.$queryRaw`SELECT id FROM "Problem" WHERE id = ${problemId} FOR UPDATE`
+      const existing = await tx.problem.findUnique({ where: { id: problemId } })
+      if (!existing || !canModifyProblem(user, existing)) fail(404, 'PROBLEM_NOT_FOUND', '题目不存在')
+      if (existing.updatedAt.getTime() !== expected.getTime()) fail(409, 'PROBLEM_STALE', '题目已被修改，当前草稿已保留，请重新加载并核对后保存')
+      const changedIdentity = identity && (identity.platform !== existing.platform || identity.problemId !== existing.problemId)
+      if (changedIdentity) {
+        if (!await canChangePrimaryIdentity(tx, existing)) fail(409, 'PROBLEM_IDENTITY_LOCKED', '已发布或被业务引用的主身份不能在普通编辑中修改')
+        if (identity.platform === 'carits' && !/^\d+$/.test(identity.problemId)) fail(400, 'INVALID_CARITS_PROBLEM_ID', 'Carits 题号必须是纯数字')
+        await assertPrimaryIdentityAvailable(tx, existing.libraryKey, identity, existing.id)
       }
+      const updated = await tx.problem.update({ where: { id: existing.id }, data: {
+        title: body?.title === undefined ? undefined : String(body.title).trim(),
+        description: body?.description, statementType: body?.statementType, solutionType: body?.solutionType,
+        solutionMarkdown: body?.solutionMarkdown, solutionVisible: body?.solutionVisible, difficulty: body?.difficulty,
+        timeLimit: normalizeOptionalNumber(body?.timeLimit, '时间限制'),
+        memoryLimit: normalizeOptionalNumber(body?.memoryLimit, '内存限制'),
+        status: body?.status,
+        // Preserve the fact that an identity has been published, including after archival.
+        publishedAt: body?.status === 'published' ? existing.publishedAt || new Date() : existing.publishedAt,
+        visibility: existing.libraryScope === 'school' ? 'private' : 'public',
+        ...(changedIdentity ? identity : {}),
+        ...(bindings !== undefined ? { ojBindings: JSON.stringify(bindings) } : {}),
+        updatedAt: new Date(Math.max(Date.now(), existing.updatedAt.getTime() + 1)),
+      } })
+      await syncStatements(tx, existing.id, body?.statements, body?.solutions)
       return updated
     })
   } catch (error: any) {
-    if (error instanceof ProblemCrudError) throw error
-    if (error?.code === 'P2002') {
-      fail(409, 'PROBLEM_EXISTS', '当前题库已存在相同平台题号')
-    }
+    if (error?.code === 'P2002') fail(409, 'PROBLEM_EXISTS', '当前题库已存在相同平台题号')
     throw error
   }
-  logger.audit('problem_updated', {
-    userId: user.userId,
-    action: 'update_problem',
-    target: existing.id,
-    metadata: { organizationId: existing.organizationId, status: problem.status },
-  })
+  logger.audit('problem_updated', { userId: user.userId, action: 'update_problem', target: problem.id,
+    metadata: { organizationId: problem.organizationId, status: problem.status, identityChanged: identityRequested } })
   return { ...problem, permissions: problemPermissions(user, problem) }
 }
 

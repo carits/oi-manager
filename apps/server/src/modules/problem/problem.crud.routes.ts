@@ -1,3 +1,4 @@
+import { ProblemIdentityError } from './problem.identity'
 import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
@@ -19,7 +20,7 @@ export const problemCrudRouter = Router()
 
 function sendProblemCrudError(error: unknown, res: any) {
   if (sendContractError(error, res)) return res
-  if (!(error instanceof ProblemCrudError)) throw error
+  if (!(error instanceof ProblemCrudError) && !(error instanceof ProblemIdentityError)) throw error
   return res.status(error.statusCode).json({
     success: false,
     code: error.code,

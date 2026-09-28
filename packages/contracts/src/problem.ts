@@ -17,6 +17,8 @@ export const ProblemOjBindingSchema = z.object({
 });
 
 const ProblemEditorMutationShape = {
+  platform: z.string().trim().min(1).max(50).optional(),
+  problemId: z.string().trim().min(1).max(128).optional(),
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   statementType: z.string().optional(),
@@ -35,10 +37,15 @@ const ProblemEditorMutationShape = {
 
 export const ProblemCreateInputSchema = z.object(ProblemEditorMutationShape).extend({
   title: z.string().min(1),
+  platform: z.string().trim().min(1).max(50),
 });
-export const ProblemEditorMutationSchema = z.object(ProblemEditorMutationShape);
+export const ProblemEditorMutationSchema = z.object(ProblemEditorMutationShape).extend({
+  expectedUpdatedAt: z.string().datetime(),
+}).refine(value => (value.platform === undefined) === (value.problemId === undefined), { message: "修改主身份时必须同时指定主 OJ 和主题号" });
 
 export const ProblemEditorDetailSchema = z.object({
+  updatedAt: DateTimeWireSchema,
+  readiness: z.object({ stable: z.boolean(), published: z.boolean() }),
   id: z.string(),
   problemId: z.string(),
   title: z.string(),
@@ -65,6 +72,7 @@ export const ProblemEditorDetailSchema = z.object({
     id: z.string(), content: z.string().nullable(), fileUrl: z.string().nullable(), isVisible: z.boolean(),
   })),
   permissions: z.object({
+    canEditIdentity: z.boolean(),
     canEdit: z.boolean(),
     canPublish: z.boolean(),
     canArchive: z.boolean(),
@@ -83,7 +91,9 @@ export const ProblemEditorDetailSchema = z.object({
   }).nullable(),
 }).passthrough();
 
-export const ProblemMutationResultSchema = z.object({ id: z.string() }).passthrough();
+export const ProblemMutationResultSchema = z.object({
+  id: z.string(), updatedAt: DateTimeWireSchema, platform: z.string(), problemId: z.string(),
+}).passthrough();
 export const ProblemSchoolCopyResultSchema = z.object({
   problem: z.object({ id: z.string() }).passthrough(),
   skippedFiles: z.array(z.string()),

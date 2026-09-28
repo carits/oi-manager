@@ -1,3 +1,4 @@
+import { ProblemIdentityError } from '../../problem/problem.identity'
 import { prisma } from '../../../prisma'
 import yaml from 'js-yaml'
 import { logger } from '../../../lib/logger'
@@ -57,7 +58,10 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
     throw new SubmissionCommandError(403, 'TEACHER_ONLY', '校园学生请从作业或比赛提交')
   }
 
-  const problem = await findUsableProblemByExternalId(context.authUser, oj, problemId)
+  const problem = await findUsableProblemByExternalId(context.authUser, oj, problemId).catch(error => {
+    if (error instanceof ProblemIdentityError) throw new SubmissionCommandError(error.statusCode, error.code, error.message)
+    throw error
+  })
   if (!problem) throw new SubmissionCommandError(404, 'PROBLEM_NOT_FOUND', '题目不存在')
   const testdataCount = await prisma.testdataFile.count({ where: { problemId: problem.id } })
   if (!problem.judgeConfig?.trim() || testdataCount === 0) {
@@ -87,7 +91,7 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
     throw error
   }
 
-  const fingerprint = requestFingerprint({ problemId, oj, language, code, submitMethod: 'local', ...submissionIo })
+  const fingerprint = requestFingerprint({ problemId: problem.problemId, oj: problem.platform, language, code, submitMethod: 'local', ...submissionIo })
   let submissionResult
   try {
     submissionResult = await runIdempotent(
