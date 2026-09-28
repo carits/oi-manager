@@ -4,14 +4,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useRouter } from 'next/navigation'
 import { ConfirmDialog } from '@/components/ui/Dialogs'
 
+type BeforeNavigate = () => boolean | Promise<boolean>
 type LeaveRequest =
-  | { kind: 'navigation'; href: string; hard?: boolean }
+  | { kind: 'navigation'; href: string; hard?: boolean; beforeNavigate?: BeforeNavigate }
   | { kind: 'action'; run: () => void | Promise<void> }
 
 type UnsavedChangesContextValue = {
   hasUnsavedChanges: boolean
   setDirty: (scope: string, dirty: boolean) => void
-  requestNavigation: (href: string, options?: { hard?: boolean }) => void
+  requestNavigation: (href: string, options?: { hard?: boolean; beforeNavigate?: BeforeNavigate }) => void
   requestAction: (run: () => void | Promise<void>) => void
 }
 
@@ -47,15 +48,20 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => { bypass.current = false }, 0)
   }, [])
 
-  const navigate = useCallback((request: Extract<LeaveRequest, { kind: 'navigation' }>) => {
+  const navigate = useCallback(async (request: Extract<LeaveRequest, { kind: 'navigation' }>) => {
+    if (request.beforeNavigate) {
+      let ready = false
+      try { ready = await request.beforeNavigate() } catch { ready = false }
+      if (!ready) return
+    }
     allowLeave()
     if (request.hard) window.location.assign(request.href)
     else router.push(request.href)
   }, [allowLeave, router])
 
-  const requestNavigation = useCallback((href: string, options?: { hard?: boolean }) => {
-    const request = { kind: 'navigation' as const, href, hard: options?.hard }
-    if (!hasUnsavedChanges || bypass.current) navigate(request)
+  const requestNavigation = useCallback((href: string, options?: { hard?: boolean; beforeNavigate?: BeforeNavigate }) => {
+    const request = { kind: 'navigation' as const, href, hard: options?.hard, beforeNavigate: options?.beforeNavigate }
+    if (!hasUnsavedChanges || bypass.current) void navigate(request)
     else setPending(request)
   }, [hasUnsavedChanges, navigate])
 
@@ -99,7 +105,7 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
         const request = pending
         setPending(null)
         if (!request) return
-        if (request.kind === 'navigation') navigate(request)
+        if (request.kind === 'navigation') void navigate(request)
         else {
           allowLeave()
           void request.run()
