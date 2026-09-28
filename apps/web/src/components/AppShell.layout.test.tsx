@@ -28,13 +28,16 @@ describe('AppShell server first frame', () => {
     expect(html).toContain('data-navigation-mode="pending"')
     expect(html).not.toMatch(/<aside[^>]*aria-hidden="true"/)
   })
-  it('renders one brand and one workspace trigger in the header before account-level actions', () => {
+  it('keeps one brand in the header and makes workspace switching the first sidebar control', () => {
     const html = renderToString(<AppShell><p>Content</p></AppShell>)
     const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] || ''
+    const aside = html.match(/<aside\b[\s\S]*?<\/aside>/)?.[0] || ''
     expect(html.match(/alt="Carits"/g)).toHaveLength(1)
     expect(html.match(/data-workspace-trigger/g)).toHaveLength(1)
-    expect(header.indexOf('data-workspace-trigger')).toBeGreaterThan(-1)
-    expect(header.indexOf('data-workspace-trigger')).toBeLessThan(header.indexOf('data-chat-trigger'))
+    expect(header).not.toContain('data-workspace-trigger')
+    expect(aside.indexOf('data-workspace-trigger')).toBeGreaterThan(-1)
+    expect(aside.indexOf('data-workspace-trigger')).toBeLessThan(aside.indexOf('<nav'))
+    expect(header.indexOf('data-chat-trigger')).toBeGreaterThan(-1)
     expect(header.indexOf('data-chat-trigger')).toBeLessThan(header.indexOf('data-notification-trigger'))
     expect(html).toContain('data-app-content="true"')
   })
