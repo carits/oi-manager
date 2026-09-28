@@ -1,19 +1,15 @@
 name: Verify and apply reviewed UI shell implementation
-
 on:
   push:
     branches: [codex/ui-shell-workspace-unification]
     paths:
       - '.github/workflows/ui-shell-apply.yml'
       - 'scripts/ui-shell-patch/**'
-
 permissions:
   contents: read
-
 concurrency:
   group: ui-shell-reviewed-implementation
   cancel-in-progress: false
-
 jobs:
   implementation:
     if: github.repository == 'carits/oi-manager' && github.ref == 'refs/heads/codex/ui-shell-workspace-unification' && contains(github.event.head_commit.message, '[apply-ui-stage-one]')
@@ -30,22 +26,40 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Verify baseline and decode exact reviewed patch
+      - name: Verify and apply reviewed source, correcting the render test
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD:apps/web/src/components/AppShell.tsx)" = dc42a474002e9f0c90d837124a7e8744172c7495
+          node scripts/ui-contract-check.mjs > "$RUNNER_TEMP/ui-before.log" 2>&1 || test "$?" = 1
           python3 - <<'PY'
-          import base64, gzip, hashlib, os
+          import base64, gzip, hashlib, os, subprocess
           from pathlib import Path
           parts = sorted(Path('scripts/ui-shell-patch').glob('part-*.b64'))
           assert [p.name for p in parts] == ['part-01.b64', 'part-02.b64', 'part-03a.b64', 'part-03b.b64', 'part-04a.b64', 'part-04b.b64']
-          encoded = ''.join(p.read_text().strip() for p in parts)
-          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
+          patch = gzip.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True))
           assert hashlib.sha256(patch).hexdigest() == 'e91868109109b53b7e0b1f967fedf519416ffb4418d1d2402b5d6fe74f997b5d'
-          Path(os.environ['RUNNER_TEMP'], 'ui-shell.patch').write_bytes(patch)
-          print('Verified reviewed implementation patch:', len(patch), 'bytes')
+          target = Path(os.environ['RUNNER_TEMP'], 'ui-shell.patch')
+          target.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--index', '--check', str(target)], check=True)
+          subprocess.run(['git', 'apply', '--index', str(target)], check=True)
+          p = Path('apps/web/src/components/AppShell.layout.test.ts')
+          source = p.read_text()
+          old = "createElement(AppShell, { initialSidebarExpanded: expanded, children: createElement('p', null, 'Content') })"
+          assert source.count(old) == 1
+          source = source.replace(old, '<AppShell initialSidebarExpanded={expanded}><p>Content</p></AppShell>')
+          source = source.replace("createElement(AppShell, null, createElement('p', null, 'Content'))", '<AppShell><p>Content</p></AppShell>')
+          p.with_suffix('.tsx').write_text(source)
+          p.unlink()
+          config = Path('apps/web/vitest.config.ts')
+          source = config.read_text()
+          assert "include: ['src/**/*.test.ts']" in source
+          config.write_text(source.replace("include: ['src/**/*.test.ts']", "include: ['src/**/*.test.ts', 'src/**/*.test.tsx']"))
+          subprocess.run(['git', 'add', '-A', 'apps/web', 'e2e', 'docs'], check=True)
+          paths = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '-z']).decode().split('\0')
+          assert all(not p or p.startswith(('apps/web/', 'e2e/', 'docs/')) for p in paths), paths
           PY
+          git diff --cached --stat
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.0
@@ -53,67 +67,17 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Record existing UI component debt, then apply source changes
-        shell: bash
-        run: |
-          set -euo pipefail
-          status=0
-          node scripts/ui-contract-check.mjs > "$RUNNER_TEMP/ui-before.log" 2>&1 || status=$?
-          test "$status" -le 1
-          git apply --index --check "$RUNNER_TEMP/ui-shell.patch"
-          git apply --index "$RUNNER_TEMP/ui-shell.patch"
-          python3 - <<'PY'
-          import subprocess
-          paths = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '-z']).decode().split('\0')
-          assert all(not p or p.startswith(('apps/web/', 'e2e/', 'docs/')) for p in paths), paths
-          print('Source patch touches only Web, E2E and documentation paths.')
-          PY
-          git diff --cached --stat
-          cat docs/development/UI_SHELL_ROLLOUT.md
       - run: pnpm install --frozen-lockfile
-      - name: Correct render-test children argument without disabling lint
-        shell: bash
-        run: |
-          node <<'JS'
-          const fs = require('node:fs');
-          const assert = require('node:assert/strict');
-          const ts = require('./apps/web/node_modules/typescript');
-          const path = 'apps/web/src/components/AppShell.layout.test.ts';
-          const source = ts.createSourceFile(path, fs.readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
-          let changed = 0;
-          const result = ts.transform(source, [context => root => {
-            const visit = node => {
-              if (ts.isCallExpression(node) && /(?:^|\.)createElement$/.test(node.expression.getText(source)) && node.arguments.length === 2 && ts.isObjectLiteralExpression(node.arguments[1])) {
-                const props = node.arguments[1];
-                const child = props.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(source) === 'children');
-                if (child) {
-                  changed += 1;
-                  return ts.factory.updateCallExpression(node, node.expression, node.typeArguments, [node.arguments[0], ts.factory.updateObjectLiteralExpression(props, props.properties.filter(property => property !== child)), child.initializer]);
-                }
-              }
-              return ts.visitEachChild(node, visit, context);
-            };
-            return ts.visitNode(root, visit);
-          }]);
-          assert.equal(changed, 1, 'Expected exactly one reviewed children-prop correction');
-          fs.writeFileSync(path, ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(result.transformed[0]));
-          result.dispose();
-          JS
-          git add apps/web/src/components/AppShell.layout.test.ts
       - name: Build shared types and generate client without database access
         run: pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate
-      - name: Web type check
-        run: pnpm --filter web exec tsc --noEmit
-      - name: Web unit tests
-        run: pnpm --filter web test
+      - run: pnpm --filter web exec tsc --noEmit
+      - run: pnpm --filter web test
       - name: UI state and unchanged legacy debt
         shell: bash
         run: |
           set -euo pipefail
           node scripts/ui-state-check.mjs
-          status=0
-          node scripts/ui-contract-check.mjs > "$RUNNER_TEMP/ui-after.log" 2>&1 || status=$?
-          test "$status" -le 1
+          node scripts/ui-contract-check.mjs > "$RUNNER_TEMP/ui-after.log" 2>&1 || test "$?" = 1
           diff -u "$RUNNER_TEMP/ui-before.log" "$RUNNER_TEMP/ui-after.log"
           cat "$RUNNER_TEMP/ui-after.log"
           echo 'Existing training component violations are unchanged; the full UI component gate is not yet green.'
@@ -133,7 +97,6 @@ jobs:
           node scripts/docs-check.mjs
           git add docs/development/UI_SHELL_ROLLOUT.md
       - name: Commit verified implementation to the feature branch only
-        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -147,6 +110,5 @@ jobs:
           echo "::add-mask::$auth"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin HEAD:refs/heads/codex/ui-shell-workspace-unification
           sha="$(git rev-parse HEAD)"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
           gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=success -f context=ui-shell-stage-one -f description='Stage-one type, unit, state, architecture and build checks passed; full plan not yet complete.' -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           printf 'Verified implementation commit: `%s`\n\nNo database migration, deployment or main-branch update. Full integration E2E remains pending.\n' "$sha" >> "$GITHUB_STEP_SUMMARY"
