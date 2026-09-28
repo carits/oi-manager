@@ -23,22 +23,23 @@ source_of_truth: apps/web/src
 - 学校负责人继承教师页面。
 - 平台管理员不会通过 `super_admin` 判断获得超管页面。
 
-导航集中在 `config/navigation.ts`。所有角色根据账号与 URL 工作区上下文选择导航配置，角色 layout
-始终只创建一个 `AppShell`，首页不再自行嵌套 Shell。
+导航集中在 `config/navigation.ts`。根级 `Providers -> RoleShell -> AppShell` 为认证应用区提供唯一业务壳层；
+个人、组织与账号路由的 layout 只保留各自服务端访问边界，不再重复创建 Shell。
 
 `AppShell` 使用固定位置的全宽顶栏：唯一品牌与工作区切换在左，消息和通知固定在右；侧栏展开、
 收起均不移动顶栏入口。账号身份卡只提供资料、安全、平台绑定和退出，不重复业务或工作区入口。
-组织内的 Shell 由组织 ID 层布局持有，模块页不再重新创建整个外壳；服务端数据接口继续独立鉴权。
+组织访问边界位于 organizationId 层，模块切换只替换内容；服务端数据接口继续独立鉴权。
 
 响应式形态仍只有 `>=1100px` 的 232px 完整侧栏与 `<1100px` 默认关闭的模态抽屉，不引入图标 rail。
-桌面展开/收起偏好以非敏感 Cookie 按 userId 在当前设备共用，由 RoleLayout 在服务端读取并传入首帧；
+桌面展开/收起偏好以非敏感 Cookie 按 userId 在当前设备共用，由根布局读取并传入首帧；
 CSS 媒体查询负责 JavaScript 执行前的形态，viewport Effect 只负责交互，不再修正桌面初始宽度。
 旧版按角色/学校分开的 localStorage 偏好不在首屏绘制后导入；无新 Cookie 的首次访问默认展开。
 抽屉开关不持久化；打开时锁定背景滚动并令顶栏和正文 inert，关闭时恢复原状态和焦点。
 只有用户主动操作启用几何过渡，刷新、切页和断点同步不播放；减少动态效果偏好关闭过渡。
 
-工作区软切换与跨个人/组织的共同路由壳层尚待后续批次。本批保留现有带未保存确认的硬切换，
-不得先修改 Auth 上下文再询问是否离开。阶段状态与验证范围见 [UI Shell 实施记录](UI_SHELL_ROLLOUT.md)。
+日常工作区切换采用带未保存保护的客户端软路由：先确认离开，再用目标组织 Header 对 `/auth/me` 做无副作用权威预检；
+预检成功后才清理旧作用域缓存并导航。目标学校拒绝或网络失败不得触发当前学校身份回收，dirty scopes 也不得提前清空。
+`/identity` 只承担首次选择和身份失效恢复，仍可使用硬进入。阶段状态与验证范围见 [UI Shell 实施记录](UI_SHELL_ROLLOUT.md)。
 
 账号级 UI 能力集中在 `lib/capabilities.ts`。全局管理员工作区、个人/校园工作区、全量评测记录、
 组织管理和平台密钥入口只能通过 `hasAccountCapability()` / `isGlobalAdministrator()` 判断，业务组件
