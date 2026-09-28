@@ -33,13 +33,23 @@ source_of_truth: apps/web/src
 响应式形态仍只有 `>=1100px` 的 232px 完整侧栏与 `<1100px` 默认关闭的模态抽屉，不引入图标 rail。
 桌面展开/收起偏好以非敏感 Cookie 按 userId 在当前设备共用，由根布局读取并传入首帧；
 CSS 媒体查询负责 JavaScript 执行前的形态，viewport Effect 只负责交互，不再修正桌面初始宽度。
-旧版按角色/学校分开的 localStorage 偏好不在首屏绘制后导入；无新 Cookie 的首次访问默认展开。
+无新 Cookie 时首次访问默认展开。旧版按角色/学校拆分的 localStorage 偏好只迁移一次：客户端仅在
+Cookie 缺失时读取可确认的旧键，写入按账号统一的新 Cookie 后立即删除旧键；它不参与服务端首帧授权，
+也不会覆盖已经存在的新偏好。
 抽屉开关不持久化；打开时锁定背景滚动并令顶栏和正文 inert，关闭时恢复原状态和焦点。
 只有用户主动操作启用几何过渡，刷新、切页和断点同步不播放；减少动态效果偏好关闭过渡。
 
 日常工作区切换采用带未保存保护的客户端软路由：先确认离开，再用目标组织 Header 对 `/auth/me` 做无副作用权威预检；
 预检成功后才清理旧作用域缓存并导航。目标学校拒绝或网络失败不得触发当前学校身份回收，dirty scopes 也不得提前清空。
+切换流程用 generation/fencing 拒绝旧请求迟到提交；组织不可用事件必须携带来源 organizationId，
+与当前 URL 不匹配的事件一律忽略。预检期间若用户继续编辑，导航前重新比较 dirty revision 并再次确认，
+但复用已经成功的目标授权结果；取消后保留新增编辑。URL 表达目标工作区，`/auth/me` 返回的账号/成员关系
+表达当前权威上下文，Workspace Directory 只负责发现，三者不得互相替代。
 `/identity` 只承担首次选择和身份失效恢复，仍可使用硬进入。阶段状态与验证范围见 [UI Shell 实施记录](UI_SHELL_ROLLOUT.md)。
+
+这个分层源自账号身份与组织身份拆分后的 SSR 回归：全局账号角色始终可能只是 `user`，组织角色必须由
+URL organizationId 与显式 `X-OI-Organization-ID` 在服务端实时解析。不能通过让组织页面接受全局 `user`
+来绕过授权，也不能把目录条目里的展示角色当成服务端访问凭据。
 
 账号级 UI 能力集中在 `lib/capabilities.ts`。全局管理员工作区、个人/校园工作区、全量评测记录、
 组织管理和平台密钥入口只能通过 `hasAccountCapability()` / `isGlobalAdministrator()` 判断，业务组件

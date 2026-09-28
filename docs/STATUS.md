@@ -5,6 +5,17 @@ last_verified: 2026-09-28
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+## 2026-09-28 UI Shell 与工作区统一已发布
+
+- 认证应用已统一为根级 `RoleShell -> AppShell`；个人、组织和账号模块不再重建外壳，组织 layout 只保留访问边界。
+- 日常工作区切换使用“dirty 确认 → 目标 `/auth/me` 权威预检 → 缓存隔离 → 软路由”，并增加切换 generation、
+  组织事件来源校验和预检后的二次 dirty 检查，避免迟到响应跨组织生效或慢请求期间的新编辑丢失。
+- 桌面/平板导航只保留 232px 完整侧栏或完整抽屉；旧 localStorage 侧栏偏好可一次迁移到 SSR Cookie，
+  不恢复 72px compact rail。
+- 发布代码提交 `f04b0aa50adb8b0dfe95310f179378db25a1ac4a`。Web 53 文件/279 项测试、TypeScript、production build、
+  UI state、architecture、routes、docs 门禁通过；BUILD_ID `TPv-g5acV9SKdg2qySdoI` 的 canary 与正式消息闭环
+  分别通过序号 368/369 和 370/371。API readiness 与线上页面正常，本批无数据库迁移或业务数据修改。
+
 ## 2026-09-28 TestSet 双槽模型代码侧收口
 
 - TestSet Revision 业务模型、revisionId、latest 指针和历史版本接口已删除；每题只保留 STABLE 与可选 EVOLVING 两个当前槽，槽内容继续引用 TestdataObject。
@@ -53,7 +64,7 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 - 2026-09-19: Training Engine Stage 驱动代码侧收口完成：移除 Session 级 Group、participant.groupId、productMode、新写入 StageMode 与 BACK_STAGE；新增 StageGroup、ParticipantAssignment、ProblemPlan、RuntimeSnapshot、GroupChange、TimeAdjustment 和 OI scoreGoal 快照。人工与 Scheduler 的开始、推进、跳过和结束现在共用同一锁/CAS 事务；设计器冻结已开始 Stage、允许继续编排未来 Stage，运行台补齐提前结束、跳过、下一 Stage 预换组、任意延时、复制已运行 Stage 为未来 Stage 和换组报告。新增基于前序完成度/分数/尝试/有效时间的可解释分组建议，教师确认前不写入。Training JSON 路由接入共享 Runtime Contract，Training UI/Model 直连传输清零；全站 Feature UI/Model 直连由 218 降至 179。Contracts、Server/Web TypeScript、Server/Web 生产构建、Web 43 文件/191 项测试和文档/架构门禁通过；Server 新增生命周期与动态分组集成用例。按当前指令未搭建 PostgreSQL，Server 数据库测试因 `localhost:5432` 不可用而无法执行，迁移集成和隔离双角色 Playwright 未执行；当前未部署。
 
-- 2026-09-19: AppShell 响应式导航已在当前代码收口为双形态：`>=1100px` 使用可持久化展开/完全收起的 232px 完整侧栏，`<1100px` 使用默认关闭、不持久化的完整抽屉。删除 72px 图标 rail、Logo 裁剪和重复品牌展示，抽屉增加遮罩、滚动锁定、焦点限制/恢复和 Escape 关闭。同时修复导航偏好读取 `user.role`、写入 `accountRole` 的键不一致，并兼容迁移旧键。Web 42/42 个测试文件、187/187 项、UI 状态/组件门禁、生产构建和文档/架构门禁通过。隔离 Playwright 因本机 `127.0.0.1:5432` 未启动而未执行，本项尚未推送或部署。
+- 2026-09-19: AppShell 双形态响应式导航完成初始代码收口：`>=1100px` 使用 232px 完整侧栏，`<1100px` 使用完整抽屉，并删除 72px rail。该条记录的是当时的分支验证；最终合并、补充竞态防护与生产发布证据见本文件 2026-09-28 UI Shell 条目。
 
 - 2026-09-18: 修复普通账号进入组织工作区时被 SSR `RoleLayout` 重定向回 `/identity` 的核心回归。RootLayout 与组织 Layout 现在以路由 Organization ID 调用上下文感知的 `getServerSession(organizationId)`，SSR `/api/auth/me` 显式携带 `X-OI-Organization-ID`；组织授权严格读取 `organizationRole`，不通过放宽全局 `user` 白名单绕过。隔离 E2E 增加第二学校和规范 Membership Role，Chromium 完整权限文件 19/19 通过，直接覆盖个人→组织 A→组织 B→个人和无效组织会话保持；同步修复规范 Contest 测试种子和错误密码提示。Web 42 个测试文件 186 项、类型检查、本地/生产构建及文档门禁通过；提交 `dfed3f3` 至 `f8a68bb` 已推送 `main`，最终 Web BUILD_ID `RreXTH0VxBR6iOJpaWynx` 经 canary、正式消息闭环（序号 298–301）和生产 SSR 探针后上线。生产业务数据未为测试修改，本批无数据库结构或 Server 运行时代码变更。
 
