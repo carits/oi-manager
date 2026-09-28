@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { SubmissionCodeEditor } from '@/features/submission'
 import { getAssetUrl } from '@/lib/assets'
-import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
 import { Pagination } from '@/components/ui/Pagination'
 import { Section } from '@/components/ui/Section'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -192,13 +192,13 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     const additions: AssignmentProblem[] = []
     for (const problem of problems) {
       if (problemDraft.some(item => item.problemId === problem.id) || additions.some(item => item.problemId === problem.id)) continue
-      if (!problem.stableData) { toast.error(`${problem.problemCode}：没有可用的 Stable 测试数据`); continue }
+      if (!problem.stableData) { toast.error(`${problem.problemId}：没有可用的 Stable 测试数据`); continue }
       additions.push({
         id: `draft-${problem.id}`, problemId: problem.id, orderIndex: 0,
         category: 'REQUIRED', required: true, maxScore: 100, judgeMaxScore: 100, targetScore: 100, weight: 100,
         completionPolicy: problem.stableData.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
         titleSnapshot: problem.title, statementsSnapshot: [],
-        Problem: { id: problem.id, platform: problem.platform, problemId: problem.problemCode, title: problem.title, difficulty: problem.difficulty, allowedLanguages: null },
+        Problem: { id: problem.id, platform: problem.platform, problemId: problem.problemId, title: problem.title, difficulty: problem.difficulty, allowedLanguages: null },
       })
     }
     if (additions.length) setProblemDraft(current => [...current, ...additions].map((item, orderIndex) => ({ ...item, orderIndex })))
@@ -270,8 +270,8 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     </>}
     {designStep === 1 && <>
     <Section title="选择题目" description="选择平台并输入题号；作业发布后，题库更新不会改变本次成绩。">
-      <div className={styles.stack}><QuickProblemInput existingProblemIds={problemDraft.map(item => item.problemId)} onResolved={addProblems} />{problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
-        <span className={styles.problemIdentity}><strong>{index + 1}. {item.Problem.problemId} · {item.Problem.title}</strong><span>每次提交使用当时的 Stable 测试数据</span></span>
+      <div className={styles.stack}><ProblemReferenceSelector existingProblemIds={problemDraft.map(item => item.problemId)} onAdd={addProblems} />{problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
+        <span className={styles.problemIdentity}><strong>{index + 1}. <ProblemReferenceLink problem={item.Problem} /></strong><span>每次提交使用当时的 Stable 测试数据</span></span>
         <div className={styles.problemControls}>
           <FormField label="类别"><Select aria-label={`${item.Problem.title} 类别`} value={item.category} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, category: event.target.value as AssignmentProblem['category'], required: event.target.value === 'REQUIRED' } : row))}><option value="REQUIRED">必做</option><option value="OPTIONAL">选做</option><option value="CHALLENGE">挑战</option></Select></FormField>
           <FormField label="作业满分" hint={`本题评测满分 ${item.judgeMaxScore || 100}`}><Input aria-label={`${item.Problem.title} 满分`} type="number" min={1} max={1000} value={item.maxScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, maxScore: Number(event.target.value), targetScore: Math.min(row.targetScore, Number(event.target.value)) } : row))} /></FormField>
