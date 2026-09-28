@@ -64,7 +64,9 @@ describe('account direct chat', () => {
     expect(published.status).toBe(200)
     const packs = await request(app).get('/api/chat/sticker-packs').set(auth(aliceToken))
     expect(packs.status).toBe(200)
-    const sticker = packs.body.data[0].stickers[0]
+    const importedPack = packs.body.data.find((pack: { id: string }) => pack.id === published.body.data.packId)
+    expect(importedPack).toBeDefined()
+    const sticker = importedPack.stickers[0]
     await befriend()
     const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
     const clientMessageId = crypto.randomUUID()
