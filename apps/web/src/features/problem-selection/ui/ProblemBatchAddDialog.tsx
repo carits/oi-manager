@@ -47,10 +47,18 @@ export function ProblemBatchAddDialog({
 
   useEffect(() => {
     requestRef.current++
+    setValue('')
     setPreview(null)
     setRequestError('')
     setLoading(false)
-  }, [platform, sessionKey])
+  }, [sessionKey])
+
+  useEffect(() => {
+    requestRef.current++
+    setPreview(null)
+    setRequestError('')
+    setLoading(false)
+  }, [platform])
 
   useEffect(() => {
     if (!isOpen) {
