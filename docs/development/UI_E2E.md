@@ -56,6 +56,9 @@ workspace-mode.spec.ts 与 workspace-isolation.spec.ts 是全角色工作区切�
 
 静态导航巡检同时识别 `window.location.assign()` 和 `window.location.replace()`；新增或修改硬跳转不能绕过不存在路由和工作区边界检查。静态门禁不能替代上述真实点击流程。
 
+日常 `WorkspaceSwitcher` 的目标行为是客户端软路由：确认未保存内容后先验证目标账号/组织上下文，失败留在原页且保留 dirty 状态；成功后新 URL 到达前不得显示旧工作区业务内容。
+`/identity` 的首次选择和失效恢复允许硬进入。隔离 E2E 必须分别覆盖取消、目标 403/组织失效、网络失败、个人↔学校和学校 A↔学校 B。
+
 ## 套件
 
 ```bash
