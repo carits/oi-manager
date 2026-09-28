@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { prisma } from '../../../prisma'
 import { findAccessibleProblem, findUsableProblemByExternalId } from '../../problem/problem.access'
+import { normalizePrimaryProblemIdentity, ProblemIdentityError } from '../../problem/problem.identity'
 import {
   checkProblemListOptimisticLock,
   getEntryProblemListId,
@@ -21,16 +22,27 @@ async function requireEditable(user: AuthUser, listId: string, message: string) 
 }
 
 async function resolveProblem(user: AuthUser, ojName: string, problemCode: string, directProblemId?: string) {
-  if (directProblemId) {
-    const problem = await findAccessibleProblem(user, directProblemId, 'use')
-    if (!problem) fail(404, '题目不存在')
-    return { id: problem.id, title: problem.title }
+  try {
+    const requested = normalizePrimaryProblemIdentity(ojName, problemCode)
+    const problem = directProblemId
+      ? await findAccessibleProblem(user, directProblemId, 'use')
+      : await findUsableProblemByExternalId(user, requested.platform, requested.problemId)
+    if (!problem) fail(404, '题库中未找到该题目，或无权访问', 'PROBLEM_NOT_FOUND')
+
+    // The transitional wire contract still carries both forms of identity. Authorize
+    // the real record first, then reject contradictions rather than trusting either
+    // client-supplied label. This does not rewrite historical Problem rows.
+    const actual = normalizePrimaryProblemIdentity(problem.platform, problem.problemId)
+    if (requested.platform !== actual.platform || requested.problemId !== actual.problemId) {
+      fail(409, '题目内部引用与平台题号不一致，请重新选择题目', 'PROBLEM_IDENTITY_MISMATCH')
+    }
+    return { id: problem.id, title: problem.title, platform: actual.platform }
+  } catch (error) {
+    if (error instanceof ProblemIdentityError) {
+      fail(error.statusCode, error.message, error.code, error.data)
+    }
+    throw error
   }
-  const problem = await findUsableProblemByExternalId(user, ojName, problemCode)
-  if (!problem) {
-    fail(404, ojName === 'carits' ? '题库中未找到该题目，或无权访问' : '题库中未找到该题目')
-  }
-  return { id: problem.id, title: problem.title }
 }
 
 async function ensureProblemFitsList(problemId: string, listId: string) {
@@ -67,7 +79,7 @@ export async function addProblemListEntry(user: AuthUser, sectionId: string, bod
       id: crypto.randomUUID(), sectionId, problemId: problem.id,
       alias: typeof body.alias === 'string' ? body.alias.trim() || null : null,
       notes: typeof body.notes === 'string' ? body.notes.trim() || null : null,
-      ojName, sortOrder: (maximum?.sortOrder ?? -1) + 1,
+      ojName: problem.platform, sortOrder: (maximum?.sortOrder ?? -1) + 1,
     },
     include: {
       Problem: { select: { id: true, platform: true, problemId: true, title: true, difficulty: true, ojBindings: true } },
