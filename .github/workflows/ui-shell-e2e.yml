@@ -1,0 +1,74 @@
+name: UI shell isolated browser acceptance
+on:
+  push:
+    branches: [codex/ui-shell-workspace-unification]
+    paths:
+      - 'apps/web/**'
+      - 'e2e/**'
+      - '.github/workflows/ui-shell-e2e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ui-shell-e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    if: github.repository == 'carits/oi-manager' && github.ref == 'refs/heads/codex/ui-shell-workspace-unification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oi
+          POSTGRES_PASSWORD: oi_password
+          POSTGRES_DB: oi_manager
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U oi -d oi_manager"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: 'true'
+      E2E_DATABASE_URL: postgresql://oi:oi_password@127.0.0.1:5432/oi_manager?schema=e2e
+      NEXT_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate
+      - run: pnpm exec playwright install --with-deps chromium firefox
+      - name: Verify isolated fixture destination
+        run: |
+          node --input-type=module - <<'JS'
+          import assert from 'node:assert/strict'
+          const url = new URL(process.env.E2E_DATABASE_URL)
+          assert.equal(url.hostname, '127.0.0.1')
+          assert.equal(url.pathname, '/oi_manager')
+          assert.equal(url.searchParams.get('schema'), 'e2e')
+          JS
+      - name: Seed only the new disposable CI database
+        run: pnpm test:ui:prepare
+      - name: Exercise real UI and server boundaries in Chromium and Firefox
+        run: pnpm exec playwright test e2e/tests/human-ux-navigation.spec.ts e2e/tests/ui-shell-unification.spec.ts --project=chromium-desktop --project=firefox-smoke --workers=1
+      - name: Publish browser report without runtime credentials or storage state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-shell-browser-report-${{ github.sha }}
+          path: |
+            test-results/playwright-report/
+            test-results/junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
