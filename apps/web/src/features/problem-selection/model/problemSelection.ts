@@ -4,7 +4,7 @@ export type SelectedCanonicalProblem = NonNullable<ResolvedProblemSelection['pro
 export const MAX_PROBLEM_SELECTION_BATCH = 100
 
 /** Split explicit numbers only; never infer a platform, prefix, URL or UUID. */
-export function parseProblemCodes(value: string): string[] {
+export function parseProblemIds(value: string): string[] {
   return [...new Set(value.split(/[\s,;，；]+/u).map(item => item.trim()).filter(Boolean))]
 }
 
@@ -28,21 +28,21 @@ export function prepareProblemSelection(
 ) {
   const seen = new Set(existingProblemIds)
   const accepted: SelectedCanonicalProblem[] = []
-  const remainingCodes: string[] = []
+  const remainingProblemIds: string[] = []
   const rows: SelectionPreviewRow[] = results.map(result => {
     const problem = result.problem
     if (result.status !== 'resolved' || !problem) {
-      remainingCodes.push(result.problemCode)
+      remainingProblemIds.push(result.problemId)
       return { result, state: 'blocked', message: result.message || '当前输入不能使用' }
     }
     if (seen.has(problem.id)) return { result, state: 'duplicate', message: '该题已在当前列表中' }
     if (requireStable && !problem.stableData) {
-      remainingCodes.push(result.problemCode)
+      remainingProblemIds.push(result.problemId)
       return { result, state: 'blocked', message: '已找到题目，但当前入口需要 Stable 评测数据，暂不能选入' }
     }
     seen.add(problem.id)
     accepted.push(problem)
     return { result, state: 'ready', message: '已找到；选入表单后仍需保存' }
   })
-  return { rows, accepted, remainingCodes }
+  return { rows, accepted, remainingProblemIds }
 }
