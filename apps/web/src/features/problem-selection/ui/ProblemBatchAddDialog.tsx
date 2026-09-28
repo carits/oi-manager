@@ -2,156 +2,102 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { FormDialog } from '@/components/ui/Dialogs'
+import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { Select, Textarea } from '@/components/ui/FormControls'
-import { OJ_PLATFORMS_NO_ALL, getOjPlatformLabel } from '@/lib/oj-platforms'
-import { useAuth } from '@/features/auth'
-import { resolveProblemSelection } from '../api/problemSelectionApi'
-import {
-  parseProblemIds,
-  prepareProblemSelection,
-  problemSelectionInputError,
-  type SelectedCanonicalProblem,
-} from '../model/problemSelection'
+import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
+import { parseProblemIds, prepareProblemSelection, problemSelectionInputError, type ProblemReferenceAddReceipt, type SelectedCanonicalProblem } from '../model/problemSelection'
+import { useProblemReferenceResolver } from '../model/useProblemReferenceResolver'
 import { ProblemReferenceResult } from './ProblemReferenceResult'
 import styles from './ProblemReferenceSelector.module.css'
 
-type Preview = ReturnType<typeof prepareProblemSelection>
-
 export function ProblemBatchAddDialog({
-  isOpen,
-  onClose,
-  platform,
-  onPlatformChange,
-  existingProblemIds,
-  requireStable,
-  onAdd,
+  onClose, platform, onPlatformChange, existingProblemIds, requireStable, onAdd, contextKey, disabled, adding,
 }: {
-  isOpen: boolean
   onClose: () => void
   platform: string
   onPlatformChange: (platform: string) => void
-  existingProblemIds?: Iterable<string>
+  existingProblemIds: readonly string[]
   requireStable: boolean
-  onAdd: (problems: SelectedCanonicalProblem[]) => void | Promise<void>
+  onAdd: (problems: SelectedCanonicalProblem[]) => Promise<ProblemReferenceAddReceipt | undefined>
+  contextKey: string
+  disabled: boolean
+  adding: boolean
 }) {
-  const { sessionKey } = useAuth()
   const [value, setValue] = useState('')
-  const [preview, setPreview] = useState<Preview | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [requestError, setRequestError] = useState('')
-  const requestRef = useRef(0)
-  const codes = useMemo(() => parseProblemIds(value), [value])
-  const existing = useMemo(() => [...(existingProblemIds || [])], [existingProblemIds])
-  const inputError = problemSelectionInputError(codes)
+  const [confirmedIds, setConfirmedIds] = useState<string[]>([])
+  const [addError, setAddError] = useState('')
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
+  const [confirmClose, setConfirmClose] = useState(false)
+  const mounted = useRef(false)
+  const addLock = useRef(false)
+  const inputKey = JSON.stringify([contextKey, platform, value, disabled])
+  const latestKey = useRef(inputKey)
+  latestKey.current = inputKey
+  const problemIds = useMemo(() => parseProblemIds(value), [value])
+  const inputError = problemSelectionInputError(problemIds)
+  const resolution = useProblemReferenceResolver({
+    items: problemIds.map((problemId, index) => ({ clientKey: String(index), platform, problemId })),
+    enabled: !disabled && !inputError,
+    contextKey: JSON.stringify([contextKey, value]),
+    automatic: false,
+  })
+  const preview = prepareProblemSelection(resolution.items, [...existingProblemIds, ...confirmedIds], requireStable)
 
-  useEffect(() => {
-    requestRef.current++
-    setValue('')
-    setPreview(null)
-    setRequestError('')
-    setLoading(false)
-  }, [sessionKey])
-
-  useEffect(() => {
-    requestRef.current++
-    setPreview(null)
-    setRequestError('')
-    setLoading(false)
-  }, [platform])
-
-  useEffect(() => {
-    if (!isOpen) {
-      requestRef.current++
-      setValue('')
-      setPreview(null)
-      setRequestError('')
-      setLoading(false)
-    }
-  }, [isOpen])
-
-  const lookup = async () => {
-    if (!codes.length || inputError || loading) return
-    const requestId = ++requestRef.current
-    setLoading(true)
-    setPreview(null)
-    setRequestError('')
-    try {
-      const response = await resolveProblemSelection({
-        items: codes.map((problemId, index) => ({ clientKey: `${requestId}-${index}`, platform, problemId })),
-      })
-      if (requestId !== requestRef.current) return
-      if (!response.ok) {
-        setRequestError(response.error.message)
-        return
-      }
-      setPreview(prepareProblemSelection(response.data.items, existing, requireStable))
-    } catch (error) {
-      if (requestId === requestRef.current) setRequestError(error instanceof Error ? error.message : '批量检索失败，请重试')
-    } finally {
-      if (requestId === requestRef.current) setLoading(false)
-    }
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const edit = (next: string) => { setValue(next); setConfirmedIds([]); setAddError(''); setRowErrors({}) }
+  const requestClose = () => {
+    if (adding || addLock.current) return
+    if (value.trim()) setConfirmClose(true)
+    else onClose()
   }
 
   const add = async () => {
-    if (!preview?.accepted.length || loading) return
-    setLoading(true)
+    if (!preview.accepted.length || disabled || adding || addLock.current) return
+    addLock.current = true
+    const key = inputKey
+    const current = () => mounted.current && latestKey.current === key
+    setAddError('')
+    setRowErrors({})
     try {
-      await onAdd(preview.accepted)
-      if (preview.remainingProblemIds.length) {
-        setValue(preview.remainingProblemIds.join('\n'))
-        setPreview(null)
-      } else {
-        onClose()
-      }
+      const receipt = await onAdd(preview.accepted)
+      if (!receipt || !current()) return
+      const accepted = new Set([...confirmedIds, ...receipt.acceptedIds])
+      setConfirmedIds([...accepted])
+      setRowErrors(Object.fromEntries((receipt.rejected || []).map(item => [item.id, item.message])))
+      const remaining = prepareProblemSelection(resolution.items, [...existingProblemIds, ...accepted], requireStable)
+      if (!remaining.accepted.length && !remaining.remainingProblemIds.length) onClose()
+      else if (receipt.rejected?.length) setAddError('部分题目未选入，成功项已保留；可重试剩余题目。')
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : '选入当前表单失败，请重试')
+      if (current()) setAddError(error instanceof Error ? error.message : '选入失败，题号已保留，请重试')
     } finally {
-      setLoading(false)
+      addLock.current = false
     }
   }
 
-  const footer = <>
-    <Button variant="secondary" onClick={onClose} disabled={loading}>取消</Button>
-    {preview
-      ? <Button onClick={() => void add()} loading={loading} disabled={!preview.accepted.length}>加入 {preview.accepted.length} 道题</Button>
-      : <Button onClick={() => void lookup()} loading={loading} disabled={!codes.length || Boolean(inputError)}>检索</Button>}
-  </>
-
-  return <FormDialog
-    isOpen={isOpen}
-    onClose={onClose}
-    title="批量添加题目"
-    description="选择一个平台后粘贴多个题号。只检索当前可访问题库，不从外部 OJ 拉取。"
-    size="lg"
-    loading={loading}
-    dirty={Boolean(value)}
-    footer={footer}
-  >
-    <div className={styles.batchBody}>
-      <div className={styles.batchFields}>
-        <Select aria-label="批量题目平台" value={platform} onChange={event => { onPlatformChange(event.target.value); setPreview(null) }} disabled={loading}>
-          {OJ_PLATFORMS_NO_ALL.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </Select>
-        <Textarea
-          className={styles.batchInput}
-          rows={7}
-          aria-label="批量题号"
-          value={value}
-          disabled={loading}
-          placeholder="每行一个题号，也支持空格、逗号或分号分隔"
-          onChange={event => { setValue(event.target.value); setPreview(null); setRequestError('') }}
-        />
+  // No nested form: this selector also lives inside Contest/Training form dialogs.
+  return <>
+    <FormDialog isOpen onClose={requestClose} title="批量添加题目" description="选择平台后粘贴题号，先检索，再选入当前表单。每次最多 100 道。" size="lg" loading={adding}
+      footer={<><Button type="button" variant="secondary" onClick={requestClose} disabled={adding}>取消</Button><Button type="button" onClick={() => void add()} loading={adding} disabled={disabled || resolution.resolving || !preview.accepted.length}>加入 {preview.accepted.length} 道题</Button></>}
+    >
+      <div className={styles.batchBody}>
+        <div className={styles.batchFields}>
+          <label className={styles.field}>平台<Select aria-label="批量题目平台" value={platform} disabled={disabled || adding} onChange={event => { onPlatformChange(event.target.value); setConfirmedIds([]); setAddError(''); setRowErrors({}) }}>
+            {OJ_PLATFORMS_NO_ALL.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </Select></label>
+          <label className={styles.field}>题号<Textarea className={styles.batchInput} rows={7} aria-label="批量题号" value={value} disabled={disabled || adding} aria-invalid={Boolean(inputError)} placeholder="每行一个题号，也支持空格、逗号或分号分隔" onChange={event => edit(event.target.value)} /></label>
+        </div>
+        <div className={styles.actions}><Button type="button" variant="secondary" onClick={() => void resolution.resolve()} loading={resolution.resolving} disabled={disabled || adding || !problemIds.length || Boolean(inputError)}>检索</Button><span className={styles.hint}>{problemIds.length} 个不同题号</span></div>
+        {(inputError || resolution.error || addError) && <p className={styles.error} role="alert">{inputError || resolution.error || addError}</p>}
+        {resolution.resolving && <p className={styles.hint} role="status">正在检索…</p>}
+        {preview.rows.length > 0 && <>
+          <p className={styles.batchSummary} role="status">可加入 {preview.accepted.length} 道，已在列表 {preview.rows.filter(row => row.state === 'duplicate').length} 道，待处理 {preview.remainingProblemIds.length} 道。选入后仍需保存业务表单。</p>
+          <ul className={styles.batchResults}>{preview.rows.map(row => <li className={styles.batchResult} key={row.result.clientKey}>
+            <span className={styles.batchCode}>{row.result.problemId}</span>
+            <div><ProblemReferenceResult row={row} />{row.result.problem && rowErrors[row.result.problem.id] && <p className={styles.error}>{rowErrors[row.result.problem.id]}</p>}</div>
+          </li>)}</ul>
+        </>}
       </div>
-      {inputError && <p className={styles.batchSummary} role="alert">{inputError}</p>}
-      {requestError && <p className={styles.batchSummary} role="alert">{requestError}</p>}
-      {preview && <>
-        <p className={styles.batchSummary}>平台：{getOjPlatformLabel(platform)}。找到 {preview.rows.filter(row => Boolean(row.result.problem)).length} 道，可加入 {preview.accepted.length} 道，待处理 {preview.remainingProblemIds.length} 道。</p>
-        <ul className={styles.batchResults}>{preview.rows.map(row => <li className={styles.batchResult} key={row.result.clientKey}>
-          <span className={styles.batchCode}>{row.result.problemId}</span>
-          <ProblemReferenceResult row={row} />
-        </li>)}</ul>
-      </>}
-    </div>
-  </FormDialog>
+    </FormDialog>
+    <ConfirmDialog isOpen={confirmClose} onClose={() => setConfirmClose(false)} onConfirm={onClose} title="放弃剩余题号？" message="关闭后，未选入的题号将被丢弃；已经选入当前表单的题目不会删除。" confirmText="放弃并关闭" danger />
+  </>
 }

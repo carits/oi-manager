@@ -31,7 +31,7 @@ import {
 } from "../api/trainingSessionApi";
 import type { Assignment, Design, DesignProblem, Issue, Stage, TrainingGrouping } from "../model/trainingDesign";
 import { createTrainingDesignDraft, isTrainingStageDefinitionLocked, moveItem, newTrainingDesignKey, normalizeAssignments, normalizeProblemOrder } from "../model/trainingDesign";
-import { ProblemReferenceSelector, type SelectedCanonicalProblem } from "@/features/problem-selection";
+import { ProblemReferenceSelector, type AddProblemReferences } from "@/features/problem-selection";
 
 const newKey = newTrainingDesignKey;
 
@@ -54,6 +54,11 @@ const copyStageAsDraft = (stage: Stage): Stage => ({
 });
 
 export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
+  const { sessionKey } = useAuth();
+  return <TrainingSessionDesignEditor key={JSON.stringify([sessionKey, sessionId])} sessionId={sessionId} />;
+}
+
+function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
   const router = useRouter(),
     pathname = usePathname(),
     searchParams = useSearchParams(),
@@ -62,6 +67,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const [design, setDesign] = useState<Design | null>(null),
     [stages, setStages] = useState<Stage[]>([]),
     [grouping, setGrouping] = useState<TrainingGrouping | undefined>();
+  const stagesRef = useRef(stages);
+  stagesRef.current = stages;
   const [stageDrawerOpen, setStageDrawerOpen] = useState(false);
   const [auxiliaryPanel, setAuxiliaryPanel] = useState<"roster" | "hints" | "matrix" | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -216,14 +223,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       );
   };
 
-  const fetchDesignProblem = async (problemId: string) => {
-    try {
-      return await getTrainingDesignProblem(sessionId, problemId) as DesignProblem;
-    } catch {
-      toast.error("题目不可用");
-      return null;
-    }
-  };
   const assignmentFromProblem = (problem: DesignProblem): Assignment => ({
     clientKey: newKey(),
     problemId: problem.id,
@@ -239,22 +238,36 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     subtasks: problem.subtasks,
     unlockPolicy: { mode: "ANY", conditions: [{ type: "AC" }] },
   });
-  const addResolvedProblems = async (problems: SelectedCanonicalProblem[]) => {
-    const destinationKeys = (problemTarget === "current" ? (activeStage ? [activeStage.clientKey] : []) : targetStages).filter(key => {
-      const stage = stages.find(item => item.clientKey === key);
-      return Boolean(stage && !stageReadOnly(stage));
-    });
-    if (!destinationKeys.length) return toast.error("请选择尚未开始的目标阶段");
+  const selectedDestinationKeys = problemTarget === "current" ? (activeStage ? [activeStage.clientKey] : []) : targetStages;
+  const destinations = stages.filter(stage => selectedDestinationKeys.includes(stage.clientKey));
+  // A number is a duplicate only when every selected destination already contains it.
+  const destinationProblemIds = destinations[0]?.Problems.filter(problem => destinations.every(stage => stage.Problems.some(item => item.problemId === problem.problemId))).map(problem => problem.problemId) || [];
+  const addResolvedProblems: AddProblemReferences = async (problems, operation) => {
+    const destinationKeys = [...selectedDestinationKeys];
+    if (!destinationKeys.length) throw new Error("请选择尚未开始的目标阶段");
     const details: DesignProblem[] = [];
+    const rejected: Array<{ id: string; message: string }> = [];
     for (const problem of problems) {
-      const detail = await fetchDesignProblem(problem.id);
-      if (detail) details.push(detail);
+      if (!operation.isCurrent()) return { acceptedIds: [], rejected };
+      try {
+        const detail = await getTrainingDesignProblem(sessionId, problem.id) as DesignProblem;
+        if (detail.id !== problem.id) throw new Error("题目详情与检索身份不一致");
+        details.push(detail);
+      } catch (error) {
+        rejected.push({ id: problem.id, message: error instanceof Error ? error.message : "训练题目详情加载失败，请重试" });
+      }
     }
-    if (!details.length) return;
-    replaceStages((current) => current.map((stage) => destinationKeys.includes(stage.clientKey) ? {
+    if (!operation.isCurrent()) return { acceptedIds: [], rejected };
+    const currentStages = stagesRef.current;
+    if (destinationKeys.some(key => {
+      const stage = currentStages.find(item => item.clientKey === key);
+      return !stage || isTrainingStageDefinitionLocked(stage.id, currentStages);
+    })) throw new Error("目标阶段已变化或开始运行，题号已保留，请重新选择");
+    if (details.length) replaceStages(current => current.map(stage => destinationKeys.includes(stage.clientKey) && !isTrainingStageDefinitionLocked(stage.id, current) ? {
       ...stage,
       Problems: [...stage.Problems, ...details.filter(problem => !stage.Problems.some(item => item.problemId === problem.id)).map(assignmentFromProblem)],
     } : stage));
+    return { acceptedIds: details.map(problem => problem.id), rejected };
   };
   const updateProblem = (
     clientKey: string,
@@ -667,8 +680,9 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             onChange={event => setTargetStages(current => event.target.checked ? [...current, stage.clientKey] : current.filter(key => key !== stage.clientKey))}
           />)}</div>}
           <ProblemReferenceSelector
-            disabled={!activeStage || activeStageReadOnly || (problemTarget === "multiple" && !targetStages.length)}
-            existingProblemIds={problemTarget === "current" ? activeStage?.Problems.map(item => item.problemId) : []}
+            contextKey={JSON.stringify([activeStageKey, problemTarget, [...targetStages].sort()])}
+            disabled={!stageDrawerOpen || saving || publishing || !activeStage || activeStageReadOnly || (problemTarget === "multiple" && !targetStages.length)}
+            existingProblemIds={destinationProblemIds}
             onAdd={addResolvedProblems}
             requireStable={false}
           />
@@ -767,7 +781,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           }}>{issue.message}</Button>)}</div>}
         </div>
       </FormDialog>
-
       <ConfirmDialog
         isOpen={pendingRemovalConfirm}
         onClose={() => setPendingRemovalConfirm(false)}

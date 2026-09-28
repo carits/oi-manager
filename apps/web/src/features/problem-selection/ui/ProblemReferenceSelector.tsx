@@ -1,23 +1,30 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/FormControls'
 import { OJ_PLATFORMS_NO_ALL, normalizeOjPlatformKey } from '@/lib/oj-platforms'
 import { useAuth } from '@/features/auth'
-import { resolveProblemSelection } from '../api/problemSelectionApi'
 import {
   prepareProblemSelection,
   problemSelectionInputError,
+  problemReferenceAddReceipt,
+  ProblemReferenceOperation,
+  type AddProblemReferences,
+  type ProblemReferenceAddReceipt,
   type SelectedCanonicalProblem,
 } from '../model/problemSelection'
+import { useProblemReferenceResolver } from '../model/useProblemReferenceResolver'
 import { ProblemBatchAddDialog } from './ProblemBatchAddDialog'
 import { ProblemReferenceResult } from './ProblemReferenceResult'
 import styles from './ProblemReferenceSelector.module.css'
 
 export interface ProblemReferenceSelectorProps {
   existingProblemIds?: Iterable<string>
-  onAdd: (problems: SelectedCanonicalProblem[]) => void | Promise<void>
+  onAdd: AddProblemReferences
+  /** Change when a destination stage, section or other business target changes. */
+  contextKey?: string
   autoFocus?: boolean
   disabled?: boolean
   label?: string
@@ -25,157 +32,155 @@ export interface ProblemReferenceSelectorProps {
   allowBatch?: boolean
 }
 
-export function ProblemReferenceSelector({
+export function ProblemReferenceSelector(props: ProblemReferenceSelectorProps) {
+  const { user, sessionKey } = useAuth()
+  const pathname = usePathname()
+  const scope = JSON.stringify([sessionKey, pathname, props.contextKey])
+  return <ReferenceEditor key={scope} {...props} scope={scope} accountId={user?.userId || 'anonymous'} disabled={props.disabled || !sessionKey} />
+}
+
+function ReferenceEditor({
   existingProblemIds,
   onAdd,
-  autoFocus = true,
-  disabled,
+  autoFocus = false,
+  disabled = false,
   label = '按题号添加',
   requireStable = true,
   allowBatch = true,
-}: ProblemReferenceSelectorProps) {
-  const { user, sessionKey } = useAuth()
-  const storageKey = `problem-selection:last-platform:${user?.userId || 'anonymous'}`
+  scope,
+  accountId,
+}: ProblemReferenceSelectorProps & { scope: string; accountId: string }) {
+  const fieldId = useId()
+  const storageKey = `problem-selection:last-platform:${accountId}`
   const [platform, setPlatform] = useState('carits')
   const [problemId, setProblemId] = useState('')
-  const [lookupItem, setLookupItem] = useState<import('@oi-manager/contracts').ResolvedProblemSelection | null>(null)
-  const [resolving, setResolving] = useState(false)
+  const [composing, setComposing] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [requestError, setRequestError] = useState('')
+  const [addError, setAddError] = useState('')
+  const [notice, setNotice] = useState('')
   const [batchOpen, setBatchOpen] = useState(false)
-  const requestRef = useRef(0)
-  const contextRef = useRef(sessionKey)
-  contextRef.current = sessionKey
+  const mounted = useRef(false)
+  const addOperation = useRef(new ProblemReferenceOperation())
   const existing = useMemo(() => [...(existingProblemIds || [])], [existingProblemIds])
+  const latest = useRef({ existing, disabled, requireStable, onAdd })
+  latest.current = { existing, disabled, requireStable, onAdd }
   const trimmed = problemId.trim()
   const inputError = trimmed ? problemSelectionInputError([trimmed]) : null
-  const preview = lookupItem ? prepareProblemSelection([lookupItem], existing, requireStable) : null
-  const row = preview?.rows[0] || null
-  const readyProblem = row?.state === 'ready' ? row.result.problem : undefined
+  const resolution = useProblemReferenceResolver({
+    items: trimmed ? [{ clientKey: 'single', platform, problemId: trimmed }] : [],
+    enabled: !disabled && !composing && !batchOpen && !inputError,
+    contextKey: scope,
+  })
+  const preview = prepareProblemSelection(resolution.items, existing, requireStable)
+  const row = preview.rows[0]
+  const ready = row?.state === 'ready' ? row.result.problem : undefined
 
   useEffect(() => {
-    requestRef.current++
-    setProblemId('')
-    setLookupItem(null)
-    setRequestError('')
-    setResolving(false)
-    let saved: string | null = null
-    try { saved = normalizeOjPlatformKey(window.localStorage.getItem(storageKey) || '') } catch { /* storage is optional */ }
-    setPlatform(saved && OJ_PLATFORMS_NO_ALL.some(item => item.value === saved) ? saved : 'carits')
-  }, [storageKey, sessionKey])
+    mounted.current = true
+    const operation = addOperation.current
+    try {
+      const saved = normalizeOjPlatformKey(window.localStorage.getItem(storageKey) || '')
+      if (saved && OJ_PLATFORMS_NO_ALL.some(item => item.value === saved)) setPlatform(saved)
+    } catch { /* Platform memory is optional. */ }
+    return () => { mounted.current = false; operation.cancel() }
+  }, [storageKey])
+
+  useEffect(() => {
+    if (disabled) { addOperation.current.cancel(); setAdding(false) }
+  }, [disabled])
 
   const changePlatform = (next: string) => {
     const canonical = normalizeOjPlatformKey(next)
     if (!canonical) return
-    requestRef.current++
     setPlatform(canonical)
-    setLookupItem(null)
-    setRequestError('')
-    try { window.localStorage.setItem(storageKey, canonical) } catch { /* storage is optional */ }
+    setAddError('')
+    setNotice('')
+    try { window.localStorage.setItem(storageKey, canonical) } catch { /* Storage is optional. */ }
   }
 
-  const lookup = async (candidate = problemId) => {
-    const value = candidate.trim()
-    if (!value || problemSelectionInputError([value]) || disabled) return
-    const requestId = ++requestRef.current
-    const context = sessionKey
-    setResolving(true)
-    setLookupItem(null)
-    setRequestError('')
+  // One synchronous lock is shared by the single and batch entry points.
+  const performAdd = async (problems: SelectedCanonicalProblem[]): Promise<ProblemReferenceAddReceipt | undefined> => {
+    if (latest.current.disabled || addOperation.current.isRunning('add')) return
+    const ticket = addOperation.current.begin('add')
+    const current = () => mounted.current && ticket.isCurrent() && !latest.current.disabled
+    setAdding(true)
     try {
-      const response = await resolveProblemSelection({
-        items: [{ clientKey: String(requestId), platform, problemId: value }],
-      })
-      if (requestId !== requestRef.current || contextRef.current !== context) return
-      if (!response.ok) {
-        setRequestError(response.error.message)
-        return
+      const existingIds = new Set(latest.current.existing)
+      const candidates = problems.filter(problem => !existingIds.has(problem.id))
+      const assessment = prepareProblemSelection(candidates.map(problem => ({
+        clientKey: problem.id, platform: problem.platform, problemId: problem.problemId, status: 'resolved', problem,
+      })), [], latest.current.requireStable)
+      const receipt = assessment.accepted.length
+        ? problemReferenceAddReceipt(assessment.accepted, await latest.current.onAdd(assessment.accepted, { signal: ticket.signal, isCurrent: current }))
+        : { acceptedIds: [] as string[] }
+      if (!current()) return
+      return {
+        acceptedIds: [...problems.filter(problem => existingIds.has(problem.id)).map(problem => problem.id), ...receipt.acceptedIds],
+        rejected: [...(receipt.rejected || []), ...assessment.rows.filter(item => item.state === 'blocked').map(item => ({ id: item.result.problem!.id, message: item.message }))],
       }
-      setLookupItem(response.data.items[0] || null)
     } catch (error) {
-      if (requestId === requestRef.current && contextRef.current === context) {
-        setRequestError(error instanceof Error ? error.message : '检索失败，请重试')
-      }
+      if (current()) throw error
     } finally {
-      if (requestId === requestRef.current && contextRef.current === context) setResolving(false)
+      if (current()) setAdding(false)
+      addOperation.current.finish(ticket)
     }
   }
-
-  useEffect(() => {
-    if (!trimmed || inputError || disabled) {
-      requestRef.current++
-      setLookupItem(null)
-      setResolving(false)
-      if (!trimmed) setRequestError('')
-      return
-    }
-    const timer = window.setTimeout(() => { void lookup(trimmed) }, 400)
-    return () => window.clearTimeout(timer)
-  // lookup intentionally reads the current platform/session and is guarded by requestRef.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trimmed, platform, sessionKey, disabled])
 
   const add = async () => {
-    if (!readyProblem || adding || disabled) return
-    setAdding(true)
-    setRequestError('')
+    if (!ready || resolution.resolving) return
+    setAddError('')
     try {
-      await onAdd([readyProblem])
-      requestRef.current++
+      const receipt = await performAdd([ready])
+      if (!receipt || !mounted.current) return
+      if (!receipt.acceptedIds.includes(ready.id)) {
+        setAddError(receipt.rejected?.find(item => item.id === ready.id)?.message || '未选入当前表单，请重试')
+        return
+      }
       setProblemId('')
-      setLookupItem(null)
-      setResolving(false)
+      setNotice('已选入当前表单，仍需保存。')
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : '选入当前表单失败，请重试')
-    } finally {
-      setAdding(false)
+      if (mounted.current) setAddError(error instanceof Error ? error.message : '选入失败，输入已保留，请重试')
     }
   }
 
-  return <section className={styles.root} aria-label={label} aria-busy={resolving || adding}>
+  return <section className={styles.root} aria-label={label} data-testid="problem-reference-selector">
     <div className={styles.row}>
-      <Select aria-label="题目平台" value={platform} onChange={event => changePlatform(event.target.value)} disabled={disabled || adding}>
-        {OJ_PLATFORMS_NO_ALL.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-      </Select>
-      <Input
-        className={styles.input}
-        aria-label="题号"
-        aria-invalid={Boolean(inputError)}
-        value={problemId}
-        autoFocus={autoFocus}
-        disabled={disabled || adding}
-        placeholder={platform === 'carits' ? '例如 10086' : platform === 'luogu' ? '例如 P1001' : platform === 'codeforces' ? '例如 2036G' : '输入原始题号'}
-        onChange={event => {
-          requestRef.current++
-          setProblemId(event.target.value)
-          setLookupItem(null)
-          setResolving(false)
-          setRequestError('')
-        }}
-        onKeyDown={event => {
-          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+      <label className={styles.field} htmlFor={`${fieldId}-platform`}>平台
+        <Select id={`${fieldId}-platform`} aria-label="题目平台" value={platform} onChange={event => changePlatform(event.target.value)} disabled={disabled || adding || batchOpen}>
+          {OJ_PLATFORMS_NO_ALL.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </Select>
+      </label>
+      <label className={styles.field} htmlFor={`${fieldId}-number`}>题号
+        <Input id={`${fieldId}-number`} className={styles.input} aria-label="题号" aria-describedby={`${fieldId}-result`} aria-invalid={Boolean(inputError)} value={problemId} autoFocus={autoFocus} autoComplete="off" spellCheck={false}
+          disabled={disabled || adding || batchOpen}
+          placeholder={platform === 'carits' ? '例如 10086' : platform === 'luogu' ? '例如 P1001' : platform === 'codeforces' ? '例如 2036G' : '输入原始题号'}
+          onChange={event => { setProblemId(event.target.value); setAddError(''); setNotice('') }}
+          onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
+          onKeyDown={event => {
+            if (event.key !== 'Enter') return
             event.preventDefault()
-            void (readyProblem ? add() : lookup())
-          }
-        }}
-      />
-      <div className={styles.resultBox} role="status">
-        <ProblemReferenceResult row={row} resolving={resolving} requestError={inputError || requestError} />
+            if (!event.nativeEvent.isComposing && !composing && !event.repeat) void resolution.resolve()
+          }}
+        />
+      </label>
+      <div className={styles.field}>检索结果
+        <div id={`${fieldId}-result`} className={styles.resultBox} role="status" aria-live="polite">
+          <ProblemReferenceResult row={row} resolving={resolution.resolving} requestError={inputError || resolution.error} />
+        </div>
       </div>
-      <Button type="button" onClick={() => void add()} loading={adding} disabled={disabled || !readyProblem || resolving}>添加</Button>
+      <Button type="button" onClick={() => void add()} loading={adding && !batchOpen} disabled={disabled || adding || batchOpen || !ready || resolution.resolving}>添加</Button>
     </div>
+    {addError && <p className={styles.error} role="alert">{addError}</p>}
+    {notice && <p className={styles.hint} role="status">{notice}</p>}
     <div className={styles.actions}>
+      {resolution.error && <Button type="button" variant="secondary" size="sm" disabled={disabled || adding} onClick={() => void resolution.resolve()}>重新检索</Button>}
       {allowBatch && <Button type="button" variant="secondary" size="sm" disabled={disabled || adding} onClick={() => setBatchOpen(true)}>批量添加题目</Button>}
-      <p className={styles.hint}>只按平台 + 题号精确检索系统已有题目，不读取附加 OJ 绑定，不从外部拉取。</p>
+      <p className={styles.hint}>仅检索系统已有题目，不从外部 OJ 拉取。</p>
     </div>
-    {allowBatch && <ProblemBatchAddDialog
-      isOpen={batchOpen}
-      onClose={() => setBatchOpen(false)}
-      platform={platform}
-      onPlatformChange={changePlatform}
-      existingProblemIds={existing}
-      requireStable={requireStable}
-      onAdd={onAdd}
+    {allowBatch && batchOpen && <ProblemBatchAddDialog
+      onClose={() => setBatchOpen(false)} platform={platform} onPlatformChange={changePlatform}
+      existingProblemIds={existing} requireStable={requireStable} contextKey={scope}
+      disabled={disabled} adding={adding} onAdd={performAdd}
     />}
   </section>
 }
