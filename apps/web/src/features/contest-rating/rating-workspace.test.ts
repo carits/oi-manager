@@ -46,7 +46,7 @@ describe('contest Rating workspace contract', () => {
     expect(source).toContain("['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']")
     expect(source).toContain('比赛赛制')
     expect(source).toContain('Rating 范围')
-    expect(source).toContain('QuickProblemInput')
+    expect(source).toContain('ProblemReferenceSelector')
     expect(source).not.toContain('Carits 平台题库')
     expect(source).not.toContain('搜索题号或标题')
     expect(source).toContain('影响强度：标准比赛的')
