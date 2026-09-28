@@ -1,28 +1,27 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { SWRConfig } from 'swr'
-import { AuthProvider } from '@/features/auth'
+import { AuthProvider, type AuthUser } from '@/features/auth'
 import { ToastProvider } from './ui/Toast'
 import { ErrorBoundary } from './ErrorBoundary'
 import { NetworkStatusBanner } from './NetworkStatusBanner'
-import type { AuthUser } from '@/features/auth'
 import { UnsavedChangesProvider } from './navigation/UnsavedChangesProvider'
+import { RoleShell } from './RoleShell'
 
-export function Providers({ children, initialUser = null }: { children: ReactNode; initialUser?: AuthUser | null }) {
+export function Providers({ children, initialUser = null, initialSidebarExpanded = true }: {
+  children: ReactNode
+  initialUser?: AuthUser | null
+  initialSidebarExpanded?: boolean
+}) {
   return (
     <ErrorBoundary>
-      <SWRConfig value={{
-        revalidateOnFocus: false,
-        revalidateOnReconnect: true,
-        dedupingInterval: 10000,
-        shouldRetryOnError: false,
-      }}>
+      <SWRConfig value={{ revalidateOnFocus: false, revalidateOnReconnect: true, dedupingInterval: 10000, shouldRetryOnError: false }}>
         <AuthProvider initialUser={initialUser}>
           <ToastProvider>
             <UnsavedChangesProvider>
               <NetworkStatusBanner />
-              {children}
+              <RoleShell initialSidebarExpanded={initialSidebarExpanded}>{children}</RoleShell>
             </UnsavedChangesProvider>
           </ToastProvider>
         </AuthProvider>
