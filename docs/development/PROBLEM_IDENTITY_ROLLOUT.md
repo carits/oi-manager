@@ -7,6 +7,25 @@ source_of_truth: packages/shared/src/oj-platforms.ts, apps/server/src/modules/pr
 
 # 题目主身份与纯本地检索：无数据库变更阶段
 
+## 当前实施：2026-09-28 统一 VJudge 式题目引用
+
+当前工作分支为 `feature/unified-problem-reference`，从 `main` 的
+`73c5b9df5de8d5f772eefcb02fae1a3f0bd65e63` 建立。本轮不修改 Prisma schema、迁移或业务数据。
+
+- 所有“引用系统已有题目”的核心入口统一使用 `ProblemReferenceSelector`：比赛、作业、训练快速创建、训练设计器、训练运行期追加和题单章节添加不再各自维护题号录入交互。
+- 默认交互改为“平台 + 单个题号 → 400ms 本地自动精确解析 → 显示题目标题链接 → 用户显式添加”。题目标题来自 canonical Problem，不能手工伪造。
+- 成功结果使用 `ProblemReferenceLink` 指向当前工作区内部题目页，并默认新窗口打开，避免编辑中的比赛/作业/训练草稿因查看题目而丢失。
+- 批量录入保留为次级“批量添加题目”对话框，继续支持最多 100 个题号；结果逐题显示成功、未找到、重复、未发布、身份冲突或 Stable 不满足。
+- Resolver 仍只查询 `Problem.platform + Problem.problemId`，不检索 `ojBindings`、标题或内部 UUID，也不调用 OJ Adapter、抓题任务或任何远程 IO。
+- selection Runtime Contract 的线路字段从历史 `problemCode` 收口为 `problemId`；内部数据库标识始终使用 `id`，避免一套身份出现三种名称。
+- 题单待保存行只保存已经解析成功的 canonical Problem，不再重复保存 `resolving/resolved/found` 状态机。
+- 旧 `QuickProblemInput` 及其样式已删除，防止后续页面继续复用旧的大 textarea 作为默认入口。
+
+验证：无数据库 Problem Identity CI 已通过 Contracts/Shared 构建、Prisma client 类型生成、Server/Web TypeScript、
+mocked resolver/contract 15/15、Web 56 文件 374/374、docs/architecture、UI state/component 与 routes 门禁。
+数据库定义相对 PR base 无差异。
+
+
 ## 当前实施：2026-09-28 保存正确性修复
 
 当前工作分支为 `fix/problem-save-integrity-20260928`，起点是
@@ -27,7 +46,7 @@ source_of_truth: packages/shared/src/oj-platforms.ts, apps/server/src/modules/pr
 - 比赛写后失败保留本地草稿和已确认步骤，不关闭、不报整体成功；暂时停止直接重试，提供草稿导出和新窗口核对入口。
 
 比赛仍是多请求保存。前端预检不能消除检查与写入之间的竞态，不代表目标内事务、原子并发版本或服务端幂等已完成。
-统一逐行选择器的六处迁移、全系统平台写入边界、离线审计工具与数据库阶段仍见交接中的后置清单。
+统一逐行选择器的六处迁移已由本文件上方“统一 VJudge 式题目引用”阶段完成；全系统平台写入边界、离线审计工具与数据库阶段仍见交接中的后置清单。
 
 ### 当前分支验证状态
 
@@ -59,13 +78,13 @@ Registry 对非规范 key、重复 key、空名称及不同平台之间的名称
 其他学校或不可访问的记录不参与冲突披露。全局唯一和学校副本转换属于后续迁移。
 
 命中题目的 status=resolved 表达身份可定位且可使用，Stable 元数据可缺省。
-Stable 不存在不由 resolver 解释为查无此题。公共 QuickProblemInput 的 requireStable 默认 true。
+Stable 不存在不由 resolver 解释为查无此题。历史 QuickProblemInput 与当前 ProblemReferenceSelector 的 requireStable 默认均为 true。
 Contest 和 Assignment 保持这一严格前置条件；题单与 Training 的创建、设计和运行期追加入口
 显式使用 requireStable=false，允许先收录已定位的 canonical Problem，再由各领域保存命令按自身
 运行条件校验数据槽。原分支为调用方策略加入了 Web 回归断言，但本轮尚未重跑这些测试。
 正式保存仍需领域服务重新授权、校验题目状态和数据要求，不能把前端查到当成发布许可。
 
-QuickProblemInput 区分请求失败与未找到；等待业务回调完成，并在失败或部分接受不明时保留输入。
+历史 QuickProblemInput 区分请求失败与未找到；当前实现已由上方 ProblemReferenceSelector 取代。旧组件当时会等待业务回调完成，并在失败或部分接受不明时保留输入。
 显示“已找到/仍需保存”，不宣称数据已保存。同步 in-flight 锁阻止连续点击重复调用，
 会话变化和卸载使旧响应失效，禁用中的表单不接收迟到结果。
 已选 ID 快照按 props 记忆化，不在一次渲染里重复消费 Iterable；回包时使用当前快照做重复检查。
@@ -80,7 +99,7 @@ localStorage 读写失败不阻断选题；读取旧中文平台偏好时规范�
 - 未转换学校副本，未改题目内部 ID、既有业务引用或不可变历史。
 - 未声称所有原始写入路径已规范化；Carits 创建编号和外部题号的完整契约规则仍有后续工作。
 - OJ 账号、导入持久化、平台绑定、提交历史等全量写入改造需结合历史冲突审计单独推进。
-- 全局主身份唯一、校内派生题新编号、整批事务保存、六处逐行选题与真实浏览器闭环尚未完成。
+- 全局主身份唯一、校内派生题新编号、整批事务保存与生产真实浏览器闭环尚未完成；六处统一题目引用 UI 已在当前分支收口。
 
 ## 历史验证记录：不得作为当前分支通过凭据
 
