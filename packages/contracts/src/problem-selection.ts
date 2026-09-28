@@ -5,7 +5,7 @@ export const ProblemSelectionItemSchema = z.object({
   clientKey: z.string().trim().min(1).max(100),
   platform: z.string().trim().min(1).max(50),
   // Wire name retained; this is Problem.problemId, never the internal UUID.
-  problemCode: z.string().trim().min(1).max(128),
+  problemId: z.string().trim().min(1).max(128),
 })
 
 export const ProblemSelectionBodySchema = z.object({
@@ -25,13 +25,13 @@ export const ProblemSelectionBodySchema = z.object({
 export const ResolvedProblemSelectionSchema = z.object({
   clientKey: z.string(),
   platform: z.string(),
-  problemCode: z.string(),
+  problemId: z.string(),
   // Identity resolution and assessment readiness are independent.
   status: z.enum(['resolved', 'not_found', 'invalid_input', 'not_published', 'identity_conflict']),
   problem: z.object({
     id: z.string(),
     platform: z.string(),
-    problemCode: z.string(),
+    problemId: z.string(),
     title: z.string(),
     difficulty: z.string().nullable().optional(),
     stableData: z.object({
