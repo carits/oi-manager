@@ -27,18 +27,26 @@ try {
   }
 
   fs.writeFileSync(currentFile, JSON.stringify(current))
+  const canExerciseLegacyRegression = current.transport.legacy.calls > 0
   fs.writeFileSync(baseFile, JSON.stringify({
     ...current,
     contractedBoundaries: current.contractedBoundaries + 1,
-    transport: { ...current.transport, legacy: { ...current.transport.legacy, calls: Math.max(0, current.transport.legacy.calls - 1) } },
+    transport: {
+      ...current.transport,
+      legacy: {
+        ...current.transport.legacy,
+        calls: canExerciseLegacyRegression ? current.transport.legacy.calls - 1 : current.transport.legacy.calls,
+      },
+    },
   }))
   const regression = run(['--gate'], {
     ARCHITECTURE_PROGRESS_FILE: currentFile,
     ARCHITECTURE_PROGRESS_BASE_FILE: baseFile,
   })
   const regressionOutput = `${regression.stderr}${regression.stdout}`
+  const missingLegacyReason = canExerciseLegacyRegression && !regressionOutput.includes('legacy transport calls increased')
   if (regression.status === 0
-    || !regressionOutput.includes('legacy transport calls increased')
+    || missingLegacyReason
     || !regressionOutput.includes('contracted boundary count decreased')) {
     throw new Error('Architecture regression was not rejected with the expected reasons')
   }
