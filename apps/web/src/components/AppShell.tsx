@@ -141,6 +141,8 @@ export function AppShell({ children, initialSidebarExpanded = true }: AppShellPr
   const navigationLabel = `${isPersonal ? '个人' : roleName}主导航`
   const navigationOpen = isPersistentSidebar === false ? drawerOpen : desktopSidebarExpanded
   const navigationMode = isPersistentSidebar === null ? 'pending' : isPersistentSidebar ? (desktopSidebarExpanded ? 'expanded' : 'collapsed') : (drawerOpen ? 'drawer' : 'closed')
+  const sidebarHidden = isPersistentSidebar === false ? !drawerOpen : false
+  const compactWorkspaceSwitcher = isPersistentSidebar !== false && !desktopSidebarExpanded
   const setNavigationOpen = (open: boolean) => {
     setNavigationMotion(true)
     if (window.matchMedia('(min-width: 1100px)').matches) {
@@ -177,21 +179,21 @@ export function AppShell({ children, initialSidebarExpanded = true }: AppShellPr
   </div>
 
   return <div className={styles.shell} data-app-shell={shellId} data-navigation-mode={navigationMode} data-desktop-sidebar={desktopSidebarExpanded ? 'expanded' : 'collapsed'} data-drawer-open={drawerOpen} data-navigation-motion={navigationMotion} onTransitionEnd={event => {
-    if (event.target === sidebarRef.current && event.propertyName === 'transform') setNavigationMotion(false)
+    if (event.target === sidebarRef.current && (event.propertyName === 'transform' || event.propertyName === 'width')) setNavigationMotion(false)
   }}>
     <header ref={headerRef} className={styles.header} data-app-header>
       <div className={styles.headerInner}>
         <div className={styles.headerStart}>
           <Button id="app-navigation-toggle" variant="ghost" type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!(window.matchMedia('(min-width: 1100px)').matches ? desktopSidebarExpanded : drawerOpen))} aria-controls="app-sidebar" aria-expanded={isPersistentSidebar === null ? undefined : navigationOpen} aria-label={isPersistentSidebar && navigationOpen ? '收起导航' : '显示导航'} title={isPersistentSidebar && navigationOpen ? '收起导航' : '显示导航'}><Menu size={21} aria-hidden="true" /></Button>
           <Link className={styles.brandLink} href={navigationHome(navigationContext)} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
-          <WorkspaceSwitcher />
         </div>
         <div className={styles.headerEnd}><ChatButton /><NotificationBell /></div>
       </div>
     </header>
     {!isPersistentSidebar && drawerOpen && <div className={styles.sidebarBackdrop} data-navigation-backdrop aria-hidden="true" onClick={() => setNavigationOpen(false)} />}
-    <aside ref={sidebarRef} id="app-sidebar" className={styles.sidebar} aria-label={navigationLabel} aria-hidden={isPersistentSidebar === null ? undefined : !navigationOpen} role={!isPersistentSidebar && drawerOpen ? 'dialog' : undefined} aria-modal={!isPersistentSidebar && drawerOpen ? true : undefined}>
+    <aside ref={sidebarRef} id="app-sidebar" className={styles.sidebar} aria-label={navigationLabel} aria-hidden={sidebarHidden} role={!isPersistentSidebar && drawerOpen ? 'dialog' : undefined} aria-modal={!isPersistentSidebar && drawerOpen ? true : undefined}>
       <div className={styles.sidebarHeader}><span>功能导航</span><Button id="app-sidebar-close" variant="ghost" type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label={isPersistentSidebar ? '收起导航' : '关闭导航'} title={isPersistentSidebar ? '收起导航' : '关闭导航'}><PanelLeftClose size={19} aria-hidden="true" /></Button></div>
+      <div className={styles.sidebarWorkspace}><WorkspaceSwitcher compact={compactWorkspaceSwitcher} /></div>
       <PrimaryNavigation label={navigationLabel} onNavigate={() => { if (!isPersistentSidebar) setNavigationOpen(false) }} />
       <div className={styles.sidebarFooter}>{userMenu}</div>
     </aside>
