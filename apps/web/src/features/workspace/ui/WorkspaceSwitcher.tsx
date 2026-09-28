@@ -86,13 +86,15 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
     }
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== 'Escape' || !openRef.current) return
-      if (document.querySelector('[aria-modal="true"]')) return
+      const topDialog = [...document.querySelectorAll<HTMLElement>('[aria-modal="true"]')].at(-1)
+      const containingDialog = rootRef.current?.closest<HTMLElement>('[aria-modal="true"]')
+      if (topDialog && topDialog !== containingDialog) return
       event.preventDefault()
       closeSwitcher(true)
     }
     document.addEventListener('mousedown', closeOnOutsidePointer)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => { document.removeEventListener('mousedown', closeOnOutsidePointer); document.removeEventListener('keydown', closeOnEscape) }
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => { document.removeEventListener('mousedown', closeOnOutsidePointer); document.removeEventListener('keydown', closeOnEscape, true) }
   }, [closeSwitcher])
 
   const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
