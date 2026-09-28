@@ -19,7 +19,7 @@ import { accountContextMatches } from '@/lib/applicationShell'
 
 const emptyWorkspaces: WorkspaceSummary[] = []
 
-export function WorkspaceSwitcher() {
+export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
   const { user, prepareWorkspaceTransition } = useAuth()
   const toast = useToast()
   const pathname = usePathname()
@@ -134,9 +134,9 @@ export function WorkspaceSwitcher() {
   if (isGlobalAdmin) return null
   const title = !contextReady ? '确认工作区…' : currentOrganization ? user?.organizationName || '当前学校' : '个人空间'
   const subtitle = !contextReady ? '' : currentOrganization ? workspaceRoleLabel(user?.organizationRole) : username
-  return <div className={styles.root} ref={rootRef}>
-    <Button variant="ghost" className={styles.trigger} type="button" onClick={() => { if (open) closeSwitcher(); else void openSwitcher() }} onKeyDown={handleTriggerKeyDown}
-      aria-expanded={open} aria-controls={popoverId} aria-label={`切换工作区，当前${title}，${subtitle}`}>
+  return <div className={styles.root} ref={rootRef} data-compact={compact || undefined}>
+    <Button variant="ghost" className={styles.trigger} type="button" data-workspace-trigger onClick={() => { if (open) closeSwitcher(); else void openSwitcher() }} onKeyDown={handleTriggerKeyDown}
+      aria-expanded={open} aria-controls={popoverId} aria-label={`切换工作区，当前${title}${subtitle ? `，${subtitle}` : ''}`} title={compact ? `${title}${subtitle ? ` · ${subtitle}` : ''}` : undefined}>
       <span className={styles.badge}>{currentOrganization ? <School size={17} /> : <UserRound size={17} />}</span>
       <span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span><ChevronDown size={16} />
     </Button>
