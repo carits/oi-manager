@@ -247,7 +247,7 @@ describe('学校私有题库隔离', () => {
       data: { ...common, problemInternalId: schoolProblemId },
     })
     const ambiguousLegacySubmission = await prisma.submission.create({
-      data: { ...common, problemInternalId: null, testSetRevisionId: null },
+      data: { ...common, problemInternalId: null },
     })
 
     const platformHistory = await schoolARequest(ownerAToken)

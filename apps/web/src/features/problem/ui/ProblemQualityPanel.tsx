@@ -32,7 +32,8 @@ type QualityEvidence = {
 }
 type QualitySnapshot = {
   id: string
-  revisionId: string
+  slot: 'STABLE' | 'EVOLVING'
+  graphHash: string
   qualityRuleVersion: string
   correctnessScore: number
   discriminationScore: number
@@ -62,11 +63,11 @@ type QualitySnapshot = {
   isStale?: boolean
   reasons?: string[]
   evidence?: QualityEvidence
-  Revision?: { revisionNumber: number; source: string }
 }
 type QualityJob = {
   id: string
-  revisionId: string
+  slot: 'STABLE' | 'EVOLVING'
+  graphHash: string
   corpusRevisionId: string
   qualityRuleVersion: string
   status: string
@@ -112,11 +113,11 @@ type SolutionProfile = {
   submissionId: number
   revision: number
   status: 'active' | 'retired'
-  observed?: { revisionId?: string | null; result?: string | null; score?: number | null; subtasks: Array<{ subtaskId: number; score: number }> } | null
+  observed?: { evaluatedSlot?: 'STABLE' | 'EVOLVING' | null; evaluatedGraphHash?: string | null; result?: string | null; score?: number | null; subtasks: Array<{ subtaskId: number; score: number }> } | null
 }
 type QualityDashboard = {
   permissions: { canManage: boolean; canExpertReview: boolean }
-  latestTestSetRevisionId?: string | null
+  stableTestSet?: { graphHash: string; fencingToken: number; updatedAt: string } | null
   testSetQuality?: QualitySnapshot | null
   problemQuality?: ProblemQuality | null
   jobs?: QualityJob[]
@@ -180,10 +181,10 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   }, [pending, load])
 
   const triggerDqs = async () => {
-    if (!data?.latestTestSetRevisionId) return toast.error('题目尚无正式测试集版本')
+    if (!data?.stableTestSet) return toast.error('题目尚无 Stable 测试数据')
     setBusy(true)
     try {
-      const result = await requestProblemQualityEvaluation(problemId, data.latestTestSetRevisionId)
+      const result = await requestProblemQualityEvaluation(problemId, 'STABLE')
       if (!result.ok) return toast.error(result.error.message || '质量评估入队失败')
       toast.success('质量评估已加入队列')
       await load()
@@ -274,7 +275,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
     <section className={styles.card}>
       <header className={styles.heading}>
         <div><h3>数据质量评估</h3><p>先告诉你当前数据是否适合使用，详细证据收在技术证书中。</p></div>
-        <Button variant="primary" loading={busy} disabled={!data.latestTestSetRevisionId || pending} onClick={triggerDqs}>{pending ? '评估进行中' : '评估当前版本'}</Button>
+        <Button variant="primary" loading={busy} disabled={!data.stableTestSet || pending} onClick={triggerDqs}>{pending ? '评估进行中' : '评估当前版本'}</Button>
       </header>
       {snapshot ? <>
         <div className={styles.conclusion}>
@@ -303,7 +304,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
         </div>
         {snapshot.evidence?.pinnedInputs && <details className={styles.evidence}><summary>查看固定评估输入</summary><pre>{JSON.stringify(snapshot.evidence.pinnedInputs, null, 2)}</pre></details>}
         </details>
-      </> : <div className={styles.empty}>尚无 DQS 快照。需要正式 Revision、Active STD / Validator 和可用 Wrong Corpus。</div>}
+      </> : <div className={styles.empty}>尚无 DQS 快照。需要 Stable 数据、Active STD / Validator 和可用 Wrong Corpus。</div>}
     </section>
 
     <section className={styles.card}>
@@ -318,7 +319,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
 
     <section className={styles.card}>
       <header className={styles.heading}>
-        <div><h3>Reference Solution Profiles</h3><p>为 OI Subtask 记录代表算法的预期总分与单个 Subtask 分数区间；评估只读取固定 Revision 的终态提交。</p></div>
+        <div><h3>Reference Solution Profiles</h3><p>为 OI Subtask 记录代表算法的预期总分与单个 Subtask 分数区间；评估只读取提交时固定的数据槽图哈希与终态结果。</p></div>
         <Button variant="outline" onClick={() => setProfileOpen(true)}>新增 Profile</Button>
       </header>
       {data.solutionProfiles?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow>
@@ -327,7 +328,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
         <TableCell><strong>{profile.name}</strong><small className={styles.blockMeta}>{profile.key} · v{profile.revision} · 提交 #{profile.submissionId}</small></TableCell>
         <TableCell>{profile.expectedClass}<small className={styles.blockMeta}>{profile.expectedComplexity || '未填写复杂度'}</small></TableCell>
         <TableCell>{profile.expectedScoreMin}–{profile.expectedScoreMax}</TableCell>
-        <TableCell>{profile.observed?.score ?? '—'}<small className={styles.blockMeta}>{profile.observed?.result || '尚无终态'}{profile.observed?.revisionId ? ` · ${profile.observed.revisionId.slice(0, 8)}` : ''}</small></TableCell>
+        <TableCell>{profile.observed?.score ?? '—'}<small className={styles.blockMeta}>{profile.observed?.result || '尚无终态'}{profile.observed?.evaluatedGraphHash ? ` · ${profile.observed.evaluatedGraphHash.slice(0, 8)}` : ''}</small></TableCell>
         <TableCell>{profile.expectedSubtaskScores.length ? profile.expectedSubtaskScores.map(item => `S${item.subtaskId}: ${item.min}–${item.max}`).join('；') : '—'}</TableCell>
         <TableCell><div className={styles.profileStatus}><StatusBadge variant={profile.status === 'active' ? 'success' : 'neutral'}>{profile.status === 'active' ? '启用' : '停用'}</StatusBadge><Button size="sm" variant="ghost" loading={busy} onClick={() => void setProfileStatus(profile, profile.status === 'active' ? 'retired' : 'active')}>{profile.status === 'active' ? '停用' : '启用'}</Button></div></TableCell>
       </TableRow>)}</TableBody></TableRoot></div> : <div className={styles.empty}>尚未配置 Reference Solution Profile。OI 数据只能获得结构分，无法验证预期 30/60/100 等得分梯度。</div>}
@@ -335,12 +336,12 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
 
     <section className={styles.card}>
       <h3>评估任务</h3>
-      {data.jobs?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow><TableHeaderCell>任务</TableHeaderCell><TableHeaderCell>版本</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>尝试</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell></TableRow></TableHead><TableBody>{data.jobs.map(job => { const presentation = qualityJobPresentation(job.status); return <TableRow key={job.id}><TableCell>{job.id.slice(0, 8)}</TableCell><TableCell>{job.revisionId.slice(0, 8)}</TableCell><TableCell><StatusBadge variant={presentation.variant}>{presentation.label}</StatusBadge>{job.errorMessage && <small className={styles.error}>{job.errorCode} · {job.errorMessage}</small>}</TableCell><TableCell>{job.attempts}/3</TableCell><TableCell>{new Date(job.queuedAt).toLocaleString('zh-CN')}</TableCell></TableRow> })}</TableBody></TableRoot></div> : <div className={styles.empty}>暂无评估任务。</div>}
+      {data.jobs?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow><TableHeaderCell>任务</TableHeaderCell><TableHeaderCell>数据槽</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>尝试</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell></TableRow></TableHead><TableBody>{data.jobs.map(job => { const presentation = qualityJobPresentation(job.status); return <TableRow key={job.id}><TableCell>{job.id.slice(0, 8)}</TableCell><TableCell>{job.slot} · {job.graphHash.slice(0, 8)}</TableCell><TableCell><StatusBadge variant={presentation.variant}>{presentation.label}</StatusBadge>{job.errorMessage && <small className={styles.error}>{job.errorCode} · {job.errorMessage}</small>}</TableCell><TableCell>{job.attempts}/3</TableCell><TableCell>{new Date(job.queuedAt).toLocaleString('zh-CN')}</TableCell></TableRow> })}</TableBody></TableRoot></div> : <div className={styles.empty}>暂无评估任务。</div>}
     </section>
 
     <section className={styles.card}>
       <h3>历史 DQS 快照</h3>
-      {data.qualityHistory?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow><TableHeaderCell>Revision</TableHeaderCell><TableHeaderCell>DQS</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>置信度</TableHeaderCell><TableHeaderCell>成熟度</TableHeaderCell><TableHeaderCell>评估时间</TableHeaderCell></TableRow></TableHead><TableBody>{data.qualityHistory.map(item => { const presentation = qualityStatusPresentation(item.qualityStatus, item.isStale); return <TableRow key={item.id}><TableCell>R{item.Revision?.revisionNumber ?? item.revisionId.slice(0, 8)}</TableCell><TableCell>{displayScore(item.overallScore)}</TableCell><TableCell><StatusBadge variant={presentation.variant}>{presentation.label}</StatusBadge></TableCell><TableCell>{item.confidenceLevel} · {item.confidenceScore}</TableCell><TableCell>{item.maturityLevel}</TableCell><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell></TableRow> })}</TableBody></TableRoot></div> : <div className={styles.empty}>还没有历史质量证书。</div>}
+      {data.qualityHistory?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow><TableHeaderCell>数据槽</TableHeaderCell><TableHeaderCell>DQS</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>置信度</TableHeaderCell><TableHeaderCell>成熟度</TableHeaderCell><TableHeaderCell>评估时间</TableHeaderCell></TableRow></TableHead><TableBody>{data.qualityHistory.map(item => { const presentation = qualityStatusPresentation(item.qualityStatus, item.isStale); return <TableRow key={item.id}><TableCell>{item.slot} · {item.graphHash.slice(0, 8)}</TableCell><TableCell>{displayScore(item.overallScore)}</TableCell><TableCell><StatusBadge variant={presentation.variant}>{presentation.label}</StatusBadge></TableCell><TableCell>{item.confidenceLevel} · {item.confidenceScore}</TableCell><TableCell>{item.maturityLevel}</TableCell><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell></TableRow> })}</TableBody></TableRoot></div> : <div className={styles.empty}>还没有历史质量证书。</div>}
     </section>
 
     <FormDialog isOpen={expertOpen} onClose={() => setExpertOpen(false)} onSubmit={submitExpert} title="平台专家质量审核" description="只写入 30 分专家部分；已固化的机器分和证据不会被覆盖。" loading={busy} dirty={expertDirty} submitText="固化专家结论" submitDisabled={!algorithmicValueScore || !editorialScore || !originalityScore || comment.trim().length < 20}>
@@ -361,7 +362,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
         <label>最低预期总分<Input type="number" min={0} max={100} value={profileScoreMin} onChange={event => setProfileScoreMin(event.target.value)} /></label>
         <label>最高预期总分<Input type="number" min={0} max={100} value={profileScoreMax} onChange={event => setProfileScoreMax(event.target.value)} /></label>
         <label>本地提交 ID<Input type="number" min={1} value={profileSubmissionId} onChange={event => setProfileSubmissionId(event.target.value)} /></label>
-        <label className={styles.fullField}>Subtask 预期分 JSON<Textarea rows={5} value={profileSubtasks} onChange={event => setProfileSubtasks(event.target.value)} placeholder='[{"subtaskId":1,"min":30,"max":30}]' /><small>ACM 或不需要单点验证时填 []。Subtask ID 必须属于当前正式 Revision。</small></label>
+        <label className={styles.fullField}>Subtask 预期分 JSON<Textarea rows={5} value={profileSubtasks} onChange={event => setProfileSubtasks(event.target.value)} placeholder='[{"subtaskId":1,"min":30,"max":30}]' /><small>ACM 或不需要单点验证时填 []。Subtask ID 必须属于当前 Stable 数据。</small></label>
       </div>
     </FormDialog>
   </div>

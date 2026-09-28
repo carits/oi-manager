@@ -351,6 +351,15 @@ describe('比赛类型区分测试', () => {
       createTestProblem({ ownerId: ownerUser.user.id, title: '命令题 A' }),
       createTestProblem({ ownerId: ownerUser.user.id, title: '命令题 B' }),
     ])
+    await prisma.problemTestSetSlot.createMany({
+      data: [problemA, problemB].map(problem => ({
+        problemId: problem.id, slot: 'STABLE' as const, mode: 'acm', source: 'test',
+        judgeConfig: 'mode: acm\ncases: []\n',
+        judgeConfigHash: 'test-judge-config-hash',
+        graphHash: `test-graph-${problem.id}`,
+        materializedPath: 'slots/stable',
+      })),
+    })
 
     const [runtimeA, runtimeB] = await prisma.$transaction(async tx => {
       const a = await createContestProblemTx(tx, contestId, {

@@ -21,7 +21,7 @@ export const listMyContributionEvents = (query: EndpointQuery<typeof Contributio
 export const listContributionAudit = (query: EndpointQuery<typeof ContributionContracts.audit>) =>
   apiClient.queryContract(ContributionContracts.audit, `/api/platform/contributions${queryString(query)}`, { accountScoped: true })
 
-export const getContributionEvidence = (id: string, kind: 'candidate' | 'revision') =>
+export const getContributionEvidence = (id: string, kind: 'candidate' | 'evolving') =>
   apiClient.queryContract(ContributionContracts.evidence, `/api/platform/contributions/${encodeURIComponent(id)}/evidence?kind=${kind}`, { accountScoped: true })
 
 export const acceptContribution = (id: string) =>

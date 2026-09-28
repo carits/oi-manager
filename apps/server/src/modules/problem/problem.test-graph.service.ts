@@ -2,13 +2,13 @@ import crypto from 'crypto'
 import yaml from 'js-yaml'
 import { prisma } from '../../prisma'
 import {
-  TestSetRevisionConflict,
-  ensureInitialTestSetRevision,
-  loadLatestRevisionGraph,
-  loadRevisionSpec,
-  publishTestSetRevision,
+  TestSetSlotFenceConflict,
+  ensureInitialTestSetSlots,
+  loadTestSetGraph as loadSlotGraph,
+  loadTestSetSlotSpec,
+  replaceTestSetSlot,
   resolveGraphDraft,
-} from './problem.testset-revision.service'
+} from './problem.testset-slot.service'
 import { OI_CANDIDATE_LIMITS, uniqueSubtaskCases } from './problem.oi-candidate-policy'
 import { resolveSubtaskReadiness } from './problem.subtask-readiness.service'
 
@@ -181,53 +181,9 @@ export async function migrateLegacyTestGraph(problemId: string) {
 }
 
 export async function loadTestGraph(problemId: string) {
-  const revisionGraph = await loadLatestRevisionGraph(problemId)
-  if (revisionGraph) return revisionGraph
-  const problem = await prisma.problem.findUnique({ where: { id: problemId }, select: { id: true, testGraphRevision: true } })
-  if (!problem) return null
-  const subtasks = await prisma.problemSubtask.findMany({
-    where: { problemId },
-    orderBy: { orderIndex: 'asc' },
-    include: {
-      Dependencies: { include: { DependsOn: true } },
-      Groups: {
-        orderBy: { orderIndex: 'asc' },
-        include: {
-          Testcases: {
-            orderBy: { orderIndex: 'asc' },
-            include: { Testcase: { include: { InputFile: true, OutputFile: true } } },
-          },
-        },
-      },
-    },
-  })
-  return {
-    revision: problem.testGraphRevision,
-    migrated: subtasks.length > 0,
-    subtasks: subtasks.map(subtask => ({
-      dbId: subtask.id,
-      id: subtask.subtaskId,
-      score: subtask.score,
-      if: subtask.Dependencies.map(dep => dep.DependsOn.subtaskId).sort((a, b) => a - b),
-      groups: subtask.Groups.map(group => ({
-        id: group.id,
-        key: group.key,
-        name: group.name,
-        kind: group.kind,
-        score: group.score,
-        type: group.aggregation,
-        cases: group.Testcases.map(link => ({
-          testcaseId: link.Testcase.id,
-          input: link.Testcase.InputFile.filename,
-          output: link.Testcase.OutputFile.filename,
-          source: link.Testcase.source,
-          score: link.score,
-          time: link.time,
-          memory: link.memory,
-        })),
-      })),
-    })),
-  }
+  await ensureInitialTestSetSlots(problemId)
+  const slotGraph = await loadSlotGraph(problemId, 'EVOLVING') || await loadSlotGraph(problemId, 'STABLE')
+  return slotGraph ? { ...slotGraph, migrated: true } : null
 }
 
 function naturalCompare(left: string, right: string) {
@@ -383,13 +339,9 @@ export async function projectTestGraph(problemId: string, baseConfigText?: strin
 }
 
 export async function refreshProblemJudgeProjection(problemId: string) {
-  const problemWithRevision = await prisma.problem.findUnique({
-    where: { id: problemId },
-    select: { latestTestSetRevisionId: true, LatestTestSetRevision: { select: { judgeConfig: true } } },
-  })
-  if (problemWithRevision?.latestTestSetRevisionId && problemWithRevision.LatestTestSetRevision) {
-    return prisma.problem.update({ where: { id: problemId }, data: { judgeConfig: problemWithRevision.LatestTestSetRevision.judgeConfig } })
-  }
+  const slots = await prisma.problemTestSetSlot.findMany({ where: { problemId }, orderBy: { slot: 'asc' } })
+  const current = slots.find(item => item.slot === 'EVOLVING') || slots.find(item => item.slot === 'STABLE')
+  if (current) return prisma.problem.update({ where: { id: problemId }, data: { judgeConfig: current.judgeConfig } })
   const projected = await projectTestGraph(problemId)
   if (projected === null) return null
   return prisma.problem.update({ where: { id: problemId }, data: { judgeConfig: projected } })
@@ -495,8 +447,8 @@ export async function replaceTestGraph(problemId: string, input: any) {
 
   const current = await loadTestGraph(problemId)
   if (current?.migrated) {
-    if (Number(input?.revision) !== current.revision) {
-      return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['测试图 revision 已变化，请刷新后重试'], errors: [{ path: 'revision', message: '测试图 revision 已变化，请刷新后重试' }] }
+    if (Number(input?.expectedFencingToken) !== current.fencingToken) {
+      return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['题目测试数据已变化，请刷新后重试'], errors: [{ path: 'expectedFencingToken', message: '题目测试数据已变化，请刷新后重试' }] }
     }
     const currentGates = new Map(current.subtasks.map(subtask => [subtask.id,
       subtask.groups.filter(group => group.kind === 'hack_gate').map(group => ({
@@ -517,17 +469,18 @@ export async function replaceTestGraph(problemId: string, input: any) {
     }
   }
 
-  const problem = await prisma.problem.findUnique({ where: { id: problemId }, select: { judgeConfig: true, latestTestSetRevisionId: true } })
+  const problem = await prisma.problem.findUnique({ where: { id: problemId }, select: { judgeConfig: true, dataContributionEnabled: true } })
   if (!problem) return { ok: false as const, code: 'INVALID_TEST_GRAPH', issues: ['题目不存在'], errors: [{ path: 'problemId', message: '题目不存在' }] }
-  if (!problem.latestTestSetRevisionId) await ensureInitialTestSetRevision(problemId)
-  const currentProblem = await prisma.problem.findUnique({ where: { id: problemId }, select: { judgeConfig: true, latestTestSetRevisionId: true } })
-  const expectedRevisionId = typeof input?.expectedLatestRevisionId === 'string'
-    ? input.expectedLatestRevisionId
-    : ('revisionId' in (current || {}) ? String((current as any).revisionId) : currentProblem?.latestTestSetRevisionId || null)
+  await ensureInitialTestSetSlots(problemId)
+  const slot = problem.dataContributionEnabled ? 'EVOLVING' as const : 'STABLE' as const
+  const currentSlot = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId, slot } } })
+  const expectedFencingToken = Number.isInteger(Number(input?.expectedFencingToken))
+    ? Number(input.expectedFencingToken)
+    : currentSlot?.fencingToken || null
   try {
     const spec = await resolveGraphDraft(problemId, input)
-    const previousSpec = currentProblem?.latestTestSetRevisionId ? await loadRevisionSpec(currentProblem.latestTestSetRevisionId) : null
-    const readiness = await resolveSubtaskReadiness(problemId, currentProblem?.latestTestSetRevisionId || null)
+    const previousSpec = await loadTestSetSlotSpec(problemId, slot)
+    const readiness = await resolveSubtaskReadiness(problemId, slot)
     const bootstrapTestcaseIds = new Set<string>()
     const overrideReason = String(input?.overrideReason || '').trim()
     let usedOverride = false
@@ -546,21 +499,24 @@ export async function replaceTestGraph(problemId: string, input: any) {
       if (overrideReason.length < 10) return { ok: false as const, code: 'WRONG_CORPUS_REQUIRED', issues: [`Subtask ${subtask.id} 已具备基础测试数据，但尚无可用于价值评估的错误程序；强制发布需填写至少 10 字原因`], errors: [{ path: `subtasks.${subtask.id}.groups`, message: `Subtask ${subtask.id} 缺少 Wrong Corpus` }] }
       usedOverride = true
     }
-    await publishTestSetRevision({
+    const writer = await replaceTestSetSlot({
       problemId,
-      expectedLatestRevisionId: expectedRevisionId,
+      slot,
+      expectedFencingToken,
       source: 'admin_edit',
-      createdBy: typeof input?.updatedBy === 'string' ? input.updatedBy : null,
-      baseConfigText: currentProblem?.judgeConfig || null,
+      requestedBy: typeof input?.updatedBy === 'string' ? input.updatedBy : null,
+      baseConfigText: currentSlot?.judgeConfig || problem.judgeConfig || null,
       spec,
-      transactionHook: async (tx, revision) => {
-        if (bootstrapTestcaseIds.size) await tx.problemTestcase.updateMany({ where: { id: { in: [...bootstrapTestcaseIds] }, problemId }, data: { isProtected: true, protectionReason: 'bootstrap_core', protectedUntil: null } })
-        if (usedOverride) await tx.platformAuditLog.create({ data: { id: crypto.randomUUID(), actorUserId: typeof input?.updatedBy === 'string' ? input.updatedBy : null, action: 'test_graph_force_published', targetType: 'problem', targetId: problemId, metadata: { reason: overrideReason.slice(0, 1000), fromRevisionId: currentProblem?.latestTestSetRevisionId, toRevisionId: revision.id } } })
-      },
     })
+    if (bootstrapTestcaseIds.size) await prisma.problemTestcase.updateMany({ where: { id: { in: [...bootstrapTestcaseIds] }, problemId }, data: { isProtected: true, protectionReason: 'bootstrap_core', protectedUntil: null } })
+    if (usedOverride) await prisma.platformAuditLog.create({ data: {
+      id: crypto.randomUUID(), actorUserId: typeof input?.updatedBy === 'string' ? input.updatedBy : null,
+      action: 'test_graph_force_published', targetType: 'problem', targetId: problemId,
+      metadata: { reason: overrideReason.slice(0, 1000), slot, fromGraphHash: currentSlot?.graphHash || null, writerId: writer.id },
+    } })
   } catch (error: any) {
-    if (error instanceof TestSetRevisionConflict || error?.code === 'TEST_SET_REVISION_STALE') {
-      return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['题目正式测试版本已变化，请刷新后重试'], errors: [{ path: 'revision', message: '题目正式测试版本已变化，请刷新后重试' }] }
+    if (error instanceof TestSetSlotFenceConflict || error?.code === 'TEST_SET_SLOT_FENCE_CONFLICT') {
+      return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['题目测试数据已变化，请刷新后重试'], errors: [{ path: 'fencingToken', message: '题目测试数据已变化，请刷新后重试' }] }
     }
     throw error
   }

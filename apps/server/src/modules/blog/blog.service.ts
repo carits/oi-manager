@@ -135,7 +135,6 @@ function normalizeClassification(value: unknown): DraftClassificationInput {
 type DraftReferenceInput = {
   type: BlogReferenceType
   problemId?: string
-  problemRevisionId?: string
   solutionVersionId?: string
   standingSnapshotId?: string
   ratingChangeId?: string
@@ -164,7 +163,6 @@ function normalizeDraftReferences(value: unknown): DraftReferenceInput[] {
     const normalized: DraftReferenceInput = {
       type,
       problemId: nullableText(item.problemId, 100) || undefined,
-      problemRevisionId: nullableText(item.problemRevisionId, 100) || undefined,
       solutionVersionId: nullableText(item.solutionVersionId, 100) || undefined,
       standingSnapshotId: nullableText(item.standingSnapshotId, 100) || undefined,
       ratingChangeId: nullableText(item.ratingChangeId, 100) || undefined,
@@ -173,12 +171,7 @@ function normalizeDraftReferences(value: unknown): DraftReferenceInput[] {
       displayMode,
       positionKey,
     }
-    if (type === 'PROBLEM' && (!normalized.problemId || normalized.problemRevisionId)) {
-      fail(422, 'BLOG_REFERENCE_INVALID', 'PROBLEM 引用只接受题目 ID；需要固定数据版本时请使用 PROBLEM_REVISION')
-    }
-    if (type === 'PROBLEM_REVISION' && (!normalized.problemId || !normalized.problemRevisionId)) {
-      fail(422, 'BLOG_REFERENCE_VERSION_REQUIRED', '题目版本引用必须同时提供 problemId 和 problemRevisionId')
-    }
+    if (type === 'PROBLEM' && !normalized.problemId) fail(422, 'BLOG_REFERENCE_INVALID', 'PROBLEM 引用必须提供题目 ID')
     if (type === 'SOLUTION_VERSION' && !normalized.solutionVersionId) fail(422, 'BLOG_REFERENCE_VERSION_REQUIRED', '题解引用必须固定到 ProblemSolutionVersion')
     if (type === 'CONTEST_STANDING' && !normalized.standingSnapshotId) fail(422, 'BLOG_REFERENCE_VERSION_REQUIRED', '比赛引用必须固定到 StandingSnapshot')
     if (type === 'RATING_CHANGE' && !normalized.ratingChangeId) fail(422, 'BLOG_REFERENCE_VERSION_REQUIRED', 'Rating 引用必须固定到 RatingChange')
@@ -235,7 +228,6 @@ type ResolvedReference = {
   snapshotData: Prisma.InputJsonValue
   accessMode: BlogVisibility
   problemId?: string
-  problemRevisionId?: string
   solutionVersionId?: string
   contestId?: string
   standingSnapshotId?: string
@@ -245,27 +237,20 @@ type ResolvedReference = {
 
 async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceInput): Promise<ResolvedReference> {
   const shared = { relationType: input.relationType, displayMode: input.displayMode, positionKey: input.positionKey || null }
-  if (input.type === 'PROBLEM' || input.type === 'PROBLEM_REVISION') {
+  if (input.type === 'PROBLEM') {
     const problem = await db.problem.findUnique({ where: { id: input.problemId! } })
     if (!problem || !canViewProblem(user, problem)) fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的题目不存在或不可访问')
-    let revision: { id: string; revisionNumber: number } | null = null
-    if (input.type === 'PROBLEM_REVISION') {
-      revision = await db.problemTestSetRevision.findFirst({ where: { id: input.problemRevisionId!, problemId: problem.id }, select: { id: true, revisionNumber: true } })
-      if (!revision) fail(404, 'BLOG_REFERENCE_NOT_FOUND', '引用的题目测试版本不存在')
-    }
     const accessMode = publicProblem(problem) ? BlogVisibility.PUBLIC : problem.organizationId ? BlogVisibility.ORGANIZATION : BlogVisibility.PRIVATE
     return {
       ...shared,
       referenceType: input.type,
       referenceId: problem.id,
-      referenceVersionId: revision?.id || null,
+      referenceVersionId: null,
       problemId: problem.id,
-      problemRevisionId: revision?.id,
       accessMode,
       snapshotData: {
         kind: 'problem', title: problem.title, platform: problem.platform,
         problemId: problem.problemId, organizationId: problem.organizationId,
-        testSetRevision: revision?.revisionNumber || null,
       },
     }
   }
@@ -509,7 +494,6 @@ function draftDto(post: any) {
 }
 
 function referenceStatus(reference: any) {
-  if (reference.referenceType === 'PROBLEM_REVISION' && reference.Problem?.latestTestSetRevisionId !== reference.problemRevisionId) return 'SUPERSEDED'
   if (reference.referenceType === 'SOLUTION_VERSION' && reference.SolutionVersion?.status === 'SUPERSEDED') return 'SUPERSEDED'
   if (reference.referenceType === 'CONTEST_STANDING' && reference.StandingSnapshot?.status === 'SUPERSEDED') return 'SUPERSEDED'
   if (reference.referenceType === 'RATING_CHANGE' && reference.RatingChange?.Batch?.status === 'SUPERSEDED') return 'SUPERSEDED'
@@ -533,7 +517,6 @@ function referenceDto(reference: any) {
 }
 
 const referenceInclude = {
-  Problem: { select: { latestTestSetRevisionId: true } },
   SolutionVersion: { select: { status: true } },
   StandingSnapshot: { select: { status: true } },
   RatingChange: { select: { Batch: { select: { status: true } } } },
@@ -1405,7 +1388,7 @@ export async function convertBlogVersionToSolutionContribution(user: JwtPayload,
   if (!post || post.authorUserId !== user.userId || !post.Versions[0]) fail(404, 'BLOG_VERSION_NOT_FOUND', '只能将自己的固定博客版本投稿为题解')
   const version = post.Versions[0]
   const requestedProblemId = nullableText(body?.problemId, 100)
-  const problemReferences = version.References.filter(reference => ['PROBLEM', 'PROBLEM_REVISION'].includes(reference.referenceType))
+  const problemReferences = version.References.filter(reference => reference.referenceType === 'PROBLEM')
   const problemReference = requestedProblemId
     ? problemReferences.find(reference => reference.problemId === requestedProblemId)
     : problemReferences.find(reference => reference.relationType === 'PRIMARY_SUBJECT') || (problemReferences.length === 1 ? problemReferences[0] : null)
@@ -1418,7 +1401,6 @@ export async function convertBlogVersionToSolutionContribution(user: JwtPayload,
       summary: body?.summary === undefined ? version.summary : body.summary,
       contentMarkdown: version.contentMarkdown,
       sourceType: body?.sourceType || 'ORIGINAL',
-      testSetRevisionId: body?.testSetRevisionId || problemReference.problemRevisionId || undefined,
     })
   } catch (error) {
     if (error instanceof SolutionDomainError) throw new BlogDomainError(error.statusCode, error.code, error.message)

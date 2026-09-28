@@ -251,7 +251,8 @@ describe('feature slice contracts', () => {
     expect(testdata.files[0].uploadedAt).toBe('2026-09-14T00:00:00.000Z')
     expect(ProblemJudgeModeTransitionInputSchema.safeParse({
       targetMode: 'ioi',
-      expectedLatestRevisionId: 'revision-1',
+      slot: 'STABLE',
+      expectedFencingToken: 1,
     }).success).toBe(false)
   })
 
@@ -273,8 +274,9 @@ describe('feature slice contracts', () => {
       isProtected: false, assignments: [],
     }
     expect(ProblemTestGraphWorkspaceSchema.safeParse({
-      revision: 2,
-      revisionId: 'revision-2',
+      slot: 'EVOLVING',
+      graphHash: 'graph-2',
+      fencingToken: 2,
       source: 'admin_edit',
       createdAt: new Date('2026-09-14T00:00:00Z'),
       migrated: true,
@@ -290,8 +292,8 @@ describe('feature slice contracts', () => {
     }).success).toBe(true)
 
     expect(ProblemTestGraphSaveInputSchema.safeParse({
-      revision: 2,
-      expectedLatestRevisionId: 'revision-2',
+      slot: 'EVOLVING',
+      expectedFencingToken: 2,
       subtasks: [{
         id: 1, score: 100, if: [], groups: [
           { key: 'official-1', name: '官方测试组', kind: 'official', score: 100, type: 'min', cases: [] },

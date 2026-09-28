@@ -34,8 +34,6 @@ import type {
   AssignmentProgressRecipient as ContractProgressRecipient,
 } from '@oi-manager/contracts'
 
-interface RevisionSummary { id: string; revisionNumber: number; mode: 'acm' | 'oi'; judgeConfigHash: string }
-interface RevisionList { latestTestSetRevisionId: string | null; revisions: RevisionSummary[] }
 interface ValidationResult { valid: boolean; issues: Array<{ path: string; code: string; message: string }> }
 type ProgressItem = ContractProgressCell
 type ProgressRecipient = ContractProgressRecipient
@@ -117,7 +115,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null,
     correctionPolicy, solutionReleasePolicy,
   })
-  const problemRows = (items: AssignmentProblem[]) => items.map(item => ({ id: item.id, problemId: item.problemId, testSetRevisionId: item.testSetRevisionId, category: item.category, required: item.required, maxScore: item.maxScore, targetScore: item.targetScore, weight: item.weight, completionPolicy: item.completionPolicy }))
+  const problemRows = (items: AssignmentProblem[]) => items.map(item => ({ id: item.id, problemId: item.problemId, category: item.category, required: item.required, maxScore: item.maxScore, targetScore: item.targetScore, weight: item.weight, completionPolicy: item.completionPolicy }))
   const saveBasics = () => mutate(`/api/assignments/${assignment.id}`, 'PATCH', basicPayload(), 'basic')
   const saveProblems = async () => {
     const saved = await mutate(`/api/assignments/${assignment.id}/problems`, 'PUT', { expectedRevision: assignment.statusRevision, problems: problemRows(problemDraft) }, 'problems')
@@ -193,16 +191,13 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     const additions: AssignmentProblem[] = []
     for (const problem of problems) {
       if (problemDraft.some(item => item.problemId === problem.id) || additions.some(item => item.problemId === problem.id)) continue
-      const result = await apiClient.get<RevisionList>(`/api/problems/${problem.id}/test-set-revisions`)
-      if (!result.success || !result.data?.latestTestSetRevisionId) { toast.error(`${problem.problemCode}：${result.message || '没有可用的正式测试版本'}`); continue }
-      const revision = result.data.revisions.find(item => item.id === result.data!.latestTestSetRevisionId)
-      if (!revision) { toast.error(`${problem.problemCode}：最新测试版本不可用`); continue }
+      if (!problem.stableData) { toast.error(`${problem.problemCode}：没有可用的 Stable 测试数据`); continue }
       additions.push({
-        id: `draft-${problem.id}`, problemId: problem.id, testSetRevisionId: revision.id, orderIndex: 0,
+        id: `draft-${problem.id}`, problemId: problem.id, orderIndex: 0,
         category: 'REQUIRED', required: true, maxScore: 100, judgeMaxScore: 100, targetScore: 100, weight: 100,
-        completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
+        completionPolicy: problem.stableData.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
         titleSnapshot: problem.title, statementsSnapshot: [],
-        Problem: { id: problem.id, platform: problem.platform, problemId: problem.problemCode, title: problem.title, difficulty: problem.difficulty, allowedLanguages: null }, TestSetRevision: revision,
+        Problem: { id: problem.id, platform: problem.platform, problemId: problem.problemCode, title: problem.title, difficulty: problem.difficulty, allowedLanguages: null },
       })
     }
     if (additions.length) setProblemDraft(current => [...current, ...additions].map((item, orderIndex) => ({ ...item, orderIndex })))
@@ -275,7 +270,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     {designStep === 1 && <>
     <Section title="选择题目" description="选择平台并输入题号；作业发布后，题库更新不会改变本次成绩。">
       <div className={styles.stack}><QuickProblemInput existingProblemIds={problemDraft.map(item => item.problemId)} onResolved={addProblems} />{problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
-        <span className={styles.problemIdentity}><strong>{index + 1}. {item.Problem.problemId} · {item.Problem.title}</strong><span>发布后使用固定的测试数据</span></span>
+        <span className={styles.problemIdentity}><strong>{index + 1}. {item.Problem.problemId} · {item.Problem.title}</strong><span>每次提交使用当时的 Stable 测试数据</span></span>
         <div className={styles.problemControls}>
           <FormField label="类别"><Select aria-label={`${item.Problem.title} 类别`} value={item.category} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, category: event.target.value as AssignmentProblem['category'], required: event.target.value === 'REQUIRED' } : row))}><option value="REQUIRED">必做</option><option value="OPTIONAL">选做</option><option value="CHALLENGE">挑战</option></Select></FormField>
           <FormField label="作业满分" hint={`本题评测满分 ${item.judgeMaxScore || 100}`}><Input aria-label={`${item.Problem.title} 满分`} type="number" min={1} max={1000} value={item.maxScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, maxScore: Number(event.target.value), targetScore: Math.min(row.targetScore, Number(event.target.value)) } : row))} /></FormField>
@@ -370,7 +365,7 @@ function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: 
       onClose={() => setSelected(null)}
       onSubmit={() => void submit()}
       title={selected ? `${selected.Problem.problemId} · ${selected.titleSnapshot}` : '作业题目'}
-      description="题面和测试数据均固定于作业发布时，不会因题库更新而改变。"
+      description="题面在发布时固定；每次提交动态使用当时的 Stable 测试数据。"
       submitText={selectedCanSubmit ? '提交评测' : '当前不可提交'}
       loading={sending}
       dirty={selectedCanSubmit && Boolean(code)}

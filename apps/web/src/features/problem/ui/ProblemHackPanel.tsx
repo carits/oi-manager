@@ -165,7 +165,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
           <TableBody>{attempts.map(item => {
             const detail = attemptDetails[item.id]
             const comparison = mode === 'oi' && item.baselineScore != null ? `${item.baselineScore} → ${item.candidateScore ?? '—'}${item.scoreDelta ? `（-${item.scoreDelta}）` : ''}${item.affectedSubtaskIds?.length ? ` · S${item.affectedSubtaskIds.join(', S')}` : ''}` : item.baselineResult ? `${item.baselineResult} → ${item.candidateResult || '—'}` : '—'
-            const canonical = hackCanonicalPresentation({ technicalStatus: item.status, canonicalStatus: item.canonicalStatus, candidateStatus: item.testcaseCandidateStatus, promotedRevision: item.promotedRevision })
+            const canonical = hackCanonicalPresentation({ technicalStatus: item.status, canonicalStatus: item.canonicalStatus, candidateStatus: item.testcaseCandidateStatus, promotedGraphHash: item.promotedGraphHash })
             return <Fragment key={item.id}>
               <TableRow>
                 <TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell>
@@ -175,7 +175,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
                 <TableCell>{getLanguageLabel(item.hackLanguage)}</TableCell>
                 <TableCell><div className={styles.actions}><Button variant="ghost" className={styles.retry} disabled={loadingDetailId === item.id} onClick={() => toggleDetails(item)}>{loadingDetailId === item.id ? '读取中…' : expandedAttemptId === item.id ? '收起程序' : '查看程序'}</Button>{canManage && item.status === 'system_error' && <Button variant="ghost" className={styles.retry} onClick={() => retry(item.id)}>重新执行</Button>}</div></TableCell>
                 <TableCell>{comparison}</TableCell>
-                <TableCell><div className={styles.lifecycle}><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || `未识别状态：${item.status}`}</span><small className={lifecycleClass(canonical.tone)}>{canonical.label}</small>{item.baseTestSetRevision && <small>判定基于 R{item.baseTestSetRevision}</small>}</div></TableCell>
+                <TableCell><div className={styles.lifecycle}><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || `未识别状态：${item.status}`}</span><small className={lifecycleClass(canonical.tone)}>{canonical.label}</small>{item.baseGraphHash && <small>判定基于 Evolving {item.baseGraphHash.slice(0, 8)}</small>}</div></TableCell>
                 <TableCell>{item.failureStage ? FAILURE_STAGE[item.failureStage] || `未识别阶段：${item.failureStage}` : '—'}</TableCell>
                 <TableCell title={item.message || ''}>{item.message || '—'}</TableCell>
               </TableRow>

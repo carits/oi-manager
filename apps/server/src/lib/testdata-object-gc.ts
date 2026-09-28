@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { prisma } from '../prisma'
-import { acquireProblemMutationLock } from '../modules/problem/problem.testset-revision.service'
+import { acquireProblemMutationLock } from '../modules/problem/problem.testset-slot.service'
 
 const TESTDATA_ROOT = path.resolve(process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata'))
 

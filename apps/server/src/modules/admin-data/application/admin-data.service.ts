@@ -15,6 +15,7 @@ export async function rejudgeAllLocalSubmissions(requestedBy: string) {
   const submissions = await prisma.submission.findMany({
     where: {
       problemInternalId: { not: null },
+      submitScope: { not: 'contest' },
       OR: [{ submitMethod: { in: ['local', 'demo_scenario'] } }, { oj: 'carits' }],
       AND: [currentJudgeCompletedWhere()],
     },

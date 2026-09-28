@@ -11,7 +11,6 @@ export interface AssignmentStatementSnapshot {
 export interface AssignmentProblem {
   id: string
   problemId: string
-  testSetRevisionId: string
   orderIndex: number
   category: 'REQUIRED' | 'OPTIONAL' | 'CHALLENGE'
   required: boolean
@@ -23,7 +22,6 @@ export interface AssignmentProblem {
   titleSnapshot: string
   statementsSnapshot: AssignmentStatementSnapshot[]
   Problem: { id: string; platform: string; problemId: string; title: string; difficulty?: string | null; allowedLanguages?: string | null }
-  TestSetRevision: { id: string; revisionNumber: number; mode: 'acm' | 'oi'; judgeConfigHash: string }
 }
 
 export interface AssignmentRecipient {

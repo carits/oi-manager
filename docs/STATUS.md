@@ -1,9 +1,17 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-27
+last_verified: 2026-09-28
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+## 2026-09-28 TestSet 双槽模型代码侧收口
+
+- TestSet Revision 业务模型、revisionId、latest 指针和历史版本接口已删除；每题只保留 STABLE 与可选 EVOLVING 两个当前槽，槽内容继续引用 TestdataObject。
+- Problem + Slot 使用持久化写优先读写屏障：Writer 排队即关门，阻止新 Reader，等待既有 Judge/Contest 等 Reader 释放后原子替换并递增 fencing token。
+- Contest 全程持有 Stable Reader；Training 每次提交选择当时 Evolving（缺失时回退 Stable）；Assignment 每次提交动态使用 Stable，不再固定数据版本。
+- Hack、贡献、Selector 串行写 Evolving；Promotion 验证捕获的临时快照后排队替换 Stable，临时目录不进入业务模型，Evolving 可在验证期间继续前进。
+- Prisma validate/generate、Contracts/Shared/Server/Web production build 已通过；双槽核心 8/8、API/并发 47/47、Contest/Training/Assignment/Hack/Quality/Solution 58/58 通过。当前仅为远端开发分支验证，尚未迁移或部署线上数据库。
 
 ## 2026-09-25 Contest / Training V2 边界收口
 

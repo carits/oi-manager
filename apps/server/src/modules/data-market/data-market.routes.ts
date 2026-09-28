@@ -10,7 +10,7 @@ import {
   confirmQualityIncident, createDataProduct, createQualityIncident, DataMarketError,
   getDataEntitlement, getDataProduct, listDataEntitlements, listDataProducts,
   getEntitlementManifest, listDataPurchases, listQualityIncidents, purchaseDataProduct, readEntitlementObject,
-  resolveQualityIncident, upgradeDataEntitlement,
+  resolveQualityIncident,
 } from './data-market.service'
 
 export const dataMarketRouter = Router()
@@ -43,17 +43,16 @@ dataMarketRouter.post('/data-products/:id/purchase', authenticate, contractRoute
 dataMarketRouter.get('/data-purchases', authenticate, route(req => listDataPurchases(req.user!)))
 dataMarketRouter.get('/data-entitlements', authenticate, contractRoute(DataMarketContracts.entitlements, req => listDataEntitlements(req.user!)))
 dataMarketRouter.get('/data-entitlements/:id', authenticate, route(req => getDataEntitlement(req.user!, req.params.id)))
-dataMarketRouter.get('/data-entitlements/:id/revisions/:revisionId/manifest', authenticate, contractRoute(DataMarketContracts.manifest, req => getEntitlementManifest(req.user!, req.params.id, req.params.revisionId)))
-dataMarketRouter.get('/data-entitlements/:id/revisions/:revisionId/objects/:objectId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+dataMarketRouter.get('/data-entitlements/:id/manifest', authenticate, contractRoute(DataMarketContracts.manifest, req => getEntitlementManifest(req.user!, req.params.id)))
+dataMarketRouter.get('/data-entitlements/:id/objects/:objectId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const object = await readEntitlementObject(req.user!, req.params.id, req.params.revisionId, req.params.objectId)
+    const object = await readEntitlementObject(req.user!, req.params.id, req.params.objectId)
     res.setHeader('Content-Type', 'application/octet-stream')
     res.setHeader('Content-Disposition', `attachment; filename="${object.fileName}"`)
     res.setHeader('ETag', `"${object.sha256}"`)
     return res.send(object.content)
   } catch (error) { return sendError(error, res) }
 }))
-dataMarketRouter.post('/data-entitlements/:id/upgrades', authenticate, contractRoute(DataMarketContracts.upgrade, req => upgradeDataEntitlement(req.user!, req.params.id, parseContractBody(DataMarketContracts.upgrade, req.body)), 201))
 dataMarketRouter.post('/test-set-quality-incidents', authenticate, contractRoute(DataMarketContracts.createIncident, req => createQualityIncident(req.user!, parseContractBody(DataMarketContracts.createIncident, req.body)), 201))
 dataMarketRouter.get('/problems/:problemId/test-set-quality-incidents', authenticate, contractRoute(DataMarketContracts.incidents, req => listQualityIncidents(req.user!, req.params.problemId)))
 dataMarketRouter.post('/test-set-quality-incidents/:id/confirm', authenticate, contractRoute(DataMarketContracts.confirmIncident, req => { parseContractBody(DataMarketContracts.confirmIncident, req.body); return confirmQualityIncident(req.user!, req.params.id) }))

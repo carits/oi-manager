@@ -1,6 +1,6 @@
 export const humanTerms = {
   evaluationCredits: '评测额度',
-  testSetRevision: '测试数据版本',
+  testSetSlot: '测试数据槽位',
   qualityScore: '数据质量评分',
   organization: '学校',
 } as const

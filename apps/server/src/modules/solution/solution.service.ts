@@ -153,8 +153,8 @@ async function statementSnapshot(problemId: string) {
   return { value, hash: crypto.createHash('sha256').update(JSON.stringify(problem)).digest('hex') }
 }
 
-function snapshotHash(fields: DraftFields, statementHash: string, revisionId: string) {
-  return crypto.createHash('sha256').update(JSON.stringify({ ...fields, statementHash, revisionId })).digest('hex')
+function snapshotHash(fields: DraftFields, statementHash: string, slot: string, graphHash: string) {
+  return crypto.createHash('sha256').update(JSON.stringify({ ...fields, statementHash, slot, graphHash })).digest('hex')
 }
 
 async function requireProblem(user: JwtPayload, problemId: string) {
@@ -163,13 +163,10 @@ async function requireProblem(user: JwtPayload, problemId: string) {
   return problem
 }
 
-async function resolveTargetRevision(problemId: string, value: unknown) {
-  const id = optionalText(value, 100)
-  const revision = id
-    ? await prisma.problemTestSetRevision.findFirst({ where: { id, problemId } })
-    : await prisma.problemTestSetRevision.findFirst({ where: { problemId }, orderBy: { revisionNumber: 'desc' } })
-  if (!revision) fail(409, 'SOLUTION_TEST_SET_REVISION_REQUIRED', '题目没有可用于验证的正式测试版本')
-  return revision
+async function resolveTargetTestSet(problemId: string) {
+  const slot = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId, slot: 'STABLE' } } })
+  if (!slot) fail(409, 'SOLUTION_TEST_SET_REQUIRED', '题目尚无可用于验证的 Stable 数据')
+  return slot
 }
 
 async function assertBase(problemId: string, fields: DraftFields) {
@@ -190,14 +187,14 @@ export async function createSolutionContribution(user: JwtPayload, problemId: st
   const fields = draftFields(body)
   assertDraftFields(fields)
   await assertBase(problem.id, fields)
-  const targetRevision = await resolveTargetRevision(problem.id, body?.testSetRevisionId)
+  const target = await resolveTargetTestSet(problem.id)
   const organizationId = await resolveContributionOrganization(user.userId, body?.organizationId)
   const statement = await statementSnapshot(problem.id)
   return prisma.solutionContribution.create({ data: {
     id: crypto.randomUUID(), problemId: problem.id, authorUserId: user.userId, organizationId,
     ...fields, algorithmTags: fields.algorithmTags ?? Prisma.JsonNull,
     licenseDeclarationVersion: LICENSE_VERSION, licenseAcceptedAt: new Date(),
-    targetTestSetRevisionId: targetRevision.id, statementSnapshotHash: statement.hash,
+    targetTestSetSlot: 'STABLE', targetTestSetGraphHash: target.graphHash, statementSnapshotHash: statement.hash,
   } })
 }
 
@@ -208,28 +205,25 @@ export async function updateSolutionContribution(user: JwtPayload, id: string, b
   const fields = draftFields(body, contribution as DraftFields)
   assertDraftFields(fields)
   await assertBase(contribution.problemId, fields)
-  let targetRevisionId = contribution.targetTestSetRevisionId
-  if (body?.testSetRevisionId !== undefined) targetRevisionId = (await resolveTargetRevision(contribution.problemId, body.testSetRevisionId)).id
+  const target = await resolveTargetTestSet(contribution.problemId)
   const organizationId = body?.organizationId === undefined ? contribution.organizationId : await resolveContributionOrganization(user.userId, body.organizationId)
   return prisma.solutionContribution.update({ where: { id }, data: {
-    ...fields, algorithmTags: fields.algorithmTags ?? Prisma.JsonNull,
-    organizationId, targetTestSetRevisionId: targetRevisionId,
+    ...fields, algorithmTags: fields.algorithmTags ?? Prisma.JsonNull, organizationId,
+    targetTestSetSlot: 'STABLE', targetTestSetGraphHash: target.graphHash,
     statementSnapshotHash: (await statementSnapshot(contribution.problemId)).hash,
   } })
 }
 
-async function assertSubmissionEligibility(user: JwtPayload, contribution: { problemId: string; targetTestSetRevisionId: string; type: SolutionType }) {
+async function assertSubmissionEligibility(user: JwtPayload, contribution: { problemId: string; type: SolutionType }) {
   if (!FULL_TYPES.includes(contribution.type)
     || user.accountRole === 'platform_admin'
     || user.accountRole === 'super_admin'
     || requestHasOrganizationCapability(user, 'problem.create')) return
   const solved = await prisma.submission.findFirst({ where: {
-    userId: user.userId, problemInternalId: contribution.problemId, testSetRevisionId: contribution.targetTestSetRevisionId,
-    OR: [
-      { CurrentJudgeRun: { is: { status: 'FINALIZED', result: 'accepted', score: { gte: 100 } } } },
-    ],
+    userId: user.userId, problemInternalId: contribution.problemId,
+    CurrentJudgeRun: { is: { status: 'FINALIZED', testSetSlot: 'STABLE', result: 'accepted', score: { gte: 100 } } },
   }, select: { id: true } })
-  if (!solved) fail(403, 'SOLUTION_AUTHOR_NOT_QUALIFIED', '完整题解投稿者需要先在指定测试版本上 AC，或由教师/题目管理员投稿')
+  if (!solved) fail(403, 'SOLUTION_AUTHOR_NOT_QUALIFIED', '完整题解投稿者需要先在 Stable 数据上 AC，或由教师/题目管理员投稿')
 }
 
 async function createSnapshot(user: JwtPayload, contributionId: string, resubmit: boolean) {
@@ -240,18 +234,19 @@ async function createSnapshot(user: JwtPayload, contributionId: string, resubmit
   const fields = contribution as DraftFields
   assertSubmissionComplete(fields)
   await assertSubmissionEligibility(user, contribution)
+  const target = await resolveTargetTestSet(contribution.problemId)
   const statement = await statementSnapshot(contribution.problemId)
   const revisionNumber = contribution.currentRevision + 1
-  const revisionId = crypto.randomUUID()
+  const contributionRevisionId = crypto.randomUUID()
   const now = new Date()
   return prisma.$transaction(async tx => {
     const changed = await tx.solutionContribution.updateMany({
       where: { id: contribution.id, authorUserId: user.userId, status: expected, currentRevision: contribution.currentRevision },
-      data: { status: 'SUBMITTED', currentRevision: revisionNumber, submittedAt: now, statementSnapshotHash: statement.hash },
+      data: { status: 'SUBMITTED', currentRevision: revisionNumber, submittedAt: now, statementSnapshotHash: statement.hash, targetTestSetSlot: 'STABLE', targetTestSetGraphHash: target.graphHash },
     })
     if (!changed.count) fail(409, 'SOLUTION_SUBMISSION_STALE', '投稿已被其他请求更新')
     const revision = await tx.solutionContributionRevision.create({ data: {
-      id: revisionId, contributionId: contribution.id, revision: revisionNumber,
+      id: contributionRevisionId, contributionId: contribution.id, revision: revisionNumber,
       title: fields.title, summary: fields.summary, contentMarkdown: fields.contentMarkdown,
       algorithmTags: fields.algorithmTags ?? Prisma.JsonNull, approachKey: fields.approachKey,
       complexityTime: fields.complexityTime, complexityMemory: fields.complexityMemory,
@@ -259,34 +254,42 @@ async function createSnapshot(user: JwtPayload, contributionId: string, resubmit
       sourceUrl: fields.sourceUrl, citation: fields.citation,
       licenseDeclarationVersion: contribution.licenseDeclarationVersion,
       licenseAcceptedAt: contribution.licenseAcceptedAt, statementSnapshot: statement.value, statementSnapshotHash: statement.hash,
-      targetTestSetRevisionId: contribution.targetTestSetRevisionId,
-      contentHash: snapshotHash(fields, statement.hash, contribution.targetTestSetRevisionId), submittedAt: now,
+      targetTestSetSlot: 'STABLE', targetTestSetGraphHash: target.graphHash,
+      contentHash: snapshotHash(fields, statement.hash, 'STABLE', target.graphHash), submittedAt: now,
     } })
     await tx.solutionSimilarityJob.create({ data: { id: crypto.randomUUID(), contributionRevisionId: revision.id } })
     return revision
   })
 }
 
-async function queueVerification(revisionId: string) {
+async function queueVerification(contributionRevisionId: string) {
   const revision = await prisma.solutionContributionRevision.findUniqueOrThrow({
-    where: { id: revisionId }, include: { Contribution: { include: { Problem: true } }, TargetTestSetRevision: true },
+    where: { id: contributionRevisionId }, include: { Contribution: { include: { Problem: true } } },
   })
-  // Explanations without executable code can skip the Judge. Corrections,
-  // translations and other contribution types that carry (or inherit) a
-  // reference implementation must be revalidated against their pinned
-  // TestSet Revision; the contribution label must never become a bypass.
+  const current = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId: revision.Contribution.problemId, slot: 'STABLE' } } })
+  if (!current || current.graphHash !== revision.targetTestSetGraphHash) {
+    await prisma.$transaction([
+      prisma.solutionVerification.create({ data: {
+        id: crypto.randomUUID(), contributionRevisionId: revision.id, verifiedTestSetSlot: 'STABLE',
+        verifiedTestSetGraphHash: revision.targetTestSetGraphHash, status: 'INFRA_ERROR',
+        errorMessage: 'Stable 数据已变化，请重新送审以使用当前数据', completedAt: new Date(),
+      } }),
+      prisma.solutionContribution.update({ where: { id: revision.contributionId }, data: { status: 'NEEDS_REVISION' } }),
+    ])
+    return
+  }
   if (!revision.referenceCode || !revision.language) {
     await prisma.$transaction([
       prisma.solutionVerification.create({ data: {
-        id: crypto.randomUUID(), contributionRevisionId: revision.id,
-        verifiedTestSetRevisionId: revision.targetTestSetRevisionId, status: 'SKIPPED', completedAt: new Date(),
+        id: crypto.randomUUID(), contributionRevisionId: revision.id, verifiedTestSetSlot: 'STABLE',
+        verifiedTestSetGraphHash: revision.targetTestSetGraphHash, status: 'SKIPPED', completedAt: new Date(),
       } }),
       prisma.solutionContribution.update({ where: { id: revision.contributionId }, data: { status: 'TECHNICALLY_VALID' } }),
     ])
     return
   }
   try {
-    const config = yaml.load(revision.TargetTestSetRevision.judgeConfig || '{}') as any
+    const config = yaml.load(current.judgeConfig || '{}') as any
     const io = normalizeSubmissionIo({ problemType: config?.type })
     await createQueuedSubmissionWithRun({
       userId: revision.Contribution.authorUserId,
@@ -295,19 +298,17 @@ async function queueVerification(revisionId: string) {
       oj: revision.Contribution.Problem.platform,
       problemId: revision.Contribution.Problem.problemId,
       problemInternalId: revision.Contribution.problemId,
-      language: revision.language!, code: revision.referenceCode!,
-      codeLength: Buffer.byteLength(revision.referenceCode!, 'utf8'),       submitMethod: 'local', submitScope: 'solution_verification', isGlobalVisible: false,
-      sourceId: revision.id, submitSource: 'solution_contribution',
-      testSetRevisionId: revision.targetTestSetRevisionId,
-      judgeConfigHash: revision.TargetTestSetRevision.judgeConfigHash,
-      judgeConfigSnapshot: revision.TargetTestSetRevision.judgeConfig,
-      ...io,
+      language: revision.language, code: revision.referenceCode,
+      codeLength: Buffer.byteLength(revision.referenceCode, 'utf8'),
+      submitMethod: 'local', submitScope: 'solution_verification', isGlobalVisible: false,
+      sourceId: revision.id, submitSource: 'solution_contribution', testSetSlot: 'STABLE',
+      judgeConfigHash: current.judgeConfigHash, judgeConfigSnapshot: current.judgeConfig, ...io,
     }, {
       requestedBy: revision.Contribution.authorUserId,
       afterSubmissionCreated: async (tx, submission) => {
         await tx.solutionVerification.create({ data: {
           id: crypto.randomUUID(), contributionRevisionId: revision.id, submissionId: submission.id,
-          verifiedTestSetRevisionId: revision.targetTestSetRevisionId, status: 'QUEUED',
+          verifiedTestSetSlot: 'STABLE', verifiedTestSetGraphHash: revision.targetTestSetGraphHash, status: 'QUEUED',
         } })
         await tx.solutionContribution.update({ where: { id: revision.contributionId }, data: { status: 'AUTO_CHECKING' } })
       },
@@ -315,8 +316,8 @@ async function queueVerification(revisionId: string) {
   } catch (error) {
     await prisma.$transaction([
       prisma.solutionVerification.create({ data: {
-        id: crypto.randomUUID(), contributionRevisionId: revision.id,
-        verifiedTestSetRevisionId: revision.targetTestSetRevisionId, status: 'INFRA_ERROR',
+        id: crypto.randomUUID(), contributionRevisionId: revision.id, verifiedTestSetSlot: 'STABLE',
+        verifiedTestSetGraphHash: revision.targetTestSetGraphHash, status: 'INFRA_ERROR',
         errorMessage: String((error as Error).message).slice(0, 2000), completedAt: new Date(),
       } }),
       prisma.solutionContribution.update({ where: { id: revision.contributionId }, data: { status: 'NEEDS_REVISION' } }),
@@ -689,7 +690,8 @@ export async function publishSolutionContribution(user: JwtPayload, contribution
       licenseDeclarationVersion: revision.licenseDeclarationVersion,
       statementSnapshot: revision.statementSnapshot as Prisma.InputJsonValue,
       statementSnapshotHash: revision.statementSnapshotHash,
-      verifiedTestSetRevisionId: revision.targetTestSetRevisionId,
+      verifiedTestSetSlot: revision.targetTestSetSlot,
+      verifiedTestSetGraphHash: revision.targetTestSetGraphHash,
       sourceContributionRevisionId: revision.id, verificationId: revision.Verification.id,
       contentHash: revision.contentHash, publishedByUserId: user.userId,
       visibilityPolicy: visibility,
@@ -709,7 +711,8 @@ export async function publishSolutionContribution(user: JwtPayload, contribution
       evidence: {
         problemId: current.problemId, solutionId: solution.id, versionId: version.id,
         solutionType: current.type, verificationId: revision.Verification.id,
-        verifiedTestSetRevisionId: revision.targetTestSetRevisionId,
+        verifiedTestSetSlot: revision.targetTestSetSlot,
+      verifiedTestSetGraphHash: revision.targetTestSetGraphHash,
         reviewerUserId: approval.reviewerUserId, publishedByUserId: user.userId,
         rewardCarits: reward.carits.toString(), organizationRewardCarits: '0',
       },
@@ -892,7 +895,6 @@ function publishedVersionDto(version: any) {
     complexityMemory: version.complexityMemory, language: version.language,
     referenceCode: version.referenceCode, sourceType: version.sourceType,
     sourceUrl: version.sourceUrl, citation: version.citation,
-    verifiedTestSetRevisionId: version.verifiedTestSetRevisionId,
     status: version.status, visibilityPolicy: version.visibilityPolicy,
     publishedAt: version.publishedAt,
   }
@@ -959,7 +961,6 @@ export async function createCorrectionContribution(user: JwtPayload, solutionId:
     sourceType: base.sourceType,
     sourceUrl: base.sourceUrl,
     citation: base.citation,
-    testSetRevisionId: base.verifiedTestSetRevisionId,
     ...body, type: 'CORRECTION', baseSolutionId: solution.id,
     baseVersionId: body?.baseVersionId || solution.currentVersionId,
     // A correction of a verified executable solution may replace its code,

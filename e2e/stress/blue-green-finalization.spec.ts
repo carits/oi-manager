@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process'
 import { expect, test } from '@playwright/test'
 import { PrismaClient } from '@prisma/client'
 import WebSocket from 'ws'
-import { ensureInitialTestSetRevision } from '../../apps/server/src/modules/problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../../apps/server/src/modules/problem/problem.testset-slot.service'
 import { createQueuedSubmissionWithRun } from '../../apps/server/src/modules/judge/application/judge-run.service'
 
 const prisma = new PrismaClient()
@@ -100,9 +100,10 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
   await expect.poll(async () => (await request.get('/api/health')).status()).toBe(200)
 
   const initialProblem = await prisma.problem.findUniqueOrThrow({ where: { id: 'e2e-problem' } })
-  const revision = await ensureInitialTestSetRevision(initialProblem.id, 'e2e-campus-principal')
+  const initialSlots = await ensureInitialTestSetSlots(initialProblem.id, 'e2e-campus-principal')
+  const stable = initialSlots.find(item => item.slot === 'STABLE')
+  expect(stable).toBeTruthy()
   const problem = await prisma.problem.findUniqueOrThrow({ where: { id: initialProblem.id } })
-  expect(problem.latestTestSetRevisionId).toBe(revision.id)
   const batch = `blue-green-${Date.now()}`
   for (const index of Array.from({ length: 100 }, (_, value) => value)) {
     await createQueuedSubmissionWithRun({
@@ -110,8 +111,7 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
       workspaceScope: 'campus', organizationId: 'org_school-default',
       language: 'cpp', code: `int main(){return ${index};}`, codeLength: 22,
       submitMethod: 'local', submitScope: 'problem', submitSource: batch,
-      sourceId: `${batch}-${index}`, testSetRevisionId: revision.id,
-      judgeConfigHash: revision.judgeConfigHash, judgeConfigSnapshot: revision.judgeConfig,
+      sourceId: `${batch}-${index}`, testSetSlot: 'STABLE',
       ioAdapterVersion: 0, inputFilename: null, outputFilename: null,
     })
   }
@@ -172,10 +172,13 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
   blueJudge.close()
   greenJudge.close()
 
+  await prisma.problem.update({ where: { id: problem.id }, data: { dataContributionEnabled: true } })
+  await ensureInitialTestSetSlots(problem.id, 'e2e-campus-principal')
   const hackProblem = await prisma.problem.findUniqueOrThrow({
-    where: { id: problem.id }, include: { LatestTestSetRevision: true },
+    where: { id: problem.id }, include: { TestSetSlots: true },
   })
-  expect(hackProblem.LatestTestSetRevision).toBeTruthy()
+  const evolving = hackProblem.TestSetSlots.find(item => item.slot === 'EVOLVING')
+  expect(evolving).toBeTruthy()
   await prisma.problemHackConfig.upsert({
     where: { problemId: hackProblem.id },
     create: {
@@ -192,12 +195,12 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
     id: hackAttemptId, problemId: hackProblem.id, userId: 'e2e-campus-student',
     status: 'judging', inputMode: 'data', inputData: '413 587\n',
     hackSource: 'int main(){return 0;}', hackLanguage: 'cpp17',
-    hackConfigRevision: 1, judgeConfigHash: hackProblem.LatestTestSetRevision!.judgeConfigHash,
+    hackConfigRevision: 1, judgeConfigHash: evolving!.judgeConfigHash,
     testGraphRevision: hackProblem.testGraphRevision,
-    baseTestSetRevisionId: hackProblem.latestTestSetRevisionId,
+    baseSlot: 'EVOLVING', baseGraphHash: evolving!.graphHash, baseFencingToken: evolving!.fencingToken,
     judgeId: hackJudgeId, judgeStarted: new Date(),
   } })
-  const revisionsBeforeHack = await prisma.problemTestSetRevision.count({ where: { problemId: hackProblem.id } })
+  const graphBeforeHack = evolving!.graphHash
   const [blueHackJudge, greenHackJudge] = await Promise.all([
     connectJudge(`ws://127.0.0.1:${stack.bluePort}/ws/judge`, hackJudgeId),
     connectJudge(`ws://127.0.0.1:${stack.greenPort}/ws/judge`, hackJudgeId),
@@ -213,16 +216,16 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
     { timeout: 30_000 }).toBe('accepted')
   const promotedHack = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: hackAttemptId } })
   expect(promotedHack).toMatchObject({ canonicalStatus: 'promoted', baselineResult: 'Accepted', candidateResult: 'Wrong Answer' })
-  expect(promotedHack.promotedRevisionId).toBeTruthy()
-  expect(await prisma.problemTestSetRevision.count({ where: { problemId: hackProblem.id } })).toBe(revisionsBeforeHack + 1)
-  expect((await prisma.problem.findUniqueOrThrow({ where: { id: hackProblem.id } })).latestTestSetRevisionId)
-    .toBe(promotedHack.promotedRevisionId)
+  expect(promotedHack.promotedGraphHash).toBeTruthy()
+  const evolvingAfterHack = await prisma.problemTestSetSlot.findUniqueOrThrow({ where: { problemId_slot: { problemId: hackProblem.id, slot: 'EVOLVING' } } })
+  expect(evolvingAfterHack.graphHash).toBe(promotedHack.promotedGraphHash)
+  expect(evolvingAfterHack.graphHash).not.toBe(graphBeforeHack)
   expect(await prisma.problemTestcase.count({ where: { hackAttemptId } })).toBe(1)
   expect(await prisma.testdataFile.count({ where: { problemId: hackProblem.id, filename: { startsWith: `hack_${hackAttemptId}.` } } })).toBe(2)
   blueHackJudge.send(hackResult)
   greenHackJudge.send(hackResult)
   await new Promise(resolve => setTimeout(resolve, 300))
-  expect(await prisma.problemTestSetRevision.count({ where: { problemId: hackProblem.id } })).toBe(revisionsBeforeHack + 1)
+  expect((await prisma.problemTestSetSlot.findUniqueOrThrow({ where: { problemId_slot: { problemId: hackProblem.id, slot: 'EVOLVING' } } })).graphHash).toBe(evolvingAfterHack.graphHash)
   blueHackJudge.close()
   greenHackJudge.close()
 

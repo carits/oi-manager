@@ -28,17 +28,17 @@ export function ContestHackSyncAction({ contestId, contestProblemId }: { contest
     </div>
   )
 
-  const updateRevision = async () => {
+  const refreshStableSnapshot = async () => {
     setSyncing(true)
     try {
-      const result = await applyContestTestSetUpdate(contestId, contestProblemId, preview.latestRevisionId || undefined)
-      if (!result.ok) return toast.error(result.error.message || '测试版本更新失败')
-      toast.success('活动已固定到题库最新测试版本')
+      const result = await applyContestTestSetUpdate(contestId, contestProblemId)
+      if (!result.ok) return toast.error(result.error.message || 'Stable 数据快照更新失败')
+      toast.success('比赛已刷新到当前 Stable 数据')
       setPreview(current => current ? {
         ...current,
         pending: false,
-        currentRevision: result.data.currentRevision ?? current.latestRevision,
-        currentRevisionId: result.data.currentRevisionId ?? current.latestRevisionId,
+        currentGraphHash: result.data.currentGraphHash ?? current.stableGraphHash,
+        currentFencingToken: result.data.currentFencingToken ?? current.stableFencingToken,
       } : current)
     } finally { setSyncing(false) }
   }
@@ -46,7 +46,7 @@ export function ContestHackSyncAction({ contestId, contestProblemId }: { contest
   return (
     <div className={styles.update}>
       <div><strong>题库有新的正式测试数据</strong><span>更新只影响本活动之后的新提交。</span></div>
-      <Button variant="outline" type="button" onClick={updateRevision} disabled={syncing}>
+      <Button variant="outline" type="button" onClick={refreshStableSnapshot} disabled={syncing}>
         {syncing ? '正在更新…' : '使用最新测试数据'}
       </Button>
     </div>

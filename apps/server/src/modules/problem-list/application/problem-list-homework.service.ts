@@ -1,6 +1,6 @@
 import { getResourceScope, isPersonalContext } from '../../../middleware/auth'
 import { prisma } from '../../../prisma'
-import { ensureInitialTestSetRevision } from '../../problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../../problem/problem.testset-slot.service'
 import { getProblemListPermission } from './problem-list-access.service'
 import { ProblemListApplicationError } from './problem-list-crud.service'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
@@ -65,12 +65,11 @@ export async function createAssignmentFromProblemList(user: AuthUser, problemLis
   const entries = problemList.ProblemListSection.flatMap(section => section.ProblemListEntry)
   if (entries.length === 0) fail(400, '题单中没有题目，无法发布')
 
-  for (const entry of entries) await ensureInitialTestSetRevision(entry.problemId, user.userId)
-  const revisionProblems = await prisma.problem.findMany({
-    where: { id: { in: entries.map(entry => entry.problemId) } },
-    include: { LatestTestSetRevision: true },
+  for (const entry of entries) await ensureInitialTestSetSlots(entry.problemId, user.userId)
+  const stableSlots = await prisma.problemTestSetSlot.findMany({
+    where: { problemId: { in: entries.map(entry => entry.problemId) }, slot: 'STABLE' },
   })
-  const revisionByProblem = new Map(revisionProblems.map(problem => [problem.id, problem]))
+  const stableByProblem = new Map(stableSlots.map(slot => [slot.problemId, slot]))
   const homeworkTitle = typeof body.title === 'string' && body.title.trim()
     ? body.title.trim()
     : `${problemList.title} - 作业`
@@ -94,22 +93,21 @@ export async function createAssignmentFromProblemList(user: AuthUser, problemLis
       },
     })
     const problemsData = entries.map((entry, index) => {
-      const revision = revisionByProblem.get(entry.problemId)?.LatestTestSetRevision
-      if (!revision) fail(422, `题目 ${entry.Problem.problemId} 没有可固定的 TestSet Revision`)
+      const stable = stableByProblem.get(entry.problemId)
+      if (!stable) fail(422, `题目 ${entry.Problem.problemId} 没有可用的 Stable 测试数据`)
       return {
         assignmentId: assignment.id,
         problemId: entry.problemId,
-        testSetRevisionId: revision.id,
         orderIndex: index,
         category: 'REQUIRED' as const,
         required: true,
         maxScore: 100,
-        judgeMaxScore: judgeMaxScoreFromSnapshot(revision.judgeConfig, revision.mode),
+        judgeMaxScore: judgeMaxScoreFromSnapshot(stable.judgeConfig, stable.mode),
         targetScore: 100,
         weight: 100,
-        completionPolicy: revision.mode === 'acm' ? 'AC' as const : 'TARGET_SCORE' as const,
-        judgeConfigSnapshot: revision.judgeConfig,
-        judgeConfigHash: revision.judgeConfigHash,
+        completionPolicy: stable.mode === 'acm' ? 'AC' as const : 'TARGET_SCORE' as const,
+        judgeConfigSnapshot: stable.judgeConfig,
+        judgeConfigHash: stable.judgeConfigHash,
         settings: { sourceProblemListId: problemList.id, sourceProblemListEntryId: entry.id, alias: entry.alias },
       }
     })

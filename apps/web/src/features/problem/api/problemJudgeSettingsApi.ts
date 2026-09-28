@@ -47,15 +47,15 @@ export const listProblemTestdata = (problemId: string) =>
     `${problemPath(problemId)}/testdata`,
   );
 
-export const listProblemTestSetRevisions = (problemId: string) =>
+export const listProblemTestSetSlots = (problemId: string) =>
   apiClient.queryContract(
-    ProblemContracts.listTestSetRevisions,
-    `${problemPath(problemId)}/test-set-revisions`,
+    ProblemContracts.listTestSetSlots,
+    `${problemPath(problemId)}/test-set-slots`,
   );
 
 export const transitionProblemJudgeMode = (
   problemId: string,
-  body: { targetMode: "acm" | "oi"; expectedLatestRevisionId: string },
+  body: { targetMode: "acm" | "oi"; slot: "STABLE" | "EVOLVING"; expectedFencingToken: number },
 ) =>
   apiClient.mutateContract(
     ProblemContracts.transitionJudgeMode,

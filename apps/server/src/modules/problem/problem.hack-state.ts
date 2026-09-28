@@ -90,3 +90,29 @@ export async function updateTerminalHackAttempt(
     data: input.data,
   })
 }
+
+/**
+ * Update non-state metadata while preserving the current state. Keeping this
+ * operation here ensures every ProblemHackAttempt write remains behind the
+ * same persistence boundary as state transitions.
+ */
+export async function updateHackAttemptMetadata(
+  db: HackPersistence,
+  input: {
+    id: string
+    state?: HackAttemptState | readonly HackAttemptState[]
+    where?: Record<string, unknown>
+    data: Record<string, unknown>
+  },
+) {
+  return db.problemHackAttempt.updateMany({
+    where: {
+      id: input.id,
+      ...input.where,
+      ...(input.state
+        ? { status: Array.isArray(input.state) ? { in: [...input.state] } : input.state }
+        : {}),
+    },
+    data: input.data,
+  })
+}

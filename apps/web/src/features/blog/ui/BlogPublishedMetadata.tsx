@@ -13,7 +13,7 @@ import { resolveNavigationContext } from '@/lib/navigationContext'
 export type { PublishedBlogReference } from './blog-reference-navigation'
 
 function referenceActionLabel(type: PublishedBlogReferenceType) {
-  if (type === 'PROBLEM' || type === 'PROBLEM_REVISION') return '查看题目'
+  if (type === 'PROBLEM') return '查看题目'
   if (type === 'SOLUTION_VERSION') return '查看题解'
   if (type === 'CONTEST_STANDING') return '查看比赛榜单'
   if (type === 'RATING_CHANGE') return '查看 Rating 变化'

@@ -52,7 +52,7 @@ async function ensureMigrationTriggers() {
           OR NEW."licenseDeclarationVersion" IS DISTINCT FROM OLD."licenseDeclarationVersion"
           OR NEW."statementSnapshot" IS DISTINCT FROM OLD."statementSnapshot"
           OR NEW."statementSnapshotHash" IS DISTINCT FROM OLD."statementSnapshotHash"
-          OR NEW."verifiedTestSetRevisionId" IS DISTINCT FROM OLD."verifiedTestSetRevisionId"
+          OR NEW."verifiedTestSetGraphHash" IS DISTINCT FROM OLD."verifiedTestSetGraphHash"
           OR NEW."sourceContributionRevisionId" IS DISTINCT FROM OLD."sourceContributionRevisionId"
           OR NEW."verificationId" IS DISTINCT FROM OLD."verificationId"
           OR NEW."contentHash" IS DISTINCT FROM OLD."contentHash"

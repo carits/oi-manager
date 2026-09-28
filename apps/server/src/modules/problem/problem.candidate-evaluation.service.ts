@@ -6,7 +6,7 @@ import type { Prisma } from '@prisma/client'
 import { getTestdataBlobStore, problemBlobKey } from '../storage/blob-store'
 import { putReferencedBlob } from '../storage/content-blob.service'
 import { EVALUATION_LIMITS, reserveEvaluationCreditsInTransaction, settleEvaluationCreditsInTransaction, usageCredits } from './problem.evaluation-budget.service'
-import { loadRevisionSpec } from './problem.testset-revision.service'
+import { acquireTestSetReaderTx, loadTestSetSlotSpec, releaseTestSetReader, releaseTestSetReaderTx, testSetSlotAbsolutePath } from './problem.testset-slot.service'
 import { parseSubtaskIds, resolveCorpusMode, uniqueSubtaskCases } from './problem.oi-candidate-policy'
 import { maybeAutoSelectCandidate } from './problem.candidate-selector.service'
 import { hasOrganizationCapability } from '../authorization/capabilities'
@@ -32,7 +32,7 @@ async function activeClusters(problemId: string, affected: number[]) {
 
 export async function queueCandidateEvaluation(candidateId: string) {
   const candidate = await prisma.testcaseCandidate.findUnique({ where: { id: candidateId } })
-  if (!candidate || !candidate.baseTestSetRevisionId) return { queued: false, reason: 'candidate_missing' }
+  if (!candidate || !candidate.baseGraphHash) return { queued: false, reason: 'candidate_missing' }
   const affected = parseSubtaskIds(candidate.affectedSubtaskIds)
   if (!affected.length) return { queued: false, reason: 'not_oi_candidate' }
   const { corpus, clusters } = await activeClusters(candidate.problemId, affected)
@@ -104,7 +104,25 @@ async function settleRunReservation(tx: Prisma.TransactionClient, run: { id: str
 export async function claimCandidateEvaluationRun(judgeId: string) {
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('candidate-evaluation-global-lane', 0)) IS NULL AS locked`
-    await tx.candidateEvaluationRun.updateMany({ where: { status: 'running', leaseExpiresAt: { lte: new Date() } }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null, message: '评估租约过期，已安全重新排队' } })
+    const expired = await tx.candidateEvaluationRun.findMany({
+      where: { status: 'running', leaseExpiresAt: { lte: new Date() } },
+      select: { id: true, testSetReaderId: true },
+    })
+    for (const item of expired) {
+      if (item.testSetReaderId) await releaseTestSetReaderTx(tx, item.testSetReaderId, 'EXPIRED')
+      await tx.candidateEvaluationRun.update({
+        where: { id: item.id },
+        data: {
+          status: 'queued',
+          judgeId: null,
+          fencingToken: null,
+          leaseExpiresAt: null,
+          startedAt: null,
+          testSetReaderId: null,
+          message: '评估租约过期，已释放 Evolving 读取屏障并重新排队',
+        },
+      })
+    }
     const running = await tx.candidateEvaluationRun.count({ where: { status: 'running' } })
     const generationRunning = await tx.problemDataGenerationJob.count({ where: { contribution: true, status: { in: ['running', 'finalizing'] } } })
     if (running || generationRunning) return null
@@ -112,32 +130,72 @@ export async function claimCandidateEvaluationRun(judgeId: string) {
     if (!rows[0]) return null
     const run = await tx.candidateEvaluationRun.findUnique({ where: { id: rows[0].id } })
     if (!run) return null
-    const candidate = await tx.testcaseCandidate.findUnique({ where: { id: run.candidateId }, include: { InputObject: true, OutputObject: true, BaseTestSetRevision: true } })
-    if (!candidate?.InputObject || !candidate.OutputObject || !candidate.BaseTestSetRevision || candidate.baseTestSetRevisionId !== (await tx.problem.findUnique({ where: { id: run.problemId }, select: { latestTestSetRevisionId: true } }))?.latestTestSetRevisionId) {
-      await tx.candidateEvaluationRun.update({ where: { id: run.id }, data: { status: 'failed', message: 'Candidate 基础测试版本已变化', finishedAt: new Date() } })
-      if (candidate) await tx.testcaseCandidate.update({ where: { id: candidate.id }, data: { status: 'STALE', evaluationStage: 'base_revision_stale' } })
-      await settleRunReservation(tx, run, { status: 'base_revision_stale' }, false)
+    const candidate = await tx.testcaseCandidate.findUnique({
+      where: { id: run.candidateId },
+      include: { InputObject: true, OutputObject: true },
+    })
+    if (!candidate?.InputObject || !candidate.OutputObject) {
+      await tx.candidateEvaluationRun.update({ where: { id: run.id }, data: { status: 'failed', message: 'Candidate 数据对象不存在', finishedAt: new Date() } })
+      await settleRunReservation(tx, run, { status: 'candidate_object_missing' }, false)
       return null
     }
+    const acquired = await acquireTestSetReaderTx(tx, {
+      problemId: run.problemId,
+      slot: 'EVOLVING',
+      ownerType: 'CANDIDATE_EVALUATION',
+      ownerId: run.id,
+    })
+    if (candidate.baseSlot !== 'EVOLVING' || candidate.baseGraphHash !== acquired.slot.graphHash || candidate.baseFencingToken !== acquired.slot.fencingToken) {
+      await tx.testcaseCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          baseSlot: 'EVOLVING',
+          baseGraphHash: acquired.slot.graphHash,
+          baseFencingToken: acquired.slot.fencingToken,
+          evaluationStage: 'revalidating_current_evolving',
+        },
+      })
+    }
     const affected = parseSubtaskIds(candidate.affectedSubtaskIds)
-    const clusters = await tx.wrongBehaviorCluster.findMany({ where: { problemId: run.problemId, corpusRevisionId: run.corpusRevisionId, status: 'active' }, orderBy: [{ weight: 'desc' }, { frequency: 'desc' }, { id: 'asc' }] })
-    const selectedClusters = selectStageClusters(clusters.filter(cluster => parseSubtaskIds(cluster.subtaskIds).some(id => affected.includes(id))), run.stage as EvaluationStage)
-    const samples = await tx.wrongSolutionSample.findMany({ where: { id: { in: selectedClusters.map(item => item.representativeSampleId) }, status: 'active' } })
-    const spec = await loadRevisionSpec(candidate.baseTestSetRevisionId!)
+    const clusters = await tx.wrongBehaviorCluster.findMany({
+      where: { problemId: run.problemId, corpusRevisionId: run.corpusRevisionId, status: 'active' },
+      orderBy: [{ weight: 'desc' }, { frequency: 'desc' }, { id: 'asc' }],
+    })
+    const selectedClusters = selectStageClusters(
+      clusters.filter(cluster => parseSubtaskIds(cluster.subtaskIds).some(id => affected.includes(id))),
+      run.stage as EvaluationStage,
+    )
+    const samples = await tx.wrongSolutionSample.findMany({
+      where: { id: { in: selectedClusters.map(item => item.representativeSampleId) }, status: 'active' },
+    })
+    const spec = await loadTestSetSlotSpec(candidate.problemId, 'EVOLVING')
     if (!spec || spec.mode !== 'oi') {
-      await tx.candidateEvaluationRun.update({ where: { id: run.id }, data: { status: 'failed', message: '候选评估的 OI 执行投影不可用', finishedAt: new Date() } })
-      await tx.testcaseCandidate.update({ where: { id: candidate.id }, data: { status: 'FAILED', evaluationStage: 'evaluation_projection_invalid', message: '候选评估的 OI 执行投影不可用' } })
+      await releaseTestSetReaderTx(tx, acquired.reader.id)
+      await tx.candidateEvaluationRun.update({
+        where: { id: run.id },
+        data: { status: 'failed', message: '候选评估的 OI 执行投影不可用', finishedAt: new Date() },
+      })
+      await tx.testcaseCandidate.update({
+        where: { id: candidate.id },
+        data: { status: 'FAILED', evaluationStage: 'evaluation_projection_invalid', message: '候选评估的 OI 执行投影不可用' },
+      })
       await settleRunReservation(tx, run, { status: 'projection_invalid' }, false)
       return null
     }
     const caseMap = new Map<string, { key: string; input: string; output: string }>()
-    for (const subtask of spec.subtasks || []) if (affected.includes(subtask.id)) for (const item of uniqueSubtaskCases(subtask)) {
-      const key = item.testcaseId || item.inputObjectId
-      caseMap.set(key, { key, input: item.inputName, output: item.outputName })
+    for (const subtask of spec.subtasks || []) {
+      if (!affected.includes(subtask.id)) continue
+      for (const item of uniqueSubtaskCases(subtask)) {
+        const key = item.testcaseId || item.inputObjectId
+        caseMap.set(key, { key, input: item.inputName, output: item.outputName })
+      }
     }
     const caseCount = caseMap.size + 1
     const budgetTaskId = run.budgetTaskId || run.id
-    const previousUsage = await tx.candidateEvaluationRun.aggregate({ where: { budgetTaskId }, _sum: { executionCount: true, cpuMilliseconds: true } })
+    const previousUsage = await tx.candidateEvaluationRun.aggregate({
+      where: { budgetTaskId },
+      _sum: { executionCount: true, cpuMilliseconds: true },
+    })
     const remaining = Math.max(0, run.budgetCredits - (previousUsage._sum.executionCount || 0))
     const cpuBudget = candidate.source === 'generator' ? EVALUATION_LIMITS.generator.cpuMs : EVALUATION_LIMITS.direct.cpuMs
     const remainingCpu = Math.max(0, cpuBudget - (previousUsage._sum.cpuMilliseconds || 0))
@@ -147,13 +205,35 @@ export async function claimCandidateEvaluationRun(judgeId: string) {
     const allowedSamples = selectedClusters.slice(0, allowedSlots)
     const allowedIds = new Set(allowedSamples.map(item => item.representativeSampleId))
     const fencingToken = crypto.randomUUID()
-    const changed = await tx.candidateEvaluationRun.updateMany({ where: { id: run.id, status: 'queued' }, data: { status: 'running', judgeId, fencingToken, leaseExpiresAt: new Date(Date.now() + 30 * 60_000), startedAt: new Date(), attempts: { increment: 1 } } })
-    if (!changed.count) return null
+    const changed = await tx.candidateEvaluationRun.updateMany({
+      where: { id: run.id, status: 'queued' },
+      data: {
+        status: 'running',
+        judgeId,
+        fencingToken,
+        testSetReaderId: acquired.reader.id,
+        leaseExpiresAt: new Date(Date.now() + 30 * 60_000),
+        startedAt: new Date(),
+        attempts: { increment: 1 },
+      },
+    })
+    if (!changed.count) {
+      await releaseTestSetReaderTx(tx, acquired.reader.id)
+      return null
+    }
     const taskSamples = []
     for (const sample of samples.filter(item => allowedIds.has(item.id))) {
       const cluster = allowedSamples.find(item => item.representativeSampleId === sample.id)!
       const source = await readSampleSource(sample)
-      if (source) taskSamples.push({ sampleId: sample.id, clusterId: cluster.id, weight: cluster.weight, language: sample.language, source, inputFilename: sample.inputFilename, outputFilename: sample.outputFilename })
+      if (source) taskSamples.push({
+        sampleId: sample.id,
+        clusterId: cluster.id,
+        weight: cluster.weight,
+        language: sample.language,
+        source,
+        inputFilename: sample.inputFilename,
+        outputFilename: sample.outputFilename,
+      })
     }
     const [input, output] = await Promise.all([
       getTestdataBlobStore().get(problemBlobKey(run.problemId, candidate.InputObject.storageKey)),
@@ -166,8 +246,8 @@ export async function claimCandidateEvaluationRun(judgeId: string) {
       problemId: run.problemId,
       fencingToken,
       stage: run.stage as EvaluationStage,
-      testdataPath: path.join(TESTDATA_ROOT, run.problemId, candidate.BaseTestSetRevision.testdataPath),
-      problemConfig: yaml.load(candidate.BaseTestSetRevision.judgeConfig || '{}'),
+      testdataPath: testSetSlotAbsolutePath(run.problemId, acquired.slot),
+      problemConfig: yaml.load(acquired.slot.judgeConfig || '{}'),
       candidateInputBase64: input.toString('base64'),
       candidateOutputBase64: output.toString('base64'),
       maxExecutionCount: remaining,
@@ -182,20 +262,25 @@ export async function finalizeCandidateEvaluationRun(judgeId: string, payload: a
   const run = await prisma.candidateEvaluationRun.findFirst({ where: { id: String(payload?.runId || ''), status: 'running', judgeId, fencingToken: String(payload?.fencingToken || '') } })
   if (!run) return { stale: true }
   const candidate = await prisma.testcaseCandidate.findUnique({ where: { id: run.candidateId } })
-  if (!candidate) return { stale: true }
+  if (!candidate) {
+    if (run.testSetReaderId) await releaseTestSetReader(run.testSetReaderId).catch(() => undefined)
+    return { stale: true }
+  }
   if (payload?.retryable) {
     if (run.attempts < 3) {
-      const changed = await prisma.candidateEvaluationRun.updateMany({ where: { id: run.id, status: 'running', judgeId, fencingToken: run.fencingToken }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null, executionCount: { increment: Math.max(0, Number(payload?.executionCount || 0)) }, cpuMilliseconds: { increment: Math.max(0, Number(payload?.cpuMilliseconds || 0)) }, message: String(payload?.message || 'Judge 基础设施暂时不可用，等待重试').slice(0, 2000) } })
+      const changed = await prisma.candidateEvaluationRun.updateMany({ where: { id: run.id, status: 'running', judgeId, fencingToken: run.fencingToken }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null, testSetReaderId: null, executionCount: { increment: Math.max(0, Number(payload?.executionCount || 0)) }, cpuMilliseconds: { increment: Math.max(0, Number(payload?.cpuMilliseconds || 0)) }, message: String(payload?.message || 'Judge 基础设施暂时不可用，等待重试').slice(0, 2000) } })
+      if (changed.count === 1 && run.testSetReaderId) await releaseTestSetReader(run.testSetReaderId).catch(() => undefined)
       return { stale: changed.count !== 1, retrying: changed.count === 1 }
     }
     let failed = false
     await prisma.$transaction(async tx => {
-      const changed = await tx.candidateEvaluationRun.updateMany({ where: { id: run.id, status: 'running', judgeId, fencingToken: run.fencingToken }, data: { status: 'failed', judgeId: null, fencingToken: null, leaseExpiresAt: null, executionCount: { increment: Math.max(0, Number(payload?.executionCount || 0)) }, cpuMilliseconds: { increment: Math.max(0, Number(payload?.cpuMilliseconds || 0)) }, message: String(payload?.message || 'Judge 基础设施连续失败').slice(0, 2000), finishedAt: new Date() } })
+      const changed = await tx.candidateEvaluationRun.updateMany({ where: { id: run.id, status: 'running', judgeId, fencingToken: run.fencingToken }, data: { status: 'failed', judgeId: null, fencingToken: null, leaseExpiresAt: null, testSetReaderId: null, executionCount: { increment: Math.max(0, Number(payload?.executionCount || 0)) }, cpuMilliseconds: { increment: Math.max(0, Number(payload?.cpuMilliseconds || 0)) }, message: String(payload?.message || 'Judge 基础设施连续失败').slice(0, 2000), finishedAt: new Date() } })
       if (!changed.count) return
       failed = true
       await tx.testcaseCandidate.updateMany({ where: { id: candidate.id }, data: { status: 'FAILED', evaluationStage: 'evaluation_system_error', message: '候选评估因 Judge 基础设施连续失败而终止，可由管理员重新排队' } })
       await settleRunReservation(tx, run, { status: 'system_error' })
     })
+    if (failed && run.testSetReaderId) await releaseTestSetReader(run.testSetReaderId).catch(() => undefined)
     return { stale: !failed, retrying: false }
   }
   // Acquire exclusive ownership of this successful result before writing its
@@ -226,7 +311,7 @@ export async function finalizeCandidateEvaluationRun(judgeId: string, payload: a
   const cpu = Math.max(0, Number(payload?.cpuMilliseconds || 0))
   let finalized = false
   await prisma.$transaction(async tx => {
-    const completed = await tx.candidateEvaluationRun.updateMany({ where: { id: run.id, status: 'running', judgeId, fencingToken: finalizationToken }, data: { status: 'succeeded', executionCount: { increment: executed }, cpuMilliseconds: { increment: cpu }, value: 0, message: String(payload?.message || '').slice(0, 2000) || null, judgeId: null, fencingToken: null, leaseExpiresAt: null, finishedAt: new Date() } })
+    const completed = await tx.candidateEvaluationRun.updateMany({ where: { id: run.id, status: 'running', judgeId, fencingToken: finalizationToken }, data: { status: 'succeeded', executionCount: { increment: executed }, cpuMilliseconds: { increment: cpu }, value: 0, testSetReaderId: null, message: String(payload?.message || '').slice(0, 2000) || null, judgeId: null, fencingToken: null, leaseExpiresAt: null, finishedAt: new Date() } })
     if (!completed.count) return
     finalized = true
     if (nextStage) {
@@ -253,13 +338,32 @@ export async function finalizeCandidateEvaluationRun(judgeId: string, payload: a
     await settleRunReservation(tx, run, { status: 'completed' })
   })
   if (!finalized) return { stale: true }
+  if (run.testSetReaderId) await releaseTestSetReader(run.testSetReaderId).catch(() => undefined)
   if (nextStage) return { stale: false, nextStage }
   if (holdoutComplete) await maybeAutoSelectCandidate(candidate.id).catch(() => undefined)
   return { stale: false }
 }
 
 export async function recoverCandidateEvaluationRuns(judgeId: string) {
-  const runs = await prisma.candidateEvaluationRun.findMany({ where: { judgeId, status: 'running' }, select: { id: true } })
-  if (runs.length) await prisma.candidateEvaluationRun.updateMany({ where: { id: { in: runs.map(item => item.id) }, judgeId, status: 'running' }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null } })
+  const runs = await prisma.candidateEvaluationRun.findMany({
+    where: { judgeId, status: 'running' },
+    select: { id: true, testSetReaderId: true },
+  })
+  for (const run of runs) {
+    if (run.testSetReaderId) await releaseTestSetReader(run.testSetReaderId, 'EXPIRED').catch(() => undefined)
+  }
+  if (runs.length) {
+    await prisma.candidateEvaluationRun.updateMany({
+      where: { id: { in: runs.map(item => item.id) }, judgeId, status: 'running' },
+      data: {
+        status: 'queued',
+        judgeId: null,
+        fencingToken: null,
+        testSetReaderId: null,
+        leaseExpiresAt: null,
+        startedAt: null,
+      },
+    })
+  }
   return runs.length
 }

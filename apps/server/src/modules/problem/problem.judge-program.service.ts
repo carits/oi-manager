@@ -357,8 +357,8 @@ export async function claimJudgeProgramVerificationJob(judgeId: string) {
     const fencingToken = crypto.randomUUID()
     const changed = await tx.problemJudgeProgramVerificationJob.updateMany({ where: { id: job.id, status: 'queued' }, data: { status: 'running', judgeId, fencingToken, leaseExpiresAt: new Date(Date.now() + 10 * 60_000), startedAt: new Date(), attemptCount: { increment: 1 } } })
     if (!changed.count) return null
-    const problem = await tx.problem.findUnique({ where: { id: job.problemId }, include: { LatestTestSetRevision: { select: { judgeConfig: true } } } })
-    const problemConfig = yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}') as any
+    const problem = await tx.problem.findUnique({ where: { id: job.problemId }, include: { TestSetSlots: { where: { slot: 'EVOLVING' }, select: { judgeConfig: true } } } })
+    const problemConfig = yaml.load(problem?.TestSetSlots[0]?.judgeConfig || problem?.judgeConfig || '{}') as any
     const [validator, standard] = job.mode === 'preflight' && ['classifier', 'generator'].includes(job.Program.kind)
       ? await Promise.all([activeVersionForKind(tx, job.problemId, 'validator'), job.Program.kind === 'generator' ? activeVersionForKind(tx, job.problemId, 'standard') : Promise.resolve(null)])
       : [null, null]

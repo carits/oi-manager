@@ -57,7 +57,6 @@ type StructureStage = {
     assignmentId?: string
     clientKey?: string
     problemId: string
-    testSetRevisionId?: string
     alias?: string | null
     unlockPolicy?: unknown
     targetScore?: number | null
@@ -217,7 +216,7 @@ function normalizeSessionSettings(value: unknown, scheduledStartAt: Date | null)
 export async function loadSession(id: string) {
   return prisma.trainingSession.findUnique({ where: { id }, include: {
     Stages: { orderBy: { orderIndex: 'asc' }, include: {
-      Problems: { orderBy: { orderIndex: 'asc' }, include: { Problem: { select: { id: true, platform: true, problemId: true, title: true, difficulty: true, timeLimit: true, memoryLimit: true } }, TestSetRevision: { select: { id: true, revisionNumber: true, mode: true, judgeConfigHash: true } }, Plans: { orderBy: { orderIndex: 'asc' } } } },
+      Problems: { orderBy: { orderIndex: 'asc' }, include: { Problem: { select: { id: true, platform: true, problemId: true, title: true, difficulty: true, timeLimit: true, memoryLimit: true } }, Plans: { orderBy: { orderIndex: 'asc' } } } },
       Groups: { orderBy: { TrainingGroup: { orderIndex: 'asc' } }, include: { ProblemPlans: { orderBy: { orderIndex: 'asc' } }, TrainingGroup: true } },
       TimeAdjustments: { orderBy: { createdAt: 'asc' } },
     } },
@@ -470,7 +469,6 @@ export async function createTrainingSessionTemplate(userId: string, sessionId: s
           const plan = defaultPlan?.ProblemPlans.find(item => item.stageProblemId === problem.id)
           return {
             problemId: problem.problemId,
-            testSetRevisionId: problem.testSetRevisionId,
             alias: problem.alias,
             required: plan?.required !== false,
             unlockPolicy: plan?.unlockPolicy,
@@ -567,13 +565,14 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
   const stageProblemInputs = (stage: StructureStage) => stage.problems || []
   const allProblemIds = [...new Set(stages.flatMap(stage => stageProblemInputs(stage).map(item => String(item.problemId))))]
   if (allProblemIds.length > 100) throw new TrainingEngineError(422, 'INVALID_TRAINING_STRUCTURE', '一场训练最多引用 100 道不同题目')
-  const requestedRevisionIds = [...new Set(stages.flatMap(stage => stageProblemInputs(stage).map(item => item.testSetRevisionId).filter((id): id is string => Boolean(id))))]
-  const [problems, requestedRevisions] = await Promise.all([
-    allProblemIds.length ? prisma.problem.findMany({ where: { id: { in: allProblemIds }, latestTestSetRevisionId: { not: null }, status: { not: 'archived' }, ...(access && !access.canSeeAll ? { OR: [{ ownerId: access.userId }, { libraryScope: 'platform', status: 'published' }, ...(access.organizationId ? [{ libraryScope: 'school', organizationId: access.organizationId, status: 'published' }] : [])] } : {}) }, include: { LatestTestSetRevision: { include: { Subtasks: { select: { subtaskId: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } } } }, ProblemStatement: { where: { isVisible: true }, orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }] } } }) : [],
-    requestedRevisionIds.length ? prisma.problemTestSetRevision.findMany({ where: { id: { in: requestedRevisionIds } }, include: { Subtasks: { select: { subtaskId: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } } } }) : [],
-  ])
+  const problems = allProblemIds.length ? await prisma.problem.findMany({
+    where: { id: { in: allProblemIds }, TestSetSlots: { some: {} }, status: { not: 'archived' }, ...(access && !access.canSeeAll ? { OR: [{ ownerId: access.userId }, { libraryScope: 'platform', status: 'published' }, ...(access.organizationId ? [{ libraryScope: 'school', organizationId: access.organizationId, status: 'published' }] : [])] } : {}) },
+    include: {
+      TestSetSlots: { orderBy: { slot: 'asc' }, include: { Subtasks: { select: { subtaskId: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } } } },
+      ProblemStatement: { where: { isVisible: true }, orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }] },
+    },
+  }) : []
   const byId = new Map(problems.map(item => [item.id, item]))
-  const revisionsById = new Map(requestedRevisions.map(item => [item.id, item]))
   return stages.map((stage, stageIndex) => {
     const name = boundedText(stage.name, 100, `阶段 ${stageIndex + 1} 名称`, 1)
     const kind = enumValue(stage.kind, STAGE_KINDS, 'TRAINING', `阶段 ${stageIndex + 1} 教学用途`)
@@ -595,14 +594,13 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
     }
     const normalizeProblem = (item: NonNullable<StructureStage['problems']>[number], problemIndex: number, label: string) => {
       const problem = byId.get(String(item.problemId))
-      if (!problem?.LatestTestSetRevision) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_REVISION_REQUIRED', `${label}的第 ${problemIndex + 1} 道题没有正式 TestSet Revision`)
-      const revision = item.testSetRevisionId ? revisionsById.get(item.testSetRevisionId) : problem.LatestTestSetRevision
-      if (!revision || revision.problemId !== problem.id) throw new TrainingEngineError(422, 'TRAINING_REVISION_PROBLEM_MISMATCH', `${label}的第 ${problemIndex + 1} 道题使用了不属于该题的 TestSet Revision`)
+      if (!problem?.TestSetSlots.length) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_DATA_REQUIRED', `${label}的第 ${problemIndex + 1} 道题没有可用测试数据`)
+      const slot = problem.TestSetSlots.find(item => item.slot === 'EVOLVING') || problem.TestSetSlots.find(item => item.slot === 'STABLE')!
       const requestedAllowedSubtaskIds = Array.isArray(item.allowedSubtaskIds) ? [...new Set(item.allowedSubtaskIds.map(Number))] : []
       if (requestedAllowedSubtaskIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', 'Subtask ID 必须是正整数')
-      if (requestedAllowedSubtaskIds.length && revision.mode !== 'oi') throw new TrainingEngineError(422, 'SUBTASK_PROJECTION_UNSUPPORTED', '仅 OI Revision 支持按 Subtask 训练')
-      const revisionSubtasks = Array.isArray((revision as any).Subtasks) ? (revision as any).Subtasks as Array<{ subtaskId: number; Dependencies: Array<{ DependsOn: { subtaskId: number } }> }> : []
-      const dependencyMap = new Map(revisionSubtasks.map(subtask => [subtask.subtaskId, subtask.Dependencies.map(dependency => dependency.DependsOn.subtaskId)]))
+      if (requestedAllowedSubtaskIds.length && slot.mode !== 'oi') throw new TrainingEngineError(422, 'SUBTASK_PROJECTION_UNSUPPORTED', '仅 OI Revision 支持按 Subtask 训练')
+      const slotSubtasks = Array.isArray((slot as any).Subtasks) ? (slot as any).Subtasks as Array<{ subtaskId: number; Dependencies: Array<{ DependsOn: { subtaskId: number } }> }> : []
+      const dependencyMap = new Map(slotSubtasks.map(subtask => [subtask.subtaskId, subtask.Dependencies.map(dependency => dependency.DependsOn.subtaskId)]))
       const closeSubtasks = (ids: number[]) => {
         const closed = new Set(ids)
         const visit = (id: number, stack = new Set<number>()) => {
@@ -627,7 +625,7 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
       let projection: string | null = null
       const allProjectedSubtasks = [...new Set([...allowedSubtaskIds, ...scoreGoals.flatMap((goal: any) => goal.allowedSubtaskIds)])]
       if (allProjectedSubtasks.length) {
-        const config = yaml.load(revision.judgeConfig) as any
+        const config = yaml.load(slot.judgeConfig) as any
         const available = new Set((config?.subtasks || []).map((subtask: any) => Number(subtask.id)))
         if (allProjectedSubtasks.some(id => !available.has(id))) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', `训练投影包含不存在的 Subtask：${allProjectedSubtasks.filter(id => !available.has(id)).join(', ')}`)
         if (allowedSubtaskIds.length) projection = yaml.dump({ ...config, subtasks: (config.subtasks || []).filter((subtask: any) => allowedSubtaskIds.includes(Number(subtask.id))) }, { noRefs: true, lineWidth: 120 })
@@ -639,7 +637,7 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
         timePolicy: normalizeProblemTimePolicy(item.timePolicy),
         stuckPolicy: normalizeStuckPolicy(item.stuckPolicy),
         scoreGoals,
-      }, problem, revision, problemIndex, allowedSubtaskIds, projection }
+      }, problem, slot, problemIndex, allowedSubtaskIds, projection }
     }
     const allSeen = new Set<string>()
     const stageProblems = (stage.problems || []).map((item, problemIndex) => {
@@ -680,7 +678,6 @@ async function createStageGraph(tx: Prisma.TransactionClient, sessionId: string,
     const saved = await tx.trainingSessionStageProblem.create({ data: {
       stageId: stage.id,
       problemId: item.problem.id,
-      testSetRevisionId: item.revision.id,
       alias: item.item.alias?.trim() || null,
       orderIndex: stageProblems.length,
       titleSnapshot: item.problem.title,
@@ -847,7 +844,6 @@ function trainingDefinitionSnapshot(session: any, hints: any[]) {
           const plan = defaultPlan?.ProblemPlans.find((item: any) => item.stageProblemId === problem.id)
           return {
             problemId: problem.problemId,
-            testSetRevisionId: problem.testSetRevisionId,
             alias: problem.alias,
             required: plan?.required !== false,
             unlockPolicy: plan?.unlockPolicy,
@@ -1021,14 +1017,15 @@ export async function validateTrainingStructure(userId: string, sessionId: strin
 export async function getTrainingDesign(userId: string, sessionId: string) {
   const session = await assertManage(userId, sessionId)
   const problemIds = [...new Set(session.Stages.flatMap(stage => stage.Problems.map(problem => problem.problemId)))]
-  const revisionIds = [...new Set(session.Stages.flatMap(stage => stage.Problems.map(problem => problem.testSetRevisionId)))]
-  const [latest, subtasks] = await Promise.all([
-    problemIds.length ? prisma.problem.findMany({ where: { id: { in: problemIds } }, select: { id: true, LatestTestSetRevision: { select: { id: true, revisionNumber: true } } } }) : [],
-    revisionIds.length ? prisma.problemTestSetRevisionSubtask.findMany({ where: { revisionId: { in: revisionIds } }, orderBy: [{ revisionId: 'asc' }, { orderIndex: 'asc' }], select: { revisionId: true, subtaskId: true, score: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } }) : [],
-  ])
-  const latestByProblem = new Map(latest.map(item => [item.id, item.LatestTestSetRevision]))
-  const subtasksByRevision = new Map<string, Array<{ id: number; score: number; dependencies: number[] }>>()
-  for (const item of subtasks) subtasksByRevision.set(item.revisionId, [...(subtasksByRevision.get(item.revisionId) || []), { id: item.subtaskId, score: item.score, dependencies: item.Dependencies.map(dependency => dependency.DependsOn.subtaskId) }])
+  const slots = problemIds.length ? await prisma.problemTestSetSlot.findMany({
+    where: { problemId: { in: problemIds } },
+    include: { Subtasks: { orderBy: { orderIndex: 'asc' }, select: { subtaskId: true, score: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } } },
+  }) : []
+  const currentByProblem = new Map<string, typeof slots[number]>()
+  for (const slot of slots) {
+    const current = currentByProblem.get(slot.problemId)
+    if (!current || slot.slot === 'EVOLVING') currentByProblem.set(slot.problemId, slot)
+  }
 
   const stages = session.Stages.map((stage, stageIndex) => {
     const defaultPlan = stage.Groups.find(plan => plan.isDefault)
@@ -1043,8 +1040,12 @@ export async function getTrainingDesign(userId: string, sessionId: string) {
         assignmentId: problem.id,
         clientKey: plan.id,
         required: plan.required,
-        latestRevision: latestByProblem.get(problem.problemId) || null,
-        subtasks: subtasksByRevision.get(problem.testSetRevisionId) || [],
+        currentData: currentByProblem.get(problem.problemId) ? {
+          slot: currentByProblem.get(problem.problemId)!.slot,
+          graphHash: currentByProblem.get(problem.problemId)!.graphHash,
+          mode: currentByProblem.get(problem.problemId)!.mode,
+        } : null,
+        subtasks: currentByProblem.get(problem.problemId)?.Subtasks.map(item => ({ id: item.subtaskId, score: item.score, dependencies: item.Dependencies.map(dependency => dependency.DependsOn.subtaskId) })) || [],
       }
     })
     return {
@@ -1116,7 +1117,7 @@ export async function getTrainingDesignProblem(userId: string, sessionId: string
   const problem = await prisma.problem.findFirst({
     where: {
       id: problemId,
-      latestTestSetRevisionId: { not: null },
+      TestSetSlots: { some: {} },
       status: { not: 'archived' },
       OR: [
         { libraryScope: 'platform', status: 'published' },
@@ -1124,17 +1125,18 @@ export async function getTrainingDesignProblem(userId: string, sessionId: string
         ...(organizationId ? [{ libraryScope: 'school', organizationId, status: 'published' }] : []),
       ],
     },
-    include: { LatestTestSetRevision: { include: { Subtasks: { orderBy: { orderIndex: 'asc' }, select: { subtaskId: true, score: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } } } } },
+    include: { TestSetSlots: { include: { Subtasks: { orderBy: { orderIndex: 'asc' }, select: { subtaskId: true, score: true, Dependencies: { select: { DependsOn: { select: { subtaskId: true } } } } } } } } },
   })
-  if (!problem?.LatestTestSetRevision) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_AVAILABLE', '题目不存在、不可用或没有正式 TestSet Revision')
+  const slot = problem?.TestSetSlots.find(item => item.slot === 'EVOLVING') || problem?.TestSetSlots.find(item => item.slot === 'STABLE')
+  if (!problem || !slot) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_AVAILABLE', '题目不存在、不可用或没有测试数据')
   return {
     id: problem.id,
     platform: problem.platform,
     problemId: problem.problemId,
     title: problem.title,
     difficulty: problem.difficulty,
-    revision: { id: problem.LatestTestSetRevision.id, revisionNumber: problem.LatestTestSetRevision.revisionNumber, mode: problem.LatestTestSetRevision.mode },
-    subtasks: problem.LatestTestSetRevision.Subtasks.map(item => ({ id: item.subtaskId, score: item.score, dependencies: item.Dependencies.map(dependency => dependency.DependsOn.subtaskId) })),
+    data: { slot: slot.slot, graphHash: slot.graphHash, mode: slot.mode },
+    subtasks: slot.Subtasks.map(item => ({ id: item.subtaskId, score: item.score, dependencies: item.Dependencies.map(dependency => dependency.DependsOn.subtaskId) })),
   }
 }
 
@@ -1325,7 +1327,7 @@ async function createStageSnapshot(tx: Prisma.TransactionClient, stageId: string
   const stage = await tx.trainingSessionStage.findUniqueOrThrow({ where: { id: stageId }, include: { Problems: { orderBy: { orderIndex: 'asc' } }, Groups: { include: { ProblemPlans: { orderBy: { orderIndex: 'asc' } } } }, TimeAdjustments: { orderBy: { createdAt: 'asc' } } } })
   const config = {
     stage: { id: stage.id, name: stage.name, orderIndex: stage.orderIndex, kind: stage.kind, mode: stage.mode, accessPolicy: stage.accessPolicy, submissionMode: stage.submissionMode, endPolicy: stage.endPolicy, plannedDurationSeconds: stage.plannedDurationSeconds, minDurationSeconds: stage.minDurationSeconds, completionThreshold: stage.completionThreshold, completionPolicy: stage.completionPolicy, rules: stage.rules, definitionRevision: stage.definitionRevision },
-    problems: stage.Problems.map(problem => ({ id: problem.id, problemId: problem.problemId, testSetRevisionId: problem.testSetRevisionId, orderIndex: problem.orderIndex })),
+    problems: stage.Problems.map(problem => ({ id: problem.id, problemId: problem.problemId, orderIndex: problem.orderIndex })),
     plans: stage.Groups.map(plan => ({ id: plan.id, groupId: plan.groupId, isDefault: plan.isDefault, inheritsDefault: plan.inheritsDefault, accessPolicy: plan.accessPolicy, submissionMode: plan.submissionMode, completionPolicy: plan.completionPolicy, rules: plan.rules, problems: plan.ProblemPlans.map(problem => ({ stageProblemId: problem.stageProblemId, orderIndex: problem.orderIndex, required: problem.required, unlockPolicy: problem.unlockPolicy, targetScore: problem.targetScore, scoreGoals: problem.scoreGoals, timePolicy: problem.timePolicy, stuckPolicy: problem.stuckPolicy, hintPolicy: problem.hintPolicy, allowedSubtaskIds: problem.allowedSubtaskIds, judgeConfigProjection: problem.judgeConfigProjection, strategyIntervalSeconds: problem.strategyIntervalSeconds, rules: problem.rules })) })),
     timeAdjustments: stage.TimeAdjustments,
   }
@@ -1437,7 +1439,7 @@ export async function cloneTrainingStage(userId: string, sessionId: string, stag
     cloneId = clone.id
     const problemMap = new Map<string, string>()
     for (const problem of source.Problems) {
-      const created = await tx.trainingSessionStageProblem.create({ data: { stageId: clone.id, problemId: problem.problemId, testSetRevisionId: problem.testSetRevisionId, alias: problem.alias, orderIndex: problem.orderIndex, titleSnapshot: problem.titleSnapshot, statementsSnapshot: asJson(problem.statementsSnapshot) } })
+      const created = await tx.trainingSessionStageProblem.create({ data: { stageId: clone.id, problemId: problem.problemId, alias: problem.alias, orderIndex: problem.orderIndex, titleSnapshot: problem.titleSnapshot, statementsSnapshot: asJson(problem.statementsSnapshot) } })
       problemMap.set(problem.id, created.id)
       for (const hint of problem.Hints) await tx.trainingSessionHint.create({ data: { sessionId, stageProblemId: created.id, level: hint.level, title: hint.title, content: hint.content, openMode: hint.openMode, triggerSeconds: hint.triggerSeconds, triggerAttempts: hint.triggerAttempts, triggerScore: hint.triggerScore, createdBy: userId } })
     }
@@ -1544,8 +1546,7 @@ export async function appendTrainingRuntimeProblem(userId: string, sessionId: st
       stageProblem = await tx.trainingSessionStageProblem.create({ data: {
         stageId,
         problemId: source.problem.id,
-        testSetRevisionId: source.revision.id,
-        alias: null,
+          alias: null,
         orderIndex: (maximum._max.orderIndex ?? -1) + 1,
         titleSnapshot: source.problem.title,
         statementsSnapshot: asJson(source.problem.ProblemStatement.map((statement: any) => ({
@@ -1565,11 +1566,11 @@ export async function appendTrainingRuntimeProblem(userId: string, sessionId: st
       targetType: targetType as any,
       targetId,
       stageProblemId: stageProblem.id,
-      payload: asJson({ required, targetScore, reason, runtime: true, problemId: source.problem.id, problemCode: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot, testSetRevisionId: stageProblem.testSetRevisionId }),
+      payload: asJson({ required, targetScore, reason, runtime: true, problemId: source.problem.id, problemCode: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot }),
       createdBy: userId,
     } })
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-    await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_APPENDED, targetType as TrainingEngineTargetType, targetId, { overlayId: overlay.id, stageId, stageProblemId: stageProblem.id, problemId: source.problem.id, problemCode: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot, testSetRevisionId: stageProblem.testSetRevisionId, required, targetScore, reason })
+    await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_APPENDED, targetType as TrainingEngineTargetType, targetId, { overlayId: overlay.id, stageId, stageProblemId: stageProblem.id, problemId: source.problem.id, problemCode: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot, required, targetScore, reason })
   })
   return getTrainingWorkspace(userId, sessionId)
 }
@@ -2135,7 +2136,8 @@ export async function submitTrainingSolution(userId: string, sessionId: string, 
   if (!stageProblem) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_FOUND', '训练题目不存在')
   const language = boundedText(body?.language, 30, '语言', 1), code = String(body?.code || '')
   if (!code.trim() || Buffer.byteLength(code, 'utf8') > 1024 * 1024) throw new TrainingEngineError(422, 'INVALID_SUBMISSION_CODE', '代码不能为空且不能超过 1 MiB')
-  const revision = await prisma.problemTestSetRevision.findUniqueOrThrow({ where: { id: stageProblem.testSetRevisionId } })
+  const slot = await prisma.problemTestSetSlot.findUnique({ where: { problemId_slot: { problemId: stageProblem.problemId, slot: 'EVOLVING' } } })
+    || await prisma.problemTestSetSlot.findUniqueOrThrow({ where: { problemId_slot: { problemId: stageProblem.problemId, slot: 'STABLE' } } })
   const participant = await prisma.trainingSessionParticipant.findUniqueOrThrow({ where: { sessionId_userId: { sessionId, userId } } })
   const stage = session.Stages.find(item => item.id === stageProblem.stageId)
   const defaultPlan = stage?.Groups.find(item => item.isDefault)
@@ -2151,15 +2153,15 @@ export async function submitTrainingSolution(userId: string, sessionId: string, 
   const goalSubtasks = goal?.allowedSubtaskIds?.length ? goal.allowedSubtaskIds : []
   const planSubtasks = Array.isArray(plan?.allowedSubtaskIds) ? plan.allowedSubtaskIds.map(Number) : []
   const selectedSubtasks = goalSubtasks.length ? goalSubtasks : planSubtasks
-  const baseConfig = yaml.load(revision.judgeConfig) as any
+  const baseConfig = yaml.load(slot.judgeConfig) as any
   const configText = selectedSubtasks.length
     ? yaml.dump({ ...baseConfig, subtasks: (baseConfig?.subtasks || []).filter((subtask: any) => selectedSubtasks.includes(Number(subtask.id))) }, { noRefs: true, lineWidth: 120 })
-    : plan?.judgeConfigProjection || revision.judgeConfig
+    : plan?.judgeConfigProjection || slot.judgeConfig
   const judgeConfigHash = crypto.createHash('sha256').update(configText).digest('hex')
   const goalSnapshot = goal ? { ...goal, allowedSubtaskIds: selectedSubtasks, judgeConfigHash } : null
   const config = yaml.load(configText) as any
   const io = normalizeSubmissionIo({ inputFilename: body?.inputFilename, outputFilename: body?.outputFilename, problemType: config?.type })
-  return createQueuedSubmissionWithRun({ userId, workspaceScope: session.organizationId ? 'campus' : 'personal', organizationId: session.organizationId, oj: stageProblem.Problem.platform, problemId: stageProblem.Problem.problemId, language, code, codeLength: Buffer.byteLength(code, 'utf8'), submitMethod: 'local', problemInternalId: stageProblem.problemId, submitScope: 'training_engine', trainingSessionId: sessionId, trainingStageProblemId: stageProblemId, trainingScoreGoalIndex: goalIndex, trainingScoreGoalSnapshot: asJson(goalSnapshot), testSetRevisionId: revision.id, judgeConfigHash, judgeConfigSnapshot: configText, ...io, isGlobalVisible: true }, { requestedBy: userId })
+  return createQueuedSubmissionWithRun({ userId, workspaceScope: session.organizationId ? 'campus' : 'personal', organizationId: session.organizationId, oj: stageProblem.Problem.platform, problemId: stageProblem.Problem.problemId, language, code, codeLength: Buffer.byteLength(code, 'utf8'), submitMethod: 'local', problemInternalId: stageProblem.problemId, submitScope: 'training_engine', trainingSessionId: sessionId, trainingStageProblemId: stageProblemId, trainingScoreGoalIndex: goalIndex, trainingScoreGoalSnapshot: asJson(goalSnapshot), testSetSlot: slot.slot, testSetFencingToken: slot.fencingToken, testSetGraphHash: slot.graphHash, judgeConfigHash, judgeConfigSnapshot: configText, ...io, isGlobalVisible: true }, { requestedBy: userId })
 }
 
 export async function createTrainingHint(userId: string, sessionId: string, body: any) {

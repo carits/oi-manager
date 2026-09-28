@@ -29,18 +29,17 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 |---|---|---|
 | `GET` | `/api/data-products` | 读取当前 ACTIVE 数据商品及公开质量证书，不返回隐藏证据或测试数据 |
 | `GET` | `/api/data-products/:id` | 读取指定商品证书；已停售商品仍保留历史状态但不能购买 |
-| `POST` | `/api/problems/:problemId/data-products` | 题目管理员绑定 Revision 与质量快照发布商品；服务端自动定级定价 |
+| `POST` | `/api/problems/:problemId/data-products` | 题目管理员绑定当前 slot/graph 与质量快照发布商品；服务端自动定级定价 |
 | `POST` | `/api/data-products/:id/purchase` | 以 UUID Idempotency-Key 和服务端价格购买 PERSONAL/ORGANIZATION/CONTEST 许可证 |
 | `GET` | `/api/data-purchases` | 读取本人或本人可管理范围内的购买记录 |
 | `GET` | `/api/data-entitlements` | 读取本人或本人可管理范围内的固定版本授权 |
-| `GET` | `/api/data-entitlements/:id` | 读取授权与追加式 Revision 历史；越权统一返回 404 |
-| `GET` | `/api/data-entitlements/:id/revisions/:revisionId/manifest` | 按 includes 返回安全数据清单与受控对象链接 |
-| `GET` | `/api/data-entitlements/:id/revisions/:revisionId/objects/:objectId` | 重验授权、Revision 与对象归属后流式下载单个对象 |
-| `POST` | `/api/data-entitlements/:id/upgrades` | 按商品更新策略追加同题新 Revision 授权 |
+| `GET` | `/api/data-entitlements/:id` | 读取当前授权及固定 graph 身份；越权统一返回 404 |
+| `GET` | `/api/data-entitlements/:id/manifest` | 按 includes 返回固定购买 graph 的安全数据清单与受控对象链接 |
+| `GET` | `/api/data-entitlements/:id/objects/:objectId` | 重验授权、固定 graph 与对象归属后流式下载单个对象 |
 | `POST` | `/api/test-set-quality-incidents` | 题目管理员登记质量事故；Critical 会自动停售并通知买家 |
 | `GET` | `/api/problems/:problemId/test-set-quality-incidents` | 题目管理员读取事故历史 |
 | `POST` | `/api/test-set-quality-incidents/:id/confirm` | 确认非 Critical 事故 |
-| `POST` | `/api/test-set-quality-incidents/:id/resolve` | 绑定修复 Revision 并向既有授权追加免费修复版本 |
+| `POST` | `/api/test-set-quality-incidents/:id/resolve` | 绑定修复 graph 并更新受影响授权 |
 | `POST` | `/api/problems/:problemId/solution-contributions` | 创建题解投稿草稿并固定来源、授权和组织归因 |
 | `GET` | `/api/problems/:problemId/solution-contributions/me` | 读取本人对指定题目的投稿 |
 | `GET` | `/api/problems/:problemId/solutions` | 按当前发布版本可见性读取题解列表 |
@@ -100,11 +99,11 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `GET` | `/api/assignments/:id` | 读取按角色裁剪的作业、固定题目版本和本人名单 |
 | `GET` | `/api/assignments/:id/workspace` | 读取学生本人或管理者的进度、订正、反馈和成绩快照 |
 | `PATCH` | `/api/assignments/:id` | 以 revision CAS 修改 DRAFT 基本信息 |
-| `PUT` | `/api/assignments/:id/problems` | 固定题目 TestSet Revision、顺序和评分目标 |
+| `PUT` | `/api/assignments/:id/problems` | 保存题目顺序和评分目标；不 pin TestSet |
 | `PUT` | `/api/assignments/:id/roster` | 保存 DRAFT 学生名单快照 |
 | `POST` | `/api/assignments/:id/validate` | 运行发布前结构检查 |
 | `POST` | `/api/assignments/:id/publish` | 原子生成名单/进度并冻结作业 |
-| `POST` | `/api/assignments/:id/submit` | 按固定 Revision 创建独立作业提交与 JudgeRun |
+| `POST` | `/api/assignments/:id/submit` | 动态取得 Stable Reader 并创建独立作业提交与 JudgeRun |
 | `GET` | `/api/assignments/:id/progress` | 管理者读取服务端成绩矩阵 |
 | `POST` | `/api/assignments/:id/progress/:progressId/manual-completion` | 管理者按版本 CAS 和必填原因设置或取消人工完成 |
 | `POST` | `/api/assignments/:id/corrections` | 原子创建订正事实和事件 |
@@ -173,7 +172,7 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `GET` | `/api/problems/:id/data-generation-jobs` | 列出题目的候选数据生成任务 |
 | `GET` | `/api/problems/:id/data-generation-jobs/:jobId` | 读取任务、逐点阶段和内容预览 |
 | `POST` | `/api/problems/:id/data-generation-jobs/:jobId/cancel` | 取消尚未完成的数据生成任务 |
-| `POST` | `/api/problems/:id/data-generation-jobs/:jobId/promote` | 以 CAS 发布选中候选点到下一 TestSet Revision |
+| `POST` | `/api/problems/:id/data-generation-jobs/:jobId/promote` | 以 Evolving fencing token 串行写入选中候选点 |
 | `POST` | `/api/problems/:id/candidates/data` | 可提交用户贡献直接 Candidate 数据 |
 | `POST` | `/api/problems/:id/candidates/generator` | 可提交用户按 `oj.generator/v1` 贡献 C++17/Python3 Generator |
 | `GET` | `/api/problems/:id/contribution-readiness` | 返回 STD、Validator、Classifier、Corpus 的统一贡献就绪状态与阻断原因 |
@@ -186,26 +185,26 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `PUT` | `/api/problems/:id/candidate-policy` | 题目管理者以 revision CAS 更新 observe/auto 与容量策略 |
 | `GET` | `/api/problems/:id/wrong-corpus` | 题目管理者读取私有错误语料的聚类汇总，不返回历史源码 |
 | `POST` | `/api/problems/:id/wrong-corpus/rebuild` | 从本地错误/部分分提交幂等重建 bootstrap Corpus |
-| `GET` | `/api/problems/:id/quality` | 读取当前 Revision 的 DQS/PQS 质量摘要；普通用户只获得脱敏证书，管理者同时获得历史和任务摘要 |
-| `GET` | `/api/problems/:id/test-set-revisions/:revisionId/quality` | 读取指定不可变 Revision 的质量证书；完整 evidence 仅题目管理者可见 |
-| `POST` | `/api/problems/:id/quality-evaluation-jobs` | 题目管理者按固定 Revision/Corpus/规则输入幂等触发 DQS 异步评估 |
+| `GET` | `/api/problems/:id/quality` | 读取当前 slot/graph 的 DQS/PQS 质量摘要；普通用户只获得脱敏证书，管理者同时获得历史和任务摘要 |
+| `GET` | `/api/problems/:id/test-set-slots/:slot/quality` | 读取当前 Stable/Evolving 槽的质量证书；完整 evidence 仅题目管理者可见 |
+| `POST` | `/api/problems/:id/quality-evaluation-jobs` | 题目管理者按固定 slot/graph/Corpus/规则输入幂等触发 DQS 异步评估 |
 | `GET` | `/api/problems/:id/quality-evaluation-jobs` | 题目管理者读取质量评估任务状态，不在列表响应暴露完整固定输入 |
 | `GET` | `/api/problems/:id/quality-evaluation-jobs/:jobId` | 题目管理者读取单个任务的固定输入、租约终态和质量证书 |
-| `GET` | `/api/problems/:id/solution-profiles` | 题目管理者读取 Reference Solution Profiles 及其固定 Revision 评测结果 |
+| `GET` | `/api/problems/:id/solution-profiles` | 题目管理者读取 Reference Solution Profiles 及其固定 graph 评测结果 |
 | `POST` | `/api/problems/:id/solution-profiles` | 题目管理者从本题本地终态提交创建带预期总分/Subtask 区间的 Profile，并触发重新评估 |
 | `PATCH` | `/api/problems/:id/solution-profiles/:profileId` | 以 `expectedRevision` CAS 更新或停用 Profile；冲突返回 `SOLUTION_PROFILE_STALE` |
 | `GET` | `/api/problems/:id/problem-quality-assessments` | 读取 PQS 历史；非管理者响应使用公开字段白名单 |
 | `POST` | `/api/problems/:id/problem-quality-assessments/automated` | 题目管理者为当前内容版本生成幂等 PQS 自动评估 |
 | `POST` | `/api/problems/:id/problem-quality-assessments/:assessmentId/expert-review` | 仅 platform_admin/super_admin 追加不可覆盖的专家评分和审查意见 |
 | `GET` | `/api/problems/:id/selector-runs` | 题目管理者读取 Selector 运行历史 |
-| `POST` | `/api/problems/:id/selector-runs/preview` | 对至多 25 个待选 Candidate 执行相对当前正式 Revision 的真实 dry-run，不创建 Selection Run 或 Revision |
-| `POST` | `/api/problems/:id/canonical-emergency-publish` | 题目管理者填写原因后紧急发布 Hack Gate Candidate；不能绕过结构、保护、Official Core 或 Revision CAS |
+| `POST` | `/api/problems/:id/selector-runs/preview` | 对至多 25 个待选 Candidate 执行相对当前 Evolving 的真实 dry-run，不创建 Selection Run 或历史版本 |
+| `POST` | `/api/problems/:id/canonical-emergency-publish` | 题目管理者填写原因后紧急发布 Hack Gate Candidate；不能绕过结构、保护、Official Core 或 Evolving fencing |
 | `GET` | `/api/resources/evaluation-credit-packages` | 读取服务端固定 Carits 兑换套餐 |
 | `GET` | `/api/resources/evaluation-credits` | 读取本人免费/已购 Credits、贡献等级、今日使用和预占 |
 | `GET` | `/api/resources/evaluation-credit-purchases` | 读取本人资源兑换流水 |
 | `POST` | `/api/resources/evaluation-credits/purchase` | 按固定 packageCode 与 Idempotency-Key 用 Carits 兑换长期 Credits |
 | `GET` | `/api/platform/contributions` | 超管/平台管理员读取贡献与奖励审计 |
-| `GET` | `/api/platform/contributions/:id/evidence` | 超管/平台管理员只读核验贡献绑定的 Candidate 或正式 TestSet Revision；`kind=candidate` 或 `kind=revision`，服务端校验事件、题目与晋升版本关系 |
+| `GET` | `/api/platform/contributions/:id/evidence` | 超管/平台管理员只读核验贡献绑定的 Candidate 或晋升 graph；服务端校验事件、题目与晋升槽身份 |
 | `POST` | `/api/platform/contributions/:id/accept` | 超级管理员接受紧急发布的 pending 贡献 |
 | `POST` | `/api/platform/contributions/:id/reject` | 超级管理员填写原因并拒绝 pending 贡献 |
 | `POST` | `/api/platform/contributions/:id/revoke` | 超级管理员撤销已接受贡献；已发 Carits 通过新冲正交易处理 |
@@ -238,12 +237,14 @@ Runtime Schema；Server Adapter 在调用 Application Service 前后校验，Web
 | `PUT` | `/api/problems/:id/test-graph` | 校验并保存 Subtask/Group/Testcase 测试图 |
 | `POST` | `/api/problems/:id/test-graph/testcases` | 将当前题目的输入与答案文件配对注册为稳定 Testcase |
 | `PATCH` | `/api/problems/:id/test-graph/testcases/:testcaseId/protection` | 题目管理者填写原因后永久保护测试点；写入平台审计 |
-| `GET` | `/api/problems/:id/test-set-revisions` | 题目管理者列出正式测试版本历史 |
-| `GET` | `/api/problems/:id/test-set-revisions/:revisionId` | 读取单个不可变 Revision 和只读 Judge 投影 |
-| `POST` | `/api/problems/:id/judge-mode-transition` | 显式创建 ACM/OI 模式转换 Revision 并关闭 Hack |
-| `GET` | `/api/contests/:id/problems/:contestProblemId/test-set-update` | 活动管理员比较固定 Revision 与题库最新版及冻结状态 |
-| `POST` | `/api/contests/:id/problems/:contestProblemId/test-set-update` | 仅在未开始且无提交时手动固定到指定 Revision |
-| `GET` | `/api/readiness` | 蓝绿 API 候选的关键依赖 readiness；只检查数据库，Revision 投影一致性由独立运维诊断检查 |
+| `GET` | `/api/problems/:id/test-set-slots` | 读取 Stable/Evolving 当前状态、graph/fence、gate 与 Reader 计数 |
+| `GET` | `/api/problems/:id/test-set-promotion-jobs` | 读取 Evolving → Stable Promotion 验证任务 |
+| `POST` | `/api/problems/:id/test-set-promotion-jobs` | 捕获当前 Evolving graph/fence 到事务临时验证目录 |
+| `POST` | `/api/problems/:id/test-set-promotion-jobs/:jobId/complete` | 质量验证成功后排队原子替换 Stable |
+| `POST` | `/api/problems/:id/judge-mode-transition` | 对指定槽执行带 fencing 的 ACM/OI 模式转换 |
+| `GET` | `/api/contests/:id/problems/:contestProblemId/test-set-update` | 比赛管理员比较 ContestProblem 的 Stable graph 与当前 Stable |
+| `POST` | `/api/contests/:id/problems/:contestProblemId/test-set-update` | 仅在未开始且无提交/Reader 时刷新 Stable graph |
+| `GET` | `/api/readiness` | 蓝绿 API 候选的关键依赖 readiness；只检查数据库，双槽物化与数据库投影一致性由独立运维诊断检查 |
 | `DELETE` | `/api/problems/:id/statement-versions/:versionId` | 软删除自己的题面版本 |
 | `GET` | `/api/problems/:id/statement-versions` | 列出官方、我的和公开题面版本 |
 | `GET` | `/api/problems/:id/statement-versions/:versionId` | 读取可访问的个人题面版本 |
@@ -449,7 +450,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/platform/organizations` | 见对应路由实现 |
 | `POST` | `/api/platform/organizations/:organizationId/principal` | 见对应路由实现 |
 | `POST` | `/api/problem-lists` | 见对应路由实现 |
-| `POST` | `/api/problem-lists/:id/create-assignment` | 从题单创建固定当前 TestSet Revision 的独立作业草稿 |
+| `POST` | `/api/problem-lists/:id/create-assignment` | 从题单创建独立作业草稿；Assignment 不 pin TestSet |
 | `POST` | `/api/problem-lists/:id/sections` | 见对应路由实现 |
 | `POST` | `/api/problem-lists/:id/shares` | 见对应路由实现 |
 | `POST` | `/api/problem-lists/sections/:sectionId/entries/single` | 见对应路由实现 |
@@ -540,10 +541,10 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/training-sessions` | 创建独立教练训练 |
 | `POST` | `/api/training-sessions/participant-preview` | 使用与创建/发布相同的权限和学生边界解析训练对象及权威人数 |
 | `GET` | `/api/training-sessions/:id` | 获取权威训练工作区、进度和权限 |
-| `GET` | `/api/training-sessions/:id/design` | 管理员获取 Stage 驱动设计 DTO、稳定 ID、Stage 分组、固定/最新 Revision 和 Subtask |
-| `GET` | `/api/training-sessions/:id/design-problems/:problemId` | 校验题目归属并返回可固定的最新正式 Revision |
-| `POST` | `/api/training-sessions/:id/structure/validate` | 无写入校验阶段、顺序解锁、Revision 和 Subtask 结构 |
-| `PUT` | `/api/training-sessions/:id/structure` | 按稳定 ID 差异更新尚未开始的 Stage；训练锁和 Revision CAS 阻止覆盖，已开始定义冻结 |
+| `GET` | `/api/training-sessions/:id/design` | 管理员获取 Stage 驱动设计 DTO、稳定 ID、Stage 分组、题目规则和 Subtask |
+| `GET` | `/api/training-sessions/:id/design-problems/:problemId` | 校验题目归属并返回 canonical Problem 和当前槽可用性 |
+| `POST` | `/api/training-sessions/:id/structure/validate` | 无写入校验阶段、顺序解锁、题目和 Subtask 结构 |
+| `PUT` | `/api/training-sessions/:id/structure` | 按稳定 ID 差异更新尚未开始的 Stage；训练锁和 statusRevision CAS 阻止覆盖，已开始定义冻结 |
 | `GET` | `/api/training-sessions/:id/roster` | 查询基础学员名单；不返回 Session 级分组 |
 | `PUT` | `/api/training-sessions/:id/roster` | 事务保存基础学员名单；Stage 分组由结构接口保存 |
 | `POST` | `/api/training-sessions/:id/publish` | 发布训练并固定参与名单；Stage 在实际开始时生成不可变快照 |
@@ -562,7 +563,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/training-sessions/:id/drafts/:stageProblemId` | 获取指定阶段题目的训练代码草稿 |
 | `PUT` | `/api/training-sessions/:id/drafts/:stageProblemId` | 按阶段题目 ID 乐观锁保存训练代码草稿 |
 | `POST` | `/api/training-sessions/:id/heartbeat` | 上报可见且聚焦的有效训练时间 |
-| `POST` | `/api/training-sessions/:id/submit` | 使用固定 Revision/专项投影创建训练提交 |
+| `POST` | `/api/training-sessions/:id/submit` | 动态取得 Evolving（缺失回退 Stable）并固化专项投影创建训练提交 |
 | `GET` | `/api/training-sessions/:id/coach-dashboard` | 教练实时进度、卡题概览以及学员当前实际 StagePlan |
 | `GET` | `/api/training-sessions/:id/peer-progress` | 按训练榜单模式和同学可见性返回服务端裁剪后的进度 |
 | `GET` | `/api/training-sessions/:id/report` | Stage 时间轴、各组完成情况、计划/延时/实际时间、快照哈希、带生效 Stage 的换组，以及学员过程报告 |

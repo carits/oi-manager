@@ -8,7 +8,7 @@ import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from '.
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 import { lockRatingParticipantTx, processDueContestRatings } from '../src/modules/rating/application/contest-rating.service'
-import { holdContestFinalizationForRejudgeTx } from '../src/modules/contest/contest-command.service'
+import { ensureContestRejudgeBarrierTx } from '../src/modules/contest/contest-command.service'
 
 const app = createTestApp()
 
@@ -195,9 +195,16 @@ describe('rating domain HTTP and persistence', () => {
     const startHoursAgo = options.startHoursAgo ?? 2
     const endHoursAgo = options.endHoursAgo ?? 1
     const problem = await prisma.problem.create({ data: { id: crypto.randomUUID(), platform: 'carits', problemId: `RATING_${crypto.randomUUID()}`, title: 'Rating test', ownerId: manager.user.id, visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', publishedAt: new Date() } })
+    const stable = await prisma.problemTestSetSlot.create({ data: {
+      problemId: problem.id, slot: 'STABLE', mode: 'oi', source: 'test_fixture',
+      judgeConfig: 'mode: oi\ncases: []\n', judgeConfigHash: `config-${problem.id}`,
+      graphHash: `graph-${problem.id}`, materializedPath: 'stable',
+    } })
     const contest = await createContestRuntimeFixture({ data: { title: options.title || 'Rated IOI contest', format: 'ioi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() - startHoursAgo * 3600_000), endTime: new Date(Date.now() - endHoursAgo * 3600_000), status: 'finished', finalizationStatus: 'JUDGING', createdBy: manager.user.id } })
     const canonicalProblem = await prisma.contestProblem.create({ data: {
       id: crypto.randomUUID(), contestId: contest.canonicalContestId, canonicalProblemId: problem.id,
+      testSetSlot: 'STABLE', testSetGraphHash: stable.graphHash,
+      testSetJudgeConfigHash: stable.judgeConfigHash, testSetFencingToken: stable.fencingToken,
       alias: 'A', orderIndex: 0, points: 100, title: problem.title, ojName: problem.platform, problemId: problem.problemId,
     } })
     await prisma.contestRatingConfig.create({ data: { id: crypto.randomUUID(), contestId: contest.canonicalContestId, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
@@ -523,7 +530,7 @@ describe('rating domain HTTP and persistence', () => {
     const secondSubmission = await prisma.submission.findFirstOrThrow({ where: { canonicalContestId: contest.canonicalContestId, userId: second.user.id } })
     if (!secondSubmission.currentJudgeRunId) throw new Error('Current JudgeRun missing')
     await prisma.judgeRun.update({ where: { id: secondSubmission.currentJudgeRunId }, data: { score: 100, result: 'accepted' } })
-    expect(await prisma.$transaction(tx => holdContestFinalizationForRejudgeTx(tx, contest.id))).toBe(true)
+    expect(await prisma.$transaction(tx => ensureContestRejudgeBarrierTx(tx, contest.canonicalContestId))).toBe(true)
 
     const rebuilt = await createAuthenticatedRequest(app, managerToken).post(`/api/contests/${contest.id}/rating/rebuild`).set('X-OI-Organization-ID', organizationId)
     expect(rebuilt.status).toBe(200)

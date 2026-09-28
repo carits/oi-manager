@@ -25,7 +25,7 @@ This statement does **not** mean runtime verification has passed. Per the explic
 - Reactivated participants align to the current Stage.
 - Future/locked/sequentially unavailable problems are redacted at the API boundary, including while `SCHEDULED` or `PAUSED`.
 - Workspace permissions are evaluated in memory after one Participant/Override/Progress load instead of re-querying per StageProblem.
-- StageProblem pins TestSet Revision plus title/statement snapshots.
+- StageProblem pins canonical Problem plus title/statement snapshots; each submission acquires current Evolving (Stable fallback).
 - Draft identity is `Session + User + StageProblem`, preventing same-Problem cross-Stage collisions.
 - OI Subtask selections and score goals are dependency-closed.
 - Hint definitions support create/edit/delete only while the owning Stage is pending; runtime definitions freeze after start.
@@ -57,7 +57,7 @@ Multi-organization regression definitions were added for the affected flows.
 
 - Solved rankings use `problemInternalId`; external fallback is `oj:problemId`, so equal problem codes on different OJs are not collapsed.
 - Campus solved rankings use canonical `workspaceScope='campus' + organizationId`, not legacy Training ownership.
-- Problem submission history first matches `problemInternalId`, then historical TestSet Revision identity.
+- Problem submission history first matches `problemInternalId`, then the stored TestSet slot/graph/fencing identity.
 - External `oj + problemId` fallback is only allowed when the identity is unambiguous; platform originals and school copies no longer mix histories.
 - Contest/Rating paths retain canonical Contest/Judge facts from current main.
 

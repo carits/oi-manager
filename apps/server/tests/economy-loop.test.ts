@@ -298,18 +298,13 @@ describe('Contribution, Carits and Evaluation Credits loop', () => {
   it('reuses the candidate contribution fact and its frozen reward snapshot on promotion replay', async () => {
     const user = await createTestUser()
     const problem = await createTestProblem({ ownerId: user.user.id, title: '贡献快照重放测试题' })
-    const revisionId = crypto.randomUUID()
+    const promotedGraphHash = 'd'.repeat(64)
     const candidateId = crypto.randomUUID()
-    await prisma.problemTestSetRevision.create({ data: {
-      id: revisionId, problemId: problem.id, revisionNumber: 1, mode: 'acm', source: 'admin_edit',
-      judgeConfig: JSON.stringify({ mode: 'acm', cases: [] }), judgeConfigHash: 'c'.repeat(64),
-      graphHash: 'd'.repeat(64), testdataPath: `revisions/${revisionId}`, createdBy: user.user.id,
-    } })
     await prisma.testcaseCandidate.create({ data: {
       id: candidateId, problemId: problem.id, source: 'direct_data', targetRole: 'official', status: 'PROMOTED',
       evaluationStage: 'promoted', inputSha256: '3'.repeat(64), outputSha256: '4'.repeat(64),
       inputSize: 4, outputSize: 2, inputFileName: 'candidate.in', outputFileName: 'candidate.out',
-      createdBy: user.user.id, promotedRevisionId: revisionId, promotedAt: new Date(),
+      createdBy: user.user.id, promotedGraphHash, promotedAt: new Date(),
     } })
     const eventId = crypto.randomUUID()
     await prisma.contributionEvent.create({ data: {
@@ -318,14 +313,14 @@ describe('Contribution, Carits and Evaluation Credits loop', () => {
       ruleCode: 'canonical_testcase_promoted', ruleVersion: 1,
       dedupeKey: `candidate:${candidateId}:promoted`, status: 'accepted',
       occurredAt: new Date(), acceptedAt: new Date(), evidence: {
-        problemId: problem.id, candidateId, promotedRevisionId: revisionId,
+        problemId: problem.id, candidateId, promotedGraphHash,
         candidateSource: 'direct_data', selectionMode: 'auto',
         rewardCarits: '17', organizationRewardCarits: '0',
       },
     } })
 
     const replay = () => prisma.$transaction(tx => recordPromotedContribution(tx, {
-      candidateId, promotedRevisionId: revisionId, selectionMode: 'auto',
+      candidateId, promotedGraphHash, selectionMode: 'auto',
     }))
     expect((await replay())?.id).toBe(eventId)
     expect((await replay())?.id).toBe(eventId)

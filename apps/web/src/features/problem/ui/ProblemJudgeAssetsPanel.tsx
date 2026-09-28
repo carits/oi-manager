@@ -23,12 +23,12 @@ import { emergencyPublishCandidate, getCandidatePool, getWrongCorpus, previewCan
 
 type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
 type Program = { id: string; kind: string; name: string; language: string; currentVersionId?: string | null; versions: Version[] }
-type Graph = { revisionId?: string; subtasks: Array<{ id: number; score?: number; dependencies?: number[]; groups: Array<{ key: string; name: string; kind: string }> }> }
+type Graph = { slot: 'STABLE' | 'EVOLVING'; graphHash: string; fencingToken: number; subtasks: Array<{ id: number; score?: number; dependencies?: number[]; groups: Array<{ key: string; name: string; kind: string }> }> }
 type AiUsage = { markdownStatements: Array<{ id: string; language?: string; maxReservedTokens: number }> }
-type AssetsTab = 'programs' | 'import' | 'generate' | 'candidates' | 'pool' | 'corpus' | 'quality' | 'revisions'
+type AssetsTab = 'programs' | 'import' | 'generate' | 'candidates' | 'pool' | 'corpus' | 'quality' | 'slots'
 type AiValidatorView = AiValidatorRequest & { dsl?: boolean }
 type PromoteRequest = {
-  expectedLatestRevisionId?: string
+  expectedEvolvingFencingToken: number
   caseIds: string[]
   assignments?: Array<{ caseId: string; subtaskId: number; groupKey: string }>
 }
@@ -36,7 +36,7 @@ type PromoteRequest = {
 const KIND_LABEL: Record<string, string> = { standard: 'STD', validator: 'Validator', classifier: 'Classifier', generator: 'Generator' }
 const ASSETS_TABS: Array<[AssetsTab, string]> = [
   ['programs', '评测程序'], ['import', '数据导入'], ['generate', '数据生成'], ['candidates', '生成任务'],
-  ['pool', 'Candidate Pool'], ['corpus', 'Wrong Corpus'], ['quality', '质量评估'], ['revisions', '正式版本'],
+  ['pool', 'Candidate Pool'], ['corpus', 'Wrong Corpus'], ['quality', '质量评估'], ['slots', 'Stable / Evolving'],
 ]
 
 export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: string; judgeMode: 'acm' | 'oi' }) {
@@ -200,7 +200,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
     try {
       const result = await emergencyPublishCandidate(problemId, { candidateId: emergencyCandidate, reason: emergencyReason })
       if (!result.ok) return toast.error(result.error.message || '紧急发布失败')
-      toast.success('已通过结构、保护和 CAS 校验并创建新的正式 Revision')
+      toast.success('已通过结构、保护和栅栏校验，Evolving 更新已排队')
       setEmergencyCandidate(null); setEmergencyReason(''); setSelectorPreview(null); await load()
     } finally { setSaving(false) }
   }
@@ -238,15 +238,12 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const promote = async () => {
     if (!selectedJob) return
     const valid = selectedJob.cases?.filter(item => item.status === 'validated') || []
-    const body: PromoteRequest = { expectedLatestRevisionId: selectedJob.expectedLatestRevisionId || undefined, caseIds: valid.map(item => item.id) }
+    if (selectedJob.expectedEvolvingFencingToken == null) return toast.error('生成任务缺少 Evolving 栅栏快照，请重新创建任务')
+    const body: PromoteRequest = { expectedEvolvingFencingToken: selectedJob.expectedEvolvingFencingToken, caseIds: valid.map(item => item.id) }
     if (judgeMode === 'oi') body.assignments = valid.map(item => { const [subtaskId, groupKey] = (assignments[item.id] || '').split(':'); return { caseId: item.id, subtaskId: Number(subtaskId), groupKey } })
-    const result = await promoteDataGenerationJob(problemId, selectedJob.id, {
-      expectedLatestRevisionId: body.expectedLatestRevisionId || '',
-      caseIds: body.caseIds,
-      assignments: body.assignments,
-    })
+    const result = await promoteDataGenerationJob(problemId, selectedJob.id, body)
     if (!result.ok) return toast.error(result.error.message || '候选测试点发布失败')
-    toast.success('已发布新的正式 TestSet Revision'); setSelectedJob(null); await load(); setTab('revisions')
+    toast.success(result.data.status === 'SUCCEEDED' ? 'Evolving 已原子更新' : 'Evolving 更新已进入写队列'); setSelectedJob(null); await load(); setTab('slots')
   }
 
   return <div className={styles.panel}>
@@ -262,7 +259,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
 
     {tab === 'import' && <section className={styles.card}><h3>数据导入</h3><p>上传完整 `.in/.out`、`.in/.ans` 或 ZIP。OI 数据导入后在“数据与分组”中注册并分配 Official Group；仅输入文件应使用“输入数据补答案”，由 Validator 与 STD 生成候选答案。</p><Input type="file" multiple accept=".in,.out,.ans,.zip" onChange={event => setImportFiles(Array.from(event.target.files || []))} /><Checkbox label="同名文件冲突时替换" checked={replaceExisting} onChange={event => setReplaceExisting(event.target.checked)} /><Button variant="primary" disabled={saving || !importFiles.length} onClick={uploadTestdata}>{saving ? '上传中…' : `导入数据（${importFiles.length}）`}</Button></section>}
     {tab === 'generate' && <section className={styles.card}><h3>数据生成</h3><div className={styles.formRow}><Select aria-label="来源方式" value={sourceMode} onChange={event => { const mode = event.target.value as 'generator' | 'input'; setSourceMode(mode); setRows(mode === 'generator' ? 'small-1 | 1 | 10 100\nsmall-2 | 2 | 100 1000' : '[\n  {"name":"manual-1","inputData":"1 2\\n"}\n]') }}><option value="generator">参数清单生成器</option><option value="input">输入数据补答案</option></Select><Select aria-label="STD" value={standardId} onChange={event => setStandardId(event.target.value)}><option value="">选择 STD</option>{currentStandard.map(item => <option key={item.id} value={item.id}>{item.programName} v{item.versionNumber}</option>)}</Select><Select aria-label="Validator" value={validatorId} onChange={event => setValidatorId(event.target.value)}><option value="">选择 Validator</option>{currentValidator.map(item => <option key={item.id} value={item.id}>{item.programName} v{item.versionNumber}</option>)}</Select>{sourceMode === 'generator' && <Select aria-label="Generator" value={generatorId} onChange={event => setGeneratorId(event.target.value)}><option value="">选择 Generator</option>{currentGenerator.map(item => <option key={item.id} value={item.id}>{item.programName} v{item.versionNumber}</option>)}</Select>}</div><label>{sourceMode === 'generator' ? '每行：名称 | 种子 | 参数列表' : 'JSON 数组：name + inputData'}</label><Textarea rows={10} value={rows} onChange={event => setRows(event.target.value)} /><Button variant="primary" disabled={!standardId || !validatorId || (sourceMode === 'generator' && !generatorId) || !rows.trim()} onClick={createJob}>创建生成任务</Button></section>}
-    {tab === 'candidates' && <div className={styles.columns}><section className={styles.card}><h3>生成任务</h3>{jobs.map(job => <Button variant="ghost" className={styles.job} key={job.id} onClick={() => openJob(job)}><strong>{job.id.slice(0, 8)}</strong><span>{job.status} · {new Date(job.createdAt).toLocaleString('zh-CN')}</span></Button>)}</section>{selectedJob && <section className={styles.card}><h3>候选测试点</h3><TableRoot><TableHead><TableRow><TableHeaderCell>名称</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell>{judgeMode === 'oi' && <TableHeaderCell>Official Group</TableHeaderCell>}</TableRow></TableHead><TableBody>{selectedJob.cases?.map(item => <TableRow key={item.id}><TableCell>{item.name}</TableCell><TableCell>{item.status}{item.message ? ` · ${item.message}` : ''}</TableCell>{judgeMode === 'oi' && <TableCell><Select aria-label="Official Group" value={assignments[item.id] || ''} onChange={event => setAssignments(current => ({ ...current, [item.id]: event.target.value }))}><option value="">选择分组</option>{officialGroups.map(group => <option key={group.value} value={group.value}>{group.label}</option>)}</Select></TableCell>}</TableRow>)}</TableBody></TableRoot><div className={styles.preview}>{selectedJob.cases?.filter(item => item.status === 'validated').map(item => <details key={item.id}><summary>{item.name} 输入/答案预览</summary><pre>{item.inputPreview}</pre><pre>{item.outputPreview}</pre></details>)}</div>{selectedJob.status === 'completed' && <Button variant="primary" disabled={judgeMode === 'oi' && selectedJob.cases?.some(item => item.status === 'validated' && !assignments[item.id])} onClick={promote}>发布新的正式版本</Button>}</section>}</div>}
+    {tab === 'candidates' && <div className={styles.columns}><section className={styles.card}><h3>生成任务</h3>{jobs.map(job => <Button variant="ghost" className={styles.job} key={job.id} onClick={() => openJob(job)}><strong>{job.id.slice(0, 8)}</strong><span>{job.status} · {new Date(job.createdAt).toLocaleString('zh-CN')}</span></Button>)}</section>{selectedJob && <section className={styles.card}><h3>候选测试点</h3><TableRoot><TableHead><TableRow><TableHeaderCell>名称</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell>{judgeMode === 'oi' && <TableHeaderCell>Official Group</TableHeaderCell>}</TableRow></TableHead><TableBody>{selectedJob.cases?.map(item => <TableRow key={item.id}><TableCell>{item.name}</TableCell><TableCell>{item.status}{item.message ? ` · ${item.message}` : ''}</TableCell>{judgeMode === 'oi' && <TableCell><Select aria-label="Official Group" value={assignments[item.id] || ''} onChange={event => setAssignments(current => ({ ...current, [item.id]: event.target.value }))}><option value="">选择分组</option>{officialGroups.map(group => <option key={group.value} value={group.value}>{group.label}</option>)}</Select></TableCell>}</TableRow>)}</TableBody></TableRoot><div className={styles.preview}>{selectedJob.cases?.filter(item => item.status === 'validated').map(item => <details key={item.id}><summary>{item.name} 输入/答案预览</summary><pre>{item.inputPreview}</pre><pre>{item.outputPreview}</pre></details>)}</div>{selectedJob.status === 'completed' && <Button variant="primary" disabled={judgeMode === 'oi' && selectedJob.cases?.some(item => item.status === 'validated' && !assignments[item.id])} onClick={promote}>写入 Evolving</Button>}</section>}</div>}
     {tab === 'pool' && <section className={styles.card}>
       <h3>有界 Candidate Pool</h3>
       {candidatePool ? <>
@@ -271,16 +268,16 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
         <div className={styles.actions}>
           <Button variant={candidatePool.policy.selectorMode === 'observe' ? 'primary' : 'outline'} onClick={() => updateSelectorMode('observe')}>观察模式</Button>
           <Button variant={candidatePool.policy.selectorMode === 'auto' ? 'primary' : 'outline'} disabled={candidatePool.subtasks.length > 0 && !candidatePool.subtasks.some(item => item.autoSelection)} onClick={() => updateSelectorMode('auto')}>质量阈值自动发布</Button>
-          <Button variant="outline" loading={saving} onClick={previewSelector}>按当前正式版本预览</Button>
+          <Button variant="outline" loading={saving} onClick={previewSelector}>按当前 Evolving 预览</Button>
         </div>
         {selectorPreview && <div className={styles.protocolCard}><strong>{selectorPreview.publishable ? '存在可入选 Candidate' : '当前没有 Candidate 达到自动选择条件'}</strong><span>{selectorPreview.note}</span>{selectorPreview.candidates.map(item => <details key={item.id}><summary>{item.id.slice(0, 8)} · {item.reason}</summary>{item.decisions?.map(decision => <p key={decision.subtaskId}>S{decision.subtaskId}：{decision.selected ? '入选' : '不入选'} · 增益 {decision.qualityGain.toFixed(1)} / 门槛 {decision.requiredGain.toFixed(1)} · {decision.reason}{decision.retiredTestcaseId ? ` · 替换 ${decision.retiredTestcaseId.slice(0, 8)}` : ''}</p>)}</details>)}</div>}
         <TableRoot><TableHead><TableRow><TableHeaderCell>Candidate</TableHeaderCell><TableHeaderCell>来源</TableHeaderCell><TableHeaderCell>目标</TableHeaderCell><TableHeaderCell>阶段</TableHeaderCell><TableHeaderCell>边际价值</TableHeaderCell><TableHeaderCell>操作</TableHeaderCell></TableRow></TableHead><TableBody>{candidatePool.candidates.map(item => <TableRow key={item.id}><TableCell>{item.id.slice(0, 8)}</TableCell><TableCell>{item.source}</TableCell><TableCell>{item.targetRole}</TableCell><TableCell>{item.status} · {item.evaluationStage}</TableCell><TableCell>{item.marginalValue}</TableCell><TableCell>{item.targetRole === 'hack_gate' && ['ELIGIBLE', 'ELIGIBLE_NOT_SELECTED', 'WAITING_REPLACEMENT'].includes(item.status) ? <Button variant="outline" onClick={() => { setEmergencyCandidate(item.id); setEmergencyReason('') }}>紧急发布</Button> : '—'}</TableCell></TableRow>)}</TableBody></TableRoot>
         {candidatePool.retirements.length > 0 && <details><summary>历史成员替换审计（{candidatePool.retirements.length}）</summary><TableRoot><TableHead><TableRow><TableHeaderCell>Subtask</TableHeaderCell><TableHeaderCell>退出测试点</TableHeaderCell><TableHeaderCell>替换测试点</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell></TableRow></TableHead><TableBody>{candidatePool.retirements.map(item => <TableRow key={item.id}><TableCell>S{item.subtaskId}</TableCell><TableCell>{item.testcaseId.slice(0, 8)}</TableCell><TableCell>{item.replacementTestcaseId?.slice(0, 8) || '—'}</TableCell><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell></TableRow>)}</TableBody></TableRoot></details>}
       </> : <p className={styles.muted}>正在加载 Candidate Pool…</p>}
-      <FormDialog isOpen={Boolean(emergencyCandidate)} onClose={() => { setEmergencyCandidate(null); setEmergencyReason('') }} onSubmit={emergencyPublish} title="紧急发布 Candidate" description="仅跳过 Corpus/质量门槛；不会绕过 15 个 Subtask、每 Subtask 10 点、保护期、Official Core 或 Revision CAS。" submitText="确认紧急发布" danger loading={saving} dirty={Boolean(emergencyReason)}><label>审计原因（10～1000 字）<Textarea rows={5} value={emergencyReason} onChange={event => setEmergencyReason(event.target.value)} /></label></FormDialog>
+      <FormDialog isOpen={Boolean(emergencyCandidate)} onClose={() => { setEmergencyCandidate(null); setEmergencyReason('') }} onSubmit={emergencyPublish} title="紧急发布 Candidate" description="仅跳过 Corpus/质量门槛；不会绕过 15 个 Subtask、每 Subtask 10 点、保护期、Official Core 或数据槽栅栏。" submitText="确认紧急发布" danger loading={saving} dirty={Boolean(emergencyReason)}><label>审计原因（10～1000 字）<Textarea rows={5} value={emergencyReason} onChange={event => setEmergencyReason(event.target.value)} /></label></FormDialog>
     </section>}
     {tab === 'corpus' && <section className={styles.card}><h3>私有 Wrong Behavior Corpus</h3><p className={styles.muted}>历史本地错误提交只用于内部行为聚类；贡献者看不到源码、用户、提交 ID 或精确 Kill 列表。</p>{corpus?.revision ? <p>Corpus R{corpus.revision.revisionNumber} · {corpus.revision.clusterCount} 个代表簇 · Evaluation {corpus.revision.evaluationCount} · Hidden Holdout {corpus.revision.holdoutCount}</p> : <p>尚未建立 Corpus。</p>}<Button variant="primary" loading={saving} onClick={rebuildCorpus}>从历史本地错误提交重建</Button></section>}
     {tab === 'quality' && <ProblemQualityPanel problemId={problemId} />}
-    {tab === 'revisions' && <section className={styles.card}><h3>正式版本</h3><p>只有达到质量阈值的 Candidate 才会创建新的不可变 TestSet Revision。比赛、训练和作业继续固定原版本，不会被自动更新。</p>{jobs.filter(job => job.promotedRevisionId).map(job => <p key={job.id}><code>{job.id.slice(0, 8)}</code> → <code>{job.promotedRevisionId}</code></p>)}</section>}
+    {tab === 'slots' && <section className={styles.card}><h3>Stable / Evolving 当前数据</h3><p>Candidate、Hack 和生成任务只串行更新 Evolving。质量验证后的 Promotion 在低流量窗口原子更新 Stable；系统不保存历史版本，也不产生第三套业务数据。</p>{jobs.filter(job => job.promotedGraphHash).map(job => <p key={job.id}><code>{job.id.slice(0, 8)}</code> → Evolving <code>{job.promotedGraphHash}</code></p>)}</section>}
   </div>
 }

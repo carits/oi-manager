@@ -360,17 +360,21 @@ async function main() {
       ],
     })
     const judgeConfigHash = createHash('sha256').update(judgeConfig).digest('hex')
-    await prisma.problemTestSetRevision.create({ data: {
-      id: 'e2e-testset-revision', problemId: ids.problem, revisionNumber: 1, mode: 'acm', source: 'initial',
-      judgeConfig, judgeConfigHash, graphHash: createHash('sha256').update('e2e-graph').digest('hex'), testdataPath: '.', createdBy: ids.principal,
-    } })
-    await prisma.problem.update({ where: { id: ids.problem }, data: { latestTestSetRevisionId: 'e2e-testset-revision' } })
-    await prisma.problemTestSetRevision.createMany({ data: [ids.secondProblem, ids.thirdProblem].map((problemId, index) => ({
-      id: `e2e-testset-revision-${index + 2}`, problemId, revisionNumber: 1, mode: 'acm', source: 'initial',
-      judgeConfig, judgeConfigHash, graphHash: createHash('sha256').update(`e2e-graph-${index + 2}`).digest('hex'), testdataPath: '.', createdBy: ids.principal,
+    const stableGraphHashes = new Map([
+      [ids.problem, createHash('sha256').update('e2e-graph').digest('hex')],
+      [ids.secondProblem, createHash('sha256').update('e2e-graph-2').digest('hex')],
+      [ids.thirdProblem, createHash('sha256').update('e2e-graph-3').digest('hex')],
+    ])
+    const stableDir = path.join(problemTestdataDir, 'slots', 'stable')
+    fs.mkdirSync(stableDir, { recursive: true })
+    fs.copyFileSync(path.join(problemTestdataDir, '1.in'), path.join(stableDir, '1.in'))
+    fs.copyFileSync(path.join(problemTestdataDir, '1.out'), path.join(stableDir, '1.out'))
+    await prisma.problemTestSetSlot.createMany({ data: [ids.problem, ids.secondProblem, ids.thirdProblem].map(problemId => ({
+      problemId, slot: 'STABLE', mode: 'acm', source: 'initial',
+      judgeConfig, judgeConfigHash, graphHash: stableGraphHashes.get(problemId)!,
+      materializedPath: 'slots/stable', fencingToken: 1,
     })) })
-    await prisma.problem.update({ where: { id: ids.secondProblem }, data: { judgeConfig, latestTestSetRevisionId: 'e2e-testset-revision-2' } })
-    await prisma.problem.update({ where: { id: ids.thirdProblem }, data: { judgeConfig, latestTestSetRevisionId: 'e2e-testset-revision-3' } })
+    await prisma.problem.updateMany({ where: { id: { in: [ids.problem, ids.secondProblem, ids.thirdProblem] } }, data: { judgeConfig } })
     await prisma.problemStatement.createMany({
       data: [
         {
@@ -399,7 +403,7 @@ async function main() {
       organizationId: ids.organization, createdBy: ids.principal, scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000), rankingMode: 'PROGRESS_ONLY', peerVisibility: 'PROGRESS',
       defaultAccessPolicy: 'SEQUENTIAL',
       Groups: { create: { id: trainingGroupId, name: '默认组', orderIndex: 0 } },
-      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, kind: 'TRAINING', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, testSetRevisionId: 'e2e-testset-revision', alias: 'A', orderIndex: 0, titleSnapshot: 'E2E A Plus B', statementsSnapshot: [{ type: 'statement', format: 'markdown', language: 'zh-CN', content: '# E2E A Plus B\n\nRead two integers and print their sum.', fileUrl: null }] } } } },
+      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, kind: 'TRAINING', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, alias: 'A', orderIndex: 0, titleSnapshot: 'E2E A Plus B', statementsSnapshot: [{ type: 'statement', format: 'markdown', language: 'zh-CN', content: '# E2E A Plus B\n\nRead two integers and print their sum.', fileUrl: null }] } } } },
     } })
     await prisma.trainingSessionParticipant.create({ data: {
       id: 'e2e-training-participant',
@@ -541,7 +545,6 @@ async function main() {
       Problems: { create: {
         id: 'e2e-assignment-problem',
         problemId: ids.problem,
-        testSetRevisionId: 'e2e-testset-revision',
         orderIndex: 0,
         category: 'REQUIRED',
         required: true,
@@ -591,7 +594,7 @@ async function main() {
             {
               id: 'e2e-contest-problem',
               canonicalProblemId: ids.problem,
-              testSetRevisionId: 'e2e-testset-revision',
+              testSetSlot: 'STABLE', testSetGraphHash: stableGraphHashes.get(ids.problem), testSetJudgeConfigHash: judgeConfigHash, testSetFencingToken: 1,
               orderIndex: 0,
               alias: 'A',
               title: 'E2E A Plus B',
@@ -603,7 +606,7 @@ async function main() {
             {
               id: 'e2e-contest-problem-b',
               canonicalProblemId: ids.secondProblem,
-              testSetRevisionId: 'e2e-testset-revision-2',
+              testSetSlot: 'STABLE', testSetGraphHash: stableGraphHashes.get(ids.secondProblem), testSetJudgeConfigHash: judgeConfigHash, testSetFencingToken: 1,
               orderIndex: 1,
               alias: 'B',
               title: 'E2E Sequence',
@@ -615,7 +618,7 @@ async function main() {
             {
               id: 'e2e-contest-problem-c',
               canonicalProblemId: ids.thirdProblem,
-              testSetRevisionId: 'e2e-testset-revision-3',
+              testSetSlot: 'STABLE', testSetGraphHash: stableGraphHashes.get(ids.thirdProblem), testSetJudgeConfigHash: judgeConfigHash, testSetFencingToken: 1,
               orderIndex: 2,
               alias: 'C',
               title: 'E2E Prefix Sum',
@@ -649,7 +652,6 @@ async function main() {
           create: {
             id: 'e2e-personal-contest-problem',
             canonicalProblemId: ids.problem,
-            testSetRevisionId: 'e2e-testset-revision',
             orderIndex: 0,
             alias: 'A',
             title: 'E2E A Plus B',
@@ -712,6 +714,8 @@ async function main() {
         oj: 'carits',
         problemId: 'E2E-1000',
         problemInternalId: ids.problem,
+        testSetSlot: 'STABLE', testSetFencingToken: 1, testSetGraphHash: stableGraphHashes.get(ids.problem),
+        judgeConfigHash, judgeConfigSnapshot: judgeConfig,
         language: 'cpp',
         code: '#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}',
         codeLength: 75,
@@ -724,7 +728,6 @@ async function main() {
         assignmentId: 'e2e-assignment',
         assignmentProblemId: 'e2e-assignment-problem',
         assignmentRecipientId: 'e2e-assignment-recipient',
-        testSetRevisionId: 'e2e-testset-revision',
     })
     await createFinalizedSubmission(prisma, {
         userId: ids.personalStudent,
@@ -754,6 +757,8 @@ async function main() {
         oj: 'carits',
         problemId: 'E2E-1000',
         problemInternalId: ids.problem,
+        testSetSlot: 'STABLE', testSetFencingToken: 1, testSetGraphHash: stableGraphHashes.get(ids.problem),
+        judgeConfigHash, judgeConfigSnapshot: judgeConfig,
         language: 'cpp',
         code: longAcceptedCode,
         codeLength: Buffer.byteLength(longAcceptedCode),

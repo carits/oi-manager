@@ -5,9 +5,9 @@ import { parseContractBody, sendContractData, sendContractError } from '../../li
 import { authenticate } from '../../middleware/auth'
 import { parseContestId } from './contest.helpers'
 import {
-  previewContestTestSetUpdate,
+  previewContestStableSnapshot,
   ContestTestSetUpdateError,
-  updateContestTestSetRevision,
+  refreshContestStableSnapshot,
 } from './application/contest-testset-update.service'
 
 export const contestHackSyncRouter = Router()
@@ -25,7 +25,7 @@ function sendTestSetUpdateError(error: unknown, res: any) {
 
 contestHackSyncRouter.get('/contests/:id/problems/:contestProblemId/test-set-update', authenticate, asyncHandler(async (req, res) => {
   try {
-    const data = await previewContestTestSetUpdate(
+    const data = await previewContestStableSnapshot(
       parseContestId(req.params.id),
       req.params.contestProblemId,
       req.user!.userId,
@@ -39,20 +39,19 @@ contestHackSyncRouter.get('/contests/:id/problems/:contestProblemId/test-set-upd
 contestHackSyncRouter.post('/contests/:id/problems/:contestProblemId/test-set-update', authenticate, asyncHandler(async (req, res) => {
   try {
     const body = parseContractBody(ContestContracts.testSetUpdate, req.body)
-    const result = await updateContestTestSetRevision({
+    const result = await refreshContestStableSnapshot({
       contestId: parseContestId(req.params.id),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
-      revisionId: body.revisionId,
     })
     if (!result.updated) {
       return sendContractData(res, ContestContracts.testSetUpdate, { updated: false, ...result.state })
     }
     return sendContractData(res, ContestContracts.testSetUpdate, {
       updated: true,
-      previousRevisionId: result.previousRevisionId,
-      currentRevisionId: result.currentRevisionId,
-      currentRevision: result.currentRevision,
+      previousGraphHash: result.previousGraphHash,
+      currentGraphHash: result.currentGraphHash,
+      currentFencingToken: result.currentFencingToken,
     })
   } catch (error) {
     return sendTestSetUpdateError(error, res)

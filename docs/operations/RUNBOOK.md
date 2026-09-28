@@ -28,7 +28,7 @@ tail -n 50 /data/backups/oi-manager/automatic/backup.log
 The production schedule is provided by persistent systemd timers: a database dump at 03:00 and an incremental attachment/testdata snapshot at 03:15, both with 14-day retention. Weekly Sunday 04:00/04:30 jobs restore the newest database and the complete asset snapshot into isolated temporary locations and atomically write mode-600 verification states; missed calendar runs are executed after the host returns. The service monitor rejects disabled/failed timers as well as missing, failed or stale proof. Override the documented `BACKUP_*` and `ASSET_*` variables in the mode-600 operations environment when provisioning. Backup directories are mode 700 and dumps/logs/state are mode 600. A
 zero-byte or unverified archive is never promoted to the final filename.
 `backup:verify` restores the newest archive into an exact `oi_manager_restore_audit_<pid>` temporary database,
-validates the dump SHA-256 and creation-time counts for tables, migrations, users, problems, submissions, files and TestSet Revisions, then removes both the temporary database and copied container archive. Asset verification copies all files and checks every manifest SHA-256. Neither verifier
+validates the dump SHA-256 and creation-time counts for tables, migrations, users, problems, submissions, files and Stable/Evolving TestSet slots, then removes both the temporary database and copied container archive. Asset verification copies all files and checks every manifest SHA-256. Neither verifier
 restores over `oi_manager`.
 
 For an actual disaster restore, select a database dump and an asset snapshot whose `metadata.json.databaseBackupSha256`

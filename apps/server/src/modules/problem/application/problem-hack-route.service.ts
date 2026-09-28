@@ -14,7 +14,7 @@ import {
   serializeHackAttempt,
 } from '../problem.hack.service'
 import { normalizeSubmissionIo, SubmissionIoError } from '../../judge/domain/submission-io'
-import { ensureInitialTestSetRevision } from '../problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../problem.testset-slot.service'
 import { transitionHackAttempt } from '../problem.hack-state'
 import { resolveContributionContext } from '../problem.contribution-readiness.service'
 import { resolveContributionOrganization } from '../../contribution/application/contribution.service'
@@ -101,17 +101,21 @@ export async function saveProblemHackConfig(input: {
     )
   }
 
-  let latestRevision
+  if (enabled && !problem.dataContributionEnabled) {
+    await prisma.problem.update({ where: { id: problem.id }, data: { dataContributionEnabled: true } })
+  }
+  let evolving
   try {
-    latestRevision = await ensureInitialTestSetRevision(problem.id, input.user.userId)
+    const slots = await ensureInitialTestSetSlots(problem.id, input.user.userId)
+    evolving = slots.find(item => item.slot === 'EVOLVING') || slots.find(item => item.slot === 'STABLE')
   } catch (error) {
     fail(
       409,
-      'TEST_SET_REVISION_REQUIRED',
-      error instanceof Error ? error.message : '题目尚无正式测试版本',
+      'TEST_SET_REQUIRED',
+      error instanceof Error ? error.message : '题目尚无可用测试数据',
     )
   }
-  const effectiveConfig = latestRevision?.judgeConfig || problem.judgeConfig
+  const effectiveConfig = evolving?.judgeConfig || problem.judgeConfig
   const parsedConfig = parseJudgeConfig(effectiveConfig)
   const mode = resolveJudgeMode(parsedConfig)
   if (enabled) {
@@ -212,24 +216,20 @@ export async function saveProblemHackConfig(input: {
 async function loadSubmittableProblem(user: JwtPayload, problemId: string) {
   let problem = await prisma.problem.findUnique({
     where: { id: problemId },
-    include: { LatestTestSetRevision: true },
+    include: { TestSetSlots: true },
   })
   if (!problem || problem.status !== 'published' || !canViewProblem(user, problem)) {
     fail(404, 'PROBLEM_NOT_FOUND', '题目不存在或当前身份不能提交该题')
   }
-  if (!problem.LatestTestSetRevision) {
+  if (!problem.TestSetSlots.some(item => item.slot === 'EVOLVING')) {
     try {
-      await ensureInitialTestSetRevision(problem.id, user.userId)
+      await ensureInitialTestSetSlots(problem.id, user.userId)
     } catch (error) {
-      fail(
-        409,
-        'TEST_SET_REVISION_REQUIRED',
-        error instanceof Error ? error.message : '题目尚无正式测试版本',
-      )
+      fail(409, 'EVOLVING_TEST_SET_REQUIRED', error instanceof Error ? error.message : '题目尚无 Evolving 测试数据')
     }
     problem = await prisma.problem.findUnique({
       where: { id: problem.id },
-      include: { LatestTestSetRevision: true },
+      include: { TestSetSlots: true },
     }) as typeof problem
   }
   return problem
@@ -246,8 +246,8 @@ export async function createProblemHackAttempt(input: {
   })
   if (
     !hackConfig?.enabled
-    || !problem.LatestTestSetRevision
-    || !isHackableJudgeConfig(parseJudgeConfig(problem.LatestTestSetRevision.judgeConfig))
+    || !problem.TestSetSlots.some(item => item.slot === 'EVOLVING')
+    || !isHackableJudgeConfig(parseJudgeConfig(problem.TestSetSlots.find(item => item.slot === 'EVOLVING')!.judgeConfig))
   ) {
     fail(409, 'HACK_NOT_ENABLED', '该题未启用 Hack')
   }
@@ -298,7 +298,7 @@ export async function createProblemHackAttempt(input: {
   }
   let submissionIo
   try {
-    const judgeConfig = parseJudgeConfig(problem.LatestTestSetRevision.judgeConfig)
+    const judgeConfig = parseJudgeConfig(problem.TestSetSlots.find(item => item.slot === 'EVOLVING')!.judgeConfig)
     submissionIo = normalizeSubmissionIo({
       inputFilename: input.body?.inputFilename,
       outputFilename: input.body?.outputFilename,
@@ -341,9 +341,11 @@ export async function createProblemHackAttempt(input: {
         inputFilename: submissionIo.inputFilename,
         outputFilename: submissionIo.outputFilename,
         hackConfigRevision: hackConfig.revision,
-        judgeConfigHash: problem.LatestTestSetRevision.judgeConfigHash,
+        judgeConfigHash: problem.TestSetSlots.find(item => item.slot === 'EVOLVING')!.judgeConfigHash,
         testGraphRevision: problem.testGraphRevision,
-        baseTestSetRevisionId: problem.latestTestSetRevisionId,
+        baseSlot: 'EVOLVING',
+        baseGraphHash: problem.TestSetSlots.find(item => item.slot === 'EVOLVING')!.graphHash,
+        baseFencingToken: problem.TestSetSlots.find(item => item.slot === 'EVOLVING')!.fencingToken,
       },
     })
     return serializeHackAttempt(attempt, true)
@@ -367,8 +369,6 @@ const hackAttemptInclude = {
   User: { select: { username: true } },
   ContributionOrganization: { select: { name: true } },
   Candidate: { select: { id: true, status: true } },
-  BaseTestSetRevision: { select: { revisionNumber: true } },
-  PromotedRevision: { select: { revisionNumber: true } },
 } as const
 
 export async function listProblemHackAttempts(input: {
@@ -432,7 +432,7 @@ export async function retryProblemHackAttempt(
 ) {
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
-    include: { LatestTestSetRevision: true },
+    include: { TestSetSlots: { where: { slot: 'EVOLVING' } } },
   })
   if (!problem || !canModifyProblem(user, problem)) {
     fail(404, 'PROBLEM_NOT_FOUND', '题目不存在')
@@ -463,8 +463,7 @@ export async function retryProblemHackAttempt(
       to: 'queuing',
       data: {
         hackConfigRevision: config.revision,
-        judgeConfigHash: problem.LatestTestSetRevision?.judgeConfigHash
-          || judgeConfigHash(problem.judgeConfig),
+        judgeConfigHash: problem.TestSetSlots[0]?.judgeConfigHash || judgeConfigHash(problem.judgeConfig),
         baselineResult: null,
         candidateResult: null,
         baselineScore: null,
@@ -473,10 +472,12 @@ export async function retryProblemHackAttempt(
         affectedSubtaskIds: null,
         acceptedTestcaseId: null,
         testGraphRevision: problem.testGraphRevision,
-        baseTestSetRevisionId: problem.latestTestSetRevisionId,
+        baseSlot: 'EVOLVING',
+        baseGraphHash: problem.TestSetSlots[0]?.graphHash || null,
+        baseFencingToken: problem.TestSetSlots[0]?.fencingToken || null,
         canonicalStatus: null,
         candidateTestcaseId: null,
-        promotedRevisionId: null,
+        promotedGraphHash: null,
         promotionRetries: 0,
         failureStage: null,
         message: null,

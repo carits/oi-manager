@@ -236,7 +236,7 @@ problemListsRouter.delete('/:id/shares/:shareId', authenticate, problemListEndpo
 
 /**
  * POST /api/problem-lists/:id/create-assignment
- * 从题单创建独立作业草稿（平铺条目并固定当前 TestSet Revision）
+ * 从题单创建独立作业草稿（平铺条目；提交时动态使用 Stable）
  */
 problemListsRouter.post('/:id/create-assignment', authenticate, problemListEndpoint('创建作业草稿失败', async (req, res) => {
   res.status(201).json({ success: true, data: await createAssignmentFromProblemList(req.user!, req.params.id, req.body) })

@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../../../prisma'
 import { findAccessibleProblem } from '../../problem/problem.access'
-import { ensureInitialTestSetRevision } from '../../problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../../problem/problem.testset-slot.service'
 import { buildContestProblemData } from '../contest.helpers'
 import {
   createContestProblemTx,
@@ -27,7 +27,7 @@ export async function addManagedContestProblem(params: {
   const accessible = await findAccessibleProblem(user, problemId, 'use')
   let problem = accessible ? await prisma.problem.findUnique({
     where: { id: accessible.id },
-    include: { LatestTestSetRevision: true, ProblemStatement: { where: { isVisible: true } } },
+    include: { TestSetSlots: { where: { slot: 'STABLE' } }, ProblemStatement: { where: { isVisible: true } } },
   }) : null
   if (!problem) throw new ContestProblemManagementError(404, 'PROBLEM_NOT_FOUND', '题目不存在')
 
@@ -36,14 +36,14 @@ export async function addManagedContestProblem(params: {
   if (problem.libraryScope === 'organization' && schoolId !== problem.organizationId) {
     throw new ContestProblemManagementError(404, 'PROBLEM_NOT_FOUND', '题目不存在')
   }
-  if (!problem.latestTestSetRevisionId) {
-    try { await ensureInitialTestSetRevision(problem.id, user.userId) }
+  if (!problem.TestSetSlots.length) {
+    try { await ensureInitialTestSetSlots(problem.id, user.userId) }
     catch (error: any) {
-      throw new ContestProblemManagementError(409, 'TEST_SET_REVISION_REQUIRED', error.message)
+      throw new ContestProblemManagementError(409, 'TEST_SET_STABLE_REQUIRED', error.message)
     }
     problem = await prisma.problem.findUnique({
       where: { id: problem.id },
-      include: { LatestTestSetRevision: true, ProblemStatement: { where: { isVisible: true } } },
+      include: { TestSetSlots: { where: { slot: 'STABLE' } }, ProblemStatement: { where: { isVisible: true } } },
     })
     if (!problem) throw new ContestProblemManagementError(404, 'PROBLEM_NOT_FOUND', '题目不存在')
   }

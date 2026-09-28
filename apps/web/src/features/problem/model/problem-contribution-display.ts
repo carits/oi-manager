@@ -48,11 +48,11 @@ export function contributionStageLabel(stage?: string | null): string {
 export function candidateLifecyclePresentation(
   status?: string | null,
   stage?: string | null,
-  promotedRevision?: number | string | null,
+  promotedGraphHash?: string | null,
 ): { label: string; detail: string; tone: LifecycleTone } {
   const normalized = status?.toUpperCase() || "";
   const stageLabel = contributionStageLabel(stage);
-  if (normalized === "PROMOTED") return { label: promotedRevision ? `已纳入 R${promotedRevision}` : "已纳入正式版本", detail: stageLabel, tone: "success" };
+  if (normalized === "PROMOTED") return { label: promotedGraphHash ? `已写入 Evolving ${promotedGraphHash.slice(0, 8)}` : "已纳入正式版本", detail: stageLabel, tone: "success" };
   if (normalized === "ELIGIBLE") return { label: "有效候选，等待 Selector", detail: stageLabel, tone: "pending" };
   if (normalized === "SELECTED" || normalized.startsWith("EVALUATING_")) return { label: "价值评估中", detail: stageLabel, tone: "pending" };
   if (normalized === "WAITING_REPLACEMENT") return { label: "有效候选，等待替换窗口", detail: stageLabel, tone: "warning" };
@@ -70,14 +70,14 @@ export function hackCanonicalPresentation(input: {
   technicalStatus: string;
   canonicalStatus?: string | null;
   candidateStatus?: string | null;
-  promotedRevision?: number | null;
+  promotedGraphHash?: string | null;
 }): { label: string; tone: LifecycleTone } {
   if (input.technicalStatus !== "accepted") {
     if (input.technicalStatus === "rejected") return { label: "技术 Hack 无效", tone: "warning" };
     if (input.technicalStatus === "system_error") return { label: "技术判定失败", tone: "error" };
     return { label: "技术判定进行中", tone: "pending" };
   }
-  if (input.canonicalStatus === "promoted") return { label: input.promotedRevision ? `已纳入 R${input.promotedRevision}` : "已纳入正式版本", tone: "success" };
+  if (input.canonicalStatus === "promoted") return { label: input.promotedGraphHash ? `已写入 Evolving ${input.promotedGraphHash.slice(0, 8)}` : "已纳入正式版本", tone: "success" };
   if (input.canonicalStatus === "redundant") return { label: "技术有效，未纳入正式版本", tone: "warning" };
   if (input.canonicalStatus === "rejected") return { label: "候选数据已拒绝", tone: "error" };
   if (input.canonicalStatus === "failed") return { label: "候选处理失败", tone: "error" };

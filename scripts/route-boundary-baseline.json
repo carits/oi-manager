@@ -227,7 +227,7 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
-  "apps/server/src/modules/problem/problem.testset-revision.routes.ts": {
+  "apps/server/src/modules/problem/problem.testset-slot.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,

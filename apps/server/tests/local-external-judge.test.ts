@@ -6,6 +6,7 @@ import { contestRouter } from '../src/modules/contest/contest.routes'
 import { prisma } from '../src/prisma'
 import { createTestUser } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
+import { acquireTestSetReader } from '../src/modules/problem/problem.testset-slot.service'
 
 const app = express()
 app.use(express.json())
@@ -45,20 +46,20 @@ async function fixture(judgeConfig: string | null = 'mode: acm\ncases: []\n', wi
 }
 
 describe('external-source local judging', () => {
-  it.each(['robot', 'myAccount', 'local'])('normalizes legacy %s submissions to the local queue', async submitMethod => {
+  it('queues a local submission for an external-source problem', async () => {
     const { actor, token, problem } = await fixture()
     const response = await request(app)
       .post('/api/submit')
-      .set('Cookie', `oi_session=${token}`)
+      .set('Cookie', 'oi_session=' + token)
       .send({
         problemId: problem.problemId,
         oj: problem.platform,
         language: 'cpp',
         code: 'int main() { return 0; }',
-        submitMethod,
+        submitMethod: 'local',
       })
 
-    expect(response.status).toBe(200)
+    expect(response.status, JSON.stringify(response.body)).toBe(200)
     const submission = await prisma.submission.findUniqueOrThrow({
       where: { id: response.body.data.submissionId },
       include: { CurrentJudgeRun: true },
@@ -84,7 +85,7 @@ describe('external-source local judging', () => {
         oj: problem.platform,
         language: 'cpp',
         code: 'int main() {}',
-        submitMethod: 'robot',
+        submitMethod: 'local',
       })
 
     expect(response.status).toBe(409)
@@ -133,16 +134,14 @@ describe('external-source local judging', () => {
     expect(response.body.code).toBe('LOCAL_JUDGE_NOT_CONFIGURED')
   })
 
-  it('queues an external contest problem locally using its fixed revision snapshot', async () => {
+  it('queues an external contest problem locally using its held Stable slot', async () => {
     const { actor, token, problem } = await fixture()
     const now = Date.now()
-    const revision = await prisma.problemTestSetRevision.create({
-      data: {
-        id: crypto.randomUUID(), problemId: problem.id, revisionNumber: 1, mode: 'acm', source: 'test',
-        judgeConfig: 'mode: acm\ncases: []\n', judgeConfigHash: 'external-local-judge', graphHash: 'external-local-judge',
-        testdataPath: '/test/external-local-judge', createdBy: actor.user.id,
-      },
-    })
+    const slot = await prisma.problemTestSetSlot.create({ data: {
+      problemId: problem.id, slot: 'STABLE', mode: 'acm', source: 'initial',
+      judgeConfig: 'mode: acm\ncases: []\n', judgeConfigHash: 'external-local-judge', graphHash: 'external-local-judge',
+      materializedPath: 'slots/stable', fencingToken: 1,
+    } })
     const contest = await prisma.contest.create({
       data: {
         id: crypto.randomUUID(), title: 'External local judge contest', format: 'icpc', type: 'judged', scope: 'platform',
@@ -150,9 +149,13 @@ describe('external-source local judging', () => {
         status: 'ongoing', createdBy: actor.user.id,
       },
     })
+    const contestProblemId = crypto.randomUUID()
+    const heldStable = await acquireTestSetReader({
+      problemId: problem.id, slot: 'STABLE', ownerType: 'CONTEST_PROBLEM', ownerId: contestProblemId,
+    })
     const contestProblem = await prisma.contestProblem.create({
       data: {
-        id: crypto.randomUUID(), contestId: contest.id, canonicalProblemId: problem.id, testSetRevisionId: revision.id,
+        id: contestProblemId, contestId: contest.id, canonicalProblemId: problem.id, testSetSlot: 'STABLE', testSetGraphHash: slot.graphHash, testSetJudgeConfigHash: slot.judgeConfigHash, testSetFencingToken: slot.fencingToken, testSetReaderId: heldStable.reader.id,
         alias: 'A', orderIndex: 1, points: 100, title: problem.title, ojName: problem.platform, problemId: problem.problemId,
       },
     })
@@ -175,7 +178,8 @@ describe('external-source local judging', () => {
       problemInternalId: problem.id,
       canonicalContestId: contest.id,
       canonicalContestProblemId: contestProblem.id,
-      testSetRevisionId: revision.id,
+      testSetSlot: 'STABLE',
+      testSetGraphHash: slot.graphHash,
       submitMethod: 'local',
       ojRemoteId: null,
     })

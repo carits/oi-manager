@@ -19,6 +19,8 @@ source_of_truth: Git history
 - 训练列表与学生管理列表将筛选/页码写入 URL，并统一首次错误、旧数据刷新失败和返回/刷新恢复语义。
 - 实施与验证范围见 [UI Shell 实施记录](development/UI_SHELL_ROLLOUT.md)。当前仍未合并、部署；完整多角色 E2E 与最新 HEAD 发布验收单独执行。
 
+
+
 ## 2026-09-27
 
 - 文档同步到 origin/main 的 ccf39a1a：更新统一组织/个人工作区、Training Engine V2、API 数量、E2E 隔离、数据库迁移与远端运行目录说明；归档历史文档保持不变。

@@ -13,26 +13,17 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
   let author: Awaited<ReturnType<typeof createTestUser>>
   let reader: Awaited<ReturnType<typeof createTestUser>>
   let problem: Awaited<ReturnType<typeof createTestProblem>>
-  let revisionId: string
+  const graphHash = 'blog-graph-v1'
 
   beforeEach(async () => {
     author = await createTestUser({ organization: { role: 'teacher' } })
     reader = await createTestUser({ organization: { role: 'student' } })
     problem = await createTestProblem({ ownerId: author.user.id, title: 'Knowledge domain problem' })
-    revisionId = crypto.randomUUID()
-    await prisma.problemTestSetRevision.create({ data: {
-      id: revisionId,
-      problemId: problem.id,
-      revisionNumber: 1,
-      mode: 'acm',
-      source: 'initial',
-      judgeConfig: 'type: default\nmode: acm\n',
-      judgeConfigHash: 'blog-judge-v1',
-      graphHash: 'blog-graph-v1',
-      testdataPath: '/test/blog-v1',
-      createdBy: author.user.id,
+    await prisma.problemTestSetSlot.create({ data: {
+      problemId: problem.id, slot: 'STABLE', mode: 'acm', source: 'initial',
+      judgeConfig: 'type: default\nmode: acm\n', judgeConfigHash: 'blog-judge-v1',
+      graphHash, materializedPath: '/test/blog-stable',
     } })
-    await prisma.problem.update({ where: { id: problem.id }, data: { latestTestSetRevisionId: revisionId } })
   })
 
   const client = (user: typeof author) => createAuthenticatedRequest(app, generateTokenFromUser(user.user))
@@ -50,9 +41,8 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       summary: 'A versioned article.',
       contentMarkdown: '# Idea\n\nUse $O(n)$ time.\n\n```cpp\nint main() {}\n```',
       references: [{
-        type: 'PROBLEM_REVISION',
+        type: 'PROBLEM',
         problemId: problem.id,
-        problemRevisionId: revisionId,
         relationType: 'PRIMARY_SUBJECT',
         displayMode: 'CARD',
         positionKey: 'primary-problem',
@@ -74,7 +64,7 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(invalid.body.code).toBe('API_CONTRACT_REQUEST_INVALID')
   })
 
-  it('publishes immutable versions, pins a problem revision, and powers reverse lookup', async () => {
+  it('publishes immutable versions, pins a problem identity, and powers reverse lookup', async () => {
     const created = await createProblemBlog()
     expect(created.status).toBe(201)
     expect(created.body.data.draft.revision).toBe(1)
@@ -84,9 +74,9 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(published.status).toBe(200)
     expect(published.body.data.currentVersion.version).toBe(1)
     expect(published.body.data.currentVersion.references[0]).toMatchObject({
-      type: 'PROBLEM_REVISION',
+      type: 'PROBLEM',
       referenceId: problem.id,
-      referenceVersionId: revisionId,
+      referenceVersionId: null,
       accessMode: 'PUBLIC',
     })
     expect(published.body.data.renderingContract).toMatchObject({ rawHtml: false, latex: true, fencedCode: true, executableCode: false })
@@ -193,7 +183,8 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       sourceType: 'ORIGINAL',
       licenseDeclarationVersion: 1,
       licenseAcceptedAt: new Date(),
-      targetTestSetRevisionId: revisionId,
+      targetTestSetSlot: 'STABLE',
+      targetTestSetGraphHash: graphHash,
       statementSnapshotHash: 'statement-v1',
       status: 'PUBLISHED',
       currentRevision: 1,
@@ -210,13 +201,15 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       licenseAcceptedAt: new Date(),
       statementSnapshot: { title: problem.title },
       statementSnapshotHash: 'statement-v1',
-      targetTestSetRevisionId: revisionId,
+      targetTestSetSlot: 'STABLE',
+      targetTestSetGraphHash: graphHash,
       contentHash: 'solution-content-v1',
     } })
     await prisma.solutionVerification.create({ data: {
       id: verificationId,
       contributionRevisionId,
-      verifiedTestSetRevisionId: revisionId,
+      verifiedTestSetSlot: 'STABLE',
+      verifiedTestSetGraphHash: graphHash,
       status: 'SKIPPED',
       completedAt: new Date(),
     } })
@@ -242,7 +235,8 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       sourceType: 'ORIGINAL',
       licenseDeclarationVersion: 1,
       licenseAcceptedAt: new Date(),
-      targetTestSetRevisionId: revisionId,
+      targetTestSetSlot: 'STABLE',
+      targetTestSetGraphHash: graphHash,
       statementSnapshotHash: 'manager-statement-v1',
       status: 'PUBLISHED',
     } })
@@ -257,13 +251,15 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       licenseAcceptedAt: new Date(),
       statementSnapshot: { title: problem.title },
       statementSnapshotHash: 'manager-statement-v1',
-      targetTestSetRevisionId: revisionId,
+      targetTestSetSlot: 'STABLE',
+      targetTestSetGraphHash: graphHash,
       contentHash: 'manager-solution-content-v1',
     } })
     await prisma.solutionVerification.create({ data: {
       id: managerVerificationId,
       contributionRevisionId: managerContributionRevisionId,
-      verifiedTestSetRevisionId: revisionId,
+      verifiedTestSetSlot: 'STABLE',
+      verifiedTestSetGraphHash: graphHash,
       status: 'SKIPPED',
       completedAt: new Date(),
     } })
@@ -277,7 +273,8 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       licenseDeclarationVersion: 1,
       statementSnapshot: { title: problem.title },
       statementSnapshotHash: 'manager-statement-v1',
-      verifiedTestSetRevisionId: revisionId,
+      verifiedTestSetSlot: 'STABLE',
+      verifiedTestSetGraphHash: graphHash,
       sourceContributionRevisionId: managerContributionRevisionId,
       verificationId: managerVerificationId,
       contentHash: 'manager-solution-content-v1',
@@ -295,7 +292,8 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       licenseDeclarationVersion: 1,
       statementSnapshot: { title: problem.title },
       statementSnapshotHash: 'statement-v1',
-      verifiedTestSetRevisionId: revisionId,
+      verifiedTestSetSlot: 'STABLE',
+      verifiedTestSetGraphHash: graphHash,
       sourceContributionRevisionId: contributionRevisionId,
       verificationId,
       contentHash: 'solution-content-v1',

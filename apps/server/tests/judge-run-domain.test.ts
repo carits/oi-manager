@@ -20,6 +20,21 @@ import {
   legacyResultToAttemptState,
 } from '../src/modules/judge/domain/judge-state'
 
+async function createStableSlot(problemId: string) {
+  return prisma.problemTestSetSlot.create({
+    data: {
+      problemId,
+      slot: 'STABLE',
+      mode: 'acm',
+      source: 'test_fixture',
+      judgeConfig: 'mode: acm\ncases: []\n',
+      judgeConfigHash: `config-${problemId}`,
+      graphHash: `graph-${problemId}`,
+      materializedPath: 'stable',
+    },
+  })
+}
+
 describe('Judge domain state machine', () => {
   it('allows only declared JudgeRun transitions', () => {
     expect(() => assertJudgeRunTransition('QUEUED', 'RUNNING')).not.toThrow()
@@ -69,6 +84,7 @@ describe('Submission and Judge lifecycle creation', () => {
       id: problemId, platform: 'carits', problemId, title: 'Judge domain test',
       ownerId: userId, ownerType: 'user', visibility: 'private', status: 'published',
     } })
+    await createStableSlot(problemId)
 
     const submission = await createQueuedSubmissionWithRun({
       userId, oj: 'carits', problemId, problemInternalId: problemId,
@@ -102,6 +118,7 @@ async function createLifecycleFixture() {
     id: problemId, platform: 'carits', problemId, title: 'Lifecycle fixture',
     ownerId: userId, ownerType: 'user', visibility: 'private', status: 'published',
   } })
+  await createStableSlot(problemId)
   const submission = await createQueuedSubmissionWithRun({
     userId, oj: 'carits', problemId, problemInternalId: problemId,
     language: 'cpp17', code: 'int main(){}', codeLength: 12,
@@ -243,6 +260,29 @@ describe('Judge lifecycle ownership and retries', () => {
       finalizedAt: new Date(),
     } })
     await prisma.contest.update({ where: { id: contest.id }, data: { finalizedStandingId: standingId } })
+    const stable = await prisma.problemTestSetSlot.findUniqueOrThrow({
+      where: { problemId_slot: { problemId: fixture.problemId, slot: 'STABLE' } },
+    })
+    const contestProblem = await prisma.contestProblem.create({
+      data: {
+        id: crypto.randomUUID(),
+        contestId: contest.id,
+        canonicalProblemId: fixture.problemId,
+        testSetSlot: 'STABLE',
+        testSetGraphHash: stable.graphHash,
+        testSetJudgeConfigHash: stable.judgeConfigHash,
+        testSetFencingToken: stable.fencingToken,
+        orderIndex: 0,
+      },
+    })
+    await prisma.submission.update({
+      where: { id: fixture.submission.id },
+      data: {
+        submitScope: 'contest',
+        canonicalContestId: contest.id,
+        canonicalContestProblemId: contestProblem.id,
+      },
+    })
 
     const queued = await createRejudgeBatch({
       submissionIds: [fixture.submission.id],

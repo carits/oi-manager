@@ -2,7 +2,6 @@ import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../prisma'
 import { postCaritsTransaction, reverseCaritsTransaction } from '../../carits/application/carits-ledger.service'
-import { getProblemTestSetRevision } from '../../problem/application/problem-route.service'
 
 const POLICY_CODE = 'canonical_testcase_promoted'
 const POLICY_VERSION = 1
@@ -47,13 +46,13 @@ function rewardSnapshot(event: { evidence: unknown; ruleCode: string; ruleVersio
 
 export async function recordPromotedContribution(tx: Prisma.TransactionClient, input: {
   candidateId: string
-  promotedRevisionId: string
+  promotedGraphHash: string
   selectionMode: string
 }) {
   const candidate = await tx.testcaseCandidate.findUnique({ where: { id: input.candidateId } })
   if (!candidate || candidate.status !== 'PROMOTED') throw new Error('Promoted Candidate is required before recording contribution')
-  if (candidate.promotedRevisionId !== input.promotedRevisionId) {
-    throw new ContributionRewardError(409, 'CONTRIBUTION_PROMOTION_EVIDENCE_MISMATCH', 'Candidate 的正式版本与贡献证据不一致')
+  if (candidate.promotedGraphHash !== input.promotedGraphHash) {
+    throw new ContributionRewardError(409, 'CONTRIBUTION_PROMOTION_EVIDENCE_MISMATCH', 'Candidate 的 Evolving 数据哈希与贡献证据不一致')
   }
   if (candidate.source === 'admin_import') return null
   const actor = await tx.user.findUnique({ where: { id: candidate.createdBy }, select: { id: true, role: true, status: true } })
@@ -76,7 +75,7 @@ export async function recordPromotedContribution(tx: Prisma.TransactionClient, i
       acceptedAt: accepted ? new Date() : null,
       evidence: {
         problemId: candidate.problemId, candidateId: candidate.id,
-        promotedRevisionId: input.promotedRevisionId, candidateSource: candidate.source,
+        promotedGraphHash: input.promotedGraphHash, candidateSource: candidate.source,
         selectionMode: input.selectionMode, rewardCarits: reward.carits.toString(), organizationRewardCarits: '0',
       },
     },
@@ -88,7 +87,7 @@ export async function recordPromotedContribution(tx: Prisma.TransactionClient, i
     || event.sourceId !== candidate.id
     || event.ruleCode !== POLICY_CODE
     || event.ruleVersion !== POLICY_VERSION
-    || persistedEvidence?.promotedRevisionId !== input.promotedRevisionId
+    || persistedEvidence?.promotedGraphHash !== input.promotedGraphHash
     || persistedEvidence?.selectionMode !== input.selectionMode) {
     throw new ContributionRewardError(409, 'CONTRIBUTION_EVENT_REPLAY_CONFLICT', '贡献事件的重放证据与原记录不一致')
   }
@@ -278,7 +277,7 @@ export async function listContributionAudit(
 }
 
 export async function getContributionEvidence(contributionId: string, kind: string) {
-  if (!['candidate', 'revision'].includes(kind)) {
+  if (!['candidate', 'evolving'].includes(kind)) {
     throw new ContributionRewardError(400, 'CONTRIBUTION_EVIDENCE_KIND_INVALID', '贡献证据类型无效')
   }
   const event = await prisma.contributionEvent.findUnique({ where: { id: contributionId } })
@@ -288,20 +287,28 @@ export async function getContributionEvidence(contributionId: string, kind: stri
     : null
   const problemId = typeof evidence?.problemId === 'string' ? evidence.problemId : ''
   const candidateId = typeof evidence?.candidateId === 'string' ? evidence.candidateId : ''
-  const revisionId = typeof evidence?.promotedRevisionId === 'string' ? evidence.promotedRevisionId : ''
-  if (!problemId || !candidateId || event.sourceType !== 'testcase_candidate' || event.sourceId !== candidateId) {
+  const graphHash = typeof evidence?.promotedGraphHash === 'string' ? evidence.promotedGraphHash : ''
+  if (!problemId || !candidateId || !graphHash || event.sourceType !== 'testcase_candidate' || event.sourceId !== candidateId) {
     throw new ContributionRewardError(409, 'CONTRIBUTION_EVIDENCE_INVALID', '贡献事件缺少可信的 Candidate 证据')
   }
   const candidate = await prisma.testcaseCandidate.findFirst({ where: { id: candidateId, problemId } })
-  if (!candidate || candidate.promotedRevisionId !== revisionId) {
-    throw new ContributionRewardError(409, 'CONTRIBUTION_EVIDENCE_INVALID', 'Candidate 与正式版本证据不一致')
+  if (!candidate || candidate.promotedGraphHash !== graphHash) {
+    throw new ContributionRewardError(409, 'CONTRIBUTION_EVIDENCE_INVALID', 'Candidate 与 Evolving 数据哈希证据不一致')
   }
   if (kind === 'candidate') {
     return { kind, problemId, candidate: serializeContributionEvidence(candidate) }
   }
-  const revision = await getProblemTestSetRevision(problemId, revisionId)
-  if (!revision) throw new ContributionRewardError(409, 'CONTRIBUTION_EVIDENCE_INVALID', '贡献引用的正式测试版本不存在')
-  return { kind, problemId, revision }
+  const current = await prisma.problemTestSetSlot.findUnique({
+    where: { problemId_slot: { problemId, slot: 'EVOLVING' } },
+    select: { graphHash: true, fencingToken: true, updatedAt: true },
+  })
+  return {
+    kind,
+    problemId,
+    graphHash,
+    isCurrent: current?.graphHash === graphHash,
+    current: current || null,
+  }
 }
 
 function serializeContributionEvidence(candidate: Awaited<ReturnType<typeof prisma.testcaseCandidate.findFirst>>) {

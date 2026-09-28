@@ -35,7 +35,6 @@ const ASSIGNMENT_INCLUDE = {
     orderBy: { orderIndex: 'asc' as const },
     include: {
       Problem: { select: { id: true, platform: true, problemId: true, title: true, difficulty: true, allowedLanguages: true } },
-      TestSetRevision: { select: { id: true, revisionNumber: true, mode: true, judgeConfigHash: true } },
     },
   },
   Recipients: {
@@ -475,36 +474,33 @@ export async function replaceAssignmentProblems(userId: string, assignmentId: st
   const expectedRevision = clientRevision(body)
   const rows = body?.problems
   const problemIds = validateProblemRows(rows)
-  const requestedRevisionIds = rows.map((row: any) => row?.testSetRevisionId ? String(row.testSetRevisionId) : null).filter(Boolean) as string[]
-  const [problems, revisions] = await Promise.all([
-    prisma.problem.findMany({ where: { id: { in: problemIds }, status: { not: 'archived' } }, include: { LatestTestSetRevision: true } }),
-    prisma.problemTestSetRevision.findMany({ where: { id: { in: requestedRevisionIds } } }),
-  ])
+  const problems = await prisma.problem.findMany({
+    where: { id: { in: problemIds }, status: { not: 'archived' } },
+    include: { TestSetSlots: { where: { slot: 'STABLE' } } },
+  })
   const problemMap = new Map(problems.map(problem => [problem.id, problem]))
-  const revisionMap = new Map(revisions.map(revision => [revision.id, revision]))
   const account = await globalAccount(userId)
   const normalized = rows.map((row: any, index: number) => {
     const problem = problemMap.get(String(row.problemId))
     if (!problem || (account?.role !== 'super_admin' && problem.ownerId !== userId && !(problem.libraryScope === 'platform' && problem.status === 'published') && !(problem.libraryScope === 'school' && problem.organizationId === assignment.organizationId && problem.status === 'published'))) {
       throw new AssignmentError(422, 'ASSIGNMENT_PROBLEM_UNAVAILABLE', `第 ${index + 1} 道题不可用`)
     }
-    const revision = row.testSetRevisionId ? revisionMap.get(String(row.testSetRevisionId)) : problem.LatestTestSetRevision
-    if (!revision || revision.problemId !== problem.id) throw new AssignmentError(422, 'ASSIGNMENT_REVISION_INVALID', `第 ${index + 1} 道题没有合法 TestSet Revision`)
+    const stable = problem.TestSetSlots[0]
+    if (!stable) throw new AssignmentError(422, 'ASSIGNMENT_TEST_DATA_UNAVAILABLE', `第 ${index + 1} 道题没有 Stable 测试数据`)
     const maxScore = boundedInteger(row.maxScore, 1, 1000, `第 ${index + 1} 道题满分`, 100)
     const targetScore = boundedInteger(row.targetScore, 0, maxScore, `第 ${index + 1} 道题目标分`, maxScore)
     return {
       id: row.id ? String(row.id) : null,
       problemId: problem.id,
-      testSetRevisionId: revision.id,
       orderIndex: index,
       category: enumValue(row.category, PROBLEM_CATEGORIES, 'REQUIRED', '题目分类'),
       required: row.required === undefined ? String(row.category || 'REQUIRED').toUpperCase() === 'REQUIRED' : Boolean(row.required),
       maxScore, targetScore,
-      judgeMaxScore: judgeMaxScoreFromSnapshot(revision.judgeConfig, revision.mode),
+      judgeMaxScore: judgeMaxScoreFromSnapshot(stable.judgeConfig, stable.mode),
       weight: boundedInteger(row.weight, 1, 10_000, `第 ${index + 1} 道题权重`, 100),
-      completionPolicy: enumValue(row.completionPolicy, COMPLETION_POLICIES, revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE', '完成条件'),
-      judgeConfigSnapshot: revision.judgeConfig,
-      judgeConfigHash: revision.judgeConfigHash,
+      completionPolicy: enumValue(row.completionPolicy, COMPLETION_POLICIES, stable.mode === 'acm' ? 'AC' : 'TARGET_SCORE', '完成条件'),
+      judgeConfigSnapshot: stable.judgeConfig,
+      judgeConfigHash: stable.judgeConfigHash,
       settings: row.settings === undefined ? undefined : JSON.parse(JSON.stringify(row.settings)),
     }
   })
@@ -587,11 +583,6 @@ export function validateAssignmentForPublish(assignment: AssignmentShape): Valid
   if (assignment.rosterMode === 'SNAPSHOT' && !assignment.Recipients.length) issues.push({ path: 'recipients', code: 'RECIPIENTS_REQUIRED', message: '快照名单至少包含一名学生' })
   if (assignment.openAt >= assignment.dueAt) issues.push({ path: 'dueAt', code: 'TIMELINE_INVALID', message: '截止时间必须晚于开放时间' })
   if (assignment.dueAt > assignment.closeAt) issues.push({ path: 'closeAt', code: 'TIMELINE_INVALID', message: '关闭时间不能早于截止时间' })
-  for (const [index, problem] of assignment.Problems.entries()) {
-    if (problem.TestSetRevision.id !== problem.testSetRevisionId || problem.TestSetRevision.judgeConfigHash !== problem.judgeConfigHash) {
-      issues.push({ path: `problems.${index}.testSetRevisionId`, code: 'REVISION_SNAPSHOT_INVALID', message: '题目版本快照不一致' })
-    }
-  }
   return issues
 }
 
@@ -720,7 +711,7 @@ export async function submitAssignmentSolution(userId: string, assignmentId: str
     oj: problem.Problem.platform, problemId: problem.Problem.problemId, language, code,
     codeLength: Buffer.byteLength(code, 'utf8'), submitMethod: 'local', problemInternalId: problem.problemId,
     submitScope: 'assignment', assignmentId, assignmentProblemId, assignmentRecipientId: recipient.id, submissionPhase,
-    testSetRevisionId: problem.testSetRevisionId, judgeConfigHash: problem.judgeConfigHash, judgeConfigSnapshot: problem.judgeConfigSnapshot,
+    testSetSlot: 'STABLE', judgeConfigHash: problem.judgeConfigHash, judgeConfigSnapshot: problem.judgeConfigSnapshot,
     ...io, isGlobalVisible: true,
   }, { requestedBy: userId })
   if (recipient.status === 'ASSIGNED') await prisma.assignmentRecipient.updateMany({ where: { id: recipient.id, status: 'ASSIGNED' }, data: { status: 'ACTIVE', startedAt: now } })

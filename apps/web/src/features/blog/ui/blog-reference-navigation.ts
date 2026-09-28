@@ -31,7 +31,7 @@ export function referenceHref(reference: PublishedBlogReference, context?: Navig
   const snapshotContest = snapshot.contest && typeof snapshot.contest === 'object'
     ? snapshot.contest as Record<string, unknown>
     : null
-  if (reference.type === 'PROBLEM' || reference.type === 'PROBLEM_REVISION') {
+  if (reference.type === 'PROBLEM') {
     return scopedProblemHref(reference.referenceId, typeof snapshot.organizationId === 'string' ? snapshot.organizationId : null, undefined, context)
   }
   if (reference.type === 'SOLUTION_VERSION' && typeof snapshotProblem?.id === 'string') {

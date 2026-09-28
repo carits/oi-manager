@@ -15,7 +15,7 @@ source_of_truth: apps/server/src/modules/contribution, apps/server/src/modules/c
 - Carits 是可消费的平台资产，通过双向不可变账本记账。
 - Evaluation Credits 是 Candidate/Hack 评估任务的计算资源，不是贡献值或货币。
 
-唯一奖励起点是 Candidate 或 Hack Candidate 被 Selector 纳入正式不可变 TestSet Revision。
+唯一奖励起点是 Candidate 或 Hack Candidate 被 Selector 纳入 Evolving，并在 Promotion 后进入 Stable。
 `ELIGIBLE`、技术 Hack 有效、重复数据、程序资产激活和 `admin_import` 都不产生奖励。
 
 ```text
@@ -36,8 +36,8 @@ Candidate/Hack 正式晋升
 | Hack Candidate | 150 | 30 C |
 
 每个 Candidate 以稳定的 `candidateId + promoted` 事实键去重，命中多个 Subtask 或后续奖励规则升级也只产生
-一条事件。事件把当时的 `ruleCode/ruleVersion`、分值、奖励金额和正式 Revision 证据固化；Worker 重放必须
-使用事件中的奖励快照，不能按新规则重新计价。Candidate 记录的 `promotedRevisionId` 与调用证据不一致时
+一条事件。事件把当时的 `ruleCode/ruleVersion`、分值、奖励金额和晋升 slot/graph/fence 证据固化；Worker 重放必须
+使用事件中的奖励快照，不能按新规则重新计价。Candidate 记录的 `promotedGraphHash` 与调用证据不一致时
 直接拒绝。自动选择直接进入
 `accepted`；题目管理者紧急发布只创建 `pending` 事件，必须由超级管理员审核。
 超级管理员和平台管理员的管理性操作不获得个人奖励。
@@ -65,7 +65,7 @@ Candidate/Hack 正式晋升
 日限额按当日毛发放量统计，`posted` 后又冲正为 `reversed` 的奖励仍占用当日发行额，
 不能通过“发放→撤销”反复腾出额度。租约终态更新必须同时匹配记录 ID、fencing token 和可预期状态；
 连续失败 5 次后停在 `failed`，只有超级管理员才能通过审计接口重置重试。
-超级管理员撤销贡献时新增反向交易，不改写原分录或正式 Revision。
+超级管理员撤销贡献时新增反向交易，不改写原分录或当前 TestSet 槽。
 如冲正导致负债，续发奖励会先抵扣负债，偿清前禁止购买资源。
 
 ## Evaluation Credits

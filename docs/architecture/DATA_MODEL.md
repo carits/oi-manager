@@ -17,7 +17,7 @@ source_of_truth: apps/server/prisma/schema.prisma, docs/architecture/generated/A
 | 授权 | `OrganizationMembershipRole`、`OrganizationMembershipCapability`；旧 `memberRole` 在迁移期仅作为资料身份和兼容输入 |
 | 团队与教学 | `Team`、`Assignment`、`TrainingSession` 及其题目、名单、进度、提示、反馈和事件 |
 | 比赛运行与 Rating | `Contest/ContestProblem` 是比赛元数据、生命周期、提交身份、Rating 身份、终结状态、发现与跨域查询的规范入口；关联的 `Training(type=contest)` 只承载参与者及 Judge 运行路由；Rating 配置、最终榜单和批次均关联规范 Contest，快照与批次不可变 |
-| 题目与评测资产 | `Problem`、`ProblemTestSetRevision`、Test Graph、测试点、Blob、Judge Program、Validator/Feature/Classifier |
+| 题目与评测资产 | `Problem`、`ProblemTestSetSlot`、Reader/Writer 屏障、Test Graph、测试点、Blob、Judge Program、Validator/Feature/Classifier |
 | Candidate 与贡献经济 | Candidate、生成任务、Wrong Corpus、Selector、Evaluation Budget、Contribution、Carits 和 Credits 账本 |
 | 提交与 Judge | `Submission` 保存提交意图与远端归档结果；本地执行结果唯一来自 `JudgeRun`，物理执行来自 `JudgeAttempt` |
 | 知识与题解 | Solution 投稿/审核/相似度，以及 Blog 文章、不可变版本、引用、系列、标签和社区互动 |
@@ -39,25 +39,27 @@ erDiagram
 
 账号的全局角色与组织成员身份分离。学生、教师和负责人是组织关系，不修改普通账号的全局 `User.role`。`User.sessionVersion` 仅负责撤销旧 JWT，不表示组织或设备身份。`OrganizationMembership.memberRole` 只决定学生/教师资料类型；授权唯一读取规范化 RoleAssignment 与显式 CapabilityGrant。所有成员写入口在同一事务同步基础 RoleAssignment，生产对账缺失与未知角色均为 0。
 
-## 题目、Revision 与活动
+## 题目双槽与活动
 
 ```mermaid
 flowchart LR
-  Problem --> Revision[ProblemTestSetRevision]
-  Revision --> TestGraph[Subtask / Group / Testcase]
-  Revision --> JudgeProjection[不可变 Judge 投影]
-  Revision --> TP[TrainingProblem 固定引用]
-  Revision --> AP[AssignmentProblem 固定引用]
-  TP --> Submission
-  AP --> Submission
+  Problem --> Stable[STABLE current slot]
+  Problem --> Evolving[EVOLVING current slot, optional]
+  Stable --> Reader[Reader barrier]
+  Evolving --> Reader
+  Writer[Queued writer] --> Stable
+  Writer --> Evolving
+  Stable --> Contest[Contest long-lived reader]
+  Evolving --> Training[Training per-submission reader]
+  Stable --> Assignment[Assignment per-submission reader]
 ```
 
-- TestSet Revision 是正式评测数据的不可变事实；YAML 只允许由结构化模型单向生成。
-- 已创建活动固定 Revision，题库 Hack/Candidate 的新 Revision 不直接传播到活动。
-- Contest/ContestProblem 是比赛发现、跨领域查询和命令定位的唯一入口；Contest.publicId 直接承担数字路由，业务代码不再读取或修改 Training(type=contest)。
-- Contest 保存标题、说明、赛制、范围、时间、可见性、生命周期、参赛者、Rating 终结状态与最终榜单指针；比赛题目与状态只引用 Contest UUID。
-- Submission 只保存提交意图和 Contest/ContestProblem 身份，JudgeRun/JudgeAttempt 保存全部执行结果；ContestRecord 的 Training 与 Contest 归属互斥，数据库 CHECK、复合外键与 CAS 阻止双身份和跨比赛题目。
-
+- 每题最多只有 Stable 与 Evolving 两套当前数据；普通题只建 Stable，支持 Hack/贡献的题才建 Evolving。不存在 TestSet 历史版本和 revisionId。
+- 槽关系复用内容寻址 `TestdataObject`。Writer 先关闭 gate、等待已有 Reader，再原子替换当前槽；排队写入由 fencing token 防止陈旧覆盖。
+- Contest/Exam 在发布与运行期间长期持有 Stable Reader；其 Judge/Rejudge 完成后释放。Training 每次提交读取当时最新 Evolving（缺失时 Stable），Assignment 每次提交读取当时 Stable。
+- Promotion 捕获当前 Evolving 到事务临时文件，验证通过后更新 Stable。临时副本不入业务模型、不形成第三版本，且不复制对象字节。
+- Contest/ContestProblem 是比赛发现、跨领域查询和命令定位的唯一入口；Contest.publicId 承担数字路由。ContestProblem 保存实际 Stable 槽的 hash/fence/reader 身份。
+- Submission 只保存提交意图和 Contest/ContestProblem 身份；JudgeRun/JudgeAttempt 保存执行结果与实际槽快照。
 ## Submission 与 Judge
 
 ```mermaid
@@ -68,14 +70,14 @@ erDiagram
   JudgeRun ||--o| JudgeAttempt : current
 ```
 
-- 本地提交：`Submission` 保存代码、来源、作用域、固定 Revision、IO 意图和 `currentJudgeRunId`；比赛提交必须保存 `canonicalContestId/canonicalContestProblemId`，并以 `trainingId/trainingProblemId` 固化实际 Judge 运行对象。旧 `contestId/contestProblemId` 仅供既有历史记录读取，新提交保持为空。状态、分数、测试点与资源指标只读取 `JudgeRun`。
+- 本地提交：`Submission` 保存代码、来源、作用域、实际槽/graphHash/fencingToken、IO 意图和 `currentJudgeRunId`；比赛提交必须保存 `canonicalContestId/canonicalContestProblemId`，并以 `trainingId/trainingProblemId` 固化实际 Judge 运行对象。旧 `contestId/contestProblemId` 仅供既有历史记录读取，新提交保持为空。状态、分数、测试点与资源指标只读取 `JudgeRun`。
 - 远端归档：没有本地 Run，其来源平台结果保存在 `Submission` 的归档快照字段。
 - `JudgeAttempt` 使用租约和 fencing token；终态 Attempt 不重新打开，基础设施重试创建新 Attempt，人工重测创建新 Run。
 - 投影审计只比较 Run 与 Attempt，并强制本地提交均有 Run；不再要求本地 Run 回写 Submission 结果列。
 
 #### 数据与并发约束
 
-- 题目 Revision、训练/比赛 Assignment、聊天会话、经济账本等高竞争写入使用数据库事务锁或 advisory lock，并通过 revision/CAS 防止丢失更新。
+- 题目槽 Writer、训练/比赛结构、聊天会话、经济账本等高竞争写入使用数据库事务锁或 advisory lock，并通过 revision/CAS 防止丢失更新。
 - `TrainingSession` 是一堂课，并以 `currentStageId` 指向全班唯一 RUNNING Stage；`TrainingSessionStage` 保存有序教学定义与全局生命周期。`TrainingSessionGroup` 是整场训练的稳定分组；数据库模型 `TrainingSessionStageGroup` 现在表示默认 StagePlan 或分组覆盖，不再是独立运行单元。Participant 通过必填 `groupId` 归属稳定 Group，ProblemPlan 通过 `stageGroupId` 归属计划。Progress 绑定稳定 StageProblem，因此换组不会删除历史成绩。
 - `TrainingSessionTemplate` 只保存个人、学校或团队可复用的 Stage/分组/规则骨架。模板不会复制题目、学员和运行事实，停用模板也不会改变已经创建的 Session。
 - 正式版本、账本分录、消息、审计、举报证据和发布版本均按追加或不可变方式保存。

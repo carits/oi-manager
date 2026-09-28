@@ -183,7 +183,6 @@ export const SolutionDraftBodySchema = z.object({
   citation: OptionalNullableTextSchema,
   licenseAccepted: z.boolean(),
   organizationId: z.string().nullable().optional(),
-  testSetRevisionId: z.string().nullable().optional(),
   baseSolutionId: z.string().nullable().optional(),
   baseVersionId: z.string().nullable().optional(),
 })

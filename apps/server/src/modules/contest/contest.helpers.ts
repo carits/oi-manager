@@ -218,18 +218,16 @@ export async function getUserTypeForContest(userId: string, contestId: number): 
   return 'student'
 }
 
-/** Build immutable contest-problem data from the selected canonical problem revision. */
+/** Build immutable contest-problem presentation data from the canonical problem. */
 export function buildContestProblemData(problem: {
   title: string
   description: string | null
-  latestTestSetRevisionId?: string | null
   platform: string
   problemId: string
 }) {
   return {
     title: problem.title,
     description: problem.description,
-    testSetRevisionId: problem.latestTestSetRevisionId || null,
     sourcePlatform: problem.platform,
     sourceProblemId: problem.problemId,
   }

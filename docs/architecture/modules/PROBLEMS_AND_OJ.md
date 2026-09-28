@@ -128,33 +128,31 @@ L1（24 个代表簇）、L2（最多 96 个）和 Holdout（最多 256 个）�
 技术有效 Hack 只会产生带 14 天保护期的 Candidate，不再从 Judge 回调直接改正式数据。Selector
 以错误簇覆盖、语义多样性、Feature、Hack 证据和运行成本计算集合价值；满 10 点时执行 11 选 10，
 遵守手工保护、7/14 天新点保护、至少 3 个 Official Core 和同语义簇最多 2 点，并要求替换增益达到
-`max(50, 当前质量的 5%)`。入选后只创建下一不可变 TestSet Revision，旧成员只记录 retirement
-审计而不删除 Blob。题目级每小时最多自动发布 3 个 Revision；紧急发布需要原因和平台审计，仍须
-通过结构、保护和 Revision CAS。固定旧 Revision 的活动、历史提交和排名永远不受影响。
+`max(50, 当前质量的 5%)`。入选后通过 writer-priority 屏障串行替换 Evolving，旧成员只记录 retirement 审计且不复制 Blob。题目级写入受预算与队列限制；紧急写入需要原因和平台审计，仍须通过结构、保护和 fencing 校验。Contest 持有 Stable Reader 时 Stable 不得更新。
 
 ## DQS / PQS 质量证书
 
-正式 TestSet Revision 发布和 Wrong Corpus 激活都会幂等尝试创建 `QualityEvaluationJob`。任务在创建时把
-Revision/对象哈希、Evaluation 与 Hidden Holdout 错误簇、Feature Schema、Kill Evidence、当前
+当前 TestSet 槽替换和 Wrong Corpus 激活都会幂等尝试创建 `QualityEvaluationJob`。任务在创建时把
+slot/graph/对象哈希、Evaluation 与 Hidden Holdout 错误簇、Feature Schema、Kill Evidence、当前
 STD/Validator/Classifier 版本及源码哈希、Checker/Judge 配置与自定义 Checker 内容哈希、
 已确认 Critical Incident、Reference Solution Profile
 及质量规则版本完整固化；数据库触发器禁止后续修改这些
 输入。Worker 使用 `FOR UPDATE SKIP LOCKED`、十分钟租约、fencing token 和最多三次重试领取，只有仍持有
 当前 fencing token 的 Worker 才能在同一事务写入终态和不可变 `TestSetQualitySnapshot`。
 
-质量任务在计分前还必须经过 Judge 的独立语义复验。Judge 对 Revision 中去重后的每个物理测试点执行
+质量任务在计分前还必须经过 Judge 的独立语义复验。Judge 对当前槽中去重后的每个物理测试点执行
 Validator，并在 OI 模式校验 Classifier 返回的全部 Subtask 与固定 Test Graph 一致；随后用固定 STD 对
-整套 Revision 运行一次完整评测，使现行 Checker 对所有正式答案完成自检。沙箱或通信故障只会重试，
+整套槽数据运行一次完整评测，使现行 Checker 对所有正式答案完成自检。沙箱或通信故障只会重试，
 不会生成证书；Validator 拒绝正式输入、Classifier 归类不一致或 STD/Checker 自检失败会进入 Critical Gate。
 
 DQS 分为正确性、区分度、覆盖、多样性、Subtask 质量和稳定性六项，总分 100；Confidence 和 Maturity
-是独立维度。Evaluation 与 Holdout 始终分别计算，再按固定规则合成区分度。对象丢失、Revision 哈希不一致
+是独立维度。Evaluation 与 Holdout 始终分别计算，再按固定规则合成区分度。对象丢失、槽 graph 哈希不一致
 等正确性 Critical Gate 会强制 `qualityStatus=CRITICAL` 且 `overallScore=null`，其他维度不得补偿；关键
 前置证据不足则为 `NOT_READY`。完整 evidence、Corpus 身份、固定输入和错误诊断只允许题目管理者读取，
 公开 DTO 采用字段白名单，不返回 Kill/Feature/Holdout 明细或操作者身份。
 
 OI 的 Subtask Quality 一半来自图结构校验，另一半来自 `ProblemSolutionProfile`：管理员只能引用本题已经
-按固定 Revision 形成终态的本地提交，并为代表算法声明预期总分和各 Subtask 区间。Profile 使用 revision
+按固定 slot/graph 形成终态的本地提交，并为代表算法声明预期总分和各 Subtask 区间。Profile 使用 graph
 CAS 更新；定义变化使旧证书显示 STALE 并 best-effort 自动排队一份新固定输入评估。Feature Schema、活动
 评测程序、Wrong Corpus 和已确认 Critical Incident 的变化也会触发同样的 STALE/重评语义。
 

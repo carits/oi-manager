@@ -41,11 +41,3 @@ export const setProblemTestGraphTestcaseProtection = (
   `${problemPath(problemId)}/test-graph/testcases/${encodeURIComponent(testcaseId)}/protection`,
   body,
 )
-
-export const getProblemTestSetRevision = (
-  problemId: string,
-  revisionId: string,
-) => apiClient.queryContract(
-  ProblemContracts.getTestSetRevision,
-  `${problemPath(problemId)}/test-set-revisions/${encodeURIComponent(revisionId)}`,
-)

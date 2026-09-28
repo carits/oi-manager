@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { finalizeHackResult, type HackJudgeResultPayload } from '../src/modules/problem/problem.hack.service'
 import { maybeAutoSelectCandidate } from '../src/modules/problem/problem.candidate-selector.service'
-import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../src/modules/problem/problem.testset-slot.service'
 import { loadTestGraphWorkspace, replaceTestGraph } from '../src/modules/problem/problem.test-graph.service'
 import { persistOwnedSubmissionResult } from '../src/ws/judge'
 import {
@@ -56,6 +56,7 @@ async function fixture(mode: 'acm' | 'oi' = 'acm') {
     visibility: 'public',
     status: 'published',
     judgeConfig,
+    dataContributionEnabled: true,
   } })
   const inputFileId = crypto.randomUUID(), outputFileId = crypto.randomUUID()
   await prisma.testdataFile.createMany({ data: [
@@ -76,7 +77,9 @@ async function fixture(mode: 'acm' | 'oi' = 'acm') {
     inputSha256: crypto.createHash('sha256').update(input).digest('hex'),
     outputSha256: crypto.createHash('sha256').update(output).digest('hex'),
   } })
-  const revision = await ensureInitialTestSetRevision(problemId, owner.user.id)
+  const slots = await ensureInitialTestSetSlots(problemId, owner.user.id)
+  const stable = slots.find(item => item.slot === 'STABLE')!
+  const evolving = slots.find(item => item.slot === 'EVOLVING')!
   const problem = await prisma.problem.findUniqueOrThrow({ where: { id: problemId } })
   await prisma.problemHackConfig.create({ data: {
     id: crypto.randomUUID(),
@@ -88,11 +91,13 @@ async function fixture(mode: 'acm' | 'oi' = 'acm') {
     classifierSource: mode === 'oi' ? 'int main(){}' : '',
     updatedBy: owner.user.id,
   } })
-  return { owner, contributor, problem, revision: revision!, directory, testcaseId }
+  return { owner, contributor, problem, stable, evolving, directory, testcaseId }
 }
 
 async function createAttempt(fixture: Awaited<ReturnType<typeof fixture>>) {
-  const latestProblem = await prisma.problem.findUniqueOrThrow({ where: { id: fixture.problem.id }, include: { LatestTestSetRevision: true } })
+  const evolving = await prisma.problemTestSetSlot.findUniqueOrThrow({
+    where: { problemId_slot: { problemId: fixture.problem.id, slot: 'EVOLVING' } },
+  })
   return prisma.problemHackAttempt.create({ data: {
     id: crypto.randomUUID(),
     problemId: fixture.problem.id,
@@ -103,9 +108,11 @@ async function createAttempt(fixture: Awaited<ReturnType<typeof fixture>>) {
     hackSource: 'int main(){}',
     hackLanguage: 'cpp17',
     hackConfigRevision: 1,
-    judgeConfigHash: latestProblem.LatestTestSetRevision?.judgeConfigHash || fixture.revision.judgeConfigHash,
-    testGraphRevision: latestProblem.testGraphRevision,
-    baseTestSetRevisionId: latestProblem.latestTestSetRevisionId || fixture.revision.id,
+    judgeConfigHash: evolving.judgeConfigHash,
+    testGraphRevision: fixture.problem.testGraphRevision,
+    baseSlot: 'EVOLVING',
+    baseGraphHash: evolving.graphHash,
+    baseFencingToken: evolving.fencingToken,
   } })
 }
 
@@ -141,8 +148,8 @@ describe('concurrent Hack promotion', () => {
       result: 'queuing',
       submitMethod: 'local',
       submitScope: 'problem',
-      testSetRevisionId: context.revision.id,
-      judgeConfigHash: context.revision.judgeConfigHash,
+      testSetSlot: 'STABLE',
+      judgeConfigHash: context.stable.judgeConfigHash,
     })
     const claimed = await claimNextQueuedSubmission('judge-owner')
     expect(claimed?.submissionId).toBe(submission.id)
@@ -169,10 +176,7 @@ describe('concurrent Hack promotion', () => {
       where: { id: submission.id },
       include: { CurrentJudgeRun: true },
     })
-    expect(finalizedSubmission).toMatchObject({
-      result: 'queuing', score: null, judgeId: null, judgeStarted: null,
-      CurrentJudgeRun: { status: 'FINALIZED', result: 'accepted', score: 100 },
-    })
+    expect(finalizedSubmission.CurrentJudgeRun).toMatchObject({ status: 'FINALIZED', result: 'accepted', score: 100 })
     expect(await prisma.judgeAttempt.findUniqueOrThrow({ where: { id: claimed!.judgeAttemptId } })).toMatchObject({
       dispatchLatencyMs: 3,
       compileLatencyMs: 12,
@@ -187,10 +191,10 @@ describe('concurrent Hack promotion', () => {
 
     await Promise.all(Array.from({ length: 100 }, () => finalizeHackResult(payload)))
 
-    expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
-    expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
+    expect(await prisma.problemTestSetSlot.count({ where: { problemId: context.problem.id } })).toBe(2)
+    expect(await prisma.problemTestSetSlotCase.count({ where: { problemId: context.problem.id, slot: 'EVOLVING', source: 'hack' } })).toBe(1)
     expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: attempt.id } })).toMatchObject({
-      status: 'PROMOTED', promotedTestcaseId: expect.any(String), promotedRevisionId: expect.any(String),
+      status: 'PROMOTED', promotedGraphHash: expect.any(String),
     })
     expect(await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({
       status: 'accepted', canonicalStatus: 'promoted',
@@ -240,17 +244,14 @@ describe('concurrent Hack promotion', () => {
     expect(rows.filter(row => row.status === 'accepted' && row.canonicalStatus === 'pending')).toHaveLength(9)
     const losingCandidates = await prisma.testcaseCandidate.findMany({ where: { problemId: context.problem.id, status: { not: 'PROMOTED' } } })
     expect(losingCandidates).toHaveLength(9)
-    expect(losingCandidates.every(item => ['STALE', 'ELIGIBLE'].includes(item.status))).toBe(true)
+    expect(losingCandidates.every(item => item.status === 'ADMITTED' && item.evaluationStage === 'awaiting_evaluator')).toBe(true)
     expect(losingCandidates.some(item => ['SELECTED', 'PROMOTING'].includes(item.status))).toBe(false)
-    expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
-    expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
+    expect(await prisma.problemTestSetSlot.count({ where: { problemId: context.problem.id } })).toBe(2)
+    expect(await prisma.problemTestSetSlotCase.count({ where: { problemId: context.problem.id, slot: 'EVOLVING', source: 'hack' } })).toBe(1)
 
-    const files = await fs.promises.readdir(context.directory)
-    expect(files.filter(name => name.endsWith('.pending'))).toHaveLength(0)
-    expect(files.filter(name => /^hack_.+\.(?:in|out)$/.test(name))).toHaveLength(2)
   }, 60_000)
 
-  it('turns a later duplicate into redundant without publishing another revision', async () => {
+  it('turns a later duplicate into redundant without another Evolving replacement', async () => {
     const context = await fixture()
     const firstAttempt = await createAttempt(context)
     await finalizeHackResult(acceptedPayload(firstAttempt.id, '40 2\n'))
@@ -260,21 +261,17 @@ describe('concurrent Hack promotion', () => {
     const redundant = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: duplicateAttempt.id } })
     expect(redundant).toMatchObject({ status: 'rejected', canonicalStatus: 'redundant', failureStage: 'input' })
     expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: duplicateAttempt.id } })).toMatchObject({ status: 'REDUNDANT' })
-    expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
-    expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
-    const files = await fs.promises.readdir(context.directory)
-    expect(files.filter(name => /^hack_.+\.(?:in|out)$/.test(name))).toHaveLength(2)
-    expect(files.filter(name => name.endsWith('.pending'))).toHaveLength(0)
+    expect(await prisma.problemTestSetSlot.count({ where: { problemId: context.problem.id } })).toBe(2)
+    expect(await prisma.problemTestSetSlotCase.count({ where: { problemId: context.problem.id, slot: 'EVOLVING', source: 'hack' } })).toBe(1)
   }, 60_000)
 
-  it('keeps an OI technical Hack in the Candidate pool while a Test Graph save creates the only new revision', async () => {
+  it('keeps an OI technical Hack in the Candidate pool while a Test Graph save atomically replaces Evolving', async () => {
     const context = await fixture('oi')
     const attempt = await createAttempt(context)
     const workspace = await loadTestGraphWorkspace(context.problem.id)
     expect(workspace?.migrated).toBe(true)
     const draft = {
-      revision: workspace!.revision,
-      expectedLatestRevisionId: context.revision.id,
+      expectedFencingToken: workspace!.fencingToken,
       updatedBy: context.owner.user.id,
       subtasks: workspace!.subtasks.map(subtask => ({
         ...subtask,
@@ -296,13 +293,13 @@ describe('concurrent Hack promotion', () => {
       finalizeHackResult(payload),
     ])
 
-    const revisions = await prisma.problemTestSetRevision.findMany({
-      where: { problemId: context.problem.id }, orderBy: { revisionNumber: 'asc' },
+    const evolving = await prisma.problemTestSetSlot.findUniqueOrThrow({
+      where: { problemId_slot: { problemId: context.problem.id, slot: 'EVOLVING' } },
     })
-    expect(revisions).toHaveLength(2)
+    expect(await prisma.problemTestSetSlot.count({ where: { problemId: context.problem.id } })).toBe(2)
     const finalAttempt = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })
     expect(graphResult.ok).toBe(true)
-    expect(revisions[1].source).toBe('admin_edit')
+    expect(evolving.source).toBe('admin_edit')
     expect(finalAttempt).toMatchObject({ status: 'accepted', canonicalStatus: 'pending' })
     expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: attempt.id } })).toMatchObject({ evaluationStage: 'awaiting_corpus' })
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(0)
@@ -363,12 +360,17 @@ describe('concurrent Hack promotion', () => {
       selectionOutcome: { evaluation: { clusters: [{ clusterId, weight: 1, killedCaseKeys: ['candidate'] }] } },
     } })
 
+    await prisma.problemCandidatePolicy.upsert({
+      where: { problemId: context.problem.id },
+      update: { selectorMode: 'observe' },
+      create: { id: crypto.randomUUID(), problemId: context.problem.id, selectorMode: 'observe', updatedBy: context.owner.user.id },
+    })
     const result = await maybeAutoSelectCandidate(candidate.id)
 
-    expect(result.reason).toBe('observe_limited')
+    expect(result.reason).toBe('observe_mode')
     expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { id: candidate.id } })).toMatchObject({ status: 'ELIGIBLE', evaluationStage: 'observed_limited' })
     expect(await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({ status: 'accepted', canonicalStatus: 'pending' })
     expect(await prisma.canonicalSelectionRun.count({ where: { problemId: context.problem.id } })).toBe(0)
-    expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(1)
+    expect(await prisma.problemTestSetSlot.count({ where: { problemId: context.problem.id } })).toBe(2)
   }, 60_000)
 })

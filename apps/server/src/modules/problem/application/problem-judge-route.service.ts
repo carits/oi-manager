@@ -4,11 +4,11 @@ import { prisma } from '../../../prisma'
 import logger from '../../../lib/logger'
 import { canModifyProblem } from '../problem.access'
 import {
-  TestSetRevisionConflict,
-  loadRevisionSpec,
-  publishTestSetRevision,
+  TestSetSlotConflict,
+  loadTestSetSlotSpec,
+  replaceTestSetSlot,
   resolveConfigSpec,
-} from '../problem.testset-revision.service'
+} from '../problem.testset-slot.service'
 import {
   normalizeCheckerFileName,
   prepareCheckerInstallation,
@@ -163,8 +163,9 @@ function normalizeOptionalLimit(value: unknown, fieldName: string) {
 }
 
 function inferExistingMode(problem: any, yaml: typeof import('js-yaml')): 'acm' | 'oi' {
-  if (problem.LatestTestSetRevision?.mode === 'oi') return 'oi'
-  if (problem.LatestTestSetRevision?.mode === 'acm') return 'acm'
+  const stable = problem.TestSetSlots?.find((item: any) => item.slot === 'STABLE')
+  if (stable?.mode === 'oi') return 'oi'
+  if (stable?.mode === 'acm') return 'acm'
   try {
     const parsed = problem.judgeConfig ? yaml.load(problem.judgeConfig) as any : {}
     return parsed?.mode === 'oi'
@@ -183,7 +184,7 @@ export async function saveProblemJudgeConfig(input: {
 }) {
   const existingProblem = await prisma.problem.findUnique({
     where: { id: input.problemId },
-    include: { LatestTestSetRevision: true },
+    include: { TestSetSlots: { select: { slot: true, mode: true, fencingToken: true } } },
   })
   if (!existingProblem || !canModifyProblem(input.user, existingProblem)) {
     fail(404, 'PROBLEM_NOT_FOUND', '题目不存在')
@@ -199,77 +200,56 @@ export async function saveProblemJudgeConfig(input: {
   if (config) {
     const mode = config.mode
       || (Array.isArray(config.subtasks) && config.subtasks.length > 0 ? 'oi' : 'acm')
-    if (mode !== 'acm' && mode !== 'oi') {
-      fail(400, 'INVALID_JUDGE_MODE', '无效的评测模式，必须是 acm 或 oi')
-    }
+    if (mode !== 'acm' && mode !== 'oi') fail(400, 'INVALID_JUDGE_MODE', '无效的评测模式，必须是 acm 或 oi')
     const checkerType = String(config.checker_type || 'default').toLowerCase()
     if (mode === 'acm' && checkerType === 'lemon') {
-      fail(
-        400,
-        'ACM_LEMON_NOT_SUPPORTED',
-        'ACM 赛制不支持 Lemon checker，请使用 testlib 或其他判定型 checker',
-      )
+      fail(400, 'ACM_LEMON_NOT_SUPPORTED', 'ACM 赛制不支持 Lemon checker，请使用 testlib 或其他判定型 checker')
     }
     const yaml = await import('js-yaml')
     const normalized = { ...config, mode }
     requestedMode = mode
+    const stable = existingProblem.TestSetSlots.find(item => item.slot === 'STABLE')
     const currentMode = inferExistingMode(existingProblem, yaml)
-    if (existingProblem.LatestTestSetRevision && currentMode !== mode) {
-      fail(
-        409,
-        'JUDGE_MODE_TRANSITION_REQUIRED',
-        'ACM/OI 模式切换必须使用显式状态迁移操作',
-        {
-          currentMode,
-          targetMode: mode,
-          latestRevisionId: existingProblem.latestTestSetRevisionId,
-        },
-      )
+    if (stable && currentMode !== mode) {
+      fail(409, 'JUDGE_MODE_TRANSITION_REQUIRED', 'ACM/OI 模式切换必须使用显式状态迁移操作', {
+        currentMode,
+        targetMode: mode,
+        slot: 'STABLE',
+        fencingToken: stable.fencingToken,
+      })
     }
     const baseConfig = yaml.dump(normalized, { lineWidth: -1 })
-    const spec = existingProblem.LatestTestSetRevision
-      ? await loadRevisionSpec(existingProblem.LatestTestSetRevision.id)
+    const spec = stable
+      ? await loadTestSetSlotSpec(existingProblem.id, 'STABLE')
       : await resolveConfigSpec(existingProblem.id, baseConfig)
-    if (!spec) {
-      fail(409, 'TEST_SET_REVISION_REQUIRED', '无法读取当前测试版本')
-    }
+    if (!spec) fail(409, 'TEST_SET_SLOT_REQUIRED', '无法读取当前 Stable 测试数据')
     try {
-      await publishTestSetRevision({
+      await replaceTestSetSlot({
         problemId: existingProblem.id,
-        expectedLatestRevisionId: existingProblem.latestTestSetRevisionId,
-        source: existingProblem.latestTestSetRevisionId ? 'admin_edit' : 'initial',
-        createdBy: input.user.userId,
+        slot: 'STABLE',
+        expectedFencingToken: stable?.fencingToken,
+        source: stable ? 'admin_edit' : 'initial',
+        requestedBy: input.user.userId,
         baseConfigText: baseConfig,
         spec,
-        transactionHook: async tx => {
-          await tx.problem.update({
-            where: { id: existingProblem.id },
-            data: {
-              ...(problemType ? { problemType } : {}),
-              ...(timeLimit !== undefined ? { timeLimit } : {}),
-              ...(memoryLimit !== undefined ? { memoryLimit } : {}),
-            },
-          })
-        },
       })
     } catch (error: any) {
-      if (error instanceof TestSetRevisionConflict || error?.code === 'TEST_SET_REVISION_STALE') {
-        fail(409, 'TEST_SET_REVISION_STALE', error.message)
+      if (error instanceof TestSetSlotConflict || error?.code === 'TEST_SET_SLOT_STALE') {
+        fail(409, 'TEST_SET_SLOT_STALE', error.message)
       }
       throw error
     }
-    logger.info('judge_config_saving', {
-      action: 'saveJudgeConfig',
-      metadata: { mode, subtasksCount: normalized.subtasks?.length ?? 0 },
+    problem = await prisma.problem.update({
+      where: { id: existingProblem.id },
+      data: {
+        ...(problemType ? { problemType } : {}),
+        ...(timeLimit !== undefined ? { timeLimit } : {}),
+        ...(memoryLimit !== undefined ? { memoryLimit } : {}),
+      },
     })
-    problem = await prisma.problem.findUnique({ where: { id: existingProblem.id } })
   } else {
-    if (existingProblem.latestTestSetRevisionId) {
-      fail(
-        409,
-        'TEST_SET_REVISION_REQUIRED',
-        '正式测试版本存在时不能清空 Judge Config',
-      )
+    if (existingProblem.TestSetSlots.length) {
+      fail(409, 'TEST_SET_SLOT_REQUIRED', '存在 Stable/Evolving 数据时不能清空 Judge Config')
     }
     problem = await prisma.problem.update({
       where: { id: existingProblem.id },

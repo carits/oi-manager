@@ -47,7 +47,7 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
         problemId: true,
         title: true,
         difficulty: true,
-        LatestTestSetRevision: { select: { id: true, revisionNumber: true, mode: true } },
+        TestSetSlots: { where: { slot: 'STABLE' }, select: { slot: true, graphHash: true, fencingToken: true, mode: true } },
       },
     })
     if (!selected) {
@@ -60,19 +60,20 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
       problemCode: selected.problemId,
       title: selected.title,
       difficulty: selected.difficulty,
-      ...(selected.LatestTestSetRevision ? {
-        latestRevision: {
-          id: selected.LatestTestSetRevision.id,
-          number: selected.LatestTestSetRevision.revisionNumber,
-          mode: selected.LatestTestSetRevision.mode === 'oi' ? 'oi' as const : 'acm' as const,
+      ...(selected.TestSetSlots[0] ? {
+        stableData: {
+          slot: 'STABLE' as const,
+          graphHash: selected.TestSetSlots[0].graphHash,
+          fencingToken: selected.TestSetSlots[0].fencingToken,
+          mode: selected.TestSetSlots[0].mode === 'oi' ? 'oi' as const : 'acm' as const,
         },
       } : {}),
     }
-    items.push(selected.LatestTestSetRevision ? {
+    items.push(selected.TestSetSlots[0] ? {
       clientKey: input.clientKey, platform, problemCode, status: 'resolved' as const, problem: summary,
     } : {
-      clientKey: input.clientKey, platform, problemCode, status: 'revision_unavailable' as const, problem: summary,
-      message: '该题尚无可用的正式评测版本',
+      clientKey: input.clientKey, platform, problemCode, status: 'stable_unavailable' as const, problem: summary,
+      message: '该题尚无可用的 Stable 评测数据',
     })
   }
   return { items }

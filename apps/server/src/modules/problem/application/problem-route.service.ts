@@ -12,7 +12,7 @@ import {
   registerOfficialTestcases,
   replaceTestGraph,
 } from '../problem.test-graph.service'
-import { ensureInitialTestSetRevision, loadRevisionSpec } from '../problem.testset-revision.service'
+import { ensureInitialTestSetSlots, getTestSetSlotState, loadTestSetSlotSpec } from '../problem.testset-slot.service'
 import {
   CURRENT_JUDGE_RUN_SELECT,
   projectSubmissionJudgeResult,
@@ -43,10 +43,8 @@ export async function listOwnProblemSubmissions(
     submitScope: 'problem',
     OR: [
       { problemInternalId: problem.id },
-      { problemInternalId: null, TestSetRevision: { is: { problemId: problem.id } } },
       ...(duplicateExternalIdentityCount === 0 ? [{
         problemInternalId: null,
-        testSetRevisionId: null,
         oj: problem.platform,
         problemId: problem.problemId,
       }] : []),
@@ -122,9 +120,9 @@ export function findManageableProblem(user: JwtPayload, problemId: string) {
   return findAccessibleProblem(user, problemId, 'edit')
 }
 
-export async function getProblemTestSetRevision(problemId: string, revisionId: string) {
-  const revision = await prisma.problemTestSetRevision.findFirst({ where: { id: revisionId, problemId } })
-  return revision ? { ...revision, spec: await loadRevisionSpec(revision.id) } : null
+export async function getProblemTestSetSlot(problemId: string, slot: 'STABLE' | 'EVOLVING') {
+  const state = (await getTestSetSlotState(problemId)).find(item => item.slot === slot)
+  return state ? { ...state, spec: await loadTestSetSlotSpec(problemId, slot) } : null
 }
 
 export async function getTestGraphWorkspace(problemId: string) {
@@ -139,7 +137,7 @@ export async function migrateProblemTestGraph(problemId: string, userId: string)
     const migrated = await migrateLegacyTestGraph(problemId)
     if (!migrated.ok) return { ok: false as const, code: 'TEST_GRAPH_MIGRATION_BLOCKED', issues: migrated.issues }
   }
-  await ensureInitialTestSetRevision(problemId, userId)
+  await ensureInitialTestSetSlots(problemId, userId)
   return { ok: true as const, alreadyMigrated: inspection.alreadyMigrated, workspace: await loadTestGraphWorkspace(problemId) }
 }
 

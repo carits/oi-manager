@@ -2,7 +2,7 @@
 status: current
 audience: development, operations
 last_verified: 2026-08-31
-source_of_truth: storage config, BlobStore implementations, TestSet Revision services and file HTTP adapters
+source_of_truth: storage config, BlobStore implementations, TestSet slot services and file HTTP adapters
 ---
 
 ## 2026-08-24 security contract
@@ -62,18 +62,16 @@ STORAGE_ROOT/
 
 ## 不可变评测资产
 
-TestSet Revision、Checker、Validator、Classifier 与 Hack 晋升数据不直接依赖普通附件路径。
+Stable/Evolving 槽、Checker、Validator、Classifier 与 Hack 晋升数据不直接依赖普通附件路径。
 领域服务只依赖 `BlobStore` port，当前提供：
 
 - `LocalBlobStore`：生产主机当前实现。
 - `S3BlobStore`：S3 兼容对象存储适配器。
 - `AliyunOssBlobStore`：阿里云 OSS 适配器。
 
-对象以 SHA-256 内容寻址，键形如 `objects/<sha256>`；Revision 保存不可变 manifest、投影哈希和
-对象引用，不覆盖旧对象。多个 Revision 可以复用同一对象。数据库事务失败或发布竞争失败时不会产生
-可见半成品 Revision，超过保留时间且无引用的孤儿对象由 GC 清理。
+对象以 SHA-256 内容寻址，键形如 `objects/<sha256>`；槽保存当前 manifest、投影哈希和对象引用；Stable 与 Evolving 可复用同一对象。数据库事务失败或 fencing 竞争失败时不会产生可见半成品槽，超过保留时间且无引用的孤儿对象由 GC 清理。
 
-Candidate、程序源码、Kill vector 和 Feature fingerprint 使用全局 `BlobObject + BlobReference` 引用层，物理键为 `global/objects/<sha256>`。Blob 本身不携带访问权限，读取权限始终来自 owner 业务记录。Candidate 被拒绝、判重或过期时先删除引用；Blob 至少再等待 30 天，并在同一内容锁内重新确认零引用后删除。迁移期间题目级 `TestdataObject` 与全局 Blob 双写，正式 Revision 仍由原不可变对象关系保证可复现。
+Candidate、程序源码、Kill vector 和 Feature fingerprint 使用全局 `BlobObject + BlobReference` 引用层，物理键为 `global/objects/<sha256>`。Blob 本身不携带访问权限，读取权限始终来自 owner 业务记录。Candidate 被拒绝、判重或过期时先删除引用；Blob 至少再等待 30 天，并在同一内容锁内重新确认零引用后删除。迁移期间题目级 `TestdataObject` 与全局 Blob 双写，当前槽继续由内容寻址对象关系保证一致。
 
 从 Local 切换到 OSS/S3 只替换 BlobStore 配置和物化策略，不允许业务服务自行拼接云厂商路径。
 当前尚未获得真实对象存储凭据，所以异机留存验收仍由运维未完成事项跟踪。
@@ -97,8 +95,8 @@ Candidate、程序源码、Kill vector 和 Feature fingerprint 使用全局 `Blo
 - 临时文件默认保留 24 小时。
 - 回收站默认保留 7 天。
 - 后台清理可用 `DISABLE_BACKGROUND_JOBS=true` 在 E2E 中关闭。
-- 数据盘迁移必须保证 `STORAGE_ROOT`、内容寻址对象、Revision manifest/链接目录和 systemd
-  `WorkingDirectory` 同步更新；迁移后必须运行对象哈希、Revision 投影与 Judge 读取验证。
+- 数据盘迁移必须保证 `STORAGE_ROOT`、内容寻址对象、Stable/Evolving manifest/物化目录和 systemd
+  `WorkingDirectory` 同步更新；迁移后必须运行对象哈希、槽投影与 Judge Reader 验证。
 - 历史学校题文件使用 `pnpm --filter server migrate:school-problem-files`
   迁入私有目录；必须先执行 `--dry-run`并备份数据库和存储根目录。
 - 删除或替换个人 PDF 会软删除原文件；已经复制到活动快照的文件继续保留。删除活动时，

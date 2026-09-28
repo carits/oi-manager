@@ -9,7 +9,7 @@ import {
 describe("problem contribution lifecycle display", () => {
   it("distinguishes technical Hack success from canonical promotion", () => {
     expect(hackCanonicalPresentation({ technicalStatus: "accepted", canonicalStatus: "pending", candidateStatus: "ELIGIBLE" }).label).toContain("等待 Selector");
-    expect(hackCanonicalPresentation({ technicalStatus: "accepted", canonicalStatus: "promoted", promotedRevision: 12 }).label).toBe("已纳入 R12");
+    expect(hackCanonicalPresentation({ technicalStatus: "accepted", canonicalStatus: "promoted", promotedGraphHash: "abcdef123456" }).label).toBe("已写入 Evolving abcdef12");
   });
 
   it("describes candidate terminal states without claiming promotion", () => {

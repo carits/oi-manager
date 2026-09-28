@@ -9,14 +9,16 @@ import { collectOrphanContentBlobs, releaseBlobReferences } from '../modules/sto
 import { prisma } from '../prisma'
 import { runChatMaintenance } from '../modules/chat/application/chat-maintenance.service'
 import { expireStagedStickerImports } from '../modules/chat/application/chat-sticker.service'
-import { maybeAutoSelectCandidate } from '../modules/problem/problem.candidate-selector.service'
+import { maybeAutoSelectCandidate, reconcileSelectedCandidateWriters } from '../modules/problem/problem.candidate-selector.service'
+import { reconcileDataGenerationWriters } from '../modules/problem/problem.data-generation.service'
+import { expireTestSetReaders, processTestSetWriters, reconcilePromotionWriters, recoverInterruptedTestSetWriters } from '../modules/problem/problem.testset-slot.service'
 
 async function expireCandidateData() {
   const now = new Date(), rejectedBefore = new Date(Date.now() - 24 * 60 * 60_000)
-  const candidates = await prisma.testcaseCandidate.findMany({ where: { promotedRevisionId: null, OR: [{ expiresAt: { lte: now } }, { status: { in: ['REJECTED', 'REDUNDANT', 'FAILED', 'STALE'] }, updatedAt: { lte: rejectedBefore } }] }, take: 500, select: { id: true } })
+  const candidates = await prisma.testcaseCandidate.findMany({ where: { promotedGraphHash: null, OR: [{ expiresAt: { lte: now } }, { status: { in: ['REJECTED', 'REDUNDANT', 'FAILED', 'STALE'] }, updatedAt: { lte: rejectedBefore } }] }, take: 500, select: { id: true } })
   for (const item of candidates) {
     await releaseBlobReferences('testcase_candidate', item.id)
-    await prisma.testcaseCandidate.updateMany({ where: { id: item.id, promotedRevisionId: null }, data: { status: 'EXPIRED', inputObjectId: null, outputObjectId: null, evaluationStage: 'metadata_only' } })
+    await prisma.testcaseCandidate.updateMany({ where: { id: item.id, promotedGraphHash: null }, data: { status: 'EXPIRED', inputObjectId: null, outputObjectId: null, evaluationStage: 'metadata_only' } })
   }
   return { expired: candidates.length }
 }
@@ -28,9 +30,8 @@ export function startCronTasks() {
     logger.warn('cron_tasks_already_running', { action: 'cron_start' })
     return cronStopper
   }
-  // Content-addressed uploads may be left behind when a Revision transaction
-  // loses CAS or rolls back. Remove only objects older than 24 hours and still
-  // unreferenced, under the same per-problem database lock as publishers.
+  // Content-addressed uploads may be left behind when a slot writer fails. Remove only
+  // objects older than 24 hours and still unreferenced, under the problem lock.
   const gcTask = cron.schedule('17 3 * * *', async () => {
     try {
       const result = await collectOrphanTestdataObjects()
@@ -57,10 +58,16 @@ export function startCronTasks() {
   // bucket is exhausted. Re-run the idempotent selector after tokens recover.
   const selectorTask = cron.schedule('*/10 * * * *', async () => {
     try {
+      const readers = await expireTestSetReaders()
+      const interruptedWriters = await recoverInterruptedTestSetWriters()
+      await processTestSetWriters()
+      const promotions = await reconcilePromotionWriters()
+      const writerCandidates = await reconcileSelectedCandidateWriters()
+      const generationWriters = await reconcileDataGenerationWriters()
       const candidates = await prisma.testcaseCandidate.findMany({ where: { OR: [{ status: 'ELIGIBLE', evaluationStage: 'evaluated' }, { status: 'WAITING_REPLACEMENT', evaluationStage: 'waiting_replacement', updatedAt: { lte: new Date(Date.now() - 24 * 60 * 60_000) } }] }, orderBy: [{ marginalValue: 'desc' }, { createdAt: 'asc' }], take: 100, select: { id: true } })
       let promoted = 0
       for (const candidate of candidates) if ((await maybeAutoSelectCandidate(candidate.id).catch(() => ({ promoted: false }))).promoted) promoted++
-      logger.info('candidate_selector_sweep_done', { action: 'candidate_selector', metadata: { scanned: candidates.length, promoted } })
+      logger.info('candidate_selector_sweep_done', { action: 'candidate_selector', metadata: { scanned: candidates.length, promoted, readers, interruptedWriters, promotions, writerCandidates, generationWriters } })
     } catch (error) {
       logger.error('candidate_selector_sweep_failed', error as Error, { action: 'candidate_selector' })
     }

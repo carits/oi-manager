@@ -32,12 +32,8 @@ export async function findDemoContestProblems(contestPublicId: number) {
   const rows = await prisma.contestProblem.findMany({
     where: { contestId: contest.id, canonicalProblemId: { not: null } },
     include: {
-      TestSetRevision: { select: { judgeConfigHash: true } },
       CanonicalProblem: {
-        select: {
-          id: true, platform: true, problemId: true, latestTestSetRevisionId: true,
-          LatestTestSetRevision: { select: { judgeConfigHash: true } },
-        },
+        select: { id: true, platform: true, problemId: true },
       },
     },
     orderBy: { orderIndex: 'asc' },

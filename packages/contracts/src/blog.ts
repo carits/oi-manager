@@ -30,7 +30,7 @@ export const BlogClassificationSchema = z.looseObject({
 
 export const PublishedBlogReferenceSchema = z.looseObject({
   id: z.string(),
-  type: z.enum(['PROBLEM', 'PROBLEM_REVISION', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT']),
+  type: z.enum(['PROBLEM', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT']),
   relationType: z.string(),
   displayMode: z.string(),
   referenceId: z.string(),
@@ -116,9 +116,8 @@ export const MyBlogListItemSchema = z.looseObject({
 export const MyBlogListSchema = paginatedDataSchema(MyBlogListItemSchema)
 
 export const BlogDraftReferenceSchema = z.object({
-  type: z.enum(['PROBLEM', 'PROBLEM_REVISION', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT']),
+  type: z.enum(['PROBLEM', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT']),
   problemId: z.string().optional(),
-  problemRevisionId: z.string().optional(),
   solutionVersionId: z.string().optional(),
   standingSnapshotId: z.string().optional(),
   ratingChangeId: z.string().optional(),
@@ -207,7 +206,7 @@ export const BlogTagListSchema = z.object({
 const BlogDraftReferenceInputSchema = BlogDraftReferenceSchema.extend({
   // Accept unsafe legacy reference names at the transport boundary so the
   // domain returns its stable, actionable error without ever storing them.
-  type: z.enum(['PROBLEM', 'PROBLEM_REVISION', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT', 'SUBMISSION', 'JUDGE_RUN']),
+  type: z.enum(['PROBLEM', 'SOLUTION_VERSION', 'CONTEST_STANDING', 'RATING_CHANGE', 'SUBMISSION_SNAPSHOT', 'SUBMISSION', 'JUDGE_RUN']),
 })
 
 const BlogDraftContentInputSchema = z.object({

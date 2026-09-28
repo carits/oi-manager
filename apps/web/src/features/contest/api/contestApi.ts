@@ -126,11 +126,11 @@ export function previewContestTestSetUpdate(contestId: string, contestProblemId:
   )
 }
 
-export function applyContestTestSetUpdate(contestId: string, contestProblemId: string, revisionId?: string) {
+export function applyContestTestSetUpdate(contestId: string, contestProblemId: string) {
   return apiClient.mutateContract(
     ContestContracts.testSetUpdate,
     `${contestProblemPath(contestId, contestProblemId)}/test-set-update`,
-    { revisionId },
+    {},
   )
 }
 

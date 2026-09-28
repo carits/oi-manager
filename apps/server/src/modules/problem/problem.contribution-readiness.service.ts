@@ -76,14 +76,15 @@ async function assetStatus(problemId: string, kind: AssetKind, active: Awaited<R
 export async function resolveContributionContext(user: JwtPayload, problemId: string) {
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
-    include: { LatestTestSetRevision: { select: { judgeConfig: true } } },
+    include: { TestSetSlots: { where: { slot: { in: ['EVOLVING', 'STABLE'] } }, select: { slot: true, judgeConfig: true } } },
   })
   if (!problem) throw new ContributionReadinessError(404, 'PROBLEM_NOT_FOUND', '题目不存在')
   const canManage = canModifyProblem(user, problem)
   const canAccess = canManage || (problem.status === 'published' && canViewProblem(user, problem))
   if (!canAccess) throw new ContributionReadinessError(404, 'PROBLEM_NOT_FOUND', '题目不存在或当前身份不能贡献数据')
 
-  const judgeConfig = problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig || ''
+  const selectedSlot = problem.TestSetSlots.find(item => item.slot === 'EVOLVING') || problem.TestSetSlots.find(item => item.slot === 'STABLE')
+  const judgeConfig = selectedSlot?.judgeConfig || problem.judgeConfig || ''
   const mode = resolveJudgeMode(parseJudgeConfig(judgeConfig))
   const [standardProgram, validatorProgram, classifierProgram, hackConfig, corpus, validatorSpec, subtaskReadiness] = await Promise.all([
     resolveActiveProgramVersion(problemId, 'standard'),
@@ -92,7 +93,7 @@ export async function resolveContributionContext(user: JwtPayload, problemId: st
     prisma.problemHackConfig.findUnique({ where: { problemId }, select: { enabled: true, standardProgramVersionId: true, validatorProgramVersionId: true, classifierProgramVersionId: true } }),
     prisma.wrongCorpusRevision.findFirst({ where: { problemId, status: 'active' }, orderBy: { revisionNumber: 'desc' } }),
     prisma.validatorSpec.findFirst({ where: { problemId }, orderBy: { versionNumber: 'desc' }, select: { status: true, compileStatus: true } }),
-    mode === 'oi' ? resolveSubtaskReadiness(problemId, problem.latestTestSetRevisionId) : Promise.resolve([]),
+    mode === 'oi' ? resolveSubtaskReadiness(problemId) : Promise.resolve([]),
   ])
   const [standard, validatorBase, classifier] = await Promise.all([
     assetStatus(problemId, 'standard', standardProgram),
@@ -159,13 +160,14 @@ export async function requireContributionReady(user: JwtPayload, problemId: stri
 }
 
 export async function refreshAdmittedCandidateStages(problemId: string) {
-  const problem = await prisma.problem.findUnique({ where: { id: problemId }, include: { LatestTestSetRevision: { select: { judgeConfig: true } } } })
+  const problem = await prisma.problem.findUnique({ where: { id: problemId }, include: { TestSetSlots: { where: { slot: { in: ['EVOLVING', 'STABLE'] } }, select: { slot: true, judgeConfig: true } } } })
   if (!problem) return { updated: 0 }
-  const mode = resolveJudgeMode(parseJudgeConfig(problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig || ''))
+  const selectedSlot = problem.TestSetSlots.find(item => item.slot === 'EVOLVING') || problem.TestSetSlots.find(item => item.slot === 'STABLE')
+  const mode = resolveJudgeMode(parseJudgeConfig(selectedSlot?.judgeConfig || problem.judgeConfig || ''))
   const [classifier, corpus, subtasks] = await Promise.all([
     mode === 'oi' ? resolveActiveProgramVersion(problemId, 'classifier') : Promise.resolve(null),
     prisma.wrongCorpusRevision.findFirst({ where: { problemId, status: 'active' } }),
-    mode === 'oi' ? resolveSubtaskReadiness(problemId, problem.latestTestSetRevisionId) : Promise.resolve([]),
+    mode === 'oi' ? resolveSubtaskReadiness(problemId) : Promise.resolve([]),
   ])
   const candidates = await prisma.testcaseCandidate.findMany({ where: { problemId, status: 'ADMITTED', evaluationStage: { in: ['awaiting_classifier', 'awaiting_corpus', 'awaiting_evaluator'] } }, select: { id: true, affectedSubtaskIds: true } })
   let updated = 0

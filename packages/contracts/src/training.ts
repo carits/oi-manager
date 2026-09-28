@@ -22,7 +22,7 @@ export const TrainingProblemTimePolicySchema = z.discriminatedUnion('mode', [
 export const TrainingStuckPolicySchema = z.object({ minActiveSeconds: z.number().int().min(60).max(86400), minAttempts: z.number().int().min(1).max(1000), noImprovementSeconds: z.number().int().min(60).max(86400) })
 
 export const TrainingStructureProblemInputSchema = z.object({
-  assignmentId: z.string().optional(), clientKey: z.string().min(1), problemId: z.string().min(1), testSetRevisionId: z.string().min(1),
+  assignmentId: z.string().optional(), clientKey: z.string().min(1), problemId: z.string().min(1),
   alias: z.string().max(50).nullable().optional(), unlockPolicy: TrainingUnlockPolicySchema.nullable().optional(), targetScore: NullableNumber,
   scoreGoals: z.array(TrainingScoreGoalSchema).max(20).nullable().optional(), timePolicy: TrainingProblemTimePolicySchema.nullable().optional(), stuckPolicy: TrainingStuckPolicySchema.nullable().optional(), hintPolicy: JsonObjectSchema.nullable().optional(),
   allowedSubtaskIds: z.array(z.number().int().positive()).nullable().optional(), strategyIntervalSeconds: NullableNumber,
@@ -79,8 +79,7 @@ export const TrainingStructureInputSchema = z.object({
 })
 export const TrainingDesignProblemSchema = TrainingStructureProblemInputSchema.partial({ clientKey: true }).extend({
   id: z.string().optional(), Problem: z.object({ id: z.string(), platform: z.string(), problemId: z.string(), title: z.string() }),
-  TestSetRevision: z.object({ id: z.string(), revisionNumber: z.number().int(), mode: z.string().optional() }),
-  latestRevision: z.object({ id: z.string(), revisionNumber: z.number().int(), mode: z.string().optional() }).nullable().optional(),
+  currentData: z.object({ slot: z.enum(['STABLE', 'EVOLVING']), graphHash: z.string(), mode: z.string().optional() }).nullable().optional(),
   subtasks: z.array(z.object({ id: z.number().int(), score: z.number(), dependencies: z.array(z.number().int()).optional() })).optional(),
 })
 export const TrainingDesignStageSchema = TrainingStructureStageInputSchema.extend({
@@ -100,7 +99,7 @@ export const TrainingDesignSchema = z.object({
 })
 export const TrainingDesignProblemLookupSchema = z.object({
   id: z.string(), platform: z.string(), problemId: z.string(), title: z.string(), difficulty: z.string().nullable().optional(),
-  revision: z.object({ id: z.string(), revisionNumber: z.number().int(), mode: z.string() }),
+  data: z.object({ slot: z.enum(['STABLE', 'EVOLVING']), graphHash: z.string(), mode: z.string() }),
   subtasks: z.array(z.object({ id: z.number().int(), score: z.number(), dependencies: z.array(z.number().int()) })),
 })
 export const TrainingStructureValidationSchema = z.object({ valid: z.boolean(), issues: z.array(TrainingIssueSchema) })
@@ -144,7 +143,6 @@ const TrainingRuntimeProblemSchema = z.object({
   timePolicy: TrainingProblemTimePolicySchema.nullable().optional(), stuckPolicy: TrainingStuckPolicySchema.nullable().optional(), allowedSubtaskIds: z.array(z.number().int()).nullable().optional(),
   strategyIntervalSeconds: z.number().int().nullable().optional(), scoreGoals: z.array(TrainingScoreGoalSchema).nullable().optional(), unlockPolicy: TrainingUnlockPolicySchema.nullable().optional(),
   Problem: z.object({ problemId: z.string(), title: z.string(), platform: z.string() }).passthrough(),
-  TestSetRevision: z.object({ revisionNumber: z.number().int(), mode: z.string() }).passthrough(),
 }).passthrough()
 const TrainingRuntimeStagePlanSchema = z.object({
   id: z.string(),
@@ -251,7 +249,7 @@ export const TrainingSessionListSchema = z.union([
   z.array(TrainingSessionSummarySchema),
   z.object({ items: z.array(TrainingSessionSummarySchema), statusCounts: z.record(z.string(), z.number().int()), pagination: z.object({ page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), totalPages: z.number().int() }) }),
 ])
-const TrainingSessionCreateProblemInputSchema = TrainingStructureProblemInputSchema.partial({ clientKey: true, testSetRevisionId: true })
+const TrainingSessionCreateProblemInputSchema = TrainingStructureProblemInputSchema.partial({ clientKey: true })
 const TrainingSessionCreateStageInputSchema = TrainingStructureStageInputSchema.omit({ problems: true }).partial({ clientKey: true }).extend({
   problems: z.array(TrainingSessionCreateProblemInputSchema).default([]),
 })

@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { sessionCookie, loginAs } from '../fixtures/api'
 import { accounts } from '../fixtures/auth'
-import { ensureInitialTestSetRevision, transitionJudgeMode } from '../../apps/server/src/modules/problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots, transitionJudgeMode } from '../../apps/server/src/modules/problem/problem.testset-slot.service'
 import { prisma } from '../../apps/server/src/prisma'
 
 test('judge program workspace exposes complete templates and blocks unknown Classifier subtasks @compact', async ({ browser, request }) => {
@@ -37,12 +37,14 @@ test('judge program workspace exposes complete templates and blocks unknown Clas
     where: { id: problemId },
     data: { judgeConfig: 'mode: acm\ntime_limit: 1000\nmemory_limit: 262144\nchecker_type: default\ncases:\n  - input: 1.in\n    output: 1.out\n' },
   })
-  const initialRevision = await ensureInitialTestSetRevision(problemId, manager.userId)
-  expect(initialRevision).toBeTruthy()
+  const initialSlots = await ensureInitialTestSetSlots(problemId, manager.userId)
+  const stable = initialSlots.find(item => item.slot === 'STABLE')
+  expect(stable).toBeTruthy()
   await transitionJudgeMode({
     problemId,
     targetMode: 'oi',
-    expectedLatestRevisionId: initialRevision!.id,
+    slot: 'STABLE',
+    expectedFencingToken: stable!.fencingToken,
     updatedBy: manager.userId,
   })
 

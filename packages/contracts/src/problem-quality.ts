@@ -4,7 +4,11 @@ import { DateTimeWireSchema, defineApiEndpoint } from './http'
 const EvidenceIssueSchema = z.object({ code: z.string(), message: z.string() })
 const QualityEvidenceSchema = z.object({
   pinnedInputs: z.record(z.string(), z.unknown()).optional(),
-  gates: z.record(z.string(), z.boolean()).optional(),
+  gates: z.object({
+    standardReady: z.boolean().optional(), validatorReady: z.boolean().optional(), checkerReady: z.boolean().optional(),
+    testSetComplete: z.boolean().optional(), classifierReady: z.boolean().optional(), corpusReady: z.boolean().optional(),
+    acceptedReplayPassed: z.boolean().optional(), semanticVerification: z.string().optional(),
+  }).passthrough().optional(),
   criticalIssues: z.array(EvidenceIssueSchema).optional(),
   warnings: z.array(EvidenceIssueSchema).optional(),
   scoring: z.object({
@@ -15,7 +19,7 @@ const QualityEvidenceSchema = z.object({
 }).passthrough()
 
 export const TestSetQualitySnapshotSchema = z.object({
-  id: z.string(), revisionId: z.string(), qualityRuleVersion: z.string(),
+  id: z.string(), slot: z.enum(['STABLE', 'EVOLVING']), graphHash: z.string(), qualityRuleVersion: z.string(),
   correctnessScore: z.number(), discriminationScore: z.number(), coverageScore: z.number(),
   diversityScore: z.number(), subtaskQualityScore: z.number(), stabilityScore: z.number(),
   overallScore: z.number().nullable(), confidenceScore: z.number(), confidenceLevel: z.string(),
@@ -27,7 +31,7 @@ export const TestSetQualitySnapshotSchema = z.object({
   validHackCount: z.number().int().nonnegative().optional(), criticalIssueCount: z.number().int().nonnegative(),
   warningCount: z.number().int().nonnegative(), qualityStatus: z.string(), createdAt: DateTimeWireSchema,
   isStale: z.boolean().optional(), reasons: z.array(z.string()).optional(), evidence: QualityEvidenceSchema.optional(),
-  Revision: z.object({ revisionNumber: z.number().int().positive(), source: z.string() }).optional(),
+
 })
 
 export const ProblemQualityAssessmentSchema = z.object({
@@ -36,13 +40,13 @@ export const ProblemQualityAssessmentSchema = z.object({
   constraintDesignScore: z.number(), subtaskDesignScore: z.number(), editorialScore: z.number().nullable().optional(),
   originalityScore: z.number().nullable().optional(), automatedScore: z.number(), expertScore: z.number().nullable().optional(),
   overallScore: z.number().nullable().optional(), confidenceScore: z.number(), confidenceLevel: z.string(),
-  automatedEvidence: z.record(z.string(), z.unknown()).optional(), expertEvidence: z.record(z.string(), z.unknown()).optional(),
+  automatedEvidence: z.record(z.string(), z.unknown()).optional(), expertEvidence: z.record(z.string(), z.unknown()).nullable().optional(),
   evaluatedAt: DateTimeWireSchema, reviewedAt: DateTimeWireSchema.nullable().optional(),
   isStale: z.boolean().optional(), staleReasons: z.array(z.string()).optional(),
 })
 
 export const ProblemQualityJobSchema = z.object({
-  id: z.string(), revisionId: z.string(), corpusRevisionId: z.string(), qualityRuleVersion: z.string(),
+  id: z.string(), slot: z.enum(['STABLE', 'EVOLVING']), graphHash: z.string(), corpusRevisionId: z.string(), qualityRuleVersion: z.string(),
   status: z.string(), attempts: z.number().int().nonnegative(), errorCode: z.string().nullable().optional(),
   errorMessage: z.string().nullable().optional(), queuedAt: DateTimeWireSchema,
   startedAt: DateTimeWireSchema.nullable().optional(), finishedAt: DateTimeWireSchema.nullable().optional(),
@@ -55,14 +59,14 @@ export const ProblemSolutionProfileSchema = z.object({
   expectedSubtaskScores: z.array(SubtaskScoreSchema), submissionId: z.number().int().positive(),
   revision: z.number().int().positive(), status: z.enum(['active', 'retired']),
   observed: z.object({
-    revisionId: z.string().nullable().optional(), result: z.string().nullable().optional(), score: z.number().nullable().optional(),
+    evaluatedSlot: z.enum(['STABLE', 'EVOLVING']).nullable().optional(), evaluatedGraphHash: z.string().nullable().optional(), result: z.string().nullable().optional(), score: z.number().nullable().optional(),
     subtasks: z.array(z.object({ subtaskId: z.number().int().positive(), score: z.number() })),
   }).nullable().optional(),
 })
 
 export const ProblemQualityDashboardSchema = z.object({
   permissions: z.object({ canManage: z.boolean(), canExpertReview: z.boolean() }),
-  latestTestSetRevisionId: z.string().nullable().optional(),
+  stableTestSet: z.object({ graphHash: z.string(), fencingToken: z.number().int(), updatedAt: DateTimeWireSchema }).nullable().optional(),
   testSetQuality: TestSetQualitySnapshotSchema.nullable().optional(),
   problemQuality: ProblemQualityAssessmentSchema.nullable().optional(),
   jobs: z.array(ProblemQualityJobSchema).optional(),
@@ -81,7 +85,7 @@ export const ProblemQualityContracts = {
   dashboard: defineApiEndpoint({ key: 'problem-quality.dashboard', method: 'GET', scope: 'context', data: ProblemQualityDashboardSchema }),
   requestEvaluation: defineApiEndpoint({
     key: 'problem-quality.evaluation.request', method: 'POST', scope: 'context',
-    body: z.object({ revisionId: z.string().min(1) }),
+    body: z.object({ slot: z.enum(['STABLE', 'EVOLVING']).default('STABLE'), corpusRevisionId: z.string().optional() }),
     data: z.object({ queued: z.boolean(), jobId: z.string(), snapshotId: z.string().optional(), status: z.string() }),
   }),
   runAutomated: defineApiEndpoint({

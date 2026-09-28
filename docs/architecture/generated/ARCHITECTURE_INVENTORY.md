@@ -13,8 +13,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 197 |
-| Prisma enums | 78 |
+| Prisma models | 199 |
+| Prisma enums | 81 |
 | Legacy route adapters | 18 |
 | Module route adapters | 53 |
 | systemd units | 8 |
@@ -83,7 +83,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/problem/problem.statement-version.routes.ts`
 - `apps/server/src/modules/problem/problem.submissions.routes.ts`
 - `apps/server/src/modules/problem/problem.test-graph.routes.ts`
-- `apps/server/src/modules/problem/problem.testset-revision.routes.ts`
+- `apps/server/src/modules/problem/problem.testset-slot.routes.ts`
 - `apps/server/src/modules/problem/problem.user-content.routes.ts`
 - `apps/server/src/modules/problem/problem.wrong-corpus.routes.ts`
 - `apps/server/src/modules/ranking/ranking.routes.ts`
@@ -159,7 +159,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ContributionProject`
 - `ContributionRewardDelivery`
 - `DataEntitlement`
-- `DataEntitlementRevision`
 - `DataProduct`
 - `DataProductPrice`
 - `DataPurchase`
@@ -225,12 +224,15 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ProblemSubtaskDependency`
 - `ProblemSubtaskRule`
 - `ProblemTestGroup`
-- `ProblemTestSetRevision`
-- `ProblemTestSetRevisionCase`
-- `ProblemTestSetRevisionDependency`
-- `ProblemTestSetRevisionGroup`
-- `ProblemTestSetRevisionGroupCase`
-- `ProblemTestSetRevisionSubtask`
+- `ProblemTestSetPromotionJob`
+- `ProblemTestSetReader`
+- `ProblemTestSetSlot`
+- `ProblemTestSetSlotCase`
+- `ProblemTestSetSlotDependency`
+- `ProblemTestSetSlotGroup`
+- `ProblemTestSetSlotGroupCase`
+- `ProblemTestSetSlotSubtask`
+- `ProblemTestSetWriter`
 - `ProblemTestcase`
 - `ProblemTestcaseGroup`
 - `QualityEvaluationJob`
@@ -340,6 +342,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ProblemQualityAssessmentStatus`
 - `ProblemSolutionStatus`
 - `ProblemSolutionVersionStatus`
+- `ProblemTestSetReaderStatus`
+- `ProblemTestSetSlotKind`
+- `ProblemTestSetWriterStatus`
 - `QualityConfidenceLevel`
 - `QualityEvaluationJobStatus`
 - `QualityMaturityLevel`

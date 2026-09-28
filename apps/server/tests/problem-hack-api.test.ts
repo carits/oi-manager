@@ -22,23 +22,12 @@ describe('problem Hack HTTP boundary', () => {
       type: 'default',
       cases: [{ input: '1.in', output: '1.out' }],
     })
-    const revisionId = crypto.randomUUID()
-    await prisma.problemTestSetRevision.create({ data: {
-      id: revisionId,
-      problemId: problem.id,
-      revisionNumber: 1,
-      mode: 'acm',
-      source: 'initial',
-      judgeConfig,
-      judgeConfigHash: 'a'.repeat(64),
-      graphHash: 'b'.repeat(64),
-      testdataPath: `revisions/${revisionId}`,
-      createdBy: manager.user.id,
-    } })
-    await prisma.problem.update({
-      where: { id: problem.id },
-      data: { judgeConfig, latestTestSetRevisionId: revisionId },
-    })
+    await prisma.problem.update({ where: { id: problem.id }, data: { judgeConfig, dataContributionEnabled: true } })
+    await prisma.problemTestSetSlot.createMany({ data: ['STABLE', 'EVOLVING'].map((slot, index) => ({
+      problemId: problem.id, slot: slot as 'STABLE' | 'EVOLVING', mode: 'acm', source: 'initial', judgeConfig,
+      judgeConfigHash: 'a'.repeat(64), graphHash: (index ? 'c' : 'b').repeat(64),
+      materializedPath: `slots/${slot.toLowerCase()}`, fencingToken: 1,
+    })) })
   })
 
   it('requires management permission for Hack configuration', async () => {
@@ -65,6 +54,8 @@ describe('problem Hack HTTP boundary', () => {
     const stale = await client.put(`/api/problems/${problem.id}/hack-config`).send({
       enabled: false,
       standardSource: 'stale',
+      validatorSource: '',
+      classifierSource: '',
       expectedRevision: 0,
     })
     expect(stale.status).toBe(409)
@@ -74,11 +65,15 @@ describe('problem Hack HTTP boundary', () => {
       client.put(`/api/problems/${problem.id}/hack-config`).send({
         enabled: false,
         standardSource: 'writer-a',
+        validatorSource: '',
+        classifierSource: '',
         expectedRevision: 1,
       }),
       client.put(`/api/problems/${problem.id}/hack-config`).send({
         enabled: false,
         standardSource: 'writer-b',
+        validatorSource: '',
+        classifierSource: '',
         expectedRevision: 1,
       }),
     ])

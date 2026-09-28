@@ -4,12 +4,12 @@ import path from 'node:path'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { getTestdataBlobStore, problemBlobKey } from '../src/modules/storage/blob-store'
-import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../src/modules/problem/problem.testset-slot.service'
 import {
   ProblemQualityError,
   claimQualityEvaluationJob,
   claimQualityVerificationJob,
-  enqueueQualityEvaluationForRevision,
+  enqueueQualityEvaluationForSlot,
   finalizeQualityVerificationJob,
   getProblemQuality,
   processNextQualityEvaluationJob,
@@ -142,8 +142,8 @@ async function qualityFixture(options: QualityFixtureOptions = {}) {
     inputSha256,
     outputSha256,
   } })
-  const revision = await ensureInitialTestSetRevision(problemId, manager.user.id)
-  if (!revision) throw new Error('fixture failed to create initial Revision')
+  await ensureInitialTestSetSlots(problemId, manager.user.id)
+  const slot = await prisma.problemTestSetSlot.findUniqueOrThrow({ where: { problemId_slot: { problemId, slot: 'STABLE' } } })
 
   if (options.programs !== false) {
     await activateProgram(problemId, manager.user.id, 'standard')
@@ -209,7 +209,9 @@ async function qualityFixture(options: QualityFixtureOptions = {}) {
     targetRole: 'official',
     status: 'PROMOTED',
     evaluationStage: 'completed',
-    baseTestSetRevisionId: revision.id,
+    baseSlot: slot.slot,
+    baseGraphHash: slot.graphHash,
+    baseFencingToken: slot.fencingToken,
     inputSha256,
     outputSha256,
     inputSize: input.length,
@@ -221,7 +223,7 @@ async function qualityFixture(options: QualityFixtureOptions = {}) {
     semanticFingerprint: 'n_min',
     createdBy: manager.user.id,
     promotedTestcaseId: testcaseId,
-    promotedRevisionId: revision.id,
+    promotedGraphHash: slot.graphHash,
     promotedAt: new Date(),
     selectionOutcome: {
       evaluation: {
@@ -239,7 +241,7 @@ async function qualityFixture(options: QualityFixtureOptions = {}) {
     isVisible: true,
   } })
 
-  return { manager, student, problemId, problemDirectory, revision, corpusId, testcaseId, evaluationClusterId, holdoutClusterId }
+  return { manager, student, problemId, problemDirectory, slot, corpusId, testcaseId, evaluationClusterId, holdoutClusterId }
 }
 
 beforeAll(async () => {
@@ -251,7 +253,8 @@ beforeAll(async () => {
     RETURNS trigger AS $$
     BEGIN
       IF NEW."problemId" IS DISTINCT FROM OLD."problemId"
-        OR NEW."revisionId" IS DISTINCT FROM OLD."revisionId"
+        OR NEW."slot" IS DISTINCT FROM OLD."slot"
+        OR NEW."graphHash" IS DISTINCT FROM OLD."graphHash"
         OR NEW."corpusRevisionId" IS DISTINCT FROM OLD."corpusRevisionId"
         OR NEW."qualityRuleVersion" IS DISTINCT FROM OLD."qualityRuleVersion"
         OR NEW."ruleConfig" IS DISTINCT FROM OLD."ruleConfig"
@@ -349,15 +352,13 @@ afterEach(async () => {
 describe('TestSet quality evaluation', () => {
   it('pins inputs, evaluates Evaluation and Holdout separately, and enqueues idempotently', async () => {
     const context = await qualityFixture()
-    const first = await enqueueQualityEvaluationForRevision({
+    const first = await enqueueQualityEvaluationForSlot({
       problemId: context.problemId,
-      revisionId: context.revision.id,
       corpusRevisionId: context.corpusId,
       createdBy: context.manager.user.id,
     })
-    const duplicate = await enqueueQualityEvaluationForRevision({
+    const duplicate = await enqueueQualityEvaluationForSlot({
       problemId: context.problemId,
-      revisionId: context.revision.id,
       corpusRevisionId: context.corpusId,
       createdBy: context.manager.user.id,
     })
@@ -401,7 +402,8 @@ describe('TestSet quality evaluation', () => {
       weightedKillCoverage: 0.4,
     })
     expect((snapshot.evidence as any).pinnedInputs).toMatchObject({
-      revisionId: context.revision.id,
+      slot: 'STABLE',
+      graphHash: context.slot.graphHash,
       corpusRevisionId: context.corpusId,
       qualityRuleVersion: 'QUALITY_RULE_V1',
       asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
@@ -410,11 +412,10 @@ describe('TestSet quality evaluation', () => {
     await expect(prisma.testSetQualitySnapshot.delete({ where: { id: snapshot.id } })).rejects.toThrow(/immutable/i)
   })
 
-  it('applies the Critical Gate when a pinned Revision object disappears', async () => {
+  it('applies the Critical Gate when a pinned slot object disappears', async () => {
     const context = await qualityFixture()
-    const queued = await enqueueQualityEvaluationForRevision({
+    const queued = await enqueueQualityEvaluationForSlot({
       problemId: context.problemId,
-      revisionId: context.revision.id,
       corpusRevisionId: context.corpusId,
       createdBy: context.manager.user.id,
     })
@@ -431,11 +432,10 @@ describe('TestSet quality evaluation', () => {
     expect((snapshot.evidence as any).criticalIssues).toContainEqual(expect.objectContaining({ code: 'TESTDATA_OBJECT_MISSING' }))
   })
 
-  it('pins a custom Checker asset and treats later Revision-file tampering as Critical', async () => {
+  it('pins a custom Checker asset and treats later slot-file tampering as Critical', async () => {
     const context = await qualityFixture({ customChecker: true })
-    const queued = await enqueueQualityEvaluationForRevision({
+    const queued = await enqueueQualityEvaluationForSlot({
       problemId: context.problemId,
-      revisionId: context.revision.id,
       corpusRevisionId: context.corpusId,
       createdBy: context.manager.user.id,
     })
@@ -445,7 +445,7 @@ describe('TestSet quality evaluation', () => {
       configured: true,
       asset: { fileName: 'checker.cpp', sha256: expect.any(String) },
     })
-    await fs.promises.writeFile(path.join(context.problemDirectory, context.revision.testdataPath, 'checker.cpp'), 'tampered\n')
+    await fs.promises.writeFile(path.join(context.problemDirectory, context.slot.materializedPath, 'checker.cpp'), 'tampered\n')
     await completeQualityVerification(queued.jobId)
     await processNextQualityEvaluationJob('quality-checker-integrity-worker')
     const snapshot = await prisma.testSetQualitySnapshot.findUniqueOrThrow({ where: { evaluationJobId: queued.jobId } })
@@ -455,9 +455,8 @@ describe('TestSet quality evaluation', () => {
 
   it('marks the old certificate stale and produces a non-compensable Critical result for a confirmed incident', async () => {
     const context = await qualityFixture()
-    const first = await enqueueQualityEvaluationForRevision({
+    const first = await enqueueQualityEvaluationForSlot({
       problemId: context.problemId,
-      revisionId: context.revision.id,
       corpusRevisionId: context.corpusId,
       createdBy: context.manager.user.id,
     })
@@ -469,7 +468,8 @@ describe('TestSet quality evaluation', () => {
     await prisma.testSetQualityIncident.create({ data: {
       id: crypto.randomUUID(),
       problemId: context.problemId,
-      revisionId: context.revision.id,
+      slot: 'STABLE',
+      affectedGraphHash: context.slot.graphHash,
       severity: 'CRITICAL',
       type: 'WRONG_OFFICIAL_ANSWER',
       description: '标准答案在边界输入上与独立小规模穷举不一致。',
@@ -484,13 +484,13 @@ describe('TestSet quality evaluation', () => {
       userId: context.manager.user.id,
       username: context.manager.user.username,
       role: 'platform_admin',
+      accountRole: 'platform_admin',
     }, context.problemId)
     expect(oldView.testSetQuality).toMatchObject({ id: ready.id, qualityStatus: 'READY', isStale: true })
     expect((oldView.testSetQuality as any).reasons).toContain('CRITICAL_INCIDENT_REPORTED')
 
-    const criticalJob = await enqueueQualityEvaluationForRevision({
+    const criticalJob = await enqueueQualityEvaluationForSlot({
       problemId: context.problemId,
-      revisionId: context.revision.id,
       corpusRevisionId: context.corpusId,
       createdBy: context.manager.user.id,
     })
@@ -504,7 +504,7 @@ describe('TestSet quality evaluation', () => {
 
   it('claims one worker, then recovers an expired lease with a new fencing token', async () => {
     const context = await qualityFixture()
-    const queued = await enqueueQualityEvaluationForRevision({ problemId: context.problemId, revisionId: context.revision.id, createdBy: context.manager.user.id })
+    const queued = await enqueueQualityEvaluationForSlot({ problemId: context.problemId, createdBy: context.manager.user.id })
     await completeQualityVerification(queued.jobId)
     const claims = await Promise.all(Array.from({ length: 8 }, (_, index) => claimQualityEvaluationJob(`worker-${index}`)))
     const first = claims.find(Boolean)
@@ -520,7 +520,7 @@ describe('TestSet quality evaluation', () => {
     const context = await qualityFixture()
     const managerClient = createAuthenticatedRequest(app, generateTokenFromUser(context.manager.user))
     const studentClient = createAuthenticatedRequest(app, generateTokenFromUser({ ...context.student.user, workspaceMode: 'personal' }))
-    const queued = await managerClient.post(`/api/problems/${context.problemId}/quality-evaluation-jobs`).send({ revisionId: context.revision.id })
+    const queued = await managerClient.post(`/api/problems/${context.problemId}/quality-evaluation-jobs`).send({ slot: 'STABLE' })
     expect(queued.status, JSON.stringify(queued.body)).toBe(202)
     await completeQualityVerification(queued.body.data.jobId)
     await processNextQualityEvaluationJob('quality-http-worker')
@@ -528,6 +528,7 @@ describe('TestSet quality evaluation', () => {
       userId: context.manager.user.id,
       username: context.manager.user.username,
       role: 'platform_admin',
+      accountRole: 'platform_admin',
     }, context.problemId)
 
     const publicResponse = await studentClient.get(`/api/problems/${context.problemId}/quality`)
@@ -562,11 +563,13 @@ describe('Problem quality automated and expert assessment', () => {
       userId: context.manager.user.id,
       username: context.manager.user.username,
       role: 'platform_admin' as const,
+      accountRole: 'platform_admin' as const,
     }
     const studentPayload = {
       userId: context.student.user.id,
       username: context.student.user.username,
       role: 'student' as const,
+      accountRole: 'user' as const,
       workspaceMode: 'personal' as const,
     }
     const automated = await runAutomatedProblemQualityAssessment(managerPayload, context.problemId)
@@ -621,15 +624,33 @@ describe('Problem quality automated and expert assessment', () => {
       language: 'cpp17',
       code: 'int main(){return 0;}',
       codeLength: 21,
-      result: 'Partial Accepted',
-      score: 40,
-      subtasks: JSON.stringify([{ id: 1, score: 40 }]),
       submitMethod: 'local',
       submitScope: 'problem',
       workspaceScope: 'personal',
       problemInternalId: context.problemId,
-      testSetRevisionId: context.revision.id,
+      testSetSlot: 'STABLE',
+      testSetFencingToken: context.slot.fencingToken,
+      testSetGraphHash: context.slot.graphHash,
+      judgeConfigHash: context.slot.judgeConfigHash,
+      judgeConfigSnapshot: context.slot.judgeConfig,
     } })
+    const judgeRun = await prisma.judgeRun.create({ data: {
+      id: crypto.randomUUID(),
+      submissionId: submission.id,
+      runNumber: 1,
+      runType: 'NORMAL',
+      status: 'FINALIZED',
+      testSetSlot: 'STABLE',
+      testSetFencingToken: context.slot.fencingToken,
+      testSetGraphHash: context.slot.graphHash,
+      judgeConfigHash: context.slot.judgeConfigHash,
+      judgeConfigSnapshot: context.slot.judgeConfig,
+      result: 'Partial Accepted',
+      score: 40,
+      subtasks: JSON.stringify([{ id: 1, score: 40 }]),
+      finalizedAt: new Date(),
+    } })
+    await prisma.submission.update({ where: { id: submission.id }, data: { currentJudgeRunId: judgeRun.id } })
     const managerClient = createAuthenticatedRequest(app, generateTokenFromUser(context.manager.user))
     const studentClient = createAuthenticatedRequest(app, generateTokenFromUser({ ...context.student.user, workspaceMode: 'personal' }))
     const body = {
@@ -647,7 +668,7 @@ describe('Problem quality automated and expert assessment', () => {
     expect(forbidden.status).toBe(404)
     const created = await managerClient.post(`/api/problems/${context.problemId}/solution-profiles`).send(body)
     expect(created.status, JSON.stringify(created.body)).toBe(201)
-    expect(created.body.data).toMatchObject({ key: 'official-reference', revision: 1, status: 'active', observed: { revisionId: context.revision.id, score: 40 } })
+    expect(created.body.data).toMatchObject({ key: 'official-reference', revision: 1, status: 'active', observed: { evaluatedSlot: 'STABLE', evaluatedGraphHash: context.slot.graphHash, score: 40 } })
 
     const profiles = await managerClient.get(`/api/problems/${context.problemId}/solution-profiles`)
     expect(profiles.status).toBe(200)

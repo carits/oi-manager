@@ -15,16 +15,17 @@ export const ResolvedProblemSelectionSchema = z.object({
   clientKey: z.string(),
   platform: z.string(),
   problemCode: z.string(),
-  status: z.enum(['resolved', 'not_found', 'revision_unavailable']),
+  status: z.enum(['resolved', 'not_found', 'stable_unavailable']),
   problem: z.object({
     id: z.string(),
     platform: z.string(),
     problemCode: z.string(),
     title: z.string(),
     difficulty: z.string().nullable().optional(),
-    latestRevision: z.object({
-      id: z.string(),
-      number: z.number().int().positive(),
+    stableData: z.object({
+      slot: z.literal('STABLE'),
+      graphHash: z.string(),
+      fencingToken: z.number().int().nonnegative(),
       mode: z.enum(['acm', 'oi']),
     }).optional(),
   }).optional(),

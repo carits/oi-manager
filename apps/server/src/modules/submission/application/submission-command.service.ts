@@ -7,7 +7,7 @@ import {
   runIdempotent,
 } from '../../../lib/idempotency'
 import { findUsableProblemByExternalId } from '../../problem/problem.access'
-import { ensureInitialTestSetRevision } from '../../problem/problem.testset-revision.service'
+import { ensureInitialTestSetSlots } from '../../problem/problem.testset-slot.service'
 import {
   createQueuedSubmissionWithRun,
   rejudgeSubmissionWithRun,
@@ -64,16 +64,17 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
     throw new SubmissionCommandError(409, 'LOCAL_JUDGE_NOT_CONFIGURED', '该题尚未配置完整的本地评测配置和测试数据，请联系题目管理员')
   }
 
-  let revision
+  let stable
   try {
-    revision = await ensureInitialTestSetRevision(problem.id, context.userId)
+    await ensureInitialTestSetSlots(problem.id, context.userId)
+    stable = await prisma.problemTestSetSlot.findUniqueOrThrow({ where: { problemId_slot: { problemId: problem.id, slot: 'STABLE' } } })
   } catch (error: any) {
-    throw new SubmissionCommandError(409, 'TEST_SET_REVISION_REQUIRED', error.message)
+    throw new SubmissionCommandError(409, 'TEST_SET_STABLE_REQUIRED', error.message)
   }
 
   let submissionIo
   try {
-    const config = yaml.load(revision?.judgeConfig || problem.judgeConfig || '{}') as any
+    const config = yaml.load(stable?.judgeConfig || problem.judgeConfig || '{}') as any
     submissionIo = normalizeSubmissionIo({
       inputFilename: input.inputFilename,
       outputFilename: input.outputFilename,
@@ -106,8 +107,10 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
                 submitMethod: 'local',
         submitScope: 'problem',
         isGlobalVisible: true,
-        testSetRevisionId: revision?.id || null,
-        judgeConfigHash: revision?.judgeConfigHash || null,
+        testSetSlot: 'STABLE',
+        testSetFencingToken: stable?.fencingToken || null,
+        testSetGraphHash: stable?.graphHash || null,
+        judgeConfigHash: stable?.judgeConfigHash || null,
         ...submissionIo,
       }, { requestedBy: context.userId }),
     )
@@ -135,7 +138,7 @@ export async function rejudgeLocalCode(context: SubmissionCommandContext, submis
   }
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
-    select: { userId: true, workspaceScope: true, organizationId: true, submitMethod: true, problemInternalId: true },
+    select: { userId: true, workspaceScope: true, organizationId: true, submitMethod: true, problemInternalId: true, submitScope: true },
   })
   if (
     !submission
@@ -146,6 +149,9 @@ export async function rejudgeLocalCode(context: SubmissionCommandContext, submis
     throw new SubmissionCommandError(404, 'SUBMISSION_NOT_FOUND', '提交记录不存在')
   }
   if (!submission.problemInternalId) return { success: false, message: '提交缺少题目内部 ID' }
+  if (submission.submitScope === 'contest') {
+    throw new SubmissionCommandError(409, 'CONTEST_REJUDGE_REQUIRES_MANAGER', '比赛提交必须由比赛管理员统一重新评测')
+  }
   const queued = await rejudgeSubmissionWithRun(submissionId, context.userId)
   if (!queued) return { success: false, message: '提交正在排队或评测中，未重复加入队列' }
   logger.info('rejudge_queued', { action: 'rejudge', metadata: { submissionId } })

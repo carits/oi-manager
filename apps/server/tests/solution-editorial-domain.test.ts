@@ -14,7 +14,6 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
   let reviewer: Awaited<ReturnType<typeof createTestUser>>
   let problem: Awaited<ReturnType<typeof createTestProblem>>
   let organizationId: string
-  let testSetRevisionId: string
 
   beforeEach(async () => {
     author = await createTestUser({ organization: { role: 'teacher' } })
@@ -26,14 +25,11 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
       description: '# Stable statement\nSolve the problem.',
       judgeConfig: 'type: default\nmode: acm\n',
     } })
-    testSetRevisionId = crypto.randomUUID()
-    await prisma.problemTestSetRevision.create({ data: {
-      id: testSetRevisionId, problemId: problem.id, revisionNumber: 1,
-      mode: 'acm', source: 'initial', judgeConfig: 'type: default\nmode: acm\n',
-      judgeConfigHash: 'judge-hash-v1', graphHash: 'graph-hash-v1', testdataPath: '/test/editorial-v1',
-      createdBy: author.user.id,
+    await prisma.problemTestSetSlot.create({ data: {
+      problemId: problem.id, slot: 'STABLE', mode: 'acm', source: 'initial',
+      judgeConfig: 'type: default\nmode: acm\n', judgeConfigHash: 'judge-hash-v1',
+      graphHash: 'graph-hash-v1', materializedPath: 'slots/stable', fencingToken: 1,
     } })
-    await prisma.problem.update({ where: { id: problem.id }, data: { latestTestSetRevisionId: testSetRevisionId } })
   })
 
   function authorClient() {
@@ -52,7 +48,6 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
       algorithmTags: ['DP'], complexityTime: 'O(n)', complexityMemory: 'O(n)',
       language: 'cpp17', referenceCode: '#include <bits/stdc++.h>\nint main(){return 0;}',
       sourceType: 'ORIGINAL', licenseAccepted: true, organizationId,
-      testSetRevisionId,
     })
   }
 
@@ -191,7 +186,7 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     const correction = await authorClient().post(`/api/solutions/${first.body.data.solutionId}/corrections`).send({
       title: 'Corrected complexity explanation',
       contentMarkdown: 'The prior complexity paragraph omitted the initialization cost; this complete replacement fixes it.',
-      sourceType: 'ORIGINAL', licenseAccepted: true, organizationId, testSetRevisionId,
+      sourceType: 'ORIGINAL', licenseAccepted: true, organizationId,
     })
     expect(correction.status).toBe(201)
     const correctionId = correction.body.data.id as string

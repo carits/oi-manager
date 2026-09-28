@@ -18,7 +18,6 @@ describe('published blog reference navigation', () => {
   it('links platform and organization problems to their readable workspace', () => {
     expect(referenceHref(reference({ type: 'PROBLEM' }), personal)).toBe('/personal/problems/problem-internal-id')
     expect(referenceHref(reference({ type: 'PROBLEM' }), platform)).toBe('/platform-admin/problems/problem-internal-id')
-    expect(referenceHref(reference({ type: 'PROBLEM_REVISION', snapshot: { organizationId: 'school-1' } }), personal)).toBe('/org/school-1/problems/problem-internal-id')
   })
 
   it('links immutable solutions and standing snapshots to the relevant tab', () => {

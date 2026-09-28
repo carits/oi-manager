@@ -14,7 +14,7 @@ import { problemUserContentRouter } from './problem.user-content.routes'
 import { problemStatementVersionRouter } from './problem.statement-version.routes'
 import { problemHackRouter } from './problem.hack.routes'
 import { problemTestGraphRouter } from './problem.test-graph.routes'
-import { problemTestSetRevisionRouter } from './problem.testset-revision.routes'
+import { problemTestSetSlotRouter } from './problem.testset-slot.routes'
 import { problemJudgeProgramRouter } from './problem.judge-program.routes'
 import { problemDataGenerationRouter } from './problem.data-generation.routes'
 import { problemCandidateRouter } from './problem.candidate.routes'
@@ -33,7 +33,7 @@ problemsRouter.use(problemSolutionRouter)
 problemsRouter.use(problemStatementVersionRouter)
 problemsRouter.use(problemHackRouter)
 problemsRouter.use(problemTestGraphRouter)
-problemsRouter.use(problemTestSetRevisionRouter)
+problemsRouter.use(problemTestSetSlotRouter)
 problemsRouter.use(problemDataGenerationRouter)
 problemsRouter.use(problemCandidateRouter)
 problemsRouter.use(problemWrongCorpusRouter)

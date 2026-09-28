@@ -194,7 +194,7 @@ const routerPrefixes = {
   problemStatementVersionRouter: '/api/problems',
   problemHackRouter: '/api/problems',
   problemTestGraphRouter: '/api/problems',
-  problemTestSetRevisionRouter: '/api/problems',
+  problemTestSetSlotRouter: '/api/problems',
   problemJudgeProgramRouter: '/api/problems',
   problemDataGenerationRouter: '/api/problems',
   judgeProgramTemplateRouter: '/api',

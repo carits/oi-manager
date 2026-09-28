@@ -13,7 +13,7 @@ OI Manager 是面向 OI 教学与竞赛训练的一体化管理与评测平台�
 
 ```text
 Education Domain                 Judge Domain
-Organization / Team             Problem / TestSet Revision
+Organization / Team             Problem / Stable + Evolving slots
 Student / Teacher               Submission / JudgeRun / JudgeAttempt
 Training / Contest              ACM/OI / Checker / Hack / Rejudge
 ProblemList / Growth            Judge scheduling / result projection
@@ -67,7 +67,7 @@ Submission (用户提交意图，基本不可变)
 ```
 
 - `Submission` 保存用户、代码、语言、题目和活动上下文。
-- `JudgeRun` 固定一次逻辑评测使用的 TestSet Revision/配置哈希和最终结果。
+- `JudgeRun` 固定一次逻辑评测实际取得的 slot、fencing token、graph/config hash 和最终结果，并持有 Reader 直至终态。
 - `JudgeAttempt` 保存一次物理执行的 owner、fencing token、租约、分段时间与终态。
 - 分段时间明确为 Queue、Dispatch、Compile、Run、Persist、Total，并由 `judge:slo` 按最近窗口检查 P95、基础设施错误率和卡住任务。
 - 重测创建新的 Run；基础设施重试创建新的 Attempt，不重开终态 Attempt。
@@ -77,9 +77,9 @@ Submission (用户提交意图，基本不可变)
 
 ## 测试数据、Hack 与存储
 
-- `ProblemTestSetRevision` 是不可变评测数据版本，活动固定 Revision，题库 Practice 使用最新版。
-- TestSet Revision 引用内容寻址 `TestdataObject`；Revision 目录只保存确定性 manifest/链接。
-- 有效 Hack 通过 Validator/Classifier/STD/双评测后只形成技术有效的 `TestcaseCandidate`；Candidate 还需经过私有错误语料 L1/L2/Holdout 评估和逐 Subtask 集合 Selector，入选后才由统一晋升事务创建下一 Revision。重复、低边际价值、等待替换、陈旧或失败候选均保留可审计终态，且不传播到既有活动。
+- `ProblemTestSetSlot` 只允许 Stable 与可选 Evolving；没有历史版本、latest 指针或 revisionId。槽引用内容寻址 `TestdataObject` 并使用确定性 manifest/物化目录。
+- Writer 关闭 `(problem, slot)` gate 后等待 Reader 清空，再原子替换当前槽；新 Reader 在 Writer 排队期间被阻止。Contest 长期读取 Stable，Training 每次提交读取 Evolving（缺失回退 Stable），Assignment 每次提交读取 Stable。
+- 有效 Hack 通过 Validator/Classifier/STD/双评测后形成 `TestcaseCandidate`；Candidate 经私有语料评估和 Selector 后串行写入 Evolving。Promotion 只在临时文件中捕获/验证 Evolving，成功后原子更新 Stable，不形成第三版本。
 - BlobStore application port 将本地内容寻址实现与未来 OSS/S3/MinIO 隔离；外部存储上线前本地实现仍是事实源。
 
 ## 后台任务边界
