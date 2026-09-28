@@ -64,6 +64,8 @@ describe('学校私有题库隔离', () => {
         status,
         schoolId: schoolB.school.id,
         libraryScope: 'platform',
+        platform: 'luogu',
+        problemId: `A-${suffix}`,
         ojBindings: [{ platform: 'luogu', problemId: `A-${suffix}` }],
         statements: [{ format: 'markdown', language: 'zh', content: '校内题面', isVisible: true }],
         solutions: [{ format: 'markdown', language: 'zh', content: '隐藏题解', isVisible: false }],
@@ -94,21 +96,21 @@ describe('学校私有题库隔离', () => {
   it('发布后同校教师可使用，但不能编辑或读取隐藏题解与评测配置', async () => {
     const created = await createSchoolProblem('draft')
     const problemId = created.body.data.id as string
-    await prisma.problem.update({ where: { id: problemId }, data: { judgeConfig: '{"secret":true}' } })
+    const configured = await prisma.problem.update({ where: { id: problemId }, data: { judgeConfig: '{"secret":true}' } })
 
     const publish = await schoolARequest(ownerAToken)
       .put(`/api/problems/${problemId}`)
-      .send({ status: 'published' })
+      .send({ status: 'published', expectedUpdatedAt: configured.updatedAt.toISOString() })
     expect(publish.status).toBe(200)
     expect(publish.body.data.publishedAt).toBeTruthy()
 
     const peerDetail = await schoolARequest(peerAToken).get(`/api/problems/${problemId}`)
     const peerEdit = await schoolARequest(peerAToken)
       .put(`/api/problems/${problemId}`)
-      .send({ title: '越权修改' })
+      .send({ title: '越权修改', expectedUpdatedAt: publish.body.data.updatedAt })
     const principalEdit = await schoolARequest(principalAToken)
       .put(`/api/problems/${problemId}`)
-      .send({ title: '负责人修改' })
+      .send({ title: '负责人修改', expectedUpdatedAt: publish.body.data.updatedAt })
 
     expect(peerDetail.status).toBe(200)
     expect(peerDetail.body.data.solutions).toEqual([])
@@ -139,10 +141,34 @@ describe('学校私有题库隔离', () => {
     expect(personalSchoolList.body.code).toBe('TEACHER_ONLY')
   })
 
+
+  it('创建时必须显式声明主身份，不能从附加来源推导', async () => {
+    const bindingOnly = await schoolARequest(ownerAToken).post('/api/problems').send({
+      title: '不能从附加来源推导',
+      ojBindings: [{ platform: 'luogu', problemId: 'P1001' }],
+    })
+    expect(bindingOnly.status).toBe(422)
+    expect(bindingOnly.body.code).toBe('API_CONTRACT_REQUEST_INVALID')
+
+    const missingNumber = await schoolARequest(ownerAToken).post('/api/problems').send({
+      title: '外部题必须带主题号', platform: 'luogu',
+    })
+    expect(missingNumber.status).toBe(400)
+    expect(missingNumber.body.code).toBe('INVALID_PROBLEM_NUMBER')
+
+    const manualCaritsNumber = await schoolARequest(ownerAToken).post('/api/problems').send({
+      title: 'Carits 题号不能手工指定', platform: 'carits', problemId: '10086',
+    })
+    expect(manualCaritsNumber.status).toBe(400)
+    expect(manualCaritsNumber.body.code).toBe('CARITS_PROBLEM_ID_SERVER_ASSIGNED')
+  })
+
   it('不同学校可使用相同 OJ 题号，同校重复创建被拒绝', async () => {
     const payload = {
       title: 'P1000 学校副本',
       status: 'published',
+      platform: 'luogu',
+      problemId: 'P1000',
       ojBindings: [{ platform: 'luogu', problemId: 'P1000' }],
     }
     const schoolAProblem = await schoolARequest(ownerAToken).post('/api/problems').send(payload)
@@ -161,6 +187,8 @@ describe('学校私有题库隔离', () => {
       .post('/api/problems')
       .send({
         title: '不应留下的半成品题目',
+        platform: 'luogu',
+        problemId: createId,
         ojBindings: [{ platform: 'luogu', problemId: createId }],
         statements: [{ content: '缺少 format' }],
       })
@@ -176,7 +204,7 @@ describe('学校私有题库隔离', () => {
     const originalTitle = created.body.data.title as string
     const rejectedUpdate = await schoolARequest(ownerAToken)
       .put(`/api/problems/${created.body.data.id}`)
-      .send({ title: '不应提交的标题', statements: [{ content: '缺少 format' }], solutions: [] })
+      .send({ title: '不应提交的标题', expectedUpdatedAt: created.body.data.updatedAt, statements: [{ content: '缺少 format' }], solutions: [] })
     expect(rejectedUpdate.status).toBe(422)
     expect(rejectedUpdate.body.code).toBe('API_CONTRACT_REQUEST_INVALID')
     expect((await prisma.problem.findUniqueOrThrow({ where: { id: created.body.data.id } })).title).toBe(originalTitle)
@@ -188,6 +216,8 @@ describe('学校私有题库隔离', () => {
       .send({
         title: '平台复制源题',
         status: 'published',
+        platform: 'codeforces',
+        problemId: '1000A',
         ojBindings: [{ platform: 'codeforces', problemId: '1000A' }],
         statements: [{ format: 'markdown', language: 'zh', content: '平台题面', isVisible: true }],
       })
@@ -218,6 +248,8 @@ describe('学校私有题库隔离', () => {
       .send({
         title: '提交身份平台原题',
         status: 'published',
+        platform: 'codeforces',
+        problemId: externalId,
         ojBindings: [{ platform: 'codeforces', problemId: externalId }],
       })
     expect(platformProblem.status).toBe(201)
@@ -226,7 +258,8 @@ describe('学校私有题库隔离', () => {
       .post(`/api/problems/${platformProblem.body.data.id}/copy-to-school`)
     expect(copied.status).toBe(201)
     const schoolProblemId = copied.body.data.problem.id as string
-    expect((await schoolARequest(ownerAToken).put(`/api/problems/${schoolProblemId}`).send({ status: 'published' })).status).toBe(200)
+    const schoolProblem = await prisma.problem.findUniqueOrThrow({ where: { id: schoolProblemId } })
+    expect((await schoolARequest(ownerAToken).put(`/api/problems/${schoolProblemId}`).send({ status: 'published', expectedUpdatedAt: schoolProblem.updatedAt.toISOString() })).status).toBe(200)
 
     const common = {
       userId: ownerA.user.id,
@@ -269,18 +302,23 @@ describe('学校私有题库隔离', () => {
     const client = createAuthenticatedRequest(app, platformAdminToken)
     const carits = await client.post('/api/problems').send({
       title: 'Carits 分组题',
+      platform: 'carits',
       status: 'published',
       statements: [{ format: 'markdown', language: 'zh', content: 'Carits 题面', isVisible: true }],
     })
     const codeforces = await client.post('/api/problems').send({
       title: 'Codeforces 分组题',
       status: 'published',
+      platform: 'codeforces',
+      problemId: 'GROUP-1000A',
       ojBindings: [{ platform: 'codeforces', problemId: 'GROUP-1000A' }],
       statements: [{ format: 'markdown', language: 'zh', content: 'Codeforces 题面', isVisible: true }],
     })
     const luogu = await client.post('/api/problems').send({
       title: '洛谷分组题',
       status: 'published',
+      platform: 'luogu',
+      problemId: 'GROUP-P1000',
       ojBindings: [{ platform: 'luogu', problemId: 'GROUP-P1000' }],
       statements: [{ format: 'markdown', language: 'zh', content: '洛谷题面', isVisible: true }],
     })

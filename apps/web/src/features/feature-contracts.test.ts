@@ -258,6 +258,7 @@ describe('feature slice contracts', () => {
 
   it('shares the Problem editor mutation contract instead of accepting arbitrary payloads', () => {
     expect(ProblemEditorMutationSchema.safeParse({
+      expectedUpdatedAt: '2026-09-28T00:00:00.000Z',
       title: '整数求和',
       status: 'draft',
       statements: [],

@@ -394,6 +394,7 @@ describe('shared API contract adapter', () => {
 
   it('guards Problem editor requests and preserves the complete detail projection', () => {
     const body = parseContractBody(ProblemContracts.update, {
+      expectedUpdatedAt: '2026-09-28T00:00:00.000Z',
       title: '整数求和',
       status: 'published',
       timeLimit: 1000,
@@ -409,6 +410,7 @@ describe('shared API contract adapter', () => {
     })
     expect(body.status).toBe('published')
     expect(() => parseContractBody(ProblemContracts.update, {
+      expectedUpdatedAt: '2026-09-28T00:00:00.000Z',
       title: '整数求和',
       status: 'public',
     })).toThrowError(ApiContractError)
@@ -416,6 +418,8 @@ describe('shared API contract adapter', () => {
     const { response, json } = responseStub()
     sendContractData(response, ProblemContracts.getEditorDetail, {
       id: 'problem-1',
+      updatedAt: new Date('2026-09-28T00:00:00Z'),
+      readiness: { stable: false, published: false },
       problemId: '1041',
       title: '整数求和',
       platform: 'carits',
@@ -437,6 +441,7 @@ describe('shared API contract adapter', () => {
       statements: [],
       solutions: [],
       permissions: {
+        canEditIdentity: true,
         canEdit: true, canPublish: true, canArchive: true,
         canCopyToSchool: false, canSubmit: false, canView: true,
       },

@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { ProblemSelectionBodySchema, ResolvedProblemSelectionSchema } from '@oi-manager/contracts'
 
-const database = vi.hoisted(() => ({ findMany: vi.fn(), unexpected: vi.fn() }))
+const database = vi.hoisted(() => ({ findMany: vi.fn(), slotFindMany: vi.fn(), unexpected: vi.fn() }))
 vi.mock('../src/prisma', () => ({ prisma: {
   problem: {
     findMany: database.findMany,
@@ -11,6 +11,7 @@ vi.mock('../src/prisma', () => ({ prisma: {
     update: database.unexpected,
     upsert: database.unexpected,
   },
+  problemTestSetSlot: { findMany: database.slotFindMany },
   $transaction: database.unexpected,
 } }))
 vi.mock('../src/modules/authorization/capabilities', () => ({
@@ -46,6 +47,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   records = []
   database.unexpected.mockImplementation(() => { throw new Error('Unexpected database operation') })
+  database.slotFindMany.mockImplementation(({ where }) => {
+    const ids = new Set(where.problemId.in as string[])
+    return records.flatMap(record => ids.has(record.id)
+      ? record.TestSetSlots.map(slot => ({ problemId: record.id, ...slot }))
+      : [])
+  })
   database.findMany.mockImplementation(({ where }) => {
     const pairs = where.AND[0].OR as Array<{ platform: string; problemId: string }>
     const scopes = where.AND[1].OR as Array<{ libraryScope: string; organizationId?: string }>

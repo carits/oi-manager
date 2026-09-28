@@ -107,7 +107,7 @@ function ProblemFormEditor({ mode, role, problemId }: ProblemFormProps) {
     }
   }, [editorContext])
 
-  // Materialize a private draft before uploading any assets. Share only the request
+  // Materialize a private draft before uploading assets. Share only the request
   // for this exact authenticated editor, not a process-wide anonymous draft.
   useEffect(() => {
     if (mode !== 'create' || !user) return

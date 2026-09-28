@@ -10,9 +10,9 @@ source_of_truth: apps/server/src/modules/problem-selection/problem-selection.ser
 ## 分支与实施边界
 
 - 工作分支：`fix/problem-save-integrity-20260928`。
-- 起点：`codex/problem-management-completion` 的 `c1dcd5a6c14020c75cfa6391efabf361ff2fffcb`，继承已经完成的显式身份、题目编辑版本检查和本地提交身份改造。
-- 本轮代码提交截至：`3b1e6daf6df5b43684af84b9fd59d76c411e478e`。之后的文档提交不代表额外运行验证。
-- 通过 GitHub 文件 API 在新分支提交；没有合并 main，没有部署，没有连接业务数据库。
+- 起点：`origin/main` 的 `c9de6949`，继承已经完成的显式身份、题目编辑版本检查和本地提交身份改造。
+- 当前实现分支：`fix/problem-save-integrity-20260928`；远端完整工作区已安装依赖并执行本文件记录的测试、类型检查与构建。
+- 本批不包含 Prisma schema 或业务数据迁移；D01—D06 继续作为独立数据治理阶段。
 - 不改 Prisma schema、迁移、数据库 baseline、历史平台值、学校副本、业务引用或不可变快照。
 - 本文是可继续执行的交接记录，不是整套 A01—A16 完成声明。没有创建或启动 Codex 后台任务。
 
@@ -42,12 +42,12 @@ source_of_truth: apps/server/src/modules/problem-selection/problem-selection.ser
 
 | 任务 | 本轮状态 | 后置事项 |
 |---|---|---|
-| A01 | 继承显式主身份输入，未完成全部创建规则 | Carits 创建一律由服务端编号；外部平台必须带题号的 Contract/Service 联动及所有创建调用方核验。 |
+| A01 | 已完成本轮创建规则：主平台显式输入、外部题号必填、Carits 题号服务端分配 | 其他导入调用方的历史数据规范化仍归 A05/D01—D06。 |
 | A02 | 继承主身份与绑定解耦 | 对绑定重排、清空、发布后身份锁定补完整回归。 |
 | A03 | 修复历史绑定误清空；继承题面/题解部分更新 | 五种局部更新场景及旧内容版本/上传文件相互作用需要项目级验证。 |
 | A04 | 编辑器核心状态与请求隔离代码已提交 | 真实浏览器检查草稿、身份修改、文件上传、评测配置保存及 readiness 刷新。 |
 | A05 | 本轮只涉及选择与题单投影 | OJ 账号、抓取配置/队列、绑定、团队导入、缓存和其他提交入口逐项规范化；上线前历史冲突审计。 |
-| A06 | 选择器与现有普通提交 helper 共用领域查询 | 全仓扫描其他旧 helper/自写查询；更新 resolver mock 以覆盖独立 Stable 查询。 |
+| A06 | 选择器与普通提交 helper 共用领域查询；resolver mock 已覆盖独立 Stable 查询 | 后续继续用架构门禁阻止新增自写身份查询。 |
 | A07 | 题单过渡接口一致性校验已提交 | 新契约 `canonicalProblemId` 的六处调用方迁移及其他领域冗余身份字段核查。 |
 | A08 | 继承入口 Stable 策略，比赛内容选项阻断补齐 | 核验六个服务端领域保存入口的可见范围、状态、数据和发布条件。 |
 | A09 | 比赛有已确认步骤回执 | 公共 `onResolved` 仍不是逐 clientKey 接受/拒绝回执；服务端逐条保存回执和结果待确认恢复未完成。 |
@@ -57,30 +57,31 @@ source_of_truth: apps/server/src/modules/problem-selection/problem-selection.ser
 | A13 | 未完成 | 比赛、题单章节及仍分散的作业/训练集合命令收敛到目标内事务。所有 helper 必须使用同一 tx。 |
 | A14 | 只有前端预检，不能视为并发完成 | 现有版本来源的原子校验/更新、服务端幂等和结果待确认；需要新增字段的部分进入独立数据阶段。 |
 | A15 | 未新增审计工具 | 开发离线只读审计核心及脱敏快照协议；本阶段不要连接业务库运行。 |
-| A16 | 仅下述隔离核对；完整项目验收未完成 | Vitest、类型/构建、浏览器、文档/架构门禁、隔离数据库验证和主 CHANGELOG 归并。 |
+| A16 | 代码侧验收完成：定向 Server/Web 回归、全量 Web 回归、生产构建、文档/架构/路由/UI 门禁通过 | 部署后的 HTTP/readiness 探针随发布执行；破坏性 E2E reset 不在共享环境运行。 |
 
-## 已做的有限核对
+## 2026-09-28 验证结果
 
-对两个新增模型的同字节本地副本进行 TypeScript 语法转译和 18 项隔离断言，均通过。已用远端 blob SHA 对照本地 Git blob SHA：
+已将两处保存完整性模型转为正式 Vitest 回归：
 
-- `contestSaveIntegrity.ts`：`dab1a9eddcbb6f4faec25fa01ed2b904bb6c75ab`。9 项断言覆盖交错排序、仅删除基线记录、不删除未见新增、缺少/重复条目 ID 阻断、成员变化阻断、成员稳定、重排/别名变动的预检差异。
-- `problemEditorBindings.ts`：`bdf51e926afcd027e614163544b669e938ffbdd6`。9 项断言覆盖 null、显式空数组、非法 JSON、未知平台/字段、非法 URL 类型、空题号、超过三条、题号及 URL 保留。
+- `problemEditorBindings.test.ts`：9 项，覆盖 `null`、显式空数组、非法 JSON、未知平台/字段、非法 URL、空题号、超量数组及安全输出。
+- `contestSaveIntegrity.test.ts`：5 项，覆盖交错排序、基线删除、成员集合稳定性及新增 ID 映射。
 
-绑定模型隔离断言使用了替代 Registry，只验证读取状态与输出语义；不代表完整共享 Registry 或浏览器组件已经通过测试。上述断言尚未转为仓库 Vitest 回归用例。
+本轮同时补齐并验证：
 
-本轮没有完整 checkout：本地 git clone 无法解析 GitHub 域名；没有依赖安装或完整项目构建。读取新分支 Actions runs 时返回 0 条运行记录。
+- Carits 创建题号只能由服务端分配；外部题必须显式提交主平台和题号，不能从附加来源推导。
+- Problem Editor Runtime Contract 包含 `updatedAt`、readiness 与身份编辑能力，更新请求携带 `expectedUpdatedAt`。
+- 本地精确检索 mock 与真实实现一致，Stable 数据由独立的 `problemTestSetSlot.findMany` 提供。
+- Web 全量 Vitest 56 个文件、374 项通过；Server 题目权限、主身份、学校隔离和本地精确检索 3 个文件、30 项通过；Problem Editor Contract 定向用例通过。
+- 根生产构建通过，覆盖 Contracts、Shared、Prisma Client、Server、Web 和 Judge。
+- `docs:check`、架构、数据库 baseline、路由巡检和 UI 状态/组件门禁通过；Feature 直接传输债务由 43 降至 42。
 
-未执行：整个仓库的 `git diff --check`、Server/Web 全量类型检查、production build、Vitest、浏览器测试、数据库集成测试、`docs:check`、`architecture:check`、`routes:audit`。既有其他提交的成功日志不得移植为本分支通过。
+以上均来自当前分支的远端完整工作区，不借用其他分支的历史结果。
 
 ## Codex 接手顺序
 
-### 1. 先核验本轮代码，而不是直接合并或部署
+### 1. 已完成本轮代码核验
 
-在有仓库访问权限、完整依赖的工作区检出本分支，保留既有未提交修改。查看当前 diff，不要覆盖别人的提交，也不要重新从 main 丢弃继承的身份改造。
-
-先检查本轮两处大组件的类型、交互和删除/新建路径，再运行非业务数据库的定向检查。项目中的 `pnpm test:ui` / `test:ui:prepare` 包含 reset，不得在未确认隔离环境时直接运行。
-
-可先核验的命令（执行前阅读各脚本）：
+已在远端完整工作区核对本轮两处大组件、删除/新增路径和非破坏性定向测试。`pnpm test:ui` / `test:ui:prepare` 包含 reset，本批未对共享业务数据库执行该命令。验证命令包括：
 
 ```bash
 pnpm --filter @oi-manager/contracts build
@@ -112,7 +113,7 @@ pnpm --filter web exec tsc --noEmit
 
 实现只读离线审计，不导出密码、Cookie、密钥、源码等敏感值，不在服务启动时自动执行。补仓库定向测试，再在批准的隔离环境做事务/并发测试。必要的架构库存通过生成脚本更新，不手改计数。
 
-本次 dated changelog 内容见本文“2026-09-28 已提交的代码”；仍需在完整 checkout 中追加到 `docs/CHANGELOG.md` 并运行文档门禁。现有主 CHANGELOG 超过 250 KB，本轮未用不完整读取覆盖其历史内容。
+本次 dated changelog 已追加到 `docs/CHANGELOG.md`；文档与架构门禁结果随最终发布记录更新。
 
 ## 数据阶段继续禁止夹带
 

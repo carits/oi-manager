@@ -10,7 +10,7 @@
     },
     "feature": {
       "files": 3,
-      "calls": 43
+      "calls": 42
     },
     "raw": {
       "registered": 11
@@ -83,7 +83,7 @@
   "topDebt": [
     {
       "file": "apps/web/src/features/contest/ui/ContestFormModal.tsx",
-      "calls": 19,
+      "calls": 18,
       "layer": "feature"
     },
     {
@@ -107,5 +107,5 @@
     "cloudMonitoring": "all cloudMonitoring flags are true",
     "productionHttps": "all https flags are true"
   },
-  "updatedAt": "2026-09-27T18:14:34.694Z"
+  "updatedAt": "2026-09-28T09:46:18.443Z"
 }

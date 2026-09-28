@@ -57,4 +57,3 @@ export function problemPermissions(user: JwtPayload, problem: ProblemAccessRecor
   const canEdit = canModifyProblem(user, problem)
   return { canView: canViewProblem(user, problem), canUse: canUseProblem(user, problem), canEdit, canPublish: canEdit, canArchive: canEdit, canCopyToSchool: canCopyProblemToSchool(user, problem) }
 }
-

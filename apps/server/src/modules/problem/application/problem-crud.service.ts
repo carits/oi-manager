@@ -198,8 +198,13 @@ export async function createProblem(user: JwtPayload, body: any) {
   const libraryKey = problemLibraryKey(libraryScope, user.organizationId)
   const canonicalPlatform = typeof body?.platform === 'string' ? normalizeOjPlatformKey(body.platform) : null
   if (!canonicalPlatform) fail(400, 'INVALID_OJ_PLATFORM', '必须明确选择已注册的主 OJ')
-  const identity = normalizePrimaryProblemIdentity(canonicalPlatform,
-    canonicalPlatform === 'carits' && body?.problemId === undefined ? await generateCaritsProblemId() : body?.problemId)
+  if (canonicalPlatform === 'carits' && body?.problemId !== undefined) {
+    fail(400, 'CARITS_PROBLEM_ID_SERVER_ASSIGNED', 'Carits 题号由服务器分配，创建时不能自行指定')
+  }
+  const identity = normalizePrimaryProblemIdentity(
+    canonicalPlatform,
+    canonicalPlatform === 'carits' ? await generateCaritsProblemId() : body?.problemId,
+  )
   const { platform, problemId } = identity
   if (platform === 'carits' && !/^\d+$/.test(problemId)) fail(400, 'INVALID_CARITS_PROBLEM_ID', 'Carits 题号必须是纯数字')
   const ojBindings = normalizeProblemOjBindings(body?.ojBindings)

@@ -124,7 +124,7 @@ describe('human UX productization contract', () => {
     expect(orgPage).not.toContain("return null")
     expect(orgPage).toContain('user?.organizationId === organizationId')
     expect(switcher).toContain("const openSwitcher = async (initialFocus: 'first' | 'last' = 'first') =>")
-    expect(switcher).toContain('if (loaded || loading) return')
+    expect(switcher).toContain('if (loaded || directory.refreshing || !directoryEnabled) return')
     expect(switcher).toContain('void openSwitcher()')
   })
 

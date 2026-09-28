@@ -51,10 +51,10 @@ describe('contest Rating workspace contract', () => {
     expect(source).not.toContain('搜索题号或标题')
     expect(source).toContain('影响强度：标准比赛的')
     expect(source).toContain('下一步')
-    expect(source).toContain("`创建${mode === 'contest' ? '比赛'")
+    expect(source).toContain('`创建${entityName}`')
     expect(source).toContain('contestValidationIssues')
-    expect(source).toContain('比赛草稿已保留')
-    expect(source).toContain('进入比赛草稿')
+    expect(source).toContain('当前草稿和已确认回执已保留')
+    expect(source).toContain('新窗口核对比赛')
   })
 
   it('explains Rating results in user-facing language', () => {
