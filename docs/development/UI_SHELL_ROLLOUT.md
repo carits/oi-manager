@@ -7,9 +7,9 @@ source_of_truth: apps/web/src/components/AppShell.tsx, apps/web/src/components/R
 
 # UI Shell 与工作区统一：架构与发布记录
 
-本轮代码已由 `codex/ui-shell-workspace-unification` 合并至 `main`。发布代码提交为
-`f04b0aa50adb8b0dfe95310f179378db25a1ac4a`，线上 Web BUILD_ID 为
-`TPv-g5acV9SKdg2qySdoI`。本批没有数据库迁移，也没有改写生产业务数据。
+初始统一壳层代码由 `codex/ui-shell-workspace-unification` 合并至 `main`。发布代码提交为
+`f04b0aa50adb8b0dfe95310f179378db25a1ac4a`，对应线上 Web BUILD_ID 为
+`TPv-g5acV9SKdg2qySdoI`。后续代码将工作区入口收回左侧导航顶部，并把桌面“完全隐藏侧栏”改为 64px 可操作窄栏；这些代码事实与下方历史发布证据分开记录，不能把旧 BUILD_ID 当成后续调整已经上线的证明。
 
 ## 背景与问题
 
@@ -69,13 +69,15 @@ RoleShell / AppShell       = 唯一持久 UI 外壳
 
 ### 导航与偏好
 
-- `>=1100px` 只有 232px 完整侧栏，可完全收起；`<1100px` 只有默认关闭的完整抽屉。
-- 不存在 compact rail。侧栏要么完整显示分组、文字和账号信息，要么完全不参与布局和辅助技术树。
-- 桌面偏好写入 `oi_sidebar_<encoded userId>` Cookie，按账号和设备共用；移动抽屉状态不持久化。
+- `>=1100px` 使用 232px 完整侧栏与 64px 窄栏两种稳定状态；收起只隐藏文字和分组标题，工作区、功能导航图标和账号入口仍可操作，正文按 64px 留出空间。
+- `<1100px` 仍使用默认关闭的完整抽屉，不持久化抽屉开关；移动端不显示桌面窄栏。
+- 工作区切换器固定在左侧导航顶部：完整侧栏显示“学校/个人空间 + 当前身份”，64px 窄栏保留学校/个人图标与完整无障碍标签。工作区面板从侧栏向右展开；移动抽屉中从工作区入口向下展开，不再由顶栏承载。
+- 顶栏只保留导航开关、唯一品牌入口以及消息/通知等全局动作；账号入口固定在侧栏底部，与工作区切换职责分离。
+- 桌面偏好写入 `oi_sidebar_<encoded userId>` Cookie，按账号和设备共用；该偏好现在表示“完整侧栏 / 64px 窄栏”，不再表示桌面侧栏完全消失。
 - 旧的 `sidebarNavigation:<role>:<userId>:<context>` localStorage 键只做一次客户端迁移：在没有新 Cookie 时
   读取可确认的旧值、写入新 Cookie 并删除旧键。迁移不是首帧授权事实，后续以 Cookie 为准。
 - 主导航由 `PrimaryNavigation` 统一渲染；学生管理保留一级入口，教师权限、申请、邀请、加入设置和学校资产归入学校管理 Tabs。
-- 任意状态最多只有一个可见且可聚焦的品牌入口。
+- 任意状态最多只有一个可见且可聚焦的品牌入口；窄栏不得复制或裁剪 Logo。
 
 ### 页面状态与缓存
 
@@ -95,6 +97,8 @@ RoleShell / AppShell       = 唯一持久 UI 外壳
 - Web canary 与 promote 后的生产双账号消息闭环通过，消息序号分别为 368/369 与 370/371。
 - 线上 `/login`、构建清单和 API readiness 正常；发布 BUILD_ID 为 `TPv-g5acV9SKdg2qySdoI`。
 
+以上发布证据只对应 `f04b0aa50adb8b0dfe95310f179378db25a1ac4a` 与当时的线上构建；后续工作区入口/64px 窄栏调整必须重新执行 Web 定向测试、production build、`pnpm routes:audit` 与对应浏览器验收后才能作为发布证据。
+
 消息闭环用于确认新 Web、Cookie 会话、API、SSE 与路由发布链健康，不替代工作区切换专项 E2E。
 工作区回归规范、视口和故障矩阵以 [全 UI E2E](UI_E2E.md) 为准；后续改动必须继续执行对应
 Playwright 套件，不能只依赖构建或静态扫描。
@@ -104,6 +108,7 @@ Playwright 套件，不能只依赖构建或静态扫描。
 - 不得重新在个人、组织或账号 layout 中挂载第二套 AppShell。
 - 不得通过把全局 `user` 加入组织 allowedRoles 绕过上下文授权。
 - 不得使用 Workspace Directory 的 role/capability 作为请求授权事实。
-- 不得恢复 72px rail、裁剪 Logo 或持久化移动抽屉。
+- 不得恢复旧的 72px 中间断点 rail；桌面窄栏固定为当前 64px 结构，并必须保留工作区、主导航和账号三个可操作层级。不得复制或裁剪 Logo，也不得持久化移动抽屉。
+- 不得把工作区切换器重新塞回顶栏或账号菜单；工作区决定导航与数据作用域，入口固定在侧栏顶部。
 - 不得在目标预检成功前清理来源缓存或 dirty scope。
 - 所有组织失效事件必须带来源 organizationId，所有异步切换必须受 generation/fencing 保护。
