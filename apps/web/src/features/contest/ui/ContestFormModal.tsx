@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { useAuth } from '@/features/auth'
-import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
 import { assertContestProblemMembership, contestProblemDeletions, contestProblemOrders, contestProblemSnapshot } from '../model/contestSaveIntegrity'
 
 function toLocalDatetimeString(date: Date): string {
@@ -307,7 +307,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       selectedIdsRef.current.add(problem.id)
       const id = `selected-${++tempIdCounter}`
       setProblemRows(current => [...current, {
-        id, ojName: problem.platform, problemCode: problem.problemCode, alias: '', points: 100, resolving: false,
+        id, ojName: problem.platform, problemCode: problem.problemId, alias: '', points: 100, resolving: false,
         resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
         contentOptionsLoading: true, statementOptions: [], solutionOptions: [],
       }])
@@ -585,9 +585,9 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
             </div>}
             {(!contestWizard || wizardStep === 2) && <div className={unifiedStyles.u10}>
               <div className={unifiedStyles.sectionHeading}><h3 className={unifiedStyles.u11}>{contestWizard ? '比赛题目' : '题目列表'}</h3></div>
-              <QuickProblemInput disabled={saving || recoveryBlocked} existingProblemIds={problemRows.flatMap(row => row.resolved ? [row.resolved.problemId] : [])} onResolved={addSelectedProblems} />
+              <ProblemReferenceSelector disabled={saving || recoveryBlocked} existingProblemIds={problemRows.flatMap(row => row.resolved ? [row.resolved.problemId] : [])} onAdd={addSelectedProblems} />
               {problemRows.length > 0 ? <>
-                <div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved?.title || row.problemCode}</span></div>)}</div>
+                <div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.problemId, platform: row.ojName, problemId: row.problemCode, title: row.resolved.title }} showIdentity={false} /> : row.problemCode}</span></div>)}</div>
                 <div className={unifiedStyles.u12}><TableRoot className={unifiedStyles.u13}>
                   <TableHead><TableRow className={unifiedStyles.u14}>
                     <TableHeaderCell className={unifiedStyles.u15}>排序</TableHeaderCell><TableHeaderCell className={unifiedStyles.u16}>#</TableHeaderCell>
@@ -598,7 +598,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
                   <TableBody>{problemRows.map((row, index) => <TableRow key={row.id} className={`${unifiedStyles.problemRow} ${row.existing ? unifiedStyles.existingProblem : unifiedStyles.newProblem}`}>
                     <TableCell className={unifiedStyles.u23}><Button variant="secondary" size="sm" onClick={() => moveRow(index, -1)} disabled={saving || index === 0} className={unifiedStyles.moveButtonFirst} title="上移">↑</Button><Button variant="secondary" size="sm" onClick={() => moveRow(index, 1)} disabled={saving || index === problemRows.length - 1} className={unifiedStyles.moveButton} title="下移">↓</Button></TableCell>
                     <TableCell className={unifiedStyles.u24}>{index + 1}</TableCell><TableCell className={unifiedStyles.u25}>{row.ojName}</TableCell><TableCell className={unifiedStyles.u25}>{row.problemCode}</TableCell>
-                    <TableCell className={unifiedStyles.u27}><span className={unifiedStyles.u31}>{row.resolved?.title || '等待识别题目'}</span>
+                    <TableCell className={unifiedStyles.u27}><span className={unifiedStyles.u31}>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.problemId, platform: row.ojName, problemId: row.problemCode, title: row.resolved.title }} showIdentity={false} /> : '等待识别题目'}</span>
                       {row.contentOptionsLoading && <p>题面选项加载中…</p>}
                       {row.contentOptionsError && <p role="alert">{row.contentOptionsError} <Button size="sm" disabled={saving} onClick={() => row.resolved && void loadRowOptions(row.id, row.resolved.problemId)}>重试加载</Button></p>}
                     </TableCell>
