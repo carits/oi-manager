@@ -39,8 +39,8 @@ const teacher = {
   organizationCapabilities: ['organization.view', 'problem.create', 'problem.manage:own'],
 } as User
 let records: Candidate[] = []
-const lookup = (platform: string, problemCode: string, user = personal) => resolveProblemSelection(user, {
-  items: [{ clientKey: 'row-1', platform, problemCode }],
+const lookup = (platform: string, problemId: string, user = personal) => resolveProblemSelection(user, {
+  items: [{ clientKey: 'row-1', platform, problemId }],
 })
 
 beforeEach(() => {
@@ -73,7 +73,7 @@ describe('read-only local primary identity lookup', () => {
   it('maps Chinese display names and trims numbers without requiring Stable', async () => {
     records = [candidate()]
     const result = await lookup(' 洛谷 ', ' P1001 ')
-    expect(result.items[0]).toMatchObject({ platform: 'luogu', problemCode: 'P1001', status: 'resolved', problem: { id: 'internal-1' } })
+    expect(result.items[0]).toMatchObject({ platform: 'luogu', problemId: 'P1001', status: 'resolved', problem: { id: 'internal-1' } })
     expect(result.items[0].problem?.stableData).toBeUndefined()
     expect(database.findMany).toHaveBeenCalledTimes(1)
     expect(database.findMany.mock.calls[0][0].where.AND[0]).toEqual({ OR: [{ platform: 'luogu', problemId: 'P1001' }] })
@@ -110,10 +110,10 @@ describe('read-only local primary identity lookup', () => {
   it('preserves batch order and client keys while querying unique exact pairs once', async () => {
     records = [candidate(), candidate({ id: 'cf-1', platform: 'codeforces', problemId: '2036G' })]
     const result = await resolveProblemSelection(personal, { items: [
-      { clientKey: 'b', platform: 'CodeForces', problemCode: '2036G' },
-      { clientKey: 'a', platform: '洛谷', problemCode: 'P1001' },
-      { clientKey: 'c', platform: 'codeforces', problemCode: '2036G' },
-      { clientKey: 'd', platform: 'luogu', problemCode: '2036G' },
+      { clientKey: 'b', platform: 'CodeForces', problemId: '2036G' },
+      { clientKey: 'a', platform: '洛谷', problemId: 'P1001' },
+      { clientKey: 'c', platform: 'codeforces', problemId: '2036G' },
+      { clientKey: 'd', platform: 'luogu', problemId: '2036G' },
     ] })
     expect(result.items.map(item => item.clientKey)).toEqual(['b', 'a', 'c', 'd'])
     expect(result.items.map(item => item.problem?.id)).toEqual(['cf-1', 'internal-1', 'cf-1', undefined])
@@ -166,15 +166,15 @@ describe('read-only local primary identity lookup', () => {
 
 describe('selection contract boundaries', () => {
   it('rejects batches over 100 and repeated client keys', () => {
-    const item = { clientKey: 'a', platform: 'luogu', problemCode: 'P1001' }
+    const item = { clientKey: 'a', platform: 'luogu', problemId: 'P1001' }
     expect(ProblemSelectionBodySchema.safeParse({ items: [item, item] }).success).toBe(false)
     expect(ProblemSelectionBodySchema.safeParse({ items: Array.from({ length: 101 }, (_, i) => ({ ...item, clientKey: String(i) })) }).success).toBe(false)
     expect(ProblemSelectionBodySchema.safeParse({ items: [item] }).success).toBe(true)
   })
 
   it('requires metadata for a found identity and forbids it for hidden results', () => {
-    const base = { clientKey: 'a', platform: 'luogu', problemCode: 'P1001' }
-    const problem = { id: '1', platform: 'luogu', problemCode: 'P1001', title: 'Example' }
+    const base = { clientKey: 'a', platform: 'luogu', problemId: 'P1001' }
+    const problem = { id: '1', platform: 'luogu', problemId: 'P1001', title: 'Example' }
     expect(ResolvedProblemSelectionSchema.safeParse({ ...base, status: 'resolved' }).success).toBe(false)
     expect(ResolvedProblemSelectionSchema.safeParse({ ...base, status: 'resolved', problem }).success).toBe(true)
     expect(ResolvedProblemSelectionSchema.safeParse({ ...base, status: 'not_found', problem }).success).toBe(false)
