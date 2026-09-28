@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type Keyboard
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import { Check, ChevronDown, Plus, Search, School, ShieldCheck, UserRound } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
@@ -19,12 +20,14 @@ import { accountContextMatches } from '@/lib/applicationShell'
 const emptyWorkspaces: WorkspaceSummary[] = []
 
 export function WorkspaceSwitcher() {
-  const { user } = useAuth()
+  const { user, prepareWorkspaceTransition } = useAuth()
+  const toast = useToast()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const isGlobalAdmin = isGlobalAdministrator(user?.accountRole)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [switchingKey, setSwitchingKey] = useState<string | null>(null)
   const [directoryEnabled, setDirectoryEnabled] = useState(false)
   const directory = useWorkspaceDirectory(user?.userId, directoryEnabled && !isGlobalAdmin)
   const workspaces = directory.data?.workspaces || emptyWorkspaces
@@ -108,10 +111,24 @@ export function WorkspaceSwitcher() {
   }
   const select = (workspace: WorkspaceSummary) => {
     if (isCurrentWorkspace(workspace, currentOrganization)) { closeSwitcher(true); return }
-    // Preserve the existing guarded hard navigation. Directory data is not an auth mutation.
+    const targetKey = workspace.organizationId || workspace.type
+    const href = workspaceHref(workspace, workspaceModule(pathname), searchParams.toString())
     focusTrigger()
     closeSwitcher()
-    requestNavigation(workspaceHref(workspace, workspaceModule(pathname), searchParams.toString()), { hard: true })
+    requestNavigation(href, {
+      beforeNavigate: async () => {
+        setSwitchingKey(targetKey)
+        try {
+          await prepareWorkspaceTransition(workspace)
+          return true
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : '目标工作区暂时无法进入，请重试')
+          return false
+        } finally {
+          setSwitchingKey(current => current === targetKey ? null : current)
+        }
+      },
+    })
   }
   if (isGlobalAdmin) return null
   const title = !contextReady ? '确认工作区…' : currentOrganization ? user?.organizationName || '当前学校' : '个人空间'
@@ -128,14 +145,14 @@ export function WorkspaceSwitcher() {
       <div className={styles.list}>
         {loading && <p className={styles.empty} role="status">正在加载工作区列表…</p>}
         {loadError && <div className={styles.empty} role="alert"><p>工作区列表加载失败，当前身份不会改变。{loadError}</p><Button size="sm" variant="outline" type="button" onClick={() => void directory.retry()}>重新加载</Button></div>}
-        {!loading && loaded && visible.map(item => <Button variant="ghost" key={item.organizationId || item.type} className={styles.item} type="button" data-workspace-option="true" onClick={() => select(item)}>
+        {!loading && loaded && visible.map(item => { const itemKey = item.organizationId || item.type; return <Button variant="ghost" key={itemKey} className={styles.item} type="button" data-workspace-option="true" onClick={() => select(item)} disabled={switchingKey !== null} aria-busy={switchingKey === itemKey}>
           <span className={styles.itemBadge}>{item.type === 'platform' ? <ShieldCheck size={17} /> : item.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span>
           <span><strong>{workspaceTitle(item)}</strong><small>{workspaceSubtitle(item, username)}</small></span>
           {isCurrentWorkspace(item, currentOrganization) && <Check className={styles.check} size={17} />}
-        </Button>)}
+        </Button> })}
         {!loading && loaded && !loadError && !visible.length && <p className={styles.empty}>没有匹配的工作区</p>}
       </div>
-      <div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" data-workspace-option="true" onClick={() => { focusTrigger(); closeSwitcher(); requestNavigation('/personal/organizations', { hard: true }) }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
+      <div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" data-workspace-option="true" disabled={switchingKey !== null} onClick={() => { focusTrigger(); closeSwitcher(); requestNavigation('/personal/organizations') }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
     </section>}
   </div>
 }
