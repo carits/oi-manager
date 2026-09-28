@@ -4,7 +4,7 @@ import { defineApiEndpoint } from './http'
 export const ProblemSelectionItemSchema = z.object({
   clientKey: z.string().trim().min(1).max(100),
   platform: z.string().trim().min(1).max(50),
-  // Wire name retained; this is Problem.problemId, never the internal UUID.
+  // Canonical platform-local problem identifier, never the internal Problem.id UUID.
   problemId: z.string().trim().min(1).max(128),
 })
 
