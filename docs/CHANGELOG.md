@@ -23,6 +23,14 @@ source_of_truth: Git history
 - 发布代码 `f04b0aa50adb8b0dfe95310f179378db25a1ac4a` 已进入 `main`；Web 53 文件/279 项测试、TypeScript、production build、UI state、architecture、routes 和 docs 门禁通过。
 - Web BUILD_ID `TPv-g5acV9SKdg2qySdoI` 已提升，canary 与正式双账号消息闭环分别通过序号 368/369 和 370/371；本批无数据库迁移或业务数据修改。
 
+## 2026-09-28 — TestSet Revision 退役与双槽文档收口
+
+- 当前架构只允许每题一个 Stable 和可选 Evolving，不存在 TestSet Revision、revisionId、latest 指针或可恢复历史版本；测试数据身份由 slot、graph hash 与 fencing token 表达。
+- Training 每次提交读取当时 Evolving（缺失回退 Stable），Assignment 每次提交读取 Stable；Contest/Exam 在运行强逻辑期间持有 Stable Reader，Writer 排队等待释放。
+- Promotion 捕获 Evolving 到事务临时文件验证后原子替换 Stable；临时副本不进入业务模型，也不形成第三版本，底层 TestdataObject 继续按内容寻址复用。
+- Training 仍是一套全局 Stage 时间轴与稳定分组模型；StageProblem 不固定 TestSet 版本，设计器只按“平台 + 题号”添加 canonical Problem。
+- 本文件后续出现的 “TestSet Revision / Rxx / 固定 Revision” 条目是当时版本的历史发布记录，不再表示当前 API、Schema 或产品能力；当前事实源以评测架构、数据模型、数据库参考和 API 参考为准。
+
 
 
 ## 2026-09-27

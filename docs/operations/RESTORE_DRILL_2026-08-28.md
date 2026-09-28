@@ -1,11 +1,14 @@
 ---
-status: current
+status: reference
 audience: development, operations
 last_verified: 2026-08-28
 source_of_truth: scripts/verify-restored-core-flows.sh, playwright.restore.config.ts, e2e/stress/restored-backup-core.spec.ts
 ---
 
 # 正式备份隔离恢复核心演练（2026-08-28）
+
+> 历史演练证据：本报告验证的是当时的 TestSet Revision Schema。当前恢复验收必须改用
+> Stable/Evolving 槽、Reader/Writer 屏障与无 revisionId 基线；不得直接复用本文的数据模型断言。
 
 ## 目标与边界
 

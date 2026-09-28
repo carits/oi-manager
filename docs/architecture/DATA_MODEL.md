@@ -70,8 +70,8 @@ erDiagram
   JudgeRun ||--o| JudgeAttempt : current
 ```
 
-- 本地提交：`Submission` 保存代码、来源、作用域、实际槽/graphHash/fencingToken、IO 意图和 `currentJudgeRunId`；比赛提交必须保存 `canonicalContestId/canonicalContestProblemId`，并以 `trainingId/trainingProblemId` 固化实际 Judge 运行对象。旧 `contestId/contestProblemId` 仅供既有历史记录读取，新提交保持为空。状态、分数、测试点与资源指标只读取 `JudgeRun`。
-- 远端归档：没有本地 Run，其来源平台结果保存在 `Submission` 的归档快照字段。
+- 本地提交：`Submission` 保存代码、来源、作用域、实际槽/graphHash/fencingToken、IO 意图和 `currentJudgeRunId`。比赛只保存规范 `canonicalContestId/canonicalContestProblemId`；Training Engine 保存 training/stage problem 身份；Assignment 保存独立作业身份，三者不得互相借用外键。状态、分数、测试点与资源指标只读取 `JudgeRun`。
+- 正常远程提交继续保存 `ojRemoteId` 并轮询外部结果；远端历史归档、源码回抓及 `submitMethod=archive` 已退役。
 - `JudgeAttempt` 使用租约和 fencing token；终态 Attempt 不重新打开，基础设施重试创建新 Attempt，人工重测创建新 Run。
 - 投影审计只比较 Run 与 Attempt，并强制本地提交均有 Run；不再要求本地 Run 回写 Submission 结果列。
 

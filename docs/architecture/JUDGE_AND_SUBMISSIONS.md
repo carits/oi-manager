@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-16
+last_verified: 2026-09-28
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -20,7 +20,7 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 - 本地代码提交：`oj/problemId` 只记录题目来源，`submitMethod=local` 选择本站 Judge；Carits、
   Codeforces、洛谷、HDU 等来源题统一走该路径。
 - 正常远程提交：平台绑定仍可用于主动提交到外部 OJ，`ojRemoteId` 保存远端评测身份并供结果轮询使用。
-- 训练提交：额外关联 `trainingId`，按训练、作业或比赛权限控制可见性。
+- 活动提交：比赛使用规范 `Contest/ContestProblem` 身份，Training Engine 使用 `trainingId` 与 StageProblem，Assignment 使用独立 Assignment 身份；三者分别按自身权限控制可见性。
 - 全局提交：题库上下文中的个人提交，按题目所有权和角色决定可见性。
 
 代码提交要求题目已有本地 `judgeConfig` 和测试数据记录；任一缺失时接口返回
@@ -30,7 +30,7 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 
 训练提交列表、详情和排行榜使用同一套 Current `JudgeRun` 状态事实，不以 `cases` 是否存在作为“已评测”
 的可见条件。因此 OLE、CE、RE、Judge Error 等没有测试点明细的终态记录仍可查询；Queuing/Judging
-可显示为进行中。比赛题目标识统一返回 `TrainingProblem.id`，源题号仅用于兼容旧记录。
+可显示为进行中。比赛题目标识统一返回规范 `ContestProblem.id`；Training StageProblem 只属于训练领域。
 
 ## 提交列表详情与个人工作区权限
 
@@ -91,8 +91,8 @@ Verdict、首个失败测试点、耗时和内存，不显示点分或子任务�
 
 详细测试点默认折叠，总 Verdict、OI 总分和 ACM 首个失败点保持可见；用户通过带测试点数量的
 Disclosure 展开完整表格，切换提交后恢复折叠。OI 赛中脱敏不返回测试点，也不显示 Disclosure。
-详情来源统一为来源平台与原始题号：活动优先读取 `TrainingProblem` 固定的来源快照，题库提交读取
-题目/提交来源；活动别名只用于活动标题。隐藏原题身份时来源字段从 DTO 中省略。远端提交 ID 仍供
+详情来源统一为来源平台与原始题号：比赛读取 `ContestProblem` 的来源快照，训练读取对应 StageProblem/
+canonical Problem 来源，题库提交读取题目/提交来源；活动别名只用于活动标题。隐藏原题身份时来源字段从 DTO 中省略。远端提交 ID 仍供
 正常远程评测轮询和授权业务使用，但不再显示在提交详情界面。
 
 ## ICPC 首 A 判定
@@ -208,6 +208,17 @@ OI Hack 由 Classifier 返回候选数据命中的全部 Subtask，并把通过 
 编辑事实源，`Problem.judgeConfig` 仅为 Judge 执行投影。
 
 ## Stable / Evolving 双槽与读写屏障
+
+### 迁移背景
+
+旧 TestSet Revision 把“当前可写测试数据”“活动运行隔离”和“永久历史版本”绑定在同一模型中，导致
+Revision、latest 指针、活动 pin、Candidate 晋升和 GC 互相牵制。当前产品并不需要用户浏览或恢复任意历史测试集；
+真正需要的是在 Judge、Contest 和 Promotion 使用数据时阻止槽被替换。因此 2026-09-28 起，测试集身份改为
+`Problem + STABLE|EVOLVING + fencingToken + graphHash`，并以 writer-priority 读写屏障提供运行隔离。
+
+这不是把 Revision 改名为 Slot：系统只维护两个“当前值”，不保留旧槽快照。JudgeRun 固化的是一次执行实际
+读取的槽身份和 Judge 投影；它用于审计执行结果，不允许把旧数据重新挂回当前槽。Contest 的长 Reader、Training/
+Assignment 的逐提交 Reader 和 Promotion 的事务临时文件分别解决运行期稳定性，不形成第三套数据版本。
 
 - 每个 Problem 最多只有 `STABLE` 与 `EVOLVING` 两条 `ProblemTestSetSlot`。普通题只有 Stable；启用 Hack/贡献后创建 Evolving。没有历史版本表、latest 指针或 revisionId。
 - 测试输入/答案继续复用 `(problemId, sha256)` 内容寻址的 `TestdataObject`；槽只保存当前关系图、Judge 投影、哈希、fencing token 和物化目录。槽替换不会复制对象字节。

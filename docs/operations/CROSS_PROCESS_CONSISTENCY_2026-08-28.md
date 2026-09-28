@@ -1,11 +1,14 @@
 ---
-status: current
+status: reference
 audience: development, operations
 last_verified: 2026-08-28
 source_of_truth: e2e/stress/blue-green-finalization.spec.ts, e2e/stress/infrastructure-faults.spec.ts
 ---
 
 # Cross-process Judge, Hack and Revision verification
+
+> Historical verification snapshot. Revision promotion and `latestTestSetRevisionId` assertions were retired by
+> the 2026-09-28 Stable/Evolving slot migration; current cross-process tests must assert slot fencing and barriers.
 
 This verification closes the remaining cross-process write-consistency item.
 Every destructive write ran in the dedicated `e2e` schema, isolated ports,

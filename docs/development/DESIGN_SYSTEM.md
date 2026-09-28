@@ -74,12 +74,12 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 
 ## 2026-08-26 OI 数据工作台
 
-- OI 数据管理采用三栏工作台：Subtask、Group、Testcase 池。三栏共享一个吸顶操作栏、revision、总分和结构化错误摘要。
+- OI 数据管理采用三栏工作台：Subtask、Group、Testcase 池。三栏共享一个吸顶操作栏、当前 Stable/Evolving 槽、fencing token、总分和结构化错误摘要。
 - Subtask 与 Official Group 支持拖放和键盘上移/下移；Hack Gate 使用成功语义色但保持只读，不伪装成普通可编辑卡片。
 - `1280×720` 下 Testcase 池下移为整行，手机下三栏降级为分步纵向区域；页面本身不得产生横向溢出。
 - 文件上传、同名替换和删除使用统一按钮与 ConfirmDialog；工作台不再暴露可编辑 JSON textarea。
-- 顶部“历史版本”使用统一 DetailDialog 展示只读 Revision 列表与当时 Judge 投影；查看历史不能切换当前版本，也不能修改活动固定版本。
-- 离开含未保存草稿的工作台必须确认，revision 冲突保留本地草稿并提示刷新，不自动覆盖。
+- 不展示“历史版本”或 Revision 列表。技术详情只展示当前 Stable/Evolving 的 graph hash、fencing token、Reader/Writer 状态和 Judge 投影；TestSet 不提供历史版本切换。
+- 离开含未保存草稿的工作台必须确认；fencing 冲突保留本地草稿并提示重新读取当前槽，不自动覆盖。
 
 ## 2026-09-07 评测程序模板工作台
 
@@ -93,10 +93,10 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 
 ## 2026-09-08 Candidate 与 Selector 工作台
 
-- 普通贡献者只展示“等待分类、等待语料、评估中、技术有效、低价值、等待替换、已纳入 Rxx”等粗粒度结果，不展示 Kill Vector、Holdout、历史错误源码或内部权重。
+- 普通贡献者只展示“等待分类、等待语料、评估中、技术有效、低价值、等待替换、已写入 Evolving、已提升 Stable”等粗粒度结果，不展示 Kill Vector、Holdout、历史错误源码或内部权重。
 - 题目管理者的 Candidate Pool 必须按 Subtask 同屏显示正式点 `x/10`、错误程序数、行为簇数及 `CLOSED/LIMITED/OPEN`；自动发布按钮在没有 OPEN Subtask 时禁用并说明原因。
 - Selector 预览必须调用服务端真实 dry-run，展示每个命中 Subtask 的基线质量、候选质量、增益、门槛和拟替换点；不得用 Candidate 单项分数冒充集合选择结果。
-- 紧急发布使用 `FormDialog` 收集 10～1000 字审计原因，并明确说明它不能绕过结构、保护期、Official Core 和 Revision CAS。
+- 紧急发布使用 `FormDialog` 收集 10～1000 字审计原因，并明确说明它不能绕过结构、保护期、Official Core 和 Evolving fencing。
 - 测试点永久保护同样使用标准 `FormDialog`，不得调用浏览器 prompt；历史成员替换默认折叠但必须可追溯。
 
 ## 2026-08-01 UX 审查结论
@@ -319,20 +319,20 @@ CSS Module、焦点 Token 与错误契约迁移；后续变更由静态门禁直
 
 1. **普通层**：先显示“现在能做什么”、下一步和一个主操作。使用“测试数据版本”、“评测额度”、“质量证书”等人类文案。
 2. **高级层**：通过明确的“高级设置”或“查看规则详情”展开，承载时间策略、计分权重、并发版本和资源范围。
-3. **技术层**：只面向需要诊断的管理者，收纳 Revision ID、哈希、DQS/PQS 细分、Holdout、Feature、评测日志和协议数据。默认折叠，不得作为完成业务操作的必填输入。
+3. **技术层**：只面向需要诊断的管理者，收纳内容版本 ID、TestSet 槽/fence、哈希、DQS/PQS 细分、Holdout、Feature、评测日志和协议数据。默认折叠，不得作为完成业务操作的必填输入。
 
 统一规则：
 
 - 页面首先显示结论、影响和可执行动作，再提供证据。
-- 选择题目、学校、比赛、测试版本和质量证书时必须使用服务端资源选择器，普通层不接受内部 ID 手填。
+- 选择题目、学校、比赛和质量证书时必须使用服务端资源选择器，普通层不接受内部 ID 手填。TestSet 槽由业务规则决定，不提供 Revision 选择器。
 - 题目、学生、团队和题单选择器必须使用服务端搜索与分页；跨页选择保存稳定 ID，切换关键词、筛选或页码不得丢失已选项。固定 `pageSize` 但不显示分页/总数属于静默截断，禁止用于业务选择器。
 - 后端错误码经统一展示层翻译；ORM、SQL、堆栈、文件绝对路径和未解释英文状态不得进入 Toast 或普通错误页。
-- 学生任务页不显示 Revision ID、内部哈希或评测管线术语；管理员可在技术详情中查看。
+- 学生任务页不显示 TestSet 槽、fencing token、内部哈希或评测管线术语；管理员可在技术详情中查看。
 - 所有长表单、编排器、代码、Markdown 和测试图草稿均向全局 `UnsavedChangesProvider` 登记，不只依赖局部 `beforeunload`。
 - 普通内容页的一级标签只保留高频阅读和操作；知识、附件、Hack、复制和归档等低频或管理动作进入语义明确的“更多”或“管理”菜单。
 - 固定引用不能要求作者记忆题目、题解、榜单、Rating 或版本的内部 ID。题目和数据版本使用资源选择器；需要上下文的题解、榜单与 Rating 引用从对应来源页发起。
 - “学校”是用户侧统一称谓；仅在架构文档、API 字段和确实跨组织类型的管理界面中使用“组织”。Evaluation Credits 在中文界面统一称为“评测额度”。
-- 活动确需固定测试数据时，普通层只说明“数据已固定”“题库有更新”和更新影响；R 编号、哈希与并发版本留在技术详情。
+- Contest/Exam 持有 Stable Reader 时，普通层只说明“比赛数据已锁定”“Stable 更新将排队”；slot、graph hash、fencing token 与 Reader 身份留在技术详情。Training 和 Assignment 不显示“固定版本”。
 
 历史批量样式改造记录保存在
 [前端风格重构归档](../archive/plans/frontend-style-refactor.md)，其中的数量是历史快照，

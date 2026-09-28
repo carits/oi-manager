@@ -1,11 +1,14 @@
 ---
-status: current
+status: reference
 audience: development, operations
 last_verified: 2026-08-27
 source_of_truth: data/20260815-mode-timing-3rounds-20260827.json
 ---
 
 # 20260815 ACM / IOI 同源提交三轮耗时报告
+
+> 历史性能报告：提交耗时数据仍可用于比较 ACM/OI 执行差异，但其中固定 TestSet Revision 的说明
+> 不代表当前双槽模型。当前 Contest 使用 Stable Reader，不存在 Revision ID。
 
 ## 结论
 
