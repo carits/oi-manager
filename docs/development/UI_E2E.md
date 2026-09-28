@@ -59,6 +59,19 @@ workspace-mode.spec.ts 与 workspace-isolation.spec.ts 是全角色工作区切�
 日常 `WorkspaceSwitcher` 的目标行为是客户端软路由：确认未保存内容后先验证目标账号/组织上下文，失败留在原页且保留 dirty 状态；成功后新 URL 到达前不得显示旧工作区业务内容。
 `/identity` 的首次选择和失效恢复允许硬进入。隔离 E2E 必须分别覆盖取消、目标 403/组织失效、网络失败、个人↔学校和学校 A↔学校 B。
 
+工作区切换专项回归还必须覆盖以下竞态，而不能只验证最终 URL：
+
+- 选择当前工作区是 no-op，不请求预检、不清缓存、不改变 dirty 状态。
+- 目标预检失败时，来源 URL、Auth 上下文、缓存和未保存草稿全部保持。
+- 用户确认离开后，若在慢预检期间继续输入，导航前必须再次确认；取消后新增内容仍在，重新确认时不得重复预检。
+- 连续发起 A→B、A→C 时，旧 B 响应即使最后到达也不能覆盖 C；断言切换 generation 生效。
+- 已离开 A 后，A 请求产生的 organization-unavailable 事件不能把 B 或个人空间重定向到 `/identity`。
+- `/auth/me` 网络失败进入可恢复降级态，不能把已登录用户改成匿名或错误清除来源会话。
+- URL 已变化但 Auth 仍是旧上下文的窗口内，`RoleShell` 不得短暂渲染旧组织业务内容。
+
+这些场景对应 UI-11（预检期间新增编辑）和 UI-13（迟到组织事件）等高风险回归。测试应同时检查
+请求次数、确认框次数、页面内容和缓存作用域；单纯等待最终地址会漏掉数据丢失与跨组织闪现。
+
 ## 套件
 
 ```bash
@@ -82,6 +95,18 @@ AppShell 响应式门禁在 `human-ux-navigation.spec.ts` 覆盖 `1440×900`、`
 补充固定顶栏入口坐标、组织内 Shell DOM 连续性以及禁用 JavaScript 时的 Cookie 首屏用例。
 Cookie 首屏用例先通过真实按钮保存偏好，再将 storageState 交给无 JavaScript 的独立 Context；
 不能只等待 hydration 后的最终截图就宣称没有闪烁。账号菜单不再包含重复的工作区或业务入口。
+旧 localStorage 迁移用例必须证明：只有缺失新 Cookie 时才导入；成功后旧键被删除；已存在 Cookie、非法旧值或
+其他账号的旧键不会覆盖当前偏好。窄屏打开抽屉不得写入桌面 Cookie。
+
+## 2026-09-28 发布证据
+
+UI Shell 发布代码 `f04b0aa50adb8b0dfe95310f179378db25a1ac4a` 已通过 Web TypeScript、53 个测试文件
+279 项单元/组件测试、production build、UI state、architecture、routes 和 docs 门禁。Web canary 及
+promote 后生产消息闭环分别完成序号 368/369 与 370/371，线上 BUILD_ID 为
+`TPv-g5acV9SKdg2qySdoI`。
+
+发布消息闭环只证明 Web/API/Cookie/SSE 与提升链健康，不等价于本文件定义的多角色、双学校、dirty、
+故障注入和多视口 Playwright。后续 Shell 或 Workspace 改动仍必须运行对应专项套件，不得引用本次部署探针豁免。
 
 Training Engine 双角色套件必须用“平台 + 题号”完成快速创建和模板编排，并跑通“热身 → 分层 → 讲解 → 重新分层 → 补题”。教师中途即时换组、延时、提前结束并追加未来 Stage；学生不刷新收到 SSE，当前要求与历史进度分离。套件同时断言界面没有“普通训练 / 教练带练”、上一阶段、题库浏览器或题单选题入口。
 

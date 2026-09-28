@@ -1,11 +1,14 @@
 ---
-status: current
+status: reference
 audience: development, operations
 last_verified: 2026-09-13
 source_of_truth: remote main, production runtime, Prisma baselines/current.json, generated architecture inventory, STATUS.md
 ---
 
 # 架构收口逐项复核（2026-09-13）
+
+> 历史审计快照：其中 TestSet Revision、固定 Revision 与 Training 兼容关系描述已被 2026-09-28
+> Stable/Evolving 双槽及 Training Engine V2 最终模型取代，不得作为当前实现依据。
 
 本文逐项复核最初架构审计列出的明确问题和十项重构，不把已经解决的历史问题继续算作当前缺陷，也不把缺少外部资源的事项伪装成完成。
 

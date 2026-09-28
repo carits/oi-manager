@@ -1,8 +1,8 @@
 ---
 status: current
 audience: development, product, operations
-last_verified: 2026-09-13
-source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/rating, apps/server/src/modules/training
+last_verified: 2026-09-28
+source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/rating, apps/server/src/modules/contest
 ---
 
 # 比赛 Rating 领域
@@ -10,8 +10,8 @@ source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/ratin
 ## 领域边界
 
 Rating 只消费比赛结束后的不可变 `ContestStandingSnapshot`，不直接读取实时榜单作为历史事实。`Contest` 是
-Rating 配置、榜单快照和结算批次的规范比赛身份；`Training(type=contest)` 仅暂时承载提交、参与者等历史运行子表，
-三类 Rating 事实只保存规范 `contestId`，不再写入或保留运行 `trainingId`。旧 `Contest.countRating`、用户资料上的旧 rating
+Rating 配置、榜单快照和结算批次的唯一规范比赛身份；参赛者、提交、排名与结算均从 Contest 领域读取，
+三类 Rating 事实只保存规范 `contestId`。旧 `Contest.countRating`、用户资料上的旧 rating
 字段不参与新链路。
 
 系统按赛制和范围建立相互独立的池：
@@ -78,8 +78,8 @@ ContestRatingConfig、ContestStandingSnapshot、RatingBatch 只以 Contest UUID 
 校验后删除 Contest/ContestProblem 的运行外键。ContestUserProblemStatus 只保留 Contest UUID，
 ContestParticipant 保存组织快照和 Rating 锁定事实。
 
-Rating 查询、结算、到期发现、同池先后顺序和重放均从 Contest 关系进入；历史
-Training(type=contest) 行不再读取、同步或作为失败回退。
+Rating 查询、结算、到期发现、同池先后顺序和重放均从 Contest 关系进入；历史 Training 比赛行不再读取、同步或作为失败回退，
+新比赛路径也不创建 Training 投影。
 
 ## 最终结算和重放
 

@@ -5,12 +5,11 @@ last_verified: 2026-08-24
 source_of_truth: Vitest configs, apps/server/tests, package scripts
 ---
 
-## Server database isolation
+## Server 数据库隔离
 
-Server tests use the PostgreSQL `test` schema and remain serial. After every test, the harness issues one multi-table
-`TRUNCATE ... RESTART IDENTITY CASCADE`, then recreates the platform fixture. Do not restore the historical loop that
-truncated each table separately: it traversed the same foreign-key graph 66 times and added about 4.5 seconds to every
-test, including pure unit tests. Never point `TEST_DATABASE_URL` at the production `public` schema.
+Server 测试使用 PostgreSQL 的 `test` schema，并保持串行执行。每个测试结束后，测试框架执行一次多表
+`TRUNCATE ... RESTART IDENTITY CASCADE`，然后重新创建平台 fixture。不要恢复逐表清理的旧循环：它会沿外键图遍历 66 次，
+每个测试额外增加约 4.5 秒，即使是纯单元测试也会受影响。`TEST_DATABASE_URL` 绝不能指向生产 `public` schema。
 
 # 单元与集成测试
 

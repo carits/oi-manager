@@ -5,14 +5,13 @@ last_verified: 2026-08-30
 source_of_truth: deploy/systemd/*.service, deploy/systemd/*.timer, scripts/install-systemd-services.sh
 ---
 
-## Persistent operation timers
+## 持久化运维定时器
 
-Monitoring and backup schedules are installed with the application services and run through the allowlisted
-`oi-manager-operations@.service` template. Six timers are enabled in production: five-minute monitoring, daily
-database and asset backups, weekly database and asset restore verification, and the weekly security baseline.
-Every timer uses `Persistent=true`, so missed calendar work is resumed after a host outage. The task service runs as
-`ecs-user`, applies resource limits and `NoNewPrivileges`, mounts the repository read-only, and only permits writes to
-`.run` and `/data/backups/oi-manager`.
+监控和备份计划随应用服务安装，并通过加入允许列表的
+`oi-manager-operations@.service` 模板运行。生产环境启用六个定时器：每五分钟监控、每日数据库和资源备份、每周数据库和资源恢复校验，以及每周安全基线。
+每个定时器都使用 `Persistent=true`，主机中断后会补执行错过的日历任务。任务服务以
+`ecs-user` 运行，启用资源限制和 `NoNewPrivileges`，以只读方式挂载仓库，只允许写入
+`.run` 和 `/data/backups/oi-manager`。
 
 ```bash
 sudo pnpm operations:timers:install
@@ -22,9 +21,7 @@ pnpm operations:timers:verify
 pnpm runtime:audit
 ```
 
-The off-host log archive timer is installed but remains disabled until both a real upload command and an independent
-remote read-back verifier are configured. The installer runs the monitor successfully before removing the matching
-legacy Cron entries, so a failed migration retains the previous scheduler.
+主机外日志归档定时器已经安装，但在真实上传命令和独立远端回读校验器均配置前保持禁用。安装器会先成功运行监控，再删除对应的旧 Cron 项；如果迁移失败，旧调度器会保留。
 
 # systemd 恢复部署
 
@@ -78,7 +75,7 @@ sudo bash scripts/promote-api.sh
 `SIGUSR2`。旧实例停止领取新任务，等待在途 Judge/Hack 后以 1012 关闭 WebSocket，Judge 自动重连新实例；
 HTTP 切换完成后只重启一份 Worker。候选未就绪时不会切换。
 
-Revision 投影一致性不属于流量 readiness，由 `pnpm judge:projection:check` 与运维定时任务独立报警。
+CurrentJudgeRun 投影一致性不属于流量 readiness，由 `pnpm judge:projection:check` 与运维定时任务独立报警；TestSet 槽只检查 Stable/Evolving Reader/Writer 屏障。
 
 ## 验证
 

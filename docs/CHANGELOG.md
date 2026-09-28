@@ -1,11 +1,17 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-27
+last_verified: 2026-09-28
 source_of_truth: Git history
 ---
 
-## 2026-09-28 — UI Shell 分批统一（分支实现，未部署）
+## 2026-09-28 — 开发文档事实与中文说明审计
+
+- 对齐 Contest-only、Stable/Evolving 双槽、CurrentJudgeRun 和当前 Prisma 199 模型事实，移除会误导新开发者的旧归档/Training 兼容表述。
+- 将当前运维、测试、存储、systemd、数据库参考和外部依赖说明统一改为中文；命令、路径、环境变量、协议和代码标识保留原写法。
+- 将全项目可用性静态审计快照标记为 `reference`，并新增 [开发文档审计记录](development/DOCUMENTATION_AUDIT_2026-09-28.md) 说明历史英文证据和当前基线。
+
+## 2026-09-28 — UI Shell 与工作区统一上线
 
 - 顶栏品牌与工作区入口固定在左侧，消息和通知独立靠右；导航开关不再隐藏或移动顶栏。
 - 清理账号菜单中的知识广场、我的文章、切换身份重复入口；原业务路由和导航仍保留。
@@ -15,9 +21,21 @@ source_of_truth: Git history
 - 对齐相互冲突的比赛附件静态测试；保留现有附件主标签，并补齐加载骨架中的同一入口，避免加载后标签跳变。
 - 个人、组织和账号页统一挂在根级业务壳层；组织模块切换和跨工作区导航不再重建整个 AppShell。
 - 日常工作区切换改为“未保存确认 → 目标身份权威预检 → 缓存隔离 → 客户端软路由”；目标学校不可用不会回收原学校上下文，`/identity` 仅保留首次选择/异常恢复硬进入。
+- 增加切换 generation、组织事件来源校验和预检后的二次 dirty revision 检查；旧请求迟到不能影响新工作区，慢预检期间继续输入也不会被静默清除。
+- 旧 localStorage 侧栏偏好在新 Cookie 缺失时一次性迁移；桌面偏好可服务端首帧读取，移动抽屉继续不持久化。
 - 主导航去重：学生管理保留一级入口，教师权限、申请、邀请、加入设置和学校资产统一归入学校管理 Tabs。
 - 训练列表与学生管理列表将筛选/页码写入 URL，并统一首次错误、旧数据刷新失败和返回/刷新恢复语义。
-- 实施与验证范围见 [UI Shell 实施记录](development/UI_SHELL_ROLLOUT.md)。当前仍未合并、部署；完整多角色 E2E 与最新 HEAD 发布验收单独执行。
+- 实施背景、授权边界、切换时序与维护约束见 [UI Shell 实施记录](development/UI_SHELL_ROLLOUT.md)。
+- 发布代码 `f04b0aa50adb8b0dfe95310f179378db25a1ac4a` 已进入 `main`；Web 53 文件/279 项测试、TypeScript、production build、UI state、architecture、routes 和 docs 门禁通过。
+- Web BUILD_ID `TPv-g5acV9SKdg2qySdoI` 已提升，canary 与正式双账号消息闭环分别通过序号 368/369 和 370/371；本批无数据库迁移或业务数据修改。
+
+## 2026-09-28 — TestSet Revision 退役与双槽文档收口
+
+- 当前架构只允许每题一个 Stable 和可选 Evolving，不存在 TestSet Revision、revisionId、latest 指针或可恢复历史版本；测试数据身份由 slot、graph hash 与 fencing token 表达。
+- Training 每次提交读取当时 Evolving（缺失回退 Stable），Assignment 每次提交读取 Stable；Contest/Exam 在运行强逻辑期间持有 Stable Reader，Writer 排队等待释放。
+- Promotion 捕获 Evolving 到事务临时文件验证后原子替换 Stable；临时副本不进入业务模型，也不形成第三版本，底层 TestdataObject 继续按内容寻址复用。
+- Training 仍是一套全局 Stage 时间轴与稳定分组模型；StageProblem 不固定 TestSet 版本，设计器只按“平台 + 题号”添加 canonical Problem。
+- 本文件后续出现的 “TestSet Revision / Rxx / 固定 Revision” 条目是当时版本的历史发布记录，不再表示当前 API、Schema 或产品能力；当前事实源以评测架构、数据模型、数据库参考和 API 参考为准。
 
 
 

@@ -9,6 +9,14 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 
 本清单由实际页面生成并与 E2E 路由清单同步。组织页面统一使用组织路径，个人页面使用个人路径，平台页面使用平台路径。旧教师端和学生端页面已删除，不属于可访问路由。
 
+认证应用路由共享根级 `Providers -> RoleShell -> AppShell`，页面 layout 不得重复创建外壳。组织授权边界
+固定在 `/org/[organizationId]/layout.tsx`；其下 module 与 segments 只替换内容区域。URL 中的
+organizationId 表示工作区意图，SSR 和浏览器 `/api/auth/me` 都必须用同一 ID 建立权威组织上下文。
+
+日常个人↔组织和组织↔组织导航使用软路由与目标身份预检；`/identity` 仅用于首次选择或身份失效恢复。
+导航到新 URL 后，在 Auth 上下文对齐前不得渲染旧工作区内容。页面存在未保存内容时统一经过
+`UnsavedChangesProvider`，不得由各路由实现自己的硬跳转绕过保护。
+
 | 路径 | 访问范围 | 用途 |
 |---|---|---|
 | `/` | 见页面权限布局 | 当前页面 |
@@ -79,7 +87,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/teams/[id]/contests/[cid]/statements` | 活动管理员 | 团队训练题面矩阵管理 |
 | `/personal/training-sessions` | 已登录账号 | 独立教练训练列表 |
 | `/personal/training-sessions/[id]` | 教练或训练学员 | 冻结 Stage 摘要、当前要求/历史进度、提交和 Runtime Intervention 工作台 |
-| `/personal/training-sessions/[id]/design` | 团队管理员 | 尚未开始 Stage 的用途、规则、Stage 分组、题号添加和固定 Revision 设计器 |
+| `/personal/training-sessions/[id]/design` | 团队管理员 | 尚未开始 Stage 的用途、规则、稳定分组、平台+题号和动态测试数据槽规则设计器 |
 | `/platform-admin` | 见页面权限布局 | 当前页面 |
 | `/platform-admin/blog-moderation` | 平台管理员 | 博客举报、内容处置与社区精选治理 |
 | `/platform-admin/knowledge` | 平台管理员 | 保留平台管理外壳的知识广场 |

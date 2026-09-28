@@ -1,11 +1,14 @@
 ---
-status: current
+status: reference
 audience: development, operations
 last_verified: 2026-08-27
 source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, route manifest
 ---
 
 # 全平台审计记录（2026-08-24）
+
+> 历史审计快照：其中 TestSet Revision 数量、固定版本覆盖率和旧 Training 关系只描述当时生产状态；
+> 当前实现以 Stable/Evolving 双槽、全局 Stage Training Engine V2 和最新 `STATUS.md` 为准。
 
 本记录跟踪全页面、全路由、全端口、角色权限、核心功能、测试、监控、压力测试与运维待办。
 只有同时具备源码检查、自动化验证和真实 Edge 页面证据的项目才标记完成。

@@ -2,126 +2,64 @@
 status: current
 audience: operations
 last_verified: 2026-08-30
-source_of_truth: production host read-only audit and Aliyun console login state
+source_of_truth: 生产主机只读审计与阿里云控制台登录状态
 ---
 
-# Remaining external dependencies
+# 待完成的外部依赖
 
-All repository-only and isolated-runtime work has been separated from the
-items below. These items must not be marked complete from unit tests or local
-loopback simulations: each requires an external account, destination, domain
-or explicit destructive authorization.
+仓库内和隔离运行环境中的工作已经与以下事项分开。以下项目不能仅凭单元测试或本机回环模拟标记为完成；每一项都需要外部账号、目标地址、域名或明确的破坏性操作授权。
 
-## Aliyun instance and alert audit
+## 阿里云实例与告警审计
 
-Known host-side evidence:
+已知主机侧证据：
 
-- ECS instance: `i-bp1exf7fip8n8i3e03jv`, region `cn-hangzhou`.
-- CloudMonitor 4.0 Agent, Aliyun Assist and Aegis are active after the controlled
-  reboot.
-- CloudMonitor is uploading host metrics without agent errors, but the returned
-  collection configuration contains no process, HTTP, TCP or ping monitors.
-- The host has no cloud API credentials or RAM role that can query ActionTrail,
-  ECS instance events, alarm contacts or security-group rules.
-- The ECS metadata endpoint was rechecked on 2026-08-30: instance and region
-  metadata resolve normally, while `ram/security-credentials/` still returns
-  `404`, confirming that no RAM role is attached.
-- The Codex in-app browser and the user's available Edge extension session both
-  redirect the Aliyun console to the official login page. The Edge login tab is
-  retained for owner handoff; no password, cookie or browser storage was read.
+- ECS 实例：`i-bp1exf7fip8n8i3e03jv`，区域 `cn-hangzhou`。
+- 受控重启后 CloudMonitor 4.0 Agent、云助手和云盾 Aegis 均处于活动状态。
+- CloudMonitor 正常上传主机指标，但返回的采集配置没有进程、HTTP、TCP 或 ping 监控。
+- 主机没有可查询 ActionTrail、ECS 事件、告警联系人或安全组规则的云 API 凭据或 RAM 角色。
+- 2026-08-30 再次检查 ECS 元数据：实例和区域元数据正常，但 `ram/security-credentials/` 仍返回 `404`，确认未绑定 RAM 角色。
+- Codex 内置浏览器和用户可用的 Edge 扩展会把阿里云控制台重定向到官方登录页。Edge 登录标签页已保留给负责人接管；未读取密码、Cookie 或浏览器存储。
 
-Required next action: the owner signs in to the retained Aliyun console tab and
-then tells Codex that the session is ready.
-The read-only audit will then inspect the 2026-08-19 instance event timeline,
-ActionTrail, CloudMonitor contacts/thresholds/reboot notifications and the
-security group. No cloud setting will be changed without separate approval.
+下一步需要负责人在保留的阿里云控制台标签页登录，然后告知 Codex 会话已就绪。只读审计随后会检查 2026-08-19 实例事件时间线、ActionTrail、CloudMonitor 联系人/阈值/重启通知和安全组。未经单独授权不会修改云端设置。
 
-## External alert delivery
+## 外部告警送达
 
-The repository alert adapter, retry behavior and failed/recovered loopback
-contract are verified. Production has no real Webhook/SMTP recipient configured,
-so delivery to a person or external incident system is not proven.
-The 2026-08-30 host audit confirms that `MONITOR_ALERT_COMMAND` and
-`MONITOR_ALERT_WEBHOOK_URL_FILE` are both absent. The persistent systemd monitor
-timer is active and healthy, but an on-host timer cannot prove external delivery
-or detect a complete host outage by itself.
+仓库告警适配器、重试行为以及失败/恢复回环契约均已验证。生产环境尚未配置真实 Webhook/SMTP 收件人，因此尚未证明告警能送达人员或外部事件系统。
+2026-08-30 主机审计确认 `MONITOR_ALERT_COMMAND` 和 `MONITOR_ALERT_WEBHOOK_URL_FILE` 均不存在。持久化 systemd 监控定时器运行正常，但仅在主机内运行不能证明外部送达，也不能独立发现整机宕机。
 
-Required input: one real alert destination, preferably an HTTPS Webhook URL
-stored in a mode-600 file, plus permission to send one synthetic failure and
-one recovery notification. An email destination also requires SMTP host,
-port, sender and credentials.
+需要提供一个真实告警目的地，优先使用保存在权限 `600` 文件中的 HTTPS Webhook URL，并授权发送一次模拟故障和一次恢复通知。若使用邮件，还需要 SMTP 主机、端口、发件人和凭据。
 
-A repository-native GitHub Actions uptime workflow was added as a possible
-off-host detector. Manual Run `33290187717` on commit `2725cf9` was rejected
-before runner allocation with GitHub's billing annotation: recent account
-payments failed or the spending limit must be increased. The workflow is now
-`disabled_manually` to prevent queued failures. Restoring Actions billing (or
-providing another external runner) is therefore an additional required input;
-afterward the workflow must be enabled and its healthy plus failure/recovery
-Issue paths executed for real.
+仓库新增了 GitHub Actions 可用性工作流作为可能的主机外探针。提交 `2725cf9` 的手动运行 `33290187717` 在分配 Runner 前因 GitHub 账单提示被拒绝：近期付款失败或需要提高消费上限。为避免排队失败，该工作流现为 `disabled_manually`。因此恢复 Actions 账单（或提供其他外部 Runner）也是必需输入；之后必须实际启用工作流并执行健康、失败和恢复 Issue 流程。
 
-The account currently has one public repository, `carits/codeforces_codes`, and
-the authenticated operator has admin access with Actions enabled. It is not an
-appropriate monitoring destination without owner approval because adding OJ
-operations workflows would mix unrelated responsibilities. The recommended
-alternative is a dedicated public repository such as `carits/oi-manager-monitor`.
-Required owner decision: repair private-repository Billing, explicitly authorize
-reuse of `codeforces_codes`, or authorize creation of the dedicated public
-monitoring repository. No cross-repository write has been performed.
+当前账号有一个公共仓库 `carits/codeforces_codes`，认证操作员拥有管理员权限且已启用 Actions。未经负责人批准不应把它作为监控目标，因为加入 OJ 运维工作流会混入无关职责。建议使用单独的公共监控仓库，例如 `carits/oi-manager-monitor`。负责人需要决定：修复私有仓库账单、明确授权复用 `codeforces_codes`，或授权创建专用公共监控仓库。尚未执行跨仓库写入。
 
-## Off-host log retention
+## 主机外日志留存
 
-Local collection, manifests, SHA-256 checks, spool retention, trusted upload
-execution and an independent remote-readback verifier contract are verified.
-Shell command fragments are rejected, and retention markers are created only
-after both absolute executables succeed. The production host has no SLS/file-store
-configuration, no object-storage credentials and no second-host target. Local
-spool is not off-host disaster recovery.
-The off-host archive systemd timer is installed but intentionally disabled;
-`LOG_ARCHIVE_COMMAND` and `LOG_ARCHIVE_VERIFY_COMMAND` remain absent. It must not
-be enabled until both a real uploader and an independent remote read-back
-verifier have been installed and tested.
+本地采集、清单、SHA-256 校验、spool 留存、受信任上传执行和独立远端回读校验契约均已验证。Shell 命令片段会被拒绝，且只有两个绝对路径可执行文件都成功后才会创建留存标记。生产主机没有 SLS/文件存储配置、对象存储凭据或第二台主机目标；本地 spool 不能替代主机外灾备。
+主机外归档 systemd 定时器已安装但有意禁用；`LOG_ARCHIVE_COMMAND` 和 `LOG_ARCHIVE_VERIFY_COMMAND` 仍为空。在真实上传器和独立远端回读校验器安装并测试前，不得启用它。
 
-Required input: either an OSS/S3-compatible bucket and scoped credentials, or
-an SSH destination and host key. The owner must also choose the retention
-period. After configuration, the uploader and verifier executables will be
-installed, then one archive will be uploaded, downloaded and checksum-verified
-before cleanup is enabled.
+需要提供 OSS/S3 兼容 Bucket 和最小权限凭据，或 SSH 目标和主机密钥，并选择留存周期。配置后应安装上传器和校验器，上传一份归档、下载并校验校验和，然后才能启用清理。
 
-## TLS and strict browser security
+## TLS 与严格浏览器安全
 
-Production read-only checks on 2026-08-28 found:
+2026-08-28 的生产只读检查发现：
 
-- Nginx listens on port 80 with `server_name _` and proxies Web/API traffic.
-- `http://47.99.222.76/` responds, while port 443 refuses connections.
-- No active Certbot/Caddy service or `/etc/letsencrypt` certificate exists.
-- Application CORS is intentionally fixed to `http://47.99.222.76`.
-- Port 3000 is loopback-only. Public traffic must enter through Nginx on 80/443; external probes must never depend on the Next.js upstream port.
+- Nginx 监听 80 端口，`server_name _`，并代理 Web/API 流量。
+- `http://47.99.222.76/` 有响应，而 443 端口拒绝连接。
+- 没有活动的 Certbot/Caddy 服务，也没有 `/etc/letsencrypt` 证书。
+- 应用 CORS 有意固定为 `http://47.99.222.76`。
+- 3000 端口只监听回环地址。公网流量必须经 Nginx 的 80/443 进入；外部探针不能依赖 Next.js 上游端口。
 
-Required input: a domain whose DNS A/AAAA record is controlled by the owner and
-points to this ECS, plus permission to issue/install a certificate. The final
-change will add HTTPS, HTTP redirect, Secure Cookie, HSTS and strict CSP, update
-CORS and application URLs, then verify browser flows and security headers.
+需要负责人提供 DNS A/AAAA 记录可控且指向此 ECS 的域名，并授权签发/安装证书。最终变更将增加 HTTPS、HTTP 跳转、Secure Cookie、HSTS 和严格 CSP，更新 CORS 与应用 URL，然后验证浏览器流程和安全响应头。
 
-Repository readiness completed on 2026-08-29: a guarded certificate/domain/key
-renderer, isolated Nginx syntax verifier, nonce-based report-only/enforce CSP,
-and response nonce checker are available and pass. No production Nginx or
-cookie setting was changed without the missing domain and certificate.
+仓库侧准备工作已于 2026-08-29 完成：受保护的证书/域名/密钥渲染器、隔离的 Nginx 语法校验器、基于 nonce 的 report-only/enforce CSP 和响应 nonce 检查器均可用且通过。缺少域名和证书前不会修改生产 Nginx 或 Cookie 设置。
 
-## Production database overwrite exercise
+## 生产数据库覆盖演练
 
-The guarded restore command and its isolated destructive verifier are deployed.
-It validates the archive in a candidate database, stops writes, creates an
-immutable pre-restore dump and rolls back automatically on database failure.
-The production database has not been overwritten merely to prove tooling.
+受保护的恢复命令和隔离破坏性校验器已经部署。它会在候选数据库校验归档、停止写入、创建不可变的恢复前转储，并在数据库失败时自动回滚。生产数据库没有仅为证明工具而被覆盖。
 
-Required input: the exact backup path and SHA-256 selected by the owner, an
-approved maintenance window and an explicit statement authorizing replacement
-of database `oi_manager`. See `DISASTER_DATABASE_RESTORE.md`.
+需要负责人提供选定的备份路径和 SHA-256、获批准的维护窗口，以及明确授权替换数据库 `oi_manager` 的声明。详见 `DISASTER_DATABASE_RESTORE.md`。
 
-## Completion rule
+## 完成规则
 
-Each section is complete only after the real external action has been executed
-and its receipt, cloud-console evidence, downloaded archive checksum, HTTPS
-browser result or restore audit log has been recorded. Missing authority is not
-substituted with a narrower simulation.
+每个小节只有在真实外部动作执行后才能完成，并且必须记录收据、云控制台证据、下载归档校验和、HTTPS 浏览器结果或恢复审计日志。缺少授权时不能用更窄范围的模拟替代。

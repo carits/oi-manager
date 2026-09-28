@@ -5,18 +5,17 @@ last_verified: 2026-08-31
 source_of_truth: storage config, BlobStore implementations, TestSet slot services and file HTTP adapters
 ---
 
-## 2026-08-24 security contract
+## 2026-08-24 安全约束
 
-- Only `STORAGE_ROOT/public` is mounted as static content. Private files are served by authenticated APIs.
-- Read, move, delete and hard-delete paths use `path.relative` containment checks. String-prefix checks are forbidden
-  because a sibling directory such as `storage-evil` shares the `storage` prefix.
-- Team and contest files require an active team membership in the current workspace scope. Campus resources must also
-  match `JwtPayload.organizationId`; management operations require the `owner` or `admin` team role.
-- Global administrators do not bypass ownership for arbitrary user/team files. Problem access continues through the
-  centralized problem permission policy.
-- Upload validation checks size, extension-to-MIME pairing and actual content. Images, PDF and archives require their expected
-  magic signature; text/source/testdata files reject NUL and excessive control bytes.
-- Soft-deleted files are excluded from metadata and download access even when the former record was public.
+- 只有 `STORAGE_ROOT/public` 挂载为静态内容；私有文件必须通过带认证的 API 提供。
+- 读取、移动、删除和硬删除路径均使用 `path.relative` 做目录包含校验。禁止只做字符串前缀判断，
+  因为 `storage-evil` 等兄弟目录也会共享 `storage` 前缀。
+- 团队和比赛文件要求当前工作区中存在有效团队成员关系。校园资源还必须匹配 `JwtPayload.organizationId`；
+  管理操作要求团队 `owner` 或 `admin` 角色。
+- 全局管理员不能绕过普通用户/团队文件的所有权校验；题目访问继续统一经过题目权限策略。
+- 上传校验同时检查大小、扩展名与 MIME 的对应关系及真实内容。图片、PDF 和压缩包必须匹配预期 Magic Bytes；
+  文本、源码和测试数据拒绝 NUL 字节及过量控制字符。
+- 软删除文件即使原记录曾公开，也不得继续出现在元数据和下载接口中。
 
 # 文件存储
 

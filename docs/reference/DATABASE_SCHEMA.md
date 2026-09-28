@@ -220,7 +220,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 每个 Stage 通过部分唯一索引保证恰好一个默认计划；默认计划必须 `groupId = null`，分组覆盖必须引用同 Session 的稳定 Group。Session.currentStageId 全局唯一，服务层和一致性检查同时保证其指向本 Session 唯一 RUNNING Stage。ProblemPlan、StageProblem 与 StagePlan 必须属于同一 Stage。
 
-Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`（StagePlan）, `TrainingSessionStageProblemPlan`, `TrainingSessionStageRuntimeSnapshot`, and `TrainingSessionStageTimeAdjustment`.
+Training Engine V2 涉及的模型：`TrainingSessionGroup`、`TrainingSessionGroupChange`、`TrainingSessionStageGroup`（StagePlan）、`TrainingSessionStageProblemPlan`、`TrainingSessionStageRuntimeSnapshot` 和 `TrainingSessionStageTimeAdjustment`。
 
-| `TrainingSessionGroup` | V2 stable session group |
-| `TrainingSessionGroupChange` | V2 participant group change audit |
+| `TrainingSessionGroup` | V2 稳定的训练会话分组 |
+| `TrainingSessionGroupChange` | V2 学员换组审计 |
