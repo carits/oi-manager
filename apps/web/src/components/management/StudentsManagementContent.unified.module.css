@@ -46,3 +46,5 @@
   z-index: 9999;
   animation: toastIn 0.25s ease;
 }
+
+.u8 { margin: 0 0 var(--space-3); color: var(--text-muted); font-size: var(--text-sm); }
