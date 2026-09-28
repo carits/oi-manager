@@ -6,7 +6,7 @@
 .resultMeta { color: var(--text-secondary); font-size: 12px; }
 .resultSuccess { color: var(--success); font-weight: 700; }
 .resultWarning { color: var(--warning); font-weight: 700; }
-.resultError { color: var(--danger); font-weight: 700; }
+.resultError { color: var(--error); font-weight: 700; }
 .resultIdle { color: var(--text-secondary); }
 .problemLink { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
 .problemIdentity { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
