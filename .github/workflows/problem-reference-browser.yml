@@ -1,0 +1,50 @@
+name: Problem reference browser (mocked API)
+
+on:
+  pull_request:
+    paths:
+      - 'apps/web/src/features/problem-selection/**'
+      - 'apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx'
+      - 'apps/web/src/components/ui/**'
+      - 'packages/contracts/src/problem-selection.ts'
+      - 'e2e/problem-reference/**'
+      - '.github/workflows/problem-reference-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: problem-reference-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused?schema=unused
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @oi-manager/contracts build
+      - run: pnpm --filter @oi-manager/shared build
+      - run: pnpm exec playwright install --with-deps chromium firefox
+      - run: pnpm exec playwright test --config=e2e/problem-reference/playwright.config.ts
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: problem-reference-browser
+          path: |
+            test-results/problem-reference/browser
+            test-results/problem-reference/report
+          retention-days: 7
