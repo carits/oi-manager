@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/Badge'
 import { Empty } from '@/components/ui/Empty'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
+import { ProblemReferenceLink } from '@/features/problem-selection'
 import type { Assignment, Stage } from '../model/trainingDesign'
 import { closeSubtaskSelection, moveItem, normalizeProblemOrder, removeSubtaskWithDependents, stageKinds, unlockLabel } from '../model/trainingDesign'
 import { AssignmentPolicyEditor, UnlockEditor } from './TrainingProblemPolicyEditors'
@@ -67,11 +68,11 @@ export function TrainingProblemChain({
         </div>
         {!problems.length ? <Empty title="当前阶段尚未分配题目" description="在下方按题号添加；讲解、复盘阶段可以留空。" /> : problems.map((problem, index) => <article
           key={problem.clientKey}
-          draggable
-          onDragStart={() => onDraggedProblemChange(index)}
+          draggable={!readOnly}
+          onDragStart={() => { if (!readOnly) onDraggedProblemChange(index) }}
           onDragOver={event => event.preventDefault()}
           onDrop={() => {
-            if (draggedProblem != null) updateProblems(items => normalizeProblemOrder(moveItem(items, draggedProblem, index)))
+            if (!readOnly && draggedProblem != null) updateProblems(items => normalizeProblemOrder(moveItem(items, draggedProblem, index)))
             onDraggedProblemChange(null)
           }}
           className={styles.problemChainCard}
@@ -79,10 +80,7 @@ export function TrainingProblemChain({
           <div className={styles.problemChainSummary}>
             <GripVertical size={15} aria-hidden="true" />
             <span className={styles.problemOrder}>{index + 1}</span>
-            <div>
-              <strong>{problem.Problem.problemId}</strong>
-              <span>{problem.Problem.title}</span>
-            </div>
+            <div><ProblemReferenceLink problem={problem.Problem} /></div>
             <StatusBadge variant="neutral">目标：{problem.targetScore ?? 100} 分</StatusBadge>
           </div>
           <div className={styles.problemQuickActions}>

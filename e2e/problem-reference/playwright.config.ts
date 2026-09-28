@@ -10,7 +10,7 @@ export default defineConfig({
   retries: 0,
   forbidOnly: Boolean(process.env.CI),
   outputDir: path.resolve(__dirname, '../../test-results/problem-reference/browser'),
-  reporter: [['line'], ['html', { outputFolder: 'test-results/problem-reference/report', open: 'never' }]],
+  reporter: [['line'], ['html', { outputFolder: path.resolve(__dirname, '../../test-results/problem-reference/report'), open: 'never' }]],
   use: { baseURL: 'http://127.0.0.1:3197', headless: true, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: { command: 'node e2e/problem-reference/server.mjs', cwd: path.resolve(__dirname, '../..'), url: 'http://127.0.0.1:3197', timeout: 60_000, reuseExistingServer: false },
   projects: [

@@ -44,6 +44,7 @@ test('single lookup shows a linked title before explicit addition and never subm
   await expect(link).toHaveAttribute('target', '_blank')
   await expect(selected(page)).toHaveCount(0)
   expect(requests).toEqual([[{ clientKey: 'single', platform: 'carits', problemId: 'A' }]])
+  await testInfo.attach('single-reference', { body: await page.screenshot(), contentType: 'image/png' })
   const popupPromise = page.waitForEvent('popup')
   await link.click()
   const popup = await popupPromise
@@ -54,7 +55,6 @@ test('single lookup shows a linked title before explicit addition and never subm
   await expect(selected(page)).toHaveCount(1)
   await expect(number(page)).toHaveValue('')
   await expect(page.getByTestId('form-submits')).toHaveText('0')
-  if (testInfo.project.name === 'chromium') await testInfo.attach('single-reference', { body: await page.screenshot(), contentType: 'image/png' })
 })
 
 for (const host of ['训练创建', '训练设计', '训练追加', '比赛', '作业', '题单']) {
@@ -90,11 +90,17 @@ test('Enter flushes the timer once and remains a lookup, not an implicit add', a
 test('composition does not query unfinished input', async ({ page }) => {
   const requests = await api(page)
   await page.goto('/personal/training-sessions')
-  await number(page).dispatchEvent('compositionstart')
-  await number(page).fill('A')
+  await number(page).focus()
+  // fill() is a committed text insertion in Firefox and can end composition.
+  // Emit the browser's composition/input sequence without synthetic key presses.
+  await number(page).evaluate(element => {
+    element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }))
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(element, 'A')
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, data: 'A', inputType: 'insertCompositionText', isComposing: true }))
+  })
   await page.waitForTimeout(550)
   expect(requests).toHaveLength(0)
-  await number(page).dispatchEvent('compositionend')
+  await number(page).evaluate(element => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'A' })))
   await expect(add(page)).toBeEnabled()
   expect(requests).toHaveLength(1)
 })
@@ -120,7 +126,7 @@ test('a late response cannot replace a newer number or platform', async ({ page 
       held = true
       await new Promise<void>(resolve => { release = resolve })
     }
-    await reply(route, items).catch(() => undefined) // The deliberately stale transport can already be aborted.
+    await reply(route, items).catch(() => undefined)
   })
   await page.goto('/personal/training-sessions')
   await number(page).fill('001')
@@ -191,7 +197,7 @@ test('batch lookup is explicit and partial business acceptance preserves failed 
   await expect(page.getByTestId('add-calls')).toHaveText('2')
   await expect(dialog).toContainText('未找到')
   await expect(dialog.getByRole('button', { name: '加入 0 道题' })).toBeDisabled()
-  if (testInfo.project.name === 'chromium') await testInfo.attach('batch-partial', { body: await page.screenshot(), contentType: 'image/png' })
+  await testInfo.attach('batch-partial', { body: await page.screenshot(), contentType: 'image/png' })
   await dialog.getByRole('button', { name: '取消', exact: true }).click()
   await page.getByRole('button', { name: '放弃并关闭' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
