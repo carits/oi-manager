@@ -382,7 +382,7 @@ async function main() {
           problemId: ids.problem,
           type: 'statement',
           format: 'markdown',
-          language: 'zh-CN',
+          language: 'zh',
           content: '# E2E A Plus B\n\nRead two integers and print their sum.',
         },
         {
@@ -390,7 +390,7 @@ async function main() {
           problemId: ids.problem,
           type: 'solution',
           format: 'markdown',
-          language: 'zh-CN',
+          language: 'zh',
           content: 'Read, add, and print.',
           isVisible: true,
         },
@@ -403,7 +403,7 @@ async function main() {
       organizationId: ids.organization, createdBy: ids.principal, scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000), rankingMode: 'PROGRESS_ONLY', peerVisibility: 'PROGRESS',
       defaultAccessPolicy: 'SEQUENTIAL',
       Groups: { create: { id: trainingGroupId, name: '默认组', orderIndex: 0 } },
-      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, kind: 'TRAINING', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, alias: 'A', orderIndex: 0, titleSnapshot: 'E2E A Plus B', statementsSnapshot: [{ type: 'statement', format: 'markdown', language: 'zh-CN', content: '# E2E A Plus B\n\nRead two integers and print their sum.', fileUrl: null }] } } } },
+      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, kind: 'TRAINING', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, alias: 'A', orderIndex: 0, titleSnapshot: 'E2E A Plus B', statementsSnapshot: [{ type: 'statement', format: 'markdown', language: 'zh', content: '# E2E A Plus B\n\nRead two integers and print their sum.', fileUrl: null }] } } } },
     } })
     await prisma.trainingSessionParticipant.create({ data: {
       id: 'e2e-training-participant',
