@@ -86,7 +86,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
     initialFocusRef.current = initialFocus
     setDirectoryEnabled(true)
     setOpen(true)
-    if (loaded || loading) return
+    if (loaded || directory.refreshing || !directoryEnabled) return
     await directory.retry()
   }
   useEffect(() => { closeSwitcher() }, [closeSwitcher, pathname, user?.userId])
