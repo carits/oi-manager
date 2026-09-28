@@ -24,6 +24,8 @@ export interface ApiClientOptions extends Omit<RequestInit, 'body'> {
   anonymous?: boolean
   /** Account-level APIs must not inherit the organization URL context. */
   accountScoped?: boolean
+  /** Preflight reads may inspect a target organization without invalidating the current URL context. */
+  suppressOrganizationUnavailableEvent?: boolean
 }
 
 export type ApiErrorKind =
@@ -194,7 +196,7 @@ export class ApiClient {
     endpoint: string,
     options: ApiClientOptions = {}
   ): Promise<ApiClientResponse<T>> {
-    const { signal, body, timeout, anonymous = false, accountScoped = false, ...fetchOptions } = options
+    const { signal, body, timeout, anonymous = false, accountScoped = false, suppressOrganizationUnavailableEvent = false, ...fetchOptions } = options
     const url = `${this.baseURL}${endpoint}`
 
     // 判断是否为 FormData
@@ -242,6 +244,7 @@ export class ApiClient {
         window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT))
       }
       if (
+        !suppressOrganizationUnavailableEvent &&
         (parsed.code === 'ORGANIZATION_NOT_AVAILABLE' || parsed.code === 'ORGANIZATION_ACCESS_DENIED') &&
         typeof window !== 'undefined' &&
         window.location.pathname.startsWith('/org/')
