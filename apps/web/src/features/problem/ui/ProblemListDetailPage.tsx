@@ -582,6 +582,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                       existingProblemIds={[...section.Entries.map(entry => entry.problemId), ...sectionNewRows.flatMap(row => row.resolved?.problemId ? [row.resolved.problemId] : [])]}
                       onResolved={(problems) => addResolvedRows(section.id, problems)}
                       autoFocus={false}
+                      requireStable={false}
                     />
                     {sectionNewRows.length > 0 && (
                       <Button variant="primary"

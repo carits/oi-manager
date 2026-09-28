@@ -30,9 +30,10 @@ Registry 对非规范 key、重复 key、空名称及不同平台之间的名称
 其他学校或不可访问的记录不参与冲突披露。全局唯一和学校副本转换属于后续迁移。
 
 命中题目的 status=resolved 表达身份可定位且可使用，Stable 元数据可缺省。
-Stable 不存在不再由 resolver 解释为查无此题。公共 QuickProblemInput 的 requireStable 默认 true，
-暂时保留旧业务入口的评测前置条件；requireStable=false 的纯收录策略已可测试，但题单等调用方
-尚未在本阶段逐页切换，不能宣称题单无 Stable 的全链路已完成。
+Stable 不存在不再由 resolver 解释为查无此题。公共 QuickProblemInput 的 requireStable 默认 true。
+Contest 和 Assignment 保持这一严格前置条件；题单与 Training 的创建、设计和运行期追加入口
+显式使用 requireStable=false，允许先收录已定位的 canonical Problem，再由各领域保存命令按自身
+运行条件校验数据槽。对应调用方策略已加入 Web 回归断言，防止纯收录入口重新误用活动发布前置条件。
 正式保存仍需领域服务重新授权、校验题目状态和数据要求，不能把前端查到当成发布许可。
 
 QuickProblemInput 区分请求失败与未找到；等待业务回调完成，并在失败或部分接受不明时保留输入。
@@ -77,7 +78,10 @@ https://github.com/carits/oi-manager/actions/runs/36377629972
 - 数据库 baseline 检查为仓库文件静态检查，没有连接数据库。
 
 上述结果属于明确的提交，不自动代表后来提交；最新 HEAD 需读取其对应 CI。
-未执行完整 Server 数据库集成测试、真实浏览器 E2E 或完整生产 Web 构建。
+本轮在远端隔离工作树对最新 HEAD 重新完成：Server/Web TypeScript noEmit、Server/Web production build、
+本地 resolver/contract 定向单测 15/15、Web 单测 54 个文件 359/359、docs:check、UI state check
+与 routes:audit，均通过。Web production build 只有既有 lint warning，没有构建错误。
+未执行完整 Server 数据库集成测试或真实浏览器 E2E。
 服务端定向测试独立使用 `vitest.problem-selection.config.ts`，不加载数据库测试 setup。
 其 fixture 模拟查询返回，权限判断复用 problem.access，capability 解析使用测试替身；
 这些不是 PostgreSQL 集成测试，也不能替代后续双学校多角色 E2E。
