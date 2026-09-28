@@ -1275,6 +1275,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           existingProblemIds={runtimeProblems.map(item => item.id)}
           onResolved={problems => setRuntimeProblems(current => [...current, ...problems])}
           label="按平台和题号追加"
+          requireStable={false}
         />
         {runtimeProblems.length > 0 && <div className={styles.timeline}>{runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><div><strong>{item.platform} · {item.problemCode}</strong><br /><span>{item.title}</span></div><Button size="sm" variant="ghost" onClick={() => setRuntimeProblems(current => current.filter(problem => problem.id !== item.id))}>移除</Button></div>)}</div>}
         <Checkbox label="作为必做题" description="取消后作为选做题，不计入当前完成要求。" checked={runtimeProblemRequired} onChange={event => setRuntimeProblemRequired(event.target.checked)} />

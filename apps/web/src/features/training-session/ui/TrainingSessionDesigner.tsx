@@ -670,6 +670,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             disabled={!activeStage || activeStageReadOnly || (problemTarget === "multiple" && !targetStages.length)}
             existingProblemIds={problemTarget === "current" ? activeStage?.Problems.map(item => item.problemId) : []}
             onResolved={addResolvedProblems}
+            requireStable={false}
           />
         </section>
       </TrainingStageDrawer>

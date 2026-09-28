@@ -308,6 +308,7 @@ export function TrainingSetupDialog({
                   required: true,
                 })),
               ])}
+              requireStable={false}
             />
             {selectedProblems.length > 0 && <div className={styles.setupProblemList} aria-label="已选训练题目">{selectedProblems.map((problem, index) => <div className={styles.setupProblemRow} key={problem.id}>
               <span className={styles.problemOrder}>{index + 1}</span>
