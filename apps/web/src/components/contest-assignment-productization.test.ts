@@ -14,7 +14,7 @@ describe('contest and assignment productization regressions', () => {
     expect(source).toContain("['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']")
     expect(source).toContain('比赛赛制')
     expect(source).toContain('Rating 范围')
-    expect(source).toContain('QuickProblemInput')
+    expect(source).toContain('ProblemReferenceSelector')
     expect(source).toContain('dirty={formDirty || recoveryBlocked}')
     expect(source).toContain('loading={saving || loading}')
     expect(source).toContain('onClick={requestClose}')
