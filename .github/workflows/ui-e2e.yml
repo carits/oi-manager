@@ -50,7 +50,7 @@ jobs:
       - name: Prepare isolated E2E schema for server integration tests
         run: pnpm test:ui:prepare
       - name: Run chat server integration tests
-        run: DATABASE_URL="$E2E_DATABASE_URL" pnpm --filter server exec vitest run tests/chat.test.ts
+        run: TEST_DATABASE_URL="$E2E_DATABASE_URL" pnpm --filter server exec vitest run tests/chat.test.ts
       - run: pnpm test:chat:race
       - run: pnpm test:ui:smoke
       - run: pnpm test:chat:e2e
