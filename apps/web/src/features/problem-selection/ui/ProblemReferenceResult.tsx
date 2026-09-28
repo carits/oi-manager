@@ -19,7 +19,7 @@ export function ProblemReferenceResult({
 
   const problem = row.result.problem
   if (problem) {
-    const warning = row.state !== 'ready'
+    const warning = row.state === 'blocked'
     return <span className={styles.resultContent}>
       <span className={warning ? styles.resultWarning : styles.resultSuccess}>{warning ? '⚠' : '✓'}</span>
       <ProblemReferenceLink problem={problem} showIdentity={false} />
