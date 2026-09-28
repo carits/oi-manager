@@ -140,9 +140,9 @@ test.describe('personal workspace pages @smoke', () => {
     await page.goto('/personal/teams')
     await expect(page.getByText('E2E Personal Team')).toBeVisible()
 
-    const workspaceControl = page.getByRole('button', { name: '切换身份' })
+    const workspaceControl = page.getByRole('button', { name: '切换工作区' })
     await workspaceControl.click()
-    await page.getByRole('menu', { name: '切换身份' }).getByRole('menuitem', { name: /^E2E School学生/ }).click()
+    await page.getByRole('region', { name: '切换工作区' }).getByRole('button', { name: /^E2E School\s*学生/ }).click()
     await page.waitForURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/(?:overview|teams|homeworks|contests|problem-lists|rankings)$`))
 
     await page.goto(`${organizationBase}/teams`)

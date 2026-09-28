@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
+import { parseSidebarNavigationPreference, sidebarNavigationCookieName } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { RoleShell } from './RoleShell'
 import { SessionUnavailable } from './SessionUnavailable'
@@ -81,9 +82,13 @@ export async function RoleLayout({
   const context = resolveNavigationContext(pathname, session.user).workspace
   if (requiredContext && context !== requiredContext) redirect('/identity')
 
+  const sidebarPreference = parseSidebarNavigationPreference(
+    (await cookies()).get(sidebarNavigationCookieName(session.user.userId))?.value,
+  )
+
   return (
     <ChatProvider>
-      <RoleShell homePath={homePath} contentClassName={contentClassName}>
+      <RoleShell homePath={homePath} contentClassName={contentClassName} initialSidebarExpanded={sidebarPreference !== 'closed'}>
         {children}
       </RoleShell>
     </ChatProvider>

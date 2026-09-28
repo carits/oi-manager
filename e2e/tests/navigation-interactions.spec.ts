@@ -12,9 +12,8 @@ const roles: Array<{ account: AuthRole; home: string; navigation: string }> = [
 
 async function ensureNavigationOpen(page: Page, navigationName: string) {
   const navigation = page.getByRole('navigation', { name: navigationName })
-  // AppShell restores the persisted sidebar choice after hydration. Wait for
-  // that restore before deciding whether a click is needed.
-  await page.waitForTimeout(150)
+  // Wait for interaction readiness, not an arbitrary post-hydration delay.
+  await expect(page.locator('[data-navigation-mode]')).not.toHaveAttribute('data-navigation-mode', 'pending')
   if (!await navigation.isVisible()) await page.locator('[aria-controls="app-sidebar"]').click()
   await expect(navigation).toBeVisible()
   return navigation
@@ -60,14 +59,14 @@ test.describe('导航与顶栏交互巡检 @smoke', () => {
     })
   }
 
-  test('通知、账号与切换身份面板不会被裁切，并可由 Escape 关闭', async ({ browser }) => {
+  test('通知、账号与切换工作区面板不会被裁切，并可由 Escape 关闭', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
     const page = await context.newPage()
     await page.goto(`${organizationBase}/management`)
 
     const headerPanels = [
       { button: page.getByRole('button', { name: /打开通知/ }), panel: page.getByRole('region', { name: '通知' }) },
-      { button: page.getByRole('button', { name: '切换身份' }), panel: page.getByRole('menu', { name: '切换身份' }) },
+      { button: page.getByRole('button', { name: '切换工作区' }), panel: page.getByRole('region', { name: '切换工作区' }) },
     ]
     for (const { button, panel } of headerPanels) {
       await button.click()

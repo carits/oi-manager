@@ -119,7 +119,7 @@ test('school student sees only the learner training experience', async ({ page }
   await expect(page.getByRole('tab', { name: /即将开始/ })).toBeVisible()
   await expect(page.getByRole('tab', { name: /已完成/ })).toBeVisible()
   await expect(page.getByText('教练带练模式')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: '切换身份' })).toContainText('学生')
+  await expect(page.getByRole('button', { name: '切换工作区' })).toContainText('学生')
   await expect(page.getByRole('button', { name: '打开账号菜单' })).toContainText('@student1')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 

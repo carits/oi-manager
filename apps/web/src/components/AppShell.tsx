@@ -4,11 +4,10 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { BookOpenText, ChevronDown, Link2, LogOut, Menu, PanelLeftClose, PenLine, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
+import { ChevronDown, Link2, LogOut, Menu, PanelLeftClose, ShieldCheck, UserRound } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { getNavConfig, getActiveNavItem, roleNames, NavigationRole } from '@/config/navigation'
-import { getSidebarNavigationPreference, setSidebarNavigationOpen } from '@/lib/auth'
-import { isGlobalAdministrator } from '@/lib/capabilities'
+import { setSidebarNavigationOpen } from '@/lib/auth'
 import { SessionUnavailable } from './SessionUnavailable'
 import { WorkspaceSwitcher } from '@/features/workspace'
 import { NotificationBell } from '@/features/notification'
@@ -19,7 +18,7 @@ import styles from './AppShell.module.css'
 import { navigationHome, resolveNavigationContext } from '@/lib/navigationContext'
 import { getNavigationIcon } from '@/config/navigationIcons'
 
-interface AppShellProps { children: ReactNode }
+interface AppShellProps { children: ReactNode; initialSidebarExpanded?: boolean }
 
 const accountPaths = {
   profile: '/account/profile',
@@ -33,15 +32,18 @@ function isWorkbenchPath(pathname: string): boolean {
     || /\/problems\/[^/]+$/.test(pathname)
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, initialSidebarExpanded = true }: AppShellProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { user, logout } = useAuth()
   const { requestAction } = useNavigationGuard()
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [isPersistentSidebar, setIsPersistentSidebar] = useState(false)
-  const [desktopSidebarExpanded, setDesktopSidebarExpanded] = useState(false)
+  const [isPersistentSidebar, setIsPersistentSidebar] = useState<boolean | null>(null)
+  const [desktopSidebarExpanded, setDesktopSidebarExpanded] = useState(initialSidebarExpanded)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [navigationMotion, setNavigationMotion] = useState(false)
+  const headerRef = useRef<HTMLElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const navigationContext = resolveNavigationContext(pathname, user)
@@ -49,25 +51,18 @@ export function AppShell({ children }: AppShellProps) {
   const contextKind = navigationContext.workspace
 
   useEffect(() => {
-    if (!user) return
-    const contextKey = organizationId || contextKind
+    // CSS chooses the first-frame responsive shape; this subscription controls interaction only.
     const persistentSidebar = window.matchMedia('(min-width: 1100px)')
     const syncNavigation = () => {
-      const persistent = persistentSidebar.matches
-      setIsPersistentSidebar(persistent)
+      setNavigationMotion(false)
+      setIsPersistentSidebar(persistentSidebar.matches)
       setDrawerOpen(false)
-      if (!persistent) return
-
-      const preference = getSidebarNavigationPreference(user.userId, user.accountRole, contextKey)
-      setDesktopSidebarExpanded(preference === null ? true : preference === 'open')
+      setShowUserMenu(false)
     }
     syncNavigation()
     persistentSidebar.addEventListener('change', syncNavigation)
-    setShowUserMenu(false)
-    return () => {
-      persistentSidebar.removeEventListener('change', syncNavigation)
-    }
-  }, [organizationId, contextKind, user?.accountRole, user?.userId])
+    return () => persistentSidebar.removeEventListener('change', syncNavigation)
+  }, [])
 
   useEffect(() => {
     if (isPersistentSidebar || !drawerOpen) return
@@ -75,6 +70,9 @@ export function AppShell({ children }: AppShellProps) {
     if (!sidebar) return
 
     const previousOverflow = document.body.style.overflow
+    const background = [headerRef.current, mainRef.current].filter((node): node is HTMLElement => Boolean(node))
+    const previousInert = background.map(node => node.inert)
+    background.forEach(node => { node.inert = true })
     document.body.style.overflow = 'hidden'
     const focusFrame = window.requestAnimationFrame(() => document.getElementById('app-sidebar-close')?.focus())
     const trapFocus = (event: KeyboardEvent) => {
@@ -100,6 +98,7 @@ export function AppShell({ children }: AppShellProps) {
       window.cancelAnimationFrame(focusFrame)
       document.removeEventListener('keydown', trapFocus)
       document.body.style.overflow = previousOverflow
+      background.forEach((node, index) => { node.inert = previousInert[index] })
       window.requestAnimationFrame(() => {
         const toggle = document.getElementById('app-navigation-toggle')
         if (toggle?.offsetParent !== null) toggle?.focus()
@@ -108,6 +107,8 @@ export function AppShell({ children }: AppShellProps) {
   }, [drawerOpen, isPersistentSidebar])
 
   useEffect(() => {
+    setNavigationMotion(false)
+    setShowUserMenu(false)
     if (!isPersistentSidebar) setDrawerOpen(false)
   }, [pathname, isPersistentSidebar])
 
@@ -116,7 +117,7 @@ export function AppShell({ children }: AppShellProps) {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) setShowUserMenu(false)
     }
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+      if (event.defaultPrevented || event.key !== 'Escape') return
       if (showUserMenu) setShowUserMenu(false)
       else if (drawerOpen) setDrawerOpen(false)
     }
@@ -130,9 +131,7 @@ export function AppShell({ children }: AppShellProps) {
 
   if (!user) return <SessionUnavailable message="当前会话不可用，请重新登录" />
 
-  const accountRole = user.accountRole as NavigationRole
   const context = contextKind
-  const isGlobalAdmin = isGlobalAdministrator(accountRole)
   const role = (navigationContext.workspace === 'organization'
     ? navigationContext.organizationRole || navigationContext.accountRole
     : navigationContext.accountRole) as NavigationRole
@@ -148,13 +147,14 @@ export function AppShell({ children }: AppShellProps) {
   const visibleName = isPersonal ? user.username : profile?.name || user.username
   const userContext = isPersonal ? '个人账号' : `@${user.username}`
 
-  const navigationOpen = isPersistentSidebar ? desktopSidebarExpanded : drawerOpen
-  const navigationMode = isPersistentSidebar
+  const navigationOpen = isPersistentSidebar === false ? drawerOpen : desktopSidebarExpanded
+  const navigationMode = isPersistentSidebar === null ? 'pending' : isPersistentSidebar
     ? (desktopSidebarExpanded ? 'expanded' : 'collapsed')
     : (drawerOpen ? 'drawer' : 'closed')
 
   const setNavigationOpen = (open: boolean) => {
-    if (isPersistentSidebar) {
+    setNavigationMotion(true)
+    if (window.matchMedia('(min-width: 1100px)').matches) {
       setDesktopSidebarExpanded(open)
       setSidebarNavigationOpen(user.userId, user.accountRole, organizationId || context, open)
     } else {
@@ -209,9 +209,6 @@ export function AppShell({ children }: AppShellProps) {
           <Link className={styles.menuItem} href={accountPaths.profile} role="menuitem" onClick={() => setShowUserMenu(false)}><UserRound size={17} aria-hidden="true" />个人信息</Link>
           <Link className={styles.menuItem} href={accountPaths.security} role="menuitem" onClick={() => setShowUserMenu(false)}><ShieldCheck size={17} aria-hidden="true" />账号安全</Link>
           <Link className={styles.menuItem} href={accountPaths.binding} role="menuitem" onClick={() => setShowUserMenu(false)}><Link2 size={17} aria-hidden="true" />平台绑定</Link>
-          <Link className={styles.menuItem} href={organizationId ? `/org/${organizationId}/knowledge` : '/personal/knowledge'} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpenText size={17} aria-hidden="true" />知识广场</Link>
-          {!isGlobalAdmin && <Link className={styles.menuItem} href="/personal/blogs" role="menuitem" onClick={() => setShowUserMenu(false)}><PenLine size={17} aria-hidden="true" />我的文章</Link>}
-          {!isGlobalAdmin && <Link className={styles.menuItem} href="/identity" role="menuitem" onClick={() => setShowUserMenu(false)}><UsersRound size={17} aria-hidden="true" />切换身份</Link>}
           <div className={styles.menuDivider} />
           <Button variant="ghost" className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => requestAction(logout)}><LogOut size={17} aria-hidden="true" />退出登录</Button>
         </div>
@@ -220,26 +217,28 @@ export function AppShell({ children }: AppShellProps) {
   )
 
   return (
-    <div className={`${styles.shell} ${navigationOpen ? styles.shellSidebarOpen : ''}`} data-navigation-mode={navigationMode}>
-      <header className={styles.header}>
+    <div className={styles.shell} data-navigation-mode={navigationMode} data-desktop-sidebar={desktopSidebarExpanded ? 'expanded' : 'collapsed'} data-drawer-open={drawerOpen} data-navigation-motion={navigationMotion} onTransitionEnd={event => {
+      if (event.target === sidebarRef.current && event.propertyName === 'transform') setNavigationMotion(false)
+    }}>
+      <header ref={headerRef} className={styles.header} data-app-header>
         <div className={styles.headerInner}>
           <div className={styles.headerStart}>
-            <Button id="app-navigation-toggle" variant="ghost" type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!navigationOpen)} aria-controls="app-sidebar" aria-expanded={navigationOpen} aria-label="显示导航" title="显示导航">
+            <Button id="app-navigation-toggle" variant="ghost" type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!(window.matchMedia('(min-width: 1100px)').matches ? desktopSidebarExpanded : drawerOpen))} aria-controls="app-sidebar" aria-expanded={isPersistentSidebar === null ? undefined : navigationOpen} aria-label={isPersistentSidebar && navigationOpen ? '收起导航' : '显示导航'} title={isPersistentSidebar && navigationOpen ? '收起导航' : '显示导航'}>
               <Menu size={21} aria-hidden="true" />
             </Button>
             <Link className={styles.brandLink} href={navigationHome(navigationContext)} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+            <WorkspaceSwitcher />
           </div>
           <div className={styles.headerEnd}>
             <ChatButton />
             <NotificationBell />
-            <WorkspaceSwitcher />
           </div>
         </div>
       </header>
       {!isPersistentSidebar && drawerOpen && <div className={styles.sidebarBackdrop} data-navigation-backdrop aria-hidden="true" onClick={() => setNavigationOpen(false)} />}
-      <aside ref={sidebarRef} id="app-sidebar" className={`${styles.sidebar} ${navigationOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人' : roleName}主导航`} aria-hidden={!navigationOpen} role={!isPersistentSidebar && drawerOpen ? 'dialog' : undefined} aria-modal={!isPersistentSidebar && drawerOpen ? true : undefined}>
+      <aside ref={sidebarRef} id="app-sidebar" className={styles.sidebar} aria-label={`${isPersonal ? '个人' : roleName}主导航`} aria-hidden={isPersistentSidebar === null ? undefined : !navigationOpen} role={!isPersistentSidebar && drawerOpen ? 'dialog' : undefined} aria-modal={!isPersistentSidebar && drawerOpen ? true : undefined}>
         <div className={styles.sidebarHeader}>
-          <Link className={styles.sidebarBrandLink} href={navigationHome(navigationContext)} aria-label="返回首页" onClick={() => { if (!isPersistentSidebar) setNavigationOpen(false) }}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+          <span>功能导航</span>
           <Button id="app-sidebar-close" variant="ghost" type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label={isPersistentSidebar ? '收起导航' : '关闭导航'} title={isPersistentSidebar ? '收起导航' : '关闭导航'}><PanelLeftClose size={19} aria-hidden="true" /></Button>
         </div>
         <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人' : roleName}主导航`}>
@@ -250,7 +249,7 @@ export function AppShell({ children }: AppShellProps) {
         </nav>
         <div className={styles.sidebarFooter}>{userMenu}</div>
       </aside>
-      <main className={styles.main} data-app-content><div className={styles.mainInner} data-page-host data-layout={isWorkbenchPath(pathname) ? 'workbench' : 'default'}>{children}</div></main>
+      <main ref={mainRef} className={styles.main} data-app-content><div className={styles.mainInner} data-page-host data-layout={isWorkbenchPath(pathname) ? 'workbench' : 'default'}>{children}</div></main>
     </div>
   )
 }

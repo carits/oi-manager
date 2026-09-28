@@ -24,7 +24,7 @@ export function IdentityChooser({ user, unavailableReason }: { user: AuthUser; u
       setWorkspaces(items)
       if (items.length === 1 && !unavailableReason) window.location.replace(workspaceHref(items[0], 'overview'))
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : '身份列表加载失败')
+      setError(loadError instanceof Error ? loadError.message : '工作区列表加载失败')
     }
   }
 
@@ -44,7 +44,7 @@ export function IdentityChooser({ user, unavailableReason }: { user: AuthUser; u
   return <main className={styles.page}>
     <section className={styles.panel} aria-labelledby="identity-title">
       <img className={styles.logo} src="/logo.png" alt="Carits" />
-      <header><h1 id="identity-title">选择身份</h1><p>你好，{user.username}</p></header>
+      <header><h1 id="identity-title">选择工作区</h1><p>你好，{user.username}</p></header>
       {unavailableReason && <div className={styles.notice} role="status">
         <strong>原学校身份已不可用</strong>
         <p>{organizationUnavailableMessage(unavailableReason)}</p>
@@ -52,7 +52,7 @@ export function IdentityChooser({ user, unavailableReason }: { user: AuthUser; u
         <Button variant="outline" onClick={() => void load()}>刷新成员身份</Button>
       </div>}
       {error && <div className={styles.error}><p>{error}</p><Button variant="secondary" onClick={() => void load()}>重新加载</Button></div>}
-      {!workspaces && !error && <p className={styles.loading}>正在加载可进入的身份…</p>}
+      {!workspaces && !error && <p className={styles.loading}>正在加载可进入的工作区…</p>}
       {workspaces && <div className={styles.list}>{workspaces.map(workspace => {
         const Icon = workspace.type === 'platform' ? ShieldCheck : workspace.type === 'personal' ? UserRound : Building2
         const title = workspace.type === 'platform' ? '平台管理' : workspace.type === 'personal' ? '个人' : workspace.organizationName || '校园'

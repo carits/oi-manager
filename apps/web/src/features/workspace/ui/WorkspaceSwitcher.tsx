@@ -77,8 +77,8 @@ export function WorkspaceSwitcher() {
       setLoadError('')
     } catch (error) {
       setWorkspaces([])
-      setLoadError(error instanceof Error ? error.message : '身份列表加载失败')
-      toast.error(error instanceof Error ? error.message : '身份列表加载失败')
+      setLoadError(error instanceof Error ? error.message : '工作区列表加载失败')
+      toast.error(error instanceof Error ? error.message : '工作区列表加载失败')
     } finally {
       setLoading(false)
     }
@@ -149,7 +149,7 @@ export function WorkspaceSwitcher() {
       onKeyDown={handleTriggerKeyDown}
       aria-expanded={open}
       aria-controls={popoverId}
-      aria-label={`切换身份，当前${title}，${subtitle}`}
+      aria-label={`切换工作区，当前${title}，${subtitle}`}
     >
       <span className={styles.badge}>{currentType === 'platform' ? <ShieldCheck size={17} /> : currentType === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span>
       <span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span>
@@ -164,11 +164,11 @@ export function WorkspaceSwitcher() {
       tabIndex={-1}
       onKeyDown={handlePopoverKeyDown}
     >
-      <header><strong id={titleId}>切换身份</strong></header>
-      {shouldSearch && <label className={styles.search}><Search size={16} aria-hidden="true" /><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" aria-label="搜索身份" /></label>}
+      <header><strong id={titleId}>切换工作区</strong></header>
+      {shouldSearch && <label className={styles.search}><Search size={16} aria-hidden="true" /><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" aria-label="搜索工作区" /></label>}
       <div className={styles.list}>
-        {loading && <p className={styles.empty} role="status">正在加载身份列表…</p>}
-        {!loading && loadError && <div className={styles.empty} role="alert"><p>身份列表加载失败，当前身份不会改变。</p><Button size="sm" variant="outline" type="button" onClick={() => { setLoaded(false); void openSwitcher() }}>重新加载</Button></div>}
+        {loading && <p className={styles.empty} role="status">正在加载工作区列表…</p>}
+        {!loading && loadError && <div className={styles.empty} role="alert"><p>工作区列表加载失败，当前身份不会改变。</p><Button size="sm" variant="outline" type="button" onClick={() => { setLoaded(false); void openSwitcher() }}>重新加载</Button></div>}
         {!loading && loaded && visible.map(item => <Button
           variant="ghost"
           key={item.organizationId || item.type}
@@ -181,7 +181,7 @@ export function WorkspaceSwitcher() {
           <span><strong>{item.type === 'platform' ? '平台管理' : item.type === 'personal' ? '个人' : item.organizationName}</strong><small>{item.type === 'platform' ? '平台管理员' : item.type === 'personal' ? user?.username : workspaceRoleLabel(item.relationLabel)}</small></span>
           {(item.organizationId === currentOrganization || (item.type === 'personal' && !currentOrganization)) && <Check className={styles.check} size={17} />}
         </Button>)}
-        {!loading && loaded && !loadError && visible.length === 0 && <p className={styles.empty}>没有匹配的身份</p>}
+        {!loading && loaded && !loadError && visible.length === 0 && <p className={styles.empty}>没有匹配的工作区</p>}
       </div>
       <div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" data-workspace-option="true" onClick={() => { setOpen(false); requestNavigation('/personal/organizations', { hard: true }) }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
     </section>}

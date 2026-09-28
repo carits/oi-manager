@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-19
+last_verified: 2026-09-28
 source_of_truth: apps/web/src
 ---
 
@@ -26,10 +26,19 @@ source_of_truth: apps/web/src
 导航集中在 `config/navigation.ts`。所有角色根据账号与 URL 工作区上下文选择导航配置，角色 layout
 始终只创建一个 `AppShell`，首页不再自行嵌套 Shell。
 
-`AppShell` 只有两种响应式形态：`>=1100px` 默认展开 232px 完整侧栏，可完全收起；`<1100px`
-默认隐藏导航，顶部菜单打开带遮罩的完整抽屉。不存在 72px 图标 rail。桌面偏好按
-`userId + accountRole + personal|organizationId` 写入本机；抽屉开关不持久化。账号身份卡位于展开侧栏左下角，点击后向上
-打开资料、安全、平台绑定和退出菜单，顶部不重复展示头像。
+`AppShell` 使用固定位置的全宽顶栏：唯一品牌与工作区切换在左，消息和通知固定在右；侧栏展开、
+收起均不移动顶栏入口。账号身份卡只提供资料、安全、平台绑定和退出，不重复业务或工作区入口。
+组织内的 Shell 由组织 ID 层布局持有，模块页不再重新创建整个外壳；服务端数据接口继续独立鉴权。
+
+响应式形态仍只有 `>=1100px` 的 232px 完整侧栏与 `<1100px` 默认关闭的模态抽屉，不引入图标 rail。
+桌面展开/收起偏好以非敏感 Cookie 按 userId 在当前设备共用，由 RoleLayout 在服务端读取并传入首帧；
+CSS 媒体查询负责 JavaScript 执行前的形态，viewport Effect 只负责交互，不再修正桌面初始宽度。
+旧版按角色/学校分开的 localStorage 偏好不在首屏绘制后导入；无新 Cookie 的首次访问默认展开。
+抽屉开关不持久化；打开时锁定背景滚动并令顶栏和正文 inert，关闭时恢复原状态和焦点。
+只有用户主动操作启用几何过渡，刷新、切页和断点同步不播放；减少动态效果偏好关闭过渡。
+
+工作区软切换与跨个人/组织的共同路由壳层尚待后续批次。本批保留现有带未保存确认的硬切换，
+不得先修改 Auth 上下文再询问是否离开。阶段状态与验证范围见 [UI Shell 实施记录](UI_SHELL_ROLLOUT.md)。
 
 账号级 UI 能力集中在 `lib/capabilities.ts`。全局管理员工作区、个人/校园工作区、全量评测记录、
 组织管理和平台密钥入口只能通过 `hasAccountCapability()` / `isGlobalAdministrator()` 判断，业务组件

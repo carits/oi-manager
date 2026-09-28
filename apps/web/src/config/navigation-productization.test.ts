@@ -42,15 +42,16 @@ describe('human navigation productization', () => {
     expect(resourceRoute).not.toContain('router.replace(`${prefix}/${module}`)')
   })
 
-  it('keeps authoring in the account menu while the public square is globally reachable', () => {
+  it('keeps account settings separate from business and workspace navigation', () => {
     const shell = fs.readFileSync(new URL('../components/AppShell.tsx', import.meta.url), 'utf8')
     expect(shell).toContain('个人信息')
     expect(shell).toContain('账号安全')
     expect(shell).toContain('平台绑定')
-    expect(shell).toContain('知识广场')
-    expect(shell).toContain('我的文章')
-    expect(shell).toContain('href="/personal/blogs"')
-    expect(shell).toContain('切换身份')
+    expect(shell).not.toContain('>知识广场</Link>')
+    expect(shell).not.toContain('>我的文章</Link>')
+    expect(shell).not.toContain('切换身份')
+    expect(shell.match(/<WorkspaceSwitcher\s*\/>/g)).toHaveLength(1)
+    expect(shell.match(/alt="Carits"/g)).toHaveLength(1)
     expect(shell).not.toContain('>我的钱包</Link>')
     expect(shell).not.toContain('>好友与私信</Link>')
   })

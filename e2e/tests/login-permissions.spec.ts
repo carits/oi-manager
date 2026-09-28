@@ -108,7 +108,7 @@ test.describe('authenticated permission matrix @smoke', () => {
     const page = await context.newPage()
     await page.goto('/org/not-a-real-organization/overview')
     await expect(page).toHaveURL(/\/identity\?organizationUnavailable=1/)
-    await expect(page.getByText('选择身份')).toBeVisible()
+    await expect(page.getByText('选择工作区')).toBeVisible()
     await context.close()
   })
 

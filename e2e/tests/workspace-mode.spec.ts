@@ -94,9 +94,9 @@ test.describe('all-role workspace shell @smoke', () => {
       const page = await context.newPage()
       await page.goto(workHomes[entry.account])
 
-      const workspaceControl = page.getByRole('button', { name: '切换身份' })
+      const workspaceControl = page.getByRole('button', { name: '切换工作区' })
       await workspaceControl.click()
-      await page.getByRole('menu', { name: '切换身份' }).getByRole('menuitem', { name: /个人/ }).click()
+      await page.getByRole('region', { name: '切换工作区' }).getByRole('button', { name: /个人/ }).click()
       await page.waitForURL(/\/personal(?:\?.*)?$/)
 
       await expect(page.getByRole('navigation', { name: '个人主导航' })).toBeVisible()
@@ -137,7 +137,7 @@ test.describe('administrator workspace isolation @smoke', () => {
       const context = await browser.newContext({ storageState: account.storageState })
       const page = await context.newPage()
       await page.goto(entry.home)
-      await expect(page.locator('button[aria-label="切换身份"]')).toHaveCount(0)
+      await expect(page.locator('button[aria-label^="切换工作区"]')).toHaveCount(0)
 
       await page.goto('/personal')
       await expect(page).toHaveURL(new RegExp(`${entry.home.replaceAll('/', '\\/')}(?:\\?.*)?$`))
@@ -214,9 +214,9 @@ test.describe('personal workspace isolation', () => {
     }))
 
     await page.goto(`${organizationBase}/overview`)
-    const workspaceControl = page.getByRole('button', { name: '切换身份' })
+    const workspaceControl = page.getByRole('button', { name: '切换工作区' })
     await workspaceControl.click()
-    await page.getByRole('menu', { name: '切换身份' }).getByRole('menuitem', { name: /个人/ }).click()
+    await page.getByRole('region', { name: '切换工作区' }).getByRole('button', { name: /个人/ }).click()
 
     await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/overview$`))
     await context.close()

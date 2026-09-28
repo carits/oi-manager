@@ -17,11 +17,12 @@ describe('unified problem selection', () => {
     const sources = [
       read('../contest/ui/ContestFormModal.tsx'),
       read('../assignment/ui/AssignmentWorkspace.tsx'),
-      read('../training-session/ui/TrainingSessionListPage.tsx'),
+      read('../training-session/ui/TrainingSetupDialog.tsx'),
       read('../training-session/ui/TrainingSessionDesigner.tsx'),
       read('../problem/ui/ProblemListDetailPage.tsx'),
     ]
     for (const source of sources) expect(source).toContain('QuickProblemInput')
+    expect(read('../training-session/ui/TrainingSessionListPage.tsx')).toContain('<TrainingSetupDialog')
     const combined = sources.join('\n')
     expect(combined).not.toContain('从题单选择')
     expect(combined).not.toContain('浏览题库')

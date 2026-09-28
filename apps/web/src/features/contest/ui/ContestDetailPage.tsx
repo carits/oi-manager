@@ -268,6 +268,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
   const initialTabs: Array<{ value: TabType; label: string }> = [
     { value: 'problems', label: '题目' },
     { value: 'submissions', label: '提交记录' }, { value: 'solutions', label: '题解' },
+    { value: 'attachments', label: '附件' },
     ...(!pathname.includes('/homeworks/') ? [{ value: 'ranking' as TabType, label: '排名' }] : []),
   ]
   const initialListHref = pathname.includes('/homeworks/')

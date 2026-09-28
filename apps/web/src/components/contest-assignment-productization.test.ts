@@ -28,12 +28,13 @@ describe('contest and assignment productization regressions', () => {
     expect(source).not.toContain('placeholder="训练标题"')
   })
 
-  it('presents one problem workspace and keeps materials out of primary tabs', () => {
+  it('presents one problem workspace and keeps the selected materials route discoverable', () => {
     const source = read('../features/contest/ui/ContestDetailPage.tsx')
     expect(source).toContain("{ value: 'problems' as const, label: '题目' }")
     expect(source).toContain("{ value: 'submissions' as const, label: '提交记录' }")
     expect(source).not.toContain("{ value: 'problemList' as const, label: '题目列表' }")
-    expect(source).not.toContain("{ value: 'attachments' as const, label: '附件' }")
+    expect(source).toContain("{ value: 'attachments' as const, label: '附件' }")
+    expect(source).toContain("{ value: 'attachments', label: '附件' }")
   })
 
   it('uses server assignment totals, pagination and an active student default', () => {
