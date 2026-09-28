@@ -61,7 +61,7 @@ jobs:
       - name: Seed only the new disposable CI database
         run: pnpm test:ui:prepare
       - name: Exercise real UI and server boundaries in Chromium and Firefox
-        run: pnpm exec playwright test e2e/tests/human-ux-navigation.spec.ts e2e/tests/ui-shell-unification.spec.ts --project=chromium-desktop --project=firefox-smoke --workers=1
+        run: pnpm exec playwright test e2e/tests/human-ux-navigation.spec.ts e2e/tests/ui-shell-unification.spec.ts e2e/tests/ui-shell-directory.spec.ts --project=chromium-desktop --project=firefox-smoke --workers=1
       - name: Publish browser report without runtime credentials or storage state
         if: always()
         uses: actions/upload-artifact@v4

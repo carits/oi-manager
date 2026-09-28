@@ -4,16 +4,19 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type Keyboard
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
-import { useToast } from '@/components/ui/Toast'
 import { Check, ChevronDown, Plus, Search, School, ShieldCheck, UserRound } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 import { isGlobalAdministrator } from '@/lib/capabilities'
-import { listWorkspaces } from '../api/workspaceApi'
 import { nextWorkspaceFocusIndex, workspaceHref, workspaceModule, workspaceRoleLabel, type WorkspaceFocusKey } from '../model/workspaceRouting'
+import { useWorkspaceDirectory } from '../model/useWorkspaceDirectory'
+import { filterWorkspaces, isCurrentWorkspace, workspaceSubtitle, workspaceTitle } from '../model/workspacePresentation'
 import styles from './WorkspaceSwitcher.module.css'
 import { useNavigationGuard } from '@/components/navigation/UnsavedChangesProvider'
 import { resolveNavigationContext } from '@/lib/navigationContext'
+import { accountContextMatches } from '@/lib/applicationShell'
+
+const emptyWorkspaces: WorkspaceSummary[] = []
 
 export function WorkspaceSwitcher() {
   const { user } = useAuth()
@@ -22,10 +25,12 @@ export function WorkspaceSwitcher() {
   const isGlobalAdmin = isGlobalAdministrator(user?.accountRole)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
-  const [loaded, setLoaded] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState('')
+  const [directoryEnabled, setDirectoryEnabled] = useState(false)
+  const directory = useWorkspaceDirectory(user?.userId, directoryEnabled && !isGlobalAdmin)
+  const workspaces = directory.data?.workspaces || emptyWorkspaces
+  const loaded = Boolean(directory.data)
+  const loading = directory.isLoading
+  const loadError = directory.error?.message || ''
   const rootRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLElement>(null)
   const openRef = useRef(false)
@@ -33,57 +38,36 @@ export function WorkspaceSwitcher() {
   const popoverId = useId()
   const titleId = useId()
   const { requestNavigation } = useNavigationGuard()
-  const toast = useToast()
   const currentOrganization = resolveNavigationContext(pathname, user).organizationId
-  const current = currentOrganization ? workspaces.find(item => item.organizationId === currentOrganization) : workspaces.find(item => item.type === 'personal')
-  const visible = useMemo(() => workspaces.filter(item => !query || ((item.organizationName || '') + ' ' + (item.relationLabel || '')).toLocaleLowerCase().includes(query.toLocaleLowerCase())), [query, workspaces])
+  const contextReady = accountContextMatches(pathname, user)
+  const username = user?.username || ''
+  const visible = useMemo(() => filterWorkspaces(workspaces, query, username), [query, username, workspaces])
   const shouldSearch = loaded && workspaces.filter(item => item.type === 'organization').length > 5
   openRef.current = open
 
-  const focusTrigger = useCallback(() => {
-    rootRef.current?.querySelector<HTMLButtonElement>('[aria-controls]')?.focus()
-  }, [])
-
+  const focusTrigger = useCallback(() => { rootRef.current?.querySelector<HTMLButtonElement>('[aria-controls]')?.focus() }, [])
   const closeSwitcher = useCallback((restoreFocus = false) => {
     setOpen(false)
     setQuery('')
     if (restoreFocus) window.requestAnimationFrame(focusTrigger)
   }, [focusTrigger])
-
   const focusPopover = useCallback(() => {
     const popover = popoverRef.current
     if (!popover) return
     const options = Array.from(popover.querySelectorAll<HTMLButtonElement>('[data-workspace-option="true"]:not(:disabled)'))
-    const requested = initialFocusRef.current
-    const target = requested === 'last'
-      ? options.at(-1)
-      : shouldSearch
-        ? popover.querySelector<HTMLInputElement>('input[type="search"], input')
-        : options[0]
+    const target = initialFocusRef.current === 'last' ? options.at(-1)
+      : shouldSearch ? popover.querySelector<HTMLInputElement>('input[type="search"]') : options[0]
     ;(target || popover.querySelector<HTMLButtonElement>('button:not(:disabled)') || popover).focus()
     initialFocusRef.current = 'first'
   }, [shouldSearch])
-
   const openSwitcher = async (initialFocus: 'first' | 'last' = 'first') => {
     initialFocusRef.current = initialFocus
+    setDirectoryEnabled(true)
     setOpen(true)
     if (loaded || loading) return
-    setLoading(true)
-    setLoadError('')
-    try {
-      const result = await listWorkspaces()
-      setWorkspaces(result.workspaces)
-      setLoaded(true)
-      setLoadError('')
-    } catch (error) {
-      setWorkspaces([])
-      setLoadError(error instanceof Error ? error.message : '工作区列表加载失败')
-      toast.error(error instanceof Error ? error.message : '工作区列表加载失败')
-    } finally {
-      setLoading(false)
-    }
+    if (directory.error) await directory.retry()
   }
-
+  useEffect(() => { closeSwitcher() }, [closeSwitcher, pathname, user?.userId])
   useEffect(() => {
     if (!open) return
     const frame = window.requestAnimationFrame(() => {
@@ -91,23 +75,20 @@ export function WorkspaceSwitcher() {
       else focusPopover()
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [focusPopover, loaded, loading, open, visible.length])
-
+  }, [focusPopover, loaded, loading, open])
   useEffect(() => {
     const closeOnOutsidePointer = (event: MouseEvent) => {
       if (openRef.current && rootRef.current && !rootRef.current.contains(event.target as Node)) closeSwitcher()
     }
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !openRef.current) return
+      if (event.defaultPrevented || event.key !== 'Escape' || !openRef.current) return
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
       event.preventDefault()
       closeSwitcher(true)
     }
     document.addEventListener('mousedown', closeOnOutsidePointer)
     document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('mousedown', closeOnOutsidePointer)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
+    return () => { document.removeEventListener('mousedown', closeOnOutsidePointer); document.removeEventListener('keydown', closeOnEscape) }
   }, [closeSwitcher])
 
   const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
@@ -115,75 +96,46 @@ export function WorkspaceSwitcher() {
     event.preventDefault()
     void openSwitcher(event.key === 'ArrowUp' ? 'last' : 'first')
   }
-
   const handlePopoverKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     const supported = ['ArrowDown', 'ArrowUp', 'Home', 'End'] as const
     if (!supported.includes(event.key as typeof supported[number])) return
     if (event.target instanceof HTMLInputElement && (event.key === 'Home' || event.key === 'End')) return
     const options = Array.from(popoverRef.current?.querySelectorAll<HTMLButtonElement>('[data-workspace-option="true"]:not(:disabled)') || [])
-    const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement)
-    const nextIndex = nextWorkspaceFocusIndex(currentIndex, options.length, event.key as WorkspaceFocusKey)
+    const nextIndex = nextWorkspaceFocusIndex(options.indexOf(document.activeElement as HTMLButtonElement), options.length, event.key as WorkspaceFocusKey)
     if (nextIndex < 0) return
     event.preventDefault()
     options[nextIndex]?.focus()
   }
-
   const select = (workspace: WorkspaceSummary) => {
-    const targetModule = workspaceModule(pathname)
-    setOpen(false)
-    requestNavigation(workspaceHref(workspace, targetModule, searchParams.toString()), { hard: true })
+    if (isCurrentWorkspace(workspace, currentOrganization)) { closeSwitcher(true); return }
+    // Preserve the existing guarded hard navigation. Directory data is not an auth mutation.
+    focusTrigger()
+    closeSwitcher()
+    requestNavigation(workspaceHref(workspace, workspaceModule(pathname), searchParams.toString()), { hard: true })
   }
-
   if (isGlobalAdmin) return null
-
-  const currentType = current?.type || (currentOrganization ? 'organization' : 'personal')
-  const title = currentType === 'platform' ? '平台管理' : currentType === 'personal' ? '个人' : user?.organizationName || '当前学校'
-  const subtitle = currentType === 'platform' ? '平台管理员' : currentType === 'personal' ? user?.username : workspaceRoleLabel(user?.organizationRole || current?.relationLabel)
-
+  const title = !contextReady ? '确认工作区…' : currentOrganization ? user?.organizationName || '当前学校' : '个人空间'
+  const subtitle = !contextReady ? '' : currentOrganization ? workspaceRoleLabel(user?.organizationRole) : username
   return <div className={styles.root} ref={rootRef}>
-    <Button
-      variant="ghost"
-      className={styles.trigger}
-      type="button"
-      onClick={() => { if (open) closeSwitcher(); else void openSwitcher() }}
-      onKeyDown={handleTriggerKeyDown}
-      aria-expanded={open}
-      aria-controls={popoverId}
-      aria-label={`切换工作区，当前${title}，${subtitle}`}
-    >
-      <span className={styles.badge}>{currentType === 'platform' ? <ShieldCheck size={17} /> : currentType === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span>
-      <span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span>
-      <ChevronDown size={16} />
+    <Button variant="ghost" className={styles.trigger} type="button" onClick={() => { if (open) closeSwitcher(); else void openSwitcher() }} onKeyDown={handleTriggerKeyDown}
+      aria-expanded={open} aria-controls={popoverId} aria-label={`切换工作区，当前${title}，${subtitle}`}>
+      <span className={styles.badge}>{currentOrganization ? <School size={17} /> : <UserRound size={17} />}</span>
+      <span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span><ChevronDown size={16} />
     </Button>
-    {open && <section
-      ref={popoverRef}
-      id={popoverId}
-      className={styles.menu}
-      role="region"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      onKeyDown={handlePopoverKeyDown}
-    >
+    {open && <section ref={popoverRef} id={popoverId} className={styles.menu} role="region" aria-labelledby={titleId} tabIndex={-1} onKeyDown={handlePopoverKeyDown}>
       <header><strong id={titleId}>切换工作区</strong></header>
-      {shouldSearch && <label className={styles.search}><Search size={16} aria-hidden="true" /><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" aria-label="搜索工作区" /></label>}
+      {shouldSearch && <label className={styles.search}><Search size={16} aria-hidden="true" /><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校或个人空间" aria-label="搜索工作区" /></label>}
       <div className={styles.list}>
         {loading && <p className={styles.empty} role="status">正在加载工作区列表…</p>}
-        {!loading && loadError && <div className={styles.empty} role="alert"><p>工作区列表加载失败，当前身份不会改变。</p><Button size="sm" variant="outline" type="button" onClick={() => { setLoaded(false); void openSwitcher() }}>重新加载</Button></div>}
-        {!loading && loaded && visible.map(item => <Button
-          variant="ghost"
-          key={item.organizationId || item.type}
-          className={styles.item}
-          type="button"
-          data-workspace-option="true"
-          onClick={() => select(item)}
-        >
+        {loadError && <div className={styles.empty} role="alert"><p>工作区列表加载失败，当前身份不会改变。{loadError}</p><Button size="sm" variant="outline" type="button" onClick={() => void directory.retry()}>重新加载</Button></div>}
+        {!loading && loaded && visible.map(item => <Button variant="ghost" key={item.organizationId || item.type} className={styles.item} type="button" data-workspace-option="true" onClick={() => select(item)}>
           <span className={styles.itemBadge}>{item.type === 'platform' ? <ShieldCheck size={17} /> : item.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span>
-          <span><strong>{item.type === 'platform' ? '平台管理' : item.type === 'personal' ? '个人' : item.organizationName}</strong><small>{item.type === 'platform' ? '平台管理员' : item.type === 'personal' ? user?.username : workspaceRoleLabel(item.relationLabel)}</small></span>
-          {(item.organizationId === currentOrganization || (item.type === 'personal' && !currentOrganization)) && <Check className={styles.check} size={17} />}
+          <span><strong>{workspaceTitle(item)}</strong><small>{workspaceSubtitle(item, username)}</small></span>
+          {isCurrentWorkspace(item, currentOrganization) && <Check className={styles.check} size={17} />}
         </Button>)}
-        {!loading && loaded && !loadError && visible.length === 0 && <p className={styles.empty}>没有匹配的工作区</p>}
+        {!loading && loaded && !loadError && !visible.length && <p className={styles.empty}>没有匹配的工作区</p>}
       </div>
-      <div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" data-workspace-option="true" onClick={() => { setOpen(false); requestNavigation('/personal/organizations', { hard: true }) }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
+      <div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" data-workspace-option="true" onClick={() => { focusTrigger(); closeSwitcher(); requestNavigation('/personal/organizations', { hard: true }) }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
     </section>}
   </div>
 }

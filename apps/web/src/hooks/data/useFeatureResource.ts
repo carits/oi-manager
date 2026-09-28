@@ -20,7 +20,6 @@ export function useFeatureResource<T>(key: string, scope: string | null, load: (
   loadRef.current = load
   const cacheKey = featureResourceKey(scope, key, options.enabled !== false)
   const fetcher = useCallback(async ([, requestScope, requestKey]: readonly [string, string, string]): Promise<FeatureSnapshot<T>> => {
-    // Capture the loader before awaiting. A later render cannot retarget this read.
     const read = loadRef.current
     try { return { scope: requestScope, key: requestKey, data: await read() } }
     catch (error) {
@@ -35,6 +34,11 @@ export function useFeatureResource<T>(key: string, scope: string | null, load: (
     revalidateOnReconnect: true,
     shouldRetryOnError: false,
   })
+  const mutate = result.mutate
+  const retry = useCallback(async () => {
+    // SWR records this error for AsyncRegion; event handlers must not also leak a rejection.
+    try { await mutate() } catch { /* Explicit resource error remains visible and retryable. */ }
+  }, [mutate])
   const data = visibleFeatureData(result.data, scope || '')
   const showingPreviousQuery = data !== undefined && result.data?.key !== key
   const refreshing = Boolean(cacheKey) && (result.isValidating || (showingPreviousQuery && !result.error))
@@ -45,6 +49,6 @@ export function useFeatureResource<T>(key: string, scope: string | null, load: (
     refreshing,
     showingPreviousQuery,
     state: toResourceState({ data, error: result.error, isValidating: refreshing }, options.isEmpty || notEmpty),
-    retry: async () => { await result.mutate() },
+    retry,
   }
 }

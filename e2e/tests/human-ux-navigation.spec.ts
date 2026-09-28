@@ -11,14 +11,12 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     })
     const page = await context.newPage()
     await page.goto(`${organizationBase}/overview`)
-
     const navigation = page.getByRole('navigation', { name: '教师主导航' })
     await expect(navigation).toBeVisible()
     await expect(page.locator('[data-navigation-mode="expanded"]')).toBeVisible()
     for (const group of ['教学', '学生与团队', '学校', '社区']) await expect(navigation.getByText(group, { exact: true })).toBeVisible()
     await expect(navigation.getByRole('link', { name: '首页' })).toHaveAttribute('aria-current', 'page')
     await expect(navigation.getByRole('link', { name: '评测记录' })).toBeVisible()
-
     await page.getByRole('button', { name: '收起导航' }).first().click()
     await expect(page.locator('[data-navigation-mode="collapsed"]')).toBeVisible()
     await expect(navigation).toBeHidden()
@@ -38,7 +36,6 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
       { width: 800, height: 900, mode: 'closed', persistent: false },
       { width: 390, height: 844, mode: 'closed', persistent: false },
     ] as const
-
     for (const viewport of viewports) {
       const context = await browser.newContext({ storageState: accounts.teacher.storageState, viewport })
       await context.addInitScript(() => {
@@ -49,7 +46,6 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
       const shell = page.locator('[data-navigation-mode]')
       const navigation = page.getByRole('navigation', { name: '教师主导航' })
       await expect(shell).toHaveAttribute('data-navigation-mode', viewport.mode)
-
       if (viewport.persistent) {
         await expect(navigation).toBeVisible()
       } else {
@@ -71,18 +67,15 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
         await expect(shell).toHaveAttribute('data-navigation-mode', 'closed')
         await expect(page.getByRole('button', { name: '显示导航' })).toBeFocused()
       }
-
       const visibleLogos = await page.locator('img[alt="Carits"]').evaluateAll(images => images.filter(image => {
         const style = getComputedStyle(image)
         const rect = image.getBoundingClientRect()
         return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0
       }).length)
       expect(visibleLogos).toBe(1)
-      const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
-      expect(horizontalOverflow).toBe(false)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false)
       await context.close()
     }
-
     const preferenceContext = await browser.newContext({ storageState: accounts.teacher.storageState, viewport: { width: 1100, height: 800 } })
     await preferenceContext.addInitScript(() => {
       for (const key of Object.keys(localStorage)) if (key.startsWith('sidebarNavigation:')) localStorage.removeItem(key)
@@ -170,7 +163,6 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     await expect(studentPage.getByRole('tab', { name: /已完成/ })).toBeVisible()
     await expect(studentPage.getByText('教练带练模式')).toHaveCount(0)
     await studentContext.close()
-
     const teacherContext = await browser.newContext({ storageState: accounts.teacher.storageState })
     const teacherPage = await teacherContext.newPage()
     await teacherPage.goto(`${organizationBase}/training-sessions`)
@@ -186,29 +178,25 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     const page = await context.newPage()
     await page.goto(`${organizationBase}/contests`)
     await page.getByRole('button', { name: '创建比赛' }).click()
-
     const createDialog = page.getByRole('dialog', { name: '创建比赛' })
     await expect(createDialog.getByRole('button', { name: '1. 基本信息' })).toHaveAttribute('aria-current', 'step')
     await page.getByPlaceholder('比赛名称').fill('五步向导浏览器验收')
     await createDialog.getByRole('button', { name: '下一步' }).click()
-
     await expect(createDialog.getByLabel('比赛赛制')).toBeVisible()
     await expect(createDialog.getByLabel('Rating 范围')).toHaveValue('NONE')
     await createDialog.getByRole('button', { name: '下一步' }).click()
-
-    await createDialog.getByRole('button', { name: '选择题目' }).click()
-    const picker = page.getByRole('dialog', { name: '选择比赛题目' })
-    await expect(picker.getByRole('tab', { name: '校内题库' })).toBeVisible()
-    await picker.getByRole('button', { name: '加入比赛' }).first().click()
-    await picker.getByRole('button', { name: '关闭对话框' }).click()
-    await expect(createDialog.locator('[aria-label="已选比赛题目"]')).toBeVisible()
+    // The current product uses canonical platform + problem code, not the retired library picker.
+    await createDialog.getByLabel('题目平台').selectOption('carits')
+    await createDialog.getByLabel('题号', { exact: true }).fill('E2E-1000')
+    await createDialog.getByRole('button', { name: '添加', exact: true }).click()
+    await expect(createDialog.locator('[aria-label="已选比赛题目"]')).toContainText('E2E A Plus B')
     await createDialog.getByRole('button', { name: '下一步' }).click()
-
     await expect(createDialog.getByText('题目来源显示')).toBeVisible()
     await expect(createDialog.getByText('题解显示')).toBeVisible()
     await createDialog.getByRole('button', { name: '下一步' }).click()
     await expect(createDialog.getByRole('heading', { name: '发布前检查' })).toBeVisible()
     await expect(createDialog.getByText(/创建时固定各题当前评测数据版本/)).toBeVisible()
+    // Do not create a contest; this acceptance case verifies the complete pre-submit UI.
     await context.close()
   })
 
@@ -219,7 +207,6 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     await expect(teacherPage).toHaveURL(`${organizationBase}/definitely-missing`)
     await expect(teacherPage.getByRole('heading', { name: '这里没有这个学校页面' })).toBeVisible()
     await teacherContext.close()
-
     const studentContext = await browser.newContext({ storageState: accounts.campusStudent.storageState })
     const studentPage = await studentContext.newPage()
     await studentPage.goto(`${organizationBase}/management`)

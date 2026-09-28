@@ -1,64 +1,60 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Building2, ChevronRight, ShieldCheck, UserRound } from 'lucide-react'
 import type { AuthUser } from '@/features/auth'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
-import { listWorkspaces } from '../api/workspaceApi'
-import { organizationUnavailableMessage, workspaceHref, workspaceRoleLabel } from '../model/workspaceRouting'
+import { organizationUnavailableMessage, workspaceHref } from '../model/workspaceRouting'
+import { useWorkspaceDirectory } from '../model/useWorkspaceDirectory'
+import { workspaceSubtitle, workspaceTitle } from '../model/workspacePresentation'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import styles from './IdentityChooser.module.css'
 
 export function IdentityChooser({ user, unavailableReason }: { user: AuthUser; unavailableReason?: string }) {
-  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
-  const [error, setError] = useState('')
+  const isGlobalAdmin = isGlobalAdministrator(user.accountRole)
+  const directory = useWorkspaceDirectory(user.userId, !isGlobalAdmin)
+  const workspaces = directory.data?.workspaces
   const [entering, setEntering] = useState<string | null>(null)
-
-  const load = async () => {
-    setError('')
-    setWorkspaces(null)
-    try {
-      const { workspaces: items } = await listWorkspaces()
-      setWorkspaces(items)
-      if (items.length === 1 && !unavailableReason) window.location.replace(workspaceHref(items[0], 'overview'))
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : '工作区列表加载失败')
-    }
-  }
+  const entered = useRef(false)
 
   useEffect(() => {
-    if (isGlobalAdministrator(user.accountRole)) {
+    if (entered.current) return
+    if (isGlobalAdmin) {
+      entered.current = true
       window.location.replace(getRoleHome(user.accountRole, 'organization'))
-      return
+    } else if (workspaces?.length === 1 && !directory.error && !directory.refreshing && !unavailableReason) {
+      entered.current = true
+      window.location.replace(workspaceHref(workspaces[0], 'overview'))
     }
-    void load()
-  }, [unavailableReason, user.accountRole])
+  }, [directory.error, directory.refreshing, isGlobalAdmin, unavailableReason, user.accountRole, workspaces])
 
   const enter = (workspace: WorkspaceSummary) => {
+    if (entered.current) return
+    entered.current = true
     setEntering(workspace.organizationId || workspace.type)
     window.location.assign(workspaceHref(workspace, 'overview'))
   }
-
   return <main className={styles.page}>
     <section className={styles.panel} aria-labelledby="identity-title">
       <img className={styles.logo} src="/logo.png" alt="Carits" />
       <header><h1 id="identity-title">选择工作区</h1><p>你好，{user.username}</p></header>
       {unavailableReason && <div className={styles.notice} role="status">
-        <strong>原学校身份已不可用</strong>
-        <p>{organizationUnavailableMessage(unavailableReason)}</p>
-        <p>请选择个人空间或其他有效身份；如需恢复学校权限，请联系学校管理员。</p>
-        <Button variant="outline" onClick={() => void load()}>刷新成员身份</Button>
+        <strong>原学校身份已不可用</strong><p>{organizationUnavailableMessage(unavailableReason)}</p>
+        <p>请选择个人空间或其他有效工作区；如需恢复学校权限，请联系学校管理员。</p>
+        <Button variant="outline" disabled={directory.refreshing} onClick={() => void directory.retry()}>刷新成员身份</Button>
       </div>}
-      {error && <div className={styles.error}><p>{error}</p><Button variant="secondary" onClick={() => void load()}>重新加载</Button></div>}
-      {!workspaces && !error && <p className={styles.loading}>正在加载可进入的工作区…</p>}
+      {directory.error && <div className={styles.error} role="alert"><p>{directory.error.message}</p><Button variant="secondary" onClick={() => void directory.retry()}>重新加载</Button></div>}
+      {!workspaces && !directory.error && <p className={styles.loading} role="status">正在加载可进入的工作区…</p>}
       {workspaces && <div className={styles.list}>{workspaces.map(workspace => {
         const Icon = workspace.type === 'platform' ? ShieldCheck : workspace.type === 'personal' ? UserRound : Building2
-        const title = workspace.type === 'platform' ? '平台管理' : workspace.type === 'personal' ? '个人' : workspace.organizationName || '校园'
-        const subtitle = workspace.type === 'platform' ? '平台管理员' : workspace.type === 'personal' ? user.username : workspaceRoleLabel(workspace.relationLabel)
-        return <Button variant="ghost" key={workspace.organizationId || workspace.type} type="button" className={styles.item} onClick={() => enter(workspace)} disabled={entering !== null}><span className={styles.icon}><Icon size={20} /></span><span><strong>{title}</strong><small>{subtitle}</small></span><ChevronRight size={18} /></Button>
+        return <Button variant="ghost" key={workspace.organizationId || workspace.type} type="button" className={styles.item} onClick={() => enter(workspace)} disabled={entering !== null}>
+          <span className={styles.icon}><Icon size={20} /></span>
+          <span><strong>{workspaceTitle(workspace)}</strong><small>{workspaceSubtitle(workspace, user.username)}</small></span><ChevronRight size={18} />
+        </Button>
       })}</div>}
+      {workspaces && !workspaces.length && !directory.error && <div className={styles.error} role="status"><p>暂时没有可进入的工作区。</p><Button variant="secondary" onClick={() => void directory.retry()}>重新加载</Button></div>}
     </section>
   </main>
 }
