@@ -1,22 +1,14 @@
 name: UI shell branch review
-
 on:
   push:
     branches: [codex/ui-shell-workspace-unification]
   pull_request:
-    paths:
-      - 'apps/web/**'
-      - 'e2e/**'
-      - 'scripts/**'
-      - '.github/workflows/ui-shell-review.yml'
-
+    paths: ['apps/web/**', 'e2e/**', 'docs/**', 'scripts/**', 'playwright*.ts', '.github/workflows/ui-shell-review.yml']
 permissions:
   contents: read
-
 concurrency:
-  group: ui-shell-review-${{ github.ref }}
-  cancel-in-progress: true
-
+  group: ui-shell-review-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 jobs:
   source:
     name: Review source snapshot
@@ -26,20 +18,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Archive tracked source only
-        run: git archive --format=tar --output=review-source.tar HEAD
+      - run: git archive --format=tar --output=review-source.tar HEAD
       - uses: actions/upload-artifact@v4
         with:
           name: ui-shell-source-${{ github.sha }}
           path: review-source.tar
           retention-days: 1
-
   checks:
-    name: Web unit, type and architecture checks
+    name: Web types, unit, architecture and production build
+    if: "!contains(github.event.head_commit.message, '[ui-transport]')"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
       CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_BUILD_CPUS: '2'
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +46,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build
+      - run: pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate
       - run: pnpm --filter web exec tsc --noEmit
       - run: pnpm --filter web test
       - run: pnpm ui:state-check
@@ -60,3 +54,88 @@ jobs:
       - run: pnpm routes:audit
       - run: pnpm docs:check
       - run: pnpm --filter web build
+  ui-browser:
+    name: Production UI against deterministic in-memory API
+    if: "!contains(github.event.head_commit.message, '[ui-transport]')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_BUILD_CPUS: '2'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate
+      - run: pnpm exec playwright install --with-deps chromium firefox
+      - run: pnpm --filter web build
+      - run: pnpm exec playwright test --config=playwright.ui-shell.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-shell-browser-${{ github.sha }}
+          path: |
+            test-results/ui-shell-report
+            test-results/ui-shell-results.json
+            test-results/ui-shell
+          retention-days: 3
+  integration:
+    name: Isolated real-server navigation and workspace E2E
+    if: "!contains(github.event.head_commit.message, '[ui-transport]')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oi_ci
+          POSTGRES_PASSWORD: ephemeral_ci_only
+          POSTGRES_DB: oi_ui_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U oi_ci -d oi_ui_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CI: 'true'
+      E2E_DATABASE_URL: postgresql://oi_ci:ephemeral_ci_only@127.0.0.1:5432/oi_ui_ci?schema=e2e
+      DISABLE_BACKGROUND_JOBS: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_BUILD_CPUS: '2'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate
+      - run: pnpm exec playwright install --with-deps chromium firefox
+      - name: Verify disposable database boundary
+        run: node -e "const u=new URL(process.env.E2E_DATABASE_URL);if(u.hostname!=='127.0.0.1'||u.pathname!=='/oi_ui_ci'||u.searchParams.get('schema')!=='e2e')throw Error('Refusing non-fixture database')"
+      - run: pnpm test:ui:prepare
+      - run: pnpm exec playwright test e2e/tests/human-ux-navigation.spec.ts e2e/tests/navigation-interactions.spec.ts e2e/tests/workspace-mode.spec.ts e2e/tests/workspace-isolation.spec.ts e2e/tests/workspace-knowledge-flow.spec.ts e2e/tests/training-engine-flow.spec.ts --project=chromium-desktop --project=firefox-smoke --workers=1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-shell-integration-${{ github.sha }}
+          path: |
+            test-results/playwright-report
+            test-results/playwright-results.json
+            test-results/playwright
+          retention-days: 3
