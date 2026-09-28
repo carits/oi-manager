@@ -2,7 +2,7 @@ import {
   AuthContracts,
   type ProfileUpdate,
 } from '@oi-manager/contracts'
-import { accountClient, ApiError, organizationClient } from '@/lib/apiClient'
+import { accountClient, ApiError, organizationClient, type ApiClientOptions } from '@/lib/apiClient'
 
 export async function loginAccount(username: string, password: string) {
   const result = await accountClient.mutateContract(AuthContracts.login, '/api/auth/login', {
@@ -25,9 +25,12 @@ export async function loginAccount(username: string, password: string) {
   return result
 }
 
-export function loadCurrentAccount(organizationId?: string) {
+export function loadCurrentAccount(
+  organizationId?: string,
+  options: Pick<ApiClientOptions, 'suppressOrganizationUnavailableEvent'> = {},
+) {
   const client = organizationId ? organizationClient(organizationId) : accountClient
-  return client.queryContract(AuthContracts.me, '/api/auth/me', { retry: false })
+  return client.queryContract(AuthContracts.me, '/api/auth/me', { retry: false, ...options })
 }
 
 export function logoutAccount() {
