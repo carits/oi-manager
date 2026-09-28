@@ -10,7 +10,7 @@ import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
 import { StudentPicker } from '@/features/organization-account'
-import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
 import {
   createTrainingSession,
   listTrainingTemplates,
@@ -295,14 +295,14 @@ export function TrainingSetupDialog({
         {!templateKey && <section className={styles.setupSection} aria-labelledby="training-setup-problems">
           <div><h3 id="training-setup-problems">训练题目</h3><p>按题号添加题库中已存在的题目。</p></div>
           <div className={styles.stack}>
-            <QuickProblemInput
+            <ProblemReferenceSelector
               existingProblemIds={selectedProblems.map(item => item.id)}
-              onResolved={(problems: SelectedCanonicalProblem[]) => setSelectedProblems(current => [
+              onAdd={(problems: SelectedCanonicalProblem[]) => setSelectedProblems(current => [
                 ...current,
                 ...problems.map(problem => ({
                   id: problem.id,
                   platform: problem.platform,
-                  problemId: problem.problemCode,
+                  problemId: problem.problemId,
                   title: problem.title,
                   difficulty: problem.difficulty,
                   required: true,
@@ -312,7 +312,7 @@ export function TrainingSetupDialog({
             />
             {selectedProblems.length > 0 && <div className={styles.setupProblemList} aria-label="已选训练题目">{selectedProblems.map((problem, index) => <div className={styles.setupProblemRow} key={problem.id}>
               <span className={styles.problemOrder}>{index + 1}</span>
-              <div><strong>{problem.platform} {problem.problemId}</strong><span>{problem.title}</span></div>
+              <div><ProblemReferenceLink problem={problem} /><span>{problem.required ? '必做题' : '选做题'}</span></div>
               {preset === 'practice' && <Checkbox label={problem.required ? '必做' : '选做'} checked={problem.required} onChange={event => setSelectedProblems(current => current.map(item => item.id === problem.id ? { ...item, required: event.target.checked } : item))} />}
               {preset !== 'practice' && <StatusBadge variant="neutral">必做</StatusBadge>}
               <Button size="sm" variant="ghost" aria-label={`移除 ${problem.problemId}`} title={`移除 ${problem.problemId}`} icon={<X size={15} />} onClick={() => setSelectedProblems(current => current.filter(item => item.id !== problem.id))} />
