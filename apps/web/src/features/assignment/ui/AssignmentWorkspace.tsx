@@ -152,7 +152,8 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   const savedRoster = new Set(assignment.Recipients.map(item => item.userId))
   const rosterDirty = rosterMode === 'SNAPSHOT' && (rosterDraft.size !== savedRoster.size || [...rosterDraft].some(userId => !savedRoster.has(userId)))
   const hasUnsavedChanges = basicsDirty || problemsDirty || rosterDirty
-  useUnsavedChanges(`assignment-draft:${assignment.id}`, hasUnsavedChanges)
+  const unsavedRevision = JSON.stringify([basicPayload(), problemRows(problemDraft), [...rosterDraft].sort()])
+  useUnsavedChanges(`assignment-draft:${assignment.id}`, hasUnsavedChanges, unsavedRevision)
 
   const validateStep = (step: number) => {
     if (step === 0) {

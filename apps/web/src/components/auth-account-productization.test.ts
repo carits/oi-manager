@@ -25,7 +25,7 @@ describe('account and authentication productization', () => {
     const provider = read('../features/auth/model/AuthProvider.tsx')
     const api = read('../features/auth/api/authApi.ts')
     const login = read('../features/auth/ui/LoginForm.tsx')
-    expect(provider).toContain("pathname.match(/^\\/org\\/([^/]+)/)")
+    expect(provider).toContain('organizationFromPath(pathname)')
     expect(provider).toContain('loadCurrentAccount(organizationId)')
     expect(api).toContain('queryContract(AuthContracts.me')
     expect(api).toContain('mutateContract(AuthContracts.login')

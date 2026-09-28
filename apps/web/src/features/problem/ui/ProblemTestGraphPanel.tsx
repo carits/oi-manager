@@ -181,7 +181,7 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
 
   useEffect(() => { load() }, [load])
   const dirty = Boolean(graph?.migrated) && graphFingerprint(graph?.fencingToken || 0, subtasks) !== baseFingerprint.current
-  useUnsavedChanges(`problem-test-graph:${problemId}`, dirty)
+  useUnsavedChanges(`problem-test-graph:${problemId}`, dirty, graphFingerprint(graph?.fencingToken || 0, subtasks))
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
 
   const selectedSubtask = subtasks.find(item => item.id === selectedSubtaskId) || null

@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -18,6 +19,7 @@ import {
   loginAccount,
   logoutAccount,
 } from '../api/authApi'
+import { organizationFromPath, organizationUnavailableAffectsPath } from '@/lib/applicationShell'
 
 export type AuthUser = CurrentAccount
 
@@ -36,7 +38,6 @@ interface AuthContextType {
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   prepareWorkspaceTransition: (workspace: WorkspaceSummary) => Promise<void>
-  activateOrganization: (workspace: WorkspaceSummary) => void
   isAuthenticated: boolean
   sessionKey: string | null
 }
@@ -56,6 +57,7 @@ export function AuthProvider({
   const [status, setStatus] = useState<AuthStatus>(
     initialUser ? 'authenticated' : 'anonymous',
   )
+  const workspaceTransitionGeneration = useRef(0)
 
   const sessionKey = useMemo(
     () => user ? `${user.accountRole}:${user.organizationId || 'personal'}:${user.organizationRole || 'user'}:${user.userId}` : null,
@@ -65,6 +67,7 @@ export function AuthProvider({
   useEffect(() => {
     const handleUnauthorized = () => {
       if (!user) return
+      workspaceTransitionGeneration.current += 1
       void mutateCache(() => true, undefined, { revalidate: false })
       setUser(null)
       setStatus('anonymous')
@@ -77,6 +80,10 @@ export function AuthProvider({
 
   useEffect(() => {
     const handleUnavailableOrganization = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail as { code?: unknown; organizationId?: unknown } : undefined
+      const requestOrganizationId = typeof detail?.organizationId === 'string' ? detail.organizationId : undefined
+      if (!organizationUnavailableAffectsPath(window.location.pathname, requestOrganizationId)) return
+      workspaceTransitionGeneration.current += 1
       void mutateCache(() => true, undefined, { revalidate: false })
       setUser(current => current ? {
         ...current,
@@ -85,7 +92,6 @@ export function AuthProvider({
         organizationMembershipId: undefined,
         organizationRole: undefined,
       } : null)
-      const detail = event instanceof CustomEvent ? event.detail as { code?: unknown } : undefined
       const reason = typeof detail?.code === 'string' ? detail.code : 'UNKNOWN'
       window.location.assign(`/identity?organizationUnavailable=1&reason=${encodeURIComponent(reason)}`)
     }
@@ -94,8 +100,9 @@ export function AuthProvider({
   }, [mutateCache])
 
   useEffect(() => {
+    workspaceTransitionGeneration.current += 1
     if (!user) return
-    const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
+    const organizationId = organizationFromPath(pathname)
     const contextMatches = organizationId
       ? user.organizationId === organizationId && Boolean(user.organizationRole)
       : !user.organizationId
@@ -124,6 +131,7 @@ export function AuthProvider({
     }
 
     const nextUser = result.data
+    workspaceTransitionGeneration.current += 1
     setUser(nextUser)
     setStatus('authenticated')
     await mutateCache(() => true, undefined, { revalidate: false })
@@ -137,6 +145,7 @@ export function AuthProvider({
       return
     }
     await mutateCache(() => true, undefined, { revalidate: false })
+    workspaceTransitionGeneration.current += 1
     setUser(null)
     setStatus('anonymous')
     window.location.assign('/login')
@@ -144,7 +153,7 @@ export function AuthProvider({
 
   const refreshUser = async () => {
     try {
-      const nextUser = await loadCurrentAccount()
+      const nextUser = await loadCurrentAccount(organizationFromPath(pathname))
       setUser(nextUser)
       setStatus('authenticated')
     } catch {
@@ -154,9 +163,12 @@ export function AuthProvider({
 
 
   const prepareWorkspaceTransition = useCallback(async (workspace: WorkspaceSummary) => {
+    const generation = ++workspaceTransitionGeneration.current
+    const sourceUserId = user?.userId
     const organizationId = workspace.type === 'organization' ? workspace.organizationId : undefined
     const nextUser = await loadCurrentAccount(organizationId, { suppressOrganizationUnavailableEvent: true })
-    if (!user || nextUser.userId !== user.userId) throw new Error('工作区账号身份已变化，请刷新后重试')
+    if (generation !== workspaceTransitionGeneration.current) throw new Error('工作区切换已被新的操作取代')
+    if (!sourceUserId || nextUser.userId !== sourceUserId) throw new Error('工作区账号身份已变化，请刷新后重试')
     if (workspace.type === 'organization') {
       if (!workspace.organizationId || nextUser.organizationId !== workspace.organizationId || !nextUser.organizationRole) {
         throw new Error('目标学校成员身份已失效，请刷新工作区列表')
@@ -166,20 +178,8 @@ export function AuthProvider({
     }
     // Remove old workspace snapshots only after target authorization is confirmed.
     await mutateCache(() => true, undefined, { revalidate: false })
-  }, [mutateCache, user])
-
-  const activateOrganization = useCallback((workspace: WorkspaceSummary) => {
-    if (workspace.type !== 'organization' || !workspace.organizationId) return
-    setUser(current => current && current.organizationId === workspace.organizationId && current.organizationRole === workspace.memberRole
-      ? current
-      : current ? {
-        ...current,
-        organizationId: workspace.organizationId,
-        organizationName: workspace.organizationName,
-        organizationMembershipId: workspace.organizationMembershipId,
-        organizationRole: workspace.memberRole as 'school_principal' | 'teacher' | 'student',
-      } : null)
-  }, [])
+    if (generation !== workspaceTransitionGeneration.current) throw new Error('工作区切换已被新的操作取代')
+  }, [mutateCache, user?.userId])
   return (
     <AuthContext.Provider value={{
       user,
@@ -189,7 +189,6 @@ export function AuthProvider({
       logout,
       refreshUser,
       prepareWorkspaceTransition,
-      activateOrganization,
       isAuthenticated: Boolean(user),
       sessionKey,
     }}>

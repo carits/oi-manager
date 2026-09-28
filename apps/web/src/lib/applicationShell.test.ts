@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountContextMatches, isApplicationPath, organizationFromPath, pageLayoutForPath } from './applicationShell'
+import { accountContextMatches, isApplicationPath, organizationFromPath, organizationUnavailableAffectsPath, pageLayoutForPath } from './applicationShell'
 
 describe('persistent application shell route contract', () => {
   it.each(['/personal', '/personal/teams', '/org/school-a/overview', '/account/profile', '/admin', '/platform-admin/problems'])('owns %s', path => { expect(isApplicationPath(path)).toBe(true) })
@@ -16,6 +16,12 @@ describe('persistent application shell route contract', () => {
     expect(organizationFromPath('/org/a/overview')).toBe('a')
     expect(organizationFromPath('/organization/a')).toBeUndefined()
     expect(organizationFromPath('/org/%E0%A4%A/overview')).toBeUndefined()
+  })
+  it('ignores stale organization-unavailable events from another workspace', () => {
+    expect(organizationUnavailableAffectsPath('/org/b/overview', 'a')).toBe(false)
+    expect(organizationUnavailableAffectsPath('/org/b/overview', 'b')).toBe(true)
+    expect(organizationUnavailableAffectsPath('/org/b/overview')).toBe(true)
+    expect(organizationUnavailableAffectsPath('/personal', 'b')).toBe(false)
   })
   it('resolves layout synchronously and does not mistake creation for a resource identifier', () => {
     expect(pageLayoutForPath('/org/a/training-sessions/b/design')).toBe('workbench')

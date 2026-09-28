@@ -78,7 +78,11 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     [publishing, setPublishing] = useState(false),
     [dirty, setDirty] = useState(false),
     [saveStatus, setSaveStatus] = useState<"saved" | "dirty" | "saving" | "error" | "conflict">("saved");
-  const { requestNavigation } = useUnsavedChanges(`training-session-design:${sessionId}`, dirty);
+  const { requestNavigation } = useUnsavedChanges(
+    `training-session-design:${sessionId}`,
+    dirty,
+    JSON.stringify({ title, description, stages, grouping }),
+  );
   const [issues, setIssues] = useState<Issue[]>([]);
   const [draggedStage, setDraggedStage] = useState<number | null>(null),
     [draggedProblem, setDraggedProblem] = useState<number | null>(null);

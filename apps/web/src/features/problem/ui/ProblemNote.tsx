@@ -171,7 +171,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
     }
   }, [noteContent])
 
-  const { requestNavigation } = useUnsavedChanges(`problem-note:${problemId}`, noteSaving || noteContent !== lastSavedContent)
+  const { requestNavigation } = useUnsavedChanges(`problem-note:${problemId}`, noteSaving || noteContent !== lastSavedContent, `${noteContent}\\0${noteSaving}`)
 
   if (loading) {
     return (

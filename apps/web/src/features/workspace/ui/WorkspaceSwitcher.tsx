@@ -86,7 +86,7 @@ export function WorkspaceSwitcher() {
     }
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== 'Escape' || !openRef.current) return
-      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+      if (document.querySelector('[aria-modal="true"]')) return
       event.preventDefault()
       closeSwitcher(true)
     }

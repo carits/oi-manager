@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getSidebarNavigationPreference,
+  migrateLegacySidebarNavigationPreference,
   parseSidebarNavigationPreference,
   setSidebarNavigationOpen,
   sidebarNavigationCookie,
@@ -29,6 +30,22 @@ describe('non-sensitive sidebar preferences', () => {
     expect(getSidebarNavigationPreference('user-1', 'student', 'org-b')).toBe('closed')
     expect(getSidebarNavigationPreference('user-1', 'user', 'personal')).toBe('closed')
     expect(getSidebarNavigationPreference('user-2', 'user', 'personal')).toBeNull()
+  })
+  it('migrates and removes the legacy role/workspace local preference once', () => {
+    const values = new Map([['sidebarNavigation:teacher:user-1:org-a', 'closed']])
+    const localStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => { values.delete(key) },
+    }
+    let cookie = ''
+    vi.stubGlobal('window', { location: { protocol: 'https:' }, localStorage })
+    vi.stubGlobal('document', {
+      get cookie() { return cookie },
+      set cookie(value: string) { cookie = value },
+    })
+    expect(migrateLegacySidebarNavigationPreference('user-1', ['teacher'], ['org-a'])).toBe('closed')
+    expect(cookie).toContain('oi_sidebar_user-1=closed')
+    expect(values.size).toBe(0)
   })
   it('does not fail navigation when browser cookies are blocked', () => {
     vi.stubGlobal('window', { location: { protocol: 'https:' } })

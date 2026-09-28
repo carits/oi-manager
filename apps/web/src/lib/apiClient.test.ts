@@ -196,7 +196,19 @@ describe('parseApiResponse', () => {
     await apiClient.get('/api/private')
     expect(dispatchEvent).toHaveBeenCalledTimes(1)
     expect(dispatchEvent.mock.calls[0][0]).toMatchObject({
-      detail: { code: 'ORGANIZATION_ACCESS_DENIED' },
+      detail: { code: 'ORGANIZATION_ACCESS_DENIED', organizationId: 'org-a' },
+    })
+  })
+
+  it('tags explicit organization failures with the request workspace, not the current URL workspace', async () => {
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { location: { pathname: '/org/org-b/overview' }, dispatchEvent })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: false, code: 'ORGANIZATION_NOT_AVAILABLE', message: 'gone',
+    }), { status: 404, headers: { 'Content-Type': 'application/json' } }))
+    await organizationClient('org-a').get('/api/private')
+    expect(dispatchEvent.mock.calls[0][0]).toMatchObject({
+      detail: { code: 'ORGANIZATION_NOT_AVAILABLE', organizationId: 'org-a' },
     })
   })
 

@@ -6,12 +6,12 @@ import { ConfirmDialog } from '@/components/ui/Dialogs'
 
 type BeforeNavigate = () => boolean | Promise<boolean>
 type LeaveRequest =
-  | { kind: 'navigation'; href: string; hard?: boolean; beforeNavigate?: BeforeNavigate }
+  | { kind: 'navigation'; href: string; hard?: boolean; beforeNavigate?: BeforeNavigate; preflightComplete?: boolean }
   | { kind: 'action'; run: () => void | Promise<void> }
 
 type UnsavedChangesContextValue = {
   hasUnsavedChanges: boolean
-  setDirty: (scope: string, dirty: boolean) => void
+  setDirty: (scope: string, dirty: boolean, revisionToken?: string) => void
   requestNavigation: (href: string, options?: { hard?: boolean; beforeNavigate?: BeforeNavigate }) => void
   requestAction: (run: () => void | Promise<void>) => void
 }
@@ -31,28 +31,40 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
   const [dirtyScopes, setDirtyScopes] = useState<Set<string>>(new Set())
   const [pending, setPending] = useState<LeaveRequest | null>(null)
   const bypass = useRef(false)
+  const dirtyScopeVersions = useRef(new Map<string, string>())
+  const dirtyRevision = useRef(0)
   const hasUnsavedChanges = dirtyScopes.size > 0
 
-  const setDirty = useCallback((scope: string, dirty: boolean) => {
-    setDirtyScopes(current => {
-      const next = new Set(current)
-      if (dirty) next.add(scope)
-      else next.delete(scope)
-      return next
-    })
+  const setDirty = useCallback((scope: string, dirty: boolean, revisionToken = 'dirty') => {
+    const previous = dirtyScopeVersions.current.get(scope)
+    if (dirty) {
+      if (previous === revisionToken) return
+      dirtyScopeVersions.current.set(scope, revisionToken)
+    } else {
+      if (previous === undefined) return
+      dirtyScopeVersions.current.delete(scope)
+    }
+    dirtyRevision.current += 1
+    setDirtyScopes(new Set(dirtyScopeVersions.current.keys()))
   }, [])
 
   const allowLeave = useCallback(() => {
     bypass.current = true
+    dirtyScopeVersions.current.clear()
+    dirtyRevision.current += 1
     setDirtyScopes(new Set())
     window.setTimeout(() => { bypass.current = false }, 0)
   }, [])
 
-  const navigate = useCallback(async (request: Extract<LeaveRequest, { kind: 'navigation' }>) => {
-    if (request.beforeNavigate) {
+  const navigate = useCallback(async (request: Extract<LeaveRequest, { kind: 'navigation' }>, approvedRevision = dirtyRevision.current) => {
+    if (request.beforeNavigate && !request.preflightComplete) {
       let ready = false
       try { ready = await request.beforeNavigate() } catch { ready = false }
       if (!ready) return
+    }
+    if (dirtyScopeVersions.current.size > 0 && dirtyRevision.current !== approvedRevision) {
+      setPending({ ...request, preflightComplete: true })
+      return
     }
     allowLeave()
     if (request.hard) window.location.assign(request.href)
@@ -105,7 +117,7 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
         const request = pending
         setPending(null)
         if (!request) return
-        if (request.kind === 'navigation') void navigate(request)
+        if (request.kind === 'navigation') void navigate(request, dirtyRevision.current)
         else {
           allowLeave()
           void request.run()
@@ -120,14 +132,14 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
   </UnsavedChangesContext.Provider>
 }
 
-export function useUnsavedChanges(scope: string, dirty: boolean) {
+export function useUnsavedChanges(scope: string, dirty: boolean, revisionToken = dirty ? 'dirty' : 'clean') {
   const context = useContext(UnsavedChangesContext)
   if (!context) throw new Error('useUnsavedChanges must be used within UnsavedChangesProvider')
   const setDirty = context.setDirty
   useEffect(() => {
-    setDirty(scope, dirty)
-    return () => setDirty(scope, false)
-  }, [setDirty, dirty, scope])
+    setDirty(scope, dirty, revisionToken)
+  }, [setDirty, dirty, revisionToken, scope])
+  useEffect(() => () => setDirty(scope, false), [setDirty, scope])
   return context
 }
 

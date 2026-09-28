@@ -7,7 +7,7 @@ import { ChevronDown, Link2, LogOut, Menu, PanelLeftClose, ShieldCheck, UserRoun
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/features/auth'
 import { roleNames, type NavigationRole } from '@/config/navigation'
-import { setSidebarNavigationOpen } from '@/lib/auth'
+import { migrateLegacySidebarNavigationPreference, setSidebarNavigationOpen } from '@/lib/auth'
 import { SessionUnavailable } from './SessionUnavailable'
 import { WorkspaceSwitcher } from '@/features/workspace'
 import { NotificationBell } from '@/features/notification'
@@ -41,6 +41,16 @@ export function AppShell({ children, initialSidebarExpanded = true }: AppShellPr
   const navigationContext = resolveNavigationContext(pathname, user)
   const organizationId = navigationContext.organizationId
   const contextKind = navigationContext.workspace
+
+  useEffect(() => {
+    if (!user) return
+    const migrated = migrateLegacySidebarNavigationPreference(
+      user.userId,
+      [user.accountRole, user.organizationRole],
+      [organizationId || contextKind, contextKind],
+    )
+    if (migrated) setDesktopSidebarExpanded(migrated === 'open')
+  }, [contextKind, organizationId, user?.accountRole, user?.organizationRole, user?.userId])
 
   useEffect(() => {
     // CSS owns the first responsive frame; this subscription controls interaction only.

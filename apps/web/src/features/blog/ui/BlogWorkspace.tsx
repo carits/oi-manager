@@ -129,7 +129,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
   const serializedEditorState = useMemo(() => serializeEditorState({ type, slug, organizationId, visibility, draft }), [draft, organizationId, slug, type, visibility])
   const rawTagsDirty = authorTagsText !== draft.classification.authorTags.join(', ')
   const dirty = baseline !== serializedEditorState || rawTagsDirty
-  const { requestNavigation } = useUnsavedChanges(`blog-editor:${postId || 'new'}`, dirty)
+  const { requestNavigation } = useUnsavedChanges(`blog-editor:${postId || 'new'}`, dirty, `${serializedEditorState}\\0${authorTagsText}`)
 
   const applyPost = useCallback((value: BlogPost) => {
     setPost(value); setType(value.type); setSlug(value.slug); setOrganizationId(value.organizationId || ''); setVisibility(value.visibility)

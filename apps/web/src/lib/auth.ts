@@ -30,6 +30,28 @@ export function getSidebarNavigationOpen(userId: string, role?: string, context?
   return getSidebarNavigationPreference(userId, role, context) !== 'closed'
 }
 
+export function migrateLegacySidebarNavigationPreference(
+  userId: string,
+  roles: Array<string | null | undefined>,
+  contexts: Array<string | null | undefined>,
+): SidebarPreference | null {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return null
+  const current = getSidebarNavigationPreference(userId)
+  let migrated = current
+  try {
+    const keys = new Set(roles.filter(Boolean).flatMap(role => contexts.filter(Boolean).map(context => `sidebarNavigation:${role}:${userId}:${context}`)))
+    for (const key of keys) {
+      const legacy = parseSidebarNavigationPreference(window.localStorage.getItem(key))
+      if (!migrated && legacy) migrated = legacy
+      window.localStorage.removeItem(key)
+    }
+    if (!current && migrated) document.cookie = sidebarNavigationCookie(userId, migrated === 'open', window.location.protocol === 'https:')
+  } catch {
+    return current
+  }
+  return migrated
+}
+
 export function setSidebarNavigationOpen(userId: string, _role: string, _context: string, open: boolean): void {
   if (typeof document === 'undefined') return
   try {

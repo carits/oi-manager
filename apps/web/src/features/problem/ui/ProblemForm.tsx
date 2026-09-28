@@ -152,7 +152,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const isAutoSaveDraft = mode === 'edit' && searchParams.get('new') === '1'
   const currentFingerprint = JSON.stringify(buildProblemPayload())
   const formDirty = savedFingerprintRef.current !== null && savedFingerprintRef.current !== currentFingerprint
-  const { requestNavigation } = useUnsavedChanges(`problem-draft:${problemId || 'new'}`, formDirty || autoSaveStatus === 'saving')
+  const { requestNavigation } = useUnsavedChanges(`problem-draft:${problemId || 'new'}`, formDirty || autoSaveStatus === 'saving', `${currentFingerprint}\\0${autoSaveStatus}`)
   useEffect(() => {
     if (loading || isAutoSaveDraft || mode !== 'edit' || loadedProblemIdRef.current !== problemId || fingerprintProblemIdRef.current === problemId) return
     savedFingerprintRef.current = currentFingerprint

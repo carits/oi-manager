@@ -243,7 +243,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
     return () => clearInterval(timer)
   }, [contest, refresh])
 
-  useUnsavedChanges(`contest-detail:${contestId}`, noteSaving || recordSaving)
+  useUnsavedChanges(`contest-detail:${contestId}`, noteSaving || recordSaving, `${noteSaving}:${recordSaving}`)
 
   // Wire submit code → set detail submission id
   const handleSubmitCode = async () => {

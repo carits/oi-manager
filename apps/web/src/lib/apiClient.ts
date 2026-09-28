@@ -249,7 +249,12 @@ export class ApiClient {
         typeof window !== 'undefined' &&
         window.location.pathname.startsWith('/org/')
       ) {
-        window.dispatchEvent(new CustomEvent(ORGANIZATION_UNAVAILABLE_EVENT, { detail: { code: parsed.code } }))
+        window.dispatchEvent(new CustomEvent(ORGANIZATION_UNAVAILABLE_EVENT, {
+          detail: {
+            code: parsed.code,
+            organizationId: headers['X-OI-Organization-ID'],
+          },
+        }))
       }
       return parsed
     } catch (error) {

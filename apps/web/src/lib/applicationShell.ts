@@ -7,6 +7,11 @@ export function organizationFromPath(pathname: string): string | undefined {
   if (!segment) return undefined
   try { return decodeURIComponent(segment) } catch { return undefined }
 }
+/** Ignore access failures from requests that belong to a workspace the user has already left. */
+export function organizationUnavailableAffectsPath(pathname: string, requestOrganizationId?: string): boolean {
+  const activeOrganizationId = organizationFromPath(pathname)
+  return Boolean(activeOrganizationId && (!requestOrganizationId || requestOrganizationId === activeOrganizationId))
+}
 export function accountContextMatches(pathname: string, user: { organizationId?: string | null; organizationRole?: string | null } | null | undefined): boolean {
   if (!user) return false
   const organizationId = organizationFromPath(pathname)
