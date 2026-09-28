@@ -46,6 +46,7 @@ export function WorkspaceSwitcher() {
   const username = user?.username || ''
   const visible = useMemo(() => filterWorkspaces(workspaces, query, username), [query, username, workspaces])
   const shouldSearch = loaded && workspaces.filter(item => item.type === 'organization').length > 5
+  const personalWorkspace = workspaces.find(item => item.type === 'personal')
   openRef.current = open
 
   const focusTrigger = useCallback(() => { rootRef.current?.querySelector<HTMLButtonElement>('[aria-controls]')?.focus() }, [])
@@ -152,7 +153,16 @@ export function WorkspaceSwitcher() {
         </Button> })}
         {!loading && loaded && !loadError && !visible.length && <p className={styles.empty}>没有匹配的工作区</p>}
       </div>
-      <div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" data-workspace-option="true" disabled={switchingKey !== null} onClick={() => { focusTrigger(); closeSwitcher(); requestNavigation('/personal/organizations') }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
+      <div className={styles.footer}><Button variant="ghost" className={styles.joinAction} type="button" data-workspace-option="true" disabled={switchingKey !== null || !personalWorkspace} onClick={() => {
+        if (!personalWorkspace) return
+        focusTrigger(); closeSwitcher()
+        requestNavigation('/personal/organizations', { beforeNavigate: async () => {
+          setSwitchingKey('personal')
+          try { await prepareWorkspaceTransition(personalWorkspace); return true }
+          catch (error) { toast.error(error instanceof Error ? error.message : '个人空间暂时无法进入，请重试'); return false }
+          finally { setSwitchingKey(current => current === 'personal' ? null : current) }
+        } })
+      }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
     </section>}
   </div>
 }
