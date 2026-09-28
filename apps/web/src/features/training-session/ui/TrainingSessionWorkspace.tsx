@@ -12,7 +12,7 @@ import { ConfirmDialog, DetailDialog, FormDialog } from '@/components/ui/Dialogs
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
-import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
 import { persistSubmissionDraft, SubmissionCodeEditor, SubmissionIoFields, type SubmissionIoValue } from '@/features/submission'
 import {
   appendTrainingRuntimeProblem,
@@ -1271,13 +1271,13 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <label className={styles.field}>目标对象<Select value={runtimeProblemTargetType} onChange={event => { setRuntimeProblemTargetType(event.target.value as 'ALL' | 'GROUP' | 'USER'); setRuntimeProblemTargetId('') }}><option value="ALL">全体学员</option><option value="GROUP">指定分组</option><option value="USER">指定学员</option></Select></label>
         {runtimeProblemTargetType === 'GROUP' && <label className={styles.field}>目标分组<Select value={runtimeProblemTargetId} onChange={event => setRuntimeProblemTargetId(event.target.value)}><option value="">请选择</option>{data.session.Groups.filter(group => group.status === 'active').map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>}
         {runtimeProblemTargetType === 'USER' && <label className={styles.field}>目标学员<Select value={runtimeProblemTargetId} onChange={event => setRuntimeProblemTargetId(event.target.value)}><option value="">请选择</option>{dashboard?.participants.map(item => <option key={item.user.id} value={item.user.id}>{item.user.username}</option>)}</Select></label>}
-        <QuickProblemInput
+        <ProblemReferenceSelector
           existingProblemIds={runtimeProblems.map(item => item.id)}
-          onResolved={problems => setRuntimeProblems(current => [...current, ...problems])}
+          onAdd={problems => setRuntimeProblems(current => [...current, ...problems])}
           label="按平台和题号追加"
           requireStable={false}
         />
-        {runtimeProblems.length > 0 && <div className={styles.timeline}>{runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><div><strong>{item.platform} · {item.problemCode}</strong><br /><span>{item.title}</span></div><Button size="sm" variant="ghost" onClick={() => setRuntimeProblems(current => current.filter(problem => problem.id !== item.id))}>移除</Button></div>)}</div>}
+        {runtimeProblems.length > 0 && <div className={styles.timeline}>{runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><div><ProblemReferenceLink problem={item} /></div><Button size="sm" variant="ghost" onClick={() => setRuntimeProblems(current => current.filter(problem => problem.id !== item.id))}>移除</Button></div>)}</div>}
         <Checkbox label="作为必做题" description="取消后作为选做题，不计入当前完成要求。" checked={runtimeProblemRequired} onChange={event => setRuntimeProblemRequired(event.target.checked)} />
         <label className={styles.field}>目标分<Input type="number" min={0} max={100} value={runtimeProblemTargetScore} onChange={event => setRuntimeProblemTargetScore(Math.max(0, Math.min(100, Number(event.target.value) || 0)))} /></label>
         <label className={styles.field}>加题原因<Textarea rows={4} maxLength={2000} value={runtimeProblemReason} onChange={event => setRuntimeProblemReason(event.target.value)} /></label>
