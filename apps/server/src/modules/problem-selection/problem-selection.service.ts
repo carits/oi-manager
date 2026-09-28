@@ -12,10 +12,10 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
   const inputs = body.items.map(input => ({
     clientKey: input.clientKey,
     platform: normalizeOjPlatformKey(input.platform),
-    problemCode: input.problemCode.trim(),
+    problemId: input.problemId.trim(),
   }))
   const identities = inputs.flatMap(input => input.platform
-    ? [{ platform: input.platform, problemId: input.problemCode }]
+    ? [{ platform: input.platform, problemId: input.problemId }]
     : [])
 
   // Selection, legacy callers and ordinary submissions share the same authorization
@@ -30,9 +30,9 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
   const stableByProblem = new Map(slots.map(slot => [slot.problemId, slot]))
 
   const items: ResolvedProblemSelection[] = inputs.map(input => {
-    const base = { clientKey: input.clientKey, platform: input.platform || '', problemCode: input.problemCode }
+    const base = { clientKey: input.clientKey, platform: input.platform || '', problemId: input.problemId }
     if (!input.platform) return { ...base, status: 'invalid_input', message: '平台名称未注册，请选择有效的 OJ 平台' }
-    const match = matches.get(primaryIdentityKey({ platform: input.platform, problemId: input.problemCode }))
+    const match = matches.get(primaryIdentityKey({ platform: input.platform, problemId: input.problemId }))
     if (match?.kind === 'identity_conflict') return {
       ...base, status: 'identity_conflict',
       message: '当前范围存在多个相同平台和题号的记录，请联系管理员处理；系统未自动选择',
@@ -43,7 +43,7 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
     const selected = match.problem
     const stable = stableByProblem.get(selected.id)
     const problem = {
-      id: selected.id, platform: selected.platform, problemCode: selected.problemId,
+      id: selected.id, platform: selected.platform, problemId: selected.problemId,
       title: selected.title, difficulty: selected.difficulty,
       ...(stable ? { stableData: {
         slot: 'STABLE' as const, graphHash: stable.graphHash, fencingToken: stable.fencingToken,
