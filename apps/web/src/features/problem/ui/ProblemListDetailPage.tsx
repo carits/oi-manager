@@ -15,10 +15,10 @@ import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
 import { getAssetUrl } from '@/lib/assets'
-import { AlertTriangle, Edit3, Send, Share2 } from 'lucide-react'
+import { Edit3, Send, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
-import { ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
 
 const avatarStyle = (avatar?: string | null): React.CSSProperties => ({
   '--problem-list-avatar': avatar ? `url(${getAssetUrl(avatar)})` : 'none',
@@ -135,17 +135,9 @@ function getOjPlatformLabel(ojBindings: string | null, ojName?: string | null): 
 interface NewRow {
   id: string
   sectionId: string
-  ojName: string
-  problemCode: string
+  problem: SelectedCanonicalProblem
   alias: string
   notes: string
-  resolving: boolean
-  resolved: {
-    found: boolean
-    problemId: string
-    title: string
-    created: boolean
-  } | null
   saving: boolean
 }
 
@@ -231,12 +223,9 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
     setNewRows(current => [...current, ...problems.map(problem => ({
       id: `temp-${++tempIdCounter}`,
       sectionId,
-      ojName: problem.platform,
-      problemCode: problem.problemId,
+      problem,
       alias: '',
       notes: '',
-      resolving: false,
-      resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
       saving: false,
     }))])
   }
@@ -251,7 +240,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
   /** 批量保存某章节所有已解析的新行 */
   const saveAllSectionRows = async (sectionId: string) => {
-    const rowsToSave = newRows.filter(r => r.sectionId === sectionId && r.resolved?.found && !r.saving)
+    const rowsToSave = newRows.filter(r => r.sectionId === sectionId && !r.saving)
     if (rowsToSave.length === 0) return
 
     // 标记所有行为 saving
@@ -262,11 +251,13 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
     let saved = 0
     for (const row of rowsToSave) {
       try {
-        const body: { ojName: string; problemCode: string; alias: string | null; notes: string | null; problemId?: string } = {
-          ojName: row.ojName, problemCode: row.problemCode.trim(),
-          alias: row.alias.trim() || null, notes: row.notes.trim() || null,
+        const body: { ojName: string; problemCode: string; alias: string | null; notes: string | null; problemId: string } = {
+          ojName: row.problem.platform,
+          problemCode: row.problem.problemId,
+          alias: row.alias.trim() || null,
+          notes: row.notes.trim() || null,
+          problemId: row.problem.id,
         }
-        if (row.resolved!.problemId) body.problemId = row.resolved!.problemId
         const res = await apiClient.post(`/api/problem-lists/sections/${row.sectionId}/entries/single`, body)
         if (res.success || res.status === 409) {
           removeNewRow(row.id)
@@ -540,17 +531,15 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                           <TableRow key={row.id} className={unifiedStyles.u38}>
                             <TableCell className={unifiedStyles.u23}>{section.Entries.length + sectionNewRows.indexOf(row) + 1}</TableCell>
                             <TableCell className={unifiedStyles.u25}>
-                              {getOjPlatformLabel(null, row.ojName)}
+                              {getOjPlatformLabel(null, row.problem.platform)}
                             </TableCell>
                             <TableCell className={unifiedStyles.u25}>
-                              {row.problemCode}
+                              {row.problem.problemId}
                             </TableCell>
                             <TableCell className={unifiedStyles.u27}>
-                              {row.saving ? <span className={unifiedStyles.u41}>保存中...</span>
-                                : row.resolving ? <span className={unifiedStyles.u42}>检索中...</span>
-                                : row.resolved ? row.resolved.found ? <span><span className={unifiedStyles.u28}>✓</span><span className={unifiedStyles.u29}>{row.resolved.title}</span></span>
-                                  : <span className={unifiedStyles.u43}><AlertTriangle aria-hidden="true" size={14} />题目不存在</span>
-                                : <span className={unifiedStyles.u42}>-</span>}
+                              {row.saving
+                                ? <span className={unifiedStyles.u41}>保存中...</span>
+                                : <span><span className={unifiedStyles.u28}>✓</span><span className={unifiedStyles.u29}><ProblemReferenceLink problem={row.problem} showIdentity={false} /></span></span>}
                             </TableCell>
                             <TableCell className={unifiedStyles.u25}>
                               <Textarea value={row.notes} onChange={e => updateNewRow(row.id, { notes: e.target.value })}
@@ -559,10 +548,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                             </TableCell>
                             <TableCell className={unifiedStyles.u35}>
                               <div className={unifiedStyles.u36}>
-                                {row.saving ? <span className={unifiedStyles.u45}>保存中...</span>
-                                  : row.resolved?.found ? <span className={unifiedStyles.u46}>✓ 已就绪</span>
-                                  : row.resolved && !row.resolved.found ? <span className={unifiedStyles.u47}>不存在</span>
-                                  : null}
+                                {row.saving ? <span className={unifiedStyles.u45}>保存中...</span> : <span className={unifiedStyles.u46}>✓ 已就绪</span>}
                                 {!row.saving && <Button variant="ghost" onClick={() => removeNewRow(row.id)} className={unifiedStyles.u37}>✕</Button>}
                               </div>
                             </TableCell>
@@ -579,7 +565,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                 {canEdit && !isStudentView && (
                   <div className={unifiedStyles.u49}>
                     <ProblemReferenceSelector
-                      existingProblemIds={[...section.Entries.map(entry => entry.problemId), ...sectionNewRows.flatMap(row => row.resolved?.problemId ? [row.resolved.problemId] : [])]}
+                      existingProblemIds={[...section.Entries.map(entry => entry.problemId), ...sectionNewRows.map(row => row.problem.id)]}
                       onAdd={(problems) => addResolvedRows(section.id, problems)}
                       autoFocus={false}
                       requireStable={false}
@@ -587,10 +573,10 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                     {sectionNewRows.length > 0 && (
                       <Button variant="primary"
                         onClick={() => saveAllSectionRows(section.id)}
-                        disabled={!sectionNewRows.some(r => r.resolved?.found && !r.saving)}
+                        disabled={!sectionNewRows.some(r => !r.saving)}
                         className={unifiedStyles.saveRowsButton}
                       >
-                        保存 ({sectionNewRows.filter(r => r.resolved?.found && !r.saving).length} 题)
+                        保存 ({sectionNewRows.filter(r => !r.saving).length} 题)
                       </Button>
                     )}
                   </div>
