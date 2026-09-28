@@ -38,6 +38,7 @@ Stable 不存在不再由 resolver 解释为查无此题。公共 QuickProblemIn
 QuickProblemInput 区分请求失败与未找到；等待业务回调完成，并在失败或部分接受不明时保留输入。
 显示“已找到/仍需保存”，不宣称数据已保存。同步 in-flight 锁阻止连续点击重复调用，
 会话变化和卸载使旧响应失效，禁用中的表单不接收迟到结果。
+已选 ID 快照按 props 记忆化，不在一次渲染里重复消费 Iterable；回包时使用当前快照做重复检查。
 localStorage 读写失败不阻断选题；读取旧中文平台偏好时规范化，写入只使用 key。
 批量上限仍是 100，但超过时明确报错，不再悄悄截断；输入示例跟随平台变化。
 
@@ -54,12 +55,29 @@ localStorage 读写失败不阻断选题；读取旧中文平台偏好时规范�
 
 本地终端不能解析 GitHub 域名，未得到完整 checkout，也未将其描述为完整本地构建通过。
 共享 Registry 单文件使用 TypeScript 编译后，139 项平台映射/冲突断言通过。
-新增选择模型完成 7 项本地运行断言；服务与组件仅完成语法转译检查，不等于全项目类型检查。
-分支增加 `.github/workflows/problem-identity-check.yml`：只读仓库权限，不使用密钥，
+新增选择模型完成 7 项本地运行断言；本地服务与组件只做语法转译，全项目验证由下述分支 CI 执行。
+分支增加 `.github/workflows/problem-identity-check.yml`：仓库权限只读，不注入业务密钥，
 不启动数据库服务，DATABASE_URL 指向本机不可用端口；仅安装依赖、生成 Prisma 客户端类型、
 执行类型检查、mocked resolver/contract 单测、Web 单测及静态门禁。
-该工作流不执行数据库迁移、seed、reset、部署或推送。最终检查结果必须读取本分支实际运行，不能仅凭工作流存在宣称通过。
+该工作流不执行数据库迁移、seed、reset、部署或推送。
 
+### 已读取的 CI 结果
+
+实现提交 `c33b43fac5b11165e049157e2cd4aa45469276b0` 的运行：
+https://github.com/carits/oi-manager/actions/runs/36377629972
+
+结果：success。已读取运行步骤和完整 job 日志，而不是仅确认工作流存在。
+
+- Prisma 目录与基线零差异检查通过。
+- Contracts、Shared 构建通过。
+- Server 与 Web 的 TypeScript noEmit 检查通过。
+- 本地 resolver/contract 定向单测 15/15 通过。
+- Web 单测 54 个文件、359/359 通过，其中平台规范化覆盖 75 项、选择模型覆盖 8 项。
+- docs:check、architecture:check、API 身份审计、UI 状态与组件门禁、导航审计通过。
+- 数据库 baseline 检查为仓库文件静态检查，没有连接数据库。
+
+上述结果属于明确的提交，不自动代表后来提交；最新 HEAD 需读取其对应 CI。
+未执行完整 Server 数据库集成测试、真实浏览器 E2E 或完整生产 Web 构建。
 服务端定向测试独立使用 `vitest.problem-selection.config.ts`，不加载数据库测试 setup。
 其 fixture 模拟查询返回，权限判断复用 problem.access，capability 解析使用测试替身；
 这些不是 PostgreSQL 集成测试，也不能替代后续双学校多角色 E2E。

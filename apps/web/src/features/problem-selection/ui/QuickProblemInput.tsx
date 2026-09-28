@@ -34,8 +34,9 @@ export function QuickProblemInput({ existingProblemIds, onResolved, autoFocus = 
   const mountedRef = useRef(false)
   const contextRef = useRef(sessionKey)
   contextRef.current = sessionKey
-  const existingRef = useRef(new Set(existingProblemIds || []))
-  existingRef.current = new Set(existingProblemIds || [])
+  const existing = useMemo(() => new Set(existingProblemIds || []), [existingProblemIds])
+  const existingRef = useRef(existing)
+  existingRef.current = existing
   const disabledRef = useRef(disabled)
   disabledRef.current = disabled
   const codes = useMemo(() => parseProblemCodes(value), [value])
