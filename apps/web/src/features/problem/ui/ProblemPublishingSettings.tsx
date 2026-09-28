@@ -11,6 +11,7 @@ type Props = {
   role: 'teacher' | 'student' | 'admin'
   status: string
   bindings: ProblemOjBinding[]
+  bindingsError?: string
   fetching: boolean
   onStatusChange: (value: string) => void
   onBindingChange: (index: number, field: 'platform' | 'problemId', value: string) => void
@@ -23,6 +24,7 @@ export function ProblemPublishingSettings({
   role,
   status,
   bindings,
+  bindingsError,
   fetching,
   onStatusChange,
   onBindingChange,
@@ -48,51 +50,53 @@ export function ProblemPublishingSettings({
         >
           <option value="draft">草稿</option>
           <option value="published">已发布</option>
-          {status === "archived" && <option value="archived">已归档</option>}
+          {status === 'archived' && <option value="archived">已归档</option>}
         </Select>
       </div>
       <div className={unifiedStyles.u30}>
         <label className={unifiedStyles.u8}>附加来源</label>
         <p className={unifiedStyles.u32}>仅记录来源，最多 3 项；不参与题号检索，不决定主 OJ 或主题号。拉取是独立的管理操作。</p>
-        {bindings.map((binding, index) => (
-          <div key={index} className={unifiedStyles.u33}>
-            <Select
-              aria-label="选择 OJ 平台"
-              value={binding.platform}
-              onChange={(event) => onBindingChange(index, 'platform', event.target.value)}
-              className={unifiedStyles.u28}
-            >
-              <option value="">选择平台</option>
-              {OJ_PLATFORMS.map((platform) => (
-                <option key={platform.value} value={platform.value}>{platform.label}</option>
-              ))}
-            </Select>
-            <Input
-              type="text"
-              value={binding.problemId}
-              onChange={(event) => onBindingChange(index, 'problemId', event.target.value)}
-              placeholder="题号"
-              className={unifiedStyles.u34}
-            />
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => onFetch(index)}
-              disabled={fetching || !binding.platform || !binding.problemId.trim()}
-              size="sm"
-            >
-              {fetching ? '拉取中...' : '拉取'}
+        {bindingsError ? <p role="alert" className={unifiedStyles.u32}>{bindingsError}</p> : <>
+          {bindings.map((binding, index) => (
+            <div key={index} className={unifiedStyles.u33}>
+              <Select
+                aria-label="选择 OJ 平台"
+                value={binding.platform}
+                onChange={(event) => onBindingChange(index, 'platform', event.target.value)}
+                className={unifiedStyles.u28}
+              >
+                <option value="">选择平台</option>
+                {OJ_PLATFORMS.map((platform) => (
+                  <option key={platform.value} value={platform.value}>{platform.label}</option>
+                ))}
+              </Select>
+              <Input
+                type="text"
+                value={binding.problemId}
+                onChange={(event) => onBindingChange(index, 'problemId', event.target.value)}
+                placeholder="题号"
+                className={unifiedStyles.u34}
+              />
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => onFetch(index)}
+                disabled={fetching || !binding.platform || !binding.problemId.trim()}
+                size="sm"
+              >
+                {fetching ? '拉取中...' : '拉取'}
+              </Button>
+              <Button variant="ghost" type="button" onClick={() => onRemove(index)} className={unifiedStyles.u35}>
+                删除
+              </Button>
+            </div>
+          ))}
+          {bindings.length < 3 && (
+            <Button variant="ghost" type="button" onClick={onAdd} className={unifiedStyles.u36}>
+              + 添加绑定
             </Button>
-            <Button variant="ghost" type="button" onClick={() => onRemove(index)} className={unifiedStyles.u35}>
-              删除
-            </Button>
-          </div>
-        ))}
-        {bindings.length < 3 && (
-          <Button variant="ghost" type="button" onClick={onAdd} className={unifiedStyles.u36}>
-            + 添加绑定
-          </Button>
-        )}
+          )}
+        </>}
       </div>
     </div>
   )
