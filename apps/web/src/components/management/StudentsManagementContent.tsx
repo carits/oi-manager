@@ -210,6 +210,7 @@ export default function StudentsManagementContent() {
           <Select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></Select>
         </ManagementToolbar>
         {resource.error && !data ? <LoadError message={resource.error.message} requestId={resource.error.requestId} onRetry={() => void resource.retry()} /> : <>
+        {resource.refreshing && data && <p className={unifiedStyles.u8} role="status">正在更新学生列表…</p>}
         {resource.error && <LoadError compact message={resource.error.message} requestId={resource.error.requestId} onRetry={() => void resource.retry()} />}
         <Table
           data={students}
