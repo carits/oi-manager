@@ -35,6 +35,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<LoginResult>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
+  prepareWorkspaceTransition: (workspace: WorkspaceSummary) => Promise<void>
   activateOrganization: (workspace: WorkspaceSummary) => void
   isAuthenticated: boolean
   sessionKey: string | null
@@ -152,6 +153,21 @@ export function AuthProvider({
   }
 
 
+  const prepareWorkspaceTransition = useCallback(async (workspace: WorkspaceSummary) => {
+    const organizationId = workspace.type === 'organization' ? workspace.organizationId : undefined
+    const nextUser = await loadCurrentAccount(organizationId, { suppressOrganizationUnavailableEvent: true })
+    if (!user || nextUser.userId !== user.userId) throw new Error('工作区账号身份已变化，请刷新后重试')
+    if (workspace.type === 'organization') {
+      if (!workspace.organizationId || nextUser.organizationId !== workspace.organizationId || !nextUser.organizationRole) {
+        throw new Error('目标学校成员身份已失效，请刷新工作区列表')
+      }
+    } else if (workspace.type === 'personal' && nextUser.organizationId) {
+      throw new Error('个人空间身份确认失败，请重试')
+    }
+    // Remove old workspace snapshots only after target authorization is confirmed.
+    await mutateCache(() => true, undefined, { revalidate: false })
+  }, [mutateCache, user])
+
   const activateOrganization = useCallback((workspace: WorkspaceSummary) => {
     if (workspace.type !== 'organization' || !workspace.organizationId) return
     setUser(current => current && current.organizationId === workspace.organizationId && current.organizationRole === workspace.memberRole
@@ -172,6 +188,7 @@ export function AuthProvider({
       login,
       logout,
       refreshUser,
+      prepareWorkspaceTransition,
       activateOrganization,
       isAuthenticated: Boolean(user),
       sessionKey,
