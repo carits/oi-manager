@@ -1,9 +1,9 @@
 .root { display: grid; min-width: 0; width: 100%; gap: var(--space-2); }
 .row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: flex-end; }
 .field { display: grid; min-width: 0; gap: var(--space-1); color: var(--text-secondary); font-size: var(--text-sm); }
-.row > .field { flex: 1 1 150px; }
-.row > .field:first-child { flex: 0 1 160px; }
-.row > div.field { flex: 2 1 210px; }
+.row > .field { flex: 1 1 130px; }
+.row > .field:first-child { flex: 0 1 140px; }
+.row > div.field { flex: 2 1 160px; }
 .row > button { flex: 0 0 auto; }
 .input { min-width: 0; }
 .resultBox { min-height: var(--control-height); box-sizing: border-box; display: flex; align-items: center; min-width: 0; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
