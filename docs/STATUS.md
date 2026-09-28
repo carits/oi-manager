@@ -5,6 +5,12 @@ last_verified: 2026-09-28
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+## 2026-09-28 开发文档审计完成
+
+- 当前开发/运维文档已按 Contest-only、Stable/Evolving 双槽、CurrentJudgeRun 和 Prisma 199 模型重新核对。
+- 当前入口文档中的主要英文说明已翻译为中文；命令、路径、环境变量、协议名和代码标识保留英文以避免执行歧义。
+- 历史静态审计与旧运维报告保持可追溯，但已标为 `reference` 或加历史警告，不再作为当前完成度依据。详情见 [开发文档审计记录](development/DOCUMENTATION_AUDIT_2026-09-28.md)。
+
 ## 2026-09-28 UI Shell 与工作区统一已发布
 
 - 认证应用已统一为根级 `RoleShell -> AppShell`；个人、组织和账号模块不再重建外壳，组织 layout 只保留访问边界。

@@ -60,6 +60,12 @@ pnpm security:audit
 
 ### TestSet 双槽不可兼容迁移
 
+当前 TestSet 不存在 Revision 概念。每题只有 Stable 与可选 Evolving 两个当前槽；本节中的“槽”指当前数据槽，
+不是可恢复的历史版本。Contest 使用 Stable Reader，Training 动态使用 Evolving（缺失回退 Stable），Assignment
+动态使用 Stable；Promotion 的验证副本仅存在于事务临时目录。
+
+> 下面是一次性迁移的历史执行步骤，不是日常发布前重复操作。迁移完成后，日常发布只检查 Stable/Evolving Reader/Writer 屏障和 readiness；不得再次创建或保留 Revision。
+
 删除 TestSet Revision 的 migration 不支持旧 API 双运行，必须使用一次性停写切换：
 
 1. 完成备份并停止 Router 新写入、两套 API、Worker、Executor 与 Judge；确认没有 QUEUED/RUNNING JudgeRun，也没有 RUNNING/PAUSED Contest。

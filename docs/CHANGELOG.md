@@ -5,6 +5,12 @@ last_verified: 2026-09-28
 source_of_truth: Git history
 ---
 
+## 2026-09-28 — 开发文档事实与中文说明审计
+
+- 对齐 Contest-only、Stable/Evolving 双槽、CurrentJudgeRun 和当前 Prisma 199 模型事实，移除会误导新开发者的旧归档/Training 兼容表述。
+- 将当前运维、测试、存储、systemd、数据库参考和外部依赖说明统一改为中文；命令、路径、环境变量、协议和代码标识保留原写法。
+- 将全项目可用性静态审计快照标记为 `reference`，并新增 [开发文档审计记录](development/DOCUMENTATION_AUDIT_2026-09-28.md) 说明历史英文证据和当前基线。
+
 ## 2026-09-28 — UI Shell 与工作区统一上线
 
 - 顶栏品牌与工作区入口固定在左侧，消息和通知独立靠右；导航开关不再隐藏或移动顶栏。

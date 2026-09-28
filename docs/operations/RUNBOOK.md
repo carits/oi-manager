@@ -6,12 +6,13 @@ source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime 
 
 ---
 
-## Automated database backup
+> 本手册面向当前开发/生产运维。TestSet 已取消历史 Revision：每道题最多有 Stable 与 Evolving 两个当前数据槽；文中“槽”均指当前数据，不代表可恢复的历史版本。
 
-The versioned backup script writes verified PostgreSQL custom-format archives to
-`/data/backups/oi-manager/automatic` by default. It uses a non-blocking lock, an atomic temporary file,
-`pg_isready`, and `pg_restore -l` verification before publishing the archive. Retention only deletes matching
-automatic `.dump` files in that exact directory; migration/pre-change backups elsewhere are untouched.
+## 自动数据库备份
+
+版本化备份脚本默认将经过校验的 PostgreSQL custom-format 归档写入
+`/data/backups/oi-manager/automatic`。脚本使用非阻塞锁和原子临时文件，在发布归档前执行
+`pg_isready` 与 `pg_restore -l` 校验。清理任务只删除该目录中匹配的 automatic `.dump` 文件；其他目录中的迁移/变更前备份不受影响。
 
 ```bash
 cd /data/oi-manager-response-refactor
@@ -25,15 +26,12 @@ systemctl list-timers --all 'oi-manager-*.timer'
 tail -n 50 /data/backups/oi-manager/automatic/backup.log
 ```
 
-The production schedule is provided by persistent systemd timers: a database dump at 03:00 and an incremental attachment/testdata snapshot at 03:15, both with 14-day retention. Weekly Sunday 04:00/04:30 jobs restore the newest database and the complete asset snapshot into isolated temporary locations and atomically write mode-600 verification states; missed calendar runs are executed after the host returns. The service monitor rejects disabled/failed timers as well as missing, failed or stale proof. Override the documented `BACKUP_*` and `ASSET_*` variables in the mode-600 operations environment when provisioning. Backup directories are mode 700 and dumps/logs/state are mode 600. A
-zero-byte or unverified archive is never promoted to the final filename.
-`backup:verify` restores the newest archive into an exact `oi_manager_restore_audit_<pid>` temporary database,
-validates the dump SHA-256 and creation-time counts for tables, migrations, users, problems, submissions, files and Stable/Evolving TestSet slots, then removes both the temporary database and copied container archive. Asset verification copies all files and checks every manifest SHA-256. Neither verifier
-restores over `oi_manager`.
+生产计划由持久化 systemd 定时器提供：03:00 备份数据库，03:15 增量快照附件/测试数据，均保留 14 天。每周日 04:00/04:30 会把最新数据库和完整资源快照恢复到隔离临时位置，并以权限 600 原子写入校验状态；主机恢复后会补执行错过的日历任务。服务监控会拒绝已禁用或失败的定时器，也会拒绝缺失、失败或过期的证明。部署时在权限 600 的运维环境中覆盖文档所列 `BACKUP_*` 和 `ASSET_*` 变量。备份目录权限为 700，转储、日志和状态文件权限为 600。零字节或未校验的归档永远不会晋升为最终文件名。
+`backup:verify` 会把最新归档恢复到精确命名的 `oi_manager_restore_audit_<pid>` 临时数据库，
+校验转储 SHA-256 以及创建时的表、迁移、用户、题目、提交、文件和 Stable/Evolving 测试数据槽数量，随后删除临时数据库和复制到容器中的归档。资源校验会复制所有文件并检查每个清单 SHA-256。两种校验都不会覆盖 `oi_manager`。
 
-For an actual disaster restore, select a database dump and an asset snapshot whose `metadata.json.databaseBackupSha256`
-matches that dump. Restore the database using the existing guarded `pnpm disaster:restore -- ...` workflow, then restore
-the paired assets:
+执行真实灾难恢复时，选择一个数据库转储，并选择其 `metadata.json.databaseBackupSha256`
+与该转储匹配。使用现有受保护的 `pnpm disaster:restore -- ...` 流程恢复数据库，然后恢复配对资源：
 
 ```bash
 sudo pnpm disaster:restore:assets -- \
@@ -43,19 +41,15 @@ sudo pnpm disaster:restore:assets -- \
   --apply
 ```
 
-The asset command first performs a full isolated verification, creates a pre-restore asset snapshot, stops application
-writes, replaces only the exact `testdata` and `uploads` roots, verifies every file and symlink, and restarts readiness.
-If replacement or readiness fails it restores the pre-restore snapshot before restarting services. Never mix an asset
-snapshot with a database dump whose SHA-256 does not match its metadata.
+资源命令先执行完整隔离校验，创建恢复前资源快照，停止应用写入，仅替换准确的 `testdata` 和 `uploads` 根目录，校验每个文件和符号链接后恢复 readiness。如果替换或 readiness 失败，会在重启服务前恢复恢复前快照。绝不能把 SHA-256 与元数据不匹配的资源快照和数据库转储混用。
 
-## Service monitor
+## 服务监控
 
-`scripts/monitor-services.sh` checks the loopback optimized preview (`127.0.0.1:3000`), API (`3002`), go-judge
-(`5050`), PostgreSQL readiness, the currently served Next.js build, root/data disk usage and automatic-backup age.
-It exits non-zero on any failure and records state changes in `.run/service-monitor.state`.
-The public `/api/health` contract is versioned JSON with `schemaVersion=1`, `status=ok`, `service=api` and an ISO timestamp.
-The monitor parses JSON and validates this contract; it never relies on display text. Compatibility `success/message`
-fields remain only for one client release.
+`scripts/monitor-services.sh` 检查回环优化预览（`127.0.0.1:3000`）、API（`3002`）、go-judge
+（`5050`）、PostgreSQL readiness、当前提供的 Next.js 构建、根盘/数据盘使用量以及自动备份年龄。
+任一项失败都会以非零状态退出，并在 `.run/service-monitor.state` 记录状态变化。
+公开 `/api/health` 契约是带版本的 JSON，包含 `schemaVersion=1`、`status=ok`、`service=api` 和 ISO 时间戳。
+监控程序解析 JSON 并校验契约，绝不依赖展示文本。兼容字段 `success/message` 仅为一个客户端发布周期保留。
 
 ```bash
 pnpm monitor
@@ -64,24 +58,19 @@ systemctl list-timers --all 'oi-manager-*.timer'
 journalctl -u oi-manager-operations@monitor.service -n 50 --no-pager
 ```
 
-The persistent monitor timer runs every five minutes and suppresses repeated healthy lines. Its sandbox reads an optional mode-600
-`$HOME/.config/oi-manager/operations.env` before invoking the monitor. Set `MONITOR_ALERT_COMMAND` to
-`/data/oi-manager-response-refactor/scripts/send-monitor-alert.sh` and store the HTTPS endpoint in a separate mode-600
-file referenced by `MONITOR_ALERT_WEBHOOK_URL_FILE`; the secret URL is read inside Node and is never placed in process
-arguments or logs. The alert command must be an absolute executable path; shell fragments are rejected. The command
-receives `MONITOR_STATUS` and `MONITOR_MESSAGE` and is invoked only when the state
-changes. A failed delivery does not advance the state file, so the next monitor run retries both failure and recovery
-notifications.
+持久化监控定时器每五分钟运行，并抑制重复的健康日志。沙箱会在调用监控程序前读取可选的权限 600
+`$HOME/.config/oi-manager/operations.env`。将 `MONITOR_ALERT_COMMAND` 设置为
+`/data/oi-manager-response-refactor/scripts/send-monitor-alert.sh`，并把 HTTPS 端点存放在权限 600 的独立文件中，
+由 `MONITOR_ALERT_WEBHOOK_URL_FILE` 指向；Node 在进程内读取密钥，绝不会把它放进进程参数或日志。告警命令必须是绝对路径可执行文件，Shell 片段会被拒绝。命令接收 `MONITOR_STATUS` 和 `MONITOR_MESSAGE`，仅在状态变化时调用。送达失败不会推进状态文件，因此下一次监控会同时重试故障和恢复通知。
 
-No external alert channel is configured on the current server, so failures are currently retained in journald and incident evidence. Do not mark external alerting complete until a real recipient has confirmed both an injected
-failure and its recovery. `pnpm monitor:verify` uses a loopback HTTP receiver solely to verify payload and retry
-contracts; it is not external-delivery evidence.
+当前服务器没有配置外部告警通道，因此故障目前只保存在 journald 和事故证据中。在真实收件人确认一次注入的
+故障及其恢复通知后，才能将外部告警标记为完成。`pnpm monitor:verify` 只使用回环 HTTP 接收器校验负载和重试契约，不能作为外部送达证据。
 
-The legacy `install-*-cron.sh` commands remain only as a rollback path. Do not run Cron and the systemd timers together; `install-operation-timers.sh` removes only the known duplicate entries after a successful monitor execution.
+旧的 `install-*-cron.sh` 命令仅作为回滚路径保留。不要同时运行 Cron 和 systemd 定时器；`install-operation-timers.sh` 只有在监控成功后才会删除已知的重复项。
 
-### GitHub off-host uptime workflow
+### GitHub 主机外可用性工作流
 
-`.github/workflows/external-uptime.yml` provides a five-minute external HTTP probe and a deduplicated GitHub Issue for failure/recovery. It is currently disabled because GitHub refused Run `33290187717` before runner allocation due to account Billing/spending-limit status. Do not describe it as active until Billing is repaired and the following commands succeed:
+`.github/workflows/external-uptime.yml` 提供每五分钟一次的主机外 HTTP 探针，并为故障/恢复创建去重后的 GitHub Issue。由于账号账单/消费上限状态，GitHub 在分配 Runner 前拒绝了运行 `33290187717`，目前工作流已禁用。在账单修复且以下命令成功前，不得称其为已启用：
 
 ```bash
 gh workflow enable external-uptime.yml
@@ -90,14 +79,9 @@ gh run list --workflow external-uptime.yml --limit 1
 gh run watch <run-id> --exit-status
 ```
 
-After a healthy run, perform one approved failure/recovery injection and confirm the workflow creates exactly one incident Issue and closes it on recovery. If Billing remains unavailable, keep the workflow disabled and use a real external monitor instead.
+健康运行后，执行一次获批准的故障/恢复注入，确认工作流只创建一个事故 Issue，并在恢复时关闭它。若账单仍不可用，继续禁用工作流，改用真实外部监控。
 
-The monitor also validates rolling API/Judge metrics, browser/security/server error spikes, Judge infrastructure errors,
-every required systemd unit, restart deltas, loopback-only restricted ports, database connection/transaction/lock state,
-database and asset snapshot/restore proofs, endpoint 5xx/P99 thresholds, stale domain workflows and immutable Revision consistency. On the first
-transition into failure it captures a mode-600 incident evidence bundle before alert delivery. Thresholds and the
-capture command are configured in `deploy/observability/operations.env.example`; do not disable a check merely to
-silence an alert.
+监控还会校验滚动 API/Judge 指标、浏览器/安全/服务器错误峰值、Judge 基础设施错误、所有必需的 systemd 单元、重启增量、仅回环可访问的受限端口、数据库连接/事务/锁状态、数据库与资源快照/恢复证明、端点 5xx/P99 阈值、过期域工作流以及 Stable/Evolving 槽一致性。首次进入故障状态时，会在发送告警前以权限 600 捕获事故证据包。阈值和捕获命令配置在 `deploy/observability/operations.env.example`；不要为了静默告警而禁用检查。
 
 ```bash
 pnpm operations:snapshot
@@ -112,11 +96,11 @@ INCIDENT_REASON='manual investigation' pnpm incident:capture
 pnpm incident:verify
 ```
 
-The complete signal, severity, retention, RTO/RPO and long-term security contract is documented in
+完整的信号、严重级别、留存、RTO/RPO 和长期安全契约记录在
 [`OBSERVABILITY_SECURITY_STRATEGY.md`](OBSERVABILITY_SECURITY_STRATEGY.md).
 
-The weekly security baseline records an independently hash-checked private report for runtime secret contracts,
-stored OJ credential decryption, network exposure, service limits, TLS tooling and production dependencies:
+每周安全基线会为运行时密钥契约、
+OJ 凭据解密、网络暴露、服务限制、TLS 工具和生产依赖生成独立校验哈希的私有报告：
 
 ```bash
 pnpm security:baseline
@@ -124,56 +108,35 @@ pnpm security:baseline:install
 cat /data/backups/oi-manager/security-baseline/security-baseline.json
 ```
 
-The monitor rejects a failed, missing, stale or hash-mismatched report. Detailed reports are mode 600 and retained for
-90 days; they contain audit output but never secret values. Every individual check is terminated after
-`SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS` (600 seconds by default), and the corresponding report log records an
-explicit timeout. A registry or other external dependency outage therefore fails the baseline without leaving a
-permanently running audit process. Verify the timeout contract after changing this runner with
-`pnpm security:baseline:verify` on Linux.
+监控会拒绝失败、缺失、过期或哈希不匹配的报告。详细报告权限为 600，保留 90 天；只包含审计输出，绝不包含密钥值。每项检查在 `SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS`（默认 600 秒）后终止，报告日志会明确记录超时。因此，Registry 或其他外部依赖中断会使基线失败，并留下明确的失败证据。
+不会留下永久运行的审计进程。修改此运行器后，在 Linux 上用 `pnpm security:baseline:verify` 验证超时契约。
 
-The baseline invokes only its embedded runtime-limit audit with
-`RUNTIME_AUDIT_REQUIRE_MONITOR_SUCCESS=0`. This breaks the circular dependency in which a stale failed baseline makes
-the monitor fail while the replacement baseline waits for that monitor to be healthy. Unit definitions, timers,
-container limits and every other runtime check remain mandatory. Standalone `pnpm runtime:audit` does not set this
-override and still requires the latest monitor operation to have succeeded; run it after the new baseline and monitor
-have both completed.
-The production dependency audit is also bounded independently. It retries the complete registry request with
-`SECURITY_DEPENDENCY_AUDIT_ATTEMPTS` (3 by default), and each attempt is limited by
-`SECURITY_DEPENDENCY_AUDIT_ATTEMPT_TIMEOUT_SECONDS` (180 seconds by default). This tolerates transient npm advisory
-endpoint failures while still failing closed when the registry remains unavailable or reports a vulnerability. Keep
-the total retry duration below `SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS`.
-The optimized production preview has no HMR listener; development environments may explicitly set
-`MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. The current host has no SLS Logtail,
-CloudMonitor Agent or ECS RAM Role, so cloud contacts, thresholds and log delivery must be provisioned explicitly.
+基线只在 `RUNTIME_AUDIT_REQUIRE_MONITOR_SUCCESS=0` 下调用内置运行时限制审计，打破“过期失败基线导致监控失败，而替换基线又等待监控健康”的循环依赖。单元定义、定时器、容器限制和其他运行时检查仍然必须通过。独立运行 `pnpm runtime:audit` 不会设置此覆盖，仍要求最近一次监控成功；应在新基线和监控都完成后再运行。
+生产依赖审计也有独立上限：完整 Registry 请求最多重试 `SECURITY_DEPENDENCY_AUDIT_ATTEMPTS` 次（默认 3），每次由 `SECURITY_DEPENDENCY_AUDIT_ATTEMPT_TIMEOUT_SECONDS` 限制（默认 180 秒）。这可以容忍 npm advisory 端点的暂时失败，但 Registry 仍不可用或报告漏洞时必须 fail closed。总重试时长必须小于 `SECURITY_BASELINE_CHECK_TIMEOUT_SECONDS`。
+优化后的生产预览没有 HMR 监听器；确需运行 HMR 的开发环境可以显式设置 `MONITOR_HMR_URL=http://127.0.0.1:3001`。当前主机没有 SLS Logtail、CloudMonitor Agent 或 ECS RAM Role，因此云联系人、阈值和日志送达必须显式配置。
 
-## Off-host log archive
+## 主机外日志归档
 
-`scripts/archive-operations-logs.sh` creates a bounded archive containing the previous 24 hours of OI Manager systemd
-units, PostgreSQL/go-judge Docker logs, the most recent Nginx lines, monitor/backup logs and a build/commit manifest.
-The archive and SHA-256 remain in a local spool until `LOG_ARCHIVE_COMMAND` successfully copies them to an off-host
-machine or object store and `LOG_ARCHIVE_VERIFY_COMMAND` independently reads the remote object and verifies its size
-and SHA-256. Only archives that pass both commands receive an `.uploaded` marker and become eligible for retention
-cleanup. A failed verifier leaves the only local copy and checksum untouched.
+`scripts/archive-operations-logs.sh` 会生成有界归档，包含过去 24 小时的 OI Manager systemd 单元、PostgreSQL/go-judge Docker 日志、最近 N 行 Nginx 日志、监控/备份日志以及构建/提交清单。归档和 SHA-256 会留在本地 spool，直到 `LOG_ARCHIVE_COMMAND` 成功复制到主机外机器或对象存储，且 `LOG_ARCHIVE_VERIFY_COMMAND` 独立读取远端对象并校验大小和 SHA-256。只有两个命令都通过的归档才会得到 `.uploaded` 标记并进入留存清理；校验失败时本地唯一副本和校验和保持不变。
 
 ```bash
 mkdir -p "$HOME/.config/oi-manager"
 install -m 600 deploy/observability/operations.env.example \
   "$HOME/.config/oi-manager/operations.env"
-# Fill in a real HTTPS webhook file plus trusted upload and remote-verification executables.
+# 填入真实 HTTPS webhook 文件，以及受信任的上传器和远端校验器可执行文件。
 pnpm monitor:verify
 pnpm logs:archive
 pnpm logs:archive:install
 ```
 
-Both commands must be absolute executable files; shell fragments are rejected. They receive `LOG_ARCHIVE_PATH`,
-`LOG_ARCHIVE_CHECKSUM_PATH`, `LOG_ARCHIVE_NAME`, `LOG_ARCHIVE_SHA256`, `LOG_ARCHIVE_SIZE` and `LOG_ARCHIVE_HOST`.
-The verifier must read or download the remote object rather than trust the uploader's exit status. Credentials belong
-in provider-owned mode-600 configuration, never in Git or command-line arguments. A local copy or loopback test is not
-accepted as off-host retention evidence.
+两个命令都必须是绝对路径可执行文件，Shell 片段会被拒绝。它们接收 `LOG_ARCHIVE_PATH`、
+`LOG_ARCHIVE_CHECKSUM_PATH`、`LOG_ARCHIVE_NAME`、`LOG_ARCHIVE_SHA256`、`LOG_ARCHIVE_SIZE` 和 `LOG_ARCHIVE_HOST`。
+校验器必须读取或下载远端对象，不能只信任上传器的退出状态。凭据应放在
+凭据只能放在服务商管理的权限 600 配置中，不能进入 Git 或命令行参数。本地复制或回环测试不能作为主机外留存证据。
 
-## Runtime resource audit
+## 运行时资源审计
 
-After changing Docker Compose or any application systemd unit, run:
+修改 Docker Compose 或任一应用 systemd 单元后运行：
 
 ```bash
 docker-compose config >/dev/null
@@ -182,14 +145,11 @@ pnpm runtime:audit
 pnpm sandbox:smoke
 ```
 
-The audit verifies go-judge CPU, memory, PID, NOFILE, read-only root, bounded `/tmp` tmpfs, loopback port and Docker log
-rotation, plus the memory, task, file-descriptor, stop-timeout and restart-frequency limits of every application unit.
-It intentionally does not inspect or print runtime secrets. Never use `docker-compose down -v`; the old named Judge
-scratch volume may be removed only in a separately verified cleanup, while the PostgreSQL volume must be retained.
+审计会验证 go-judge 的 CPU、内存、PID、NOFILE、只读根目录、有界 `/tmp` tmpfs、回环端口和 Docker 日志轮转，以及每个应用单元的内存、任务、文件描述符、停止超时和重启频率限制。它不会检查或打印运行时密钥。绝不能使用 `docker-compose down -v`；旧命名 Judge scratch 卷只能在单独校验的清理中删除，而 PostgreSQL 卷必须保留。
 
-## Runtime secret audit and rotation
+## 运行时密钥审计与轮换
 
-The security audit reports only file metadata, secret lengths and boolean comparisons. It never prints secret values:
+安全审计只报告文件元数据、密钥长度和布尔比较，绝不打印密钥值：
 
 ```bash
 pnpm security:audit
@@ -197,23 +157,14 @@ pnpm security:rotate:check
 pnpm security:rotate:verify
 ```
 
-`security:rotate:check` decrypts every stored OJ account in memory and performs no writes. `security:rotate:verify`
-restores the newest backup into a uniquely named temporary database, applies a real rotation to a mode-600 temporary
-environment file, decrypts every account again with the new key, and removes the database/files through a trap. A production rotation must
-first create and verify a database backup, then prove `--apply` against a restored isolated database and a temporary
-environment file. The apply path creates a mode-600 environment backup, rotates JWT and the 64-hex AES account key,
-re-encrypts OJ passwords with compare-and-swap inside a transaction, and replaces an old deployment symlink with a
-mode-600 file in the current repository. Do not print, copy into Git, or include either environment file in logs.
+`security:rotate:check` 会在内存中解密所有已保存的 OJ 账号，不写入任何数据。`security:rotate:verify`
+会把最新备份恢复到唯一命名的临时数据库，对权限 600 的临时环境文件执行真实轮换，使用新密钥再次解密所有账号，最后通过 trap 删除数据库和文件。生产轮换必须先创建并校验数据库备份，再在隔离恢复库和临时环境文件上证明 `--apply`。应用路径会创建权限 600 的环境备份，轮换 JWT 和 64 位十六进制 AES 账号密钥，在事务内通过 CAS 重新加密 OJ 密码，并把旧部署软链接替换为当前仓库中的权限 600 文件。不得打印、复制到 Git 或将任一环境文件写入日志。
 
-After a successful production apply, immediately blue/green promote the API and restart the singleton Worker. Existing
-JWT sessions are intentionally invalidated and users must sign in again. Verify `pnpm security:audit`, both OJ account
-decryptions, login, API readiness and Judge authentication before declaring the rotation complete.
+生产应用成功后，立即蓝绿提升 API 并重启单例 Worker。现有 JWT 会话会有意失效，用户必须重新登录。声明轮换完成前，验证 `pnpm security:audit`、两个 OJ 账号解密、登录、API readiness 和 Judge 认证。
 
-## SSH hardening
+## SSH 加固
 
-The repository baseline disables password and keyboard-interactive authentication, keeps public-key authentication,
-and limits root to public-key access. The installer refuses to proceed unless the invoking sudo user has an active
-`authorized_keys`, correct 700/600 permissions and sudo access; invalid `sshd` configuration is rolled back.
+仓库基线禁用密码和键盘交互认证，保留公钥认证，并限制 root 只能使用公钥访问。除非执行 sudo 的用户拥有有效 `authorized_keys`、正确的 700/600 权限和 sudo 权限，安装器不会继续；无效的 `sshd` 配置会回滚。
 
 ```bash
 cd /data/oi-manager-response-refactor
@@ -223,11 +174,9 @@ ssh -o BatchMode=yes -o PasswordAuthentication=no alias true
 sudo sshd -T | grep -E '^(pubkeyauthentication|passwordauthentication|kbdinteractiveauthentication|permitrootlogin|maxauthtries) '
 ```
 
-## Controlled load smoke
+## 受控负载冒烟
 
-`scripts/load-smoke.sh` provides a bounded read-only concurrency check. For safety it only accepts the explicitly
-listed loopback URLs on ports `3000` and `3002`, rejects more than 5,000 requests or concurrency above 100, and
-never targets login mutations, submissions, Judge queues or other write operations.
+`scripts/load-smoke.sh` 提供有界只读并发检查。为安全起见，它只接受明确列出的 `3000` 和 `3002` 回环 URL，拒绝超过 5,000 请求或超过 100 并发，并且绝不访问登录写操作、提交、Judge 队列或其他写入接口。
 
 ```bash
 pnpm load:smoke
@@ -237,13 +186,11 @@ LOAD_REQUESTS=300 LOAD_CONCURRENCY=15 \
   LOAD_URL=http://127.0.0.1:3000/login pnpm load:smoke
 ```
 
-The output includes total/success/failed counts, elapsed time, throughput, average, maximum, P50 and P95 latency.
-Run the service monitor and inspect application logs after each load smoke. This is a bounded operational smoke,
-not a production capacity claim or a substitute for an isolated soak test.
+输出包含总数、成功/失败数、耗时、吞吐量、平均/最大延迟以及 P50/P95 延迟。每次负载冒烟后运行服务监控并检查应用日志。这是有界运维冒烟，不代表生产容量，也不能替代隔离的长时间 soak test。
 
-## Dependency security audit
+## 依赖安全审计
 
-Run the production dependency audit after every dependency or framework update:
+每次依赖或框架更新后运行生产依赖审计：
 
 ```bash
 pnpm audit --prod --audit-level low
@@ -253,9 +200,7 @@ pnpm --filter web test
 pnpm --filter @oi-manager/judge test
 ```
 
-The current Web application does not import `next/image`; the optional Sharp dependency is deliberately excluded until
-its patched release is supported by the installed Next.js line. Do not remove the pnpm security overrides without first
-confirming the resolved lockfile still passes `pnpm audit --prod`.
+当前 Web 应用不导入 `next/image`；在当前 Next.js 版本支持修复版前，有意不引入可选 Sharp 依赖。删除 pnpm 安全覆盖前，必须确认解析后的 lockfile 仍能通过 `pnpm audit --prod`。
 
 # 运行手册
 

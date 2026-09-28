@@ -1,11 +1,13 @@
 ---
-status: current
+status: reference
 audience: development, testing, operations
 last_verified: 2026-09-22
 source_of_truth: codex/full-project-usability-hardening branch
 ---
 
-# Full-project usability hardening audit
+# 全项目可用性加固审计（历史参考）
+
+> 本文是 2026-09-22 的代码静态审计快照，保留英文原始证据以便追溯。它不代表当前发布状态，也不应作为当前功能是否完成的判断依据；当前状态以 `docs/STATUS.md`、对应模块文档和最近一次发布记录为准。
 
 ## Scope and completion state
 
