@@ -38,7 +38,6 @@ export function ProblemReferenceSelector({
   const storageKey = `problem-selection:last-platform:${user?.userId || 'anonymous'}`
   const [platform, setPlatform] = useState('carits')
   const [problemId, setProblemId] = useState('')
-  const [result, setResult] = useState<Awaited<ReturnType<typeof resolveProblemSelection>> extends { data: infer T } ? T : never>()
   const [lookupItem, setLookupItem] = useState<import('@oi-manager/contracts').ResolvedProblemSelection | null>(null)
   const [resolving, setResolving] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -146,7 +145,13 @@ export function ProblemReferenceSelector({
         autoFocus={autoFocus}
         disabled={disabled || adding}
         placeholder={platform === 'carits' ? '例如 10086' : platform === 'luogu' ? '例如 P1001' : platform === 'codeforces' ? '例如 2036G' : '输入原始题号'}
-        onChange={event => { setProblemId(event.target.value); setLookupItem(null); setRequestError('') }}
+        onChange={event => {
+          requestRef.current++
+          setProblemId(event.target.value)
+          setLookupItem(null)
+          setResolving(false)
+          setRequestError('')
+        }}
         onKeyDown={event => {
           if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
             event.preventDefault()
