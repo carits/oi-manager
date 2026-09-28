@@ -11,7 +11,7 @@ source_of_truth: Git history
 - 桌面侧栏收起改为 64px 可操作窄栏，保留工作区、主导航图标和账号入口；正文按窄栏宽度稳定让位，不再让用户收起后失去工作区切换能力。
 - 工作区面板通过 document.body Portal 脱离侧栏裁剪：桌面从侧栏向右展开，移动抽屉中从入口下方展开，修复原顶栏弹层被侧栏层叠上下文遮挡的问题。
 - 更新 AppShell 首帧布局契约与 UI Shell 维护说明；本批不涉及数据库、服务端授权或工作区切换事务语义。
-- 当前记录只表示分支代码变化，尚未作为新的线上 BUILD_ID 发布；浏览器专项验收与 production build 结果必须在实际执行后另行记录。
+- 已合并至 main（功能提交 `1775f4df`）并发布 Web BUILD_ID `8ytePCgiO9Je6M7G60uen`；Web 54 个测试文件/360 项、工作区目录双视口 Playwright 12 项、TypeScript、production build、UI/路由/文档/架构门禁及 canary/promote 双轮消息探针均通过。
 
 ## 2026-09-28 — 开发文档事实与中文说明审计
 

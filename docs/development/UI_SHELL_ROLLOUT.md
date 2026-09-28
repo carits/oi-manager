@@ -97,7 +97,13 @@ RoleShell / AppShell       = 唯一持久 UI 外壳
 - Web canary 与 promote 后的生产双账号消息闭环通过，消息序号分别为 368/369 与 370/371。
 - 线上 `/login`、构建清单和 API readiness 正常；发布 BUILD_ID 为 `TPv-g5acV9SKdg2qySdoI`。
 
-以上发布证据只对应 `f04b0aa50adb8b0dfe95310f179378db25a1ac4a` 与当时的线上构建；后续工作区入口/64px 窄栏调整必须重新执行 Web 定向测试、production build、`pnpm routes:audit` 与对应浏览器验收后才能作为发布证据。
+工作区入口、64px 窄栏与 Portal 面板调整已在功能提交 `1775f4df` 完成，并发布为 Web BUILD_ID
+`8ytePCgiO9Je6M7G60uen`。本轮验证证据为：
+
+- Web 单元/组件测试 54 个文件、360 项通过。
+- 工作区目录在 desktop/compact 两个 Chromium 视口共 12 项 Playwright 测试通过，覆盖当前工作区 no-op、失败重试以及学校→个人→学校完整切换。
+- Web TypeScript、production build、`pnpm ui:state-check`、`pnpm routes:audit`、`pnpm docs:check` 通过。
+- canary 与正式端口健康检查、BUILD_ID 校验及双账号消息闭环通过；消息序号为 382/383 与 384/385。
 
 消息闭环用于确认新 Web、Cookie 会话、API、SSE 与路由发布链健康，不替代工作区切换专项 E2E。
 工作区回归规范、视口和故障矩阵以 [全 UI E2E](UI_E2E.md) 为准；后续改动必须继续执行对应
