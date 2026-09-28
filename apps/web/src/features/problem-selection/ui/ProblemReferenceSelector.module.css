@@ -1,0 +1,33 @@
+.root { display: grid; gap: 10px; }
+.row { display: grid; grid-template-columns: minmax(150px, 210px) minmax(180px, 260px) minmax(240px, 1fr) auto; gap: 10px; align-items: center; }
+.input { min-width: 0; }
+.resultBox { min-height: 44px; display: flex; align-items: center; min-width: 0; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-secondary); }
+.resultContent { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.resultMeta { color: var(--text-secondary); font-size: 12px; }
+.resultSuccess { color: var(--success); font-weight: 700; }
+.resultWarning { color: var(--warning); font-weight: 700; }
+.resultError { color: var(--danger); font-weight: 700; }
+.resultIdle { color: var(--text-secondary); }
+.problemLink { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.problemIdentity { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
+.problemTitle { color: var(--primary); font-weight: 650; text-decoration: none; overflow-wrap: anywhere; }
+.problemTitle:hover { text-decoration: underline; }
+.actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hint { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.batchBody { display: grid; gap: 12px; }
+.batchFields { display: grid; grid-template-columns: minmax(150px, 210px) 1fr; gap: 10px; align-items: start; }
+.batchInput { min-height: 150px; resize: vertical; }
+.batchSummary { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.batchResults { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.batchResult { display: grid; grid-template-columns: minmax(100px, 150px) 1fr; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-secondary); }
+.batchCode { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+@media (max-width: 900px) {
+  .row { grid-template-columns: minmax(130px, 180px) 1fr auto; }
+  .resultBox { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 640px) {
+  .row, .batchFields { grid-template-columns: 1fr; }
+  .resultBox { grid-column: auto; grid-row: auto; }
+  .row > button { width: 100%; }
+  .batchResult { grid-template-columns: 1fr; }
+}
