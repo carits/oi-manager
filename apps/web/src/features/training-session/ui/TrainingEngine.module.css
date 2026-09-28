@@ -179,8 +179,8 @@
 .issueList button, .publishIssues button { border: 0; padding: var(--space-1) 0; background: transparent; color: var(--danger); text-align: left; cursor: pointer; }
 
 .stageDrawerLayer { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; }
-.stageDrawerBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgb(15 23 42 / .42); cursor: default; }
-.stageDrawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(720px, calc(100vw - 48px)); height: 100%; background: var(--bg-card); box-shadow: -12px 0 36px rgb(15 23 42 / .18); }
+.stageDrawerBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--overlay-backdrop); cursor: default; }
+.stageDrawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(720px, calc(100vw - 48px)); height: 100%; background: var(--bg-card); box-shadow: var(--shadow-lg); }
 .stageDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
 .stageDrawerHeader h2, .stageDrawerHeader p { margin: 0; }
 .stageDrawerHeader h2 { font-size: 1.1rem; }
@@ -289,8 +289,8 @@
 .participantTableRow > button small, .participantTableRow > span { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
 .participantAvatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: var(--primary); font-weight: 700; }
 .participantDrawerLayer { position: fixed; inset: 0; z-index: 1210; display: flex; justify-content: flex-end; }
-.participantDrawerBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgb(15 23 42 / .42); }
-.participantDrawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(480px, calc(100vw - 48px)); height: 100%; background: var(--bg-card); box-shadow: -12px 0 36px rgb(15 23 42 / .18); }
+.participantDrawerBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--overlay-backdrop); }
+.participantDrawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(480px, calc(100vw - 48px)); height: 100%; background: var(--bg-card); box-shadow: var(--shadow-lg); }
 .participantDrawer > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
 .participantDrawer h2, .participantDrawer p { margin: 0; }
 .participantDrawer header p { margin-top: var(--space-1); color: var(--text-muted); }

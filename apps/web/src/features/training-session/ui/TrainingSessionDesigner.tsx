@@ -627,13 +627,13 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
                 <div><dt>阶段</dt><dd>{stages.length}</dd></div>
                 <div><dt>题目</dt><dd>{stages.reduce((sum, stage) => sum + stage.Problems.length, 0)}</dd></div>
               </dl>
-              {issues.length > 0 && <div className={styles.issueList}>{issues.slice(0, 3).map(issue => <button type="button" key={`${issue.path}-${issue.code}`} onClick={() => {
+              {issues.length > 0 && <div className={styles.issueList}>{issues.slice(0, 3).map(issue => <Button variant="ghost" type="button" key={`${issue.path}-${issue.code}`} onClick={() => {
                 const index = Number(issue.path.split(".")[1])
                 if (Number.isInteger(index) && stages[index]) {
                   setActiveStageKey(stages[index].clientKey)
                   setStageDrawerOpen(true)
                 }
-              }}>{issue.message}</button>)}</div>}
+              }}>{issue.message}</Button>)}</div>}
             </section>
           </aside>
         </div>
@@ -761,14 +761,14 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             <div><dt>训练流程</dt><dd>{stages.length} 个阶段</dd></div>
             <div><dt>训练题目</dt><dd>{stages.reduce((sum, stage) => sum + stage.Problems.length, 0)} 道题</dd></div>
           </dl>
-          {issues.length > 0 && <div className={styles.publishIssues}><strong>需要处理</strong>{issues.map(issue => <button type="button" key={`${issue.path}-${issue.code}`} onClick={() => {
+          {issues.length > 0 && <div className={styles.publishIssues}><strong>需要处理</strong>{issues.map(issue => <Button variant="ghost" type="button" key={`${issue.path}-${issue.code}`} onClick={() => {
             const index = Number(issue.path.split(".")[1])
             setPublishOpen(false)
             if (Number.isInteger(index) && stages[index]) {
               setActiveStageKey(stages[index].clientKey)
               setStageDrawerOpen(true)
             }
-          }}>{issue.message}</button>)}</div>}
+          }}>{issue.message}</Button>)}</div>}
         </div>
       </FormDialog>
 

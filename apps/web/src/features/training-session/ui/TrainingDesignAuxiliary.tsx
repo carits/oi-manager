@@ -176,9 +176,9 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     <Section title="学员与分组" description="统一维护训练名单与分组；支持搜索、筛选和批量移动，不再需要在每个分组里重复勾选全体学生。" actions={<div className={styles.actions}><Button onClick={() => void saveRoster()} loading={saving} disabled={!roster}>保存名单</Button><Button variant="secondary" onClick={addTrainingGroup} disabled={groupsFrozen}>新增分组</Button>{groupSource?.id && <Button variant="secondary" loading={suggestionLoading} onClick={() => void previewSuggestions(groupSource.id!)} disabled={groupsFrozen}>生成分组建议</Button>}</div>}>
       {loading && !roster ? <p className={styles.muted}>正在加载学员…</p> : !roster ? <Empty title="暂无可配置名单" /> : <div className={styles.stack}>
         <div className={styles.rosterStats}>
-          <button type="button" onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter('all') }}><strong>{selectedCandidates.length}</strong><span>参加训练</span></button>
-          {trainingGroups.map(group => <button type="button" key={group.clientKey} onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter(group.clientKey) }}><strong>{group.participantIds.filter(id => selectedCandidates.some(candidate => candidate.userId === id)).length}</strong><span>{group.name}</span></button>)}
-          <button type="button" data-warning={unassignedCount > 0} onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter('unassigned') }}><strong>{unassignedCount}</strong><span>未分组</span></button>
+          <Button variant="ghost" type="button" onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter('all') }}><strong>{selectedCandidates.length}</strong><span>参加训练</span></Button>
+          {trainingGroups.map(group => <Button variant="ghost" type="button" key={group.clientKey} onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter(group.clientKey) }}><strong>{group.participantIds.filter(id => selectedCandidates.some(candidate => candidate.userId === id)).length}</strong><span>{group.name}</span></Button>)}
+          <Button variant="ghost" type="button" data-warning={unassignedCount > 0} onClick={() => { setRosterStatusFilter('selected'); setRosterGroupFilter('unassigned') }}><strong>{unassignedCount}</strong><span>未分组</span></Button>
         </div>
         {unassignedCount > 0 && <p className={styles.rosterWarning} role="status">{unassignedCount} 名已选学员尚未分组，将使用各阶段的默认训练方案。</p>}
         <div className={styles.rosterFilters}>
@@ -188,13 +188,13 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
         </div>
         <div className={styles.rosterTable} role="table" aria-label="训练学员与分组">
           <div className={styles.rosterTableHeader} role="row">
-            <span role="columnheader"><input type="checkbox" aria-label="全选当前筛选结果" checked={filteredRosterCandidates.length > 0 && filteredRosterCandidates.every(candidate => checkedRosterIds.includes(candidate.userId))} onChange={event => toggleVisibleRosterSelection(event.target.checked)} /></span>
+            <span role="columnheader"><Input type="checkbox" aria-label="全选当前筛选结果" checked={filteredRosterCandidates.length > 0 && filteredRosterCandidates.every(candidate => checkedRosterIds.includes(candidate.userId))} onChange={event => toggleVisibleRosterSelection(event.target.checked)} /></span>
             <span role="columnheader">学员</span><span role="columnheader">参加训练</span><span role="columnheader">训练分组</span>
           </div>
           {filteredRosterCandidates.map(candidate => {
             const currentGroupKey = groupKeyByParticipant.get(candidate.userId) || ''
             return <div className={styles.rosterTableRow} role="row" key={candidate.userId}>
-              <span role="cell"><input type="checkbox" aria-label={'选择 ' + candidate.displayName} checked={checkedRosterIds.includes(candidate.userId)} onChange={event => setCheckedRosterIds(current => event.target.checked ? [...new Set([...current, candidate.userId])] : current.filter(id => id !== candidate.userId))} /></span>
+              <span role="cell"><Input type="checkbox" aria-label={'选择 ' + candidate.displayName} checked={checkedRosterIds.includes(candidate.userId)} onChange={event => setCheckedRosterIds(current => event.target.checked ? [...new Set([...current, candidate.userId])] : current.filter(id => id !== candidate.userId))} /></span>
               <span role="cell"><strong>{candidate.displayName}</strong><small>{candidate.username} · {candidate.role}</small></span>
               <span role="cell"><Checkbox label={candidate.selected ? '已加入' : '未加入'} checked={candidate.selected} onChange={event => setCandidateSelected(candidate.userId, event.target.checked)} /></span>
               <span role="cell"><Select aria-label={candidate.displayName + '训练分组'} value={currentGroupKey} disabled={groupsFrozen || !candidate.selected} onChange={event => setCandidateGroup(candidate.userId, event.target.value)}><option value="">未分组（使用默认方案）</option>{trainingGroups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></span>

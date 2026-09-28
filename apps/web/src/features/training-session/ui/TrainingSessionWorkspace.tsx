@@ -1023,7 +1023,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
             </div>
             <div className={styles.actions} role="toolbar" aria-label="批量课堂操作">
               <label className={styles.checkboxLabel}>
-                <input
+                <Input
                   type="checkbox"
                   checked={filteredParticipants.length > 0 && filteredParticipants.every(item => selectedParticipantIds.includes(item.id))}
                   onChange={event => setSelectedParticipantIds(current => event.target.checked
@@ -1053,8 +1053,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
                   const groupName = item.currentGroupId ? data.session.Groups.find(group => group.id === item.currentGroupId)?.name || '已分组' : '未分组'
                   const statusLabel = metrics.stuck ? '卡题' : !item.online ? '离线' : item.completed ? '已完成' : metrics.current ? trainingProgressStatusLabel(metrics.current.status) : '未开始'
                   return <div className={styles.participantTableRow} role="row" key={item.id}>
-                    <input type="checkbox" aria-label={'选择 ' + item.user.username} checked={selectedParticipantIds.includes(item.id)} onChange={event => setSelectedParticipantIds(current => event.target.checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))} />
-                    <button type="button" onClick={() => setSelectedParticipantId(item.id)}><strong>{item.user.username}</strong><small>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 完成</small></button>
+                    <Input type="checkbox" aria-label={'选择 ' + item.user.username} checked={selectedParticipantIds.includes(item.id)} onChange={event => setSelectedParticipantIds(current => event.target.checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))} />
+                    <Button variant="ghost" type="button" onClick={() => setSelectedParticipantId(item.id)}><strong>{item.user.username}</strong><small>{item.online ? '在线' : '离线'} · {item.completedCount}/{item.requiredCount} 完成</small></Button>
                     <span>{groupName}</span>
                     <span title={item.currentProblemId ? problemNames[item.currentProblemId] : undefined}>{item.currentProblemId ? problemNames[item.currentProblemId] || '训练题' : '—'}</span>
                     <span>{metrics.current?.bestScore ?? '—'}</span>
