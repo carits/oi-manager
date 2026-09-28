@@ -1,8 +1,21 @@
 name: Problem identity (no database)
 
 on:
-  push:
-    branches: [codex/problem-identity-local-lookup]
+  pull_request:
+    paths:
+      - 'packages/contracts/src/problem-selection.ts'
+      - 'packages/shared/src/oj-platforms.ts'
+      - 'apps/server/src/modules/problem-selection/**'
+      - 'apps/server/src/modules/problem/problem.identity.ts'
+      - 'apps/server/tests/problem-selection-local.test.ts'
+      - 'apps/web/src/features/problem-selection/**'
+      - 'apps/web/src/features/contest/ui/ContestFormModal.tsx'
+      - 'apps/web/src/features/assignment/ui/AssignmentWorkspace.tsx'
+      - 'apps/web/src/features/training-session/ui/TrainingSetupDialog.tsx'
+      - 'apps/web/src/features/training-session/ui/TrainingSessionDesigner.tsx'
+      - 'apps/web/src/features/training-session/ui/TrainingSessionWorkspace.tsx'
+      - 'apps/web/src/features/problem/ui/ProblemListDetailPage.tsx'
+      - '.github/workflows/problem-identity-check.yml'
 
 permissions:
   contents: read
@@ -33,7 +46,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - name: Assert database definitions were not changed
-        run: git diff --exit-code f04b0aa50adb8b0dfe95310f179378db25a1ac4a HEAD -- apps/server/prisma
+        run: git diff --exit-code "${{ github.event.pull_request.base.sha }}" HEAD -- apps/server/prisma
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @oi-manager/contracts build
       - run: pnpm --filter @oi-manager/shared build
