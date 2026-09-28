@@ -59,16 +59,37 @@ export const OJ_PLATFORM_REGISTRY: readonly OjPlatformDefinition[] = platforms.m
   status: fetchable.has(key) ? 'supported' : 'link-only',
 }))
 
-const byIdentifier = new Map<string, OjPlatformDefinition>()
-for (const definition of OJ_PLATFORM_REGISTRY) {
-  byIdentifier.set(definition.key.toLowerCase(), definition)
-  for (const alias of definition.aliases) byIdentifier.set(alias.toLowerCase(), definition)
+/** Exact registered names only. Display labels are inputs, never storage keys. */
+export function buildOjPlatformIdentifierIndex(
+  definitions: readonly OjPlatformDefinition[],
+): ReadonlyMap<string, OjPlatformDefinition> {
+  const index = new Map<string, OjPlatformDefinition>()
+  const keys = new Set<string>()
+  for (const definition of definitions) {
+    if (!/^[a-z0-9]+(?:[_-][a-z0-9]+)*$/.test(definition.key) || keys.has(definition.key)) {
+      throw new Error(`Invalid or duplicate OJ platform key: ${definition.key}`)
+    }
+    keys.add(definition.key)
+    for (const name of [definition.key, definition.displayName, ...definition.aliases]) {
+      const identifier = name.trim().toLowerCase()
+      if (!identifier) throw new Error(`Empty OJ platform name: ${definition.key}`)
+      const previous = index.get(identifier)
+      if (previous && previous.key !== definition.key) {
+        throw new Error(`Ambiguous OJ platform name: ${name}`)
+      }
+      index.set(identifier, definition)
+    }
+  }
+  return index
 }
+
+const byIdentifier = buildOjPlatformIdentifierIndex(OJ_PLATFORM_REGISTRY)
 
 export function getOjPlatform(identifier: string | null | undefined): OjPlatformDefinition | undefined {
-  return identifier ? byIdentifier.get(identifier.trim().toLowerCase()) : undefined
+  return typeof identifier === 'string' ? byIdentifier.get(identifier.trim().toLowerCase()) : undefined
 }
 
+/** Normalize a platform label/key, never a problem number or account name. */
 export function normalizeOjPlatformKey(identifier: string): string | null {
   return getOjPlatform(identifier)?.key || null
 }
