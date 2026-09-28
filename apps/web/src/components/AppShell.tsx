@@ -143,6 +143,7 @@ export function AppShell({ children, initialSidebarExpanded = true }: AppShellPr
   const navigationMode = isPersistentSidebar === null ? 'pending' : isPersistentSidebar ? (desktopSidebarExpanded ? 'expanded' : 'collapsed') : (drawerOpen ? 'drawer' : 'closed')
   const sidebarHidden = isPersistentSidebar === false ? !drawerOpen : false
   const compactWorkspaceSwitcher = isPersistentSidebar !== false && !desktopSidebarExpanded
+  const navigationToggleLabel = isPersistentSidebar === false ? (drawerOpen ? '关闭导航' : '显示导航') : (desktopSidebarExpanded ? '收起导航' : '展开导航')
   const setNavigationOpen = (open: boolean) => {
     setNavigationMotion(true)
     if (window.matchMedia('(min-width: 1100px)').matches) {
@@ -184,7 +185,7 @@ export function AppShell({ children, initialSidebarExpanded = true }: AppShellPr
     <header ref={headerRef} className={styles.header} data-app-header>
       <div className={styles.headerInner}>
         <div className={styles.headerStart}>
-          <Button id="app-navigation-toggle" variant="ghost" type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!(window.matchMedia('(min-width: 1100px)').matches ? desktopSidebarExpanded : drawerOpen))} aria-controls="app-sidebar" aria-expanded={isPersistentSidebar === null ? undefined : navigationOpen} aria-label={isPersistentSidebar && navigationOpen ? '收起导航' : '显示导航'} title={isPersistentSidebar && navigationOpen ? '收起导航' : '显示导航'}><Menu size={21} aria-hidden="true" /></Button>
+          <Button id="app-navigation-toggle" variant="ghost" type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!(window.matchMedia('(min-width: 1100px)').matches ? desktopSidebarExpanded : drawerOpen))} aria-controls="app-sidebar" aria-expanded={isPersistentSidebar === null ? undefined : navigationOpen} aria-label={navigationToggleLabel} title={navigationToggleLabel}><Menu size={21} aria-hidden="true" /></Button>
           <Link className={styles.brandLink} href={navigationHome(navigationContext)} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
         </div>
         <div className={styles.headerEnd}><ChatButton /><NotificationBell /></div>
