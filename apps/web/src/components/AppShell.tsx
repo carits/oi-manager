@@ -81,8 +81,11 @@ export function AppShell({ children, initialSidebarExpanded = true }: AppShellPr
       // A confirmation dialog opened above the drawer owns focus until it closes.
       const topDialog = [...document.querySelectorAll<HTMLElement>('[aria-modal="true"]')].at(-1)
       if (topDialog && topDialog !== sidebar) return
-      const focusable = [...sidebar.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-        .filter(element => element.getAttribute('aria-hidden') !== 'true' && element.offsetParent !== null)
+      const portal = document.querySelector<HTMLElement>('[data-sidebar-portal="workspace"]')
+      const focusable = [
+        ...sidebar.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+        ...(portal ? portal.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])') : []),
+      ].filter(element => element.getAttribute('aria-hidden') !== 'true' && element.offsetParent !== null)
       const first = focusable[0]
       const last = focusable.at(-1)
       if (!first || !last) { event.preventDefault(); return }

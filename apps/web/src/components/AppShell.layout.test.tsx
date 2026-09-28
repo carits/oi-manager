@@ -12,7 +12,7 @@ vi.mock('@/features/auth', () => ({ useAuth: () => ({
   user: { userId: 'user-1', username: 'teacher1', accountRole: 'user', organizationId: 'org-a', organizationName: 'School A', organizationRole: 'teacher' },
   logout: () => undefined,
 }) }))
-vi.mock('@/features/workspace', () => ({ WorkspaceSwitcher: () => createElement('button', { 'data-workspace-trigger': true }, 'School A') }))
+vi.mock('@/features/workspace', () => ({ WorkspaceSwitcher: ({ compact }: { compact?: boolean }) => createElement('button', { 'data-workspace-trigger': true, 'data-compact': compact || undefined }, 'School A') }))
 vi.mock('@/features/chat', () => ({ ChatButton: () => createElement('button', { 'data-chat-trigger': true }, 'Chat') }))
 vi.mock('@/features/notification', () => ({ NotificationBell: () => createElement('button', { 'data-notification-trigger': true }, 'Notifications') }))
 vi.mock('@/components/navigation/UnsavedChangesProvider', () => ({ useNavigationGuard: () => ({ requestAction: () => undefined }) }))
@@ -40,5 +40,11 @@ describe('AppShell server first frame', () => {
     expect(header.indexOf('data-chat-trigger')).toBeGreaterThan(-1)
     expect(header.indexOf('data-chat-trigger')).toBeLessThan(header.indexOf('data-notification-trigger'))
     expect(html).toContain('data-app-content="true"')
+  })
+  it('keeps the workspace control available when the desktop sidebar preference is collapsed', () => {
+    const html = renderToString(<AppShell initialSidebarExpanded={false}><p>Content</p></AppShell>)
+    expect(html).toContain('data-desktop-sidebar="collapsed"')
+    expect(html).toContain('data-workspace-trigger="true"')
+    expect(html).toContain('data-compact="true"')
   })
 })

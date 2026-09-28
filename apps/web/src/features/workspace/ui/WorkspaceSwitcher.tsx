@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
@@ -49,6 +50,23 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
   const personalWorkspace = workspaces.find(item => item.type === 'personal')
   openRef.current = open
 
+  const positionPopover = useCallback(() => {
+    const trigger = rootRef.current?.querySelector<HTMLButtonElement>('[data-workspace-trigger]')
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const desktop = window.matchMedia('(min-width: 1100px)').matches
+    const gap = desktop ? 20 : 8
+    const left = desktop ? rect.right + gap : Math.max(16, rect.left)
+    const top = desktop ? Math.max(16, rect.top) : rect.bottom + gap
+    const availableWidth = Math.max(240, window.innerWidth - left - 16)
+    const popover = popoverRef.current
+    if (!popover) return
+    popover.style.top = `${top}px`
+    popover.style.left = `${left}px`
+    popover.style.width = `${Math.min(360, availableWidth)}px`
+    popover.style.maxHeight = `${Math.max(240, window.innerHeight - top - 16)}px`
+  }, [])
+
   const focusTrigger = useCallback(() => { rootRef.current?.querySelector<HTMLButtonElement>('[aria-controls]')?.focus() }, [])
   const closeSwitcher = useCallback((restoreFocus = false) => {
     setOpen(false)
@@ -74,15 +92,26 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
   useEffect(() => { closeSwitcher() }, [closeSwitcher, pathname, user?.userId])
   useEffect(() => {
     if (!open) return
+    positionPopover()
     const frame = window.requestAnimationFrame(() => {
       if (loading) popoverRef.current?.focus()
       else focusPopover()
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [focusPopover, loaded, loading, open])
+  }, [focusPopover, loaded, loading, open, positionPopover])
+  useEffect(() => {
+    if (!open) return
+    const update = () => positionPopover()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [open, positionPopover])
   useEffect(() => {
     const closeOnOutsidePointer = (event: MouseEvent) => {
-      if (openRef.current && rootRef.current && !rootRef.current.contains(event.target as Node)) closeSwitcher()
+      if (openRef.current && rootRef.current && !rootRef.current.contains(event.target as Node) && !popoverRef.current?.contains(event.target as Node)) closeSwitcher()
     }
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== 'Escape' || !openRef.current) return
@@ -142,7 +171,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
       <span className={styles.badge}>{currentOrganization ? <School size={17} /> : <UserRound size={17} />}</span>
       <span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span><ChevronDown size={16} />
     </Button>
-    {open && <section ref={popoverRef} id={popoverId} className={styles.menu} role="region" aria-labelledby={titleId} tabIndex={-1} onKeyDown={handlePopoverKeyDown}>
+    {open && typeof document !== 'undefined' && createPortal(<section ref={popoverRef} id={popoverId} className={styles.menu} data-sidebar-portal="workspace" role="region" aria-labelledby={titleId} tabIndex={-1} onKeyDown={handlePopoverKeyDown}>
       <header><strong id={titleId}>切换工作区</strong></header>
       {shouldSearch && <label className={styles.search}><Search size={16} aria-hidden="true" /><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校或个人空间" aria-label="搜索工作区" /></label>}
       <div className={styles.list}>
@@ -165,6 +194,6 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
           finally { setSwitchingKey(current => current === 'personal' ? null : current) }
         } })
       }}><Plus size={17} /><span>加入或创建学校</span></Button></div>
-    </section>}
+    </section>, document.body)}
   </div>
 }
