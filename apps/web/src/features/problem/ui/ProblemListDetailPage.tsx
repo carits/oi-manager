@@ -18,7 +18,7 @@ import { getAssetUrl } from '@/lib/assets'
 import { AlertTriangle, Edit3, Send, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
-import { QuickProblemInput, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
 
 const avatarStyle = (avatar?: string | null): React.CSSProperties => ({
   '--problem-list-avatar': avatar ? `url(${getAssetUrl(avatar)})` : 'none',
@@ -232,7 +232,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
       id: `temp-${++tempIdCounter}`,
       sectionId,
       ojName: problem.platform,
-      problemCode: problem.problemCode,
+      problemCode: problem.problemId,
       alias: '',
       notes: '',
       resolving: false,
@@ -578,9 +578,9 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                 {/* 添加题目 + 保存按钮 */}
                 {canEdit && !isStudentView && (
                   <div className={unifiedStyles.u49}>
-                    <QuickProblemInput
+                    <ProblemReferenceSelector
                       existingProblemIds={[...section.Entries.map(entry => entry.problemId), ...sectionNewRows.flatMap(row => row.resolved?.problemId ? [row.resolved.problemId] : [])]}
-                      onResolved={(problems) => addResolvedRows(section.id, problems)}
+                      onAdd={(problems) => addResolvedRows(section.id, problems)}
                       autoFocus={false}
                       requireStable={false}
                     />
