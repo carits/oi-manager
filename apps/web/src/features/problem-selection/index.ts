@@ -1,5 +1,5 @@
-export { QuickProblemInput } from './ui/QuickProblemInput'
-export type { QuickProblemInputProps } from './ui/QuickProblemInput'
+export { ProblemReferenceSelector } from './ui/ProblemReferenceSelector'
+export type { ProblemReferenceSelectorProps } from './ui/ProblemReferenceSelector'
+export { ProblemReferenceLink } from './ui/ProblemReferenceLink'
 export type { SelectedCanonicalProblem } from './model/problemSelection'
-export { parseProblemCodes } from './model/problemSelection'
-
+export { parseProblemIds } from './model/problemSelection'
