@@ -9,15 +9,20 @@ describe('chat event client', () => {
     expect(parseChatEventBlock('event: ready\ndata: {"cursor":"42"}')).toEqual({ type: 'ready', data: '{"cursor":"42"}' })
   })
 
-  it('keeps exactly one chat event connection owner in authenticated UI code', () => {
+  it('keeps exactly one chat event connection owner in the persistent authenticated shell', () => {
     const provider = fs.readFileSync(new URL('../model/ChatProvider.tsx', import.meta.url), 'utf8')
     const button = fs.readFileSync(new URL('../ui/ChatButton.tsx', import.meta.url), 'utf8')
     const page = fs.readFileSync(new URL('../ui/ChatWorkspace.tsx', import.meta.url), 'utf8')
     const layout = fs.readFileSync(new URL('../../../components/RoleLayout.tsx', import.meta.url), 'utf8')
+    const shell = fs.readFileSync(new URL('../../../components/RoleShell.tsx', import.meta.url), 'utf8')
+    const providers = fs.readFileSync(new URL('../../../components/Providers.tsx', import.meta.url), 'utf8')
     expect(provider).toContain('connectChatEvents(')
     expect(button).not.toContain('connectChatEvents(')
     expect(page).not.toContain('connectChatEvents(')
-    expect(layout).toContain('<ChatProvider>')
+    expect(layout).not.toContain('<ChatProvider>')
+    expect(shell.match(/<ChatProvider>/g)).toHaveLength(1)
+    expect(shell).not.toMatch(/<ChatProvider[^>]*key=/)
+    expect(providers.match(/<RoleShell\b/g)).toHaveLength(1)
   })
 
   it('keeps recovery, race prevention and per-conversation composer safeguards', () => {

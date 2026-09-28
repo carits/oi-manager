@@ -9,29 +9,25 @@ describe('human navigation productization', () => {
     expect(studentNav.items.find(item => item.label === '首页')?.href).toBe('overview')
     expect(studentNav.items.find(item => item.label === '评测记录')?.href).toBe('submissions')
   })
-
   it('groups personal, school and platform navigation by user intent', () => {
-    for (const config of [personalNav, teacherNav, schoolManagerNav, platformAdminNav]) {
-      expect(config.items.filter(item => item.href !== config.items[0]?.href).some(item => item.group)).toBe(true)
-    }
+    for (const config of [personalNav, teacherNav, schoolManagerNav, platformAdminNav]) expect(config.items.filter(item => item.href !== config.items[0]?.href).some(item => item.group)).toBe(true)
     expect(teacherNav.items.some(item => item.group === '教学')).toBe(true)
     expect(personalNav.items.some(item => item.group === '资源')).toBe(true)
   })
-
   it('gives every configured navigation item an explicit icon', () => {
-    for (const config of [personalNav, studentNav, teacherNav, schoolManagerNav, platformAdminNav, superAdminNav]) {
-      expect(config.items.filter(item => !hasNavigationIcon(item.label))).toEqual([])
-    }
+    for (const config of [personalNav, studentNav, teacherNav, schoolManagerNav, platformAdminNav, superAdminNav]) expect(config.items.filter(item => !hasNavigationIcon(item.label))).toEqual([])
   })
-
-  it('exposes teacher diagnostics and principal teacher management', () => {
+  it('keeps diagnostics in primary navigation and teacher management under its school parent', () => {
     expect(teacherNav.items).toEqual(expect.arrayContaining([expect.objectContaining({ label: '评测记录', href: 'submissions' })]))
     expect(schoolManagerNav.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: '评测记录', href: 'submissions' }),
-      expect.objectContaining({ label: '教师与权限', href: 'management?tab=teachers' }),
+      expect.objectContaining({ label: '学生', href: 'management?tab=students' }),
+      expect.objectContaining({ label: '学校管理', href: 'management?tab=applications' }),
     ]))
+    const management = fs.readFileSync(new URL('../components/organization-pages/teacher/management/page.tsx', import.meta.url), 'utf8')
+    expect(management).toContain("label: '教师与权限'")
+    expect(management).toContain("activeTab === 'teachers' && isPrincipal")
+    expect(management).toContain('<TeachersManagementContent />')
   })
-
   it('does not silently render the dashboard for unknown or forbidden organization modules', () => {
     const route = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/page.tsx', import.meta.url), 'utf8')
     const resourceRoute = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/[...segments]/page.tsx', import.meta.url), 'utf8')
@@ -41,12 +37,9 @@ describe('human navigation productization', () => {
     expect(resourceRoute).toContain('status="404"')
     expect(resourceRoute).not.toContain('router.replace(`${prefix}/${module}`)')
   })
-
   it('keeps account settings separate from business and workspace navigation', () => {
     const shell = fs.readFileSync(new URL('../components/AppShell.tsx', import.meta.url), 'utf8')
-    expect(shell).toContain('个人信息')
-    expect(shell).toContain('账号安全')
-    expect(shell).toContain('平台绑定')
+    for (const title of ['个人信息', '账号安全', '平台绑定']) expect(shell).toContain(title)
     expect(shell).not.toContain('>知识广场</Link>')
     expect(shell).not.toContain('>我的文章</Link>')
     expect(shell).not.toContain('切换身份')
@@ -55,17 +48,12 @@ describe('human navigation productization', () => {
     expect(shell).not.toContain('>我的钱包</Link>')
     expect(shell).not.toContain('>好友与私信</Link>')
   })
-
-  it('keeps knowledge browsing inside user workspaces while platform entries remain public', () => {
+  it('keeps knowledge browsing inside each user or administrator workspace', () => {
     expect(personalNav.items.find(item => item.label === '知识广场')?.href).toBe('/personal/knowledge')
-    for (const config of [studentNav, teacherNav, schoolManagerNav]) {
-      expect(config.items.find(item => item.label === '知识广场')?.href).toBe('knowledge')
-    }
-    for (const config of [platformAdminNav, superAdminNav]) {
-      expect(config.items.find(item => item.label === '知识广场')).toEqual(expect.objectContaining({ href: '/blog', scope: 'global' }))
-    }
+    for (const config of [studentNav, teacherNav, schoolManagerNav]) expect(config.items.find(item => item.label === '知识广场')?.href).toBe('knowledge')
+    expect(platformAdminNav.items.find(item => item.label === '知识广场')?.href).toBe('/platform-admin/knowledge')
+    expect(superAdminNav.items.find(item => item.label === '知识广场')?.href).toBe('/admin/knowledge')
   })
-
   it('keeps AppShell navigation to full sidebar or full drawer without a compact rail', () => {
     const shell = fs.readFileSync(new URL('../components/AppShell.tsx', import.meta.url), 'utf8')
     const styles = fs.readFileSync(new URL('../components/AppShell.module.css', import.meta.url), 'utf8')

@@ -1,0 +1,5 @@
+.content[data-layout='reading'] { max-width: var(--content-reading-width); }
+.content[data-layout='form'] { max-width: 760px; }
+.content[data-layout='workbench'] { max-width: none; }
+/* Public standalone frames can have their own width; authenticated nested frames cannot. */
+.content[data-layout] :global([data-page-frame]) { max-width: none; }

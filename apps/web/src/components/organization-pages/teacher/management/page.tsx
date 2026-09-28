@@ -1,89 +1,83 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/features/auth'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { SegmentedControl } from '@/components/ui/SegmentedControl'
-import { Empty } from '@/components/ui/Empty'
+import { Tabs } from '@/components/ui/Tabs'
+import { LoadError } from '@/components/ui/LoadError'
+import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
+import { useNavigationGuard } from '@/components/navigation/UnsavedChangesProvider'
 import StudentsManagementContent from '@/components/management/StudentsManagementContent'
 import TeachersManagementContent from '@/components/management/TeachersManagementContent'
 import { WalletPage } from '@/features/account-wallet'
-import {
-  getOrganizationInvitations,
-  getOrganizationJoinApplications,
-  JoinApplicationsManagement,
-  OrganizationInvitationsManagement,
-  OrganizationJoinSettings,
-} from '@/features/organization-account'
-import styles from '@/features/ranking/RankingPage.module.css'
+import { getOrganizationInvitations, getOrganizationJoinApplications, JoinApplicationsManagement, OrganizationInvitationsManagement, OrganizationJoinSettings } from '@/features/organization-account'
+import styles from './SchoolManagement.module.css'
 
 type Tab = 'students' | 'teachers' | 'applications' | 'invitations' | 'settings' | 'wallet'
+const validTabs = new Set<string>(['students', 'teachers', 'applications', 'invitations', 'settings', 'wallet'])
 
 export default function CampusManagementPage() {
   const { user } = useAuth()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const params = useParams<{ organizationId?: string }>()
-  const organizationId = params.organizationId || ''
+  const { organizationId = '' } = useParams<{ organizationId?: string }>()
+  const { requestNavigation } = useNavigationGuard()
+  const isPrincipal = user?.organizationRole === 'school_principal'
   const role = user?.organizationRole
-  const isPrincipal = role === 'school_principal'
-  const requestedTab = searchParams.get('tab')
-  const deniedTab = (requestedTab === 'teachers' || requestedTab === 'settings') && !isPrincipal
-  const knownTab = requestedTab === null || ['students', 'teachers', 'applications', 'invitations', 'settings', 'wallet'].includes(requestedTab)
-  const resolvedTab: Tab = requestedTab === 'teachers' && isPrincipal ? 'teachers' : requestedTab === 'settings' && isPrincipal ? 'settings' : requestedTab === 'applications' || requestedTab === 'invitations' || requestedTab === 'wallet' ? requestedTab : 'students'
-  const [activeTab, setActiveTab] = useState<Tab>(resolvedTab)
+  const requestedTab = searchParams.get('tab') || 'students'
+  const activeTab = requestedTab as Tab
+  const deniedTab = (activeTab === 'teachers' || activeTab === 'settings') && !isPrincipal
   const [pending, setPending] = useState({ applications: 0, invitations: 0 })
-
-  const items = useMemo(() => [
-    { value: 'students', label: '学生' },
-    ...(isPrincipal ? [{ value: 'teachers', label: '教师' }] : []),
-    { value: 'applications', label: `加入申请${pending.applications ? ` ${pending.applications}` : ''}` },
-    { value: 'invitations', label: `成员邀请${pending.invitations ? ` ${pending.invitations}` : ''}` },
-    ...(isPrincipal ? [{ value: 'settings', label: '加入设置' }] : []),
-    { value: 'wallet', label: '学校资产' },
-  ], [isPrincipal, pending])
+  const [countError, setCountError] = useState('')
+  const [refreshVersion, setRefreshVersion] = useState(0)
 
   useEffect(() => {
-    if (!organizationId) return
-    void Promise.all([
-      getOrganizationJoinApplications(organizationId),
-      getOrganizationInvitations(organizationId),
-    ]).then(([applications, invitations]) => setPending({ applications: applications.pending, invitations: invitations.pending }))
-  }, [organizationId, activeTab])
-
-  useEffect(() => { setActiveTab(resolvedTab) }, [resolvedTab])
-
-  useEffect(() => {
-    if (!knownTab) window.history.replaceState(null, '', pathname)
-  }, [knownTab, pathname])
+    if (!organizationId || !role || role === 'student' || activeTab === 'students' || deniedTab || !validTabs.has(activeTab)) return
+    let current = true
+    void Promise.allSettled([getOrganizationJoinApplications(organizationId), getOrganizationInvitations(organizationId)])
+      .then(([applications, invitations]) => {
+        if (!current) return
+        setPending(previous => ({ applications: applications.status === 'fulfilled' ? applications.value.pending : previous.applications, invitations: invitations.status === 'fulfilled' ? invitations.value.pending : previous.invitations }))
+        const failure = [applications, invitations].find(result => result.status === 'rejected')
+        setCountError(failure?.status === 'rejected' ? (failure.reason instanceof Error ? failure.reason.message : '待处理数量更新失败') : '')
+      })
+    return () => { current = false }
+  }, [activeTab, deniedTab, organizationId, refreshVersion, role])
 
   const setTab = (tab: string) => {
-    const nextTab = tab as Tab
-    setActiveTab(nextTab)
+    if (!validTabs.has(tab) || tab === activeTab) return
     const next = new URLSearchParams(searchParams.toString())
-    nextTab === 'students' ? next.delete('tab') : next.set('tab', nextTab)
-    window.history.replaceState(null, '', pathname + (next.size ? '?' + next : ''))
+    next.set('tab', tab)
+    next.delete('applicationId')
+    requestNavigation(`${pathname}?${next.toString()}`)
   }
 
-  if (deniedTab) return <Empty title="无权访问该管理内容" description="当前学校身份不能访问此管理标签，请从可见标签进入。" />
-  if (role === 'student') return <Empty title="无权访问管理" description="学生不能访问学校管理内容。" />
-  if (!organizationId) return <Empty title="缺少学校上下文" description="请从学校工作区进入管理页面。" />
+  if (!organizationId) return <ContextualRecovery status="error" title="缺少学校上下文" description="请从学校工作区进入管理页面。" />
+  if (role === 'student' || deniedTab) return <ContextualRecovery status="403" title="无权访问该管理内容" description="当前学校成员身份不能访问此内容。" />
+  if (!validTabs.has(requestedTab)) return <ContextualRecovery status="404" title="没有这个管理分区" description="请使用左侧学生或学校管理入口。" />
 
-  return (
-    <PageFrame>
-      <div className={styles.content}>
-        <PageHeader title="成员与学校管理" description="管理本校学生、教师、加入方式与学校资产。" />
-        <SegmentedControl label="管理内容" value={activeTab} onChange={setTab} items={items} />
-        {activeTab === 'students' && <StudentsManagementContent />}
-        {activeTab === 'teachers' && isPrincipal && <TeachersManagementContent />}
-        {activeTab === 'applications' && organizationId && <JoinApplicationsManagement organizationId={organizationId} isPrincipal={isPrincipal} initialApplicationId={searchParams.get('applicationId')} onOpenSettings={() => setTab('settings')} />}
-        {activeTab === 'invitations' && organizationId && <OrganizationInvitationsManagement organizationId={organizationId} isPrincipal={isPrincipal} />}
-        {activeTab === 'settings' && organizationId && isPrincipal && <OrganizationJoinSettings organizationId={organizationId} />}
-        {activeTab === 'wallet' && organizationId && <WalletPage embedded scope="organization" organizationId={organizationId} />}
-        {activeTab === 'wallet' && !organizationId && <Empty title="未找到学校" description="当前账号没有可访问的学校资产。" />}
-      </div>
-    </PageFrame>
-  )
+  // The student component owns its heading and actions; do not duplicate them here.
+  if (activeTab === 'students') return <PageFrame><StudentsManagementContent /></PageFrame>
+
+  const items = [
+    ...(isPrincipal ? [{ value: 'teachers', label: '教师与权限' }] : []),
+    { value: 'applications', label: '加入申请', count: pending.applications },
+    { value: 'invitations', label: '成员邀请', count: pending.invitations },
+    ...(isPrincipal ? [{ value: 'settings', label: '加入设置' }] : []),
+    { value: 'wallet', label: '学校资产' },
+  ]
+  return <PageFrame>
+    <PageHeader title="学校管理" description="管理教师、加入方式和学校资产；学生管理保留在左侧独立入口。" />
+    <Tabs label="学校管理分区" value={activeTab} onChange={setTab} items={items} />
+    {countError && <LoadError compact message={`待处理数量可能不是最新：${countError}`} onRetry={() => setRefreshVersion(value => value + 1)} />}
+    <div className={styles.content}>
+      {activeTab === 'teachers' && isPrincipal && <TeachersManagementContent />}
+      {activeTab === 'applications' && <JoinApplicationsManagement organizationId={organizationId} isPrincipal={isPrincipal} initialApplicationId={searchParams.get('applicationId')} onOpenSettings={() => setTab('settings')} />}
+      {activeTab === 'invitations' && <OrganizationInvitationsManagement organizationId={organizationId} isPrincipal={isPrincipal} />}
+      {activeTab === 'settings' && isPrincipal && <OrganizationJoinSettings organizationId={organizationId} />}
+      {activeTab === 'wallet' && <WalletPage embedded scope="organization" organizationId={organizationId} />}
+    </div>
+  </PageFrame>
 }
