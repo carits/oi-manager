@@ -38,6 +38,14 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 # 当前状态
 
+## 2026-09-28 统一题目引用交互（分支验证）
+
+- `feature/unified-problem-reference` 将比赛、作业、训练创建/设计/运行期追加和题单的“按题号选题”统一为 VJudge 式交互：平台 + 题号自动本地解析、题名链接回显、显式添加，批量录入降为辅助入口。
+- 共享 resolver 继续只按 canonical `platform + problemId` 精确查当前可访问题库；不读 `ojBindings`、不猜内部 UUID、不从外部 OJ 拉题。Selection Contract 同步由 `problemCode` 收口为 `problemId`。
+- 旧 `QuickProblemInput` 已退役；题单待保存行只持有解析后的 canonical Problem，避免业务页面维护第二套识别状态。
+- 本批无 Prisma/schema/migration/业务数据修改。无数据库专项 CI 已通过 Server 定向 15/15、Web 56 文件 374/374、Server/Web TypeScript、docs/architecture、UI 与 routes 门禁；当前为分支/PR 验证，不表示已经合并或部署。
+
+
 ## 2026-09-28 题目身份与保存完整性
 
 - 题目创建、编辑、本地精确检索、题单身份校验和比赛题目保存已按显式主身份与保守恢复策略收口。
