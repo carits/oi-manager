@@ -87,7 +87,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
     setDirectoryEnabled(true)
     setOpen(true)
     if (loaded || loading) return
-    if (directory.error) await directory.retry()
+    await directory.retry()
   }
   useEffect(() => { closeSwitcher() }, [closeSwitcher, pathname, user?.userId])
   useEffect(() => {
