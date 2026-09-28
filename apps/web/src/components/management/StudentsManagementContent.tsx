@@ -1,21 +1,23 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import unifiedStyles from './StudentsManagementContent.unified.module.css'
-import { Input, Select, Textarea } from '@/components/ui/FormControls'
-import { useParams, useRouter } from 'next/navigation'
+import { Input, Select } from '@/components/ui/FormControls'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { FormField } from '@/components/ui/FormField'
 import { Pagination } from '@/components/ui/Pagination'
+import { LoadError } from '@/components/ui/LoadError'
 import { useModal } from '@/hooks/form/useModal'
 import { useForm } from '@/hooks/form/useForm'
 import { useAuth } from '@/features/auth'
+import { useFeatureResource } from '@/hooks/data/useFeatureResource'
+import { useListScrollRestoration } from '@/hooks/useListScrollRestoration'
 import {
   archiveOrganizationStudent,
   createOrganizationStudent,
@@ -38,8 +40,15 @@ interface Teacher {
 type StudentListData = EndpointData<typeof OrganizationContracts.studentOptions>
 type Student = StudentListData['data'][number]
 
+function positiveInt(value: string | null, fallback: number) {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
 export default function StudentsManagementContent() {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { organizationId } = useParams<{ organizationId?: string }>()
   const { user, sessionKey } = useAuth()
   const toast = useToast()
@@ -47,31 +56,33 @@ export default function StudentsManagementContent() {
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [transferringStudent, setTransferringStudent] = useState<Student | null>(null)
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
-  const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: 20
-  })
   const [toastMsg, setToastMsg] = useState<string | null>(null)
-  const [filters, setFilters] = useState({ q: '', grade: '', headTeacherMembershipId: '', status: '' })
 
   const isPrincipal = user?.organizationRole === 'school_principal'
-
+  const filters = useMemo(() => ({
+    q: searchParams.get('q') || '',
+    grade: searchParams.get('grade') || '',
+    headTeacherMembershipId: searchParams.get('headTeacherMembershipId') || '',
+    status: searchParams.get('status') || '',
+  }), [searchParams])
+  const pagination = useMemo(() => ({
+    page: positiveInt(searchParams.get('page'), 1),
+    pageSize: positiveInt(searchParams.get('pageSize'), 20),
+  }), [searchParams])
   const filterParams = useMemo(() => ({ ...filters, ...pagination }), [filters, pagination])
-
-  const [data, setData] = useState<StudentListData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const refetch = useCallback(async () => {
-    if (!organizationId) return
-    setLoading(true)
-    try {
-      setData(await getOrganizationStudentOptions(organizationId, filterParams))
-    } catch (error) {
-      console.error('Failed to fetch students:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [filterParams, organizationId, sessionKey])
-  useEffect(() => { void refetch() }, [refetch])
+  const locationKey = searchParams.toString()
+  const resource = useFeatureResource(
+    `organization-students:${locationKey}`,
+    sessionKey && organizationId ? `${sessionKey}:${organizationId}` : null,
+    () => {
+      if (!organizationId) throw new Error('当前学校上下文无效')
+      return getOrganizationStudentOptions(organizationId, filterParams)
+    },
+    { keepPreviousData: true },
+  )
+  const data = resource.data
+  const refetch = resource.retry
+  useListScrollRestoration(`${organizationId || 'unknown'}:students:${locationKey}`, Boolean(data && !resource.isLoading))
   const modal = useModal<Student>()
   const deleteItem = async (id: string, confirmMessage: string) => {
     if (!organizationId || !window.confirm(confirmMessage)) return false
@@ -140,18 +151,19 @@ export default function StudentsManagementContent() {
   const total = data?.total || 0
   const totalPages = Math.ceil(total / pagination.pageSize)
 
-  const handlePageChange = (page: number) => {
-    setPagination(prev => ({ ...prev, page }))
+  const navigateList = (changes: Record<string, string | number | null>, mode: 'push' | 'replace') => {
+    const next = new URLSearchParams(searchParams.toString())
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null || value === '' || (key === 'page' && value === 1) || (key === 'pageSize' && value === 20)) next.delete(key)
+      else next.set(key, String(value))
+    }
+    const query = next.toString()
+    router[mode](`${pathname}${query ? `?${query}` : ''}`, { scroll: false })
   }
 
-  const handlePageSizeChange = (pageSize: number) => {
-    setPagination(prev => ({ ...prev, page: 1, pageSize }))
-  }
-
-  const updateFilter = (key: keyof typeof filters, value: string) => {
-    setFilters(current => ({ ...current, [key]: value }))
-    setPagination(current => ({ ...current, page: 1 }))
-  }
+  const handlePageChange = (page: number) => navigateList({ page }, 'push')
+  const handlePageSizeChange = (pageSize: number) => navigateList({ page: 1, pageSize }, 'replace')
+  const updateFilter = (key: keyof typeof filters, value: string) => navigateList({ [key]: value, page: 1 }, 'replace')
 
   const gradeOptions = data?.filters?.grades || []
 
@@ -197,9 +209,11 @@ export default function StudentsManagementContent() {
           {isPrincipal && <Select className={managementListStyles.select} value={filters.headTeacherMembershipId} onChange={event => updateFilter('headTeacherMembershipId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.membershipId}>{teacher.name}</option>)}</Select>}
           <Select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></Select>
         </ManagementToolbar>
+        {resource.error && !data ? <LoadError message={resource.error.message} requestId={resource.error.requestId} onRetry={() => void resource.retry()} /> : <>
+        {resource.error && <LoadError compact message={resource.error.message} requestId={resource.error.requestId} onRetry={() => void resource.retry()} />}
         <Table
           data={students}
-          loading={loading}
+          loading={resource.isLoading}
           emptyText="暂无学生数据"
           columns={[
             {
@@ -267,7 +281,7 @@ export default function StudentsManagementContent() {
           )}
         />
 
-        {!loading && (
+        {!resource.isLoading && (
           <Pagination
             currentPage={pagination.page}
             totalPages={totalPages}
@@ -280,6 +294,7 @@ export default function StudentsManagementContent() {
             showQuickJumper={true}
           />
         )}
+        </>}
 
         {modal.isOpen && (
           <StudentFormModal
