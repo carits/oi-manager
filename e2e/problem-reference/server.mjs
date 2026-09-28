@@ -22,7 +22,16 @@ await build({
   sourcemap: true,
   tsconfig: path.join(root, 'apps/web/tsconfig.json'),
   define: { 'process.env.NODE_ENV': '"development"', 'process.env': '{}' },
-  alias: { '@/features/auth': shim, 'next/navigation': shim, 'next/link': shim, '@': path.join(root, 'apps/web/src') },
+  alias: {
+    '@/features/auth': shim,
+    'next/navigation': shim,
+    'next/link': shim,
+    '@': path.join(root, 'apps/web/src'),
+    // E2E lives outside the web package. Resolve one shared React instance from
+    // that workspace rather than relying on a root-level hoisted dependency.
+    'react': path.dirname(fromWeb.resolve('react/package.json')),
+    'react-dom': path.dirname(fromWeb.resolve('react-dom/package.json')),
+  },
   loader: { '.woff2': 'file', '.woff': 'file', '.ttf': 'file', '.png': 'file', '.svg': 'file' },
 })
 const html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/entry.css"></head><body><div id="root"></div><script type="module" src="/entry.js"></script></body></html>'
