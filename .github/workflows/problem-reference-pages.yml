@@ -1,0 +1,65 @@
+name: Problem reference real training pages
+
+on:
+  pull_request:
+    paths:
+      - 'apps/web/src/features/problem-selection/**'
+      - 'apps/web/src/features/training-session/ui/TrainingSetupDialog.tsx'
+      - 'apps/server/src/modules/problem-selection/**'
+      - 'packages/contracts/src/problem-selection.ts'
+      - 'e2e/tests/problem-reference-integration.spec.ts'
+      - '.github/workflows/problem-reference-pages.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: problem-reference-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  training-pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: oi_manager
+          POSTGRES_USER: oi
+          POSTGRES_PASSWORD: oi_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U oi -d oi_manager"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: 'true'
+      E2E_DATABASE_URL: postgresql://oi:oi_password@127.0.0.1:5432/oi_manager?schema=e2e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @oi-manager/contracts build
+      - run: pnpm --filter @oi-manager/shared build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:ui:prepare
+      - run: pnpm exec playwright test e2e/tests/problem-reference-integration.spec.ts --project=chromium-desktop --project=chromium-compact
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: problem-reference-real-training
+          path: |
+            test-results/playwright
+            test-results/playwright-report
+            test-results/playwright-results.json
+          retention-days: 7

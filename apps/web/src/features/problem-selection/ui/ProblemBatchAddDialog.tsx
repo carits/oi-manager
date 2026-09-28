@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { Select, Textarea } from '@/components/ui/FormControls'
@@ -74,8 +75,10 @@ export function ProblemBatchAddDialog({
     }
   }
 
-  // No nested form: this selector also lives inside Contest/Training form dialogs.
-  return <>
+  // The selector may be inside a transformed modal/drawer. Keep the overlay at
+  // the document root and avoid creating another form inside the host form.
+  if (typeof document === 'undefined') return null
+  return createPortal(<>
     <FormDialog isOpen onClose={requestClose} title="批量添加题目" description="选择平台后粘贴题号，先检索，再选入当前表单。每次最多 100 道。" size="lg" loading={adding}
       footer={<><Button type="button" variant="secondary" onClick={requestClose} disabled={adding}>取消</Button><Button type="button" onClick={() => void add()} loading={adding} disabled={disabled || resolution.resolving || !preview.accepted.length}>加入 {preview.accepted.length} 道题</Button></>}
     >
@@ -99,5 +102,5 @@ export function ProblemBatchAddDialog({
       </div>
     </FormDialog>
     <ConfirmDialog isOpen={confirmClose} onClose={() => setConfirmClose(false)} onConfirm={onClose} title="放弃剩余题号？" message="关闭后，未选入的题号将被丢弃；已经选入当前表单的题目不会删除。" confirmText="放弃并关闭" danger />
-  </>
+  </>, document.body)
 }

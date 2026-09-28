@@ -2,144 +2,135 @@
 status: current
 audience: development
 last_verified: 2026-09-28
-source_of_truth: packages/shared/src/oj-platforms.ts, apps/server/src/modules/problem/problem.identity.ts, apps/server/src/modules/problem-selection/problem-selection.service.ts, apps/web/src/features/problem/ui/ProblemForm.tsx, apps/web/src/features/contest/ui/ContestFormModal.tsx
+source_of_truth: packages/contracts/src/problem-selection.ts, packages/shared/src/oj-platforms.ts, apps/server/src/modules/problem/problem.identity.ts, apps/server/src/modules/problem-selection/problem-selection.service.ts, apps/web/src/features/problem-selection/, e2e/problem-reference/, e2e/tests/problem-reference-integration.spec.ts
 ---
 
-# 题目主身份与纯本地检索：无数据库变更阶段
+# 题目主身份与统一本地题目引用
 
-## 当前实施：2026-09-28 统一 VJudge 式题目引用
+## 本轮范围与发布边界
 
-当前工作分支为 `feature/unified-problem-reference`，从 `main` 的
-`73c5b9df5de8d5f772eefcb02fae1a3f0bd65e63` 建立。本轮不修改 Prisma schema、迁移或业务数据。
+开发分支为 `feature/unified-problem-reference`，PR #9，从 `main` 的
+`73c5b9df5de8d5f772eefcb02fae1a3f0bd65e63` 建立。分支验证不表示合并或部署。
+本轮不修改 Prisma schema、迁移目录、数据库 baseline、生产数据或既有业务引用。
+CI 使用的临时 PostgreSQL `test` / `e2e` schema 不属于业务数据库。
 
-- 所有“引用系统已有题目”的核心入口统一使用 `ProblemReferenceSelector`：比赛、作业、训练快速创建、训练设计器、训练运行期追加和题单章节添加不再各自维护题号录入交互。
-- 默认交互改为“平台 + 单个题号 → 400ms 本地自动精确解析 → 显示题目标题链接 → 用户显式添加”。题目标题来自 canonical Problem，不能手工伪造。
-- 成功结果使用 `ProblemReferenceLink` 指向当前工作区内部题目页，并默认新窗口打开，避免编辑中的比赛/作业/训练草稿因查看题目而丢失。
-- 批量录入保留为次级“批量添加题目”对话框，继续支持最多 100 个题号；结果逐题显示成功、未找到、重复、未发布、身份冲突或 Stable 不满足。
-- Resolver 仍只查询 `Problem.platform + Problem.problemId`，不检索 `ojBindings`、标题或内部 UUID，也不调用 OJ Adapter、抓题任务或任何远程 IO。
-- selection Runtime Contract 的线路字段从历史 `problemCode` 收口为 `problemId`；内部数据库标识始终使用 `id`，避免一套身份出现三种名称。
-- 题单待保存行只保存已经解析成功的 canonical Problem，不再重复保存 `resolving/resolved/found` 状态机。
-- 旧 `QuickProblemInput` 及其样式已删除，防止后续页面继续复用旧的大 textarea 作为默认入口。
+目标是统一“引用已经存在的题目”，不把题库浏览、题目自身身份编辑、管理员显式导入
+混入选题控件。旧 `QuickProblemInput` 与默认批量 textarea 已退役。
 
-验证：无数据库 Problem Identity CI 已通过 Contracts/Shared 构建、Prisma client 类型生成、Server/Web TypeScript、
-mocked resolver/contract 15/15、Web 56 文件 374/374、docs/architecture、UI state/component 与 routes 门禁。
-数据库定义相对 PR base 无差异。
+## 唯一身份与只读检索
 
+`POST /api/problem-selection/resolve` 接收 `{ items: [{ clientKey, platform, problemId }] }`。
+每批 1–100 项，clientKey 唯一，题号最长 128 字符。selection 接口的历史线路字段
+`problemCode` 已改为 `problemId`；Web、Server 和 Contracts 必须作为同一版本发布。
+本轮没有增加旧线路双读兼容。
 
-## 当前实施：2026-09-28 保存正确性修复
+平台通过共享 Registry 的 key、displayName 和显式 aliases 规范化为英文小写 key。
+中文显示名称可以在边界被识别，未登记简称不猜测，也不默认到其他平台。
+题号只 trim；大小写、前导零和原始前缀保持不变，不把题号整体转成小写。
 
-当前工作分支为 `fix/problem-save-integrity-20260928`，起点是
-`codex/problem-management-completion` 的 `c1dcd5a6c14020c75cfa6391efabf361ff2fffcb`。
-本记录描述分支代码，不代表合并、部署、完成数据库清理或整套 A01—A16 改造。
+Resolver 只查 `Problem.platform + Problem.problemId`，共用题目领域
+`findPrimaryProblemIdentities` 的授权与冲突规则。不检索附加 OJ 绑定、标题、别名，
+不把 Carits 题号当内部 UUID，不调用 OJ Adapter、抓题队列、远程 IO 或任何写入。
+平台与题号按成对条件查询，不能组合成两个独立 IN 条件。
 
-当前逐项状态、提交、验证范围与 Codex 接手顺序见
-[保存正确性与 Codex 后置交接](./PROBLEM_SAVE_INTEGRITY_HANDOFF.md)。
-该交接是仓库文档，不是已经启动的 Codex 后台任务。
+返回的 `problem.id` 是内部 Problem ID，`problem.platform + problem.problemId` 是平台身份。
+其他业务命令已有的 `problemId` 外键字段仍可能表示内部 ID，不应对全仓库机械重命名。
 
-继承的显式主身份与绑定解耦代码已经存在；本轮进一步完成以下代码修改：
+无权披露的题目与不存在题目返回同一种 not_found；有权查看但未发布/已归档的题目
+返回 not_published。当前平台库和组织范围出现多个可访问的相同主身份时返回
+identity_conflict，不默认选学校、平台或第一条。其他学校的私有题不参与冲突披露。
+数据库异常走请求错误，不伪造查无此题。
 
-- 公共选择器复用题目领域 `findPrimaryProblemIdentities`，与已有普通提交 helper 使用同一授权与身份冲突规则；仅对唯一可披露记录只读补充 Stable 信息。
-- 题单过渡接口校验内部引用与冗余平台/题号的一致性，条目平台从真实授权题目生成；不改写历史 Problem 行。
-- 历史附加来源无法安全读取时保持只读，保存请求省略该字段，不以 `[]` 覆盖；正常显式清空仍发送空数组。
-- 题目编辑器按账号、工作区与题目重建上下文，恢复 Effect setup 的有效上下文；加载失败不开放空白编辑器，保存提示使用实际未保存差异。
-- 比赛保存逐步检查响应，删除依据加载基线中的明确移除项；新增 ID 绑定原 client row，保持新旧题交错顺序，排序后回读确认。
-- 比赛写后失败保留本地草稿和已确认步骤，不关闭、不报整体成功；暂时停止直接重试，提供草稿导出和新窗口核对入口。
+当前数据库唯一约束仍是 `libraryKey + platform + problemId`。历史中文/非规范平台
+不会在检索中自动补偿；全局唯一与学校副本治理属于单独批准的数据阶段。
 
-比赛仍是多请求保存。前端预检不能消除检查与写入之间的竞态，不代表目标内事务、原子并发版本或服务端幂等已完成。
-统一逐行选择器的六处迁移已由本文件上方“统一 VJudge 式题目引用”阶段完成；全系统平台写入边界、离线审计工具与数据库阶段仍见交接中的后置清单。
+## 六处业务接入
 
-### 当前分支验证状态
+| 入口 | 业务文件 | requireStable |
+|---|---|---|
+| 比赛 | ContestFormModal.tsx | true |
+| 作业 | AssignmentWorkspace.tsx | true |
+| 训练快速创建 | TrainingSetupDialog.tsx | false |
+| 训练阶段设计 | TrainingSessionDesigner.tsx | false |
+| 训练运行期追加 | TrainingSessionWorkspace.tsx | false |
+| 题单章节添加 | ProblemListDetailPage.tsx | false |
 
-本轮仅对两个新增模型的同字节副本做语法转译与 18 项隔离断言；绑定读取断言使用替代 Registry。
-这不代表 Server/Web 全项目类型检查、构建、Vitest 或浏览器验收通过，详情和 blob SHA 已记录在交接文档。
-本轮未取得完整 checkout，未运行项目级文档、架构或路由门禁；读取分支 Actions 时没有运行记录。
-没有连接业务数据库、执行迁移或部署。下方历史分支的测试数字不能作为本分支的验证结果。
+全部入口使用 `features/problem-selection` 的公共组件。业务页面不再自行实现按题号解析。
+题单待保存行直接持有已经解析的 canonical Problem，而不是另一套 resolving/resolved/found。
 
-## 历史基础：本地身份检索阶段
+身份命中与业务可用性独立：没有 Stable 时仍显示真实题名链接，但严格入口禁止添加并
+解释原因。训练最终运行要求由训练命令再次校验；前端选题成功不是发布许可。
 
-原始分支为 `codex/problem-identity-local-lookup`，起点 `f04b0aa5`。
-以下保留该阶段的设计和历史验证记录；本轮没有重新运行其全量验收。
+## 默认交互与链接
 
-平台名称通过共享 Registry 的 key、displayName 和显式 aliases 精确映射成英文小写 key。
-中文显示名也能在数据边界被识别；未注册简称不猜测，不默认为其他平台。
-Registry 对非规范 key、重复 key、空名称及不同平台之间的名称冲突 fail-fast。
-既有已登记别称保留；共享 Adapter 不能成为合并两种平台身份的理由。
-题号只 trim，大小写、前导零和前缀均保持，不把用户名、URL、Cookie 或其他内容整体转小写。
+默认是一行“平台 / 单题号 / 就地检索结果 / 添加”。停止输入 400ms 自动查询；Enter
+只立即检索，不隐式添加，也不提交外层表单。中文输入法组合阶段不发查询。
+多题号和 URL 不能放入单题框；多题号使用明确的批量入口。
 
-统一题号 resolver 只对 `Problem.platform + Problem.problemId` 做本地精确匹配。
-没有 Carits 内部 UUID 兜底；不检索 `ojBindings`、标题、别名，不调用 Adapter、抓取队列或任何写入。
-批量输入按平台/题号成对查询，保留 clientKey 和顺序，避免独立 IN 条件交叉误匹配。
-权限仍调用现有 canUseProblem / canViewProblem；无权披露的记录与不存在记录返回相同结果。
-有权查看的未发布/归档题返回明确 not_published，数据库错误继续走请求错误路径。
+题名来自服务端 canonical Problem，不允许手填。未输入、检索中、未找到、未发布、
+身份冲突、重复、业务条件不满足和请求失败保持可区分。网络失败可原地重试。
 
-数据库仍是 libraryKey + platform + problemId 唯一，无数据库变更阶段没有修改此约束。
-当前平台库与当前组织范围内如果存在多个可访问的相同主身份，返回 identity_conflict；
-不优先学校、不 fallback 平台、不选第一条，也不在代码中合并数据。
-其他学校或不可访问的记录不参与冲突披露。全局唯一和学校副本转换属于后续迁移。
+`ProblemReferenceLink` 按当前 URL 生成工作区内链接；全局账号角色不能把个人工作区
+链接改成平台管理链接。`/admin` 映射到实际存在的 `/platform-admin/problems` 详情入口。
+链接使用内部 ID，默认在新窗口打开，避免离开正在编辑的表单；训练已选题目链也复用它。
 
-命中题目的 status=resolved 表达身份可定位且可使用，Stable 元数据可缺省。
-Stable 不存在不由 resolver 解释为查无此题。历史 QuickProblemInput 与当前 ProblemReferenceSelector 的 requireStable 默认均为 true。
-Contest 和 Assignment 保持这一严格前置条件；题单与 Training 的创建、设计和运行期追加入口
-显式使用 requireStable=false，允许先收录已定位的 canonical Problem，再由各领域保存命令按自身
-运行条件校验数据槽。原分支为调用方策略加入了 Web 回归断言，但本轮尚未重跑这些测试。
-正式保存仍需领域服务重新授权、校验题目状态和数据要求，不能把前端查到当成发布许可。
+布局使用现有设计令牌并随可用宽度换行。批量对话框通过 Portal 挂在 document.body，
+避免训练创建弹窗或阶段抽屉的变换/裁剪约束其遮罩。批量界面不再创建嵌套 form。
 
-历史 QuickProblemInput 区分请求失败与未找到；当前实现已由上方 ProblemReferenceSelector 取代。旧组件当时会等待业务回调完成，并在失败或部分接受不明时保留输入。
-显示“已找到/仍需保存”，不宣称数据已保存。同步 in-flight 锁阻止连续点击重复调用，
-会话变化和卸载使旧响应失效，禁用中的表单不接收迟到结果。
-已选 ID 快照按 props 记忆化，不在一次渲染里重复消费 Iterable；回包时使用当前快照做重复检查。
-localStorage 读写失败不阻断选题；读取旧中文平台偏好时规范化，写入只使用 key。
-批量上限仍是 100，但超过时明确报错，不再悄悄截断；输入示例跟随平台变化。
-公共回调仍未实现按 clientKey 的完整接受/拒绝回执，不应称为 A09 已完成。
+## 请求生命周期和添加回执
 
-## 本阶段明确未做
+单题与批量共用 `useProblemReferenceResolver`。手动检索先取消防抖计时器；相同正在
+执行的请求不会重复发起。换题号、换平台、换账号/工作区/业务目标、禁用与卸载会取消
+旧 transport，并通过 generation、当前上下文和请求键拒绝迟到结果。
 
-- 未连接或修改生产/开发业务数据库，未执行迁移、db push、seed、reset、去重或全量 UPDATE。
-- 未修改 Prisma schema、迁移目录、数据库 baseline、全局唯一索引或数据库 CHECK。
-- 未转换学校副本，未改题目内部 ID、既有业务引用或不可变历史。
-- 未声称所有原始写入路径已规范化；Carits 创建编号和外部题号的完整契约规则仍有后续工作。
-- OJ 账号、导入持久化、平台绑定、提交历史等全量写入改造需结合历史冲突审计单独推进。
-- 全局主身份唯一、校内派生题新编号、整批事务保存与生产真实浏览器闭环尚未完成；六处统一题目引用 UI 已在当前分支收口。
+响应除了 Runtime Contract，还检查完整行数、唯一 clientKey、题号/平台一致性和
+返回 Problem 的身份一致性。缺行、混入别的请求或身份矛盾必须报请求错误，不能添加。
 
-## 历史验证记录：不得作为当前分支通过凭据
+单题与批量共享同步 in-flight 锁，避免连续点击重复回调。添加时重新检查当前已选 ID
+和业务条件，不使用检索发起时的旧重复判断。
 
-原检索分支记录：本地终端不能解析 GitHub 域名，未得到完整 checkout，也未描述为完整本地构建通过。
-共享 Registry 单文件使用 TypeScript 编译后，139 项平台映射/冲突断言通过。
-新增选择模型完成 7 项本地运行断言；本地服务与组件只做语法转译。
-原分支增加 `.github/workflows/problem-identity-check.yml`：仓库权限只读，不注入业务密钥，
-不启动数据库服务，DATABASE_URL 指向本机不可用端口；仅安装依赖、生成 Prisma 客户端类型、
-执行类型检查、mocked resolver/contract 单测、Web 单测及静态门禁。
-该工作流不执行数据库迁移、seed、reset、部署或推送。
+`onAdd(problems, context)` 中 context 提供 signal 与 isCurrent。异步业务调用必须在
+等待后、修改表单前重新检查上下文。可以返回 `{ acceptedIds, rejected }`，未确认的题目
+保留为失败行；原同步 void 回调仍表示整批接收。不得把没有接收的题号静默清空。
 
-### 具备明确提交标识的历史 CI
+训练设计器逐题加载详情后返回明确的部分接收回执，目标阶段已经删除、锁定或变化时
+不写入旧目标。多阶段添加以目标交集判重：仅在全部目标都包含该题时才算重复。
 
-实现提交 `c33b43fac5b11165e049157e2cd4aa45469276b0` 的运行：
-https://github.com/carits/oi-manager/actions/runs/36377629972
+批量检索与加入分开。成功项保留在业务表单，失败项保留原输入与原因，可单独重试；
+超过 100 题明确拒绝而非截断。关闭未处理输入前确认，已经选入的题目不随关闭删除。
+“选入当前表单”与“已保存到服务端”是不同状态，最终保存仍由各领域命令负责。
 
-原记录记载结果为 success，并已读取运行步骤和完整 job 日志；本轮保留此历史记录，没有重新核验该运行。
+## 验证层级与证据
 
-- Prisma 目录与基线零差异检查通过。
-- Contracts、Shared 构建通过。
-- Server 与 Web 的 TypeScript noEmit 检查通过。
-- 本地 resolver/contract 定向单测 15/15 通过。
-- Web 单测 54 个文件、359/359 通过，其中平台规范化覆盖 75 项、选择模型覆盖 8 项。
-- docs:check、architecture:check、API 身份审计、UI 状态与组件门禁、导航审计通过。
-- 数据库 baseline 检查为仓库文件静态检查，没有连接数据库。
+- `.github/workflows/problem-identity-check.yml`：不可连接的 DATABASE_URL、Prisma 目录零差异、
+  Contracts/Shared 构建、客户端类型生成、Server/Web 类型检查、mocked 本地 resolver、
+  Web 模型/六处接入断言和 docs/architecture/UI/routes 门禁。不执行业务数据库迁移。
+- `.github/workflows/problem-reference-browser.yml`：真实生产组件、API client、契约与样式，
+  在 React StrictMode 和 Chromium/Firefox/窄屏 Chromium 中运行。仅 Auth/Next 路由与
+  本地 API 响应为测试替身。覆盖防抖、Enter、组合输入、迟到响应、回执、重复、关闭、
+  禁用、上下文隔离、链接、存储失败和布局。它不是六个完整业务页面的发布验收。
+- `.github/workflows/problem-reference-pages.yml`：在隔离 `e2e` schema 启动真实 API 和 Next，
+  用已认证教师检查实际训练创建弹窗的本地解析、链接、明确添加和嵌套批量弹窗，覆盖
+  桌面与紧凑桌面。不把它扩大成比赛/作业等全部保存发布闭环。
+- `.github/workflows/ui-e2e.yml`：独立的全站回归。聊天集成/并发用干净 `test` schema，
+  浏览器 seed 用 `e2e` schema，避免默认表情包污染聊天测试。失败产物不打包 runtime
+  password JSON 或浏览器认证 storageState。
 
-### 原记录中的后续远端工作树验证
+已取得的提交级基线：`8f003e2a5b26fd03ab14e0db0bd3c75dec05605e` 的无数据库专项
+运行 `36437326963`、文档运行 `36437326727` 和组件浏览器运行 `36437326738` 成功；
+浏览器为 21 个场景在三个项目中执行 63 项。后续提交必须读取对应的 Actions 结果，
+不能直接沿用该基线数字。真实页面和全站结果分别以各自工作流为准。
 
-原文还记载，在当时远端隔离工作树的“最新 HEAD”上运行 Server/Web TypeScript noEmit、
-Server/Web production build、本地 resolver/contract 15/15、Web 54 个文件 359/359、docs:check、
-UI state check 与 routes:audit 均通过；Web production build 只有既有 lint warning。
-该段没有单独绑定提交 SHA，本轮不据此宣称当前或其他后续提交通过。
+## 保存完整性与后置数据阶段
 
-原验证未执行完整 Server 数据库集成测试或真实浏览器 E2E。
-服务端定向测试独立使用 `vitest.problem-selection.config.ts`，不加载数据库测试 setup。
-其 fixture 模拟查询返回，权限判断复用 problem.access，capability 解析使用测试替身；
-这些不是 PostgreSQL 集成测试，也不能替代后续双学校多角色 E2E。
+此前显式主身份、Carits 服务端编号、损坏绑定只读保全、expectedUpdatedAt 并发保护、
+比赛保存基线与写后恢复仍然保留。详细背景见
+[保存正确性与交接](./PROBLEM_SAVE_INTEGRITY_HANDOFF.md)。比赛多请求保存不等于服务端
+整批事务或持久化幂等；本轮没有把这些未完成事项标为完成。
 
-## 后续迁移前置条件
+迁移前仍须只读盘点旧平台、未知 key、身份冲突、学校副本和跨表引用，取得批准清单并
+完成恢复演练。不得为了让选题成功而自动重写历史平台、合并题目、删除学校归属、改换
+内部 ID 或对业务数据执行迁移、seed、reset、去重或全量 UPDATE。
 
-先只读盘点中文/大小写平台、未知 key、规范化冲突、学校副本和跨表引用，形成批准清单。
-不把规范化函数当作已经清理历史数据；存储层仍是中文/旧大小写时，本地精确查询不会自动兜底。
-完成冲突处理和恢复演练前，不启用全局唯一约束，不删除学校归属，不更换历史引用。
+历史本地身份阶段的 `c33b43fac5b11165e049157e2cd4aa45469276b0` / Actions
+`36377629972` 与保存完整性阶段的验证记录只证明当时提交，不作为本分支上线凭据。
