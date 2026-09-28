@@ -68,7 +68,38 @@ jobs:
           assert all(not p or p.startswith(('apps/web/', 'e2e/', 'docs/')) for p in paths), paths
           print('Source patch touches only Web, E2E and documentation paths.')
           PY
+          git diff --cached --stat
+          cat docs/development/UI_SHELL_ROLLOUT.md
       - run: pnpm install --frozen-lockfile
+      - name: Correct render-test children argument without disabling lint
+        shell: bash
+        run: |
+          node <<'JS'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const ts = require('./apps/web/node_modules/typescript');
+          const path = 'apps/web/src/components/AppShell.layout.test.ts';
+          const source = ts.createSourceFile(path, fs.readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+          let changed = 0;
+          const result = ts.transform(source, [context => root => {
+            const visit = node => {
+              if (ts.isCallExpression(node) && /(?:^|\.)createElement$/.test(node.expression.getText(source)) && node.arguments.length === 2 && ts.isObjectLiteralExpression(node.arguments[1])) {
+                const props = node.arguments[1];
+                const child = props.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(source) === 'children');
+                if (child) {
+                  changed += 1;
+                  return ts.factory.updateCallExpression(node, node.expression, node.typeArguments, [node.arguments[0], ts.factory.updateObjectLiteralExpression(props, props.properties.filter(property => property !== child)), child.initializer]);
+                }
+              }
+              return ts.visitEachChild(node, visit, context);
+            };
+            return ts.visitNode(root, visit);
+          }]);
+          assert.equal(changed, 1, 'Expected exactly one reviewed children-prop correction');
+          fs.writeFileSync(path, ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(result.transformed[0]));
+          result.dispose();
+          JS
+          git add apps/web/src/components/AppShell.layout.test.ts
       - name: Build shared types and generate client without database access
         run: pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate
       - name: Web type check
@@ -85,7 +116,7 @@ jobs:
           test "$status" -le 1
           diff -u "$RUNNER_TEMP/ui-before.log" "$RUNNER_TEMP/ui-after.log"
           cat "$RUNNER_TEMP/ui-after.log"
-          echo 'Existing training component violations are unchanged; this is not a claim that the complete UI gate is green.'
+          echo 'Existing training component violations are unchanged; the full UI component gate is not yet green.'
       - run: pnpm architecture:check
       - run: pnpm routes:audit
       - run: pnpm docs:check
@@ -97,8 +128,8 @@ jobs:
           set -euo pipefail
           git diff --exit-code
           printf '\n## 分支 CI 验证记录\n\n' >> docs/development/UI_SHELL_ROLLOUT.md
-          printf 'GitHub Actions 运行 %s/actions/runs/%s 已通过 Web 类型检查、238 项 Web 单测、UI 状态检查、架构检查、路由审计、文档检查和完整生产 Web 构建。\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> docs/development/UI_SHELL_ROLLOUT.md
-          printf '完整 UI 组件门禁仍有 10 项原有训练组件违规；本批前后输出一致，未扩大基线。完整后端 E2E 未在本运行执行，未合并主分支或部署。\n' >> docs/development/UI_SHELL_ROLLOUT.md
+          printf 'GitHub Actions 运行 %s/actions/runs/%s 已通过 Web 类型检查、Web 单测、UI 状态检查、架构检查、路由审计、文档检查和完整生产 Web 构建。\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> docs/development/UI_SHELL_ROLLOUT.md
+          printf '完整 UI 组件门禁仍有原有训练组件违规；本批前后输出一致，未扩大基线。完整后端 E2E 未在本运行执行，未合并主分支或部署。\n' >> docs/development/UI_SHELL_ROLLOUT.md
           node scripts/docs-check.mjs
           git add docs/development/UI_SHELL_ROLLOUT.md
       - name: Commit verified implementation to the feature branch only
@@ -117,5 +148,5 @@ jobs:
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin HEAD:refs/heads/codex/ui-shell-workspace-unification
           sha="$(git rev-parse HEAD)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=success -f context=ui-shell-stage-one -f description='Types, 238 unit tests, architecture and build passed; legacy UI debt and E2E remain.' -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=success -f context=ui-shell-stage-one -f description='Stage-one type, unit, state, architecture and build checks passed; full plan not yet complete.' -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           printf 'Verified implementation commit: `%s`\n\nNo database migration, deployment or main-branch update. Full integration E2E remains pending.\n' "$sha" >> "$GITHUB_STEP_SUMMARY"
