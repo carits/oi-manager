@@ -31,7 +31,7 @@ import {
 } from "../api/trainingSessionApi";
 import type { Assignment, Design, DesignProblem, Issue, Stage, TrainingGrouping } from "../model/trainingDesign";
 import { createTrainingDesignDraft, isTrainingStageDefinitionLocked, moveItem, newTrainingDesignKey, normalizeAssignments, normalizeProblemOrder } from "../model/trainingDesign";
-import { QuickProblemInput, type SelectedCanonicalProblem } from "@/features/problem-selection";
+import { ProblemReferenceSelector, type SelectedCanonicalProblem } from "@/features/problem-selection";
 
 const newKey = newTrainingDesignKey;
 
@@ -666,10 +666,10 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
             disabled={stageReadOnly(stage)}
             onChange={event => setTargetStages(current => event.target.checked ? [...current, stage.clientKey] : current.filter(key => key !== stage.clientKey))}
           />)}</div>}
-          <QuickProblemInput
+          <ProblemReferenceSelector
             disabled={!activeStage || activeStageReadOnly || (problemTarget === "multiple" && !targetStages.length)}
             existingProblemIds={problemTarget === "current" ? activeStage?.Problems.map(item => item.problemId) : []}
-            onResolved={addResolvedProblems}
+            onAdd={addResolvedProblems}
             requireStable={false}
           />
         </section>
