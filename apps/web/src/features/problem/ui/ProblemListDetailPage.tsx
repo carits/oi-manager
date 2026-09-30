@@ -251,12 +251,12 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
     let saved = 0
     for (const row of rowsToSave) {
       try {
-        const body: { ojName: string; problemCode: string; alias: string | null; notes: string | null; problemId: string } = {
-          ojName: row.problem.platform,
-          problemCode: row.problem.problemId,
+        const body: { platform: string; problemId: string; alias: string | null; notes: string | null; canonicalProblemId: string } = {
+          platform: row.problem.platform,
+          problemId: row.problem.problemId,
           alias: row.alias.trim() || null,
           notes: row.notes.trim() || null,
-          problemId: row.problem.id,
+          canonicalProblemId: row.problem.id,
         }
         const res = await apiClient.post(`/api/problem-lists/sections/${row.sectionId}/entries/single`, body)
         if (res.success || res.status === 409) {

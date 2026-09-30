@@ -21,11 +21,11 @@ async function requireEditable(user: AuthUser, listId: string, message: string) 
   if (permission !== 'admin' && permission !== 'edit') fail(403, message)
 }
 
-async function resolveProblem(user: AuthUser, ojName: string, problemCode: string, directProblemId?: string) {
+async function resolveProblem(user: AuthUser, platform: string, problemId: string, canonicalProblemId?: string) {
   try {
-    const requested = normalizePrimaryProblemIdentity(ojName, problemCode)
-    const problem = directProblemId
-      ? await findAccessibleProblem(user, directProblemId, 'use')
+    const requested = normalizePrimaryProblemIdentity(platform, problemId)
+    const problem = canonicalProblemId
+      ? await findAccessibleProblem(user, canonicalProblemId, 'use')
       : await findUsableProblemByExternalId(user, requested.platform, requested.problemId)
     if (!problem) fail(404, '题库中未找到该题目，或无权访问', 'PROBLEM_NOT_FOUND')
 
@@ -58,10 +58,10 @@ export async function addProblemListEntry(user: AuthUser, sectionId: string, bod
   const listId = await getSectionProblemListId(sectionId)
   if (!listId) fail(404, '章节不存在')
   await requireEditable(user, listId, '无权限添加题目')
-  const ojName = typeof body.ojName === 'string' ? body.ojName : ''
-  const problemCode = typeof body.problemCode === 'string' ? body.problemCode : ''
-  if (!ojName || !problemCode) fail(400, 'OJ 平台和题号不能为空')
-  const problem = await resolveProblem(user, ojName, problemCode, typeof body.problemId === 'string' ? body.problemId : undefined)
+  const platform = typeof body.platform === 'string' ? body.platform : ''
+  const problemId = typeof body.problemId === 'string' ? body.problemId : ''
+  if (!platform || !problemId) fail(400, '平台和题号不能为空')
+  const problem = await resolveProblem(user, platform, problemId, typeof body.canonicalProblemId === 'string' ? body.canonicalProblemId : undefined)
   await ensureProblemFitsList(problem.id, listId)
   const existing = await prisma.problemListEntry.findUnique({
     where: { sectionId_problemId: { sectionId, problemId: problem.id } },

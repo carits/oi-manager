@@ -43,8 +43,8 @@ interface ContentOptions {
 interface ProblemRow {
   id: string
   contestProblemId?: string
-  ojName: string
-  problemCode: string
+  platform: string
+  problemId: string
   alias: string
   points: number
   resolving: boolean
@@ -206,7 +206,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
           const solutionKey = options.currentSelection?.solutionOptionKey ?? options.solution.find(option => option.key !== 'none')?.key ?? 'none'
           return {
             id: `existing-${problem.id}`, contestProblemId: String(problem.id),
-            ojName: problem.platform || 'carits', problemCode: problem.platformProblemId || problem.problemId,
+            platform: problem.platform || 'carits', problemId: problem.platformProblemId || problem.problemId,
             alias: problem.alias || '', points: problem.points ?? 100, resolving: false,
             resolved: { found: true, problemId: problem.problemId, title: problem.problemTitle || '', created: false }, existing: true,
             statementOptions: options.statement, solutionOptions: options.solution,
@@ -307,7 +307,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       selectedIdsRef.current.add(problem.id)
       const id = `selected-${++tempIdCounter}`
       setProblemRows(current => [...current, {
-        id, ojName: problem.platform, problemCode: problem.problemId, alias: '', points: 100, resolving: false,
+        id, platform: problem.platform, problemId: problem.problemId, alias: '', points: 100, resolving: false,
         resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
         contentOptionsLoading: true, statementOptions: [], solutionOptions: [],
       }])
@@ -456,14 +456,14 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       for (const row of rows) {
         const points = format === 'icpc' ? null : row.points
         if (row.contestProblemId) {
-          await write(`更新题目 ${row.problemCode}`, () => apiClient.put(`/api/contests/${target}/problems/${row.contestProblemId}`, { alias: row.alias, points }))
+          await write(`更新题目 ${row.problemId}`, () => apiClient.put(`/api/contests/${target}/problems/${row.contestProblemId}`, { alias: row.alias, points }))
           if (row.statementOptionKey !== row.originalStatementOptionKey || row.solutionOptionKey !== row.originalSolutionOptionKey) {
-            await write(`保存题目 ${row.problemCode} 的内容版本`, () => apiClient.put(`/api/contests/${target}/problems/${row.contestProblemId}/content-selection`, {
+            await write(`保存题目 ${row.problemId} 的内容版本`, () => apiClient.put(`/api/contests/${target}/problems/${row.contestProblemId}/content-selection`, {
               statementOptionKey: row.statementOptionKey, solutionOptionKey: row.solutionOptionKey || 'none',
             }))
           }
         } else {
-          const result = await write(`新增题目 ${row.problemCode}`, () => apiClient.post<IdResponse>(`/api/contests/${target}/problems`, {
+          const result = await write(`新增题目 ${row.problemId}`, () => apiClient.post<IdResponse>(`/api/contests/${target}/problems`, {
             problemId: row.resolved!.problemId, alias: row.alias, points,
             statementOptionKey: row.statementOptionKey, solutionOptionKey: row.solutionOptionKey || 'none',
           }), true)
@@ -587,7 +587,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
               <div className={unifiedStyles.sectionHeading}><h3 className={unifiedStyles.u11}>{contestWizard ? '比赛题目' : '题目列表'}</h3></div>
               <ProblemReferenceSelector disabled={saving || recoveryBlocked} existingProblemIds={problemRows.flatMap(row => row.resolved ? [row.resolved.problemId] : [])} onAdd={addSelectedProblems} />
               {problemRows.length > 0 ? <>
-                <div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.problemId, platform: row.ojName, problemId: row.problemCode, title: row.resolved.title }} showIdentity={false} /> : row.problemCode}</span></div>)}</div>
+                <div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.problemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : row.problemId}</span></div>)}</div>
                 <div className={unifiedStyles.u12}><TableRoot className={unifiedStyles.u13}>
                   <TableHead><TableRow className={unifiedStyles.u14}>
                     <TableHeaderCell className={unifiedStyles.u15}>排序</TableHeaderCell><TableHeaderCell className={unifiedStyles.u16}>#</TableHeaderCell>
@@ -597,8 +597,8 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
                   </TableRow></TableHead>
                   <TableBody>{problemRows.map((row, index) => <TableRow key={row.id} className={`${unifiedStyles.problemRow} ${row.existing ? unifiedStyles.existingProblem : unifiedStyles.newProblem}`}>
                     <TableCell className={unifiedStyles.u23}><Button variant="secondary" size="sm" onClick={() => moveRow(index, -1)} disabled={saving || index === 0} className={unifiedStyles.moveButtonFirst} title="上移">↑</Button><Button variant="secondary" size="sm" onClick={() => moveRow(index, 1)} disabled={saving || index === problemRows.length - 1} className={unifiedStyles.moveButton} title="下移">↓</Button></TableCell>
-                    <TableCell className={unifiedStyles.u24}>{index + 1}</TableCell><TableCell className={unifiedStyles.u25}>{row.ojName}</TableCell><TableCell className={unifiedStyles.u25}>{row.problemCode}</TableCell>
-                    <TableCell className={unifiedStyles.u27}><span className={unifiedStyles.u31}>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.problemId, platform: row.ojName, problemId: row.problemCode, title: row.resolved.title }} showIdentity={false} /> : '等待识别题目'}</span>
+                    <TableCell className={unifiedStyles.u24}>{index + 1}</TableCell><TableCell className={unifiedStyles.u25}>{row.platform}</TableCell><TableCell className={unifiedStyles.u25}>{row.problemId}</TableCell>
+                    <TableCell className={unifiedStyles.u27}><span className={unifiedStyles.u31}>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.problemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : '等待识别题目'}</span>
                       {row.contentOptionsLoading && <p>题面选项加载中…</p>}
                       {row.contentOptionsError && <p role="alert">{row.contentOptionsError} <Button size="sm" disabled={saving} onClick={() => row.resolved && void loadRowOptions(row.id, row.resolved.problemId)}>重试加载</Button></p>}
                     </TableCell>

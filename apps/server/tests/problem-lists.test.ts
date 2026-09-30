@@ -425,7 +425,7 @@ describe('题单权限模块', () => {
       const problem1 = await createTestProblem({ platform: 'carits', problemId: `P${Date.now()}_admin`, ownerId: ownerUser.user.id })
       const res = await organizationRequest(ownerToken)
         .post(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/single`)
-        .send({ ojName: 'carits', problemCode: problem1.problemId, problemId: problem1.id })
+        .send({ platform: 'carits', problemId: problem1.problemId, canonicalProblemId: problem1.id })
       expect(res.status).toBe(200)
     })
 
@@ -433,14 +433,14 @@ describe('题单权限模块', () => {
       const problem2 = await createTestProblem({ platform: 'carits', problemId: `P${Date.now()}_edit`, ownerId: ownerUser.user.id })
       const res = await organizationRequest(editToken)
         .post(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/single`)
-        .send({ ojName: 'carits', problemCode: problem2.problemId, problemId: problem2.id })
+        .send({ platform: 'carits', problemId: problem2.problemId, canonicalProblemId: problem2.id })
       expect(res.status).toBe(200)
     })
 
     it('view 用户添加条目 → 403', async () => {
       const res = await organizationRequest(viewToken)
         .post(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/single`)
-        .send({ ojName: 'carits', problemCode: 'test' })
+        .send({ platform: 'carits', problemId: 'test' })
       expect(res.status).toBe(403)
     })
 
@@ -451,7 +451,7 @@ describe('题单权限模块', () => {
       const entryProblem = await createTestProblem({ platform: 'carits', problemId: `P${Date.now()}_entry`, ownerId: ownerUser.user.id })
       const res = await organizationRequest(ownerToken)
         .post(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/single`)
-        .send({ ojName: 'carits', problemCode: entryProblem.problemId, problemId: entryProblem.id })
+        .send({ platform: 'carits', problemId: entryProblem.problemId, canonicalProblemId: entryProblem.id })
       entryId = res.body.data.entry.id
     })
 
@@ -478,7 +478,7 @@ describe('题单权限模块', () => {
       const otherProblem = await createTestProblem({ platform: 'carits', problemId: `P${Date.now()}_foreign`, ownerId: ownerUser.user.id })
       const added = await organizationRequest(ownerToken)
         .post(`/api/problem-lists/sections/${otherList.defaultSection.id}/entries/single`)
-        .send({ ojName: 'carits', problemCode: otherProblem.problemId, problemId: otherProblem.id })
+        .send({ platform: 'carits', problemId: otherProblem.problemId, canonicalProblemId: otherProblem.id })
       const res = await organizationRequest(ownerToken)
         .put(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/reorder`)
         .send({ entryIds: [added.body.data.entry.id] })
@@ -533,7 +533,7 @@ describe('题单权限模块', () => {
       } })
       await organizationRequest(ownerToken)
         .post(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/single`)
-        .send({ ojName: 'carits', problemCode: testProblem.problemId, problemId: testProblem.id })
+        .send({ platform: 'carits', problemId: testProblem.problemId, canonicalProblemId: testProblem.id })
       const res = await organizationRequest(ownerToken)
         .post(`/api/problem-lists/${testList.list.id}/create-assignment`)
         .send({ teamId: team.id, title: '题单作业草稿', startTime: '2026-09-01T00:00:00.000Z', endTime: '2026-09-02T00:00:00.000Z' })
