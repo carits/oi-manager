@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-09-10
+last_verified: 2026-10-01
 source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints, economy-loop migration and scheduler services
 
 ---
@@ -70,7 +70,11 @@ journalctl -u oi-manager-operations@monitor.service -n 50 --no-pager
 
 ### GitHub 主机外可用性工作流
 
-`.github/workflows/external-uptime.yml` 提供每五分钟一次的主机外 HTTP 探针，并为故障/恢复创建去重后的 GitHub Issue。由于账号账单/消费上限状态，GitHub 在分配 Runner 前拒绝了运行 `33290187717`，目前工作流已禁用。在账单修复且以下命令成功前，不得称其为已启用：
+`.github/workflows/external-uptime.yml` 提供每五分钟一次的主机外 HTTPS 探针，并为故障/恢复创建去重后的
+GitHub Issue。默认目标是 `https://www.carits.top`；仓库变量 `OI_MANAGER_PUBLIC_ORIGIN` 可在迁移域名时显式覆盖。
+探针使用正常证书校验，因此证书过期、域名错误、HTTP/API 不可用都会失败。
+
+启用或复核工作流：
 
 ```bash
 gh workflow enable external-uptime.yml
@@ -79,7 +83,9 @@ gh run list --workflow external-uptime.yml --limit 1
 gh run watch <run-id> --exit-status
 ```
 
-健康运行后，执行一次获批准的故障/恢复注入，确认工作流只创建一个事故 Issue，并在恢复时关闭它。若账单仍不可用，继续禁用工作流，改用真实外部监控。
+只有 `gh run watch` 成功且探针日志显示正式域名的 `/api/health` 与 `/login` 均通过，才能把外部 HTTPS
+探针标记为已启用。若 GitHub 账单或 Runner 仍拒绝运行，必须明确记录为未启用，并使用真实外部监控
+覆盖该缺口；不能以回环 `pnpm monitor:verify` 代替公网证书监控。
 
 监控还会校验滚动 API/Judge 指标、浏览器/安全/服务器错误峰值、Judge 基础设施错误、所有必需的 systemd 单元、重启增量、仅回环可访问的受限端口、数据库连接/事务/锁状态、数据库与资源快照/恢复证明、端点 5xx/P99 阈值、过期域工作流以及 Stable/Evolving 槽一致性。首次进入故障状态时，会在发送告警前以权限 600 捕获事故证据包。阈值和捕获命令配置在 `deploy/observability/operations.env.example`；不要为了静默告警而禁用检查。
 

@@ -44,6 +44,7 @@
     "security:baseline:verify": "bash scripts/verify-security-baseline-timeout.sh",
     "security:baseline:install": "bash scripts/install-security-baseline-cron.sh",
     "tls:verify": "bash scripts/verify-tls-tooling.sh",
+    "tls:renewal:install": "sudo bash scripts/install-tls-renewal.sh",
     "csp:verify": "node scripts/verify-csp-response.mjs",
     "security:rotate:check": "pnpm --filter server exec tsx scripts/rotate-runtime-secrets.ts",
     "security:rotate:verify": "bash scripts/verify-secret-rotation.sh",

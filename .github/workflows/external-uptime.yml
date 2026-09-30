@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
-      PUBLIC_ORIGIN: ${{ vars.OI_MANAGER_PUBLIC_ORIGIN || 'http://47.99.222.76' }}
+      PUBLIC_ORIGIN: ${{ vars.OI_MANAGER_PUBLIC_ORIGIN || 'https://www.carits.top' }}
     steps:
       - name: Probe health and login endpoints
         id: probe

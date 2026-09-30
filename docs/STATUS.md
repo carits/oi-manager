@@ -1,9 +1,16 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-28
+last_verified: 2026-10-01
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+## 2026-10-01 HTTPS 证书恢复
+
+- 线上 `carits.top` / `www.carits.top` 的 Let’s Encrypt 证书已通过 ACME webroot 重新签发，当前有效期至 2026-12-29；Nginx `:80` 对正式域名返回 308 并保留 ACME challenge，`:443` 正常反代 Web/API。
+- 已安装 `certbot.timer`，并配置 `/etc/letsencrypt/renewal-hooks/deploy/oi-manager-nginx-reload.sh`：续期后先执行 `nginx -t`，再 reload Nginx。仓库提供 `pnpm tls:renewal:install` 用于在新机器恢复这套机制。
+- 真实公网验收：`https://www.carits.top/login` 与 `https://www.carits.top/api/health` 均返回 200；本次未修改业务数据或应用业务代码。
+- GitHub 外部探针默认目标已改为 `https://www.carits.top`，使证书错误能够被公开 HTTPS 检查直接发现；工作流是否启用仍以 GitHub 运行记录为准。
 
 ## 2026-09-28 开发文档审计完成
 

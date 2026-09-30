@@ -1,13 +1,32 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-29
+last_verified: 2026-10-01
 source_of_truth: deploy/nginx/oi-manager-https.conf.template, scripts/render-tls-config.sh, apps/web/src/middleware.ts
 ---
 
 # TLS 与严格浏览器安全发布
 
-当前公网仍使用 HTTP/IP，本文只说明取得域名和证书后的受控切换流程。仓库已经具备可验证的 TLS 配置生成器、nonce CSP 和回滚边界；没有域名、证书和变更授权时不得把模板直接安装到生产 Nginx。
+当前公网域名 `carits.top` / `www.carits.top` 已由 Nginx 提供 HTTPS，HTTP 请求统一 308 跳转到 HTTPS。证书由
+Let’s Encrypt 通过 `/var/www/letsencrypt` webroot 签发，Certbot systemd timer 负责周期检查，
+`/etc/letsencrypt/renewal-hooks/deploy/oi-manager-nginx-reload.sh` 在证书更新后执行
+`nginx -t` 并 reload。本文保留受控切换、验证和回滚流程，供后续域名或证书变更复用。
+
+## 证书续期闭环
+
+在当前服务器上安装或恢复续期机制：
+
+```bash
+cd /data/oi-manager-response-refactor
+sudo bash scripts/install-tls-renewal.sh
+sudo certbot certificates
+sudo certbot renew --dry-run
+```
+
+脚本只安装 webroot 目录、Certbot deploy hook 和 `certbot.timer`，不会自动签发新域名证书，
+也不会把账号、密钥或 webhook 写入仓库。证书实际签发仍须使用受控的 `certbot certonly
+--webroot` 流程；更新成功后 deploy hook 会先执行 `nginx -t`，再 reload Nginx。若校验失败，
+Nginx 不会被 reload，旧证书继续服务。
 
 ## 已有工具
 

@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-27
+last_verified: 2026-10-01
 source_of_truth: 47.99.222.76 systemd units, listeners, Nginx config and deployed worktree Git HEAD
 ---
 
@@ -13,15 +13,15 @@ PM2 配置为准。
 
 ## 当前结论
 
-- 唯一运行时事实源：/data/oi-manager-response-refactor；当前分支为 codex/training-ux-pr4，HEAD 为 ccf39a1ab68ca137eb86d3bf3819195421234156，与 origin/main 同提交。
+- 唯一运行时事实源：/data/oi-manager-response-refactor；当前分支为 codex/training-ux-pr4，HEAD 为 08b2036075f2f73d8b429f7f4e56f7dd986004a3，与 origin/main 同提交。
 - 文档刷新工作树为 /data/oi-manager-docs-refresh-20260927，仅用于文档审阅和提交，不承载公网流量。
 - 运行目录、systemd 单元和 Git HEAD 已在 2026-09-27 核对；后续发布仍以 systemctl show、监听端口、readiness 和 canary/promote 结果为准。
-- 公网入口：Nginx `:80/:443` → loopback Next.js `127.0.0.1:3000`。未完成 TLS 切换前 `:80` 仅是过渡入口；取得域名和证书后必须跳转 HTTPS。
+- 公网入口：Nginx `:80/:443` → loopback Next.js `127.0.0.1:3000`。`:80` 对 `carits.top` / `www.carits.top` 返回 308 跳转到 HTTPS，`:443` 使用 Let’s Encrypt 证书；ACME challenge 保留在 `/var/www/letsencrypt`，Certbot timer 与 Nginx deploy hook 已启用。
 - 稳定 API：Nginx → Router `127.0.0.1:3002` → 活动蓝绿 slot `3302` 或 `3303`。
 - PostgreSQL `127.0.0.1:5432` 与 go-judge `127.0.0.1:5050` 由 Docker 管理。
 - Scheduler、Executor、Judge 和 Web/API 均由仓库内 systemd unit 管理。
 - 当前没有常驻 HMR、tsx watch、PM2 或 Nix 进程承载公网业务。
-- `:443` 尚未监听；当前仍缺域名/TLS，因此 Production v1 外部验收未完成。
+- TLS 已在公网启用：`https://www.carits.top/login` 与 `/api/health` 均已验证返回 200；当前证书有效期至 2026-12-29。Secure Cookie、CSP、HSTS 与外部告警仍按各自证据单独验收，不因 HTTPS 已恢复而自动标记完成。
 
 ## 服务映射
 
