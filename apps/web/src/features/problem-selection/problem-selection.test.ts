@@ -67,6 +67,7 @@ describe('unified problem selection', () => {
       expect(source).not.toContain('QuickProblemInput')
       expect(source).not.toContain('/api/resolve-problems')
       expect(source).not.toContain('/entries/resolve')
+      expect(source).not.toContain('problemCode')
     }
     for (const source of sources.slice(2)) expect(source).toContain('requireStable={false}')
     for (const source of sources.slice(0, 2)) expect(source).not.toContain('requireStable={false}')

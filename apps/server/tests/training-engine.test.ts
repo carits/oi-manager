@@ -714,6 +714,8 @@ describe('Training Engine global Stage domain', () => {
     const report = await getTrainingReport(coach.user.id, session.id)
     expect(report.runtimeProblems).toHaveLength(2)
     expect(report.runtimeProblems.map(item => item.payload.targetScore)).toEqual([80, 60])
+    expect(report.runtimeProblems[0].payload).toMatchObject({ canonicalProblemId: extraProblem.id, problemId: extraProblem.problemId })
+    expect(report.runtimeProblems[0].payload).not.toHaveProperty('problemCode')
     expect(report.interventions.map(item => item.type)).toContain('UNLOCK_FOR_USER')
     const targetReport = await getTrainingReport(targetUserId, session.id)
     const otherReport = await getTrainingReport(otherUserId, session.id)

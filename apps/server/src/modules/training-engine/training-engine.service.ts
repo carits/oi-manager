@@ -1566,11 +1566,11 @@ export async function appendTrainingRuntimeProblem(userId: string, sessionId: st
       targetType: targetType as any,
       targetId,
       stageProblemId: stageProblem.id,
-      payload: asJson({ required, targetScore, reason, runtime: true, problemId: source.problem.id, problemCode: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot }),
+      payload: asJson({ required, targetScore, reason, runtime: true, canonicalProblemId: source.problem.id, problemId: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot }),
       createdBy: userId,
     } })
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-    await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_APPENDED, targetType as TrainingEngineTargetType, targetId, { overlayId: overlay.id, stageId, stageProblemId: stageProblem.id, problemId: source.problem.id, problemCode: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot, required, targetScore, reason })
+    await appendEvent(tx, sessionId, TrainingEventTypes.PROBLEM_APPENDED, targetType as TrainingEngineTargetType, targetId, { overlayId: overlay.id, stageId, stageProblemId: stageProblem.id, canonicalProblemId: source.problem.id, problemId: source.problem.problemId, platform: source.problem.platform, title: stageProblem.titleSnapshot, required, targetScore, reason })
   })
   return getTrainingWorkspace(userId, sessionId)
 }
