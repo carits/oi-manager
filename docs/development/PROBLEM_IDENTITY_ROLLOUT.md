@@ -10,7 +10,7 @@ source_of_truth: packages/contracts/src/problem-selection.ts, packages/shared/sr
 ## 本轮范围与发布边界
 
 功能从 `feature/unified-problem-reference` 开发，并于 2026-09-30 以
-`2c80c6ef4150bc190bed6ab3af579db07d5210ad` 快进合并到 `main` 后发布。
+`66d36215787741a10dea8356aede8ffd200a0da1` 快进合并到 `main` 后发布。
 本轮不修改 Prisma schema、迁移目录、数据库 baseline、生产数据或既有业务引用。
 CI 使用的临时 PostgreSQL `test` / `e2e` schema 不属于业务数据库。
 

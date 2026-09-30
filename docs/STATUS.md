@@ -43,7 +43,7 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 - `feature/unified-problem-reference` 将比赛、作业、训练创建/设计/运行期追加和题单的“按题号选题”统一为 VJudge 式交互：平台 + 题号自动本地解析、题名链接回显、显式添加，批量录入降为辅助入口。
 - 共享 resolver 继续只按 canonical `platform + problemId` 精确查当前可访问题库；不读 `ojBindings`、不猜内部 UUID、不从外部 OJ 拉题。Selection Contract 同步由 `problemCode` 收口为 `problemId`。
 - 旧 `QuickProblemInput` 已退役；题单待保存行只持有解析后的 canonical Problem，避免业务页面维护第二套识别状态。
-- 本批无 Prisma、Schema、Migration 或生产业务数据修改。最终提交 `2c80c6ef4150bc190bed6ab3af579db07d5210ad` 已合并 `main` 并发布：Server 精确检索和题单 71/71、比赛与作业 21/21、Web 58 文件 387/387、组件浏览器 63/63、真实训练页面 10/10，以及 Contracts、Server、Web、Judge 构建和 docs/architecture 门禁通过。API 蓝绿切换至 3303，Web BUILD_ID 为 `DTo7qGaIZEhfRRSzDOZP9`，canary 与正式消息闭环探针均通过。
+- 本批无 Prisma、Schema、Migration 或生产业务数据修改。最终提交 `66d36215787741a10dea8356aede8ffd200a0da1` 已合并 `main` 并发布：Server 精确检索和题单 71/71、比赛与作业 21/21、Web 58 文件 387/387、组件浏览器 63/63、真实训练页面 10/10，以及 Contracts、Server、Web、Judge 构建和 docs/architecture 门禁通过。Training Engine 运行期题目身份回归 19/19、统一选题 Feature 8/8 通过；API 蓝绿切换至 3302，Web BUILD_ID 为 `DWgLUyI6U8yoApTMjnJmW`，canary 与正式消息闭环探针均通过。
 
 
 ## 2026-09-28 题目身份与保存完整性
