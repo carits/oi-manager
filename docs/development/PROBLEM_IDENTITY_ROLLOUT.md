@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-28
+last_verified: 2026-09-30
 source_of_truth: packages/contracts/src/problem-selection.ts, packages/shared/src/oj-platforms.ts, apps/server/src/modules/problem/problem.identity.ts, apps/server/src/modules/problem-selection/problem-selection.service.ts, apps/web/src/features/problem-selection/, e2e/problem-reference/, e2e/tests/problem-reference-integration.spec.ts
 ---
 
@@ -9,8 +9,8 @@ source_of_truth: packages/contracts/src/problem-selection.ts, packages/shared/sr
 
 ## 本轮范围与发布边界
 
-开发分支为 `feature/unified-problem-reference`，PR #9，从 `main` 的
-`73c5b9df5de8d5f772eefcb02fae1a3f0bd65e63` 建立。分支验证不表示合并或部署。
+功能从 `feature/unified-problem-reference` 开发，并于 2026-09-30 以
+`2c80c6ef4150bc190bed6ab3af579db07d5210ad` 快进合并到 `main` 后发布。
 本轮不修改 Prisma schema、迁移目录、数据库 baseline、生产数据或既有业务引用。
 CI 使用的临时 PostgreSQL `test` / `e2e` schema 不属于业务数据库。
 
