@@ -6,7 +6,7 @@ import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
-import { parseContestId } from './contest.helpers'
+import { contestRoutePublicId } from './contest.helpers'
 import {
   getContestRanking,
   ContestRankingError,
@@ -25,7 +25,7 @@ function sendRankingError(error: unknown, res: any) {
 
 contestRankingRouter.get('/contests/:id/ranking', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const data = await getContestRanking(parseContestId(req.params.id), req.user!.userId)
+    const data = await getContestRanking(contestRoutePublicId(req), req.user!.userId)
     return res.json({ success: true, data })
   } catch (error) {
     return sendRankingError(error, res)
