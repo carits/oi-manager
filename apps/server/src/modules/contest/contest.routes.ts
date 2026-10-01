@@ -11,13 +11,20 @@ import { contestContentRouter } from './contest.content.routes'
 import { contestStatementManagementRouter } from './contest.statement-management.routes'
 import { contestHackSyncRouter } from './contest.hack-sync.routes'
 import { contestMatchesWorkspaceScope } from './application/contest-scope.service'
+import { resolveContestRoutePublicId } from './contest.helpers'
 
 export const contestRouter = Router()
 
 contestRouter.use('/contests/:id', authenticate, async (req, res, next) => {
-  const id = Number.parseInt(req.params.id, 10)
-  if (!Number.isFinite(id) || !req.user) return next()
-  if (!await contestMatchesWorkspaceScope(id, req.user)) {
+  if (!req.user) return res.status(401).json({ success: false, message: '请先登录' })
+  let publicId: number
+  try {
+    publicId = await resolveContestRoutePublicId(req.params.id)
+  } catch {
+    return res.status(404).json({ success: false, message: '比赛不存在' })
+  }
+  ;(req as typeof req & { contestPublicId?: number }).contestPublicId = publicId
+  if (!await contestMatchesWorkspaceScope(publicId, req.user)) {
     return res.status(404).json({ success: false, message: '比赛不存在' })
   }
   next()
