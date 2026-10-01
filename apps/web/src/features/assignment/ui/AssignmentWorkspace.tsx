@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { SubmissionCodeEditor } from '@/features/submission'
 import { getAssetUrl } from '@/lib/assets'
-import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedProblemReference } from '@/features/problem-selection'
 import { Pagination } from '@/components/ui/Pagination'
 import { Section } from '@/components/ui/Section'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -188,9 +188,9 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     if (saved) setDesignStep(target)
   }
 
-  const addProblems = async (problems: SelectedCanonicalProblem[]) => {
+  const addProblems = async (references: SelectedProblemReference[]) => {
     const additions: AssignmentProblem[] = []
-    for (const problem of problems) {
+    for (const { problem } of references) {
       if (problemDraft.some(item => item.problemId === problem.id) || additions.some(item => item.problemId === problem.id)) continue
       if (!problem.stableData) { toast.error(`${problem.problemId}：没有可用的 Stable 测试数据`); continue }
       additions.push({
