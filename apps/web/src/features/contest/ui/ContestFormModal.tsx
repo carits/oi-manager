@@ -351,14 +351,19 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       isEdit && endTime && new Date(endTime) <= new Date() ? '结束时间必须晚于当前时间' : '',
     ].filter(Boolean)
     if (step === 1) return mode === 'contest' && !ratingConfigurationValid ? ['请修正 Rating 范围、影响强度或最低人数'] : []
-    if (step === 2) return [
-      mode === 'contest' && problemRows.length === 0 ? '请至少添加一道题目' : '',
-      problemRows.some(row => !row.resolved?.found) ? '仍有题目未能解析' : '',
-      problemRows.some(row => row.contentOptionsLoading) ? '题面选项仍在加载' : '',
-      problemRows.some(row => row.contentOptionsError) ? '题面选项加载失败，请在题目行重试' : '',
-      problemRows.some(row => !row.statementOptionKey) ? '存在未指定有效题面版本的题目' : '',
-      format !== 'icpc' && problemRows.some(row => !Number.isFinite(row.points) || row.points < 0) ? '题目分值无效' : '',
-    ].filter(Boolean)
+    if (step === 2) {
+      const aliases = problemRows.map(row => row.alias.trim()).filter(Boolean)
+      return [
+        mode === 'contest' && problemRows.length === 0 ? '请至少添加一道题目' : '',
+        problemRows.some(row => !row.resolved?.found) ? '仍有题目未能解析' : '',
+        problemRows.some(row => row.alias.trim().length > 50) ? '题目别名不能超过 50 个字符' : '',
+        new Set(aliases).size !== aliases.length ? '比赛题目别名不能重复' : '',
+        problemRows.some(row => row.contentOptionsLoading) ? '题面选项仍在加载' : '',
+        problemRows.some(row => row.contentOptionsError) ? '题面选项加载失败，请在题目行重试' : '',
+        problemRows.some(row => !row.statementOptionKey) ? '存在未指定有效题面版本的题目' : '',
+        format !== 'icpc' && problemRows.some(row => !Number.isFinite(row.points) || row.points < 0) ? '题目分值无效' : '',
+      ].filter(Boolean)
+    }
     return []
   }
   const contestWizard = mode === 'contest'
