@@ -31,7 +31,7 @@ export async function loadContestProblemForSubmission(contestId: number, contest
       TestSetReader: { include: { Slot: true } },
     },
   })
-  return row ? toContestProblemView(row, contest.publicId) : null
+  return row ? toContestProblemView(row, contest.id) : null
 }
 
 export function countProblemTestdata(problemId: string) {
