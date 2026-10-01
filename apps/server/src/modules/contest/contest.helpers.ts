@@ -87,7 +87,7 @@ export async function isOrganizationMember(userId: string, organizationId: strin
 export type ContestListStatus = 'ongoing' | 'upcoming' | 'finished' | string
 
 export interface ContestListSortItem {
-  id: number
+  id: string
   title: string
   status: ContestListStatus
   startTime: string | Date
@@ -138,7 +138,7 @@ export function sortContestListForDisplay<T extends ContestListSortItem>(items: 
     const createdDiff = timeValue(b.createdAt) - timeValue(a.createdAt)
     if (createdDiff !== 0) return createdDiff
 
-    return b.id - a.id
+    return b.id.localeCompare(a.id)
   })
 }
 
@@ -233,7 +233,29 @@ export function buildContestProblemData(problem: {
   }
 }
 
-/** 解析比赛公开 ID（数字） */
+/**
+ * Resolve a route identifier to the legacy numeric publicId used by the
+ * current Contest application services. Canonical Contest.id is authoritative;
+ * a positive integer is accepted only as a temporary legacy URL fallback.
+ */
+export async function resolveContestRoutePublicId(raw: string): Promise<number> {
+  const routeId = raw.trim()
+  if (!routeId || routeId.length > 128) throw new Error('无效的比赛 ID')
+  const canonical = await prisma.contest.findUnique({
+    where: { id: routeId },
+    select: { publicId: true },
+  })
+  if (canonical) return canonical.publicId
+  return parseContestId(routeId)
+}
+
+/** Read the identity resolved by the parent contest router; numeric parsing is legacy fallback only. */
+export function contestRoutePublicId(req: { params: { id: string }; contestPublicId?: number }): number {
+  if (Number.isSafeInteger(req.contestPublicId) && Number(req.contestPublicId) > 0) return Number(req.contestPublicId)
+  return parseContestId(req.params.id)
+}
+
+/** 解析旧版比赛公开数字 ID；仅供迁移兼容。 */
 export function parseContestId(raw: string): number {
   if (!/^\d+$/.test(raw)) throw new Error('无效的比赛 ID')
   const n = Number(raw)
