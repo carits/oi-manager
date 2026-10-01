@@ -3,7 +3,7 @@ import { ContestContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
-import { parseContestId } from './contest.helpers'
+import { contestRoutePublicId } from './contest.helpers'
 import {
   downloadContestStatementFile,
   getContestStatementManagement,
@@ -33,7 +33,7 @@ function sendInlineFile(res: any, file: { mimeType: string; originalName: string
 contestStatementManagementRouter.get('/contests/:id/statement-management', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getContestStatementManagement(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.user!.userId,
     )
     return sendContractData(res, ContestContracts.statementManagement, data)
@@ -46,7 +46,7 @@ contestStatementManagementRouter.put('/contests/:id/statement-management', authe
   try {
     const body = parseContractBody(ContestContracts.saveStatementManagement, req.body)
     const data = await saveContestStatementManagement({
-      contestId: parseContestId(req.params.id),
+      contestId: contestRoutePublicId(req),
       userId: req.user!.userId,
       selections: body.selections,
     })
@@ -59,7 +59,7 @@ contestStatementManagementRouter.put('/contests/:id/statement-management', authe
 contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/statements', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getContestStatements(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.params.contestProblemId,
       req.user!.userId,
     )
@@ -83,7 +83,7 @@ contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/s
 contestStatementManagementRouter.get('/contests/:id/problems/:contestProblemId/statement/file', authenticate, asyncHandler(async (req, res) => {
   try {
     const file = await downloadContestStatementFile({
-      contestId: parseContestId(req.params.id),
+      contestId: contestRoutePublicId(req),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
     })
