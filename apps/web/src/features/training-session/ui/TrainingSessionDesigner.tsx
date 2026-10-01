@@ -223,9 +223,10 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
       );
   };
 
-  const assignmentFromProblem = (problem: DesignProblem): Assignment => ({
+  const assignmentFromProblem = (problem: DesignProblem, alias?: string | null): Assignment => ({
     clientKey: newKey(),
     problemId: problem.id,
+    alias: alias || null,
     allowedSubtaskIds: [],
     Problem: {
       id: problem.id,
@@ -242,17 +243,18 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
   const destinations = stages.filter(stage => selectedDestinationKeys.includes(stage.clientKey));
   // A number is a duplicate only when every selected destination already contains it.
   const destinationProblemIds = destinations[0]?.Problems.filter(problem => destinations.every(stage => stage.Problems.some(item => item.problemId === problem.problemId))).map(problem => problem.problemId) || [];
-  const addResolvedProblems: AddProblemReferences = async (problems, operation) => {
+  const addResolvedProblems: AddProblemReferences = async (references, operation) => {
     const destinationKeys = [...selectedDestinationKeys];
     if (!destinationKeys.length) throw new Error("请选择尚未开始的目标阶段");
-    const details: DesignProblem[] = [];
+    const details: Array<{ problem: DesignProblem; alias?: string | null }> = [];
     const rejected: Array<{ id: string; message: string }> = [];
-    for (const problem of problems) {
+    for (const reference of references) {
+      const problem = reference.problem;
       if (!operation.isCurrent()) return { acceptedIds: [], rejected };
       try {
         const detail = await getTrainingDesignProblem(sessionId, problem.id) as DesignProblem;
         if (detail.id !== problem.id) throw new Error("题目详情与检索身份不一致");
-        details.push(detail);
+        details.push({ problem: detail, alias: reference.alias });
       } catch (error) {
         rejected.push({ id: problem.id, message: error instanceof Error ? error.message : "训练题目详情加载失败，请重试" });
       }
@@ -265,9 +267,9 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
     })) throw new Error("目标阶段已变化或开始运行，题号已保留，请重新选择");
     if (details.length) replaceStages(current => current.map(stage => destinationKeys.includes(stage.clientKey) && !isTrainingStageDefinitionLocked(stage.id, current) ? {
       ...stage,
-      Problems: [...stage.Problems, ...details.filter(problem => !stage.Problems.some(item => item.problemId === problem.id)).map(assignmentFromProblem)],
+      Problems: [...stage.Problems, ...details.filter(({ problem }) => !stage.Problems.some(item => item.problemId === problem.id)).map(({ problem, alias }) => assignmentFromProblem(problem, alias))],
     } : stage));
-    return { acceptedIds: details.map(problem => problem.id), rejected };
+    return { acceptedIds: details.map(({ problem }) => problem.id), rejected };
   };
   const updateProblem = (
     clientKey: string,
@@ -684,7 +686,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
             disabled={!stageDrawerOpen || saving || publishing || !activeStage || activeStageReadOnly || (problemTarget === "multiple" && !targetStages.length)}
             existingProblemIds={destinationProblemIds}
             onAdd={addResolvedProblems}
-            requireStable={false}
+            dataRequirement="training"
           />
         </section>
       </TrainingStageDrawer>
