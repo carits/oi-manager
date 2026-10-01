@@ -10,7 +10,7 @@ import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
 import { StudentPicker } from '@/features/organization-account'
-import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedProblemReference } from '@/features/problem-selection'
 import {
   createTrainingSession,
   listTrainingTemplates,
@@ -32,6 +32,7 @@ type Problem = {
   problemId: string
   title: string
   difficulty?: string | null
+  alias?: string | null
   required: boolean
 }
 
@@ -204,7 +205,7 @@ export function TrainingSetupDialog({
         plannedDurationSeconds: exam ? Math.max(10, examDurationMinutes) * 60 : null,
         minDurationSeconds: null,
         completionThreshold: null,
-        problems: selectedProblems.map(problem => ({ problemId: problem.id, allowedSubtaskIds: [], required: problem.required })),
+        problems: selectedProblems.map(problem => ({ problemId: problem.id, alias: problem.alias || null, allowedSubtaskIds: [], required: problem.required })),
       }],
     })
     if (!response.ok || !response.data) {
@@ -297,22 +298,23 @@ export function TrainingSetupDialog({
           <div className={styles.stack}>
             <ProblemReferenceSelector
               existingProblemIds={selectedProblems.map(item => item.id)}
-              onAdd={(problems: SelectedCanonicalProblem[]) => setSelectedProblems(current => [
+              onAdd={(references: SelectedProblemReference[]) => setSelectedProblems(current => [
                 ...current,
-                ...problems.map(problem => ({
+                ...references.map(({ problem, alias }) => ({
                   id: problem.id,
                   platform: problem.platform,
                   problemId: problem.problemId,
                   title: problem.title,
                   difficulty: problem.difficulty,
+                  alias: alias || null,
                   required: true,
                 })),
               ])}
-              requireStable={false}
+              dataRequirement="training"
             />
             {selectedProblems.length > 0 && <div className={styles.setupProblemList} aria-label="已选训练题目">{selectedProblems.map((problem, index) => <div className={styles.setupProblemRow} key={problem.id}>
               <span className={styles.problemOrder}>{index + 1}</span>
-              <div><ProblemReferenceLink problem={problem} /><span>{problem.required ? '必做题' : '选做题'}</span></div>
+              <div><ProblemReferenceLink problem={problem} />{problem.alias && <span>别名 {problem.alias}</span>}<span>{problem.required ? '必做题' : '选做题'}</span></div>
               {preset === 'practice' && <Checkbox label={problem.required ? '必做' : '选做'} checked={problem.required} onChange={event => setSelectedProblems(current => current.map(item => item.id === problem.id ? { ...item, required: event.target.checked } : item))} />}
               {preset !== 'practice' && <StatusBadge variant="neutral">必做</StatusBadge>}
               <Button size="sm" variant="ghost" aria-label={`移除 ${problem.problemId}`} title={`移除 ${problem.problemId}`} icon={<X size={15} />} onClick={() => setSelectedProblems(current => current.filter(item => item.id !== problem.id))} />

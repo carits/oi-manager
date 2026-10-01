@@ -2,12 +2,13 @@ import { expect, test, type Page, type Route } from '@playwright/test'
 
 type Input = { clientKey: string; platform: string; problemId: string }
 const stableData = { slot: 'STABLE', graphHash: 'test-graph', fencingToken: 1, mode: 'acm' }
+const evolvingData = { slot: 'EVOLVING', graphHash: 'test-evolving', fencingToken: 2, mode: 'acm' }
 function row(item: Input) {
   if (item.problemId === 'missing') return { ...item, status: 'not_found' }
   if (item.problemId === 'conflict') return { ...item, status: 'identity_conflict' }
   return { ...item, status: item.problemId === 'draft' ? 'not_published' : 'resolved', problem: {
     id: `local-${item.platform}-${item.problemId}`, platform: item.platform, problemId: item.problemId,
-    title: `题目 ${item.platform} ${item.problemId}`, ...(item.problemId === 'S' ? { stableData } : {}),
+    title: `题目 ${item.platform} ${item.problemId}`, ...(item.problemId === 'S' ? { stableData } : { evolvingData }),
   } }
 }
 async function reply(route: Route, items: Input[]) {
@@ -29,7 +30,7 @@ const selected = (page: Page) => page.getByTestId('selected').locator('li')
 async function openBatch(page: Page, value: string) {
   await picker(page).getByRole('button', { name: '批量添加题目', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '批量添加题目', exact: true })
-  await dialog.getByRole('textbox', { name: '批量题号' }).fill(value)
+  await dialog.getByRole('textbox', { name: '批量题目引用' }).fill(value)
   return dialog
 }
 
@@ -182,16 +183,16 @@ test('batch lookup is explicit and partial business acceptance preserves failed 
   const requests = await api(page)
   await page.goto('/personal/training-sessions')
   await page.getByLabel('接收模式').selectOption('partial')
-  const dialog = await openBatch(page, 'A B missing A')
+  const dialog = await openBatch(page, 'carits | A | A\nluogu | B | B\ncarits | missing | M\nCarits平台 | A | DUP')
   await expect(dialog.getByRole('button', { name: '加入 0 道题' })).toBeDisabled()
   expect(requests).toHaveLength(0)
   await dialog.getByRole('button', { name: '检索', exact: true }).click()
   await expect(dialog.getByRole('button', { name: '加入 2 道题' })).toBeEnabled()
-  expect(requests[0].map(item => item.problemId)).toEqual(['A', 'B', 'missing'])
+  expect(requests[0].map(item => item.problemId)).toEqual(['A', 'B', 'missing', 'A'])
   await dialog.getByRole('button', { name: '加入 2 道题' }).click()
   await expect(selected(page)).toHaveCount(1)
   await expect(dialog).toContainText('该题详情加载失败')
-  await expect(dialog.getByRole('textbox', { name: '批量题号' })).toHaveValue('A B missing A')
+  await expect(dialog.getByRole('textbox', { name: '批量题目引用' })).toHaveValue('carits | A | A\nluogu | B | B\ncarits | missing | M\nCarits平台 | A | DUP')
   await dialog.getByRole('button', { name: '加入 1 道题' }).click()
   await expect(selected(page)).toHaveCount(2)
   await expect(page.getByTestId('add-calls')).toHaveText('2')
@@ -208,16 +209,16 @@ test('batch lookup is explicit and partial business acceptance preserves failed 
 test('batch preview rechecks current selected IDs and rejects oversized input without truncation', async ({ page }) => {
   const requests = await api(page)
   await page.goto('/personal/training-sessions')
-  const dialog = await openBatch(page, 'A')
+  const dialog = await openBatch(page, 'carits | A | A')
   await dialog.getByRole('button', { name: '检索', exact: true }).click()
   await expect(dialog.getByRole('button', { name: '加入 1 道题' })).toBeEnabled()
   await page.getByRole('button', { name: '外部选入 A', exact: true }).evaluate(button => (button as HTMLButtonElement).click())
   await expect(dialog.getByRole('button', { name: '加入 0 道题' })).toBeDisabled()
-  const oversized = Array.from({ length: 101 }, (_, index) => `P${index}`).join('\n')
-  await dialog.getByRole('textbox', { name: '批量题号' }).fill(oversized)
+  const oversized = Array.from({ length: 101 }, (_, index) => `carits | P${index}`).join('\n')
+  await dialog.getByRole('textbox', { name: '批量题目引用' }).fill(oversized)
   await expect(dialog.getByRole('alert')).toContainText('未截断')
   await expect(dialog.getByRole('button', { name: '检索', exact: true })).toBeDisabled()
-  await expect(dialog.getByRole('textbox', { name: '批量题号' })).toHaveValue(oversized)
+  await expect(dialog.getByRole('textbox', { name: '批量题目引用' })).toHaveValue(oversized)
   expect(requests).toHaveLength(1)
 })
 
@@ -231,14 +232,14 @@ test('closing a pending batch aborts it and reopening starts with an empty input
     await reply(route, items).catch(() => undefined)
   })
   await page.goto('/personal/training-sessions')
-  const dialog = await openBatch(page, 'A')
+  const dialog = await openBatch(page, 'carits | A | A')
   await dialog.getByRole('button', { name: '检索', exact: true }).click()
   await expect.poll(() => held).toBe(true)
   await dialog.getByRole('button', { name: '取消', exact: true }).click()
   await page.getByRole('button', { name: '放弃并关闭' }).click()
   release?.()
   const reopened = await openBatch(page, '')
-  await expect(reopened.getByRole('textbox', { name: '批量题号' })).toHaveValue('')
+  await expect(reopened.getByRole('textbox', { name: '批量题目引用' })).toHaveValue('')
   await expect(reopened.getByRole('link')).toHaveCount(0)
 })
 
@@ -301,7 +302,7 @@ test('narrow hosts wrap long titles and batch overlays remain viewport-sized', a
   await number(page).fill('A'.repeat(120))
   await expect(add(page)).toBeEnabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
-  const dialog = await openBatch(page, 'A')
+  const dialog = await openBatch(page, 'carits | A | A')
   const overlay = await dialog.evaluate(element => ({ width: element.parentElement!.getBoundingClientRect().width, viewport: window.innerWidth }))
   expect(Math.abs(overlay.width - overlay.viewport)).toBeLessThanOrEqual(1)
   expect(await page.locator('form form').count()).toBe(0)

@@ -54,7 +54,7 @@ test.describe('training setup problem references @smoke @compact', () => {
     const batch = page.getByRole('dialog', { name: '批量添加题目', exact: true })
     await expect(batch).toBeVisible()
     const missingNumber = `not-in-local-library-${Date.now()}`
-    await batch.getByRole('textbox', { name: '批量题号' }).fill(missingNumber)
+    await batch.getByRole('textbox', { name: '批量题目引用' }).fill(`carits | ${missingNumber}`)
     const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/problem-selection/resolve')
     await batch.getByRole('button', { name: '检索', exact: true }).click()
     const response = await responsePromise
@@ -62,7 +62,7 @@ test.describe('training setup problem references @smoke @compact', () => {
     expect((await response.json()).data.items[0].status).toBe('not_found')
     await expect(batch).toContainText('未找到')
     await expect(batch.getByRole('button', { name: '加入 0 道题' })).toBeDisabled()
-    await expect(batch.getByRole('textbox', { name: '批量题号' })).toHaveValue(missingNumber)
+    await expect(batch.getByRole('textbox', { name: '批量题目引用' })).toHaveValue(`carits | ${missingNumber}`)
     const geometry = await batch.evaluate(dialog => ({ overlay: dialog.parentElement!.getBoundingClientRect().width, viewport: window.innerWidth, nestedForm: Boolean(dialog.closest('form')) }))
     expect(Math.abs(geometry.overlay - geometry.viewport)).toBeLessThanOrEqual(1)
     expect(geometry.nestedForm).toBe(false)

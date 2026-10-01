@@ -1273,9 +1273,9 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {runtimeProblemTargetType === 'USER' && <label className={styles.field}>目标学员<Select value={runtimeProblemTargetId} onChange={event => setRuntimeProblemTargetId(event.target.value)}><option value="">请选择</option>{dashboard?.participants.map(item => <option key={item.user.id} value={item.user.id}>{item.user.username}</option>)}</Select></label>}
         <ProblemReferenceSelector
           existingProblemIds={runtimeProblems.map(item => item.id)}
-          onAdd={problems => setRuntimeProblems(current => [...current, ...problems])}
+          onAdd={references => setRuntimeProblems(current => [...current, ...references.map(reference => reference.problem)])}
           label="按平台和题号追加"
-          requireStable={false}
+          dataRequirement="training"
         />
         {runtimeProblems.length > 0 && <div className={styles.timeline}>{runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><div><ProblemReferenceLink problem={item} /></div><Button size="sm" variant="ghost" onClick={() => setRuntimeProblems(current => current.filter(problem => problem.id !== item.id))}>移除</Button></div>)}</div>}
         <Checkbox label="作为必做题" description="取消后作为选做题，不计入当前完成要求。" checked={runtimeProblemRequired} onChange={event => setRuntimeProblemRequired(event.target.checked)} />

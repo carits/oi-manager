@@ -22,6 +22,12 @@ export const ProblemSelectionBodySchema = z.object({
   })
 })
 
+const ProblemSelectionDataSlotSchema = z.object({
+  graphHash: z.string(),
+  fencingToken: z.number().int().nonnegative(),
+  mode: z.enum(['acm', 'oi']),
+})
+
 export const ResolvedProblemSelectionSchema = z.object({
   clientKey: z.string(),
   platform: z.string(),
@@ -34,12 +40,8 @@ export const ResolvedProblemSelectionSchema = z.object({
     problemId: z.string(),
     title: z.string(),
     difficulty: z.string().nullable().optional(),
-    stableData: z.object({
-      slot: z.literal('STABLE'),
-      graphHash: z.string(),
-      fencingToken: z.number().int().nonnegative(),
-      mode: z.enum(['acm', 'oi']),
-    }).optional(),
+    stableData: ProblemSelectionDataSlotSchema.extend({ slot: z.literal('STABLE') }).optional(),
+    evolvingData: ProblemSelectionDataSlotSchema.extend({ slot: z.literal('EVOLVING') }).optional(),
   }).optional(),
   message: z.string().optional(),
 }).superRefine((item, context) => {

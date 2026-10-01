@@ -18,7 +18,7 @@ import { getAssetUrl } from '@/lib/assets'
 import { Edit3, Send, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
-import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem, type SelectedProblemReference } from '@/features/problem-selection'
 
 const avatarStyle = (avatar?: string | null): React.CSSProperties => ({
   '--problem-list-avatar': avatar ? `url(${getAssetUrl(avatar)})` : 'none',
@@ -219,12 +219,12 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
   // ---------- 新行操作 ----------
 
-  const addResolvedRows = (sectionId: string, problems: SelectedCanonicalProblem[]) => {
-    setNewRows(current => [...current, ...problems.map(problem => ({
+  const addResolvedRows = (sectionId: string, references: SelectedProblemReference[]) => {
+    setNewRows(current => [...current, ...references.map(({ problem, alias }) => ({
       id: `temp-${++tempIdCounter}`,
       sectionId,
       problem,
-      alias: '',
+      alias: alias || '',
       notes: '',
       saving: false,
     }))])
@@ -566,9 +566,9 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                   <div className={unifiedStyles.u49}>
                     <ProblemReferenceSelector
                       existingProblemIds={[...section.Entries.map(entry => entry.problemId), ...sectionNewRows.map(row => row.problem.id)]}
-                      onAdd={(problems) => addResolvedRows(section.id, problems)}
+                      onAdd={(references) => addResolvedRows(section.id, references)}
                       autoFocus={false}
-                      requireStable={false}
+                      dataRequirement="none"
                     />
                     {sectionNewRows.length > 0 && (
                       <Button variant="primary"

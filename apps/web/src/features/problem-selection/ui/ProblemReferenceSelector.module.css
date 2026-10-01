@@ -26,7 +26,8 @@
 .batchInput { min-height: 150px; resize: vertical; }
 .batchResults { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .batchResult { display: grid; grid-template-columns: minmax(90px, 130px) minmax(0, 1fr); gap: var(--space-2); align-items: start; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
-.batchCode { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.batchCode { display: grid; gap: var(--space-1); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.batchCode strong { font-family: inherit; font-size: var(--text-xs); color: var(--text-secondary); }
 @media (max-width: 640px) {
   .row > .field, .row > .field:first-child { flex: 1 1 130px; }
   .row > div.field { flex-basis: 100%; }

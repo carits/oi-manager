@@ -25,7 +25,7 @@ type User = Parameters<typeof resolveProblemSelection>[0]
 type Candidate = {
   id: string; platform: string; problemId: string; title: string; difficulty: string | null
   libraryScope: string; organizationId: string | null; ownerId: string; status: string; visibility: string
-  TestSetSlots: Array<{ graphHash: string; fencingToken: number; mode: string }>
+  TestSetSlots: Array<{ slot: 'STABLE' | 'EVOLVING'; graphHash: string; fencingToken: number; mode: string }>
 }
 const candidate = (overrides: Partial<Candidate> = {}): Candidate => ({
   id: 'internal-1', platform: 'luogu', problemId: 'P1001', title: 'Local example', difficulty: null,
@@ -148,9 +148,14 @@ describe('read-only local primary identity lookup', () => {
     expect((await lookup('luogu', 'P1001', manager)).items[0]).toMatchObject({ status: 'not_published', problem: { id: 'internal-1' } })
   })
 
-  it('returns existing Stable metadata without creating or changing it', async () => {
-    records = [candidate({ TestSetSlots: [{ graphHash: 'graph', fencingToken: 7, mode: 'oi' }] })]
-    expect((await lookup('luogu', 'P1001')).items[0].problem?.stableData).toEqual({ slot: 'STABLE', graphHash: 'graph', fencingToken: 7, mode: 'oi' })
+  it('returns existing Stable and Evolving metadata without creating or changing it', async () => {
+    records = [candidate({ TestSetSlots: [
+      { slot: 'STABLE', graphHash: 'stable', fencingToken: 7, mode: 'oi' },
+      { slot: 'EVOLVING', graphHash: 'evolving', fencingToken: 8, mode: 'oi' },
+    ] })]
+    const problem = (await lookup('luogu', 'P1001')).items[0].problem
+    expect(problem?.stableData).toEqual({ slot: 'STABLE', graphHash: 'stable', fencingToken: 7, mode: 'oi' })
+    expect(problem?.evolvingData).toEqual({ slot: 'EVOLVING', graphHash: 'evolving', fencingToken: 8, mode: 'oi' })
   })
 
   it('propagates storage failures instead of fabricating not_found rows', async () => {

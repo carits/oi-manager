@@ -23,16 +23,20 @@ function Harness() {
   const delayed = useRef<Array<() => void>>([])
   const pathname = scope === 'personal' ? '/personal/training-sessions'
     : scope === 'admin' ? '/admin/contests' : `/org/${scope}/training-sessions`
-  const onAdd: AddProblemReferences = async (problems, operation) => {
+  const onAdd: AddProblemReferences = async (references, operation) => {
     setCalls(current => current + 1)
     attempts.current += 1
     const attempt = attempts.current
     if (mode === 'delayed') await new Promise<void>(resolve => delayed.current.push(resolve))
     if (!operation.isCurrent()) return { acceptedIds: [] }
     if (mode === 'error') throw new Error('业务暂时不可用，题号已保留')
-    const accepted = mode === 'partial' && attempt === 1 ? problems.slice(0, 1) : problems
-    setSelected(current => [...current, ...accepted.filter(problem => !current.some(item => item.id === problem.id))])
-    return { acceptedIds: accepted.map(problem => problem.id), rejected: problems.filter(problem => !accepted.includes(problem)).map(problem => ({ id: problem.id, message: '该题详情加载失败，可重试' })) }
+    const accepted = mode === 'partial' && attempt === 1 ? references.slice(0, 1) : references
+    const acceptedProblems = accepted.map(reference => reference.problem)
+    setSelected(current => [...current, ...acceptedProblems.filter(problem => !current.some(item => item.id === problem.id))])
+    return {
+      acceptedIds: acceptedProblems.map(problem => problem.id),
+      rejected: references.filter(reference => !accepted.includes(reference)).map(reference => ({ id: reference.problem.id, message: '该题详情加载失败，可重试' })),
+    }
   }
   return <ReferenceHarnessContext.Provider value={{ sessionKey: `${scope}:tester`, user: { userId: 'tester', accountRole: scope === 'admin' ? 'super_admin' : 'user' }, pathname }}>
     <main>
@@ -49,7 +53,7 @@ function Harness() {
       </div>
       <div id="host" className="harness-host">
         <form onSubmit={event => { event.preventDefault(); setSubmits(current => current + 1) }}>
-          {visible && <ProblemReferenceSelector contextKey={`${host}:${target}`} requireStable={host === '比赛' || host === '作业'} existingProblemIds={selected.map(problem => problem.id)} disabled={disabled} onAdd={onAdd} />}
+          {visible && <ProblemReferenceSelector contextKey={`${host}:${target}`} dataRequirement={host === '比赛' || host === '作业' ? 'stable' : host === '题单' ? 'none' : 'training'} existingProblemIds={selected.map(problem => problem.id)} disabled={disabled} onAdd={onAdd} />}
         </form>
       </div>
       <p>接收调用：<output data-testid="add-calls">{calls}</output>；父表单提交：<output data-testid="form-submits">{submits}</output></p>

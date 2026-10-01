@@ -93,8 +93,10 @@ async function main() {
     problemList: problemList.id,
     personalProblemList: personalProblemList.id,
     homework: homework.id,
-    contest: String(contest.id),
-    personalContest: String(personalContest.id),
+    // Contest URLs use the public numeric identifier; the internal id is
+    // intentionally never exposed to browser fixtures.
+    contest: String(contest.publicId),
+    personalContest: String(personalContest.publicId),
     submission: String(submission.id),
     personalSubmission: String(personalSubmission.id),
     trainingSession: trainingSession.id,

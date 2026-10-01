@@ -12,8 +12,9 @@ import {
   problemReferenceAddReceipt,
   ProblemReferenceOperation,
   type AddProblemReferences,
+  type ProblemDataRequirement,
   type ProblemReferenceAddReceipt,
-  type SelectedCanonicalProblem,
+  type SelectedProblemReference,
 } from '../model/problemSelection'
 import { useProblemReferenceResolver } from '../model/useProblemReferenceResolver'
 import { ProblemBatchAddDialog } from './ProblemBatchAddDialog'
@@ -28,7 +29,7 @@ export interface ProblemReferenceSelectorProps {
   autoFocus?: boolean
   disabled?: boolean
   label?: string
-  requireStable?: boolean
+  dataRequirement?: ProblemDataRequirement
   allowBatch?: boolean
 }
 
@@ -45,7 +46,7 @@ function ReferenceEditor({
   autoFocus = false,
   disabled = false,
   label = '按题号添加',
-  requireStable = true,
+  dataRequirement = 'stable',
   allowBatch = true,
   scope,
   accountId,
@@ -62,8 +63,8 @@ function ReferenceEditor({
   const mounted = useRef(false)
   const addOperation = useRef(new ProblemReferenceOperation())
   const existing = useMemo(() => [...(existingProblemIds || [])], [existingProblemIds])
-  const latest = useRef({ existing, disabled, requireStable, onAdd })
-  latest.current = { existing, disabled, requireStable, onAdd }
+  const latest = useRef({ existing, disabled, dataRequirement, onAdd })
+  latest.current = { existing, disabled, dataRequirement, onAdd }
   const trimmed = problemId.trim()
   const inputError = trimmed ? problemSelectionInputError([trimmed]) : null
   const resolution = useProblemReferenceResolver({
@@ -71,7 +72,7 @@ function ReferenceEditor({
     enabled: !disabled && !composing && !batchOpen && !inputError,
     contextKey: scope,
   })
-  const preview = prepareProblemSelection(resolution.items, existing, requireStable)
+  const preview = prepareProblemSelection(resolution.items, existing, dataRequirement)
   const row = preview.rows[0]
   const ready = row?.state === 'ready' ? row.result.problem : undefined
 
@@ -99,24 +100,36 @@ function ReferenceEditor({
   }
 
   // One synchronous lock is shared by the single and batch entry points.
-  const performAdd = async (problems: SelectedCanonicalProblem[]): Promise<ProblemReferenceAddReceipt | undefined> => {
+  const performAdd = async (references: SelectedProblemReference[]): Promise<ProblemReferenceAddReceipt | undefined> => {
     if (latest.current.disabled || addOperation.current.isRunning('add')) return
     const ticket = addOperation.current.begin('add')
     const current = () => mounted.current && ticket.isCurrent() && !latest.current.disabled
     setAdding(true)
     try {
       const existingIds = new Set(latest.current.existing)
-      const candidates = problems.filter(problem => !existingIds.has(problem.id))
-      const assessment = prepareProblemSelection(candidates.map(problem => ({
-        clientKey: problem.id, platform: problem.platform, problemId: problem.problemId, status: 'resolved', problem,
-      })), [], latest.current.requireStable)
-      const receipt = assessment.accepted.length
-        ? problemReferenceAddReceipt(assessment.accepted, await latest.current.onAdd(assessment.accepted, { signal: ticket.signal, isCurrent: current }))
+      const candidates = references.filter(reference => !existingIds.has(reference.problem.id))
+      const assessment = prepareProblemSelection(candidates.map(reference => ({
+        clientKey: reference.problem.id,
+        platform: reference.problem.platform,
+        problemId: reference.problem.problemId,
+        status: 'resolved',
+        problem: reference.problem,
+      })), [], latest.current.dataRequirement)
+      const acceptedIds = new Set(assessment.accepted.map(problem => problem.id))
+      const acceptedReferences = candidates.filter(reference => acceptedIds.has(reference.problem.id))
+      const receipt = acceptedReferences.length
+        ? problemReferenceAddReceipt(acceptedReferences, await latest.current.onAdd(acceptedReferences, { signal: ticket.signal, isCurrent: current }))
         : { acceptedIds: [] as string[] }
       if (!current()) return
       return {
-        acceptedIds: [...problems.filter(problem => existingIds.has(problem.id)).map(problem => problem.id), ...receipt.acceptedIds],
-        rejected: [...(receipt.rejected || []), ...assessment.rows.filter(item => item.state === 'blocked').map(item => ({ id: item.result.problem!.id, message: item.message }))],
+        acceptedIds: [
+          ...references.filter(reference => existingIds.has(reference.problem.id)).map(reference => reference.problem.id),
+          ...receipt.acceptedIds,
+        ],
+        rejected: [
+          ...(receipt.rejected || []),
+          ...assessment.rows.filter(item => item.state === 'blocked').map(item => ({ id: item.result.problem!.id, message: item.message })),
+        ],
       }
     } catch (error) {
       if (current()) throw error
@@ -130,7 +143,7 @@ function ReferenceEditor({
     if (!ready || resolution.resolving) return
     setAddError('')
     try {
-      const receipt = await performAdd([ready])
+      const receipt = await performAdd([{ problem: ready }])
       if (!receipt || !mounted.current) return
       if (!receipt.acceptedIds.includes(ready.id)) {
         setAddError(receipt.rejected?.find(item => item.id === ready.id)?.message || '未选入当前表单，请重试')
@@ -178,8 +191,8 @@ function ReferenceEditor({
       <p className={styles.hint}>仅检索系统已有题目，不从外部 OJ 拉取。</p>
     </div>
     {allowBatch && batchOpen && <ProblemBatchAddDialog
-      onClose={() => setBatchOpen(false)} platform={platform} onPlatformChange={changePlatform}
-      existingProblemIds={existing} requireStable={requireStable} contextKey={scope}
+      onClose={() => setBatchOpen(false)}
+      existingProblemIds={existing} dataRequirement={dataRequirement} contextKey={scope}
       disabled={disabled} adding={adding} onAdd={performAdd}
     />}
   </section>

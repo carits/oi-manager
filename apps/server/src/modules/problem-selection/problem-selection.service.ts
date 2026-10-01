@@ -24,10 +24,11 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
   const visibleIds = [...new Set([...matches.values()].flatMap(match =>
     match.kind === 'found' ? [match.problem.id] : []))]
   const slots = visibleIds.length ? await prisma.problemTestSetSlot.findMany({
-    where: { problemId: { in: visibleIds }, slot: 'STABLE' },
-    select: { problemId: true, graphHash: true, fencingToken: true, mode: true },
+    where: { problemId: { in: visibleIds }, slot: { in: ['STABLE', 'EVOLVING'] } },
+    select: { problemId: true, slot: true, graphHash: true, fencingToken: true, mode: true },
   }) : []
-  const stableByProblem = new Map(slots.map(slot => [slot.problemId, slot]))
+  const stableByProblem = new Map(slots.filter(slot => slot.slot === 'STABLE').map(slot => [slot.problemId, slot]))
+  const evolvingByProblem = new Map(slots.filter(slot => slot.slot === 'EVOLVING').map(slot => [slot.problemId, slot]))
 
   const items: ResolvedProblemSelection[] = inputs.map(input => {
     const base = { clientKey: input.clientKey, platform: input.platform || '', problemId: input.problemId }
@@ -42,12 +43,17 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
     }
     const selected = match.problem
     const stable = stableByProblem.get(selected.id)
+    const evolving = evolvingByProblem.get(selected.id)
     const problem = {
       id: selected.id, platform: selected.platform, problemId: selected.problemId,
       title: selected.title, difficulty: selected.difficulty,
       ...(stable ? { stableData: {
         slot: 'STABLE' as const, graphHash: stable.graphHash, fencingToken: stable.fencingToken,
         mode: stable.mode === 'oi' ? 'oi' as const : 'acm' as const,
+      } } : {}),
+      ...(evolving ? { evolvingData: {
+        slot: 'EVOLVING' as const, graphHash: evolving.graphHash, fencingToken: evolving.fencingToken,
+        mode: evolving.mode === 'oi' ? 'oi' as const : 'acm' as const,
       } } : {}),
     }
     if (!match.usable) return {

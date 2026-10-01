@@ -50,15 +50,15 @@ describe('problem reference lifecycle', () => {
   })
   it('keeps every unacknowledged item when the caller partially accepts a batch', () => {
     const second = { ...problem, id: 'canonical-two', problemId: 'P0002' }
-    const receipt = problemReferenceAddReceipt([problem, second], { acceptedIds: [problem.id] })
+    const receipt = problemReferenceAddReceipt([{ problem }, { problem: second }], { acceptedIds: [problem.id] })
     expect(receipt.acceptedIds).toEqual([problem.id])
     expect(receipt.rejected).toEqual([{ id: second.id, message: '未选入当前表单，请重试' }])
   })
   it('preserves specific business errors and rejects forged receipts', () => {
-    expect(problemReferenceAddReceipt([problem], { acceptedIds: [], rejected: [{ id: problem.id, message: '阶段已关闭' }] }).rejected?.[0].message).toBe('阶段已关闭')
-    expect(() => problemReferenceAddReceipt([problem], { acceptedIds: ['foreign'] })).toThrow('回执')
-    expect(() => problemReferenceAddReceipt([problem], { acceptedIds: [problem.id, problem.id] })).toThrow('回执')
-    expect(() => problemReferenceAddReceipt([problem], { acceptedIds: [problem.id], rejected: [{ id: problem.id, message: '矛盾' }] })).toThrow('回执')
-    expect(problemReferenceAddReceipt([problem], undefined)).toEqual({ acceptedIds: [problem.id] })
+    expect(problemReferenceAddReceipt([{ problem }], { acceptedIds: [], rejected: [{ id: problem.id, message: '阶段已关闭' }] }).rejected?.[0].message).toBe('阶段已关闭')
+    expect(() => problemReferenceAddReceipt([{ problem }], { acceptedIds: ['foreign'] })).toThrow('回执')
+    expect(() => problemReferenceAddReceipt([{ problem }], { acceptedIds: [problem.id, problem.id] })).toThrow('回执')
+    expect(() => problemReferenceAddReceipt([{ problem }], { acceptedIds: [problem.id], rejected: [{ id: problem.id, message: '矛盾' }] })).toThrow('回执')
+    expect(problemReferenceAddReceipt([{ problem }], undefined)).toEqual({ acceptedIds: [problem.id] })
   })
 })

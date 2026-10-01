@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../../../prisma'
 import { findAccessibleProblem } from '../../problem/problem.access'
-import { ensureInitialTestSetSlots } from '../../problem/problem.testset-slot.service'
 import { buildContestProblemData } from '../contest.helpers'
 import {
   createContestProblemTx,
@@ -37,15 +36,7 @@ export async function addManagedContestProblem(params: {
     throw new ContestProblemManagementError(404, 'PROBLEM_NOT_FOUND', '题目不存在')
   }
   if (!problem.TestSetSlots.length) {
-    try { await ensureInitialTestSetSlots(problem.id, user.userId) }
-    catch (error: any) {
-      throw new ContestProblemManagementError(409, 'TEST_SET_STABLE_REQUIRED', error.message)
-    }
-    problem = await prisma.problem.findUnique({
-      where: { id: problem.id },
-      include: { TestSetSlots: { where: { slot: 'STABLE' } }, ProblemStatement: { where: { isVisible: true } } },
-    })
-    if (!problem) throw new ContestProblemManagementError(404, 'PROBLEM_NOT_FOUND', '题目不存在')
+    throw new ContestProblemManagementError(409, 'TEST_SET_STABLE_REQUIRED', '题目没有可用的 Stable 测试数据')
   }
 
   try {
