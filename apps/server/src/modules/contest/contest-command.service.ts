@@ -214,7 +214,7 @@ export async function createContestProblemTx(
     },
     include: { CanonicalProblem: true, ContestResource: true },
   })
-  return { conflict: null, problem: toContestProblemView(created, publicId) }
+  return { conflict: null, problem: toContestProblemView(created, contest.id) }
 }
 
 export async function reorderContestProblemsTx(
@@ -269,7 +269,7 @@ export async function updateContestProblemTx(
     },
     include: { CanonicalProblem: true, ContestResource: true },
   })
-  return { conflict: null, problem: toContestProblemView(problem, publicId) }
+  return { conflict: null, problem: toContestProblemView(problem, contest.id) }
 }
 
 export async function deleteContestProblemTx(
