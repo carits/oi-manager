@@ -93,10 +93,9 @@ async function main() {
     problemList: problemList.id,
     personalProblemList: personalProblemList.id,
     homework: homework.id,
-    // Contest URLs use the public numeric identifier; the internal id is
-    // intentionally never exposed to browser fixtures.
-    contest: String(contest.publicId),
-    personalContest: String(personalContest.publicId),
+    // Browser routes use the same canonical Contest.id as database relations.
+    contest: contest.id,
+    personalContest: personalContest.id,
     submission: String(submission.id),
     personalSubmission: String(personalSubmission.id),
     trainingSession: trainingSession.id,
