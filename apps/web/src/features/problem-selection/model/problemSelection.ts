@@ -1,6 +1,12 @@
 import type { ProblemSelectionItem, ResolvedProblemSelection } from '@oi-manager/contracts'
 
 export type SelectedCanonicalProblem = NonNullable<ResolvedProblemSelection['problem']>
+export type ProblemDataRequirement = 'none' | 'stable' | 'training'
+export interface SelectedProblemReference {
+  problem: SelectedCanonicalProblem
+  alias?: string | null
+  lineNumber?: number
+}
 export const MAX_PROBLEM_SELECTION_BATCH = 100
 
 /** Split explicit numbers only; never infer a platform, prefix, URL or UUID. */
@@ -34,8 +40,11 @@ const statusMessages: Record<ResolvedProblemSelection['status'], string> = {
 export function prepareProblemSelection(
   results: readonly ResolvedProblemSelection[],
   existingProblemIds: Iterable<string>,
-  requireStable: boolean,
+  requirement: ProblemDataRequirement | boolean = 'stable',
 ) {
+  const dataRequirement: ProblemDataRequirement = typeof requirement === 'boolean'
+    ? (requirement ? 'stable' : 'none')
+    : requirement
   const seen = new Set(existingProblemIds)
   const accepted: SelectedCanonicalProblem[] = []
   const remainingProblemIds: string[] = []
@@ -46,9 +55,13 @@ export function prepareProblemSelection(
       return { result, state: 'blocked', message: result.message || statusMessages[result.status] }
     }
     if (seen.has(problem.id)) return { result, state: 'duplicate', message: '该题已在当前列表中' }
-    if (requireStable && !problem.stableData) {
+    if (dataRequirement === 'stable' && !problem.stableData) {
       remainingProblemIds.push(result.problemId)
       return { result, state: 'blocked', message: '已找到题目，但当前入口需要 Stable 评测数据，暂不能选入' }
+    }
+    if (dataRequirement === 'training' && !problem.evolvingData && !problem.stableData) {
+      remainingProblemIds.push(result.problemId)
+      return { result, state: 'blocked', message: '已找到题目，但没有可用于训练的 Evolving 或 Stable 评测数据' }
     }
     seen.add(problem.id)
     accepted.push(problem)
@@ -86,17 +99,17 @@ export interface ProblemReferenceAddReceipt {
   rejected?: Array<{ id: string; message: string }>
 }
 export type AddProblemReferences = (
-  problems: SelectedCanonicalProblem[],
+  references: SelectedProblemReference[],
   context: ProblemReferenceAddContext,
 ) => void | ProblemReferenceAddReceipt | Promise<void | ProblemReferenceAddReceipt>
 
 /** Existing synchronous callers accept the whole array. Partial async callers return a receipt. */
 export function problemReferenceAddReceipt(
-  problems: readonly SelectedCanonicalProblem[],
+  references: readonly SelectedProblemReference[],
   receipt: void | ProblemReferenceAddReceipt,
 ): ProblemReferenceAddReceipt {
-  if (!receipt) return { acceptedIds: problems.map(problem => problem.id) }
-  const requested = new Set(problems.map(problem => problem.id))
+  if (!receipt) return { acceptedIds: references.map(reference => reference.problem.id) }
+  const requested = new Set(references.map(reference => reference.problem.id))
   const accepted = new Set(receipt.acceptedIds)
   const rejected = new Map((receipt.rejected || []).map(item => [item.id, item.message]))
   if (accepted.size !== receipt.acceptedIds.length || [...accepted].some(id => !requested.has(id))
@@ -105,8 +118,8 @@ export function problemReferenceAddReceipt(
   }
   return {
     acceptedIds: [...accepted],
-    rejected: problems.filter(problem => !accepted.has(problem.id)).map(problem => ({
-      id: problem.id, message: rejected.get(problem.id) || '未选入当前表单，请重试',
+    rejected: references.filter(reference => !accepted.has(reference.problem.id)).map(reference => ({
+      id: reference.problem.id, message: rejected.get(reference.problem.id) || '未选入当前表单，请重试',
     })),
   }
 }
