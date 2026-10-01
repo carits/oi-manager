@@ -151,7 +151,7 @@ export const ContestTestSetUpdateResultSchema = z.object({
 })
 
 export const ContestTeamSummarySchema = z.object({
-  id: z.number().int().positive(), title: z.string(), description: z.string().nullable().optional(),
+  id: z.string().min(1), title: z.string(), description: z.string().nullable().optional(),
   format: z.string().nullable().optional(), startTime: DateTimeWireSchema, endTime: DateTimeWireSchema,
   status: z.string(), createdBy: z.string().nullable().optional(), type: z.literal('contest'),
   problemCount: z.number().int().nonnegative(), participantCount: z.number().int().nonnegative(), createdAt: DateTimeWireSchema,
