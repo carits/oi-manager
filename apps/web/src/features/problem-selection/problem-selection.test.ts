@@ -28,6 +28,60 @@ describe('unified problem selection', () => {
     ])
     expect(parsed.rows.some(row => Object.prototype.hasOwnProperty.call(row, 'weight'))).toBe(false)
   })
+  it('preserves the 40-row mixed-platform A-to-AN import exactly', () => {
+    const parsed = parseProblemReferenceImport(`
+CodeForces | 242E | 1 | A
+洛谷 | P2023 | 1 | B
+洛谷 | P4145 | 1 | C
+洛谷 | P1471 | 1 | D
+洛谷 | P3437 | 1 | E
+CodeForces | 380C | 1 | F
+CodeForces | 652D | 1 | G
+CodeForces | 356A | 1 | H
+CodeForces | 474F | 1 | I
+CodeForces | 52C | 1 | J
+CodeForces | 145E | 1 | K
+洛谷 | P2572 | 1 | L
+洛谷 | P4121 | 1 | M
+CodeForces | 292E | 1 | N
+CodeForces | 920F | 1 | O
+CodeForces | 914D | 1 | P
+CodeForces | 446C | 1 | Q
+洛谷 | P4140 | 1 | R
+洛谷 | P3875 | 1 | S
+CodeForces | 1285E | 1 | T
+CodeForces | 863E | 1 | U
+CodeForces | 1555E | 1 | V
+CodeForces | 438D | 1 | W
+洛谷 | P4188 | 1 | X
+洛谷 | P5142 | 1 | Y
+洛谷 | P4072 | 1 | Z
+CodeForces | 558E | 1 | AA
+CodeForces | 580E | 1 | AB
+CodeForces | 786B | 1 | AC
+CodeForces | 817F | 1 | AD
+CodeForces | 718C | 1 | AE
+LibreOJ | 2570 | 1 | AF
+LibreOJ | 3043 | 1 | AG
+LibreOJ | 6576 | 1 | AH
+HDU | 1542 | 1 | AI
+HDU | 4578 | 1 | AJ
+UniversalOJ | 467 | 1 | AK
+QOJ | 7992 | 1 | AL
+CodeForces | 1000F | 1 | AM
+Baekjoon | 28057 | 1 | AN
+`)
+    expect(parsed.error).toBeNull()
+    expect(parsed.rows).toHaveLength(40)
+    expect(parsed.rows.map(row => row.alias)).toEqual([
+      'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+      'AA','AB','AC','AD','AE','AF','AG','AH','AI','AJ','AK','AL','AM','AN',
+    ])
+    expect(parsed.rows[0]).toMatchObject({ platform: 'codeforces', problemId: '242E', alias: 'A' })
+    expect(parsed.rows[31]).toMatchObject({ platform: 'libreoj', problemId: '2570', alias: 'AF' })
+    expect(parsed.rows[36]).toMatchObject({ platform: 'universaloj', problemId: '467', alias: 'AK' })
+    expect(parsed.rows[39]).toMatchObject({ platform: 'baekjoon', problemId: '28057', alias: 'AN' })
+  })
   it('keeps every batch line and reports row-local format errors instead of silently dropping them', () => {
     const parsed = parseProblemReferenceImport('洛谷 | P1001 | A\nLuogu | P1001 | B\n未知OJ | 1 | C\n只有平台')
     expect(parsed.rows).toHaveLength(4)
