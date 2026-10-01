@@ -265,7 +265,7 @@ export function parseContestId(raw: string): number {
 
 /** 检查比赛是否已开始（非管理员在 upcoming 时拒绝访问） */
 export async function requireContestStarted(
-  contest: { id: number; status: string; startTime: Date; endTime: Date; teamId: string | null; organizationId: string | null; createdBy: string; scope?: string },
+  contest: { id: string; status: string; startTime: Date; endTime: Date; teamId: string | null; organizationId: string | null; createdBy: string; scope?: string },
   userId: string,
 ): Promise<string | null> {
   let status = contest.status
