@@ -28,7 +28,7 @@ export async function listContestProblems(contestId: number) {
     include: contestProblemInclude,
     orderBy: { orderIndex: 'asc' },
   })
-  return problems.map(problem => toContestProblemView(problem, contest.publicId))
+  return problems.map(problem => toContestProblemView(problem, contest.id))
 }
 
 export async function getContestProblemStatusData(contestId: number, userId: string, submitScope: string) {
@@ -47,7 +47,7 @@ export async function getContestProblemStatusData(contestId: number, userId: str
     }),
   ])
   return {
-    problems: rows.map(problem => toContestProblemView(problem, contest.publicId)),
+    problems: rows.map(problem => toContestProblemView(problem, contest.id)),
     submissions: submissions.map(projectSubmissionJudgeResult),
   }
 }
@@ -65,7 +65,7 @@ export async function getContestProblemDetailData(
       include: contestProblemInclude,
     })
     if (!row || row.contestId !== contest.id) return null
-    const contestProblem = toContestProblemView(row, contest.publicId)
+    const contestProblem = toContestProblemView(row, contest.id)
     const note = row.canonicalProblemId
       ? await prisma.problemNote.findUnique({
           where: { problemId_userId_userType: { problemId: row.canonicalProblemId, userId, userType } },
