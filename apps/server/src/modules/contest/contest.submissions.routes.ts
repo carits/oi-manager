@@ -15,7 +15,7 @@ import type { AuthRequest } from '../../middleware/auth'
 import {
   canAccessContest,
   canManageContest,
-  parseContestId,
+  contestRoutePublicId,
   requireContestStarted,
 } from './contest.helpers'
 import {
@@ -52,7 +52,7 @@ export const contestSubmissionsRouter = Router()
  * 提交代码
  */
 contestSubmissionsRouter.post('/contests/:id/submit', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const userId = req.user!.userId
     const { contestProblemId, language, code, submitMethod, inputFilename, outputFilename } = req.body
 
@@ -148,7 +148,7 @@ contestSubmissionsRouter.post('/contests/:id/submit', authenticate, asyncHandler
  * 获取训练评测记录
  */
 contestSubmissionsRouter.get('/contests/:id/submissions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const userId = req.user!.userId
     const query = parseContractQuery(ContestContracts.submissions, req.query)
     const {
@@ -255,7 +255,7 @@ contestSubmissionsRouter.get('/contests/:id/submissions', authenticate, asyncHan
  * 获取提交详情（返回格式与题库提交详情一致）
  */
 contestSubmissionsRouter.get('/contests/:id/submissions/:submissionId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const submissionId = Number(req.params.submissionId)
     const user = req.user!
     const context: SubmissionQueryContext = {
@@ -286,7 +286,7 @@ contestSubmissionsRouter.get('/contests/:id/submissions/:submissionId', authenti
  * GET /api/contests/:id/submission-users
  */
 contestSubmissionsRouter.get('/contests/:id/submission-users', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const contest = await findContestForProblemAccess(id)
     if (!contest || !await canManageContest(req.user!.userId, contest)) return res.status(403).json({ success: false, message: '无权限' })
     const users = await listContestSubmissionUsers(id)
@@ -297,7 +297,7 @@ contestSubmissionsRouter.get('/contests/:id/submission-users', authenticate, asy
  * GET /api/contests/:id/rejudge/preview
  */
 contestSubmissionsRouter.get('/contests/:id/rejudge/preview', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const contest = await findContestForProblemAccess(id)
     if (!contest || !await canManageContest(req.user!.userId, contest)) return res.status(403).json({ success: false, message: '无权限' })
     const query = parseContractQuery(ContestContracts.rejudgePreview, req.query)
@@ -318,7 +318,7 @@ contestSubmissionsRouter.get('/contests/:id/rejudge/preview', authenticate, asyn
  * 重新评测指定训练的所有本地评测提交。
  */
 contestSubmissionsRouter.post('/contests/:id/rejudge', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const userId = req.user!.userId
 
     const contest = await findContestForProblemAccess(id)
