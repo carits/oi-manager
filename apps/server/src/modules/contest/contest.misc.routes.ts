@@ -6,7 +6,7 @@ import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
-import { parseContestId } from './contest.helpers'
+import { contestRoutePublicId } from './contest.helpers'
 import {
   downloadContestProblemFile,
   getContestAttachments,
@@ -30,7 +30,7 @@ function sendContestMiscError(error: unknown, res: any) {
 
 contestMiscRouter.get('/contests/:id/overview', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const data = await getContestOverview(parseContestId(req.params.id), req.user!.userId)
+    const data = await getContestOverview(contestRoutePublicId(req), req.user!.userId)
     return res.json({ success: true, data })
   } catch (error) {
     return sendContestMiscError(error, res)
@@ -39,7 +39,7 @@ contestMiscRouter.get('/contests/:id/overview', authenticate, asyncHandler(async
 
 contestMiscRouter.get('/contests/:id/solutions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const data = await getContestSolutions(parseContestId(req.params.id), req.user!.userId)
+    const data = await getContestSolutions(contestRoutePublicId(req), req.user!.userId)
     return res.json({ success: true, data })
   } catch (error) {
     return sendContestMiscError(error, res)
@@ -48,7 +48,7 @@ contestMiscRouter.get('/contests/:id/solutions', authenticate, asyncHandler(asyn
 
 contestMiscRouter.get('/contests/:id/attachments', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const data = await getContestAttachments(parseContestId(req.params.id), req.user!.userId)
+    const data = await getContestAttachments(contestRoutePublicId(req), req.user!.userId)
     return res.json({ success: true, data })
   } catch (error) {
     return sendContestMiscError(error, res)
@@ -58,7 +58,7 @@ contestMiscRouter.get('/contests/:id/attachments', authenticate, asyncHandler(as
 contestMiscRouter.get('/contests/:id/problems/:problemId/solution', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const result = await getContestProblemSolution(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.params.problemId,
       req.user!.userId,
     )
@@ -71,7 +71,7 @@ contestMiscRouter.get('/contests/:id/problems/:problemId/solution', authenticate
 contestMiscRouter.get('/contests/:id/problems/:problemId/attachments', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const data = await getContestProblemAttachments(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.params.problemId,
       req.user!.userId,
     )
@@ -84,7 +84,7 @@ contestMiscRouter.get('/contests/:id/problems/:problemId/attachments', authentic
 contestMiscRouter.get('/contests/:id/problems/:problemId/files/:fileId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const file = await downloadContestProblemFile({
-      contestId: parseContestId(req.params.id),
+      contestId: contestRoutePublicId(req),
       contestProblemId: req.params.problemId,
       fileId: req.params.fileId,
       userId: req.user!.userId,
