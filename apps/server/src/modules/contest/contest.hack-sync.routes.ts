@@ -3,7 +3,7 @@ import { ContestContracts } from '@oi-manager/contracts'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
 import { authenticate } from '../../middleware/auth'
-import { parseContestId } from './contest.helpers'
+import { contestRoutePublicId } from './contest.helpers'
 import {
   previewContestStableSnapshot,
   ContestTestSetUpdateError,
@@ -26,7 +26,7 @@ function sendTestSetUpdateError(error: unknown, res: any) {
 contestHackSyncRouter.get('/contests/:id/problems/:contestProblemId/test-set-update', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await previewContestStableSnapshot(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.params.contestProblemId,
       req.user!.userId,
     )
@@ -40,7 +40,7 @@ contestHackSyncRouter.post('/contests/:id/problems/:contestProblemId/test-set-up
   try {
     const body = parseContractBody(ContestContracts.testSetUpdate, req.body)
     const result = await refreshContestStableSnapshot({
-      contestId: parseContestId(req.params.id),
+      contestId: contestRoutePublicId(req),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
     })
