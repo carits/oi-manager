@@ -5,7 +5,7 @@ import type { AuthRequest } from '../../middleware/auth'
 import {
   canAccessContest,
   getUserTypeForContest,
-  parseContestId,
+  contestRoutePublicId,
   requireContestStarted,
 } from './contest.helpers'
 import { findContestForProblemAccess } from './application/contest-problem-query.service'
@@ -14,7 +14,7 @@ import { getContestProblemNote, saveContestProblemNote } from './application/con
 export const contestNotesRouter = Router()
 
 async function context(req: AuthRequest, res: any) {
-  const contestId = parseContestId(req.params.id)
+  const contestId = contestRoutePublicId(req)
   const userId = req.user!.userId
   const contest = await findContestForProblemAccess(contestId)
   if (!contest) { res.status(404).json({ success: false, message: '训练不存在' }); return null }
