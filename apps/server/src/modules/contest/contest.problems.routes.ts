@@ -12,7 +12,7 @@ import {
   canAccessContest,
   canManageContest,
   getUserTypeForContest,
-  parseContestId,
+  contestRoutePublicId,
   requireContestStarted,
 } from './contest.helpers'
 import { getContestRuntimeStatus, shouldHideContestProblemSource } from './contest.visibility'
@@ -63,7 +63,7 @@ export const contestProblemsRouter = Router()
  * 获取训练题目列表
  */
 contestProblemsRouter.get('/contests/:id/problems', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const userId = req.user!.userId
 
     const contest = await findContestForProblemAccess(id, true)
@@ -124,7 +124,7 @@ contestProblemsRouter.get('/contests/:id/problems', authenticate, asyncHandler(a
  * 所有团队成员可见来源信息（与题面tab隐藏来源策略不同）
  */
 contestProblemsRouter.get('/contests/:id/problem-status', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const userId = req.user!.userId
 
     const contest = await findContestForProblemAccess(id)
@@ -218,7 +218,7 @@ contestProblemsRouter.get('/contests/:id/problem-status', authenticate, asyncHan
  * 添加训练题目
  */
 contestProblemsRouter.post('/contests/:id/problems', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const userId = req.user!.userId
     const { problemId, alias, points, statementOptionKey, solutionOptionKey } = req.body
 
@@ -256,7 +256,7 @@ contestProblemsRouter.post('/contests/:id/problems', authenticate, asyncHandler(
  * 重排题目顺序
  */
 contestProblemsRouter.put('/contests/:id/problems/reorder', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id)
+    const id = contestRoutePublicId(req)
     const userId = req.user!.userId
     const { orders } = req.body as { orders: Array<{ id: string; orderIndex: number }> }
 
@@ -280,7 +280,7 @@ contestProblemsRouter.put('/contests/:id/problems/reorder', authenticate, asyncH
  * 更新训练题目
  */
 contestProblemsRouter.put('/contests/:id/problems/:problemId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id), problemId = req.params.problemId
+    const id = contestRoutePublicId(req), problemId = req.params.problemId
     const userId = req.user!.userId
     const { alias, points } = req.body
 
@@ -305,7 +305,7 @@ contestProblemsRouter.put('/contests/:id/problems/:problemId', authenticate, asy
  * 删除训练题目
  */
 contestProblemsRouter.delete('/contests/:id/problems/:problemId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id), problemId = req.params.problemId
+    const id = contestRoutePublicId(req), problemId = req.params.problemId
     const userId = req.user!.userId
 
     const contest = await findContestForProblemAccess(id)
@@ -328,7 +328,7 @@ contestProblemsRouter.delete('/contests/:id/problems/:problemId', authenticate, 
  * 获取训练题目详情（题面内容）
  */
 contestProblemsRouter.get('/contests/:id/problems/:problemId/detail', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseContestId(req.params.id), problemId = req.params.problemId
+    const id = contestRoutePublicId(req), problemId = req.params.problemId
     const userId = req.user!.userId
 
     const contest = await findContestForProblemAccess(id)
