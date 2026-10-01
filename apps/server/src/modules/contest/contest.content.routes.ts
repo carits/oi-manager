@@ -3,7 +3,7 @@ import { ContestContracts, ProblemContracts } from '@oi-manager/contracts'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContractBody, sendContractData, sendContractError } from '../../lib/api-contract'
-import { parseContestId } from './contest.helpers'
+import { contestRoutePublicId } from './contest.helpers'
 import {
   downloadContestContentOption,
   downloadContestContentFile,
@@ -42,7 +42,7 @@ function sendInlineFile(res: any, file: { mimeType: string; originalName: string
 contestContentRouter.get('/contests/:id/problems/:contestProblemId/my-content', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getContestMyContent(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.params.contestProblemId,
       req.user!.userId,
     )
@@ -56,7 +56,7 @@ contestContentRouter.put('/contests/:id/problems/:contestProblemId/content/:kind
   try {
     const body = parseContractBody(ContestContracts.updateContentMarkdown, req.body)
     const data = await editContestContentMarkdown({
-      contestId: parseContestId(req.params.id),
+      contestId: contestRoutePublicId(req),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
       kind: parseContentKind(req.params.kind),
@@ -71,7 +71,7 @@ contestContentRouter.put('/contests/:id/problems/:contestProblemId/content/:kind
 contestContentRouter.post('/contests/:id/problems/:contestProblemId/content/:kind/pdf', authenticate, contestContentPdfUpload.single('file'), asyncHandler(async (req, res) => {
   try {
     const data = await replaceContestContentPdf({
-      contestId: parseContestId(req.params.id),
+      contestId: contestRoutePublicId(req),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
       kind: parseContentKind(req.params.kind),
@@ -88,7 +88,7 @@ contestContentRouter.post('/contests/:id/problems/:contestProblemId/content/:kin
 contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-options', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await getContestContentOptions(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.params.contestProblemId,
       req.user!.userId,
     )
@@ -101,7 +101,7 @@ contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-optio
 contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-options/:optionKey/preview', authenticate, asyncHandler(async (req, res) => {
   try {
     const data = await previewContestContentOption(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.params.contestProblemId,
       req.user!.userId,
       req.params.optionKey,
@@ -120,7 +120,7 @@ contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-optio
 contestContentRouter.get('/contests/:id/problems/:contestProblemId/content-options/:optionKey/file', authenticate, asyncHandler(async (req, res) => {
   try {
     const file = await downloadContestContentOption(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.params.contestProblemId,
       req.user!.userId,
       req.params.optionKey,
@@ -135,7 +135,7 @@ contestContentRouter.put('/contests/:id/problems/:contestProblemId/content-selec
   try {
     const body = parseContractBody(ContestContracts.updateContentSelection, req.body)
     const data = await updateContestContentSelection({
-      contestId: parseContestId(req.params.id),
+      contestId: contestRoutePublicId(req),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
       statementOptionKey: body.statementOptionKey,
@@ -150,7 +150,7 @@ contestContentRouter.put('/contests/:id/problems/:contestProblemId/content-selec
 contestContentRouter.get('/contests/:id/problems/:contestProblemId/content/:kind/file', authenticate, asyncHandler(async (req, res) => {
   try {
     const file = await downloadContestContentFile({
-      contestId: parseContestId(req.params.id),
+      contestId: contestRoutePublicId(req),
       contestProblemId: req.params.contestProblemId,
       userId: req.user!.userId,
       kind: parseContentKind(req.params.kind),
