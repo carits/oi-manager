@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 18 |
 | Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 485 |
+| Referenced environment keys | 486 |
 
 ## HTTP adapter ownership
 
@@ -579,6 +579,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `HEALTH_BODY`
 - `HMR_URL`
 - `HOME`
+- `HOOK`
 - `HOST_LABEL`
 - `INCIDENT_CAPTURE_COMMAND`
 - `INCIDENT_EVIDENCE_DIR`
