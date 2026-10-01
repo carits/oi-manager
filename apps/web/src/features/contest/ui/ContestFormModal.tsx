@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { useAuth } from '@/features/auth'
-import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedCanonicalProblem } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedProblemReference } from '@/features/problem-selection'
 import { assertContestProblemMembership, contestProblemDeletions, contestProblemOrders, contestProblemSnapshot } from '../model/contestSaveIntegrity'
 
 function toLocalDatetimeString(date: Date): string {
@@ -24,7 +24,7 @@ function responseData<T>(response: StepResponse<T>, message: string): T {
   return response.data
 }
 
-interface ResolvedProblem { found: boolean; problemId: string; title: string; created: boolean }
+interface ResolvedProblem { found: boolean; canonicalProblemId: string; title: string; created: boolean }
 interface ContentOption {
   key: string
   sourceType: 'canonical' | 'user' | 'contest' | 'none'
@@ -208,7 +208,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
             id: `existing-${problem.id}`, contestProblemId: String(problem.id),
             platform: problem.platform || 'carits', problemId: problem.platformProblemId || problem.problemId,
             alias: problem.alias || '', points: problem.points ?? 100, resolving: false,
-            resolved: { found: true, problemId: problem.problemId, title: problem.problemTitle || '', created: false }, existing: true,
+            resolved: { found: true, canonicalProblemId: problem.problemId, title: problem.problemTitle || '', created: false }, existing: true,
             statementOptions: options.statement, solutionOptions: options.solution,
             statementOptionKey: statementKey, solutionOptionKey: solutionKey,
             originalStatementOptionKey: statementKey, originalSolutionOptionKey: solutionKey,
@@ -265,7 +265,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
     title, description, format, startTime, endTime, problemIdVisible, solutionVisible, includeAdminInRanking,
     ratingScope, ratingWeight, organizationRatingMinimum, globalRatingMinimum,
     problems: problemRows.map(row => ({
-      clientKey: row.id, problemId: row.resolved?.problemId, alias: row.alias, points: row.points,
+      clientKey: row.id, canonicalProblemId: row.resolved?.canonicalProblemId, alias: row.alias, points: row.points,
       statementOptionKey: row.statementOptionKey || null, solutionOptionKey: row.solutionOptionKey || null,
     })),
   })
@@ -283,13 +283,13 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
   const updateRow = (id: string, updates: Partial<ProblemRow>) => {
     if (!savingRef.current) setProblemRows(current => current.map(row => row.id === id ? { ...row, ...updates } : row))
   }
-  const loadRowOptions = async (id: string, problemId: string) => {
+  const loadRowOptions = async (id: string, canonicalProblemId: string) => {
     const requestId = (optionRequestsRef.current.get(id) || 0) + 1
     optionRequestsRef.current.set(id, requestId)
     const current = () => mountedRef.current && optionRequestsRef.current.get(id) === requestId
     updateRow(id, { contentOptionsLoading: true, contentOptionsError: '' })
     try {
-      const options = responseData(await apiClient.get<ContentOptions>(`/api/problems/${problemId}/content-options`), '题面选项加载失败')
+      const options = responseData(await apiClient.get<ContentOptions>(`/api/problems/${canonicalProblemId}/content-options`), '题面选项加载失败')
       if (!current()) return
       updateRow(id, {
         contentOptionsLoading: false, statementOptions: options.statement, solutionOptions: options.solution,
@@ -300,15 +300,16 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       if (current()) updateRow(id, { contentOptionsLoading: false, contentOptionsError: error instanceof Error ? error.message : '题面选项加载失败' })
     }
   }
-  const addSelectedProblems = async (problems: SelectedCanonicalProblem[]) => {
-    for (const problem of problems) {
+  const addSelectedProblems = async (references: SelectedProblemReference[]) => {
+    for (const reference of references) {
+      const problem = reference.problem
       if (!mountedRef.current || savingRef.current || recoveryBlocked) return
       if (selectedIdsRef.current.has(problem.id)) continue
       selectedIdsRef.current.add(problem.id)
       const id = `selected-${++tempIdCounter}`
       setProblemRows(current => [...current, {
-        id, platform: problem.platform, problemId: problem.problemId, alias: '', points: 100, resolving: false,
-        resolved: { found: true, problemId: problem.id, title: problem.title, created: false },
+        id, platform: problem.platform, problemId: problem.problemId, alias: reference.alias || '', points: 100, resolving: false,
+        resolved: { found: true, canonicalProblemId: problem.id, title: problem.title, created: false },
         contentOptionsLoading: true, statementOptions: [], solutionOptions: [],
       }])
       await loadRowOptions(id, problem.id)
@@ -317,7 +318,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
   const removeRow = (id: string) => {
     if (savingRef.current) return
     const row = problemRows.find(item => item.id === id)
-    if (row?.resolved) selectedIdsRef.current.delete(row.resolved.problemId)
+    if (row?.resolved) selectedIdsRef.current.delete(row.resolved.canonicalProblemId)
     optionRequestsRef.current.delete(id)
     setProblemRows(current => current.filter(row => row.id !== id))
   }
@@ -464,7 +465,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
           }
         } else {
           const result = await write(`新增题目 ${row.problemId}`, () => apiClient.post<IdResponse>(`/api/contests/${target}/problems`, {
-            problemId: row.resolved!.problemId, alias: row.alias, points,
+            problemId: row.resolved!.canonicalProblemId, alias: row.alias, points,
             statementOptionKey: row.statementOptionKey, solutionOptionKey: row.solutionOptionKey || 'none',
           }), true)
           const id = String(responseData(result, '新增题目缺少条目 ID').id)
@@ -585,9 +586,9 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
             </div>}
             {(!contestWizard || wizardStep === 2) && <div className={unifiedStyles.u10}>
               <div className={unifiedStyles.sectionHeading}><h3 className={unifiedStyles.u11}>{contestWizard ? '比赛题目' : '题目列表'}</h3></div>
-              <ProblemReferenceSelector disabled={saving || recoveryBlocked} existingProblemIds={problemRows.flatMap(row => row.resolved ? [row.resolved.problemId] : [])} onAdd={addSelectedProblems} />
+              <ProblemReferenceSelector disabled={saving || recoveryBlocked} existingProblemIds={problemRows.flatMap(row => row.resolved ? [row.resolved.canonicalProblemId] : [])} onAdd={addSelectedProblems} />
               {problemRows.length > 0 ? <>
-                <div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.problemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : row.problemId}</span></div>)}</div>
+                <div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.canonicalProblemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : row.problemId}</span></div>)}</div>
                 <div className={unifiedStyles.u12}><TableRoot className={unifiedStyles.u13}>
                   <TableHead><TableRow className={unifiedStyles.u14}>
                     <TableHeaderCell className={unifiedStyles.u15}>排序</TableHeaderCell><TableHeaderCell className={unifiedStyles.u16}>#</TableHeaderCell>
@@ -598,9 +599,9 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
                   <TableBody>{problemRows.map((row, index) => <TableRow key={row.id} className={`${unifiedStyles.problemRow} ${row.existing ? unifiedStyles.existingProblem : unifiedStyles.newProblem}`}>
                     <TableCell className={unifiedStyles.u23}><Button variant="secondary" size="sm" onClick={() => moveRow(index, -1)} disabled={saving || index === 0} className={unifiedStyles.moveButtonFirst} title="上移">↑</Button><Button variant="secondary" size="sm" onClick={() => moveRow(index, 1)} disabled={saving || index === problemRows.length - 1} className={unifiedStyles.moveButton} title="下移">↓</Button></TableCell>
                     <TableCell className={unifiedStyles.u24}>{index + 1}</TableCell><TableCell className={unifiedStyles.u25}>{row.platform}</TableCell><TableCell className={unifiedStyles.u25}>{row.problemId}</TableCell>
-                    <TableCell className={unifiedStyles.u27}><span className={unifiedStyles.u31}>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.problemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : '等待识别题目'}</span>
+                    <TableCell className={unifiedStyles.u27}><span className={unifiedStyles.u31}>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.canonicalProblemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : '等待识别题目'}</span>
                       {row.contentOptionsLoading && <p>题面选项加载中…</p>}
-                      {row.contentOptionsError && <p role="alert">{row.contentOptionsError} <Button size="sm" disabled={saving} onClick={() => row.resolved && void loadRowOptions(row.id, row.resolved.problemId)}>重试加载</Button></p>}
+                      {row.contentOptionsError && <p role="alert">{row.contentOptionsError} <Button size="sm" disabled={saving} onClick={() => row.resolved && void loadRowOptions(row.id, row.resolved.canonicalProblemId)}>重试加载</Button></p>}
                     </TableCell>
                     <TableCell className={unifiedStyles.u34}><Input value={row.alias} disabled={saving} onChange={event => updateRow(row.id, { alias: event.target.value })} className={unifiedStyles.u35} /></TableCell>
                     {format !== 'icpc' && <TableCell className={unifiedStyles.u34}><Input type="number" value={row.points} disabled={saving} onChange={event => updateRow(row.id, { points: Number(event.target.value) })} className={unifiedStyles.u36} /></TableCell>}
