@@ -22,7 +22,7 @@ export interface ContestInfo {
   includeAdminInRanking: boolean
   problemCount: number
   isAdmin: boolean
-  sourceContestId?: number | null
+  sourceContestId?: string | null
   finalizationStatus?: 'LIVE' | 'JUDGING' | 'FINALIZING' | 'FINALIZED' | 'HELD' | 'FAILED'
   finalizedStandingId?: string | null
   ratingConfig?: {
