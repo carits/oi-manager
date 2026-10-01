@@ -1,5 +1,7 @@
 export { ProblemReferenceSelector } from './ui/ProblemReferenceSelector'
 export type { ProblemReferenceSelectorProps } from './ui/ProblemReferenceSelector'
 export { ProblemReferenceLink } from './ui/ProblemReferenceLink'
-export type { SelectedCanonicalProblem, AddProblemReferences, ProblemReferenceAddContext, ProblemReferenceAddReceipt } from './model/problemSelection'
+export type { SelectedCanonicalProblem, SelectedProblemReference, ProblemDataRequirement, AddProblemReferences, ProblemReferenceAddContext, ProblemReferenceAddReceipt } from './model/problemSelection'
 export { parseProblemIds } from './model/problemSelection'
+export { parseProblemReferenceImport } from './model/problemReferenceImport'
+export type { ProblemReferenceImportRow, ProblemReferenceImportParseResult } from './model/problemReferenceImport'
