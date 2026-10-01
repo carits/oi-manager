@@ -8,7 +8,7 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parseContractBody, parseContractQuery, sendContractData, sendContractError } from '../../lib/api-contract'
 import type { AuthRequest } from '../../middleware/auth'
-import { parseContestId } from './contest.helpers'
+import { contestRoutePublicId } from './contest.helpers'
 import {
   createMakeupHomework,
   createPlatformContest,
@@ -82,7 +82,7 @@ contestCrudRouter.post('/teams/:teamId/contests', authenticate, asyncHandler(asy
 
 contestCrudRouter.get('/contests/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const data = await getContestDetail(parseContestId(req.params.id), req.user!.userId)
+    const data = await getContestDetail(contestRoutePublicId(req), req.user!.userId)
     return res.json({ success: true, data })
   } catch (error) {
     return sendContestError(error, res)
@@ -91,7 +91,7 @@ contestCrudRouter.get('/contests/:id', authenticate, asyncHandler(async (req: Au
 
 contestCrudRouter.put('/contests/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const data = await updateContest(parseContestId(req.params.id), req.user!.userId, req.body)
+    const data = await updateContest(contestRoutePublicId(req), req.user!.userId, req.body)
     return res.json({ success: true, data })
   } catch (error) {
     return sendContestError(error, res)
@@ -101,7 +101,7 @@ contestCrudRouter.put('/contests/:id', authenticate, asyncHandler(async (req: Au
 contestCrudRouter.put('/contests/:id/end-time', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
     const data = await updateContestEndTime(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.user!.userId,
       req.body.endTime,
     )
@@ -113,7 +113,7 @@ contestCrudRouter.put('/contests/:id/end-time', authenticate, asyncHandler(async
 
 contestCrudRouter.post('/contests/:id/start', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const result = await startContest(parseContestId(req.params.id), req.user!.userId)
+    const result = await startContest(contestRoutePublicId(req), req.user!.userId)
     return res.json({ success: true, data: result.contest, message: result.message })
   } catch (error) {
     return sendContestError(error, res)
@@ -122,7 +122,7 @@ contestCrudRouter.post('/contests/:id/start', authenticate, asyncHandler(async (
 
 contestCrudRouter.post('/contests/:id/finish', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    const result = await finishContest(parseContestId(req.params.id), req.user!.userId)
+    const result = await finishContest(contestRoutePublicId(req), req.user!.userId)
     return res.json({ success: true, data: result.contest, message: result.message })
   } catch (error) {
     return sendContestError(error, res)
@@ -131,7 +131,7 @@ contestCrudRouter.post('/contests/:id/finish', authenticate, asyncHandler(async 
 
 contestCrudRouter.delete('/contests/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {
-    await deleteContest(parseContestId(req.params.id), req.user!.userId)
+    await deleteContest(contestRoutePublicId(req), req.user!.userId)
     return res.json({ success: true, message: '删除成功' })
   } catch (error) {
     return sendContestError(error, res)
@@ -142,7 +142,7 @@ contestCrudRouter.post('/contests/:id/create-makeup-homework', authenticate, asy
   try {
     const body = parseContractBody(ContestContracts.createMakeupHomework, req.body)
     const data = await createMakeupHomework(
-      parseContestId(req.params.id),
+      contestRoutePublicId(req),
       req.user!.userId,
       body,
     )
