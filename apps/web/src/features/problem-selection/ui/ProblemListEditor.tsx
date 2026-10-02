@@ -109,7 +109,9 @@ export function ProblemListEditor({
   const [textError, setTextError] = useState('')
   const [businessError, setBusinessError] = useState('')
   const [focusKey, setFocusKey] = useState<string | null>(null)
+  const [aliasFocusKey, setAliasFocusKey] = useState<string | null>(null)
   const inputRefs = useRef(new Map<string, HTMLInputElement>())
+  const aliasRefs = useRef(new Map<string, HTMLInputElement>())
   const mounted = useRef(false)
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const controllers = useRef(new Map<string, AbortController>())
@@ -138,10 +140,16 @@ export function ProblemListEditor({
   }, [])
 
   useEffect(() => {
-    if (!focusKey) return
-    inputRefs.current.get(focusKey)?.focus()
-    setFocusKey(null)
-  }, [focusKey, rows])
+    if (focusKey) {
+      inputRefs.current.get(focusKey)?.focus()
+      setFocusKey(null)
+      return
+    }
+    if (aliasFocusKey) {
+      aliasRefs.current.get(aliasFocusKey)?.focus()
+      setAliasFocusKey(null)
+    }
+  }, [aliasFocusKey, focusKey, rows])
 
   const projectedSignature = referenceSignature(readyReferences(rows))
   useEffect(() => {
@@ -243,6 +251,8 @@ export function ProblemListEditor({
         const blank: DraftRow = { clientKey: nextClientKey(), platform: lastPlatform.current, problemId: '', alias: '', status: 'editing' }
         next = [...next, blank]
         setFocusKey(blank.clientKey)
+      } else if (assessed.status === 'ready' && aliasLabel) {
+        setAliasFocusKey(clientKey)
       }
       setRows(next)
       await commitProjection(next)
@@ -480,6 +490,7 @@ export function ProblemListEditor({
             </span>
           </> : <>
             {aliasLabel && <Input
+              ref={element => { if (element) aliasRefs.current.set(row.clientKey, element); else aliasRefs.current.delete(row.clientKey) }}
               className={styles.aliasInput}
               aria-label={`第 ${index + 1} 题${aliasLabel}`}
               value={row.alias}
