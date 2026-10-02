@@ -22,7 +22,7 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
   // and conflict rules. Stable readiness is enrichment, never identity resolution.
   const matches = await findPrimaryProblemIdentities(user, identities)
   const visibleIds = [...new Set([...matches.values()].flatMap(match =>
-    match.kind === 'found' ? [match.problem.id] : []))]
+    match.kind === 'found' && match.usable ? [match.problem.id] : []))]
   const slots = visibleIds.length ? await prisma.problemTestSetSlot.findMany({
     where: { problemId: { in: visibleIds }, slot: { in: ['STABLE', 'EVOLVING'] } },
     select: { problemId: true, slot: true, graphHash: true, fencingToken: true, mode: true },
@@ -42,6 +42,10 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
       ...base, status: 'not_found', message: '当前可访问题库中未找到该题',
     }
     const selected = match.problem
+    if (!match.usable) return {
+      ...base, status: 'not_published',
+      message: selected.status === 'archived' ? '该题已归档，暂不能添加' : '该题尚未发布，暂不能添加',
+    }
     const stable = stableByProblem.get(selected.id)
     const evolving = evolvingByProblem.get(selected.id)
     const problem = {
@@ -55,10 +59,6 @@ export async function resolveProblemSelection(user: AuthUser, body: Body) {
         slot: 'EVOLVING' as const, graphHash: evolving.graphHash, fencingToken: evolving.fencingToken,
         mode: evolving.mode === 'oi' ? 'oi' as const : 'acm' as const,
       } } : {}),
-    }
-    if (!match.usable) return {
-      ...base, status: 'not_published', problem,
-      message: selected.status === 'archived' ? '已找到题目，但该题已归档' : '已找到题目，但该题尚未发布',
     }
     // Business save commands remain responsible for their own assessment requirements.
     return { ...base, status: 'resolved', problem }
