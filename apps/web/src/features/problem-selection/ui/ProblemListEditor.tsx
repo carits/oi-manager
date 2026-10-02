@@ -200,12 +200,13 @@ export function ProblemListEditor({
             : 'error'
       return { status, message: rowMessage(status, result.message) }
     }
-    const duplicate = currentRows.some(row => row.clientKey !== clientKey && row.status === 'ready' && row.problem?.id === result.problem.id)
+    const problem = result.problem
+    const duplicate = currentRows.some(row => row.clientKey !== clientKey && row.status === 'ready' && row.problem?.id === problem.id)
     if (duplicate) return { status: 'conflict', message: '该题已在当前列表中' }
     const assessment = prepareProblemSelection([result], [], dataRequirement)
     const assessed = assessment.rows[0]
     if (assessed.state !== 'ready') return { status: 'unavailable', message: '该题暂时没有可用评测数据' }
-    return { status: 'ready', problem: result.problem, message: '' }
+    return { status: 'ready', problem, message: '' }
   }
 
   const resolveRow = async (clientKey: string, appendNext = false) => {
