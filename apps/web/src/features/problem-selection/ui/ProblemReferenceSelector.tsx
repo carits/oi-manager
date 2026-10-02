@@ -260,7 +260,7 @@ function ReferenceEditor({
       setTextError('')
       setNotice('题目列表已更新。')
     } catch (error) {
-      if (current()) setTextError(error instanceof Error ? error.message : '解析题目失败，请重试')
+      if (mounted.current && !latest.current.disabled) setTextError(error instanceof Error ? error.message : '解析题目失败，请重试')
     } finally {
       if (current()) setTextBusy(false)
       operation.current.finish(ticket)
