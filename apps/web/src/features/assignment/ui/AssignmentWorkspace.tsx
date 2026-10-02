@@ -207,7 +207,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
       if (existing) return [existing]
       const draft = draftProblemFromReference(reference)
       if (!draft) {
-        rejected.push({ id: reference.problem.id, message: `${reference.problem.problemId}：没有可用的 Stable 测试数据` })
+        rejected.push({ id: reference.problem.id, message: `${reference.problem.problemId}：没有可用于作业的评测数据` })
         return []
       }
       return [draft]
@@ -276,7 +276,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
 
     <Section
       title="选择题目"
-      description="添加题库中已发布且具有 Stable 评测数据的题目；“编辑”可以直接修改整份题目列表。"
+      description="添加系统题库中可用于作业的题目；“编辑”可以直接修改整份题目列表。"
       actions={<Button variant="secondary" loading={saving === 'problems'} disabled={!problemsDirty || Boolean(saving)} onClick={() => void saveProblemsChecked()}>保存题目</Button>}
     >
       <div className={styles.stack}>
