@@ -238,6 +238,22 @@ export function TrainingSetupDialog({
     await onPublished()
   }
 
+  const replaceSelectedProblems = (references: SelectedProblemReference[]) => {
+    setSelectedProblems(current => {
+      const requiredById = new Map(current.map(problem => [problem.id, problem.required]))
+      return references.map(({ problem, alias }) => ({
+        id: problem.id,
+        platform: problem.platform,
+        problemId: problem.problemId,
+        title: problem.title,
+        difficulty: problem.difficulty,
+        alias: alias || null,
+        required: requiredById.get(problem.id) ?? true,
+      }))
+    })
+    return { acceptedIds: references.map(reference => reference.problem.id) }
+  }
+
   const audienceText = participantTarget === 'team'
     ? selectedTeamName
     : participantTarget === 'custom_students'
@@ -293,23 +309,29 @@ export function TrainingSetupDialog({
           </div>
         </section>
 
-        {!templateKey && <section className={styles.setupSection} aria-labelledby="training-setup-problems">
+        {!templateKey && <section className={`${styles.setupSection} ${styles.problemSetupSection}`} aria-labelledby="training-setup-problems">
           <div><h3 id="training-setup-problems">训练题目</h3><p>按题号添加题库中已存在的题目。</p></div>
           <div className={styles.stack}>
             <ProblemReferenceSelector
               existingProblemIds={selectedProblems.map(item => item.id)}
-              onAdd={(references: SelectedProblemReference[]) => setSelectedProblems(current => [
-                ...current,
-                ...references.map(({ problem, alias }) => ({
-                  id: problem.id,
-                  platform: problem.platform,
-                  problemId: problem.problemId,
-                  title: problem.title,
-                  difficulty: problem.difficulty,
-                  alias: alias || null,
-                  required: true,
-                })),
-              ])}
+              editableReferences={selectedProblems.map(item => ({ platform: item.platform, problemId: item.problemId, alias: item.alias }))}
+              onAdd={(references: SelectedProblemReference[]) => {
+                setSelectedProblems(current => [
+                  ...current,
+                  ...references.map(({ problem, alias }) => ({
+                    id: problem.id,
+                    platform: problem.platform,
+                    problemId: problem.problemId,
+                    title: problem.title,
+                    difficulty: problem.difficulty,
+                    alias: alias || null,
+                    required: true,
+                  })),
+                ])
+                return { acceptedIds: references.map(reference => reference.problem.id) }
+              }}
+              onReplace={replaceSelectedProblems}
+              aliasLabel="别名"
               dataRequirement="training"
             />
             {selectedProblems.length > 0 && <div className={styles.setupProblemList} aria-label="已选训练题目">{selectedProblems.map((problem, index) => <div className={styles.setupProblemRow} key={problem.id}>
