@@ -669,7 +669,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
               <div className={unifiedStyles.formGrid}>
                 <label><span className={unifiedStyles.u5}>题目来源显示</span><Select aria-label="题目来源显示" value={problemIdVisible ? 'always' : 'after'} disabled={saving} onChange={event => setProblemIdVisible(event.target.value === 'always')}><option value="after">赛后显示</option><option value="always">始终显示</option></Select></label>
                 <label><span className={unifiedStyles.u5}>题解显示</span><Select aria-label="题解显示" value={solutionVisible ? 'always' : 'after'} disabled={saving} onChange={event => setSolutionVisible(event.target.value === 'always')}><option value="after">赛后显示</option><option value="always">始终显示</option></Select></label>
-                <label><span className={unifiedStyles.u5}>管理员排名</span><label className={unifiedStyles.u7}><Input type="checkbox" checked={includeAdminInRanking} disabled={saving} onChange={event => setIncludeAdminInRanking(event.target.checked)} className={unifiedStyles.u8} /><span className={unifiedStyles.u9}>包含管理员</span></label></label>
+                <div><span className={unifiedStyles.u5}>管理员排名</span><label className={unifiedStyles.u7}><Input type="checkbox" checked={includeAdminInRanking} disabled={saving} onChange={event => setIncludeAdminInRanking(event.target.checked)} className={unifiedStyles.u8} /><span className={unifiedStyles.u9}>包含管理员</span></label></div>
               </div>
             </section>
           </div>}
