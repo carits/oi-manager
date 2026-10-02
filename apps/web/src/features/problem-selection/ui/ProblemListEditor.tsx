@@ -257,11 +257,10 @@ export function ProblemListEditor({
 
   const scheduleResolve = (clientKey: string) => {
     clearRowWork(clientKey)
-    const row = rowsRef.current.find(item => item.clientKey === clientKey)
-    if (!row?.problemId.trim()) return
     timers.current.set(clientKey, setTimeout(() => {
       timers.current.delete(clientKey)
-      void resolveRow(clientKey)
+      const row = rowsRef.current.find(item => item.clientKey === clientKey)
+      if (row?.problemId.trim()) void resolveRow(clientKey)
     }, 350))
   }
 
