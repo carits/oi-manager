@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import collisionStyles from './ContestFormModal.collision.module.css'
-import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './ContestFormModal.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
@@ -10,7 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { useAuth } from '@/features/auth'
-import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedProblemReference } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type AddProblemReferences, type SelectedProblemReference } from '@/features/problem-selection'
 import { assertContestProblemMembership, contestProblemDeletions, contestProblemOrders, contestProblemSnapshot } from '../model/contestSaveIntegrity'
 
 function toLocalDatetimeString(date: Date): string {
@@ -146,7 +145,6 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
   const [ratingRevision, setRatingRevision] = useState(0)
   const [ratingLocked, setRatingLocked] = useState(false)
   const [allowedRatingScopes, setAllowedRatingScopes] = useState<Array<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>>(['NONE'])
-  const [wizardStep, setWizardStep] = useState(0)
   const [recoveryContestId, setRecoveryContestId] = useState<string | null>(null)
   const [recoveryMessage, setRecoveryMessage] = useState('')
   const [recoveryBlocked, setRecoveryBlocked] = useState(false)
@@ -366,10 +364,6 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
     }
     return []
   }
-  const contestWizard = mode === 'contest'
-  const wizardSteps = ['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']
-  const canReachStep = (target: number) => target <= 0 || Array.from({ length: target }, (_, index) => stepIssues(index).length === 0).every(Boolean)
-  const currentStepIssues = contestWizard ? stepIssues(wizardStep) : []
   const contestValidationIssues = [0, 1, 2, 3].flatMap(stepIssues)
 
   const handleSave = async () => {
