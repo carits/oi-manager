@@ -259,68 +259,85 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   }
 
   return <div className={styles.stack}>
-    <p className={styles.draftNotice}>当前为草稿。点击“下一步”会检查并自动保存当前内容；发布后，题目和学生名单将保持不变。</p>
-    <div className={styles.designSteps} role="tablist" aria-label="作业设计步骤">
-      {['基本信息', '选择题目', '选择学生', '检查并发布'].map((label, index) => <Button key={label} size="sm" variant={designStep === index ? 'primary' : 'ghost'} disabled={Boolean(saving) || index > designStep + 1} onClick={() => void changeStep(index)} aria-current={designStep === index ? 'step' : undefined}>{index + 1}. {label}</Button>)}
-    </div>
-    {designStep === 0 && <>
-    <Section title="基本信息" description="进入下一步时自动保存，不会因为切换步骤丢失内容。">
+    <p className={styles.draftNotice}>当前为草稿。基本信息、题目和学生名单可以独立修改并保存；发布前需保存全部修改并运行检查。</p>
+
+    <Section
+      title="基本信息"
+      description="名称、时间和评分规则可以直接配置，不需要按步骤逐页填写。"
+      actions={<Button variant="secondary" loading={saving === 'basic'} disabled={!basicsDirty || Boolean(saving)} onClick={() => void saveBasicsChecked()}>保存基本信息</Button>}
+    >
       <div className={styles.settingsGrid}>
         <FormField label="作业名称" required><Input value={title} onChange={event => setTitle(event.target.value)} /></FormField>
         <FormField label="截止时间" required><Input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></FormField>
         <div className={styles.full}><FormField label="作业说明"><Textarea rows={3} value={description} onChange={event => setDescription(event.target.value)} /></FormField></div>
         <div className={styles.full}><Button variant="secondary" onClick={() => setAdvancedOpen(value => !value)} aria-expanded={advancedOpen}>{advancedOpen ? '收起高级设置' : '展开高级设置'}</Button></div>
         {advancedOpen && <>
-        <FormField label="发布时间" hint="留空表示发布后立即可见；不能晚于开放时间"><Input type="datetime-local" value={publishAt} onChange={event => setPublishAt(event.target.value)} /></FormField>
-        <FormField label="开放时间" required><Input type="datetime-local" value={openAt} onChange={event => setOpenAt(event.target.value)} /></FormField>
-        <FormField label="关闭时间" required><Input type="datetime-local" value={closeAt} onChange={event => setCloseAt(event.target.value)} /></FormField>
-        <FormField label="订正截止时间" hint="留空表示不单独限制"><Input type="datetime-local" value={correctionDueAt} onChange={event => setCorrectionDueAt(event.target.value)} /></FormField>
-        <FormField label="学生名单"><Select value={rosterMode} onChange={event => setRosterMode(event.target.value as Assignment['rosterMode'])}><option value="SNAPSHOT">手动选择学生</option><option value="DYNAMIC">发布时选择学校或团队中的学生</option></Select></FormField>
-        <FormField label="评分策略"><Select value={gradingPolicy} onChange={event => setGradingPolicy(event.target.value)}><option value="BEST_BEFORE_DUE">截止前最好成绩</option><option value="BEST">全部提交最好成绩</option><option value="LATEST">最后一次成绩</option><option value="FIRST_TARGET_MET">首次达标成绩</option></Select></FormField>
-        <FormField label="基础成绩满分" hint="必做题按权重归一化到该分值"><Input type="number" min={1} max={1000} value={baseScoreMax} onChange={event => setBaseScoreMax(Number(event.target.value))} /></FormField>
-        <FormField label="选做题计分"><Select value={optionalScoringPolicy} onChange={event => setOptionalScoringPolicy(event.target.value as Assignment['optionalScoringPolicy'])}><option value="NONE">不计入成绩</option><option value="BONUS">全部按权重计加分</option><option value="BEST_N">取完成度最高的 N 题</option></Select></FormField>
-        {optionalScoringPolicy === 'BEST_N' && <FormField label="选做题计分数量" required><Input type="number" min={1} max={1000} value={optionalBestCount} onChange={event => setOptionalBestCount(Number(event.target.value))} /></FormField>}
-        {optionalScoringPolicy !== 'NONE' && <FormField label="选做题加分上限" required><Input type="number" min={1} max={1000} value={optionalBonusMax} onChange={event => setOptionalBonusMax(Number(event.target.value))} /></FormField>}
-        <FormField label="挑战题计分"><Select value={challengeScoringPolicy} onChange={event => setChallengeScoringPolicy(event.target.value as Assignment['challengeScoringPolicy'])}><option value="NONE">不计入成绩</option><option value="EXTRA_CREDIT">按权重计额外加分</option></Select></FormField>
-        {challengeScoringPolicy === 'EXTRA_CREDIT' && <FormField label="挑战题加分上限" required><Input type="number" min={1} max={1000} value={challengeBonusMax} onChange={event => setChallengeBonusMax(Number(event.target.value))} /></FormField>}
-        <FormField label="迟交策略"><Select value={latePolicy} onChange={event => setLatePolicy(event.target.value)}><option value="DISALLOW">不允许迟交</option><option value="ALLOW_MARK_LATE">允许并标记迟交</option><option value="ALLOW_NO_PENALTY">允许且不扣分</option><option value="ALLOW_WITH_PENALTY">允许并按比例扣分</option></Select></FormField>
-        {latePolicy === 'ALLOW_WITH_PENALTY' && <FormField label="迟交扣分比例" required hint="0～100%"><Input type="number" min={0} max={100} value={latePenaltyPercent} onChange={event => setLatePenaltyPercent(Number(event.target.value))} /></FormField>}
-        <FormField label="订正策略"><Select value={correctionPolicy} onChange={event => setCorrectionPolicy(event.target.value)}><option value="NONE">不自动要求订正</option><option value="BELOW_TARGET">未达目标分需订正</option><option value="NON_AC">未 AC 需订正</option><option value="TEACHER_ASSIGNED">仅教师指定</option></Select></FormField>
-        <FormField label="题解开放"><Select value={solutionReleasePolicy} onChange={event => setSolutionReleasePolicy(event.target.value)}><option value="NEVER">不开放</option><option value="AFTER_DUE">截止后</option><option value="AFTER_CLOSE">关闭后</option><option value="AFTER_RELEASE">发布成绩后</option></Select></FormField>
-        <div className={styles.full}><FormField label="学习目标"><Textarea rows={3} value={learningObjectives} onChange={event => setLearningObjectives(event.target.value)} /></FormField></div>
+          <FormField label="发布时间" hint="留空表示发布后立即可见；不能晚于开放时间"><Input type="datetime-local" value={publishAt} onChange={event => setPublishAt(event.target.value)} /></FormField>
+          <FormField label="开放时间" required><Input type="datetime-local" value={openAt} onChange={event => setOpenAt(event.target.value)} /></FormField>
+          <FormField label="关闭时间" required><Input type="datetime-local" value={closeAt} onChange={event => setCloseAt(event.target.value)} /></FormField>
+          <FormField label="订正截止时间" hint="留空表示不单独限制"><Input type="datetime-local" value={correctionDueAt} onChange={event => setCorrectionDueAt(event.target.value)} /></FormField>
+          <FormField label="学生名单"><Select value={rosterMode} onChange={event => setRosterMode(event.target.value as Assignment['rosterMode'])}><option value="SNAPSHOT">手动选择学生</option><option value="DYNAMIC">发布时选择学校或团队中的学生</option></Select></FormField>
+          <FormField label="评分策略"><Select value={gradingPolicy} onChange={event => setGradingPolicy(event.target.value)}><option value="BEST_BEFORE_DUE">截止前最好成绩</option><option value="BEST">全部提交最好成绩</option><option value="LATEST">最后一次成绩</option><option value="FIRST_TARGET_MET">首次达标成绩</option></Select></FormField>
+          <FormField label="基础成绩满分" hint="必做题按权重归一化到该分值"><Input type="number" min={1} max={1000} value={baseScoreMax} onChange={event => setBaseScoreMax(Number(event.target.value))} /></FormField>
+          <FormField label="选做题计分"><Select value={optionalScoringPolicy} onChange={event => setOptionalScoringPolicy(event.target.value as Assignment['optionalScoringPolicy'])}><option value="NONE">不计入成绩</option><option value="BONUS">全部按权重计加分</option><option value="BEST_N">取完成度最高的 N 题</option></Select></FormField>
+          {optionalScoringPolicy === 'BEST_N' && <FormField label="选做题计分数量" required><Input type="number" min={1} max={1000} value={optionalBestCount} onChange={event => setOptionalBestCount(Number(event.target.value))} /></FormField>}
+          {optionalScoringPolicy !== 'NONE' && <FormField label="选做题加分上限" required><Input type="number" min={1} max={1000} value={optionalBonusMax} onChange={event => setOptionalBonusMax(Number(event.target.value))} /></FormField>}
+          <FormField label="挑战题计分"><Select value={challengeScoringPolicy} onChange={event => setChallengeScoringPolicy(event.target.value as Assignment['challengeScoringPolicy'])}><option value="NONE">不计入成绩</option><option value="EXTRA_CREDIT">按权重计额外加分</option></Select></FormField>
+          {challengeScoringPolicy === 'EXTRA_CREDIT' && <FormField label="挑战题加分上限" required><Input type="number" min={1} max={1000} value={challengeBonusMax} onChange={event => setChallengeBonusMax(Number(event.target.value))} /></FormField>}
+          <FormField label="迟交策略"><Select value={latePolicy} onChange={event => setLatePolicy(event.target.value)}><option value="DISALLOW">不允许迟交</option><option value="ALLOW_MARK_LATE">允许并标记迟交</option><option value="ALLOW_NO_PENALTY">允许且不扣分</option><option value="ALLOW_WITH_PENALTY">允许并按比例扣分</option></Select></FormField>
+          {latePolicy === 'ALLOW_WITH_PENALTY' && <FormField label="迟交扣分比例" required hint="0～100%"><Input type="number" min={0} max={100} value={latePenaltyPercent} onChange={event => setLatePenaltyPercent(Number(event.target.value))} /></FormField>}
+          <FormField label="订正策略"><Select value={correctionPolicy} onChange={event => setCorrectionPolicy(event.target.value)}><option value="NONE">不自动要求订正</option><option value="BELOW_TARGET">未达目标分需订正</option><option value="NON_AC">未 AC 需订正</option><option value="TEACHER_ASSIGNED">仅教师指定</option></Select></FormField>
+          <FormField label="题解开放"><Select value={solutionReleasePolicy} onChange={event => setSolutionReleasePolicy(event.target.value)}><option value="NEVER">不开放</option><option value="AFTER_DUE">截止后</option><option value="AFTER_CLOSE">关闭后</option><option value="AFTER_RELEASE">发布成绩后</option></Select></FormField>
+          <div className={styles.full}><FormField label="学习目标"><Textarea rows={3} value={learningObjectives} onChange={event => setLearningObjectives(event.target.value)} /></FormField></div>
         </>}
       </div>
     </Section>
-    </>}
-    {designStep === 1 && <>
-    <Section title="选择题目" description="选择平台并输入题号；作业发布后，题库更新不会改变本次成绩。">
-      <div className={styles.stack}><ProblemReferenceSelector existingProblemIds={problemDraft.map(item => item.problemId)} onAdd={addProblems} />{problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
-        <span className={styles.problemIdentity}><strong>{index + 1}. <ProblemReferenceLink problem={item.Problem} /></strong><span>每次提交使用当时的 Stable 测试数据</span></span>
-        <div className={styles.problemControls}>
-          <FormField label="类别"><Select aria-label={`${item.Problem.title} 类别`} value={item.category} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, category: event.target.value as AssignmentProblem['category'], required: event.target.value === 'REQUIRED' } : row))}><option value="REQUIRED">必做</option><option value="OPTIONAL">选做</option><option value="CHALLENGE">挑战</option></Select></FormField>
-          <FormField label="作业满分" hint={`本题评测满分 ${item.judgeMaxScore || 100}`}><Input aria-label={`${item.Problem.title} 满分`} type="number" min={1} max={1000} value={item.maxScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, maxScore: Number(event.target.value), targetScore: Math.min(row.targetScore, Number(event.target.value)) } : row))} /></FormField>
-          <FormField label="达标分"><Input aria-label={`${item.Problem.title} 目标分`} type="number" min={0} max={item.maxScore} value={item.targetScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, targetScore: Number(event.target.value) } : row))} /></FormField>
-          <FormField label="权重"><Input aria-label={`${item.Problem.title} 权重`} type="number" min={1} max={10000} value={item.weight} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, weight: Number(event.target.value) } : row))} /></FormField>
-          <FormField label="完成条件"><Select aria-label={`${item.Problem.title} 完成条件`} value={item.completionPolicy} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, completionPolicy: event.target.value as AssignmentProblem['completionPolicy'] } : row))}><option value="AC">必须 AC</option><option value="TARGET_SCORE">达到目标分</option><option value="ATTEMPT">有提交即可</option><option value="MANUAL">教师确认</option></Select></FormField>
-        </div>
-        <span className={styles.actions}><Button iconOnly variant="ghost" aria-label="上移题目" disabled={index === 0} onClick={() => move(index, -1)} icon={<ArrowUp size={16} />} /><Button iconOnly variant="ghost" aria-label="下移题目" disabled={index === problemDraft.length - 1} onClick={() => move(index, 1)} icon={<ArrowDown size={16} />} /><Button iconOnly variant="ghost" aria-label="移除题目" onClick={() => setProblemDraft(current => current.filter(row => row.id !== item.id))} icon={<Trash2 size={16} />} /></span>
-      </div>)}{problemDraft.length === 0 && <p className={styles.muted}>尚未添加题目。</p>}</div>
+
+    <Section
+      title="选择题目"
+      description="添加题库中已发布且具有 Stable 评测数据的题目；“编辑”可以直接修改整份题目列表。"
+      actions={<Button variant="secondary" loading={saving === 'problems'} disabled={!problemsDirty || Boolean(saving)} onClick={() => void saveProblemsChecked()}>保存题目</Button>}
+    >
+      <div className={styles.stack}>
+        <ProblemReferenceSelector
+          existingProblemIds={problemDraft.map(item => item.problemId)}
+          editableReferences={problemDraft.map(item => ({ platform: item.Problem.platform, problemId: item.Problem.problemId }))}
+          onAdd={addProblems}
+          onReplace={replaceProblems}
+          dataRequirement="stable"
+        />
+        {problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
+          <span className={styles.problemIdentity}><strong>{index + 1}. <ProblemReferenceLink problem={item.Problem} /></strong><span>每次提交使用当时的 Stable 测试数据</span></span>
+          <div className={styles.problemControls}>
+            <FormField label="类别"><Select aria-label={`${item.Problem.title} 类别`} value={item.category} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, category: event.target.value as AssignmentProblem['category'], required: event.target.value === 'REQUIRED' } : row))}><option value="REQUIRED">必做</option><option value="OPTIONAL">选做</option><option value="CHALLENGE">挑战</option></Select></FormField>
+            <FormField label="作业满分" hint={`本题评测满分 ${item.judgeMaxScore || 100}`}><Input aria-label={`${item.Problem.title} 满分`} type="number" min={1} max={1000} value={item.maxScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, maxScore: Number(event.target.value), targetScore: Math.min(row.targetScore, Number(event.target.value)) } : row))} /></FormField>
+            <FormField label="达标分"><Input aria-label={`${item.Problem.title} 目标分`} type="number" min={0} max={item.maxScore} value={item.targetScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, targetScore: Number(event.target.value) } : row))} /></FormField>
+            <FormField label="权重"><Input aria-label={`${item.Problem.title} 权重`} type="number" min={1} max={10000} value={item.weight} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, weight: Number(event.target.value) } : row))} /></FormField>
+            <FormField label="完成条件"><Select aria-label={`${item.Problem.title} 完成条件`} value={item.completionPolicy} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, completionPolicy: event.target.value as AssignmentProblem['completionPolicy'] } : row))}><option value="AC">必须 AC</option><option value="TARGET_SCORE">达到目标分</option><option value="ATTEMPT">有提交即可</option><option value="MANUAL">教师确认</option></Select></FormField>
+          </div>
+          <span className={styles.actions}><Button iconOnly variant="ghost" aria-label="上移题目" disabled={index === 0} onClick={() => move(index, -1)} icon={<ArrowUp size={16} />} /><Button iconOnly variant="ghost" aria-label="下移题目" disabled={index === problemDraft.length - 1} onClick={() => move(index, 1)} icon={<ArrowDown size={16} />} /><Button iconOnly variant="ghost" aria-label="移除题目" onClick={() => setProblemDraft(current => current.filter(row => row.id !== item.id))} icon={<Trash2 size={16} />} /></span>
+        </div>)}
+        {problemDraft.length === 0 && <p className={styles.muted}>尚未添加题目。</p>}
+      </div>
     </Section>
-    </>}
-    {designStep === 2 && <>
-    <Section title="学生名单" description={rosterMode === 'DYNAMIC' ? '发布时自动选择当前学校或团队中的有效学生。' : `已选 ${rosterDraft.size} 人；发布后名单保持不变，之后的成员变化不会改写本次作业。`}>
+
+    <Section
+      title="学生名单"
+      description={rosterMode === 'DYNAMIC' ? '发布时自动选择当前学校或团队中的有效学生。' : `已选 ${rosterDraft.size} 人；发布后名单保持不变，之后的成员变化不会改写本次作业。`}
+      actions={rosterMode === 'SNAPSHOT' ? <Button variant="secondary" loading={saving === 'roster'} disabled={!rosterDirty || Boolean(saving) || basicsDirty} onClick={() => void saveRosterChecked()}>保存学生名单</Button> : undefined}
+    >
+      {basicsDirty && rosterMode === 'SNAPSHOT' && <p className={styles.muted}>学生名单模式已修改时，请先保存基本信息。</p>}
       {rosterMode === 'DYNAMIC' ? <p className={styles.muted}>无需在草稿中逐个勾选；发布时会固定当时符合范围的学生。</p> : <StudentPicker organizationId={organizationId} selectedIds={[...rosterDraft]} onChange={ids => setRosterDraft(new Set(ids))} />}
     </Section>
-    </>}
-    {designStep === 3 && <>
-    <Section title="发布检查" description="检查题目、时间和学生名单是否完整。" actions={<><Button variant="secondary" loading={saving === 'validate'} onClick={() => void runValidation()}>运行检查</Button><Button icon={<CheckCircle2 size={16} />} onClick={() => setConfirmPublish(true)}>发布作业</Button></>}>
+
+    <Section
+      title="发布检查"
+      description="所有区域保存后，检查题目、时间和学生名单是否完整。"
+      actions={<><Button variant="secondary" loading={saving === 'validate'} onClick={() => void runValidation()}>运行检查</Button><Button icon={<CheckCircle2 size={16} />} onClick={() => setConfirmPublish(true)}>发布作业</Button></>}
+    >
       {!validation ? <p className={styles.muted}>尚未运行发布检查。</p> : validation.valid ? <p>所有检查均已通过，可以发布。</p> : <ul className={styles.validationList}>{validation.issues.map(issue => <li key={`${issue.path}:${issue.code}`}>{issue.path}：{issue.message}</li>)}</ul>}
     </Section>
-    </>}
-    <div className={styles.designFooter}>
-      <Button variant="secondary" disabled={designStep === 0 || Boolean(saving)} onClick={() => void changeStep(designStep - 1)}>上一步</Button>
-      {designStep < 3 && <Button loading={Boolean(saving)} onClick={() => void changeStep(designStep + 1)}>下一步</Button>}
-    </div>
+
     <ConfirmDialog isOpen={confirmPublish} onClose={() => setConfirmPublish(false)} onConfirm={() => void publish()} loading={saving === 'publish'} title="发布并冻结作业？" message={`发布后将固定 ${problemDraft.length} 道题和${rosterMode === 'DYNAMIC' ? '发布时生成的学生名单' : ` ${rosterDraft.size} 名学生`}，不能再修改结构。请确认各配置区域均已保存。`} confirmText="确认发布" />
   </div>
 }
