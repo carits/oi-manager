@@ -3,17 +3,28 @@ import { expect, test, type Page, type Route } from '@playwright/test'
 type Input = { clientKey: string; platform: string; problemId: string }
 const stableData = { slot: 'STABLE', graphHash: 'test-graph', fencingToken: 1, mode: 'acm' }
 const evolvingData = { slot: 'EVOLVING', graphHash: 'test-evolving', fencingToken: 2, mode: 'acm' }
+
 function row(item: Input) {
   if (item.problemId === 'missing') return { ...item, status: 'not_found' }
   if (item.problemId === 'conflict') return { ...item, status: 'identity_conflict' }
-  return { ...item, status: item.problemId === 'draft' ? 'not_published' : 'resolved', problem: {
-    id: `local-${item.platform}-${item.problemId}`, platform: item.platform, problemId: item.problemId,
-    title: `题目 ${item.platform} ${item.problemId}`, ...(item.problemId === 'S' ? { stableData } : { evolvingData }),
-  } }
+  if (item.problemId === 'draft') return { ...item, status: 'not_published', message: '该题尚未发布，暂不能添加' }
+  return {
+    ...item,
+    status: 'resolved',
+    problem: {
+      id: `local-${item.platform}-${item.problemId}`,
+      platform: item.platform,
+      problemId: item.problemId,
+      title: `题目 ${item.platform} ${item.problemId}`,
+      ...(item.problemId === 'S' ? { stableData } : { evolvingData }),
+    },
+  }
 }
+
 async function reply(route: Route, items: Input[]) {
   await route.fulfill({ json: { success: true, data: { items: items.map(row) } } })
 }
+
 async function api(page: Page) {
   const requests: Input[][] = []
   await page.route('**/api/problem-selection/resolve', async route => {
@@ -23,77 +34,74 @@ async function api(page: Page) {
   })
   return requests
 }
+
 const picker = (page: Page) => page.getByTestId('problem-reference-selector')
 const number = (page: Page) => picker(page).getByRole('textbox', { name: '题号', exact: true })
-const add = (page: Page) => picker(page).getByRole('button', { name: '添加', exact: true })
+const complete = (page: Page) => picker(page).getByRole('button', { name: '完成', exact: true })
 const selected = (page: Page) => page.getByTestId('selected').locator('li')
-async function openBatch(page: Page, value: string) {
-  await picker(page).getByRole('button', { name: '批量添加题目', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: '批量添加题目', exact: true })
-  await dialog.getByRole('textbox', { name: '批量题目引用' }).fill(value)
-  return dialog
+
+async function beginAdd(page: Page) {
+  await picker(page).getByRole('button', { name: '＋ 添加一道题目', exact: true }).click()
 }
 
-test('single lookup shows a linked title before explicit addition and never submits the parent form', async ({ page }, testInfo) => {
+test('one problem is entered as a row, resolved inline and added without submitting the parent form', async ({ page }, testInfo) => {
   const requests = await api(page)
   await page.goto('/personal/training-sessions')
-  await expect(picker(page).locator('textarea')).toHaveCount(0)
+  await expect(picker(page)).not.toContainText('检索结果')
+  await expect(picker(page)).not.toContainText('批量添加题目')
+
+  await beginAdd(page)
+  await picker(page).getByRole('textbox', { name: '别名', exact: true }).fill('Warmup')
   await number(page).fill('A')
+
   const link = picker(page).getByRole('link', { name: '题目 carits A', exact: true })
   await expect(link).toBeVisible()
-  await expect(link).toHaveAttribute('href', /\/personal\/problems\/local-carits-A/)
-  await expect(link).toHaveAttribute('target', '_blank')
-  await expect(selected(page)).toHaveCount(0)
   expect(requests).toEqual([[{ clientKey: 'single', platform: 'carits', problemId: 'A' }]])
-  await testInfo.attach('single-reference', { body: await page.screenshot(), contentType: 'image/png' })
-  const popupPromise = page.waitForEvent('popup')
-  await link.click()
-  const popup = await popupPromise
-  await expect(popup).toHaveURL(/\/personal\/problems\/local-carits-A/)
-  await popup.close()
-  await expect(number(page)).toHaveValue('A')
-  await add(page).click()
+
+  await complete(page).click()
   await expect(selected(page)).toHaveCount(1)
-  await expect(number(page)).toHaveValue('')
+  await expect(selected(page)).toContainText('Warmup')
   await expect(page.getByTestId('form-submits')).toHaveText('0')
+  await testInfo.attach('inline-problem-entry', { body: await page.screenshot(), contentType: 'image/png' })
 })
 
 for (const host of ['训练创建', '训练设计', '训练追加', '比赛', '作业', '题单']) {
-  test(`${host}: identical reference control preserves the host Stable policy`, async ({ page }) => {
+  test(`${host}: shared editor preserves the business readiness policy`, async ({ page }) => {
     await api(page)
     await page.goto('/personal/training-sessions')
     await page.getByLabel('业务入口', { exact: true }).selectOption(host)
+    await beginAdd(page)
     await number(page).fill('A')
     await expect(picker(page).getByRole('link', { name: '题目 carits A', exact: true })).toBeVisible()
+
     if (host === '比赛' || host === '作业') {
       await expect(picker(page)).toContainText('Stable')
-      await expect(add(page)).toBeDisabled()
       await number(page).fill('S')
+      await expect(picker(page).getByRole('link', { name: '题目 carits S', exact: true })).toBeVisible()
     }
-    await expect(add(page)).toBeEnabled()
-    await add(page).click()
+
+    await complete(page).click()
     await expect(selected(page)).toHaveCount(1)
   })
 }
 
-test('Enter flushes the timer once and remains a lookup, not an implicit add', async ({ page }) => {
+test('Enter means finish this row, not a separate search action', async ({ page }) => {
   const requests = await api(page)
   await page.goto('/personal/training-sessions')
+  await beginAdd(page)
+  await picker(page).getByRole('textbox', { name: '别名', exact: true }).fill('A')
   await number(page).fill('A')
   await number(page).press('Enter')
-  await expect(add(page)).toBeEnabled()
-  await page.waitForTimeout(650) // Wait past the original debounce deadline to catch a second request.
+  await expect(selected(page)).toHaveCount(1)
   expect(requests).toHaveLength(1)
-  await expect(selected(page)).toHaveCount(0)
   await expect(page.getByTestId('form-submits')).toHaveText('0')
 })
 
-test('composition does not query unfinished input', async ({ page }) => {
+test('composition does not resolve unfinished input', async ({ page }) => {
   const requests = await api(page)
   await page.goto('/personal/training-sessions')
+  await beginAdd(page)
   await number(page).focus()
-  // fill() is a committed text insertion in Firefox and can end composition.
-  // Emit the browser's composition/input sequence without synthetic key presses.
   await number(page).evaluate(element => {
     element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }))
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(element, 'A')
@@ -102,23 +110,11 @@ test('composition does not query unfinished input', async ({ page }) => {
   await page.waitForTimeout(550)
   expect(requests).toHaveLength(0)
   await number(page).evaluate(element => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'A' })))
-  await expect(add(page)).toBeEnabled()
+  await expect(picker(page).getByRole('link', { name: '题目 carits A', exact: true })).toBeVisible()
   expect(requests).toHaveLength(1)
 })
 
-test('single field rejects multi-number input, long numbers and URLs without sending a request', async ({ page }) => {
-  const requests = await api(page)
-  await page.goto('/personal/training-sessions')
-  for (const value of ['A B', 'A'.repeat(129), 'https://example.test/problem/A']) {
-    await number(page).fill(value)
-    await expect(number(page)).toHaveAttribute('aria-invalid', 'true')
-    await number(page).press('Enter')
-    await expect(add(page)).toBeDisabled()
-  }
-  expect(requests).toHaveLength(0)
-})
-
-test('a late response cannot replace a newer number or platform', async ({ page }) => {
+test('late responses cannot replace a newer platform and number', async ({ page }) => {
   let release: (() => void) | undefined
   let held = false
   await page.route('**/api/problem-selection/resolve', async route => {
@@ -130,6 +126,7 @@ test('a late response cannot replace a newer number or platform', async ({ page 
     await reply(route, items).catch(() => undefined)
   })
   await page.goto('/personal/training-sessions')
+  await beginAdd(page)
   await number(page).fill('001')
   await expect.poll(() => held).toBe(true)
   await picker(page).getByLabel('题目平台', { exact: true }).selectOption('luogu')
@@ -138,172 +135,98 @@ test('a late response cannot replace a newer number or platform', async ({ page 
   release?.()
   await page.waitForTimeout(100)
   await expect(picker(page).getByRole('link', { name: '题目 carits 001', exact: true })).toHaveCount(0)
-  await add(page).click()
-  await expect(selected(page)).toHaveCount(1)
+  await complete(page).click()
   await expect(selected(page)).toContainText('P0001')
 })
 
-test('request failure, absent, unpublished and conflicting identities stay distinguishable', async ({ page }) => {
-  let fail = true
-  await page.route('**/api/problem-selection/resolve', async route => {
-    const items = route.request().postDataJSON().items as Input[]
-    if (fail) { fail = false; await route.fulfill({ status: 503, json: { success: false, message: '临时检索故障' } }); return }
-    await reply(route, items)
-  })
+test('unpublished problems expose status but not title or internal link', async ({ page }) => {
+  await api(page)
   await page.goto('/personal/training-sessions')
-  await number(page).fill('A')
-  await expect(picker(page).getByRole('button', { name: '重新检索' })).toBeVisible()
-  await expect(add(page)).toBeDisabled()
-  await picker(page).getByRole('button', { name: '重新检索' }).click()
-  await expect(add(page)).toBeEnabled()
-  for (const [value, message] of [['missing', '未找到'], ['draft', '尚未发布'], ['conflict', '重复记录']]) {
-    await number(page).fill(value)
-    await expect(picker(page)).toContainText(message)
-    await expect(add(page)).toBeDisabled()
-  }
+  await beginAdd(page)
+  await number(page).fill('draft')
+  await expect(picker(page)).toContainText('尚未发布')
+  await expect(picker(page).getByRole('link')).toHaveCount(0)
+  await expect(picker(page)).not.toContainText('题目 carits draft')
+  await complete(page).click()
   await expect(selected(page)).toHaveCount(0)
 })
 
-test('a failed business add leaves the resolved number available for retry', async ({ page }) => {
+test('business failure keeps the editable row for retry', async ({ page }) => {
   await api(page)
   await page.goto('/personal/training-sessions')
   await page.getByLabel('接收模式').selectOption('error')
+  await beginAdd(page)
   await number(page).fill('A')
-  await expect(add(page)).toBeEnabled()
-  await add(page).click()
+  await expect(picker(page).getByRole('link', { name: '题目 carits A' })).toBeVisible()
+  await complete(page).click()
   await expect(picker(page).getByRole('alert')).toContainText('业务暂时不可用')
   await expect(number(page)).toHaveValue('A')
-  await expect(selected(page)).toHaveCount(0)
+
   await page.getByLabel('接收模式').selectOption('all')
-  await add(page).click()
+  await complete(page).click()
   await expect(selected(page)).toHaveCount(1)
 })
 
-test('batch lookup is explicit and partial business acceptance preserves failed rows without re-adding successes', async ({ page }, testInfo) => {
+test('Edit switches the current list directly to text and replaces it on confirm', async ({ page }, testInfo) => {
   const requests = await api(page)
   await page.goto('/personal/training-sessions')
-  await page.getByLabel('接收模式').selectOption('partial')
-  const dialog = await openBatch(page, 'carits | A | A\nluogu | B | B\ncarits | missing | M\nCarits平台 | A | DUP')
-  await expect(dialog.getByRole('button', { name: '加入 0 道题' })).toBeDisabled()
-  expect(requests).toHaveLength(0)
-  await dialog.getByRole('button', { name: '检索', exact: true }).click()
-  await expect(dialog.getByRole('button', { name: '加入 2 道题' })).toBeEnabled()
-  expect(requests[0].map(item => item.problemId)).toEqual(['A', 'B', 'missing', 'A'])
-  await dialog.getByRole('button', { name: '加入 2 道题' }).click()
-  await expect(selected(page)).toHaveCount(1)
-  await expect(dialog).toContainText('该题详情加载失败')
-  await expect(dialog.getByRole('textbox', { name: '批量题目引用' })).toHaveValue('carits | A | A\nluogu | B | B\ncarits | missing | M\nCarits平台 | A | DUP')
-  await dialog.getByRole('button', { name: '加入 1 道题' }).click()
-  await expect(selected(page)).toHaveCount(2)
-  await expect(page.getByTestId('add-calls')).toHaveText('2')
-  await expect(dialog).toContainText('未找到')
-  await expect(dialog.getByRole('button', { name: '加入 0 道题' })).toBeDisabled()
-  await testInfo.attach('batch-partial', { body: await page.screenshot(), contentType: 'image/png' })
-  await dialog.getByRole('button', { name: '取消', exact: true }).click()
-  await page.getByRole('button', { name: '放弃并关闭' }).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(selected(page)).toHaveCount(2)
-  await expect(page.getByTestId('form-submits')).toHaveText('0')
-})
 
-test('batch preview rechecks current selected IDs and rejects oversized input without truncation', async ({ page }) => {
-  const requests = await api(page)
-  await page.goto('/personal/training-sessions')
-  const dialog = await openBatch(page, 'carits | A | A')
-  await dialog.getByRole('button', { name: '检索', exact: true }).click()
-  await expect(dialog.getByRole('button', { name: '加入 1 道题' })).toBeEnabled()
-  await page.getByRole('button', { name: '外部选入 A', exact: true }).evaluate(button => (button as HTMLButtonElement).click())
-  await expect(dialog.getByRole('button', { name: '加入 0 道题' })).toBeDisabled()
-  const oversized = Array.from({ length: 101 }, (_, index) => `carits | P${index}`).join('\n')
-  await dialog.getByRole('textbox', { name: '批量题目引用' }).fill(oversized)
-  await expect(dialog.getByRole('alert')).toContainText('未截断')
-  await expect(dialog.getByRole('button', { name: '检索', exact: true })).toBeDisabled()
-  await expect(dialog.getByRole('textbox', { name: '批量题目引用' })).toHaveValue(oversized)
-  expect(requests).toHaveLength(1)
-})
-
-test('closing a pending batch aborts it and reopening starts with an empty input', async ({ page }) => {
-  let release: (() => void) | undefined
-  let held = false
-  await page.route('**/api/problem-selection/resolve', async route => {
-    const items = route.request().postDataJSON().items as Input[]
-    held = true
-    await new Promise<void>(resolve => { release = resolve })
-    await reply(route, items).catch(() => undefined)
-  })
-  await page.goto('/personal/training-sessions')
-  const dialog = await openBatch(page, 'carits | A | A')
-  await dialog.getByRole('button', { name: '检索', exact: true }).click()
-  await expect.poll(() => held).toBe(true)
-  await dialog.getByRole('button', { name: '取消', exact: true }).click()
-  await page.getByRole('button', { name: '放弃并关闭' }).click()
-  release?.()
-  const reopened = await openBatch(page, '')
-  await expect(reopened.getByRole('textbox', { name: '批量题目引用' })).toHaveValue('')
-  await expect(reopened.getByRole('link')).toHaveCount(0)
-})
-
-test('disabling or unmounting while resolving never accepts the old response', async ({ page }) => {
-  let release: (() => void) | undefined
-  let held = false
-  await page.route('**/api/problem-selection/resolve', async route => {
-    const items = route.request().postDataJSON().items as Input[]
-    held = true
-    await new Promise<void>(resolve => { release = resolve })
-    await reply(route, items).catch(() => undefined)
-  })
-  await page.goto('/personal/training-sessions')
+  await beginAdd(page)
+  await picker(page).getByRole('textbox', { name: '别名', exact: true }).fill('A')
   await number(page).fill('A')
-  await expect.poll(() => held).toBe(true)
-  await page.getByRole('button', { name: '切换禁用', exact: true }).click()
-  release?.()
-  await expect(add(page)).toBeDisabled()
-  await expect(picker(page).getByRole('link')).toHaveCount(0)
-  await page.getByRole('button', { name: '切换挂载', exact: true }).click()
-  await page.getByRole('button', { name: '切换挂载', exact: true }).click()
-  await expect(number(page)).toHaveValue('')
+  await complete(page).click()
+  await expect(selected(page)).toHaveCount(1)
+
+  await picker(page).getByRole('button', { name: '编辑', exact: true }).click()
+  const textarea = picker(page).getByRole('textbox', { name: '题目列表文本编辑' })
+  await expect(textarea).toHaveValue('carits | A | A')
+  await textarea.fill('luogu | B | Bee\ncarits | C | See')
+  await picker(page).getByRole('button', { name: '确认', exact: true }).click()
+
+  await expect(selected(page)).toHaveCount(2)
+  await expect(selected(page).nth(0)).toContainText('Bee')
+  await expect(selected(page).nth(1)).toContainText('See')
+  await expect(picker(page).getByRole('textbox', { name: '题目列表文本编辑' })).toHaveCount(0)
+  expect(requests.at(-1)?.map(item => [item.platform, item.problemId])).toEqual([['luogu', 'B'], ['carits', 'C']])
+  await testInfo.attach('text-list-editor', { body: await page.screenshot(), contentType: 'image/png' })
 })
 
-for (const change of ['工作区', '阶段']) {
-  test(`async additions are single-flight and invalidated on ${change} change`, async ({ page }) => {
-    await api(page)
-    await page.goto('/personal/training-sessions')
-    await page.getByLabel('接收模式').selectOption('delayed')
-    await number(page).fill('A')
-    await expect(add(page)).toBeEnabled()
-    await add(page).evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click() })
-    await expect(page.getByTestId('add-calls')).toHaveText('1')
-    if (change === '工作区') await page.getByLabel('工作区', { exact: true }).selectOption('org-a')
-    else await page.getByRole('button', { name: '切换阶段', exact: true }).click()
-    await page.getByRole('button', { name: '完成异步添加', exact: true }).click()
-    await expect(selected(page)).toHaveCount(0)
-    await expect(number(page)).toHaveValue('')
-  })
-}
-
-test('localStorage failure does not break selection and incomplete responses are not treated as success', async ({ page }) => {
-  await page.addInitScript(() => { Storage.prototype.getItem = () => { throw new Error('storage blocked') }; Storage.prototype.setItem = () => { throw new Error('storage blocked') } })
-  await page.route('**/api/problem-selection/resolve', route => route.fulfill({ json: { success: true, data: { items: [] } } }))
-  await page.goto('/personal/training-sessions')
-  await picker(page).getByLabel('题目平台', { exact: true }).selectOption('luogu')
-  await number(page).fill('P0001')
-  await expect(picker(page)).toContainText('响应不完整')
-  await expect(add(page)).toBeDisabled()
-  await page.unroute('**/api/problem-selection/resolve')
+test('text editing keeps row-local failures visible and does not partially replace the list', async ({ page }) => {
   await api(page)
-  await picker(page).getByRole('button', { name: '重新检索' }).click()
-  await expect(add(page)).toBeEnabled()
+  await page.goto('/personal/training-sessions')
+  await picker(page).getByRole('button', { name: '编辑', exact: true }).click()
+  const textarea = picker(page).getByRole('textbox', { name: '题目列表文本编辑' })
+  await textarea.fill('carits | A | A\ncarits | missing | B')
+  await picker(page).getByRole('button', { name: '确认', exact: true }).click()
+  await expect(picker(page).getByRole('alert')).toContainText('第 2 行')
+  await expect(picker(page)).toContainText('未找到')
+  await expect(selected(page)).toHaveCount(0)
 })
 
-test('narrow hosts wrap long titles and batch overlays remain viewport-sized', async ({ page }) => {
+test('single field rejects URLs and oversized identifiers without sending requests', async ({ page }) => {
+  const requests = await api(page)
+  await page.goto('/personal/training-sessions')
+  await beginAdd(page)
+  for (const value of ['A B', 'A'.repeat(129), 'https://example.test/problem/A']) {
+    await number(page).fill(value)
+    await expect(number(page)).toHaveAttribute('aria-invalid', 'true')
+    await number(page).press('Enter')
+  }
+  expect(requests).toHaveLength(0)
+})
+
+test('narrow hosts stay within the viewport and text edit is inline, not a nested dialog', async ({ page }) => {
   await api(page)
   await page.goto('/personal/training-sessions')
   await page.locator('#host').evaluate(element => { (element as HTMLElement).style.width = '340px' })
+  await beginAdd(page)
   await number(page).fill('A'.repeat(120))
-  await expect(add(page)).toBeEnabled()
+  await expect(picker(page).getByRole('link')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
-  const dialog = await openBatch(page, 'carits | A | A')
-  const overlay = await dialog.evaluate(element => ({ width: element.parentElement!.getBoundingClientRect().width, viewport: window.innerWidth }))
-  expect(Math.abs(overlay.width - overlay.viewport)).toBeLessThanOrEqual(1)
+
+  await picker(page).getByRole('button', { name: '取消', exact: true }).click()
+  await picker(page).getByRole('button', { name: '编辑', exact: true }).click()
+  await expect(picker(page).getByRole('textbox', { name: '题目列表文本编辑' })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: /批量添加/ })).toHaveCount(0)
   expect(await page.locator('form form').count()).toBe(0)
 })
