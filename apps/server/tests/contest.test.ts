@@ -247,7 +247,7 @@ describe('比赛类型区分测试', () => {
       })
 
     expect(created.status).toBe(200)
-    const contestId = created.body.data.id as number
+    const contestId = created.body.data.id as string
 
     const started = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .post(`/api/contests/${contestId}/start`)
@@ -256,7 +256,7 @@ describe('比赛类型区分测试', () => {
     expect(started.body.data.title).toBe('生命周期比赛')
 
     const afterStart = await prisma.contest.findUniqueOrThrow({
-      where: { publicId: contestId },
+      where: { id: contestId },
       include: { RatingConfig: true },
     })
     expect(afterStart.status).toBe('ongoing')
@@ -269,7 +269,7 @@ describe('比赛类型区分测试', () => {
     expect(finished.body.data.finalizationStatus).toBe('JUDGING')
 
     const afterFinish = await prisma.contest.findUniqueOrThrow({
-      where: { publicId: contestId },
+      where: { id: contestId },
     })
     expect(afterFinish.status).toBe('finished')
     expect(afterFinish.endAt).not.toBeNull()
@@ -288,7 +288,7 @@ describe('比赛类型区分测试', () => {
       })
 
     expect(created.status).toBe(200)
-    const contestId = created.body.data.id as number
+    const contestId = created.body.data.id as string
     const renamedEndTime = new Date(Date.now() + 86400000 * 3)
     const updated = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .put(`/api/contests/${contestId}`)
@@ -303,7 +303,7 @@ describe('比赛类型区分测试', () => {
     expect(extended.status).toBe(200)
 
     const aggregate = await prisma.contest.findUniqueOrThrow({
-      where: { publicId: contestId },
+      where: { id: contestId },
       include: { RatingConfig: true },
     })
     expect(aggregate.title).toBe('已编辑比赛')
@@ -324,9 +324,9 @@ describe('比赛类型区分测试', () => {
       })
 
     expect(created.status).toBe(200)
-    const contestId = created.body.data.id as number
+    const contestId = created.body.data.id as string
     const aggregateBefore = await prisma.contest.findUniqueOrThrow({
-      where: { publicId: contestId },
+      where: { id: contestId },
     })
 
     const deleted = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
@@ -346,7 +346,7 @@ describe('比赛类型区分测试', () => {
         endTime: new Date(Date.now() + 86400000 * 2).toISOString(),
       })
     expect(created.status).toBe(200)
-    const contestId = created.body.data.id as number
+    const contestId = created.body.data.id as string
     const [problemA, problemB] = await Promise.all([
       createTestProblem({ ownerId: ownerUser.user.id, title: '命令题 A' }),
       createTestProblem({ ownerId: ownerUser.user.id, title: '命令题 B' }),
@@ -361,33 +361,38 @@ describe('比赛类型区分测试', () => {
       })),
     })
 
+    const legacyContestPublicId = (await prisma.contest.findUniqueOrThrow({
+      where: { id: contestId },
+      select: { publicId: true },
+    })).publicId
+
     const [runtimeA, runtimeB] = await prisma.$transaction(async tx => {
-      const a = await createContestProblemTx(tx, contestId, {
+      const a = await createContestProblemTx(tx, legacyContestPublicId, {
         id: crypto.randomUUID(), problemId: problemA.id, alias: 'A', points: 40,
       })
-      const b = await createContestProblemTx(tx, contestId, {
+      const b = await createContestProblemTx(tx, legacyContestPublicId, {
         id: crypto.randomUUID(), problemId: problemB.id, alias: 'B', points: 60,
       })
       return [a.problem!, b.problem!]
     })
 
-    await prisma.$transaction(tx => updateContestProblemTx(tx, contestId, runtimeA.id, {
+    await prisma.$transaction(tx => updateContestProblemTx(tx, legacyContestPublicId, runtimeA.id, {
       alias: 'X', points: 50,
     }))
-    await prisma.$transaction(tx => reorderContestProblemsTx(tx, contestId, [
+    await prisma.$transaction(tx => reorderContestProblemsTx(tx, legacyContestPublicId, [
       { id: runtimeB.id, orderIndex: 0 },
       { id: runtimeA.id, orderIndex: 1 },
     ]))
 
     const aggregateProblems = await prisma.contestProblem.findMany({
-      where: { Contest: { publicId: contestId } },
+      where: { Contest: { id: contestId } },
       orderBy: { orderIndex: 'asc' },
     })
     expect(aggregateProblems.map(problem => [problem.id, problem.orderIndex]))
       .toEqual([[runtimeB.id, 0], [runtimeA.id, 1]])
     expect(aggregateProblems[1]).toMatchObject({ points: 50 })
 
-    await prisma.$transaction(tx => deleteContestProblemTx(tx, contestId, runtimeA.id))
+    await prisma.$transaction(tx => deleteContestProblemTx(tx, legacyContestPublicId, runtimeA.id))
     expect(await prisma.contestProblem.findUnique({ where: { id: runtimeA.id } })).toBeNull()
   })
 })

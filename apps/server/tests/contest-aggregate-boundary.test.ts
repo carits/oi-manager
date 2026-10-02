@@ -12,6 +12,42 @@ function sourceFiles(root: string): string[] {
 }
 
 describe('Contest aggregate write boundary', () => {
+
+  it('keeps canonical Contest.id as the external contest identity', () => {
+    expect(ContestContracts.listTeam.data.safeParse([{
+      id: 'contest-canonical-id',
+      title: '比赛',
+      description: null,
+      format: 'oi',
+      startTime: '2026-10-02T00:00:00.000Z',
+      endTime: '2026-10-02T01:00:00.000Z',
+      status: 'upcoming',
+      createdBy: 'user-1',
+      type: 'contest',
+      problemCount: 0,
+      participantCount: 0,
+      createdAt: '2026-10-01T00:00:00.000Z',
+    }]).success).toBe(true)
+    expect(ContestContracts.listTeam.data.safeParse([{
+      id: 128,
+      title: '比赛',
+      startTime: '2026-10-02T00:00:00.000Z',
+      endTime: '2026-10-02T01:00:00.000Z',
+      status: 'upcoming',
+      type: 'contest',
+      problemCount: 0,
+      participantCount: 0,
+      createdAt: '2026-10-01T00:00:00.000Z',
+    }]).success).toBe(false)
+
+    const view = fs.readFileSync(new URL('../src/modules/contest/contest-view.ts', import.meta.url), 'utf8')
+    const fixtures = fs.readFileSync(new URL('../scripts/e2e/write-fixtures.ts', import.meta.url), 'utf8')
+    expect(view).toContain('id: contest.id')
+    expect(view).not.toContain('id: contest.publicId')
+    expect(fixtures).toContain('contest: contest.id')
+    expect(fixtures).not.toContain('contest: String(contest.publicId)')
+  })
+
   it('validates submission pagination and discriminated rejudge requests', () => {
     expect(ContestContracts.submissions.query.parse({ page: '2', pageSize: '50' })).toMatchObject({ page: 2, pageSize: 50 })
     expect(ContestContracts.rejudge.body.safeParse({ scope: { type: 'problem', contestProblemId: 'cp-1' } }).success).toBe(true)

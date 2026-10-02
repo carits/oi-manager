@@ -87,7 +87,7 @@ export async function isOrganizationMember(userId: string, organizationId: strin
 export type ContestListStatus = 'ongoing' | 'upcoming' | 'finished' | string
 
 export interface ContestListSortItem {
-  id: number
+  id: string
   title: string
   status: ContestListStatus
   startTime: string | Date
@@ -138,7 +138,36 @@ export function sortContestListForDisplay<T extends ContestListSortItem>(items: 
     const createdDiff = timeValue(b.createdAt) - timeValue(a.createdAt)
     if (createdDiff !== 0) return createdDiff
 
-    return b.id - a.id
+    return b.id.localeCompare(a.id)
+  })
+}
+
+
+export interface ContestRouteIdentity {
+  id: string
+  publicId: number
+}
+
+/**
+ * Resolve the canonical Contest.id first. Numeric publicId is accepted only as
+ * a legacy route fallback while old links are phased out.
+ */
+export async function resolveContestRouteIdentity(raw: string): Promise<ContestRouteIdentity | null> {
+  const id = raw.trim()
+  if (!id || id.length > 128) return null
+
+  const canonical = await prisma.contest.findUnique({
+    where: { id },
+    select: { id: true, publicId: true },
+  })
+  if (canonical) return canonical
+
+  if (!/^\d+$/.test(id)) return null
+  const publicId = Number(id)
+  if (!Number.isSafeInteger(publicId) || publicId <= 0) return null
+  return prisma.contest.findUnique({
+    where: { publicId },
+    select: { id: true, publicId: true },
   })
 }
 
@@ -233,7 +262,7 @@ export function buildContestProblemData(problem: {
   }
 }
 
-/** 解析比赛公开 ID（数字） */
+/** Legacy-only parser used after the route boundary resolves canonical IDs to publicId. */
 export function parseContestId(raw: string): number {
   if (!/^\d+$/.test(raw)) throw new Error('无效的比赛 ID')
   const n = Number(raw)

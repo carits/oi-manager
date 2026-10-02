@@ -67,9 +67,10 @@ async function requireContestResolved(contestId: number) {
   return resolved
 }
 
-async function canonicalContestIdTx(tx: Prisma.TransactionClient, publicContestId: number) {
+async function canonicalContestIdTx(tx: Prisma.TransactionClient, contestIdentity: number | string) {
+  if (typeof contestIdentity === 'string') return contestIdentity
   const contest = await tx.contest.findUnique({
-    where: { publicId: publicContestId },
+    where: { publicId: contestIdentity },
     select: { id: true },
   })
   if (!contest) fail(409, 'CONTEST_CANONICAL_IDENTITY_MISSING', '比赛缺少规范 Contest 身份，已拒绝写入 Rating 数据')
@@ -260,7 +261,7 @@ async function assertNoOverlap(client: Prisma.TransactionClient, training: any, 
   if (scope === 'NONE') return
   const candidates = await client.contest.findMany({
     where: {
-      publicId: { not: training.id },
+      id: { not: training.id },
       startAt: { lt: training.endTime },
       endAt: { gt: training.startTime },
       RatingConfig: { is: { track, scope: { not: 'NONE' } } },
@@ -326,7 +327,7 @@ export async function updateContestRatingConfig(contestId: number, userId: strin
   return { ...configDto(config, training), allowedScopes, context: ratingContext(training) }
 }
 
-export async function lockContestRatingConfigTx(tx: Prisma.TransactionClient, contestId: number, actorUserId: string, format: string) {
+export async function lockContestRatingConfigTx(tx: Prisma.TransactionClient, contestId: number | string, actorUserId: string, format: string) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rating-config:${contestId}`}, 0)) IS NULL AS locked`
   const canonicalContestId = await canonicalContestIdTx(tx, contestId)
   const existing = await tx.contestRatingConfig.findUnique({ where: { contestId: canonicalContestId } })
@@ -490,7 +491,7 @@ async function assertNoEarlierRatedContestPendingTx(tx: Prisma.TransactionClient
 }) {
   const candidates = await tx.contest.findMany({
     where: {
-      publicId: { not: input.training.id },
+      id: { not: input.training.id },
       endAt: { lt: input.training.endTime },
       finalizationStatus: { not: 'FINALIZED' },
       RatingConfig: { is: {

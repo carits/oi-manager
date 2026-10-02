@@ -24,13 +24,13 @@ export const contestInclude = {
 
 export type ContestViewRecord = Prisma.ContestGetPayload<{ include: typeof contestInclude }>
 
-export function toContestProblemView(problem: any, publicContestId: number) {
+export function toContestProblemView(problem: any, _legacyContestId?: string | number) {
   const canonical = problem.CanonicalProblem
   const resources = Array.isArray(problem.ContestResource) ? problem.ContestResource : []
   const attachments = resources.filter((resource: any) => !['statement', 'solution'].includes(resource.fileType))
   return {
     id: problem.id,
-    contestId: publicContestId,
+    contestId: problem.contestId,
     canonicalProblemId: problem.canonicalProblemId,
     alias: problem.alias,
     orderIndex: problem.orderIndex,
@@ -64,10 +64,10 @@ export function toContestProblemView(problem: any, publicContestId: number) {
 
 export function toContestView(contest: any) {
   const problems = Array.isArray(contest.ContestProblem)
-    ? contest.ContestProblem.map((problem: any) => toContestProblemView(problem, contest.publicId))
+    ? contest.ContestProblem.map((problem: any) => toContestProblemView(problem, contest.id))
     : undefined
   return {
-    id: contest.publicId,
+    id: contest.id,
     canonicalContestId: contest.id,
     teamId: contest.teamId,
     organizationId: contest.organizationId,
