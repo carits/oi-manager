@@ -45,7 +45,7 @@ export const ResolvedProblemSelectionSchema = z.object({
   }).optional(),
   message: z.string().optional(),
 }).superRefine((item, context) => {
-  const mayDisclose = item.status === 'resolved' || item.status === 'not_published'
+  const mayDisclose = item.status === 'resolved'
   if (mayDisclose !== Boolean(item.problem)) context.addIssue({
     code: z.ZodIssueCode.custom,
     path: ['problem'],
