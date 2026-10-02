@@ -236,6 +236,15 @@ describe('rating domain HTTP and persistence', () => {
     expect(accounts.reduce((sum, account) => sum + account.rating - 1500, 0)).toBe(0)
   })
 
+  it('accepts canonical Contest.id for rating routes', async () => {
+    const contest = await createFinishedContest()
+    const response = await createAuthenticatedRequest(app, managerToken)
+      .get('/api/contests/' + contest.canonicalContestId + '/rating-config')
+      .set('X-OI-Organization-ID', organizationId)
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200)
+  })
+
   it('binds contest rating management routes to the active organization context', async () => {
     const contest = await createFinishedContest({ title: 'Rating context guarded contest' })
     const otherSchool = (await createTestSchoolWithPrincipal(`Rating route context ${crypto.randomUUID()}`)).school

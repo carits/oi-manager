@@ -20,6 +20,7 @@ declare global {
 export interface AuthRequest extends Request {
   user?: JwtPayload
   authContext?: RequestAuthContext
+  contestPublicId?: number
 }
 
 export interface RequestAuthContext {
