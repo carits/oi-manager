@@ -1,5 +1,5 @@
 export { ProblemReferenceSelector } from './ui/ProblemReferenceSelector'
-export type { ProblemReferenceSelectorProps } from './ui/ProblemReferenceSelector'
+export type { ProblemReferenceSelectorProps, EditableProblemReference } from './ui/ProblemReferenceSelector'
 export { ProblemReferenceLink } from './ui/ProblemReferenceLink'
 export type { SelectedCanonicalProblem, SelectedProblemReference, ProblemDataRequirement, AddProblemReferences, ProblemReferenceAddContext, ProblemReferenceAddReceipt } from './model/problemSelection'
 export { parseProblemIds } from './model/problemSelection'
