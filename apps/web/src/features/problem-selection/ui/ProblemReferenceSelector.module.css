@@ -12,6 +12,7 @@
   background: var(--bg-card);
 }
 .composer > :nth-child(2) { min-width: 0; }
+.composerWithoutAlias { grid-template-columns: minmax(130px, 170px) minmax(180px, 1fr) auto auto; }
 .inlineResult {
   grid-column: 1 / -1;
   min-height: 24px;
