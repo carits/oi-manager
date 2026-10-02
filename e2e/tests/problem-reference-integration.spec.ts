@@ -47,18 +47,16 @@ test.describe('training setup problem list editor @smoke @compact', () => {
   })
 
   test('text edit returns to the list and keeps unresolved rows visible for correction', async ({ page }, testInfo) => {
+    const metadataResponse = await page.request.get(`/api/problems/${ids.problem}`, { headers: { 'X-OI-Organization-ID': organizationId } })
+    expect(metadataResponse.ok()).toBe(true)
+    const { data: problem } = await metadataResponse.json()
     await page.goto(`${organizationBase}/training-sessions`)
     await page.getByRole('button', { name: '布置训练', exact: true }).first().click()
     const editor = page.getByTestId('problem-list-editor')
     await editor.getByRole('button', { name: '编辑', exact: true }).click()
     const textarea = editor.getByRole('textbox', { name: '题目列表文本编辑' })
     const missingNumber = `not-in-local-library-${Date.now()}`
-    await textarea.fill(`carits | ${ids.problem} | A\ncarits | ${missingNumber} | B`)
-
-    const responses: Array<Promise<unknown>> = []
-    page.on('response', response => {
-      if (new URL(response.url()).pathname === '/api/problem-selection/resolve') responses.push(response.json())
-    })
+    await textarea.fill(`${problem.platform} | ${problem.problemId} | A\ncarits | ${missingNumber} | B`)
     await editor.getByRole('button', { name: '确认', exact: true }).click()
 
     await expect(textarea).toHaveCount(0)
