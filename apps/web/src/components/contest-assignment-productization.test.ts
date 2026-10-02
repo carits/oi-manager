@@ -30,6 +30,18 @@ describe('contest and assignment productization regressions', () => {
     expect(source).not.toContain('placeholder="训练标题"')
   })
 
+  it('keeps assignment draft sections parallel instead of forcing step navigation', () => {
+    const source = read('../features/assignment/ui/AssignmentWorkspace.tsx')
+    expect(source).toContain('保存基本信息')
+    expect(source).toContain('保存题目')
+    expect(source).toContain('保存学生名单')
+    expect(source).toContain('editableReferences=')
+    expect(source).toContain('onReplace={replaceProblems}')
+    expect(source).not.toContain('designStep')
+    expect(source).not.toContain('作业设计步骤')
+    expect(source).not.toContain('点击“下一步”')
+  })
+
   it('presents one problem workspace and keeps the selected materials route discoverable', () => {
     const source = read('../features/contest/ui/ContestDetailPage.tsx')
     expect(source).toContain("{ value: 'problems' as const, label: '题目' }")
