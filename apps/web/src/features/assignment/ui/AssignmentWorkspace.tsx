@@ -98,7 +98,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
       if (!result.ok) { toast.error(result.error.message); return null }
       setValidation(null)
       onChange(result.data)
-      toast.success('当前步骤已自动保存')
+      toast.success('当前区域已保存')
       return result.data
     } finally {
       setSaving(null)
