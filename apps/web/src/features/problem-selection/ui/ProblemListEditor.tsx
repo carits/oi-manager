@@ -246,12 +246,13 @@ export function ProblemListEditor({
       const current = currentRows.find(item => item.clientKey === clientKey)
       if (!current || normalizeOjPlatformKey(current.platform) !== platform || current.problemId.trim() !== problemId) return false
       const assessed = assessResolved(result, currentRows, clientKey)
+      const shouldFocusAlias = Boolean(aliasLabel && typeof document !== 'undefined' && document.activeElement === inputRefs.current.get(clientKey))
       let next = currentRows.map(item => item.clientKey === clientKey ? { ...item, platform, ...assessed } : item)
       if (assessed.status === 'ready' && appendNext) {
         const blank: DraftRow = { clientKey: nextClientKey(), platform: lastPlatform.current, problemId: '', alias: '', status: 'editing' }
         next = [...next, blank]
         setFocusKey(blank.clientKey)
-      } else if (assessed.status === 'ready' && aliasLabel) {
+      } else if (assessed.status === 'ready' && shouldFocusAlias) {
         setAliasFocusKey(clientKey)
       }
       setRows(next)
