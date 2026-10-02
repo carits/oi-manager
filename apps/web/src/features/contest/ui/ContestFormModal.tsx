@@ -313,6 +313,52 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       await loadRowOptions(id, problem.id)
     }
   }
+  const replaceSelectedProblems: AddProblemReferences = async (references, operation) => {
+    const currentByProblemId = new Map(problemRows.flatMap(row => row.resolved ? [[row.resolved.canonicalProblemId, row] as const] : []))
+    const nextRows: ProblemRow[] = []
+    const rowsNeedingOptions: Array<{ rowId: string; canonicalProblemId: string }> = []
+
+    for (const reference of references) {
+      if (!operation.isCurrent()) return { acceptedIds: [] }
+      const problem = reference.problem
+      const existing = currentByProblemId.get(problem.id)
+      if (existing) {
+        nextRows.push({
+          ...existing,
+          platform: problem.platform,
+          problemId: problem.problemId,
+          alias: reference.alias || '',
+          resolved: { found: true, canonicalProblemId: problem.id, title: problem.title, created: false },
+        })
+        continue
+      }
+      const id = `selected-${++tempIdCounter}`
+      nextRows.push({
+        id,
+        platform: problem.platform,
+        problemId: problem.problemId,
+        alias: reference.alias || '',
+        points: 100,
+        resolving: false,
+        resolved: { found: true, canonicalProblemId: problem.id, title: problem.title, created: false },
+        contentOptionsLoading: true,
+        statementOptions: [],
+        solutionOptions: [],
+      })
+      rowsNeedingOptions.push({ rowId: id, canonicalProblemId: problem.id })
+    }
+
+    if (!operation.isCurrent()) return { acceptedIds: [] }
+    selectedIdsRef.current = new Set(references.map(reference => reference.problem.id))
+    setProblemRows(nextRows)
+
+    for (const item of rowsNeedingOptions) {
+      if (!operation.isCurrent()) return { acceptedIds: [] }
+      await loadRowOptions(item.rowId, item.canonicalProblemId)
+    }
+    return { acceptedIds: references.map(reference => reference.problem.id) }
+  }
+
   const removeRow = (id: string) => {
     if (savingRef.current) return
     const row = problemRows.find(item => item.id === id)
