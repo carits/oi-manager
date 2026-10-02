@@ -185,20 +185,47 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     await saveRoster()
   }
 
+  const draftProblemFromReference = (reference: SelectedProblemReference): AssignmentProblem | null => {
+    const { problem } = reference
+    if (!problem.stableData) return null
+    return {
+      id: `draft-${problem.id}`, problemId: problem.id, orderIndex: 0,
+      category: 'REQUIRED', required: true, maxScore: 100, judgeMaxScore: 100, targetScore: 100, weight: 100,
+      completionPolicy: problem.stableData.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
+      titleSnapshot: problem.title, statementsSnapshot: [],
+      Problem: { id: problem.id, platform: problem.platform, problemId: problem.problemId, title: problem.title, difficulty: problem.difficulty, allowedLanguages: null },
+    }
+  }
+
   const addProblems = async (references: SelectedProblemReference[]) => {
     const additions: AssignmentProblem[] = []
-    for (const { problem } of references) {
+    for (const reference of references) {
+      const problem = reference.problem
       if (problemDraft.some(item => item.problemId === problem.id) || additions.some(item => item.problemId === problem.id)) continue
-      if (!problem.stableData) { toast.error(`${problem.problemId}：没有可用的 Stable 测试数据`); continue }
-      additions.push({
-        id: `draft-${problem.id}`, problemId: problem.id, orderIndex: 0,
-        category: 'REQUIRED', required: true, maxScore: 100, judgeMaxScore: 100, targetScore: 100, weight: 100,
-        completionPolicy: problem.stableData.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
-        titleSnapshot: problem.title, statementsSnapshot: [],
-        Problem: { id: problem.id, platform: problem.platform, problemId: problem.problemId, title: problem.title, difficulty: problem.difficulty, allowedLanguages: null },
-      })
+      const draft = draftProblemFromReference(reference)
+      if (!draft) { toast.error(`${problem.problemId}：没有可用的 Stable 测试数据`); continue }
+      additions.push(draft)
     }
     if (additions.length) setProblemDraft(current => [...current, ...additions].map((item, orderIndex) => ({ ...item, orderIndex })))
+    return { acceptedIds: additions.map(item => item.problemId) }
+  }
+
+  const replaceProblems = (references: SelectedProblemReference[]) => {
+    const currentByCanonicalId = new Map(problemDraft.map(item => [item.problemId, item]))
+    const rejected: Array<{ id: string; message: string }> = []
+    const next = references.flatMap(reference => {
+      const existing = currentByCanonicalId.get(reference.problem.id)
+      if (existing) return [existing]
+      const draft = draftProblemFromReference(reference)
+      if (!draft) {
+        rejected.push({ id: reference.problem.id, message: `${reference.problem.problemId}：没有可用的 Stable 测试数据` })
+        return []
+      }
+      return [draft]
+    }).map((item, orderIndex) => ({ ...item, orderIndex }))
+    if (rejected.length) return { acceptedIds: [], rejected }
+    setProblemDraft(next)
+    return { acceptedIds: references.map(reference => reference.problem.id) }
   }
 
   const move = (index: number, delta: number) => setProblemDraft(current => {
