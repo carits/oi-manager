@@ -274,7 +274,7 @@ function ReferenceEditor({
       <span className={styles.hint}>仅使用系统题库中的可用题目</span>
     </div>
 
-    {editingRow && !textMode && <div className={styles.composer}>
+    {editingRow && !textMode && <div className={`${styles.composer} ${aliasLabel ? '' : styles.composerWithoutAlias}`}>
       <Select aria-label="题目平台" value={platform} onChange={event => changePlatform(event.target.value)} disabled={disabled || adding}>
         {OJ_PLATFORMS_NO_ALL.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
       </Select>
