@@ -81,7 +81,6 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   const [rosterDraft, setRosterDraft] = useState(() => new Set(assignment.Recipients.map(item => item.userId)))
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [confirmPublish, setConfirmPublish] = useState(false)
-  const [designStep, setDesignStep] = useState(0)
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
   useEffect(() => {
@@ -155,37 +154,35 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   const unsavedRevision = JSON.stringify([basicPayload(), problemRows(problemDraft), [...rosterDraft].sort()])
   useUnsavedChanges(`assignment-draft:${assignment.id}`, hasUnsavedChanges, unsavedRevision)
 
-  const validateStep = (step: number) => {
-    if (step === 0) {
-      if (!title.trim()) return '请填写作业名称'
-      if (!openAt || !dueAt || !closeAt) return '请填写开放、截止和关闭时间'
-      if (new Date(dueAt) < new Date(openAt)) return '截止时间不能早于开放时间'
-      if (new Date(closeAt) < new Date(dueAt)) return '关闭时间不能早于截止时间'
-      if (publishAt && new Date(publishAt) > new Date(openAt)) return '发布时间不能晚于开放时间'
-    }
-    if (step === 1) {
-      if (!problemDraft.length) return '请至少选择一道题目'
-      if (problemDraft.some(problem => problem.maxScore <= 0 || problem.targetScore < 0 || problem.targetScore > problem.maxScore || problem.weight <= 0)) return '请修正题目的满分、达标分和权重'
-    }
-    if (step === 2 && rosterMode === 'SNAPSHOT' && rosterDraft.size === 0) return '请至少选择一名学生'
+  const validateBasics = () => {
+    if (!title.trim()) return '请填写作业名称'
+    if (!openAt || !dueAt || !closeAt) return '请填写开放、截止和关闭时间'
+    if (new Date(dueAt) < new Date(openAt)) return '截止时间不能早于开放时间'
+    if (new Date(closeAt) < new Date(dueAt)) return '关闭时间不能早于截止时间'
+    if (publishAt && new Date(publishAt) > new Date(openAt)) return '发布时间不能晚于开放时间'
     return null
   }
-
-  const saveCurrentStep = async () => {
-    if (designStep === 0) return basicsDirty ? saveBasics() : assignment
-    if (designStep === 1) return problemsDirty ? saveProblems() : assignment
-    if (designStep === 2 && rosterMode === 'SNAPSHOT') return rosterDirty ? saveRoster() : assignment
-    return assignment
+  const validateProblems = () => {
+    if (!problemDraft.length) return '请至少选择一道题目'
+    if (problemDraft.some(problem => problem.maxScore <= 0 || problem.targetScore < 0 || problem.targetScore > problem.maxScore || problem.weight <= 0)) return '请修正题目的满分、达标分和权重'
+    return null
   }
+  const validateRoster = () => rosterMode === 'SNAPSHOT' && rosterDraft.size === 0 ? '请至少选择一名学生' : null
 
-  const changeStep = async (target: number) => {
-    if (saving || target === designStep) return
-    if (target < designStep) { setDesignStep(target); return }
-    if (target !== designStep + 1) return
-    const issue = validateStep(designStep)
+  const saveBasicsChecked = async () => {
+    const issue = validateBasics()
     if (issue) return toast.warning(issue)
-    const saved = await saveCurrentStep()
-    if (saved) setDesignStep(target)
+    await saveBasics()
+  }
+  const saveProblemsChecked = async () => {
+    const issue = validateProblems()
+    if (issue) return toast.warning(issue)
+    await saveProblems()
+  }
+  const saveRosterChecked = async () => {
+    const issue = validateRoster()
+    if (issue) return toast.warning(issue)
+    await saveRoster()
   }
 
   const addProblems = async (references: SelectedProblemReference[]) => {
@@ -213,7 +210,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   })
 
   const runValidation = async () => {
-    if (hasUnsavedChanges) return toast.warning('有尚未保存的修改，请返回对应步骤并点击“下一步”完成自动保存。')
+    if (hasUnsavedChanges) return toast.warning('有尚未保存的修改，请先保存对应配置区域。')
     setSaving('validate')
     const result = await apiClient.post<ValidationResult>(`/api/assignments/${assignment.id}/validate`)
     setSaving(null)
