@@ -10,7 +10,7 @@ import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
 import { StudentPicker } from '@/features/organization-account'
-import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedProblemReference } from '@/features/problem-selection'
+import { ProblemListEditor, type SelectedProblemReference } from '@/features/problem-selection'
 import {
   createTrainingSession,
   listTrainingTemplates,
@@ -72,6 +72,7 @@ export function TrainingSetupDialog({
   const [participantTarget, setParticipantTarget] = useState<ParticipantTarget>('team')
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
   const [selectedProblems, setSelectedProblems] = useState<Problem[]>([])
+  const [problemEditorBlocked, setProblemEditorBlocked] = useState(false)
   const [preset, setPreset] = useState<TrainingPreset>('practice')
   const [templates, setTemplates] = useState<TrainingTemplateOption[]>([])
   const [templateKey, setTemplateKey] = useState('')
@@ -100,6 +101,7 @@ export function TrainingSetupDialog({
     title.trim()
     && dueAt
     && (selectedProblems.length || templateKey)
+    && (templateKey || !problemEditorBlocked)
     && requiredProblemCount > 0
     && scopeReady
     && participantPreview?.participantCount
@@ -115,6 +117,7 @@ export function TrainingSetupDialog({
     setParticipantTarget('team')
     setSelectedStudentIds([])
     setSelectedProblems([])
+    setProblemEditorBlocked(false)
     setPreset('practice')
     setTemplateKey('')
     setExamDurationMinutes(120)
@@ -316,35 +319,29 @@ export function TrainingSetupDialog({
         {!templateKey && <section className={`${styles.setupSection} ${styles.problemSetupSection}`} aria-labelledby="training-setup-problems">
           <div><h3 id="training-setup-problems">训练题目</h3><p>按题号添加题库中已存在的题目。</p></div>
           <div className={styles.stack}>
-            <ProblemReferenceSelector
-              existingProblemIds={selectedProblems.map(item => item.id)}
-              editableReferences={selectedProblems.map(item => ({ platform: item.platform, problemId: item.problemId, alias: item.alias }))}
-              onAdd={(references: SelectedProblemReference[]) => {
-                setSelectedProblems(current => [
-                  ...current,
-                  ...references.map(({ problem, alias }) => ({
-                    id: problem.id,
-                    platform: problem.platform,
-                    problemId: problem.problemId,
-                    title: problem.title,
-                    difficulty: problem.difficulty,
-                    alias: alias || null,
-                    required: true,
-                  })),
-                ])
-                return { acceptedIds: references.map(reference => reference.problem.id) }
-              }}
+            <ProblemListEditor
+              references={selectedProblems.map(problem => ({
+                problem: {
+                  id: problem.id,
+                  platform: problem.platform,
+                  problemId: problem.problemId,
+                  title: problem.title,
+                  difficulty: problem.difficulty,
+                },
+                alias: problem.alias || undefined,
+              }))}
               onReplace={replaceSelectedProblems}
               aliasLabel="别名"
               dataRequirement="training"
+              onBlockingChange={setProblemEditorBlocked}
+              renderTrailing={(reference) => {
+                const current = selectedProblems.find(problem => problem.id === reference.problem.id)
+                if (!current) return null
+                return preset === 'practice'
+                  ? <Checkbox label={current.required ? '必做' : '选做'} checked={current.required} onChange={event => setSelectedProblems(items => items.map(item => item.id === current.id ? { ...item, required: event.target.checked } : item))} />
+                  : <StatusBadge variant="neutral">必做</StatusBadge>
+              }}
             />
-            {selectedProblems.length > 0 && <div className={styles.setupProblemList} aria-label="已选训练题目">{selectedProblems.map((problem, index) => <div className={styles.setupProblemRow} key={problem.id}>
-              <span className={styles.problemOrder}>{index + 1}</span>
-              <div><ProblemReferenceLink problem={problem} />{problem.alias && <span>别名 {problem.alias}</span>}<span>{problem.required ? '必做题' : '选做题'}</span></div>
-              {preset === 'practice' && <Checkbox label={problem.required ? '必做' : '选做'} checked={problem.required} onChange={event => setSelectedProblems(current => current.map(item => item.id === problem.id ? { ...item, required: event.target.checked } : item))} />}
-              {preset !== 'practice' && <StatusBadge variant="neutral">必做</StatusBadge>}
-              <Button size="sm" variant="ghost" aria-label={`移除 ${problem.problemId}`} title={`移除 ${problem.problemId}`} icon={<X size={15} />} onClick={() => setSelectedProblems(current => current.filter(item => item.id !== problem.id))} />
-            </div>)}</div>}
           </div>
         </section>}
 
