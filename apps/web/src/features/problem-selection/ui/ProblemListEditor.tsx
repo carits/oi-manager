@@ -338,47 +338,73 @@ export function ProblemListEditor({
     const invalid = parsed.rows.find(row => row.error)
     if (invalid) { setTextError(`第 ${invalid.lineNumber} 行：${invalid.error}`); return }
 
-    const nextRows: DraftRow[] = parsed.validRows.map(row => ({
-      clientKey: row.clientKey,
-      platform: row.platform!,
-      problemId: row.problemId,
-      alias: row.alias || '',
-      status: 'resolving',
-    }))
+    const existingByIdentity = new Map(rowsRef.current.flatMap(row =>
+      row.status === 'ready' && row.problem
+        ? [[JSON.stringify([row.platform, row.problemId]), row.problem] as const]
+        : []
+    ))
+    const nextRows: DraftRow[] = parsed.validRows.map(row => {
+      const existing = existingByIdentity.get(JSON.stringify([row.platform!, row.problemId]))
+      return {
+        clientKey: row.clientKey,
+        platform: row.platform!,
+        problemId: row.problemId,
+        alias: row.alias || '',
+        status: existing ? 'ready' : 'resolving',
+        ...(existing ? { problem: existing } : {}),
+      }
+    })
+
     setRows(nextRows)
     setTextMode(false)
     setTextBusy(true)
     setTextError('')
-    if (!nextRows.length) {
-      await commitProjection([])
+
+    const unresolved = nextRows.filter(row => row.status === 'resolving')
+    if (!unresolved.length) {
+      const seen = new Set<string>()
+      const deduped = nextRows.map(row => {
+        if (!row.problem) return row
+        if (seen.has(row.problem.id)) return { ...row, status: 'conflict' as const, problem: undefined, message: '该题在列表中重复' }
+        seen.add(row.problem.id)
+        return row
+      })
+      setRows(deduped)
+      await commitProjection(deduped)
       setTextBusy(false)
       return
     }
 
     try {
-      const items = nextRows.map(row => ({ clientKey: row.clientKey, platform: row.platform, problemId: row.problemId }))
       textController.current?.abort()
       const controller = new AbortController()
       textController.current = controller
+      const items = unresolved.map(row => ({ clientKey: row.clientKey, platform: row.platform, problemId: row.problemId }))
       const response = await resolveProblemSelection({ items }, { signal: controller.signal })
       if (!response.ok) throw response.error
       const ordered = orderProblemSelectionResults(items, response.data.items)
+      const resultByKey = new Map(ordered.map(result => [result.clientKey, result]))
       const seen = new Set<string>()
-      const resolvedRows = nextRows.map((row, index) => {
-        const result = ordered[index]
-        const assessed = assessResolved(result, [], row.clientKey)
-        if (assessed.status === 'ready' && assessed.problem) {
-          if (seen.has(assessed.problem.id)) return { ...row, status: 'conflict' as const, message: '该题在列表中重复' }
-          seen.add(assessed.problem.id)
+      const resolvedRows = nextRows.map(row => {
+        let candidate = row
+        if (row.status === 'resolving') {
+          const result = resultByKey.get(row.clientKey)!
+          candidate = { ...row, ...assessResolved(result, [], row.clientKey) }
         }
-        return { ...row, ...assessed }
+        if (candidate.status === 'ready' && candidate.problem) {
+          if (seen.has(candidate.problem.id)) return { ...candidate, status: 'conflict' as const, problem: undefined, message: '该题在列表中重复' }
+          seen.add(candidate.problem.id)
+        }
+        return candidate
       })
       if (!mounted.current) return
       setRows(resolvedRows)
       await commitProjection(resolvedRows)
     } catch (error) {
       if (textController.current?.signal.aborted || !mounted.current) return
-      setRows(current => current.map(row => ({ ...row, status: 'error' as const, message: error instanceof Error ? error.message : '暂时无法确认' })))
+      setRows(current => current.map(row => row.status === 'resolving'
+        ? { ...row, status: 'error' as const, message: error instanceof Error ? error.message : '暂时无法确认' }
+        : row))
     } finally {
       textController.current = null
       if (mounted.current) setTextBusy(false)
