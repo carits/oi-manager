@@ -199,7 +199,7 @@ export function ProblemListEditor({
     if (duplicate) return { status: 'conflict', message: '该题已在当前列表中' }
     const assessment = prepareProblemSelection([result], [], dataRequirement)
     const assessed = assessment.rows[0]
-    if (assessed.state !== 'ready') return { status: 'unavailable', message: assessed.message }
+    if (assessed.state !== 'ready') return { status: 'unavailable', message: '该题暂时没有可用评测数据' }
     return { status: 'ready', problem: result.problem, message: '' }
   }
 
@@ -437,7 +437,7 @@ export function ProblemListEditor({
               event.preventDefault()
               if (!event.nativeEvent.isComposing) void resolveRow(row.clientKey, true)
             }} />}
-            <span className={`${styles.state} ${row.status === 'resolving' ? styles.pending : styles.problemState}`}>
+            <span role="status" className={`${styles.state} ${row.status === 'resolving' ? styles.pending : styles.problemState}`}>
               {row.status === 'resolving' ? '·' : row.message || ''}
             </span>
           </> : <>
