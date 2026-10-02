@@ -73,7 +73,7 @@ for (const host of ['训练创建', '训练设计', '训练追加', '比赛', '�
     await number(page).fill('A')
 
     if (host === '比赛' || host === '作业') {
-      await expect(editor(page)).toContainText('Stable')
+      await expect(editor(page)).toContainText('暂时没有可用评测数据')
       await expect(selected(page)).toHaveCount(0)
       await number(page).fill('S')
       await expect(editor(page).getByRole('link', { name: '题目 carits S', exact: true })).toBeVisible()
