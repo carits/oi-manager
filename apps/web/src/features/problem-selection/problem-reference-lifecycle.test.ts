@@ -32,7 +32,7 @@ describe('problem reference lifecycle', () => {
   it('rejects mixed input in the single field without changing number case or zeroes', () => {
     expect(problemSelectionInputError(['P0001'])).toBeNull()
     expect(problemSelectionInputError(['p0001'])).toBeNull()
-    expect(problemSelectionInputError(['P0001 P0002'])).toContain('批量添加')
+    expect(problemSelectionInputError(['P0001 P0002'])).toContain('文本模式')
     expect(problemSelectionInputError(['https://example.test/problem/1'])).toContain('链接')
   })
   it('restores request order by clientKey', () => {

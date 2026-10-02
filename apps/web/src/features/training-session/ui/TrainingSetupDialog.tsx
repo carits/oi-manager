@@ -238,6 +238,22 @@ export function TrainingSetupDialog({
     await onPublished()
   }
 
+  const replaceSelectedProblems = (references: SelectedProblemReference[]) => {
+    setSelectedProblems(current => {
+      const requiredById = new Map(current.map(problem => [problem.id, problem.required]))
+      return references.map(({ problem, alias }) => ({
+        id: problem.id,
+        platform: problem.platform,
+        problemId: problem.problemId,
+        title: problem.title,
+        difficulty: problem.difficulty,
+        alias: alias || null,
+        required: requiredById.get(problem.id) ?? true,
+      }))
+    })
+    return { acceptedIds: references.map(reference => reference.problem.id) }
+  }
+
   const audienceText = participantTarget === 'team'
     ? selectedTeamName
     : participantTarget === 'custom_students'
@@ -271,12 +287,14 @@ export function TrainingSetupDialog({
         <section className={styles.setupSection} aria-labelledby="training-setup-basic">
           <div><h3 id="training-setup-basic">基本信息</h3><p>给学生一个清楚、容易识别的训练名称。</p></div>
           <div className={styles.stack}>
-            <label className={styles.field}>训练模板（可选）<Select value={templateKey} disabled={preset !== 'practice'} onChange={event => { setTemplateKey(event.target.value); if (event.target.value) setSelectedProblems([]) }}><option value="">空白开始</option>{templates.map(template => <option key={template.key} value={template.key}>{template.name}{template.problemCount ? ' · ' + template.problemCount + ' 题' : ' · 结构骨架'}</option>)}</Select><small>{preset !== 'practice' ? '模拟测试使用固定考试预设，不叠加日常训练模板。' : selectedTemplate?.description || '教师保存的模板会连同阶段、分组方案、题目规则与提示载入。'}</small></label>
-            <label className={styles.field}>使用场景<Select value={preset} onChange={event => { const nextPreset = event.target.value as TrainingPreset; setPreset(nextPreset); if (nextPreset !== 'practice') { setTemplateKey(''); setSelectedProblems(current => current.map(problem => ({ ...problem, required: true }))) } }}><option value="practice">日常训练</option><option value="oi_exam">OI 模拟测试</option><option value="acm_exam">ACM 模拟测试</option></Select><small>{preset === 'practice' ? '开放提示与同伴进度，适合日常练习。' : '关闭提示与同伴进度，按时长自动结束；成绩按所选公布规则展示。'}</small></label>
-            {preset !== 'practice' && <>
+            <div className={styles.compactGrid}>
+              <label className={styles.field}>训练模板（可选）<Select value={templateKey} disabled={preset !== 'practice'} onChange={event => { setTemplateKey(event.target.value); if (event.target.value) setSelectedProblems([]) }}><option value="">空白开始</option>{templates.map(template => <option key={template.key} value={template.key}>{template.name}{template.problemCount ? ' · ' + template.problemCount + ' 题' : ' · 结构骨架'}</option>)}</Select><small>{preset !== 'practice' ? '模拟测试使用固定考试预设，不叠加日常训练模板。' : selectedTemplate?.description || '教师保存的模板会连同阶段、分组方案、题目规则与提示载入。'}</small></label>
+              <label className={styles.field}>使用场景<Select value={preset} onChange={event => { const nextPreset = event.target.value as TrainingPreset; setPreset(nextPreset); if (nextPreset !== 'practice') { setTemplateKey(''); setSelectedProblems(current => current.map(problem => ({ ...problem, required: true }))) } }}><option value="practice">日常训练</option><option value="oi_exam">OI 模拟测试</option><option value="acm_exam">ACM 模拟测试</option></Select><small>{preset === 'practice' ? '开放提示与同伴进度，适合日常练习。' : '关闭提示与同伴进度，按时长自动结束；成绩按所选公布规则展示。'}</small></label>
+            </div>
+            {preset !== 'practice' && <div className={styles.compactGrid}>
               <label className={styles.field}>测试时长（分钟）<Input type="number" min={10} max={1440} value={examDurationMinutes} onChange={event => setExamDurationMinutes(Math.max(10, Number(event.target.value) || 10))} /></label>
               <label className={styles.field}>成绩公布<Select value={examResultVisibility} onChange={event => setExamResultVisibility(event.target.value as ExamResultVisibility)}><option value="LIVE">提交后立即可见</option><option value="AFTER_END">测试结束后可见</option><option value="TEACHER_PUBLISHED">由教师手动公布</option></Select><small>未公布前，学生看不到分数、提交统计、完成情况或训练报告。</small></label>
-            </>}
+            </div>}
             <label className={styles.field}>训练名称<Input autoFocus value={title} maxLength={200} placeholder="例如：图论专项训练" onChange={event => setTitle(event.target.value)} /></label>
             <label className={styles.field}>训练说明（可选）<Textarea rows={2} value={description} onChange={event => setDescription(event.target.value)} /></label>
           </div>
@@ -285,31 +303,39 @@ export function TrainingSetupDialog({
         <section className={styles.setupSection} aria-labelledby="training-setup-audience">
           <div><h3 id="training-setup-audience">训练对象</h3><p>选择本次需要完成训练的学生范围。</p></div>
           <div className={styles.stack}>
-            {organizationId && <label className={styles.field}>训练范围<Select value={participantTarget} onChange={event => { setParticipantTarget(event.target.value as ParticipantTarget); setSchoolWideConfirmed(false) }}><option value="team">团队（推荐）</option><option value="custom_students">自定义学生</option>{user?.organizationRole === 'school_principal' && <option value="organization_students">全校学生</option>}</Select></label>}
-            {(!organizationId && !fixedTeamId || organizationId && participantTarget === 'team') && <label className={styles.field}>学员团队<Select value={selectedTeamId} onChange={event => setSelectedTeamId(event.target.value)}><option value="">请选择可管理团队</option>{teams.map(team => <option value={team.id} key={team.id}>{team.name}</option>)}</Select></label>}
+            <div className={styles.compactGrid}>
+              {organizationId && <label className={styles.field}>训练范围<Select value={participantTarget} onChange={event => { setParticipantTarget(event.target.value as ParticipantTarget); setSchoolWideConfirmed(false) }}><option value="team">团队（推荐）</option><option value="custom_students">自定义学生</option>{user?.organizationRole === 'school_principal' && <option value="organization_students">全校学生</option>}</Select></label>}
+              {(!organizationId && !fixedTeamId || organizationId && participantTarget === 'team') && <label className={styles.field}>学员团队<Select value={selectedTeamId} onChange={event => setSelectedTeamId(event.target.value)}><option value="">请选择可管理团队</option>{teams.map(team => <option value={team.id} key={team.id}>{team.name}</option>)}</Select></label>}
+            </div>
             {organizationId && participantTarget === 'custom_students' && <StudentPicker organizationId={organizationId} teams={teams} selectedIds={selectedStudentIds} onChange={setSelectedStudentIds} />}
             {organizationId && participantTarget === 'organization_students' && <div className={styles.message}><strong>全校学生</strong><p>仅包含当前学校的有效学生，不会加入教师或负责人。</p>{participantPreview && <Checkbox label={`我确认向全校 ${participantPreview.participantCount} 名学生发布`} checked={schoolWideConfirmed} onChange={event => setSchoolWideConfirmed(event.target.checked)} />}</div>}
             <p className={styles.muted} role="status">{previewLoading ? '正在确认训练对象…' : participantPreview ? `${participantPreview.targetName} · ${participantPreview.participantCount} 人` : scopeReady ? '暂时无法确认训练对象' : '请选择训练对象'}</p>
           </div>
         </section>
 
-        {!templateKey && <section className={styles.setupSection} aria-labelledby="training-setup-problems">
+        {!templateKey && <section className={`${styles.setupSection} ${styles.problemSetupSection}`} aria-labelledby="training-setup-problems">
           <div><h3 id="training-setup-problems">训练题目</h3><p>按题号添加题库中已存在的题目。</p></div>
           <div className={styles.stack}>
             <ProblemReferenceSelector
               existingProblemIds={selectedProblems.map(item => item.id)}
-              onAdd={(references: SelectedProblemReference[]) => setSelectedProblems(current => [
-                ...current,
-                ...references.map(({ problem, alias }) => ({
-                  id: problem.id,
-                  platform: problem.platform,
-                  problemId: problem.problemId,
-                  title: problem.title,
-                  difficulty: problem.difficulty,
-                  alias: alias || null,
-                  required: true,
-                })),
-              ])}
+              editableReferences={selectedProblems.map(item => ({ platform: item.platform, problemId: item.problemId, alias: item.alias }))}
+              onAdd={(references: SelectedProblemReference[]) => {
+                setSelectedProblems(current => [
+                  ...current,
+                  ...references.map(({ problem, alias }) => ({
+                    id: problem.id,
+                    platform: problem.platform,
+                    problemId: problem.problemId,
+                    title: problem.title,
+                    difficulty: problem.difficulty,
+                    alias: alias || null,
+                    required: true,
+                  })),
+                ])
+                return { acceptedIds: references.map(reference => reference.problem.id) }
+              }}
+              onReplace={replaceSelectedProblems}
+              aliasLabel="别名"
               dataRequirement="training"
             />
             {selectedProblems.length > 0 && <div className={styles.setupProblemList} aria-label="已选训练题目">{selectedProblems.map((problem, index) => <div className={styles.setupProblemRow} key={problem.id}>

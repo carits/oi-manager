@@ -16,6 +16,9 @@
 .trainingSetupMain { display: grid; gap: var(--space-5); min-width: 0; }
 .setupSection { display: grid; grid-template-columns: minmax(150px, .42fr) minmax(0, 1fr); gap: var(--space-4); padding-bottom: var(--space-5); border-bottom: 1px solid var(--border); }
 .setupSection:last-child { padding-bottom: 0; border-bottom: 0; }
+.problemSetupSection { grid-template-columns: minmax(0, 1fr); }
+.problemSetupSection > div:first-child { max-width: 720px; }
+.problemSetupSection > div:first-child p { max-width: 640px; }
 .setupSection h3, .setupSection p, .trainingSetupSummary p { margin: 0; }
 .setupSection > div:first-child p, .trainingSetupSummary p { margin-top: var(--space-1); color: var(--text-muted); font-size: .875rem; line-height: 1.55; }
 .setupProblemList { display: grid; gap: var(--space-2); }

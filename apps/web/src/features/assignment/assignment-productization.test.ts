@@ -4,19 +4,26 @@ import { describe, expect, it } from 'vitest'
 describe('assignment productization contract', () => {
   const workspace = fs.readFileSync(new URL('./ui/AssignmentWorkspace.tsx', import.meta.url), 'utf8')
 
-  it('uses a four-step draft flow with advanced settings kept optional', () => {
-    expect(workspace).toContain("['基本信息', '选择题目', '选择学生', '检查并发布']")
+  it('uses explicit draft section saves with advanced settings kept optional', () => {
+    expect(workspace).toContain('保存基本信息</Button>')
+    expect(workspace).toContain('保存题目</Button>')
+    expect(workspace).toContain('保存学生名单</Button>')
+    expect(workspace).toContain('saveBasicsChecked')
+    expect(workspace).toContain('saveProblemsChecked')
+    expect(workspace).toContain('saveRosterChecked')
     expect(workspace).toContain('展开高级设置')
     expect(workspace).toContain('发布后立即可见')
   })
 
-  it('saves and validates the active step before advancing', () => {
-    expect(workspace).toContain('saveCurrentStep')
-    expect(workspace).toContain('const saved = await saveCurrentStep()')
-    expect(workspace).toContain('当前步骤已自动保存')
-    expect(workspace).toContain('if (hasUnsavedChanges)')
-    expect(workspace).not.toContain('>保存基本信息</Button>')
-    expect(workspace).not.toContain('>保存题目</Button>')
+  it('edits problem references as one replaceable table without restoring step navigation', () => {
+    expect(workspace).toContain('editableReferences')
+    expect(workspace).toContain('onReplace={replaceProblems}')
+    expect(workspace).not.toContain('designStep')
+    expect(workspace).not.toContain('saveCurrentStep')
+    expect(workspace).not.toContain('changeStep')
+    expect(workspace).not.toContain('作业设计步骤')
+    expect(workspace).not.toContain('点击“下一步”')
+    expect(workspace).not.toContain('当前步骤已自动保存')
   })
 
   it('submits the displayed correction target and narrows filtered matrix columns', () => {

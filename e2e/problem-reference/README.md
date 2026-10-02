@@ -7,16 +7,16 @@ pnpm exec playwright install chromium firefox
 pnpm exec playwright test --config=e2e/problem-reference/playwright.config.ts
 ```
 
-This suite renders the production ProblemReferenceSelector, Result, Link, Batch dialog,
-request client, runtime contracts and styles in React StrictMode. Next navigation and
+This suite renders the production ProblemReferenceSelector, Result and Link together with the
+inline row editor and whole-list text edit mode, request client, runtime contracts and styles in React StrictMode. Next navigation and
 authentication are replaced with explicit test context providers. Playwright supplies
 local resolver responses; the harness opens no database and has no remote OJ fallback.
 There is no additional route in the production application.
 
-Chromium, Firefox and narrow Chromium exercise live lookup, explicit addition, Enter and
-IME behavior, stale responses, cancellation, disabled/unmounted/context changes, business
-failure and partial receipts, current duplicate detection, batch limits, nested form
-safety, internal new-window links, storage failures and wrapping/overlay geometry.
+Chromium, Firefox and narrow Chromium exercise inline resolution, row completion, manual aliases,
+Enter and IME behavior, stale responses, business failure and retry, whole-list text replacement,
+row-local validation, unpublished metadata privacy, nested form safety, internal new-window links
+and narrow-layout wrapping.
 The six host configurations assert the distinct Stable policies of Contest, Assignment,
 Training creation/design/runtime and Problem Lists. The Web source integration tests
 separately verify that those six real business files import the shared selector.

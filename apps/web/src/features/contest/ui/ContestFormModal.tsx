@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import collisionStyles from './ContestFormModal.collision.module.css'
-import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './ContestFormModal.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
@@ -10,7 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { useAuth } from '@/features/auth'
-import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedProblemReference } from '@/features/problem-selection'
+import { ProblemReferenceLink, ProblemReferenceSelector, type AddProblemReferences, type SelectedProblemReference } from '@/features/problem-selection'
 import { assertContestProblemMembership, contestProblemDeletions, contestProblemOrders, contestProblemSnapshot } from '../model/contestSaveIntegrity'
 
 function toLocalDatetimeString(date: Date): string {
@@ -146,7 +145,6 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
   const [ratingRevision, setRatingRevision] = useState(0)
   const [ratingLocked, setRatingLocked] = useState(false)
   const [allowedRatingScopes, setAllowedRatingScopes] = useState<Array<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>>(['NONE'])
-  const [wizardStep, setWizardStep] = useState(0)
   const [recoveryContestId, setRecoveryContestId] = useState<string | null>(null)
   const [recoveryMessage, setRecoveryMessage] = useState('')
   const [recoveryBlocked, setRecoveryBlocked] = useState(false)
@@ -315,6 +313,52 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       await loadRowOptions(id, problem.id)
     }
   }
+  const replaceSelectedProblems: AddProblemReferences = async (references, operation) => {
+    const currentByProblemId = new Map(problemRows.flatMap(row => row.resolved ? [[row.resolved.canonicalProblemId, row] as const] : []))
+    const nextRows: ProblemRow[] = []
+    const rowsNeedingOptions: Array<{ rowId: string; canonicalProblemId: string }> = []
+
+    for (const reference of references) {
+      if (!operation.isCurrent()) return { acceptedIds: [] }
+      const problem = reference.problem
+      const existing = currentByProblemId.get(problem.id)
+      if (existing) {
+        nextRows.push({
+          ...existing,
+          platform: problem.platform,
+          problemId: problem.problemId,
+          alias: reference.alias || '',
+          resolved: { found: true, canonicalProblemId: problem.id, title: problem.title, created: false },
+        })
+        continue
+      }
+      const id = `selected-${++tempIdCounter}`
+      nextRows.push({
+        id,
+        platform: problem.platform,
+        problemId: problem.problemId,
+        alias: reference.alias || '',
+        points: 100,
+        resolving: false,
+        resolved: { found: true, canonicalProblemId: problem.id, title: problem.title, created: false },
+        contentOptionsLoading: true,
+        statementOptions: [],
+        solutionOptions: [],
+      })
+      rowsNeedingOptions.push({ rowId: id, canonicalProblemId: problem.id })
+    }
+
+    if (!operation.isCurrent()) return { acceptedIds: [] }
+    selectedIdsRef.current = new Set(references.map(reference => reference.problem.id))
+    setProblemRows(nextRows)
+
+    for (const item of rowsNeedingOptions) {
+      if (!operation.isCurrent()) return { acceptedIds: [] }
+      await loadRowOptions(item.rowId, item.canonicalProblemId)
+    }
+    return { acceptedIds: references.map(reference => reference.problem.id) }
+  }
+
   const removeRow = (id: string) => {
     if (savingRef.current) return
     const row = problemRows.find(item => item.id === id)
@@ -366,10 +410,6 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
     }
     return []
   }
-  const contestWizard = mode === 'contest'
-  const wizardSteps = ['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']
-  const canReachStep = (target: number) => target <= 0 || Array.from({ length: target }, (_, index) => stepIssues(index).length === 0).every(Boolean)
-  const currentStepIssues = contestWizard ? stepIssues(wizardStep) : []
   const contestValidationIssues = [0, 1, 2, 3].flatMap(stepIssues)
 
   const handleSave = async () => {
@@ -529,18 +569,14 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       dirty={formDirty || recoveryBlocked} loading={saving || loading}
       footer={<div className={unifiedStyles.u1}>
         <Button variant="secondary" onClick={requestClose} disabled={saving || loading}>取消</Button>
-        {contestWizard && wizardStep > 0 && <Button variant="secondary" onClick={() => setWizardStep(step => step - 1)} disabled={saving || loading}>上一步</Button>}
-        {contestWizard && wizardStep < wizardSteps.length - 1
-          ? <Button onClick={() => setWizardStep(step => step + 1)} disabled={saving || loading || Boolean(loadError) || (!recoveryBlocked && !canReachStep(wizardStep + 1))}>下一步</Button>
-          : <Button onClick={() => void handleSave()} disabled={saving || loading || Boolean(loadError) || recoveryBlocked || contestValidationIssues.length > 0}>
-            {saving ? '保存中...' : isEdit ? '保存修改' : `创建${entityName}`}
-          </Button>}
+        <Button onClick={() => void handleSave()} disabled={saving || loading || Boolean(loadError) || recoveryBlocked}>
+          {saving ? '保存中...' : isEdit ? '保存修改' : `创建${entityName}`}
+        </Button>
       </div>}>
       <div className={unifiedStyles.u2}>
         {loading ? <div className={unifiedStyles.u3}><span className={['resource-skeleton-line', collisionStyles.u1].filter(Boolean).join(' ')} aria-label="内容正在准备" /></div>
           : loadError ? <section className={unifiedStyles.reviewCard} role="alert"><p>{loadError}</p><Button onClick={() => setLoadAttempt(value => value + 1)}>重新加载</Button></section>
-          : <>
-            {contestWizard && <div className={unifiedStyles.wizardSteps} role="tablist" aria-label="比赛创建步骤">{wizardSteps.map((label, index) => <Button key={label} size="sm" variant={index === wizardStep ? 'primary' : index < wizardStep ? 'secondary' : 'ghost'} disabled={saving || (!recoveryBlocked && !canReachStep(index))} onClick={() => setWizardStep(index)} aria-current={index === wizardStep ? 'step' : undefined}>{index + 1}. {label}</Button>)}</div>}
+          : <div className={unifiedStyles.formSections}>
             {recoveryMessage && <section className={unifiedStyles.reviewCard} role="alert">
               <h3>保存未完整完成</h3><p>{recoveryMessage}</p>
               {saveReceipts.length > 0 && <details><summary>已确认完成 {saveReceipts.length} 个步骤，不代表整笔保存成功</summary><ul>{saveReceipts.map((receipt, index) => <li key={index}>{receipt}</li>)}</ul></details>}
@@ -548,81 +584,95 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
               {recoveryHref && <Button variant="secondary" onClick={() => window.open(recoveryHref, '_blank', 'noopener,noreferrer')}>新窗口核对比赛</Button>}
               {recoveryBlocked && <p>已停止直接重试。核对后请重新打开编辑器；完整事务与幂等恢复接入前，不自动重放部分完成的操作。</p>}
             </section>}
-            {contestWizard && currentStepIssues.length > 0 && <section className={unifiedStyles.reviewCard} role="alert"><strong>完成本步骤后可继续</strong><ul className={unifiedStyles.reviewIssues}>{currentStepIssues.map(issue => <li key={issue}>{issue}</li>)}</ul></section>}
-            {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
-              <label className={unifiedStyles.u5}>标题 *</label>
-              <Input value={title} disabled={saving} onChange={event => setTitle(event.target.value)} placeholder={`${entityName}名称`} />
-            </div>}
-            {contestWizard && wizardStep === 1 && <div className={unifiedStyles.u6}>
-              <div><label className={unifiedStyles.u5}>赛制</label>
-                <Select aria-label="比赛赛制" value={format} disabled={saving || ratingLocked} onChange={event => setFormat(event.target.value as typeof format)}>
-                  <option value="ioi">IOI（即时反馈 + 部分分）</option><option value="icpc">ICPC（即时反馈 + AC / 罚时）</option><option value="oi">OI（赛中不反馈，赛后统一公布）</option>
-                </Select>
+
+            <section className={unifiedStyles.formSection}>
+              <div className={unifiedStyles.formSectionHeading}>
+                <div><h3>基本信息</h3><p>名称、公告与比赛时间可以一次完成。</p></div>
               </div>
-              <div><label className={unifiedStyles.u5}>Rating 范围</label>
-                <Select aria-label="Rating 范围" value={ratingScope} disabled={saving || ratingLocked} onChange={event => setRatingScope(event.target.value as typeof ratingScope)}>
-                  {allowedRatingScopes.includes('NONE') && <option value="NONE">不计 Rating</option>}
-                  {allowedRatingScopes.includes('ORGANIZATION') && <option value="ORGANIZATION">本校 Rating</option>}
-                  {allowedRatingScopes.includes('GLOBAL') && <option value="GLOBAL">全局 Rating</option>}
-                  {allowedRatingScopes.includes('BOTH') && <option value="BOTH">全局 + 本校</option>}
-                </Select>
-                <small>{ratingLocked ? '比赛已经开始，Rating 规则已永久冻结。' : `${organizationId ? '学校比赛只影响本校 Rating。' : teamId ? '个人团队赛暂不计个人 Rating。' : ''} Rating 类型会自动跟随赛制：${format === 'icpc' ? 'ACM' : format.toUpperCase()}`}</small>
+              <div className={unifiedStyles.formGrid}>
+                <label className={unifiedStyles.fullField}><span className={unifiedStyles.u5}>标题 *</span><Input value={title} disabled={saving} onChange={event => setTitle(event.target.value)} placeholder={`${entityName}名称`} /></label>
+                <label className={unifiedStyles.fullField}><span className={unifiedStyles.u5}>公告</span><Textarea value={description} disabled={saving} onChange={event => setDescription(event.target.value)} placeholder={`${entityName}说明（可选）`} rows={2} className={unifiedStyles.descriptionInput} /></label>
+                {mode !== 'contest' && <label><span className={unifiedStyles.u5}>赛制</span><Select aria-label="赛制" value={format} disabled={saving} onChange={event => setFormat(event.target.value as typeof format)}><option value="ioi">IOI（即时反馈 + 部分分）</option><option value="icpc">ICPC（即时反馈 + AC / 罚时）</option><option value="oi">OI（赛中不反馈，赛后统一公布）</option></Select></label>}
+                <label><span className={unifiedStyles.u5}>开始时间 *</span><Input type="datetime-local" value={startTime} disabled={saving} onChange={event => setStartTime(event.target.value)} /></label>
+                <label><span className={unifiedStyles.u5}>结束时间 *</span><Input type="datetime-local" value={endTime} disabled={saving} onChange={event => setEndTime(event.target.value)} /></label>
               </div>
-              {ratingScope !== 'NONE' && <>
-                <div><label className={unifiedStyles.u5}>Rating 权重</label><Input aria-label="Rating 权重" type="number" min="0.1" max="1" step="0.1" value={ratingWeight} disabled={saving || ratingLocked} onChange={event => setRatingWeight(event.target.value)} /><small>影响强度：标准比赛的 {Math.round((Number(ratingWeight) || 0) * 100)}%</small></div>
-                <div><label className={unifiedStyles.u5}>本校 / 全局最低人数</label><div className={unifiedStyles.u1}>
-                  <Input aria-label="本校 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={saving || ratingLocked} onChange={event => setOrganizationRatingMinimum(event.target.value)} />
-                  <Input aria-label="全局 Rating 最低人数" type="number" min="2" value={globalRatingMinimum} disabled={saving || ratingLocked} onChange={event => setGlobalRatingMinimum(event.target.value)} />
-                </div></div>
-              </>}
-            </div>}
-            {(!contestWizard || wizardStep === 0) && <>
-              <div className={unifiedStyles.u4}><label className={unifiedStyles.u5}>公告</label><Textarea value={description} disabled={saving} onChange={event => setDescription(event.target.value)} placeholder={`${entityName}说明（可选）`} rows={2} className={unifiedStyles.descriptionInput} /></div>
-              <div className={unifiedStyles.u6}>
-                {!contestWizard && <div><label className={unifiedStyles.u5}>赛制</label><Select aria-label="赛制" value={format} disabled={saving} onChange={event => setFormat(event.target.value as typeof format)}><option value="ioi">IOI（即时反馈+部分分）</option><option value="icpc">ICPC（即时反馈+AC/罚时）</option><option value="oi">OI（赛中不反馈，赛后统一公布）</option></Select></div>}
-                <div><label className={unifiedStyles.u5}>开始时间 *</label><Input type="datetime-local" value={startTime} disabled={saving} onChange={event => setStartTime(event.target.value)} /></div>
-                <div><label className={unifiedStyles.u5}>结束时间 *</label><Input type="datetime-local" value={endTime} disabled={saving} onChange={event => setEndTime(event.target.value)} /></div>
+            </section>
+
+            {mode === 'contest' && <section className={unifiedStyles.formSection}>
+              <div className={unifiedStyles.formSectionHeading}>
+                <div><h3>赛制与 Rating</h3><p>这些配置彼此相关，放在同一处直接调整。</p></div>
               </div>
-            </>}
-            {(!contestWizard || wizardStep === 3) && <div className={unifiedStyles.u6}>
-              <div><label className={unifiedStyles.u5}>题目来源显示</label><Select aria-label="题目来源显示" value={problemIdVisible ? 'always' : 'after'} disabled={saving} onChange={event => setProblemIdVisible(event.target.value === 'always')}><option value="after">赛后显示</option><option value="always">始终显示</option></Select></div>
-              <div><label className={unifiedStyles.u5}>题解显示</label><Select aria-label="题解显示" value={solutionVisible ? 'always' : 'after'} disabled={saving} onChange={event => setSolutionVisible(event.target.value === 'always')}><option value="after">赛后显示</option><option value="always">始终显示</option></Select></div>
-              <div><label className={unifiedStyles.u5}>管理员排名</label><label className={unifiedStyles.u7}><Input type="checkbox" checked={includeAdminInRanking} disabled={saving} onChange={event => setIncludeAdminInRanking(event.target.checked)} className={unifiedStyles.u8} /><span className={unifiedStyles.u9}>包含管理员</span></label></div>
-            </div>}
-            {(!contestWizard || wizardStep === 2) && <div className={unifiedStyles.u10}>
-              <div className={unifiedStyles.sectionHeading}><h3 className={unifiedStyles.u11}>{contestWizard ? '比赛题目' : '题目列表'}</h3></div>
-              <ProblemReferenceSelector disabled={saving || recoveryBlocked} existingProblemIds={problemRows.flatMap(row => row.resolved ? [row.resolved.canonicalProblemId] : [])} onAdd={addSelectedProblems} />
-              {problemRows.length > 0 ? <>
-                <div className={unifiedStyles.selectedProblems} aria-label="已选比赛题目">{problemRows.map((row, index) => <div key={row.id} className={unifiedStyles.selectedProblemCard}><strong>{row.alias || String.fromCharCode(65 + index)}</strong><span>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.canonicalProblemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : row.problemId}</span></div>)}</div>
-                <div className={unifiedStyles.u12}><TableRoot className={unifiedStyles.u13}>
-                  <TableHead><TableRow className={unifiedStyles.u14}>
-                    <TableHeaderCell className={unifiedStyles.u15}>排序</TableHeaderCell><TableHeaderCell className={unifiedStyles.u16}>#</TableHeaderCell>
-                    <TableHeaderCell className={unifiedStyles.u17}>OJ</TableHeaderCell><TableHeaderCell className={unifiedStyles.u18}>题号</TableHeaderCell>
-                    <TableHeaderCell className={unifiedStyles.u19}>题目</TableHeaderCell><TableHeaderCell className={unifiedStyles.u20}>别名</TableHeaderCell>
-                    {format !== 'icpc' && <TableHeaderCell className={unifiedStyles.u21}>分值</TableHeaderCell>}<TableHeaderCell className={unifiedStyles.u22}>操作</TableHeaderCell>
-                  </TableRow></TableHead>
-                  <TableBody>{problemRows.map((row, index) => <TableRow key={row.id} className={`${unifiedStyles.problemRow} ${row.existing ? unifiedStyles.existingProblem : unifiedStyles.newProblem}`}>
-                    <TableCell className={unifiedStyles.u23}><Button variant="secondary" size="sm" onClick={() => moveRow(index, -1)} disabled={saving || index === 0} className={unifiedStyles.moveButtonFirst} title="上移">↑</Button><Button variant="secondary" size="sm" onClick={() => moveRow(index, 1)} disabled={saving || index === problemRows.length - 1} className={unifiedStyles.moveButton} title="下移">↓</Button></TableCell>
-                    <TableCell className={unifiedStyles.u24}>{index + 1}</TableCell><TableCell className={unifiedStyles.u25}>{row.platform}</TableCell><TableCell className={unifiedStyles.u25}>{row.problemId}</TableCell>
-                    <TableCell className={unifiedStyles.u27}><span className={unifiedStyles.u31}>{row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.canonicalProblemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : '等待识别题目'}</span>
-                      {row.contentOptionsLoading && <p>题面选项加载中…</p>}
-                      {row.contentOptionsError && <p role="alert">{row.contentOptionsError} <Button size="sm" disabled={saving} onClick={() => row.resolved && void loadRowOptions(row.id, row.resolved.canonicalProblemId)}>重试加载</Button></p>}
-                    </TableCell>
-                    <TableCell className={unifiedStyles.u34}><Input value={row.alias} disabled={saving} onChange={event => updateRow(row.id, { alias: event.target.value })} className={unifiedStyles.u35} /></TableCell>
-                    {format !== 'icpc' && <TableCell className={unifiedStyles.u34}><Input type="number" value={row.points} disabled={saving} onChange={event => updateRow(row.id, { points: Number(event.target.value) })} className={unifiedStyles.u36} /></TableCell>}
-                    <TableCell className={unifiedStyles.u34}><Button variant="ghost" disabled={saving} onClick={() => removeRow(row.id)} className={unifiedStyles.u37} title="移除">✕</Button></TableCell>
-                  </TableRow>)}</TableBody>
-                </TableRoot></div>
-              </> : <div className={unifiedStyles.u39}>还没有添加题目，请选择平台并输入题号。</div>}
-            </div>}
-            {contestWizard && wizardStep === 4 && <section className={unifiedStyles.reviewCard}><h3>发布前检查</h3>
-              {contestValidationIssues.length > 0 ? <ul className={unifiedStyles.reviewIssues}>{contestValidationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p>比赛信息完整。确认后将保存比赛；开始前仍可编辑未冻结字段。</p>}
-              <dl><div><dt>比赛</dt><dd>{title || '未填写名称'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div>
-                <div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 本校' : ratingScope === 'GLOBAL' ? '全局' : '本校'} · 标准比赛的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div>
-                <div><dt>题目</dt><dd>{problemRows.length} 道，创建时固定各题当前评测数据版本</dd></div><div><dt>原题来源</dt><dd>{problemIdVisible ? '比赛期间显示' : '比赛结束后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '比赛期间显示' : '比赛结束后显示'}</dd></div>
-              </dl>
+              <div className={unifiedStyles.formGrid}>
+                <label><span className={unifiedStyles.u5}>赛制</span>
+                  <Select aria-label="比赛赛制" value={format} disabled={saving || ratingLocked} onChange={event => setFormat(event.target.value as typeof format)}>
+                    <option value="ioi">IOI（即时反馈 + 部分分）</option><option value="icpc">ICPC（即时反馈 + AC / 罚时）</option><option value="oi">OI（赛中不反馈，赛后统一公布）</option>
+                  </Select>
+                </label>
+                <label><span className={unifiedStyles.u5}>Rating 范围</span>
+                  <Select aria-label="Rating 范围" value={ratingScope} disabled={saving || ratingLocked} onChange={event => setRatingScope(event.target.value as typeof ratingScope)}>
+                    {allowedRatingScopes.includes('NONE') && <option value="NONE">不计 Rating</option>}
+                    {allowedRatingScopes.includes('ORGANIZATION') && <option value="ORGANIZATION">本校 Rating</option>}
+                    {allowedRatingScopes.includes('GLOBAL') && <option value="GLOBAL">全局 Rating</option>}
+                    {allowedRatingScopes.includes('BOTH') && <option value="BOTH">全局 + 本校</option>}
+                  </Select>
+                  <small>{ratingLocked ? '比赛已经开始，Rating 规则已冻结。' : `${organizationId ? '学校比赛只影响本校 Rating。' : teamId ? '个人团队赛暂不计个人 Rating。' : ''} Rating 类型自动跟随赛制：${format === 'icpc' ? 'ACM' : format.toUpperCase()}`}</small>
+                </label>
+                {ratingScope !== 'NONE' && <>
+                  <label><span className={unifiedStyles.u5}>Rating 权重</span><Input aria-label="Rating 权重" type="number" min="0.1" max="1" step="0.1" value={ratingWeight} disabled={saving || ratingLocked} onChange={event => setRatingWeight(event.target.value)} /><small>标准比赛影响强度的 {Math.round((Number(ratingWeight) || 0) * 100)}%</small></label>
+                  <label><span className={unifiedStyles.u5}>最低人数</span><div className={unifiedStyles.inlineInputs}><Input aria-label="本校 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={saving || ratingLocked} onChange={event => setOrganizationRatingMinimum(event.target.value)} /><Input aria-label="全局 Rating 最低人数" type="number" min="2" value={globalRatingMinimum} disabled={saving || ratingLocked} onChange={event => setGlobalRatingMinimum(event.target.value)} /></div></label>
+                </>}
+              </div>
             </section>}
-          </>}
+
+            <section className={unifiedStyles.formSection}>
+              <div className={unifiedStyles.formSectionHeading}>
+                <div><h3>{mode === 'contest' ? '比赛题目' : '题目列表'}</h3><p>添加一题会自动解析；“编辑”可直接切换为整段文本。</p></div>
+                <span className={unifiedStyles.problemCount}>{problemRows.length} 道</span>
+              </div>
+              <ProblemReferenceSelector
+                disabled={saving || recoveryBlocked}
+                existingProblemIds={problemRows.flatMap(row => row.resolved ? [row.resolved.canonicalProblemId] : [])}
+                editableReferences={problemRows.map(row => ({ platform: row.platform, problemId: row.problemId, alias: row.alias }))}
+                onAdd={addSelectedProblems}
+                onReplace={replaceSelectedProblems}
+                aliasLabel="别名"
+                dataRequirement="stable"
+              />
+              {problemRows.length > 0
+                ? <div className={unifiedStyles.problemCards} aria-label="已选比赛题目">
+                  {problemRows.map((row, index) => <article key={row.id} className={unifiedStyles.problemCard}>
+                    <div className={unifiedStyles.problemMove}>
+                      <Button variant="ghost" size="sm" onClick={() => moveRow(index, -1)} disabled={saving || index === 0} title="上移">↑</Button>
+                      <Button variant="ghost" size="sm" onClick={() => moveRow(index, 1)} disabled={saving || index === problemRows.length - 1} title="下移">↓</Button>
+                    </div>
+                    <div className={unifiedStyles.problemCardMain}>
+                      <div className={unifiedStyles.problemTitleRow}>
+                        <strong>{row.alias || '—'}</strong>
+                        {row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.canonicalProblemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : <span>等待识别题目</span>}
+                      </div>
+                      <span className={unifiedStyles.problemMeta}>{row.platform} · {row.problemId}</span>
+                      {row.contentOptionsLoading && <span className={unifiedStyles.problemMeta}>正在准备题面…</span>}
+                      {row.contentOptionsError && <span className={unifiedStyles.problemError}>{row.contentOptionsError} <Button size="sm" variant="ghost" disabled={saving} onClick={() => row.resolved && void loadRowOptions(row.id, row.resolved.canonicalProblemId)}>重试</Button></span>}
+                    </div>
+                    <label className={unifiedStyles.problemCompactField}><span>别名</span><Input aria-label={`${row.problemId} 别名`} value={row.alias} maxLength={50} disabled={saving} onChange={event => updateRow(row.id, { alias: event.target.value })} /></label>
+                    {format !== 'icpc' && <label className={unifiedStyles.problemCompactField}><span>分值</span><Input aria-label={`${row.problemId} 分值`} type="number" min={0} value={row.points} disabled={saving} onChange={event => updateRow(row.id, { points: Number(event.target.value) })} /></label>}
+                    <Button variant="ghost" size="sm" disabled={saving} onClick={() => removeRow(row.id)}>移除</Button>
+                  </article>)}
+                </div>
+                : <div className={unifiedStyles.problemEmpty}><strong>还没有题目</strong><span>点击“添加一道题目”开始，也可以用“编辑”一次粘贴多行。</span></div>}
+            </section>
+
+            <section className={unifiedStyles.formSection}>
+              <div className={unifiedStyles.formSectionHeading}>
+                <div><h3>可见性</h3><p>这些选项可以并列配置，不需要单独一步。</p></div>
+              </div>
+              <div className={unifiedStyles.formGrid}>
+                <label><span className={unifiedStyles.u5}>题目来源显示</span><Select aria-label="题目来源显示" value={problemIdVisible ? 'always' : 'after'} disabled={saving} onChange={event => setProblemIdVisible(event.target.value === 'always')}><option value="after">赛后显示</option><option value="always">始终显示</option></Select></label>
+                <label><span className={unifiedStyles.u5}>题解显示</span><Select aria-label="题解显示" value={solutionVisible ? 'always' : 'after'} disabled={saving} onChange={event => setSolutionVisible(event.target.value === 'always')}><option value="after">赛后显示</option><option value="always">始终显示</option></Select></label>
+                <div><span className={unifiedStyles.u5}>管理员排名</span><label className={unifiedStyles.u7}><Input type="checkbox" checked={includeAdminInRanking} disabled={saving} onChange={event => setIncludeAdminInRanking(event.target.checked)} className={unifiedStyles.u8} /><span className={unifiedStyles.u9}>包含管理员</span></label></div>
+              </div>
+            </section>
+          </div>}
       </div>
     </FormDialog>
     <ConfirmDialog isOpen={closeRequested} onClose={() => setCloseRequested(false)} onConfirm={() => { setCloseRequested(false); onClose() }}

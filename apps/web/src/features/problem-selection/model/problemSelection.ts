@@ -17,7 +17,7 @@ export function parseProblemIds(value: string): string[] {
 export function problemSelectionInputError(problemIds: readonly string[]): string | null {
   if (problemIds.length > MAX_PROBLEM_SELECTION_BATCH) return `每次最多检索 ${MAX_PROBLEM_SELECTION_BATCH} 道题，请分批输入；本次输入未截断。`
   if (problemIds.some(id => id.length > 128)) return '题号不能超过 128 个字符；请只输入题号，不要粘贴题目链接。'
-  if (problemIds.some(id => /[\s,;，；]/u.test(id))) return '此处只能输入一个题号；多个题号请使用“批量添加题目”。'
+  if (problemIds.some(id => /[\s,;，；]/u.test(id))) return '此处只能输入一个题号；多题请使用“编辑”切换到文本模式。'
   if (problemIds.some(id => /:\/\//u.test(id))) return '请填写原始题号，不要填写题目链接。'
   return null
 }

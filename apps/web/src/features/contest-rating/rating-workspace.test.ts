@@ -40,17 +40,18 @@ describe('contest Rating workspace contract', () => {
     expect(source).toContain('disabled={!selectedOrganizationId}')
   })
 
-  it('guides contest creation through explicit rating and visibility steps', () => {
+  it('keeps rating and visibility visible alongside the rest of contest creation', () => {
     const source = fs.readFileSync(new URL('../contest/ui/ContestFormModal.tsx', import.meta.url), 'utf8')
 
-    expect(source).toContain("['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']")
+    expect(source).toContain('赛制与 Rating')
     expect(source).toContain('比赛赛制')
     expect(source).toContain('Rating 范围')
     expect(source).toContain('ProblemReferenceSelector')
+    expect(source).toContain('可见性')
     expect(source).not.toContain('Carits 平台题库')
     expect(source).not.toContain('搜索题号或标题')
-    expect(source).toContain('影响强度：标准比赛的')
-    expect(source).toContain('下一步')
+    expect(source).toContain('标准比赛影响强度的')
+    expect(source).not.toContain('下一步')
     expect(source).toContain('`创建${entityName}`')
     expect(source).toContain('contestValidationIssues')
     expect(source).toContain('当前草稿和已确认回执已保留')
