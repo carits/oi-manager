@@ -110,9 +110,11 @@ export function ProblemListEditor({
   const [businessError, setBusinessError] = useState('')
   const [focusKey, setFocusKey] = useState<string | null>(null)
   const inputRefs = useRef(new Map<string, HTMLInputElement>())
+  const mounted = useRef(false)
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const controllers = useRef(new Map<string, AbortController>())
   const businessOperation = useRef(new ProblemReferenceOperation())
+  const textController = useRef<AbortController | null>(null)
   const composing = useRef(new Set<string>())
   const dragging = useRef<number | null>(null)
   const lastPlatform = useRef('carits')
@@ -125,9 +127,12 @@ export function ProblemListEditor({
   }, [storageKey])
 
   useEffect(() => {
+    mounted.current = true
     return () => {
+      mounted.current = false
       timers.current.forEach(timer => clearTimeout(timer))
       controllers.current.forEach(controller => controller.abort())
+      textController.current?.abort()
       businessOperation.current.cancel()
     }
   }, [])
@@ -352,7 +357,10 @@ export function ProblemListEditor({
 
     try {
       const items = nextRows.map(row => ({ clientKey: row.clientKey, platform: row.platform, problemId: row.problemId }))
-      const response = await resolveProblemSelection({ items })
+      textController.current?.abort()
+      const controller = new AbortController()
+      textController.current = controller
+      const response = await resolveProblemSelection({ items }, { signal: controller.signal })
       if (!response.ok) throw response.error
       const ordered = orderProblemSelectionResults(items, response.data.items)
       const seen = new Set<string>()
@@ -365,20 +373,23 @@ export function ProblemListEditor({
         }
         return { ...row, ...assessed }
       })
+      if (!mounted.current) return
       setRows(resolvedRows)
       await commitProjection(resolvedRows)
     } catch (error) {
-      setRows(current => current.map(row => ({ ...row, status: 'error', message: error instanceof Error ? error.message : '暂时无法确认' })))
+      if (textController.current?.signal.aborted || !mounted.current) return
+      setRows(current => current.map(row => ({ ...row, status: 'error' as const, message: error instanceof Error ? error.message : '暂时无法确认' })))
     } finally {
-      setTextBusy(false)
+      textController.current = null
+      if (mounted.current) setTextBusy(false)
     }
   }
 
   return <section className={styles.root} data-testid="problem-list-editor">
     <div className={styles.toolbar}>
       <div className={styles.toolbarActions}>
-        <Button type="button" variant="secondary" size="sm" disabled={disabled || textMode} onClick={addRow}>＋ 添加一道题目</Button>
-        <Button type="button" variant="ghost" size="sm" disabled={disabled || textMode} onClick={beginTextEdit}>编辑</Button>
+        <Button type="button" variant="secondary" size="sm" disabled={disabled || textMode || textBusy} onClick={addRow}>＋ 添加一道题目</Button>
+        <Button type="button" variant="ghost" size="sm" disabled={disabled || textMode || textBusy} onClick={beginTextEdit}>编辑</Button>
       </div>
       <span className={styles.count}>{rows.length} 道</span>
     </div>
