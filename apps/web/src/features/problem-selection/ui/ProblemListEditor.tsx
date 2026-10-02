@@ -406,12 +406,10 @@ export function ProblemListEditor({
         return <div
           key={row.clientKey}
           className={`${styles.row} ${row.status === 'ready' ? styles.readyRow : styles.editingRow}`}
-          draggable={!disabled && row.status === 'ready'}
-          onDragStart={() => { dragging.current = index }}
           onDragOver={event => { if (!disabled) event.preventDefault() }}
           onDrop={() => dropRow(index)}
         >
-          <span className={styles.handle} title="拖动调整顺序">{row.status === 'ready' ? '⋮⋮' : '+'}</span>
+          <span className={styles.handle} title={row.status === 'ready' ? '拖动调整顺序' : undefined} draggable={!disabled && row.status === 'ready'} onDragStart={() => { dragging.current = index }}>{row.status === 'ready' ? '⋮⋮' : '+'}</span>
           <span className={styles.order}>{index + 1}</span>
           {editable ? <>
             <Select aria-label={`第 ${index + 1} 题平台`} value={row.platform} disabled={disabled} onChange={event => updateIdentity(row.clientKey, { platform: event.target.value })}>
