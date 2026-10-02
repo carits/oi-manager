@@ -1,3 +1,5 @@
+export { ProblemListEditor } from './ui/ProblemListEditor'
+export type { ProblemListEditorProps } from './ui/ProblemListEditor'
 export { ProblemReferenceSelector } from './ui/ProblemReferenceSelector'
 export type { ProblemReferenceSelectorProps, EditableProblemReference } from './ui/ProblemReferenceSelector'
 export { ProblemReferenceLink } from './ui/ProblemReferenceLink'

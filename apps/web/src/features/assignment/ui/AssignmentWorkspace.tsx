@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Send, Trash2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Send } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import apiClient from '@/lib/apiClient'
@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { SubmissionCodeEditor } from '@/features/submission'
 import { getAssetUrl } from '@/lib/assets'
-import { ProblemReferenceLink, ProblemReferenceSelector, type SelectedProblemReference } from '@/features/problem-selection'
+import { ProblemListEditor, type SelectedProblemReference } from '@/features/problem-selection'
 import { Pagination } from '@/components/ui/Pagination'
 import { Section } from '@/components/ui/Section'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -78,6 +78,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   const [correctionPolicy, setCorrectionPolicy] = useState(assignment.correctionPolicy)
   const [solutionReleasePolicy, setSolutionReleasePolicy] = useState(assignment.solutionReleasePolicy)
   const [problemDraft, setProblemDraft] = useState(assignment.Problems)
+  const [problemEditorBlocked, setProblemEditorBlocked] = useState(false)
   const [rosterDraft, setRosterDraft] = useState(() => new Set(assignment.Recipients.map(item => item.userId)))
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [confirmPublish, setConfirmPublish] = useState(false)
@@ -163,6 +164,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     return null
   }
   const validateProblems = () => {
+    if (problemEditorBlocked) return '仍有题目需要修正'
     if (!problemDraft.length) return '请至少选择一道题目'
     if (problemDraft.some(problem => problem.maxScore <= 0 || problem.targetScore < 0 || problem.targetScore > problem.maxScore || problem.weight <= 0)) return '请修正题目的满分、达标分和权重'
     return null
@@ -197,19 +199,6 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     }
   }
 
-  const addProblems = async (references: SelectedProblemReference[]) => {
-    const additions: AssignmentProblem[] = []
-    for (const reference of references) {
-      const problem = reference.problem
-      if (problemDraft.some(item => item.problemId === problem.id) || additions.some(item => item.problemId === problem.id)) continue
-      const draft = draftProblemFromReference(reference)
-      if (!draft) { toast.error(`${problem.problemId}：没有可用的 Stable 测试数据`); continue }
-      additions.push(draft)
-    }
-    if (additions.length) setProblemDraft(current => [...current, ...additions].map((item, orderIndex) => ({ ...item, orderIndex })))
-    return { acceptedIds: additions.map(item => item.problemId) }
-  }
-
   const replaceProblems = (references: SelectedProblemReference[]) => {
     const currentByCanonicalId = new Map(problemDraft.map(item => [item.problemId, item]))
     const rejected: Array<{ id: string; message: string }> = []
@@ -218,7 +207,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
       if (existing) return [existing]
       const draft = draftProblemFromReference(reference)
       if (!draft) {
-        rejected.push({ id: reference.problem.id, message: `${reference.problem.problemId}：没有可用的 Stable 测试数据` })
+        rejected.push({ id: reference.problem.id, message: `${reference.problem.problemId}：没有可用于作业的评测数据` })
         return []
       }
       return [draft]
@@ -227,14 +216,6 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     setProblemDraft(next)
     return { acceptedIds: references.map(reference => reference.problem.id) }
   }
-
-  const move = (index: number, delta: number) => setProblemDraft(current => {
-    const target = index + delta
-    if (target < 0 || target >= current.length) return current
-    const next = [...current]
-    ;[next[index], next[target]] = [next[target], next[index]]
-    return next.map((item, orderIndex) => ({ ...item, orderIndex }))
-  })
 
   const runValidation = async () => {
     if (hasUnsavedChanges) return toast.warning('有尚未保存的修改，请先保存对应配置区域。')
@@ -295,29 +276,41 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
 
     <Section
       title="选择题目"
-      description="添加题库中已发布且具有 Stable 评测数据的题目；“编辑”可以直接修改整份题目列表。"
+      description="添加系统题库中可用于作业的题目；“编辑”可以直接修改整份题目列表。"
       actions={<Button variant="secondary" loading={saving === 'problems'} disabled={!problemsDirty || Boolean(saving)} onClick={() => void saveProblemsChecked()}>保存题目</Button>}
     >
       <div className={styles.stack}>
-        <ProblemReferenceSelector
-          existingProblemIds={problemDraft.map(item => item.problemId)}
-          editableReferences={problemDraft.map(item => ({ platform: item.Problem.platform, problemId: item.Problem.problemId }))}
-          onAdd={addProblems}
+        <ProblemListEditor
+          references={problemDraft.map(item => ({
+            problem: {
+              id: item.Problem.id,
+              platform: item.Problem.platform,
+              problemId: item.Problem.problemId,
+              title: item.Problem.title,
+              difficulty: item.Problem.difficulty,
+            },
+          }))}
           onReplace={replaceProblems}
           dataRequirement="stable"
+          aliasLabel={null}
+          onBlockingChange={setProblemEditorBlocked}
+          renderTrailing={(reference) => {
+            const item = problemDraft.find(problem => problem.problemId === reference.problem.id)
+            if (!item) return null
+            return <div className={styles.problemInlineControls}>
+              <Select aria-label={`${item.Problem.title} 类别`} value={item.category} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, category: event.target.value as AssignmentProblem['category'], required: event.target.value === 'REQUIRED' } : row))}><option value="REQUIRED">必做</option><option value="OPTIONAL">选做</option><option value="CHALLENGE">挑战</option></Select>
+              <details className={styles.problemSettings}>
+                <summary>设置</summary>
+                <div className={styles.problemControls}>
+                  <FormField label="作业满分" hint={`本题评测满分 ${item.judgeMaxScore || 100}`}><Input aria-label={`${item.Problem.title} 满分`} type="number" min={1} max={1000} value={item.maxScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, maxScore: Number(event.target.value), targetScore: Math.min(row.targetScore, Number(event.target.value)) } : row))} /></FormField>
+                  <FormField label="达标分"><Input aria-label={`${item.Problem.title} 目标分`} type="number" min={0} max={item.maxScore} value={item.targetScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, targetScore: Number(event.target.value) } : row))} /></FormField>
+                  <FormField label="权重"><Input aria-label={`${item.Problem.title} 权重`} type="number" min={1} max={10000} value={item.weight} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, weight: Number(event.target.value) } : row))} /></FormField>
+                  <FormField label="完成条件"><Select aria-label={`${item.Problem.title} 完成条件`} value={item.completionPolicy} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, completionPolicy: event.target.value as AssignmentProblem['completionPolicy'] } : row))}><option value="AC">必须 AC</option><option value="TARGET_SCORE">达到目标分</option><option value="ATTEMPT">有提交即可</option><option value="MANUAL">教师确认</option></Select></FormField>
+                </div>
+              </details>
+            </div>
+          }}
         />
-        {problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
-          <span className={styles.problemIdentity}><strong>{index + 1}. <ProblemReferenceLink problem={item.Problem} /></strong><span>每次提交使用当时的 Stable 测试数据</span></span>
-          <div className={styles.problemControls}>
-            <FormField label="类别"><Select aria-label={`${item.Problem.title} 类别`} value={item.category} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, category: event.target.value as AssignmentProblem['category'], required: event.target.value === 'REQUIRED' } : row))}><option value="REQUIRED">必做</option><option value="OPTIONAL">选做</option><option value="CHALLENGE">挑战</option></Select></FormField>
-            <FormField label="作业满分" hint={`本题评测满分 ${item.judgeMaxScore || 100}`}><Input aria-label={`${item.Problem.title} 满分`} type="number" min={1} max={1000} value={item.maxScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, maxScore: Number(event.target.value), targetScore: Math.min(row.targetScore, Number(event.target.value)) } : row))} /></FormField>
-            <FormField label="达标分"><Input aria-label={`${item.Problem.title} 目标分`} type="number" min={0} max={item.maxScore} value={item.targetScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, targetScore: Number(event.target.value) } : row))} /></FormField>
-            <FormField label="权重"><Input aria-label={`${item.Problem.title} 权重`} type="number" min={1} max={10000} value={item.weight} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, weight: Number(event.target.value) } : row))} /></FormField>
-            <FormField label="完成条件"><Select aria-label={`${item.Problem.title} 完成条件`} value={item.completionPolicy} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, completionPolicy: event.target.value as AssignmentProblem['completionPolicy'] } : row))}><option value="AC">必须 AC</option><option value="TARGET_SCORE">达到目标分</option><option value="ATTEMPT">有提交即可</option><option value="MANUAL">教师确认</option></Select></FormField>
-          </div>
-          <span className={styles.actions}><Button iconOnly variant="ghost" aria-label="上移题目" disabled={index === 0} onClick={() => move(index, -1)} icon={<ArrowUp size={16} />} /><Button iconOnly variant="ghost" aria-label="下移题目" disabled={index === problemDraft.length - 1} onClick={() => move(index, 1)} icon={<ArrowDown size={16} />} /><Button iconOnly variant="ghost" aria-label="移除题目" onClick={() => setProblemDraft(current => current.filter(row => row.id !== item.id))} icon={<Trash2 size={16} />} /></span>
-        </div>)}
-        {problemDraft.length === 0 && <p className={styles.muted}>尚未添加题目。</p>}
       </div>
     </Section>
 

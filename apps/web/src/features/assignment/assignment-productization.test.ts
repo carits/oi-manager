@@ -16,7 +16,7 @@ describe('assignment productization contract', () => {
   })
 
   it('edits problem references as one replaceable table without restoring step navigation', () => {
-    expect(workspace).toContain('editableReferences')
+    expect(workspace).toContain('ProblemListEditor')
     expect(workspace).toContain('onReplace={replaceProblems}')
     expect(workspace).not.toContain('designStep')
     expect(workspace).not.toContain('saveCurrentStep')

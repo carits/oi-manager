@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog, FormDialog } from '@/components/ui/Dialogs'
 import { useAuth } from '@/features/auth'
-import { ProblemReferenceLink, ProblemReferenceSelector, type AddProblemReferences, type SelectedProblemReference } from '@/features/problem-selection'
+import { ProblemListEditor, type AddProblemReferences } from '@/features/problem-selection'
 import { assertContestProblemMembership, contestProblemDeletions, contestProblemOrders, contestProblemSnapshot } from '../model/contestSaveIntegrity'
 
 function toLocalDatetimeString(date: Date): string {
@@ -128,7 +128,6 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
   const readyRef = useRef(false)
   const baselineProblemsRef = useRef<ExistingContestProblem[] | null>(null)
   const baselineInfoRef = useRef('')
-  const selectedIdsRef = useRef(new Set<string>())
   const optionRequestsRef = useRef(new Map<string, number>())
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -152,6 +151,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
   const [originalStartTime, setOriginalStartTime] = useState<Date | null>(null)
   const [originalStartTimeStr, setOriginalStartTimeStr] = useState('')
   const [problemRows, setProblemRows] = useState<ProblemRow[]>([])
+  const [problemEditorBlocked, setProblemEditorBlocked] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [loadError, setLoadError] = useState('')
@@ -215,7 +215,6 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
         if (!current()) return
         baselineProblemsRef.current = problems
         baselineInfoRef.current = infoSnapshot(info)
-        selectedIdsRef.current = new Set(problems.map(problem => problem.problemId))
         setTitle(info.title)
         setDescription(info.description || '')
         setFormat(info.format)
@@ -298,21 +297,6 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       if (current()) updateRow(id, { contentOptionsLoading: false, contentOptionsError: error instanceof Error ? error.message : '题面选项加载失败' })
     }
   }
-  const addSelectedProblems = async (references: SelectedProblemReference[]) => {
-    for (const reference of references) {
-      const problem = reference.problem
-      if (!mountedRef.current || savingRef.current || recoveryBlocked) return
-      if (selectedIdsRef.current.has(problem.id)) continue
-      selectedIdsRef.current.add(problem.id)
-      const id = `selected-${++tempIdCounter}`
-      setProblemRows(current => [...current, {
-        id, platform: problem.platform, problemId: problem.problemId, alias: reference.alias || '', points: 100, resolving: false,
-        resolved: { found: true, canonicalProblemId: problem.id, title: problem.title, created: false },
-        contentOptionsLoading: true, statementOptions: [], solutionOptions: [],
-      }])
-      await loadRowOptions(id, problem.id)
-    }
-  }
   const replaceSelectedProblems: AddProblemReferences = async (references, operation) => {
     const currentByProblemId = new Map(problemRows.flatMap(row => row.resolved ? [[row.resolved.canonicalProblemId, row] as const] : []))
     const nextRows: ProblemRow[] = []
@@ -349,7 +333,8 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
     }
 
     if (!operation.isCurrent()) return { acceptedIds: [] }
-    selectedIdsRef.current = new Set(references.map(reference => reference.problem.id))
+    const nextIds = new Set(nextRows.map(row => row.id))
+    for (const row of problemRows) if (!nextIds.has(row.id)) optionRequestsRef.current.delete(row.id)
     setProblemRows(nextRows)
 
     for (const item of rowsNeedingOptions) {
@@ -357,24 +342,6 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       await loadRowOptions(item.rowId, item.canonicalProblemId)
     }
     return { acceptedIds: references.map(reference => reference.problem.id) }
-  }
-
-  const removeRow = (id: string) => {
-    if (savingRef.current) return
-    const row = problemRows.find(item => item.id === id)
-    if (row?.resolved) selectedIdsRef.current.delete(row.resolved.canonicalProblemId)
-    optionRequestsRef.current.delete(id)
-    setProblemRows(current => current.filter(row => row.id !== id))
-  }
-  const moveRow = (index: number, delta: number) => {
-    if (savingRef.current) return
-    setProblemRows(current => {
-      const target = index + delta
-      if (target < 0 || target >= current.length) return current
-      const rows = [...current]
-      ;[rows[index], rows[target]] = [rows[target], rows[index]]
-      return rows
-    })
   }
 
   const ratingConfigurationValid = ratingScope === 'NONE' || (
@@ -399,6 +366,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       const aliases = problemRows.map(row => row.alias.trim()).filter(Boolean)
       return [
         mode === 'contest' && problemRows.length === 0 ? '请至少添加一道题目' : '',
+        problemEditorBlocked ? '仍有题目需要修正' : '',
         problemRows.some(row => !row.resolved?.found) ? '仍有题目未能解析' : '',
         problemRows.some(row => row.alias.trim().length > 50) ? '题目别名不能超过 50 个字符' : '',
         new Set(aliases).size !== aliases.length ? '比赛题目别名不能重复' : '',
@@ -626,40 +594,33 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
 
             <section className={unifiedStyles.formSection}>
               <div className={unifiedStyles.formSectionHeading}>
-                <div><h3>{mode === 'contest' ? '比赛题目' : '题目列表'}</h3><p>添加一题会自动解析；“编辑”可直接切换为整段文本。</p></div>
-                <span className={unifiedStyles.problemCount}>{problemRows.length} 道</span>
+                <div><h3>{mode === 'contest' ? '比赛题目' : '题目列表'}</h3><p>直接维护题目列表；系统会在后台自动确认题目。</p></div>
               </div>
-              <ProblemReferenceSelector
+              <ProblemListEditor
                 disabled={saving || recoveryBlocked}
-                existingProblemIds={problemRows.flatMap(row => row.resolved ? [row.resolved.canonicalProblemId] : [])}
-                editableReferences={problemRows.map(row => ({ platform: row.platform, problemId: row.problemId, alias: row.alias }))}
-                onAdd={addSelectedProblems}
+                references={problemRows.flatMap(row => row.resolved ? [{
+                  problem: {
+                    id: row.resolved.canonicalProblemId,
+                    platform: row.platform,
+                    problemId: row.problemId,
+                    title: row.resolved.title,
+                  },
+                  alias: row.alias || undefined,
+                }] : [])}
                 onReplace={replaceSelectedProblems}
                 aliasLabel="别名"
                 dataRequirement="stable"
-              />
-              {problemRows.length > 0
-                ? <div className={unifiedStyles.problemCards} aria-label="已选比赛题目">
-                  {problemRows.map((row, index) => <article key={row.id} className={unifiedStyles.problemCard}>
-                    <div className={unifiedStyles.problemMove}>
-                      <Button variant="ghost" size="sm" onClick={() => moveRow(index, -1)} disabled={saving || index === 0} title="上移">↑</Button>
-                      <Button variant="ghost" size="sm" onClick={() => moveRow(index, 1)} disabled={saving || index === problemRows.length - 1} title="下移">↓</Button>
-                    </div>
-                    <div className={unifiedStyles.problemCardMain}>
-                      <div className={unifiedStyles.problemTitleRow}>
-                        <strong>{row.alias || '—'}</strong>
-                        {row.resolved ? <ProblemReferenceLink problem={{ id: row.resolved.canonicalProblemId, platform: row.platform, problemId: row.problemId, title: row.resolved.title }} showIdentity={false} /> : <span>等待识别题目</span>}
-                      </div>
-                      <span className={unifiedStyles.problemMeta}>{row.platform} · {row.problemId}</span>
-                      {row.contentOptionsLoading && <span className={unifiedStyles.problemMeta}>正在准备题面…</span>}
-                      {row.contentOptionsError && <span className={unifiedStyles.problemError}>{row.contentOptionsError} <Button size="sm" variant="ghost" disabled={saving} onClick={() => row.resolved && void loadRowOptions(row.id, row.resolved.canonicalProblemId)}>重试</Button></span>}
-                    </div>
-                    <label className={unifiedStyles.problemCompactField}><span>别名</span><Input aria-label={`${row.problemId} 别名`} value={row.alias} maxLength={50} disabled={saving} onChange={event => updateRow(row.id, { alias: event.target.value })} /></label>
+                onBlockingChange={setProblemEditorBlocked}
+                renderTrailing={(reference) => {
+                  const row = problemRows.find(item => item.resolved?.canonicalProblemId === reference.problem.id)
+                  if (!row) return null
+                  return <div className={unifiedStyles.problemExtras}>
+                    {row.contentOptionsLoading && <span className={unifiedStyles.problemMeta}>准备题面…</span>}
+                    {row.contentOptionsError && <span className={unifiedStyles.problemError}>{row.contentOptionsError} <Button size="sm" variant="ghost" disabled={saving} onClick={() => void loadRowOptions(row.id, reference.problem.id)}>重试</Button></span>}
                     {format !== 'icpc' && <label className={unifiedStyles.problemCompactField}><span>分值</span><Input aria-label={`${row.problemId} 分值`} type="number" min={0} value={row.points} disabled={saving} onChange={event => updateRow(row.id, { points: Number(event.target.value) })} /></label>}
-                    <Button variant="ghost" size="sm" disabled={saving} onClick={() => removeRow(row.id)}>移除</Button>
-                  </article>)}
-                </div>
-                : <div className={unifiedStyles.problemEmpty}><strong>还没有题目</strong><span>点击“添加一道题目”开始，也可以用“编辑”一次粘贴多行。</span></div>}
+                  </div>
+                }}
+              />
             </section>
 
             <section className={unifiedStyles.formSection}>

@@ -1,4 +1,4 @@
-# Problem reference browser regression
+# Problem list editor browser regression
 
 Run after installing the locked workspace dependencies and building contracts/shared:
 
@@ -7,21 +7,29 @@ pnpm exec playwright install chromium firefox
 pnpm exec playwright test --config=e2e/problem-reference/playwright.config.ts
 ```
 
-This suite renders the production ProblemReferenceSelector, Result and Link together with the
-inline row editor and whole-list text edit mode, request client, runtime contracts and styles in React StrictMode. Next navigation and
-authentication are replaced with explicit test context providers. Playwright supplies
-local resolver responses; the harness opens no database and has no remote OJ fallback.
-There is no additional route in the production application.
+This suite renders the production `ProblemListEditor` and `ProblemReferenceLink` with the
+real request client, runtime contracts and production styles in React StrictMode. Navigation and
+authentication are replaced with explicit test context providers. Playwright supplies local
+resolver responses; the harness opens no database and has no remote OJ fallback.
 
-Chromium, Firefox and narrow Chromium exercise inline resolution, row completion, manual aliases,
-Enter and IME behavior, stale responses, business failure and retry, whole-list text replacement,
-row-local validation, unpublished metadata privacy, nested form safety, internal new-window links
-and narrow-layout wrapping.
-The six host configurations assert the distinct Stable policies of Contest, Assignment,
-Training creation/design/runtime and Problem Lists. The Web source integration tests
-separately verify that those six real business files import the shared selector.
+The editor is intentionally list-first rather than search-first. The browser contract covers:
 
-These are component-level browser tests, not six complete authenticated business-page
-save/publish workflows or a production deployment check. Full application E2E remains
-in playwright.config.ts and the UI E2E workflow. Do not substitute this suite's pass count
-for those wider integration results.
+- clicking `+ 添加一道题目` creates a draft row immediately;
+- platform + problem number changes resolve automatically in the background;
+- there is no search-result field, search button, retry-search button or per-row completion button;
+- alias changes do not trigger identity resolution;
+- Enter supports continuous row entry;
+- IME composition and stale responses cannot publish unfinished identities;
+- unavailable/unpublished rows remain editable without leaking hidden metadata;
+- text editing happens in the same area using `平台 | 题号 | 别名`;
+- unchanged identities are reused when only aliases change;
+- valid text rows remain accepted when another row has an identity error;
+- narrow layouts stay within the viewport and no nested form/dialog is introduced.
+
+The host configurations assert the distinct data-readiness policies used by Contest, Assignment,
+Training and Problem Lists without exposing those implementation concepts in normal user-facing
+messages. Real-page integration tests separately verify the Training setup entry point.
+
+These are component-level browser tests, not complete authenticated save/publish workflows or a
+production deployment check. Full application E2E remains in the main Playwright configuration and
+the UI E2E workflow.
