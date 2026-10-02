@@ -199,19 +199,6 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     }
   }
 
-  const addProblems = async (references: SelectedProblemReference[]) => {
-    const additions: AssignmentProblem[] = []
-    for (const reference of references) {
-      const problem = reference.problem
-      if (problemDraft.some(item => item.problemId === problem.id) || additions.some(item => item.problemId === problem.id)) continue
-      const draft = draftProblemFromReference(reference)
-      if (!draft) { toast.error(`${problem.problemId}：没有可用的 Stable 测试数据`); continue }
-      additions.push(draft)
-    }
-    if (additions.length) setProblemDraft(current => [...current, ...additions].map((item, orderIndex) => ({ ...item, orderIndex })))
-    return { acceptedIds: additions.map(item => item.problemId) }
-  }
-
   const replaceProblems = (references: SelectedProblemReference[]) => {
     const currentByCanonicalId = new Map(problemDraft.map(item => [item.problemId, item]))
     const rejected: Array<{ id: string; message: string }> = []
