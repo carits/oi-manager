@@ -103,6 +103,7 @@ export function ProblemListEditor({
   const [rows, setRows] = useState<DraftRow[]>(() => rowsFromReferences(references))
   const rowsRef = useRef(rows)
   rowsRef.current = rows
+  const replaceRows = (next: DraftRow[]) => { rowsRef.current = next; setRows(next) }
   const [textMode, setTextMode] = useState(false)
   const [textValue, setTextValue] = useState('')
   const [textBusy, setTextBusy] = useState(false)
@@ -227,7 +228,7 @@ export function ProblemListEditor({
       const next = rowsRef.current.map(item => item.clientKey === clientKey
         ? { ...item, status: 'error' as const, problem: undefined, message: problemId.length > 128 ? '题号不能超过 128 个字符' : '请只填写原始题号' }
         : item)
-      setRows(next)
+      replaceRows(next)
       await commitProjection(next)
       return false
     }
@@ -255,7 +256,7 @@ export function ProblemListEditor({
       } else if (assessed.status === 'ready' && shouldFocusAlias) {
         setAliasFocusKey(clientKey)
       }
-      setRows(next)
+      replaceRows(next)
       await commitProjection(next)
       return assessed.status === 'ready'
     } catch (error) {
@@ -320,7 +321,7 @@ export function ProblemListEditor({
   const removeRow = (clientKey: string) => {
     clearRowWork(clientKey)
     const next = rowsRef.current.filter(row => row.clientKey !== clientKey)
-    setRows(next)
+    replaceRows(next)
     void commitProjection(next)
   }
 
@@ -331,7 +332,7 @@ export function ProblemListEditor({
     const next = [...rowsRef.current]
     const [moved] = next.splice(sourceIndex, 1)
     next.splice(targetIndex, 0, moved)
-    setRows(next)
+    replaceRows(next)
     void commitProjection(next)
   }
 
@@ -367,7 +368,7 @@ export function ProblemListEditor({
       }
     })
 
-    setRows(nextRows)
+    replaceRows(nextRows)
     setTextMode(false)
     setTextBusy(true)
     setTextError('')
@@ -381,7 +382,7 @@ export function ProblemListEditor({
         seen.add(row.problem.id)
         return row
       })
-      setRows(deduped)
+      replaceRows(deduped)
       await commitProjection(deduped)
       setTextBusy(false)
       return
@@ -410,7 +411,7 @@ export function ProblemListEditor({
         return candidate
       })
       if (!mounted.current) return
-      setRows(resolvedRows)
+      replaceRows(resolvedRows)
       await commitProjection(resolvedRows)
     } catch (error) {
       if (textController.current?.signal.aborted || !mounted.current) return
