@@ -103,7 +103,8 @@
     "ui:contract-baseline": "node scripts/ui-contract-check.mjs --update",
     "routes:audit": "node scripts/audit-web-navigation.mjs",
     "lint": "pnpm -r lint",
-    "install:all": "pnpm install"
+    "install:all": "pnpm install",
+    "ai:context": "node scripts/ai-context-pack.mjs"
   },
   "keywords": [
     "oi",
