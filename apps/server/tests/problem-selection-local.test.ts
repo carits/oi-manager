@@ -143,9 +143,13 @@ describe('read-only local primary identity lookup', () => {
     expect(await lookup('luogu', 'P1001')).toEqual(absent)
   })
 
-  it('discloses an unpublished identity only to a user who can view it', async () => {
-    records = [candidate({ status: 'draft' })]
-    expect((await lookup('luogu', 'P1001', manager)).items[0]).toMatchObject({ status: 'not_published', problem: { id: 'internal-1' } })
+  it('reports manageable unpublished identities without disclosing their metadata', async () => {
+    records = [candidate({ status: 'draft', title: 'Secret draft title' })]
+    const result = (await lookup('luogu', 'P1001', manager)).items[0]
+    expect(result).toMatchObject({ status: 'not_published' })
+    expect(result.problem).toBeUndefined()
+    expect(JSON.stringify(result)).not.toContain('Secret draft title')
+    expect(JSON.stringify(result)).not.toContain('internal-1')
   })
 
   it('returns existing Stable and Evolving metadata without creating or changing it', async () => {
