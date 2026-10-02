@@ -144,45 +144,53 @@ Baekjoon | 28057 | 1 | AN
     const training = read('../training-session/ui/TrainingSetupDialog.tsx')
     expect(contest).not.toContain('wizardSteps')
     expect(contest).not.toContain('TableRoot')
-    expect(contest).toContain('editableReferences=')
+    expect(contest).toContain('ProblemListEditor')
     expect(contest).toContain('aliasLabel="别名"')
     expect(training).toContain('problemSetupSection')
-    expect(training).toContain('editableReferences=')
+    expect(training).toContain('ProblemListEditor')
     expect(training).toContain('aliasLabel="别名"')
   })
-  it('keeps all six business entry points on the shared selector', () => {
-    const paths = [
-      '../contest/ui/ContestFormModal.tsx', '../assignment/ui/AssignmentWorkspace.tsx',
-      '../training-session/ui/TrainingSetupDialog.tsx', '../training-session/ui/TrainingSessionDesigner.tsx',
-      '../problem/ui/ProblemListDetailPage.tsx', '../training-session/ui/TrainingSessionWorkspace.tsx',
+  it('uses the row-first list editor for creation and keeps the legacy selector only in older secondary entry points', () => {
+    const creationPaths = [
+      '../contest/ui/ContestFormModal.tsx',
+      '../assignment/ui/AssignmentWorkspace.tsx',
+      '../training-session/ui/TrainingSetupDialog.tsx',
     ]
-    const sources = paths.map(read)
-    for (const source of sources) {
-      expect(source).toContain('ProblemReferenceSelector')
+    const secondaryPaths = [
+      '../training-session/ui/TrainingSessionDesigner.tsx',
+      '../problem/ui/ProblemListDetailPage.tsx',
+      '../training-session/ui/TrainingSessionWorkspace.tsx',
+    ]
+    const creationSources = creationPaths.map(read)
+    const secondarySources = secondaryPaths.map(read)
+    for (const source of creationSources) {
+      expect(source).toContain('ProblemListEditor')
+      expect(source).not.toContain('ProblemReferenceSelector')
       expect(source).not.toContain('QuickProblemInput')
       expect(source).not.toContain('/api/resolve-problems')
       expect(source).not.toContain('/entries/resolve')
       expect(source).not.toContain('problemCode')
     }
-    expect(sources[2]).toContain('dataRequirement="training"')
-    expect(sources[3]).toContain('dataRequirement="training"')
-    expect(sources[4]).toContain('dataRequirement="none"')
-    expect(sources[5]).toContain('dataRequirement="training"')
-    for (const source of sources) expect(source).not.toContain('requireStable=')
-    expect(read('./index.ts')).not.toContain('QuickProblemInput')
-    expect(read('./ui/ProblemReferenceSelector.tsx')).toContain('useProblemReferenceResolver')
-    expect(read('./model/useProblemReferenceResolver.ts')).toContain('PROBLEM_REFERENCE_DEBOUNCE_MS = 400')
-    const selectorSource = read('./ui/ProblemReferenceSelector.tsx')
-    expect(selectorSource).toContain('＋ 添加一道题目')
-    expect(selectorSource).toContain('编辑题目列表')
-    expect(selectorSource).toContain('aliasLabel')
-    expect(selectorSource).not.toContain('批量添加题目')
-    expect(selectorSource).not.toContain('检索结果')
+    for (const source of secondarySources) expect(source).toContain('ProblemReferenceSelector')
+    expect(creationSources[2]).toContain('dataRequirement="training"')
+    expect(secondarySources[0]).toContain('dataRequirement="training"')
+    expect(secondarySources[1]).toContain('dataRequirement="none"')
+    expect(secondarySources[2]).toContain('dataRequirement="training"')
+    for (const source of [...creationSources, ...secondarySources]) expect(source).not.toContain('requireStable=')
+    const editorSource = read('./ui/ProblemListEditor.tsx')
+    expect(editorSource).toContain('＋ 添加一道题目')
+    expect(editorSource).toContain('题目列表文本编辑')
+    expect(editorSource).toContain('350')
+    expect(editorSource).not.toContain('检索结果')
+    expect(editorSource).not.toContain('重新检索')
+    expect(editorSource).not.toContain('批量添加题目')
+    expect(editorSource).not.toContain('>完成</Button>')
+    expect(read('./index.ts')).toContain('ProblemListEditor')
     expect(read('./ui/ProblemReferenceLink.tsx')).toContain('problemReferenceHref(pathname, problem.id)')
     expect(read('../training-session/ui/TrainingSessionListPage.tsx')).toContain('<TrainingSetupDialog')
     expect(read('../training-session/ui/TrainingProblemChain.tsx')).toContain('<ProblemReferenceLink problem={problem.Problem}')
-    expect(sources[3]).toContain('operation.isCurrent()')
-    expect(sources[3]).toContain('acceptedIds: details.map')
-    expect(sources[3]).toContain('contextKey=')
+    expect(secondarySources[0]).toContain('operation.isCurrent()')
+    expect(secondarySources[0]).toContain('acceptedIds: details.map')
+    expect(secondarySources[0]).toContain('contextKey=')
   })
 })
