@@ -126,7 +126,7 @@ Baekjoon | 28057 | 1 | AN
   it('keeps inaccessible, unpublished and ambiguous inputs pending', () => {
     const rows: ResolvedProblemSelection[] = [
       { clientKey: 'a', platform: 'luogu', problemId: 'P2', status: 'not_found' },
-      { ...found, clientKey: 'b', status: 'not_published', message: '未发布' },
+      { clientKey: 'b', platform: 'luogu', problemId: 'P1001', status: 'not_published', message: '未发布' },
       { clientKey: 'c', platform: 'luogu', problemId: 'P3', status: 'identity_conflict' },
     ]
     const result = prepareProblemSelection(rows, [], 'none')
@@ -138,6 +138,17 @@ Baekjoon | 28057 | 1 | AN
     const result = prepareProblemSelection([ready], [], 'stable')
     expect(result.accepted).toHaveLength(1)
     expect(result.rows[0].message).toContain('仍需保存')
+  })
+  it('keeps contest and training creation task-oriented instead of wizard/table driven', () => {
+    const contest = read('../contest/ui/ContestFormModal.tsx')
+    const training = read('../training-session/ui/TrainingSetupDialog.tsx')
+    expect(contest).not.toContain('wizardSteps')
+    expect(contest).not.toContain('TableRoot')
+    expect(contest).toContain('editableReferences=')
+    expect(contest).toContain('aliasLabel="别名"')
+    expect(training).toContain('problemSetupSection')
+    expect(training).toContain('editableReferences=')
+    expect(training).toContain('aliasLabel="别名"')
   })
   it('keeps all six business entry points on the shared selector', () => {
     const paths = [
@@ -161,9 +172,12 @@ Baekjoon | 28057 | 1 | AN
     expect(read('./index.ts')).not.toContain('QuickProblemInput')
     expect(read('./ui/ProblemReferenceSelector.tsx')).toContain('useProblemReferenceResolver')
     expect(read('./model/useProblemReferenceResolver.ts')).toContain('PROBLEM_REFERENCE_DEBOUNCE_MS = 400')
-    expect(read('./ui/ProblemReferenceSelector.tsx')).toContain('批量添加题目')
-    expect(read('./ui/ProblemBatchAddDialog.tsx')).not.toContain('批量题目平台')
-    expect(read('./ui/ProblemBatchAddDialog.tsx')).toContain('平台 | 题号 | 别名')
+    const selectorSource = read('./ui/ProblemReferenceSelector.tsx')
+    expect(selectorSource).toContain('＋ 添加一道题目')
+    expect(selectorSource).toContain('编辑题目列表')
+    expect(selectorSource).toContain('aliasLabel')
+    expect(selectorSource).not.toContain('批量添加题目')
+    expect(selectorSource).not.toContain('检索结果')
     expect(read('./ui/ProblemReferenceLink.tsx')).toContain('problemReferenceHref(pathname, problem.id)')
     expect(read('../training-session/ui/TrainingSessionListPage.tsx')).toContain('<TrainingSetupDialog')
     expect(read('../training-session/ui/TrainingProblemChain.tsx')).toContain('<ProblemReferenceLink problem={problem.Problem}')
