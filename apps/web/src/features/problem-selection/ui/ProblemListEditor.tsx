@@ -113,6 +113,7 @@ export function ProblemListEditor({
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const controllers = useRef(new Map<string, AbortController>())
   const businessOperation = useRef(new ProblemReferenceOperation())
+  const composing = useRef(new Set<string>())
   const dragging = useRef<number | null>(null)
   const lastPlatform = useRef('carits')
 
@@ -288,7 +289,7 @@ export function ProblemListEditor({
         try { window.localStorage.setItem(storageKey, canonical) } catch { /* optional */ }
       }
     }
-    queueMicrotask(() => scheduleResolve(clientKey))
+    if (!composing.current.has(clientKey)) queueMicrotask(() => scheduleResolve(clientKey))
   }
 
   const updateAlias = (clientKey: string, alias: string) => {
@@ -426,10 +427,12 @@ export function ProblemListEditor({
               autoComplete="off"
               spellCheck={false}
               onChange={event => updateIdentity(row.clientKey, { problemId: event.target.value })}
+              onCompositionStart={() => { composing.current.add(row.clientKey); clearRowWork(row.clientKey) }}
+              onCompositionEnd={() => { composing.current.delete(row.clientKey); scheduleResolve(row.clientKey) }}
               onKeyDown={event => {
                 if (event.key !== 'Enter') return
                 event.preventDefault()
-                if (!event.nativeEvent.isComposing) void resolveRow(row.clientKey, true)
+                if (!event.nativeEvent.isComposing && !composing.current.has(row.clientKey)) void resolveRow(row.clientKey, true)
               }}
             />
             {aliasLabel && <Input aria-label={`第 ${index + 1} 题${aliasLabel}`} value={row.alias} maxLength={50} disabled={disabled} placeholder={aliasLabel} onChange={event => updateAlias(row.clientKey, event.target.value)} onKeyDown={event => {
