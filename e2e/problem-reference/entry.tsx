@@ -1,7 +1,7 @@
 import { StrictMode, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ReferenceHarnessContext } from './browser-shims'
-import { ProblemReferenceSelector, ProblemReferenceLink, type AddProblemReferences, type SelectedCanonicalProblem } from '../../apps/web/src/features/problem-selection'
+import { ProblemReferenceSelector, ProblemReferenceLink, type AddProblemReferences, type SelectedProblemReference } from '../../apps/web/src/features/problem-selection'
 import { Button } from '../../apps/web/src/components/ui/Button'
 import { Select } from '../../apps/web/src/components/ui/FormControls'
 import '../../apps/web/src/styles/globals.css'
@@ -16,7 +16,7 @@ function Harness() {
   const [disabled, setDisabled] = useState(false)
   const [visible, setVisible] = useState(true)
   const [mode, setMode] = useState('all')
-  const [selected, setSelected] = useState<SelectedCanonicalProblem[]>([])
+  const [selected, setSelected] = useState<SelectedProblemReference[]>([])
   const [calls, setCalls] = useState(0)
   const [submits, setSubmits] = useState(0)
   const attempts = useRef(0)
@@ -31,12 +31,17 @@ function Harness() {
     if (!operation.isCurrent()) return { acceptedIds: [] }
     if (mode === 'error') throw new Error('业务暂时不可用，题号已保留')
     const accepted = mode === 'partial' && attempt === 1 ? references.slice(0, 1) : references
-    const acceptedProblems = accepted.map(reference => reference.problem)
-    setSelected(current => [...current, ...acceptedProblems.filter(problem => !current.some(item => item.id === problem.id))])
+    setSelected(current => [...current, ...accepted.filter(reference => !current.some(item => item.problem.id === reference.problem.id))])
     return {
-      acceptedIds: acceptedProblems.map(problem => problem.id),
+      acceptedIds: accepted.map(reference => reference.problem.id),
       rejected: references.filter(reference => !accepted.includes(reference)).map(reference => ({ id: reference.problem.id, message: '该题详情加载失败，可重试' })),
     }
+  }
+  const onReplace: AddProblemReferences = async (references, operation) => {
+    setCalls(current => current + 1)
+    if (!operation.isCurrent()) return { acceptedIds: [] }
+    setSelected(references)
+    return { acceptedIds: references.map(reference => reference.problem.id) }
   }
   return <ReferenceHarnessContext.Provider value={{ sessionKey: `${scope}:tester`, user: { userId: 'tester', accountRole: scope === 'admin' ? 'super_admin' : 'user' }, pathname }}>
     <main>
@@ -49,15 +54,24 @@ function Harness() {
         <Button type="button" onClick={() => setVisible(value => !value)}>切换挂载</Button>
         <Button type="button" onClick={() => { setTarget(value => value === 'stage-a' ? 'stage-b' : 'stage-a'); setSelected([]) }}>切换阶段</Button>
         <Button type="button" onClick={() => { delayed.current.splice(0).forEach(resolve => resolve()) }}>完成异步添加</Button>
-        <Button type="button" onClick={() => setSelected(current => [...current, { id: 'local-carits-A', platform: 'carits', problemId: 'A', title: '题目 carits A' }])}>外部选入 A</Button>
+        <Button type="button" onClick={() => setSelected(current => [...current, { problem: { id: 'local-carits-A', platform: 'carits', problemId: 'A', title: '题目 carits A' }, alias: 'A' }])}>外部选入 A</Button>
       </div>
       <div id="host" className="harness-host">
         <form onSubmit={event => { event.preventDefault(); setSubmits(current => current + 1) }}>
-          {visible && <ProblemReferenceSelector contextKey={`${host}:${target}`} dataRequirement={host === '比赛' || host === '作业' ? 'stable' : host === '题单' ? 'none' : 'training'} existingProblemIds={selected.map(problem => problem.id)} disabled={disabled} onAdd={onAdd} />}
+          {visible && <ProblemReferenceSelector
+            contextKey={`${host}:${target}`}
+            dataRequirement={host === '比赛' || host === '作业' ? 'stable' : host === '题单' ? 'none' : 'training'}
+            existingProblemIds={selected.map(reference => reference.problem.id)}
+            editableReferences={selected.map(reference => ({ platform: reference.problem.platform, problemId: reference.problem.problemId, alias: reference.alias }))}
+            aliasLabel={host === '比赛' || host === '训练创建' ? '别名' : null}
+            disabled={disabled}
+            onAdd={onAdd}
+            onReplace={onReplace}
+          />}
         </form>
       </div>
       <p>接收调用：<output data-testid="add-calls">{calls}</output>；父表单提交：<output data-testid="form-submits">{submits}</output></p>
-      <ul data-testid="selected">{selected.map(problem => <li key={problem.id}><ProblemReferenceLink problem={problem} /></li>)}</ul>
+      <ul data-testid="selected">{selected.map(reference => <li key={reference.problem.id}>{reference.alias && <span>{reference.alias} </span>}<ProblemReferenceLink problem={reference.problem} /></li>)}</ul>
     </main>
   </ReferenceHarnessContext.Provider>
 }
