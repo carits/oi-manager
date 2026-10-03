@@ -306,60 +306,67 @@ describe('shared API contract adapter', () => {
     })).toThrowError(ApiContractError)
   })
 
-  it('guards Training structure mutations and design responses with one contract', () => {
-    const body = parseContractBody(TrainingContracts.replaceStructure, {
-      expectedRevision: 2,
+  it('guards Training V3 creation, assignments and lifecycle commands with one contract', () => {
+    const created = parseContractBody(TrainingContracts.createSession, {
       title: '顺序训练',
       description: '',
-      stages: [{
-        clientKey: 'stage-draft-1',
-        name: '热身',
-        kind: 'TRAINING',
-        problems: [],
-      }],
+      sessionType: 'GENERAL',
+      teamId: 'team-1',
+      participantTarget: 'team',
+      totalDurationSeconds: 7200,
+      startImmediately: false,
+      problems: [{ problemId: 'problem-1', alias: '热身题' }],
     })
-    expect(body.expectedRevision).toBe(2)
+    expect(created).toMatchObject({
+      title: '顺序训练',
+      sessionType: 'GENERAL',
+      startImmediately: false,
+      problems: [{ problemId: 'problem-1', alias: '热身题' }],
+    })
+    expect(() => parseContractBody(TrainingContracts.createSession, {
+      title: '无题训练',
+      sessionType: 'GENERAL',
+      teamId: 'team-1',
+      participantTarget: 'team',
+      totalDurationSeconds: 7200,
+      problems: [],
+    })).toThrowError(ApiContractError)
+
+    expect(parseContractBody(TrainingContracts.replaceAssignments, {
+      expectedRevision: 2,
+      groupId: 'group-1',
+      problems: [{ problemId: 'problem-2', alias: null }],
+    })).toMatchObject({ expectedRevision: 2, groupId: 'group-1' })
+    expect(parseContractBody(TrainingContracts.executeCommand, {
+      type: 'FOCUS_PROBLEM',
+      expectedRevision: 3,
+      targetType: 'GROUP',
+      targetId: 'group-1',
+      payload: { sessionProblemId: 'session-problem-1' },
+    })).toMatchObject({ type: 'FOCUS_PROBLEM', targetType: 'GROUP' })
 
     const { response, json } = responseStub()
-    sendContractData(response, TrainingContracts.getDesign, {
-      editable: true,
-      statusRevision: 2,
-      session: {
-        id: 'training-1',
-        title: '顺序训练',
-        sessionType: 'GENERAL',
-        status: 'DRAFT',
-        scheduledStartAt: new Date('2026-09-15T00:00:00Z'),
-      },
-      participants: [],
-      groups: [],
-      stages: [],
-      stagePlans: [],
-      issues: [],
+    sendContractData(response, TrainingContracts.createSession, {
+      id: 'training-1',
+      title: '顺序训练',
+      status: 'READY',
+      sessionType: 'GENERAL',
+      statusRevision: 0,
+      totalDurationSeconds: 7200,
+      activeElapsedSeconds: 0,
+      scheduledStartAt: new Date('2026-09-15T00:00:00Z'),
+      startedAt: null,
+      runningSince: null,
+      endedAt: null,
+      currentRoundId: null,
     })
     expect(json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
       data: expect.objectContaining({
-        statusRevision: 2,
-        session: expect.objectContaining({ scheduledStartAt: '2026-09-15T00:00:00.000Z' }),
+        status: 'READY',
+        scheduledStartAt: '2026-09-15T00:00:00.000Z',
       }),
     }))
-
-    expect(parseContractBody(TrainingContracts.createTemplate, { name: '分层课堂', scope: 'organization' })).toEqual({ name: '分层课堂', scope: 'organization' })
-    expect(() => parseContractBody(TrainingContracts.createTemplate, { name: '', scope: 'organization' })).toThrowError(ApiContractError)
-    expect(parseContractBody(TrainingContracts.joinParticipantRuntime, {
-      expectedRevision: 3, userId: 'user-2', groupId: 'group-1', historyMode: 'absent', reason: '中途到课',
-    })).toMatchObject({ historyMode: 'absent' })
-    expect(parseContractBody(TrainingContracts.appendRuntimeProblem, {
-      expectedRevision: 4, targetType: 'GROUP', targetId: 'group-1', problemId: 'problem-2', required: true, targetScore: 80, reason: '补充练习',
-    })).toMatchObject({ targetType: 'GROUP', targetId: 'group-1', targetScore: 80 })
-    expect(() => parseContractBody(TrainingContracts.appendRuntimeProblem, {
-      expectedRevision: 4, targetType: 'GROUP', problemId: 'problem-2', reason: '缺少目标组',
-    })).toThrowError(ApiContractError)
-    sendContractData(response, TrainingContracts.listTemplates, [{
-      key: 'database:template-1', name: '分层课堂', sessionType: 'GENERAL', description: '', source: 'organization',
-      stages: [{ name: '分层', description: '', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' }],
-    }])
   })
 
   it('guards Problem judge mutations and normalizes judge asset dates', () => {

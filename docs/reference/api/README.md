@@ -534,50 +534,27 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `PUT` | `/api/contests/:id/problems/:problemId/note` | 见对应路由实现 |
 | `PUT` | `/api/contests/:id/problems/reorder` | 见对应路由实现 |
 | `PUT` | `/api/contests/:id/record` | 见对应路由实现 |
-| `GET` | `/api/training-session-templates` | 保留的模板查询接口；当前 Web 不调用 |
-| `POST` | `/api/training-sessions/:id/templates` | 保留的模板保存接口；当前 Web 不提供入口 |
-| `DELETE` | `/api/training-session-templates/:id` | 保留的模板停用接口；当前 Web 不提供入口 |
-| `GET` | `/api/training-sessions` | 查询独立教练训练 |
-| `POST` | `/api/training-sessions` | 创建独立教练训练 |
-| `POST` | `/api/training-sessions/participant-preview` | 使用与创建/发布相同的权限和学生边界解析训练对象及权威人数 |
-| `GET` | `/api/training-sessions/:id` | 获取权威训练工作区、进度和权限 |
-| `GET` | `/api/training-sessions/:id/design` | 管理员获取 Stage 驱动设计 DTO、稳定 ID、Stage 分组、题目规则和 Subtask |
-| `GET` | `/api/training-sessions/:id/design-problems/:problemId` | 校验题目归属并返回 canonical Problem 和当前槽可用性 |
-| `POST` | `/api/training-sessions/:id/structure/validate` | 无写入校验阶段、顺序解锁、题目和 Subtask 结构 |
-| `PUT` | `/api/training-sessions/:id/structure` | 按稳定 ID 差异更新尚未开始的 Stage；训练锁和 statusRevision CAS 阻止覆盖，已开始定义冻结 |
-| `GET` | `/api/training-sessions/:id/roster` | 查询基础学员名单；不返回 Session 级分组 |
-| `PUT` | `/api/training-sessions/:id/roster` | 事务保存基础学员名单；Stage 分组由结构接口保存 |
-| `POST` | `/api/training-sessions/:id/publish` | 发布训练并固定参与名单；Stage 在实际开始时生成不可变快照 |
-| `POST` | `/api/training-sessions/:id/clone` | 复制可复用定义为新的 DRAFT，不复制参与名单、运行快照、进度或事件 |
-| `POST` | `/api/training-sessions/:id/runtime-participants` | 运行中加入范围内学员，记录迟到/补训语义和原因 |
-| `POST` | `/api/training-sessions/:id/runtime-participants/:participantId/leave` | 记录学员中途退出，保留此前进度、提交和报告历史 |
-| `POST` | `/api/training-sessions/:id/stage-transitions` | 开始、完成/提前结束、跳过 pending Stage 或结束 Session；不支持回滚 |
-| `PUT` | `/api/training-sessions/:id/next-stage` | 创建或替换唯一下一阶段；用途限自主练习、引导练习、统一讲解、复盘 |
-| `DELETE` | `/api/training-sessions/:id/next-stage` | 丢弃唯一下一阶段；旧版多待运行阶段队列拒绝批量删除 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/group-changes` | 即时换组或预设下一 Stage 分组，必须记录原因 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/end` | 结束当前阶段并记录结束原因与备注 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/clone` | 复制未来阶段定义，不复制运行时快照、进度或事件 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/move-participant` | 将学员移动到当前阶段的指定分组并保留历史进度 |
-| `GET` | `/api/training-sessions/:id/stages/:stageId/group-suggestions` | 为尚未开始的 grouped Stage 生成基于前序完成度、分数、尝试次数和有效时间的可解释分组建议；只预览，不自动写入 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/time-extensions` | 追加 Stage 延时记录，不改写计划时长 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/runtime-problems` | 向当前 Stage 临时追加全体、分组或个人题目；不改写 RuntimeSnapshot |
-| `POST` | `/api/training-sessions/:id/commands` | 执行暂停、Focus、锁定、提示、消息和个人干预；不能改写 Stage 定义 |
-| `GET` | `/api/training-sessions/:id/drafts/:stageProblemId` | 获取指定阶段题目的训练代码草稿 |
-| `PUT` | `/api/training-sessions/:id/drafts/:stageProblemId` | 按阶段题目 ID 乐观锁保存训练代码草稿 |
-| `POST` | `/api/training-sessions/:id/heartbeat` | 上报可见且聚焦的有效训练时间 |
-| `POST` | `/api/training-sessions/:id/submit` | 动态取得 Evolving（缺失回退 Stable）并固化专项投影创建训练提交 |
-| `GET` | `/api/training-sessions/:id/coach-dashboard` | 教练实时进度、卡题概览以及学员当前实际 StagePlan |
-| `GET` | `/api/training-sessions/:id/peer-progress` | 按训练榜单模式和同学可见性返回服务端裁剪后的进度 |
-| `GET` | `/api/training-sessions/:id/report` | Stage 时间轴、各组完成情况、计划/延时/实际时间、快照哈希、带生效 Stage 的换组，以及学员过程报告 |
+| `GET` | `/api/training-sessions` | 按学校或团队范围查询训练 |
+| `POST` | `/api/training-sessions` | 单页创建训练，可保持 READY 或立即开始 |
+| `POST` | `/api/training-sessions/participant-preview` | 预览训练对象和权威人数 |
+| `GET` | `/api/training-sessions/:id` | 获取按身份裁剪的 V3 工作区 |
+| `PUT` | `/api/training-sessions/:id/assignments` | 替换当前轮指定分组的题目分配 |
+| `PUT` | `/api/training-sessions/:id/next-round` | 创建或替换唯一待开始下一轮 |
+| `DELETE` | `/api/training-sessions/:id/next-round` | 删除待开始下一轮 |
+| `POST` | `/api/training-sessions/:id/rounds/advance` | 结束当前轮并明确切换到下一轮 |
+| `PUT` | `/api/training-sessions/:id/grouping` | 替换训练稳定分组和成员归属 |
+| `POST` | `/api/training-sessions/:id/grouping/change` | 即时调整学员分组并记录原因 |
+| `POST` | `/api/training-sessions/:id/commands` | 开始、暂停、继续、延时、聚焦、结束聚焦或结束训练 |
+| `POST` | `/api/training-sessions/:id/archive` | 归档已结束训练 |
+| `POST` | `/api/training-sessions/:id/join` | 范围内成员加入训练 |
+| `GET` | `/api/training-sessions/:id/drafts/:sessionProblemId` | 获取稳定训练题目的代码草稿 |
+| `PUT` | `/api/training-sessions/:id/drafts/:sessionProblemId` | 按 revision 保存稳定训练题目草稿 |
+| `POST` | `/api/training-sessions/:id/heartbeat` | 上报当前稳定训练题目的有效活跃时间 |
+| `POST` | `/api/training-sessions/:id/submit` | 校验当前有效题集并创建训练提交 |
+| `GET` | `/api/training-sessions/:id/coach-dashboard` | 获取教师实时课堂进度 |
+| `GET` | `/api/training-sessions/:id/peer-progress` | 获取按赛制动态计算并裁剪的同学排名 |
+| `GET` | `/api/training-sessions/:id/report` | 获取轮次、分组和学员过程报告 |
 | `GET` | `/api/training-sessions/:id/events` | 可补偿的训练 SSE 事件流 |
-| `POST` | `/api/training-sessions/:id/join` | 范围内成员按迟到规则加入训练 |
-| `POST` | `/api/training-sessions/:id/archive` | 归档草稿或已结束训练 |
-| `POST` | `/api/training-sessions/:id/hints` | 教练创建分级提示 |
-| `GET` | `/api/training-sessions/:id/problems/:stageProblemId/hints` | 获取当前学员已满足条件的提示 |
-| `POST` | `/api/training-sessions/:id/hints/:hintId/open` | 幂等记录并打开提示 |
-| `PATCH` | `/api/training-sessions/:id/hints/:hintId` | 更新尚未开始阶段的提示定义 |
-| `DELETE` | `/api/training-sessions/:id/hints/:hintId` | 删除尚未开始阶段的提示定义 |
-| `POST` | `/api/training-sessions/:id/strategy-decisions` | 记录 ACM 策略训练决策 |
 | `PUT` | `/api/users/:id/status` | 见对应路由实现 |
 | `GET` | `/api/problems/:id/checker` | 题目 Checker 文件列表 |
 | `GET` | `/api/problems/:id/checker/:fileName/download` | 下载 Checker 源码 |
@@ -622,24 +599,30 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/platform/blog-tags` | 超管或平台管理员创建或复用受控系统标签 |
 | `GET` | `/api/blog-tags/:tagId/blogs` | 通过标签反向查询当前读者可见的已发布博客 |
 
-## Training Engine V2 API
+## Training Engine V3 API
 
-Training Session 使用一条全局 Stage 时间轴。设计器通过 `/design`、`/structure/validate` 与 `/structure` 保存 Stage、稳定 Group、默认 StagePlan 和可选 Group override；运行期使用统一 `/stage-transitions` 推进全班当前 Stage。不存在按组启动、暂停或推进 Stage 的 API。
+训练 Session 使用稳定 SessionProblem、稳定 Group 和全局 Round 时间线。创建接口直接生成 READY 或 RUNNING 训练，不存在草稿发布、模板、设计器或 Stage API。当前有效题集由服务端统一解析 Round × Group 分配；所有结构写入和课堂命令都使用 `statusRevision` 做并发校验。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| `GET` | `/api/training-sessions/:id/design` | 读取 Stage、稳定 Group 和 StagePlan 设计数据 |
-| `POST` | `/api/training-sessions/:id/structure/validate` | 校验尚未开始的训练结构 |
-| `PUT` | `/api/training-sessions/:id/structure` | 以 statusRevision CAS 保存结构 |
-| `GET` | `/api/training-sessions/:id/grouping` | 读取稳定分组与当前成员归属 |
-| `PUT` | `/api/training-sessions/:id/grouping` | 保存尚未开始训练的稳定分组 |
-| `POST` | `/api/training-sessions/:id/grouping/change` | 调整稳定分组归属 |
-| `PUT` | `/api/training-sessions/:id/stage-group-matrix` | 保存默认 StagePlan 与可选分组覆盖；路径名仅对应现有数据库模型，不表示独立运行单元 |
-| `POST` | `/api/training-sessions/:id/stage-transitions` | 开始、推进、跳过未来 Stage 或结束整场训练 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/group-changes` | 即时换组或预设目标 Stage 换组 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/time-extensions` | 追加 Stage 延时记录 |
-| `POST` | `/api/training-sessions/:id/stages/:stageId/clone` | 将 Stage 定义复制为新的未来 Stage |
-| `POST` | `/api/training-sessions/:id/groups/split` | 拆分稳定分组，可立即或在目标 Stage 开始时生效，不创建运行时间线 |
-| `POST` | `/api/training-sessions/:id/groups/merge` | 合并稳定分组，不改变全局当前 Stage |
-
-所有 JSON 请求/响应经过 Training Contracts 校验。Stage 转换采用训练锁与 `statusRevision` CAS；Stage 首次开始时创建不可变 RuntimeSnapshot，开始后的定义和计划不可改写，已结束 Stage 不允许回滚。
+| `GET` | `/api/training-sessions` | 按学校或团队范围查询训练 |
+| `POST` | `/api/training-sessions` | 单页创建训练，可保持 READY 或立即开始 |
+| `POST` | `/api/training-sessions/participant-preview` | 预览训练对象和权威人数 |
+| `GET` | `/api/training-sessions/:id` | 获取按身份裁剪的 V3 工作区 |
+| `PUT` | `/api/training-sessions/:id/assignments` | 替换当前轮指定分组的题目分配 |
+| `PUT` | `/api/training-sessions/:id/next-round` | 创建或替换唯一待开始下一轮 |
+| `DELETE` | `/api/training-sessions/:id/next-round` | 删除待开始下一轮 |
+| `POST` | `/api/training-sessions/:id/rounds/advance` | 结束当前轮并明确切换到下一轮 |
+| `PUT` | `/api/training-sessions/:id/grouping` | 替换训练稳定分组和成员归属 |
+| `POST` | `/api/training-sessions/:id/grouping/change` | 即时调整学员分组并记录原因 |
+| `POST` | `/api/training-sessions/:id/commands` | 开始、暂停、继续、延时、聚焦、结束聚焦或结束训练 |
+| `POST` | `/api/training-sessions/:id/archive` | 归档已结束训练 |
+| `POST` | `/api/training-sessions/:id/join` | 范围内成员加入训练 |
+| `GET` | `/api/training-sessions/:id/drafts/:sessionProblemId` | 获取稳定训练题目的代码草稿 |
+| `PUT` | `/api/training-sessions/:id/drafts/:sessionProblemId` | 按 revision 保存稳定训练题目草稿 |
+| `POST` | `/api/training-sessions/:id/heartbeat` | 上报当前稳定训练题目的有效活跃时间 |
+| `POST` | `/api/training-sessions/:id/submit` | 校验当前有效题集并创建训练提交 |
+| `GET` | `/api/training-sessions/:id/coach-dashboard` | 获取教师实时课堂进度 |
+| `GET` | `/api/training-sessions/:id/peer-progress` | 获取按赛制动态计算并裁剪的同学排名 |
+| `GET` | `/api/training-sessions/:id/report` | 获取轮次、分组和学员过程报告 |
+| `GET` | `/api/training-sessions/:id/events` | 可补偿的训练 SSE 事件流 |

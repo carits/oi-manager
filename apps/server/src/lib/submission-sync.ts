@@ -159,7 +159,7 @@ export async function onSubmissionJudged(submission: {
   canonicalContestId?: string | null
   canonicalContestProblemId?: string | null
   trainingSessionId?: string | null
-  trainingStageProblemId?: string | null
+  trainingSessionProblemId?: string | null
   assignmentId?: string | null
   assignmentProblemId?: string | null
   assignmentRecipientId?: string | null
@@ -195,7 +195,7 @@ export async function onSubmissionJudged(submission: {
       id: submission.id,
       userId: submission.userId,
       trainingSessionId: submission.trainingSessionId || null,
-      trainingStageProblemId: submission.trainingStageProblemId || null,
+      trainingSessionProblemId: submission.trainingSessionProblemId || null,
       result: submission.result,
       score: submission.score,
     })

@@ -1,458 +1,95 @@
-# Training V3 目标模型
+---
+status: current
+audience: development
+last_verified: 2026-10-04
+source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/schema.prisma, packages/contracts/src/training.ts
+---
 
-> 状态：target-state
->
-> 基线：main@ef442202
->
-> 实施分支：refactor/training-session-problem-model
->
-> 本文是新训练模型的产品与领域约束。V2 引擎字段可以为历史数据兼容保留，但不得继续向新 UI 暴露。
+# 训练模块 V3 目标架构
 
-## 1. 重构背景
+## 决策
 
-当前 Training Engine 以 `StageProblem` 为题目身份，并让 Stage 同时承担题目身份、分组计划、完成要求、Hint、时间策略和提交上下文。结果是同一道题跨轮次会产生多个训练题目身份，Submission / Progress / Draft / 排名 / 聚焦 / 权限都被 `stageProblemId` 绑定。
+本项目处于开发阶段，训练模块采用一次性硬切：
 
-新模型的核心原则：
+- 不保留旧训练数据。
+- 不保留旧训练接口、旧路由或旧前端入口。
+- 不提供字段回退、静默转换或双写。
+- 数据库迁移检测到旧训练场次或旧训练提交时立即终止，由开发环境先清空旧数据后再执行。
 
-> 一场训练中的同一道 canonical Problem 永远只有一个训练题目身份；Round 只决定当前某个分组能看到哪些题。
+## 领域模型
 
-## 2. 教师产品模型
+### TrainingSession
 
-教师课堂主界面固定只保留四个主动作：
+训练场次保存标题、说明、赛制、状态、组织或团队范围、总时长和当前轮次。
 
-1. **题目调整**
-2. **聚焦题目**
-3. **调整分组**
-4. **下一步**
+状态只有 READY、RUNNING、PAUSED、ENDED、ARCHIVED。新建训练直接生成 READY，也可以通过“创建并开始”直接进入 RUNNING。不存在草稿设计器。
 
-以下不再作为一级课堂动作：
+### TrainingSessionProblem
 
-- 统一讲解；
-- 发送提示；
-- 结束训练；
-- 消息；
-- 禁止/恢复提交；
-- Soft/Hard Pause；
-- 延长当前阶段；
-- Teaching / Review / Guided Stage。
+训练题目身份由 sessionId + problemId 唯一确定。移出当前轮次只会停用轮次分配，不删除训练题目身份。因此重新加入同一题后，SessionProblem ID、历史提交、草稿、进度和最好成绩都保持不变。
 
-暂停/继续、增加总时间属于 Session 状态控制，不占四个课堂动作。
+### TrainingSessionRound
 
-## 3. 新训练生命周期
+轮次只承担课堂时间与题集快照：
 
-新训练不再创建 DRAFT。
+- PENDING：老师已准备、学生不可见。
+- RUNNING：当前轮次。
+- ENDED：已结束。
 
-目标状态：
+一次只有一个 RUNNING 轮次。轮次限时到期只结束当前轮次，不自动切换下一轮，也不自动结束整场训练。
 
-```text
-READY
-  -> RUNNING
-  <-> PAUSED
-  -> ENDED
-  -> ARCHIVED
-```
+### TrainingSessionGroup
 
-`scheduledStartAt` 是 READY 的可选自动开始时间，不需要再把 SCHEDULED 作为独立产品概念。
+分组属于训练场次。参与者任一时刻只属于一个有效分组。每个轮次通过 TrainingRoundProblemAssignment 为每个分组建立有序题集，组间题集可以不同。
 
-旧 DRAFT / SCHEDULED 数据继续只读兼容或迁移兼容。
+## 有效题集
 
-## 4. 时间模型
+所有读取、权限、聚焦、提交、草稿、进度和排名必须调用统一有效题集解析器。有效题集由当前场次、当前 RUNNING 轮次、当前参与者分组，以及分配记录的 active 与 orderIndex 唯一确定。
 
-### 4.1 Session 总时间
+任何接口不得自行拼装另一套题集规则。PENDING 轮次及其他分组题目不能出现在学生响应中。
 
-每场训练必须设置：
+## 课堂动作
 
-```text
-totalDurationSeconds
-```
+老师课堂页只提供四个主要业务动作：
 
-教师和学生看到总倒计时或明确结束时间。
+1. 题目调整：替换当前轮次指定分组的题集。
+2. 聚焦题目：要求全部学生或指定分组关注当前有效题。
+3. 调整分组：立即把学生移动到另一分组，并重新计算其有效题。
+4. 下一步：先准备下一轮，再明确切换。
 
-规则：
+开始、暂停、继续、延长整场时间、延长本轮时间和结束训练属于课堂状态控制，不作为新的教学模型。
 
-- RUNNING 时递减；
-- PAUSED 时停止；
-- 恢复后继续；
-- 教师可“增加时间”；
-- 总时间归零后 Session 自动 ENDED；
-- 不再使用“预计用时”；
-- 不再用 Assignment 风格的 7 天 dueAt 表达训练寿命。
+## 创建流程
 
-### 4.2 Round 可选测试倒计时
+创建训练为单页表单，固定包含名称与说明、参加学生、GENERAL/OI/ACM 赛制、整场总时间和第一轮题目。
 
-普通 Round：
+题目统一使用 ProblemListEditor。界面不出现模板、必做/选做、阶段、提示策略、完成策略或设计步骤。
 
-```text
-timeLimitSeconds = null
-```
+## 排名
 
-限时测试 Round：
+排名每次按当前有效题集动态计算：
 
-```text
-timeLimitSeconds = N
-```
+- GENERAL：完成题数优先。
+- OI：当前有效题集最好分之和。
+- ACM：当前有效题集通过数与罚时。
 
-规则：
+不同分组题集不一致时，学生只与同组成员排名。历史提交保留，但已移出有效题集的题目不计入当前排名。
 
-- 无额外提醒；
-- PAUSED 时与 Session 一起暂停；
-- 归零后当前 Round 结束；
-- 不自动进入下一 Round；
-- 不因为 Round 时间归零而结束整个 Session；
-- 等待教师点击“下一步”；
-- 增加 Session 总时间默认不改变 Round 测试时间；
-- 只有 Round 存在测试倒计时时才允许单独调整本轮时间。
+## 时间
 
-V3 不继续扩展 MANUAL / TIME / COMPLETION / HYBRID 策略引擎。
+- 整场计时由 Session 保存。
+- 本轮计时由 Round 保存。
+- 暂停时冻结两种计时。
+- 延时命令分别作用于整场或当前轮次。
+- 整场时间到期结束训练。
+- 本轮时间到期只结束本轮并等待老师操作。
 
-## 5. 三种赛制
+## API
 
-继续支持：
+只保留 V3 API：列表、创建、参与者预览、工作区读取、当前轮题集替换、下一轮保存/删除/切换、分组整体替换与即时调整、课堂命令、草稿、心跳、提交、教师看板、动态排名、报告和事件流。
 
-- GENERAL
-- OI
-- ACM
+所有写请求使用 expectedRevision 防止并发覆盖，但界面不向普通用户展示内部版本术语。
 
-三种赛制共享完全相同的课堂流程和题目/分组模型，只在统计与排名计算层存在差异。
+## 验收
 
-不得重新产生 GENERAL/OI/ACM 三套 Stage、Workspace 或课堂动作。
-
-## 6. 核心数据模型
-
-```text
-TrainingSession
-├─ SessionProblem[]
-├─ Participant[]
-├─ Group[]
-├─ Round[]
-│  └─ GroupProblemAssignment[]
-└─ RuntimeOverlay[]
-   └─ Focus
-```
-
-### 6.1 TrainingSessionProblem
-
-建议模型：
-
-```text
-TrainingSessionProblem
-- id
-- sessionId
-- problemId
-- alias?
-- titleSnapshot
-- statementsSnapshot
-- createdAt
-- updatedAt
-```
-
-约束：
-
-```text
-unique(sessionId, problemId)
-```
-
-职责：
-
-- 一场训练中题目的唯一身份；
-- 承接 Submission；
-- 承接学生代码；
-- 承接 Progress；
-- 承接成绩统计；
-- 保存训练题面快照。
-
-### 6.2 Round
-
-Round 是“下一轮训练”的内部实体。
-
-只负责：
-
-- 顺序；
-- lifecycle；
-- startedAt / endedAt；
-- 可选 `timeLimitSeconds`。
-
-Round 不负责：
-
-- 题目身份；
-- 必做/选做；
-- Hint；
-- Teaching / Review / Guided；
-- 单题策略；
-- CompletionPolicy；
-- ScoreGoal。
-
-数据库可以暂时继续使用 `TrainingSessionStage` 表名，但新 Application Layer 应按 Round 语义使用。
-
-### 6.3 GroupProblemAssignment
-
-Round 与题目的关系仅表示：
-
-> 当前这一轮，这个分组可以看到哪些 SessionProblem。
-
-建议：
-
-```text
-TrainingRoundProblemAssignment
-- id
-- roundId
-- groupId
-- sessionProblemId
-- orderIndex
-- active
-```
-
-V3 第一版只支持 GROUP 级题目调整，不支持 USER 级单独题集。
-
-没有“必做 / 选做”字段。
-
-## 7. 题目调整
-
-教师选择一个分组后，可以：
-
-- 添加题目；
-- 移除题目。
-
-“移除”只移除当前有效 Assignment，不删除历史事实。
-
-例如学生已对 P1001 有 Submission：
-
-1. 教师从当前分组移除 P1001；
-2. 学生立即看不到 P1001；
-3. P1001 不再参与当前成绩/通过数/罚时/总分；
-4. Submission、代码、历史成绩仍保留；
-5. 以后重新加入 P1001；
-6. 原 Submission 立即重新参与统计，无需重新提交。
-
-这是系统级不变量：
-
-> Submission 是历史事实；当前排名与成绩由“当前有效题集 + 历史 Submission”实时计算。
-
-## 8. 跨 Round 同题语义
-
-同一 Session 中 P1001 无论：
-
-- 在 Round 1 出现；
-- 被删除；
-- Round 2 再出现；
-- 分组变化后重新可见；
-
-都必须指向同一个 `TrainingSessionProblem(P1001)`。
-
-因此：
-
-- Submission 历史连续；
-- 已有成绩连续；
-- 代码连续；
-- 删除后重加立即恢复统计。
-
-不得再创建 Round1-P1001 / Round2-P1001 两份题目身份。
-
-## 9. 下一轮
-
-只允许提前准备一个下一轮。
-
-当前：
-
-```text
-RUNNING Round
-+ at most one PENDING Round
-```
-
-下一轮保存的是一个**完整题集快照**，不是增量 patch。
-
-例如：
-
-```text
-Round 1: A B C
-Round 2: D E
-```
-
-进入 Round 2 后学生看到 D E，不是 A B C D E。
-
-PENDING Round 内容绝不能泄露给学生。
-
-## 10. 分组与换组
-
-学生始终属于一个当前有效 Group。
-
-换组立即重新计算当前有效题集：
-
-```text
-effectiveProblems = currentRound.assignments[currentGroup]
-```
-
-如果学生正在查看一题，而换组后该题不再有效：
-
-- 保存代码；
-- 保留 Submission；
-- 关闭该题；
-- 自动进入新有效题集中的可用题目。
-
-历史事实不因换组删除。
-
-## 11. 聚焦题目
-
-聚焦是 RuntimeOverlay，不创建 Round。
-
-建议第一版聚焦只允许选择目标分组当前有效题目，避免聚焦成为绕过题目可见权限的第二套分配系统。
-
-聚焦结束后回到学生原有效题集。
-
-`currentProblemId / returnProblemId` 后续必须改为 SessionProblem 语义。
-
-## 12. 学生端
-
-学生不需要看到：
-
-- Round 历史；
-- Stage；
-- 当前任务/历史任务分类；
-- 下一轮；
-- 教师规划。
-
-学生只看到教师当前让其分组可见的题目。
-
-当题目调整、换组或进入下一轮发生时，学生题目列表实时变成新的有效题集。
-
-## 13. 教师学生身份显示
-
-教师端所有学生列表、关注区、分组和详情必须优先显示组织真实姓名：
-
-```text
-displayName
-```
-
-username 只作为次要信息或 fallback。
-
-## 14. 排名与动态题集
-
-### 14.1 动态删除
-
-题目被移出当前有效题集后：
-
-- GENERAL：该题不计当前完成/成绩；
-- OI：该题分数不计总分；
-- ACM：该题 AC、错误提交、罚时都不计。
-
-重新加入时，历史 Submission 立即重新计入。
-
-### 14.2 不同组不同题
-
-这是仍需最终产品确认的一个显示问题。
-
-推荐：
-
-- 各组有效题集完全相同：允许全体榜；
-- 各组有效题集不同：默认按组查看排名，不做加权比较。
-
-无论 UI 是否显示全体榜，后端计算必须基于每个 participant 的当前有效题集。
-
-## 15. 有效题集必须成为唯一领域函数
-
-V3 必须集中实现类似：
-
-```ts
-resolveEffectiveSessionProblems(sessionId, participantId)
-```
-
-所有模块统一消费它：
-
-- 学生题目列表；
-- canView / canSubmit；
-- 排名；
-- 完成情况；
-- 当前题目合法性；
-- 聚焦合法性；
-- 换组；
-- Round 切换。
-
-禁止 Workspace、Permission、Ranking 各自实现一套题集解析规则。
-
-## 16. Submission 与评测快照
-
-Submission 从：
-
-```text
-trainingStageProblemId
-```
-
-迁移为：
-
-```text
-trainingSessionProblemId
-roundId?  // 仅作为提交发生时的上下文
-```
-
-Submission 的评测事实继续保留：
-
-- testSetSlot
-- testSetFencingToken
-- testSetGraphHash
-- judgeConfigHash
-- judgeConfigSnapshot
-
-题目删除/重加不得修改历史 JudgeRun 或历史测试数据快照。
-
-## 17. Hint / Requirement / 旧高级策略
-
-新训练暂不提供 Hint。
-
-不新增：
-
-- Hint UI；
-- OPEN_HINT / CLOSE_HINT 产品入口；
-- hint trigger。
-
-新训练也不提供：
-
-- required / optional；
-- requiredProblemCount；
-- completionThreshold；
-- UnlockPolicy；
-- ScoreGoal；
-- 单题时间策略；
-- StrategyDecision。
-
-旧接口/字段可暂时保留以兼容历史数据，但必须标记 legacy/deprecated，不得被新 UI 重新接回。
-
-## 18. 暂不实现
-
-本轮明确不做：
-
-- 课堂记录 UI；
-- Hint；
-- 学生历史 Round UI；
-- 复杂自动编排；
-- USER 级独立题集；
-- 多个未来 Round 队列。
-
-## 19. 新 UI 验收
-
-教师主动作始终只有：
-
-```text
-题目调整 | 聚焦题目 | 调整分组 | 下一步
-```
-
-创建训练只让教师理解：
-
-- 名称；
-- 学生；
-- 赛制；
-- 总时间；
-- 第一轮题目/分组题目。
-
-不得再出现：
-
-- 保存草稿；
-- Stage；
-- Teaching / Review / Guided；
-- 预计阶段时长；
-- 必做 / 选做；
-- Hint；
-- Requirement；
-- Revision；
-- StagePlan；
-- 时间轴/矩阵。
-
+必须通过 Prisma schema 校验和迁移演练、Contracts/Server/Web 构建、Web 全量单元测试、有效题集解析单元测试、API 与浏览器 E2E、桌面与窄屏页面验收，以及旧训练模型与旧路径源码扫描。

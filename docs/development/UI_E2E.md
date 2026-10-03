@@ -152,7 +152,6 @@ pnpm exec playwright test e2e/tests/internal-link-audit.spec.ts --project=chromi
 PR 运行冒烟；`main` 推送和每日定时任务运行 Chromium 全量与紧凑视口。真实连通性
 只在手动 workflow 中使用 Secrets，且不保存可能含凭据的 trace。
 
-## Training Engine V2 E2E
+## Training Engine V3 E2E
 
-双角色场景应完成：创建一个 Stage、发布、运行中准备唯一下一阶段、教师推进/提前结束、学生无刷新收到要求变化、换组后历史 Progress 保留，并验证不存在“上一阶段”回滚入口。
-
+双角色场景应完成：单页创建并开始训练、调整当前题目、准备唯一下一轮、确认学员不可见待开始轮次、教师明确切轮、学生收到有效题集变化、换组和题目移出/重加后历史 Progress 保留，并验证不存在旧设计器、模板或回滚入口。

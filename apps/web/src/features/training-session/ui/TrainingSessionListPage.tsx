@@ -3,7 +3,7 @@
 import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Copy, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -20,7 +20,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useFeatureResource } from '@/hooks/data/useFeatureResource'
 import { useListScrollRestoration } from '@/hooks/useListScrollRestoration'
 import { trainingStatusLabel } from '@/lib/humanPresentation'
-import { cloneTrainingSession, joinTrainingSession, listManagedTrainingTeams, listTrainingSessions } from '../api/trainingSessionApi'
+import { joinTrainingSession, listManagedTrainingTeams, listTrainingSessions } from '../api/trainingSessionApi'
 import { buildTrainingListQuery, resolveTrainingListTeamId, type TrainingListStatus } from '../model/trainingListScope'
 import { readTrainingListLocation, updateTrainingListLocation, type TrainingListLocation } from '../model/trainingListLocation'
 import { TrainingSetupDialog, type TrainingSetupTeam } from './TrainingSetupDialog'
@@ -29,8 +29,7 @@ import listStyles from './TrainingList.module.css'
 
 type Session = {
   id: string; title: string; description?: string; status: string; statusRevision?: number;
-  problemCount?: number; dueAt?: string | null; canJoin?: boolean; teamId?: string | null; teamName?: string | null;
-  _count: { Stages: number; Participants: number }
+  problemCount?: number; participantCount?: number; canJoin?: boolean; teamId?: string | null; teamName?: string | null;
 }
 type SessionListPayload = {
   items: Session[];
@@ -40,7 +39,7 @@ type SessionListPayload = {
 type Team = TrainingSetupTeam & { owner?: { id?: string }; members?: Array<{ userId: string; role: string }> }
 type TeamPayload = Team[] | { items?: Team[]; data?: Team[]; totalPages?: number }
 const normalizeTeams = (payload?: TeamPayload) => Array.isArray(payload) ? payload : payload?.items || payload?.data || []
-const emptyCounts = { active: 0, upcoming: 0, completed: 0, draft: 0 }
+const emptyCounts = { active: 0, upcoming: 0, completed: 0 }
 const statusVariant = (status: string) => status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : status === 'ENDED' || status === 'ARCHIVED' ? 'neutral' : 'info'
 
 async function loadAllManagedTeams(organizationId?: string): Promise<Team[]> {
@@ -79,7 +78,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   const teams = teamsResource.data || []
   const canCreateTraining = canViewTrainingManagement || Boolean(!organizationId && (teamId || teams.length))
   const managerView = canCreateTraining
-  const listFilter = location.status === 'draft' && organizationId && !canViewTrainingManagement ? 'active' : location.status
+  const listFilter = location.status
   const query = buildTrainingListQuery({ organizationId, fixedTeamId: teamId, selectedTeamId: listTeamId, statusGroup: listFilter, page: location.page, pageSize: 20, keyword: location.keyword })
   const queryKey = `training:list:${JSON.stringify(query)}`
   const resource = useFeatureResource<SessionListPayload>(queryKey, sessionKey, async () => {
@@ -102,29 +101,20 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     return () => window.clearTimeout(timer)
   }, [keywordDraft, location.keyword, updateLocation])
   useEffect(() => {
-    if (!managerView && !teamsResource.isLoading && location.status === 'draft') updateLocation({ status: 'active' }, true)
-  }, [location.status, managerView, teamsResource.isLoading, updateLocation])
-  useEffect(() => {
     if (!resource.data || resource.error || resource.showingPreviousQuery) return
     const pages = Math.max(1, resource.data.pagination.totalPages)
     if (location.page > pages) updateLocation({ page: pages }, true)
   }, [location.page, resource.data, resource.error, resource.showingPreviousQuery, updateLocation])
 
   const countFor = (status: TrainingListStatus) => resource.data?.statusCounts[status]
-  const filterItems = managerView ? [
+  const filterItems = [
     { value: 'active', label: '进行中', count: countFor('active') },
     { value: 'upcoming', label: '待开始', count: countFor('upcoming') },
-    { value: 'draft', label: '草稿', count: countFor('draft') },
-    { value: 'completed', label: '已结束', count: countFor('completed') },
-  ] : [
-    { value: 'active', label: '进行中', count: countFor('active') },
-    { value: 'upcoming', label: '待开始', count: countFor('upcoming') },
-    { value: 'completed', label: '已完成', count: countFor('completed') },
+    { value: 'completed', label: managerView ? '已结束' : '已完成', count: countFor('completed') },
   ]
   const filtered = Boolean(location.keyword || (!teamId && listTeamId))
   const emptyCopy = filtered ? ['没有符合条件的训练', '调整关键词或训练范围后再试。']
-    : managerView ? listFilter === 'draft' ? ['没有训练草稿', '未发布的课堂训练会保存在这里。']
-      : listFilter === 'active' ? ['还没有进行中的训练', '布置一组题目给学生练习。']
+    : managerView ? listFilter === 'active' ? ['还没有进行中的训练', '布置一组题目给学生练习。']
         : listFilter === 'upcoming' ? ['没有待开始的训练', '设置未来的开始时间后，训练会出现在这里。']
           : ['还没有已结束的训练', '训练结束后会保留在这里，方便查看结果。']
     : listFilter === 'active' ? ['暂无训练', '目前老师还没有给你安排需要完成的训练。']
@@ -141,30 +131,15 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
         const joined = await joinTrainingSession(item.id)
         if (!joined.ok) { toast.error(joined.error.userMessage || '加入训练失败'); return }
       }
-      router.push(`${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${item.id}${item.status === 'DRAFT' ? '/design' : ''}`)
+      router.push(`${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${item.id}`)
     } catch (error) { toast.error(publicErrorMessage(error, '无法打开训练')) }
     finally { busyRef.current = false; setBusyId(null) }
   }
-  const cloneSession = async (item: Session) => {
-    if (busyRef.current) return
-    busyRef.current = true
-    setBusyId(item.id)
-    rememberPosition()
-    try {
-      const result = await cloneTrainingSession(item.id, { expectedRevision: item.statusRevision || 0 })
-      if (!result.ok) { toast.error(result.error.userMessage || '复制训练失败'); return }
-      toast.success('已复制为新的训练草稿')
-      router.push((organizationId ? '/org/' + organizationId : '/personal') + '/training-sessions/' + result.data.id + '/design')
-    } catch (error) { toast.error(publicErrorMessage(error, '复制训练失败')) }
-    finally { busyRef.current = false; setBusyId(null) }
-  }
   const actionLabel = (item: Session) => item.canJoin ? '加入训练'
-    : item.status === 'DRAFT' ? '继续编辑'
-      : item.status === 'RUNNING' || item.status === 'PAUSED' ? '进入课堂'
-        : item.status === 'SCHEDULED' ? '查看设置' : '查看结果'
-  const sessionFacts = (item: Session) => `${item.teamName || (organizationId ? '校级训练' : '个人团队')} · ${item._count.Participants} 人`
-  const sessionProgress = (item: Session) => item.status === 'DRAFT' ? `已配置 ${item.problemCount || 0} 道题`
-    : `${item.problemCount || 0} 道题${item.dueAt ? ` · 截止 ${new Date(item.dueAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}`
+    : item.status === 'RUNNING' || item.status === 'PAUSED' ? '进入课堂'
+      : item.status === 'READY' ? '查看课堂' : '查看结果'
+  const sessionFacts = (item: Session) => `${item.teamName || (organizationId ? '校级训练' : '个人团队')} · ${item.participantCount || 0} 人`
+  const sessionProgress = (item: Session) => `${item.problemCount || 0} 道题`
 
   return <PageFrame className={styles.trainingListFrame}>
     <PageHeader title="训练" description={managerView ? '管理和布置学生训练。' : '查看老师安排的训练并继续练习。'} actions={canCreateTraining ? <Button icon={<Plus size={17} />} onClick={() => setSetupOpen(true)}>布置训练</Button> : undefined} />
@@ -190,8 +165,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
             <p className={styles.sessionAudience}>{sessionFacts(item)}</p>{item.description && <p className={styles.muted}>{item.description}</p>}
             <p className={styles.sessionProgress}>{sessionProgress(item)}</p>
             <div className={styles.actions}>
-              <Button variant={item.status === 'DRAFT' || item.canJoin || item.status === 'RUNNING' ? 'primary' : 'secondary'} disabled={Boolean(busyId) || resource.showingPreviousQuery} loading={busyId === item.id} onClick={() => void openSession(item)}>{actionLabel(item)}</Button>
-              {managerView && <Button variant="outline" icon={<Copy size={15} />} disabled={Boolean(busyId) || resource.showingPreviousQuery} onClick={() => void cloneSession(item)}>复制训练</Button>}
+              <Button variant={item.canJoin || item.status === 'RUNNING' ? 'primary' : 'secondary'} disabled={Boolean(busyId) || resource.showingPreviousQuery} loading={busyId === item.id} onClick={() => void openSession(item)}>{actionLabel(item)}</Button>
             </div>
           </article>)}</div>}
         {data.pagination.totalPages > 1 && <div className={styles.pagination}><span>共 {data.pagination.total} 个 · 第 {location.page}/{Math.max(1, data.pagination.totalPages)} 页</span><div className={styles.actions}>

@@ -29,7 +29,7 @@ export interface SubmissionRecord {
   submittedAt: Date
   submitScope: string
   trainingSessionId: string | null
-  trainingStageProblemId: string | null
+  trainingSessionProblemId: string | null
   canonicalContestId: string | null
   canonicalContestProblemId: string | null
   isGlobalVisible: boolean
@@ -71,7 +71,7 @@ export interface SubmissionViewResult {
   submittedAt: Date
   submitScope: string
   trainingSessionId: string | null
-  trainingStageProblemId: string | null
+  trainingSessionProblemId: string | null
   canonicalContestId: string | null
   canonicalContestProblemId: string | null
 
@@ -164,7 +164,7 @@ export function getSubmissionView(
     submittedAt: submission.submittedAt,
     submitScope: submission.submitScope,
     trainingSessionId: submission.trainingSessionId,
-    trainingStageProblemId: submission.trainingStageProblemId,
+    trainingSessionProblemId: submission.trainingSessionProblemId,
     canonicalContestId: submission.canonicalContestId,
     canonicalContestProblemId: submission.canonicalContestProblemId,
     result: submission.result,
@@ -296,7 +296,7 @@ export function sanitizeSubmissionForOi(
     submittedAt: submission.submittedAt,
     submitScope: submission.submitScope,
     trainingSessionId: submission.trainingSessionId,
-    trainingStageProblemId: submission.trainingStageProblemId,
+    trainingSessionProblemId: submission.trainingSessionProblemId,
     canonicalContestId: submission.canonicalContestId,
     canonicalContestProblemId: submission.canonicalContestProblemId,
     result: null,

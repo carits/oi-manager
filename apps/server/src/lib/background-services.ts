@@ -52,7 +52,7 @@ export function startTrainingEngineScheduler(intervalMs = 5_000): () => Promise<
     try {
       const { processDueTrainingSessions } = await import('../modules/training-engine/training-engine.service')
       const result = await processDueTrainingSessions()
-      if (result.started || result.advanced || result.ended) logger.info('training_engine_scheduler_tick', { action: 'training_engine', metadata: result })
+      if (result.started || result.roundsEnded || result.ended) logger.info('training_engine_scheduler_tick', { action: 'training_engine', metadata: result })
     } catch (error) {
       logger.error('training_engine_scheduler_failed', error, { action: 'training_engine' })
     } finally { running = false }

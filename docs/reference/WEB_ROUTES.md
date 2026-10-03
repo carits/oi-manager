@@ -86,8 +86,7 @@ organizationId 表示工作区意图，SSR 和浏览器 `/api/auth/me` 都必须
 | `/personal/teams/[id]/contests/[cid]` | 见页面权限布局 | 当前页面 |
 | `/personal/teams/[id]/contests/[cid]/statements` | 活动管理员 | 团队训练题面矩阵管理 |
 | `/personal/training-sessions` | 已登录账号 | 独立教练训练列表 |
-| `/personal/training-sessions/[id]` | 教练或训练学员 | 冻结 Stage 摘要、当前要求/历史进度、提交和 Runtime Intervention 工作台 |
-| `/personal/training-sessions/[id]/design` | 团队管理员 | 尚未开始 Stage 的用途、规则、稳定分组、平台+题号和动态测试数据槽规则设计器 |
+| `/personal/training-sessions/[id]` | 教练或训练学员 | 当前轮题目、代码、提交、分组、聚焦、下一轮和动态排名工作台 |
 | `/platform-admin` | 见页面权限布局 | 当前页面 |
 | `/platform-admin/blog-moderation` | 平台管理员 | 博客举报、内容处置与社区精选治理 |
 | `/platform-admin/knowledge` | 平台管理员 | 保留平台管理外壳的知识广场 |
@@ -114,7 +113,6 @@ organizationId 表示工作区意图，SSR 和浏览器 `/api/auth/me` 都必须
 | `/profile/user/[id]` | 见页面权限布局 | 当前页面 |
 | `/super_admin` | 见页面权限布局 | 当前页面 |
 
-## Training Engine V2 路由职责
+## Training Engine V3 路由职责
 
-`/org/:organizationId/training-sessions/:id/design` 与 `/personal/training-sessions/:id/design` 负责尚未开始 Stage 的定义、全班默认计划、稳定分组覆盖与发布检查；`/training-sessions/:id` 负责 SCHEDULED/RUNNING/PAUSED/ENDED 运行控制。运行工作台只展示一个全局当前 Stage，并在该 Stage 内解释学员所属稳定 Group 的有效计划、换组和干预；不提供分组独立推进或上一阶段回滚。
-
+`/org/:organizationId/training-sessions` 与 `/personal/training-sessions` 提供训练列表和单页创建入口；`/training-sessions/:id` 同时承担待开始、运行、暂停和结束后的课堂工作区。系统没有训练设计器子路由。教师在同一工作区完成题目调整、聚焦题目、调整分组和准备/切换下一轮，普通学员只能看到当前有效轮次和所属分组题目。

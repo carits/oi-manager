@@ -13,7 +13,6 @@ import { ProblemListDetailPage } from '@/features/problem/ProblemListDetailPage'
 import { NewProblemListPage } from '@/features/problem/NewProblemListPage'
 import { ContestStatementManagementPage } from '@/features/contest/ContestStatementManagementPage'
 import { TrainingSessionWorkspace } from '@/features/training-session/TrainingSessionWorkspace'
-import { TrainingSessionDesigner } from '@/features/training-session/TrainingSessionDesigner'
 import { AssignmentWorkspace } from '@/features/assignment'
 import { BlogDiscoveryDetail } from '@/features/blog'
 import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
@@ -51,7 +50,6 @@ export default function OrganizationResourcePage() {
     return <ContestDetailPage basePath={prefix} contestIdOverride={parts[0]} />
   }
   if (module === 'training-sessions' && parts.length === 1) return <TrainingSessionWorkspace sessionId={parts[0]} />
-  if (module === 'training-sessions' && parts.length === 2 && parts[1] === 'design') return <TrainingSessionDesigner sessionId={parts[0]} />
   if (module === 'problems' && parts.length === 1 && parts[0] === 'new') {
     return <ProblemForm mode="create" role={userType} />
   }

@@ -17,7 +17,7 @@ interface TeamPayload { items?: Team[]; data?: Team[]; total?: number; summary?:
 interface AssignmentItem { id: string; title: string; status: string; dueAt: string }
 interface AssignmentPayload { items: AssignmentItem[]; statusCounts?: Record<string, number> }
 interface JoinPayload { pending: number }
-interface TrainingItem { id: string; title: string; status: string; scheduledStartAt?: string | null; dueAt?: string | null }
+interface TrainingItem { id: string; title: string; status: string; scheduledStartAt?: string | null; problemCount?: number }
 interface ContestItem { id: number; title: string; startTime: string; endTime: string }
 
 function normalizeTeams(payload: TeamPayload | Team[] | undefined): Team[] {
@@ -46,10 +46,10 @@ export default function TeacherPage() {
     href: `${prefix}/homeworks/${item.id}`, actionLabel: item.status === 'DRAFT' ? '待发布' : item.status === 'REVIEWING' ? '待批改' : item.status === 'OVERDUE' ? '已截止' : '进行中',
     dueAt: item.dueAt, detail: `截止 ${new Date(item.dueAt).toLocaleString('zh-CN')}`,
   }))
-  const trainingTasks: LearningTask[] = (trainingResource.data || []).filter(item => ['DRAFT', 'SCHEDULED'].includes(item.status)).map(item => ({
+  const trainingTasks: LearningTask[] = (trainingResource.data || []).filter(item => item.status === 'READY').map(item => ({
     id: `training-${item.id}`, type: 'training', title: item.title, status: item.status,
-    href: `${prefix}/training-sessions/${item.id}${item.status === 'DRAFT' ? '/design' : ''}`, actionLabel: item.status === 'DRAFT' ? '待编排' : '待开始',
-    actionAt: item.scheduledStartAt, dueAt: item.dueAt, detail: item.status === 'DRAFT' ? '继续配置题目和训练顺序' : `计划 ${item.scheduledStartAt ? new Date(item.scheduledStartAt).toLocaleString('zh-CN') : '手动开始'}`,
+    href: `${prefix}/training-sessions/${item.id}`, actionLabel: '待开始',
+    actionAt: item.scheduledStartAt, detail: `${item.problemCount || 0} 道题 · ${item.scheduledStartAt ? new Date(item.scheduledStartAt).toLocaleString('zh-CN') + ' 自动开始' : '由老师手动开始'}`,
   }))
   const contestTasks: LearningTask[] = (contestResource.data || []).filter(item => new Date(item.endTime).getTime() >= now).map(item => ({
     id: `contest-${item.id}`, type: 'contest', title: item.title,

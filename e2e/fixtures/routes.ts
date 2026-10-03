@@ -69,7 +69,6 @@ export const routePatterns = [
   '/personal/teams/[id]/contests/[cid]/statements',
   '/personal/training-sessions',
   '/personal/training-sessions/[id]',
-  '/personal/training-sessions/[id]/design',
   '/platform-admin',
   '/platform-admin/blog-moderation',
   '/platform-admin/chat-reports',
@@ -102,7 +101,6 @@ export type RoutePattern = typeof routePatterns[number]
 
 export function routeOwner(pattern: RoutePattern): RouteOwner {
   if (pattern === '/' || pattern === '/login' || pattern === '/blog' || pattern === '/blog/[id]') return 'public'
-  if (pattern === '/personal/training-sessions/[id]/design') return 'principal'
   if (pattern === '/profile/student/[id]') return 'campusStudent'
   if (pattern === '/profile/teacher/[id]') return 'principal'
   if (pattern === '/profile/user/[id]') return 'personalStudent'

@@ -127,6 +127,10 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 
 - 2026-09-16: Frontend Feature Slice 与统一 API Contract Layer 第十七批完成并上线。平台 DeepSeek Token 总池、不可变调整流水与 Candidate Evaluation Budget 统一迁入 `features/ai-governance/{api,ui}`，Route 仅保留 Feature 公共入口；新增 AI Governance Runtime Contract，Server/Web 共同校验 Token Pool、流水、评估预算和额度调整。修复调整接口直接返回 Prisma `BigInt` 可能触发 JSON 序列化 500 的缺陷，并为幂等键复用不同调整内容增加 409 fail-closed；页面新增首屏骨架、失败重试、刷新保留数据、空流水和窄屏表格。生产同构 `ai-governance-contract` 4 文件 42/42、Web 40 文件 181 项、Contracts/Server/Web 构建及 UI/导航/架构门禁通过；门禁提升为 22 个 Contract 文件、23 个 Feature Slice、98 条契约边界且 0 违规。提交 `823194e`、`5c48716` 已推送 `main`；API 3303→3302，Web BUILD_ID `yHRqSBrdFmLsQOXHiXKFc` 经 canary 与正式双账号消息闭环（序号 226–229）后提升。本批无 Prisma 或业务数据迁移。
 
+## Training Engine V3 当前状态
+
+训练模块当前以 TrainingSessionProblem、TrainingSessionRound 和 TrainingRoundProblemAssignment 为唯一模型。创建页为单页，课堂工作区只保留题目调整、聚焦题目、调整分组和下一步；不存在训练模板、旧设计器或兼容接口。迁移采用开发期硬切，发现旧训练场次或旧训练提交时直接终止。
+
 ## 历史
 
 - [2026-09 及此前状态流水](archive/history/STATUS-2026-09.md)
@@ -134,4 +138,3 @@ source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer,
 ### Training Engine V2
 
 已完成 Stage × stable Group 统一模型迁移、StageGroup 独立运行、分组拆分/合并 API、设计器与运行工作台兼容收口。原型 StageGroupPlan/GroupMembership/RuntimeState 表为空并已在迁移中删除；生产数据校验显示 prototype 表 0、V2 结构重复 0、当前 legacy session 不受影响。
-

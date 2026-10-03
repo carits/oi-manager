@@ -65,13 +65,12 @@ pnpm --filter server exec vitest run tests/security-boundaries.test.ts
 - 多 Judge 不重复领取任务，ping/pong 会刷新活跃时间。
 - 事务失败不留下部分学校、负责人、成员或状态数据。
 - API 客户端正确处理 JSON、文本、空响应、HTTP 错误、超时和断网。
-- Training Engine 必测 Stage 正常完成、提前结束、跳过、Scheduler/人工 CAS 竞争和禁止回滚；竞态至少重复 20 轮。
-- Stage 分组覆盖沿用、手工重分、`immediate/next_stage`、共有题 Progress 复用和跨 Session/Stage ID 伪造。
-- OI 30→60→100 目标及 Subtask 投影必须同时固定到 Submission/JudgeRun；暂停不累计 Stage 时间，延时不得改写计划时间。
+- Training Engine 必测 READY 开始、暂停/继续、整场到时结束、轮次到时等待、Scheduler/人工 CAS 竞争和禁止回滚；竞态至少重复 20 轮。
+- Round × Group 有效题集、手工重分、待开始轮次隔离、SessionProblem 历史复用和跨 Session/Group/Problem ID 伪造。
+- GENERAL/OI/ACM 动态排名必须从提交事实重算；暂停不累计 Session/Round 时间，整场与本轮延时分别生效。
 
 全页面和业务闭环由[UI E2E](UI_E2E.md)覆盖。
 
-## Training Engine V2 测试矩阵
+## Training Engine V3 测试矩阵
 
-测试必须覆盖全局唯一 RUNNING Stage、默认计划与分组覆盖、学员 immediate/next-stage 换组、Stage 转换 CAS、不可变 RuntimeSnapshot、暂停不累计时间、延时独立记录、Split/Merge 不产生新时间线、Training 每次提交动态取得 Evolving（缺失回退 Stable），以及旧分组运行表/接口不存在。
-
+测试必须覆盖稳定 SessionProblem、当前 Round × Group 有效题集、题目移出后重加保持历史身份、待开始轮次对学员隐藏、显式切轮、即时换组、暂停恢复计时、整场/本轮独立延时、GENERAL/OI/ACM 动态排名，以及旧训练接口和设计器路由不存在。

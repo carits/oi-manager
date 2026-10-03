@@ -50,9 +50,8 @@ identity_conflict，不默认选学校、平台或第一条。其他学校的私
 |---|---|---|
 | 比赛 | ContestFormModal.tsx | true |
 | 作业 | AssignmentWorkspace.tsx | true |
-| 训练快速创建 | TrainingSetupDialog.tsx | false |
-| 训练阶段设计 | TrainingSessionDesigner.tsx | false |
-| 训练运行期追加 | TrainingSessionWorkspace.tsx | false |
+| 训练创建 | TrainingSetupDialog.tsx | false |
+| 训练运行期题目调整 | TrainingSessionWorkspace.tsx | false |
 | 题单章节添加 | ProblemListDetailPage.tsx | false |
 
 全部入口使用 `features/problem-selection` 的公共组件。业务页面不再自行实现按题号解析。

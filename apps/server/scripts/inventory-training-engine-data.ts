@@ -1,86 +1,29 @@
-import { prisma } from '../src/prisma'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 async function main() {
-  const [
-    sessions,
-    stages,
-    groups,
-    stagePlans,
-    problemPlans,
-    stageProblems,
-    runtimeSnapshots,
-    groupChanges,
-    progress,
-    events,
-    sessionStatus,
-    stageLifecycle,
-    relationSizes,
-  ] = await Promise.all([
+  const [sessions, problems, rounds, assignments, groups, participants, progress, drafts, submissions, statuses, roundStates] = await Promise.all([
     prisma.trainingSession.count(),
-    prisma.trainingSessionStage.count(),
+    prisma.trainingSessionProblem.count(),
+    prisma.trainingSessionRound.count(),
+    prisma.trainingRoundProblemAssignment.count(),
     prisma.trainingSessionGroup.count(),
-    prisma.trainingSessionStageGroup.count(),
-    prisma.trainingSessionStageProblemPlan.count(),
-    prisma.trainingSessionStageProblem.count(),
-    prisma.trainingSessionStageRuntimeSnapshot.count(),
-    prisma.trainingSessionGroupChange.count(),
+    prisma.trainingSessionParticipant.count(),
     prisma.trainingSessionProblemProgress.count(),
-    prisma.trainingSessionEvent.count(),
+    prisma.trainingSessionProblemDraft.count(),
+    prisma.submission.count({ where: { trainingSessionId: { not: null } } }),
     prisma.trainingSession.groupBy({ by: ['status'], _count: { _all: true }, orderBy: { status: 'asc' } }),
-    prisma.trainingSessionStage.groupBy({ by: ['lifecycle'], _count: { _all: true }, orderBy: { lifecycle: 'asc' } }),
-    prisma.$queryRaw<Array<{ tableName: string; sizeBytes: bigint }>>`
-      SELECT c.relname AS "tableName", pg_total_relation_size(c.oid)::bigint AS "sizeBytes"
-      FROM pg_class c
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = current_schema()
-        AND c.relkind = 'r'
-        AND c.relname IN (
-          'TrainingSession',
-          'TrainingSessionStage',
-          'TrainingSessionGroup',
-          'TrainingSessionStageGroup',
-          'TrainingSessionStageProblem',
-          'TrainingSessionStageProblemPlan',
-          'TrainingSessionStageRuntimeSnapshot',
-          'TrainingSessionGroupChange',
-          'TrainingSessionProblemProgress',
-          'TrainingSessionEvent'
-        )
-      ORDER BY pg_total_relation_size(c.oid) DESC
-    `,
+    prisma.trainingSessionRound.groupBy({ by: ['lifecycle'], _count: { _all: true }, orderBy: { lifecycle: 'asc' } }),
   ])
 
-  const snapshot = {
+  process.stdout.write(JSON.stringify({
     generatedAt: new Date().toISOString(),
-    counts: {
-      trainingSessions: sessions,
-      stages,
-      stableGroups: groups,
-      stagePlans,
-      problemPlans,
-      stageProblems,
-      runtimeSnapshots,
-      groupChanges,
-      progress,
-      events,
-    },
-    sessionStatus: Object.fromEntries(sessionStatus.map(item => [item.status, item._count._all])),
-    stageLifecycle: Object.fromEntries(stageLifecycle.map(item => [item.lifecycle, item._count._all])),
-    relationSizes: relationSizes.map(item => ({
-      table: item.tableName,
-      bytes: Number(item.sizeBytes),
-      mebibytes: Math.round((Number(item.sizeBytes) / 1024 / 1024) * 1000) / 1000,
-    })),
-  }
-
-  console.log(JSON.stringify(snapshot, null, 2))
+    model: 'training-v3',
+    totals: { sessions, problems, rounds, assignments, groups, participants, progress, drafts, submissions },
+    statuses,
+    roundStates,
+  }, null, 2) + '\n')
 }
 
-main()
-  .catch(error => {
-    console.error('Training Engine inventory failed:', error)
-    process.exitCode = 1
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+main().finally(() => prisma.$disconnect())

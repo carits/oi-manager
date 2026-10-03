@@ -186,28 +186,19 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TeamOperationLog` | 以 Prisma schema 为准 |
 | `TeamProblemList` | 以 Prisma schema 为准 |
 | `TestdataFile` | 以 Prisma schema 为准 |
-| `TrainingSession` | 独立训练聚合根；保存范围、生命周期、有效运行时间、command/event revision，并以 currentStageId 指向全班唯一运行 Stage |
-| `TrainingSessionStage` | 有序全局课堂时间轴；保存定义、生命周期、计时、结束原因与 definitionRevision |
-| `TrainingSessionStageProblem` | Stage 内 canonical 题目的稳定身份；提交时动态取得 Evolving（缺失回退 Stable） |
-| `TrainingSessionGroup` | 整场 Session 的稳定分组；Participant 当前归属与可选 Stage 分组覆盖均引用它 |
-| `TrainingSessionGroupChange` | 稳定 Group 之间的即时或目标 Stage 生效换组审计 |
-| `TrainingSessionStageGroup` | StagePlan：一个无 groupId 的唯一默认计划或一个显式分组覆盖；不保存运行生命周期 |
-| `TrainingSessionStageProblemPlan` | 通过 stageGroupId 归属 StagePlan 的题目顺序、必做标记与规则 |
-| `TrainingSessionStageRuntimeSnapshot` | Stage 首次开始时生成的不可变配置、definitionRevision 与 SHA-256 哈希 |
-| `TrainingSessionStageTimeAdjustment` | Stage 延时追加记录，不覆盖原计划时长 |
-| `TrainingSessionParticipant` | 学员、稳定 groupId、当前题目、心跳和有效活跃时间；不保存独立 Stage 位置 |
-| `TrainingSessionProblemProgress` | Participant × StageProblem 的稳定进度；换组不删除 |
-| `TrainingSessionCommand` | 带会话单调序号的教练控制命令审计 |
-| `TrainingSessionOverlay` | 面向全员、组、团队或用户的运行覆盖层 |
-| `TrainingSessionUserOverride` | 教练对单个学员的运行覆盖 |
-| `TrainingSessionProblemDraft` | Participant × StageProblem 代码草稿 |
-| `TrainingSessionHint` | 分级提示与开放策略 |
-| `TrainingSessionHintAccess` | 学员首次打开提示的不可变记录 |
+| `TrainingSession` | 训练聚合根；保存范围、赛制、READY/RUNNING/PAUSED/ENDED/ARCHIVED 生命周期、总时长、有效运行时间和 currentRoundId |
+| `TrainingSessionProblem` | Session 内稳定题目身份；同一 sessionId + problemId 唯一，移出和重加分配不改变历史身份 |
+| `TrainingSessionRound` | 有序课堂轮次；生命周期为 PENDING/RUNNING/ENDED，保存独立计时和结束原因 |
+| `TrainingRoundProblemAssignment` | Round × Group × SessionProblem 的有效题集分配与顺序 |
+| `TrainingSessionGroup` | 整场训练的稳定分组 |
+| `TrainingSessionGroupChange` | 学员跨稳定分组的审计记录 |
+| `TrainingSessionParticipant` | 学员、当前 groupId、当前题目、心跳和有效活跃时间 |
+| `TrainingSessionProblemProgress` | Participant × SessionProblem 的稳定进度，换组或题目暂时移出不删除 |
+| `TrainingSessionCommand` | 带会话单调序号的课堂控制命令审计 |
+| `TrainingSessionOverlay` | 面向全员、分组或用户的运行期聚焦覆盖 |
+| `TrainingSessionProblemDraft` | Participant × SessionProblem 代码草稿 |
 | `TrainingSessionScoreEvent` | 训练提交产生的幂等分数事件 |
-| `TrainingSessionStrategyDecision` | ACM 策略训练决策 |
 | `TrainingSessionEvent` | SSE 补偿使用的会话单调持久事件 |
-| `TrainingSessionTemplate` | 可复用的 Stage/Group 骨架，不保存运行事实 |
-| `TrainingSessionTemplateStage` | 模板中的 Stage 元数据 |
 | `ContestRatingConfig` | 比赛开始前可配置、开始或首交时冻结的 Contest Rating 规则快照 |
 | `User` | 全局账号、密码摘要、状态与会话撤销代数；不保存学校身份 |
 | `UserProblemContent` | 用户独立题面版本与兼容题解；题面按名称软删除并使用 private/public 可见性 |
@@ -216,11 +207,6 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `UserStatusLog` | 以 Prisma schema 为准 |
 | `carits_sequence` | 以 Prisma schema 为准 |
 
-## Training Engine V2 表约束
+## Training Engine V3 表约束
 
-每个 Stage 通过部分唯一索引保证恰好一个默认计划；默认计划必须 `groupId = null`，分组覆盖必须引用同 Session 的稳定 Group。Session.currentStageId 全局唯一，服务层和一致性检查同时保证其指向本 Session 唯一 RUNNING Stage。ProblemPlan、StageProblem 与 StagePlan 必须属于同一 Stage。
-
-Training Engine V2 涉及的模型：`TrainingSessionGroup`、`TrainingSessionGroupChange`、`TrainingSessionStageGroup`（StagePlan）、`TrainingSessionStageProblemPlan`、`TrainingSessionStageRuntimeSnapshot` 和 `TrainingSessionStageTimeAdjustment`。
-
-| `TrainingSessionGroup` | V2 稳定的训练会话分组 |
-| `TrainingSessionGroupChange` | V2 学员换组审计 |
+`TrainingSessionProblem` 通过 `sessionId + problemId` 唯一约束保证稳定身份。`TrainingRoundProblemAssignment` 通过轮次、分组、稳定训练题目建立唯一分配，并以 `active` 和 `orderIndex` 表示当前题集。服务层保证一个 Session 同时至多一个 RUNNING Round，`currentRoundId` 必须指向本 Session 的运行轮次。Participant、Progress、Draft、ScoreEvent、Overlay 和 Submission 均引用稳定 SessionProblem，不引用轮次分配。

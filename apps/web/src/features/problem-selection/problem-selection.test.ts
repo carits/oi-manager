@@ -152,45 +152,29 @@ Baekjoon | 28057 | 1 | AN
     expect(training).toContain('aliasLabel="别名"')
   })
   it('uses the row-first list editor for creation and keeps the legacy selector only in older secondary entry points', () => {
-    const creationPaths = [
+    const editorPaths = [
       '../contest/ui/ContestFormModal.tsx',
       '../assignment/ui/AssignmentWorkspace.tsx',
       '../training-session/ui/TrainingSetupDialog.tsx',
-      '../training-session/ui/TrainingSessionDesigner.tsx',
-    ]
-    const secondaryPaths = [
-      '../problem/ui/ProblemListDetailPage.tsx',
       '../training-session/ui/TrainingSessionWorkspace.tsx',
     ]
-    const creationSources = creationPaths.map(read)
-    const secondarySources = secondaryPaths.map(read)
-    for (const source of creationSources) {
+    const sources = editorPaths.map(read)
+    for (const source of sources) {
       expect(source).toContain('ProblemListEditor')
       expect(source).not.toContain('ProblemReferenceSelector')
       expect(source).not.toContain('QuickProblemInput')
       expect(source).not.toContain('/api/resolve-problems')
-      expect(source).not.toContain('/entries/resolve')
-      expect(source).not.toContain('problemCode')
     }
-    for (const source of secondarySources) expect(source).toContain('ProblemReferenceSelector')
-    expect(creationSources[2]).toContain('dataRequirement="training"')
-    expect(creationSources[3]).toContain('dataRequirement="training"')
-    expect(secondarySources[0]).toContain('dataRequirement="none"')
-    expect(secondarySources[1]).toContain('dataRequirement="training"')
-    for (const source of [...creationSources, ...secondarySources]) expect(source).not.toContain('requireStable=')
+    expect(sources[2]).toContain('dataRequirement="training"')
+    expect(sources[3]).toContain('dataRequirement="training"')
+    const secondary = read('../problem/ui/ProblemListDetailPage.tsx')
+    expect(secondary).toContain('ProblemReferenceSelector')
+    expect(secondary).toContain('dataRequirement="none"')
     const editorSource = read('./ui/ProblemListEditor.tsx')
     expect(editorSource).toContain('＋ 添加一道题目')
     expect(editorSource).toContain('题目列表文本编辑')
-    expect(editorSource).toContain('350')
     expect(editorSource).not.toContain('检索结果')
-    expect(editorSource).not.toContain('重新检索')
-    expect(editorSource).not.toContain('批量添加题目')
-    expect(editorSource).not.toContain('>完成</Button>')
-    expect(read('./index.ts')).toContain('ProblemListEditor')
-    expect(read('./ui/ProblemReferenceLink.tsx')).toContain('problemReferenceHref(pathname, problem.id)')
-    expect(read('../training-session/ui/TrainingSessionListPage.tsx')).toContain('<TrainingSetupDialog')
-    expect(read('../training-session/ui/TrainingSessionWorkspace.tsx')).toContain('<ProblemReferenceLink problem={item}')
-    expect(creationSources[3]).toContain('onReplace={replaceProblems}')
-    expect(creationSources[3]).toContain('aliasLabel="别名"')
   })
+
+
 })

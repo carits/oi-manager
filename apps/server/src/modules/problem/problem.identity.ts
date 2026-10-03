@@ -99,7 +99,7 @@ export async function canChangePrimaryIdentity(client: Prisma.TransactionClient,
   const [references, submissions] = await Promise.all([
     client.problem.findUnique({ where: { id: problem.id }, select: { _count: { select: {
       ProblemListEntry: true, AssignmentProblem: true, ContestProblems: true,
-      TrainingSessionStageProblem: true, CopiedProblems: true, BlogReferences: true,
+      TrainingSessionProblem: true, CopiedProblems: true, BlogReferences: true,
     } } } }),
     client.submission.count({ where: { problemInternalId: problem.id } }),
   ])

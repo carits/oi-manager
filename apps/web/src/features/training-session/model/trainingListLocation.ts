@@ -1,6 +1,6 @@
 import type { TrainingListStatus } from './trainingListScope'
 export interface TrainingListLocation { status: TrainingListStatus; keyword: string; page: number; teamId: string }
-const statuses = new Set<string>(['active', 'upcoming', 'completed', 'draft'])
+const statuses = new Set<string>(['active', 'upcoming', 'completed'])
 
 export function readTrainingListLocation(params: URLSearchParams, prefix = ''): TrainingListLocation {
   const status = params.get(`${prefix}status`)

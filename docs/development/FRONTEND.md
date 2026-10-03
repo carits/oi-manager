@@ -100,7 +100,7 @@ Feature Slice。路由和跨域组件只能从 `@/features/<feature>` 根入口�
 `api/model/ui`，也不得在 `components` 下重新建立同名业务目录。根级按页面入口用于保持 Next.js 路由的切块
 边界，避免一个聚合 barrel 将同一 Feature 的全部管理工作台装入首屏。
 
-Training Session 前端只呈现一套全局 Stage 驱动模型。新训练只有一个初始阶段；运行中只允许准备唯一下一阶段。不得恢复任意未来阶段、时间轴拖拽、阶段复制或普通入口的 Stage × Group 矩阵。创建入口由教师手动选择题目并生成一个 Stage，需要多阶段或分层流程时再进入课堂编排器，不展示训练模板或使用场景。不得形成普通训练/教练带练两套 DTO。设计器按课堂语言配置 Stage，并通过 `features/training-session/api` 调用共享 Runtime Contract；SSE 是登记的 Raw Transport。基础名单选择参与者，稳定 Group 表达当前归属，Stage 编辑唯一默认计划与可选 Group 覆盖。题目添加只允许共享的“平台 + 题号”组件，不恢复题库浏览或题单选题。
+Training Session 前端只呈现 V3 Round 驱动模型。创建页在一个页面内完成基本信息、参与者与稳定题目池配置，不提供模板、旧 Designer、必做/选做或阶段流程。运行页由当前 Round、待开始的下一 Round、分组和有效题目分配组成，只提供“题目调整 / 聚焦题目 / 调整分组 / 下一步”四个主操作。所有进度、草稿、提交和覆盖配置均使用稳定的 `sessionProblemId`，不得恢复 Stage DTO、Stage × Group 矩阵或旧设计器路由。前端通过 `features/training-session/api` 调用共享 Runtime Contract；SSE 是登记的 Raw Transport。题目添加只允许共享的“平台 + 题号”组件，不恢复题库浏览或题单选题。
 
 普通题目页的多题面工作区以左侧版本栏作为版本名称、身份和创建入口的唯一展示位置；右侧
 只渲染题面正文，不重复标题、作者、语言、格式、来源或派生入口。只有用户自己的版本在右侧
@@ -218,7 +218,6 @@ SWR/Hooks 的 key 包含接口、查询参数和 `sessionKey=role:userId:workspa
 当前验收重点是 `1440×900` 和 `1280×720` 桌面端。固定格式控件使用明确的
 grid、min/max、aspect-ratio 或稳定按钮尺寸，避免动态内容导致布局跳动。
 
-## Training Engine V2 前端约定
+## Training Engine V3 前端约定
 
-设计器以 Stage 时间线、StageGroup 矩阵和题目计划为核心；UI 使用课堂语言解释规则，复杂的 Subtask/ANY-ALL 配置放入高级设置。Training Feature API 是唯一 JSON 访问入口，组件不直接调用 apiClient。
-
+训练创建固定为单页；课堂工作区只提供“题目调整 / 聚焦题目 / 调整分组 / 下一步”四个主操作。下一轮使用 Round × Group 题集编辑，并在明确切轮前对学员隐藏。Training Feature API 是唯一 JSON 访问入口，组件不直接调用 apiClient。

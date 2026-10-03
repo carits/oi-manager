@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 199 |
-| Prisma enums | 81 |
+| Prisma models | 190 |
+| Prisma enums | 70 |
 | Legacy route adapters | 18 |
 | Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 486 |
+| Referenced environment keys | 485 |
 
 ## HTTP adapter ownership
 
@@ -267,28 +267,19 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TestcaseMembershipRetirement`
 - `TestdataFile`
 - `TestdataObject`
+- `TrainingRoundProblemAssignment`
 - `TrainingSession`
 - `TrainingSessionCommand`
 - `TrainingSessionEvent`
 - `TrainingSessionGroup`
 - `TrainingSessionGroupChange`
-- `TrainingSessionHint`
-- `TrainingSessionHintAccess`
 - `TrainingSessionOverlay`
 - `TrainingSessionParticipant`
+- `TrainingSessionProblem`
 - `TrainingSessionProblemDraft`
 - `TrainingSessionProblemProgress`
+- `TrainingSessionRound`
 - `TrainingSessionScoreEvent`
-- `TrainingSessionStage`
-- `TrainingSessionStageGroup`
-- `TrainingSessionStageProblem`
-- `TrainingSessionStageProblemPlan`
-- `TrainingSessionStageRuntimeSnapshot`
-- `TrainingSessionStageTimeAdjustment`
-- `TrainingSessionStrategyDecision`
-- `TrainingSessionTemplate`
-- `TrainingSessionTemplateStage`
-- `TrainingSessionUserOverride`
 - `User`
 - `UserBlock`
 - `UserNotification`
@@ -367,23 +358,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TestSetQualityIncidentStatus`
 - `TestSetQualityStatus`
 - `TestcaseCandidateStatus`
-- `TrainingEngineGroupChangeEffectiveMode`
-- `TrainingEngineHintOpenMode`
-- `TrainingEngineJoinMode`
-- `TrainingEnginePauseMode`
-- `TrainingEnginePeerVisibility`
 - `TrainingEngineProgressStatus`
-- `TrainingEngineRankingMode`
 - `TrainingEngineSessionStatus`
 - `TrainingEngineSessionType`
-- `TrainingEngineStageAccessPolicy`
-- `TrainingEngineStageAudienceMode`
-- `TrainingEngineStageEndPolicy`
-- `TrainingEngineStageEndReason`
-- `TrainingEngineStageKind`
-- `TrainingEngineStageLifecycle`
-- `TrainingEngineSubmissionMode`
 - `TrainingEngineTargetType`
+- `TrainingRoundEndReason`
+- `TrainingRoundLifecycle`
 
 ## systemd units
 
@@ -866,7 +846,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TEST_SCOPE`
 - `TIMEOUT_SECONDS`
 - `TMP_DIR`
-- `TRAINING_STAGE_ENGINE_ROLLOUT`
 - `TRANSLATION_ENABLE_CACHE`
 - `TRASH_RETENTION_DAYS`
 - `UNIT_DIR`

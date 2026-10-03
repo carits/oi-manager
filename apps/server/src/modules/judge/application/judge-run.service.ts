@@ -22,7 +22,7 @@ export interface CreateQueuedSubmissionOptions {
 export interface ClaimedSubmissionLifecycle {
   submissionId: number
   problemInternalId: string
-  trainingStageProblemId: string | null
+  trainingSessionProblemId: string | null
   testSetSlot: 'STABLE' | 'EVOLVING' | null
   testSetFencingToken: number | null
   testSetGraphHash: string | null
@@ -224,7 +224,7 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
       select: {
         id: true,
         problemInternalId: true,
-        trainingStageProblemId: true,
+        trainingSessionProblemId: true,
         testSetSlot: true,
         testSetFencingToken: true,
         testSetGraphHash: true,
@@ -238,7 +238,7 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
     return {
       submissionId: submission.id,
       problemInternalId: submission.problemInternalId,
-      trainingStageProblemId: submission.trainingStageProblemId,
+      trainingSessionProblemId: submission.trainingSessionProblemId,
       testSetSlot: submission.testSetSlot,
       testSetFencingToken: submission.testSetFencingToken,
       testSetGraphHash: submission.testSetGraphHash,
@@ -353,7 +353,7 @@ export async function finalizeOwnedJudgeAttempt(input: {
         userId: true,
         problemId: true,
         submitScope: true,
-        trainingStageProblemId: true,
+        trainingSessionProblemId: true,
         canonicalContestId: true,
         canonicalContestProblemId: true,
         trainingSessionId: true,

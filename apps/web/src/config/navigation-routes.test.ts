@@ -43,8 +43,11 @@ describe('navigation route reachability', () => {
   })
 
   it('provides a guarded return from training design to the same runtime', () => {
-    const source = fs.readFileSync(new URL('../features/training-session/ui/TrainingSessionDesigner.tsx', import.meta.url), 'utf8')
-    expect(source).toContain('requestNavigation(runtimePath)')
-    expect(source).toContain('返回课堂')
+    const route = fs.readFileSync(new URL('../app/org/[organizationId]/[module]/[...segments]/page.tsx', import.meta.url), 'utf8')
+    expect(route).toContain("parts.length === 1) return <TrainingSessionWorkspace")
+    expect(route).not.toContain('TrainingSessionDesigner')
+    expect(route).not.toContain("parts[1] === 'design'")
   })
+
+
 })

@@ -59,7 +59,6 @@ const routeCases: RouteCase[] = [
   { role: 'principal', label: '负责人 · 作业详情', path: `${organizationBase}/homeworks/${ids.homework}` },
   { role: 'principal', label: '负责人 · 比赛详情', path: `${organizationBase}/contests/${ids.contest}` },
   { role: 'principal', label: '负责人 · 训练工作台', path: `${organizationBase}/training-sessions/${ids.trainingSession}` },
-  { role: 'principal', label: '负责人 · 训练设计器', path: `${organizationBase}/training-sessions/${ids.trainingSession}/design` },
   { role: 'principal', label: '负责人 · 题目详情', path: `${organizationBase}/problems/${ids.problem}` },
   { role: 'principal', label: '负责人 · 题目编辑', path: `${organizationBase}/problems/${ids.problem}/edit` },
   { role: 'principal', label: '负责人 · 题目笔记', path: `${organizationBase}/problems/${ids.problem}/note` },

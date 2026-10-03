@@ -1,351 +1,407 @@
-.stack { display: grid; gap: var(--space-4); }
-.definitionFieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-.trainingListFrame { max-width: 1240px; margin: 0 auto; }
-.listControls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
-.listFilters { display: flex; align-items: center; gap: var(--space-2); }
-.listFilters > * { min-width: 180px; }
-.loadingCopy { min-height: 180px; display: grid; place-items: center; margin: 0; color: var(--text-muted); }
-.sessionGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-3); }
-.sessionCard { display: grid; align-content: start; gap: var(--space-3); min-height: 220px; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
-.sessionCard > button { justify-self: start; margin-top: auto; }
-.sessionCardHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
-.sessionCardHeader h3 { margin: 0; font-size: 1rem; line-height: 1.5; }
-.sessionAudience, .sessionProgress { margin: 0; color: var(--text-muted); }
-.sessionProgress { padding-top: var(--space-2); border-top: 1px solid var(--border); }
-.trainingSetupLayout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--space-5); align-items: start; }
-.trainingSetupMain { display: grid; gap: var(--space-5); min-width: 0; }
-.setupSection { display: grid; grid-template-columns: minmax(150px, .42fr) minmax(0, 1fr); gap: var(--space-4); padding-bottom: var(--space-5); border-bottom: 1px solid var(--border); }
-.setupSection:last-child { padding-bottom: 0; border-bottom: 0; }
-.problemSetupSection { grid-template-columns: minmax(0, 1fr); }
-.problemSetupSection > div:first-child { max-width: 720px; }
-.problemSetupSection > div:first-child p { max-width: 640px; }
-.setupSection h3, .setupSection p, .trainingSetupSummary p { margin: 0; }
-.setupSection > div:first-child p, .trainingSetupSummary p { margin-top: var(--space-1); color: var(--text-muted); font-size: .875rem; line-height: 1.55; }
-.setupProblemList { display: grid; gap: var(--space-2); }
-.setupProblemRow { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
-.setupProblemRow > div { display: grid; min-width: 0; }
-.setupProblemRow strong, .setupProblemRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.setupProblemRow > div span { color: var(--text-muted); font-size: .875rem; }
-.problemOrder { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm); background: var(--bg-muted); color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.trainingSetupSummary { position: sticky; top: var(--space-4); display: grid; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-muted); }
-.trainingSetupSummary dl { display: grid; gap: var(--space-3); margin: 0; }
-.trainingSetupSummary dl > div { display: grid; gap: 2px; padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
-.trainingSetupSummary dt { color: var(--text-muted); font-size: .8125rem; }
-.trainingSetupSummary dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-3); }
-.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); padding: var(--space-4); display: grid; gap: var(--space-3); }
-.card h3, .card p { margin: 0; }
-.muted { color: var(--text-muted); }
-.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.targetBar { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 320px)); gap: var(--space-3); align-items: end; }
-.field { display: grid; gap: var(--space-2); font-weight: 600; }
-.field small { color: var(--text-muted); font-weight: 400; }
-.problemPicker { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2); display: grid; gap: var(--space-1); }
-.workspace { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr) minmax(250px, 340px); gap: var(--space-4); align-items: start; }
-.rail { display: grid; gap: var(--space-2); position: sticky; top: var(--space-4); }
-.stage { display: grid; gap: var(--space-2); }
-.stageProblemEditor { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
-.unlockEditor { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border); }
-.conditionRow { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, 180px) auto; gap: var(--space-2); align-items: center; }
-.problemButton { width: 100%; text-align: left; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--bg-card); cursor: pointer; color: var(--text-primary); }
-.problemGroupLabel { display: block; margin: var(--space-2) 0 var(--space-1); color: var(--text-muted); font-size: var(--font-size-xs); font-weight: 700; letter-spacing: 0.04em; }
-.problemButton[data-active='true'] { border-color: var(--primary); background: var(--primary-light); }
-.problemButton:disabled { cursor: not-allowed; opacity: .55; }
-.editor { min-height: 360px; font-family: var(--font-mono); resize: vertical; }
-.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-2); }
-.metric { padding: var(--space-3); border-radius: var(--radius-md); background: var(--bg-muted); }
-.metric strong { display: block; font-size: 1.25rem; }
-.timeline { display: grid; gap: var(--space-2); }
-.timelineItem { border-left: 3px solid var(--border); padding-left: var(--space-3); }
-.message { padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
-.trainingSetupSummary .message p { color: var(--text-primary); }
-.controlDisclosure { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
-.controlDisclosure > summary { padding: var(--space-3); cursor: pointer; font-weight: 600; color: var(--text-primary); }
-.controlDisclosure[open] > summary { border-bottom: 1px solid var(--border); }
-.controlDisclosure > :not(summary) { margin: var(--space-3); }
-.dangerDisclosure { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
-.dangerDisclosure > summary { color: var(--danger); }
-.draftConflict { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
-.draftConflict p { margin: 0; }
-.draftCompare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-.draftCompare > div { min-width: 0; display: grid; gap: var(--space-2); }
-.draftCompare pre { max-height: 220px; margin: 0; padding: var(--space-2); overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-family: var(--font-mono); }
-.peerGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-2); }
-.peerCard { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
-.peerCard strong { flex: 1; }
-.designSteps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; }
-.designSteps > * { border-radius: 0; padding: var(--space-3); text-align: center; border-right: 1px solid var(--border); }
-.designSteps > :last-child { border-right: 0; }
-.designSteps strong { color: var(--primary); background: var(--primary-light); }
-.flowPreview { padding: var(--space-3); border-radius: var(--radius-md); background: var(--bg-muted); font-weight: 650; line-height: 1.8; }
-.issueList { display: grid; gap: var(--space-1); margin-top: var(--space-3); }
-.issueList > * { justify-content: flex-start; color: var(--danger); }
-.basicGrid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr); gap: var(--space-3); align-items: end; }
-.designWorkspace { display: grid; grid-template-columns: minmax(230px, .8fr) minmax(390px, 1.4fr) minmax(300px, 1fr); gap: var(--space-3); align-items: start; min-width: 0; }
-.designColumn { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; }
-.designColumn > header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--border); background: var(--bg-muted); }
-.designColumn > header > div { display: grid; gap: 2px; }
-.designColumn > header small { color: var(--text-muted); }
-.designColumnBody { display: grid; gap: var(--space-2); padding: var(--space-2); max-height: 72vh; overflow-y: auto; }
-.stageCard, .problemChainCard, .poolProblem { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
-.stageCard { cursor: pointer; }
-.stageCard > small, .poolProblem small, .poolProblem span { color: var(--text-muted); }
-.activeDesignCard { border-color: var(--primary); background: var(--primary-light); }
-.cardTitle { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.cardTitle strong { min-width: 0; overflow-wrap: anywhere; }
-.stageSettings { display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-md); background: var(--bg-muted); }
-.compactGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.assignmentPolicy { padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
-.assignmentPolicy summary { cursor: pointer; font-weight: 600; }
-.assignmentPolicy[open] summary { margin-bottom: var(--space-3); }
-.unlockConnector { display: grid; justify-items: center; gap: 2px; padding: var(--space-1); color: var(--text-muted); }
-.unlockConnector strong { font-size: .8rem; text-align: center; }
-.unlockHeader { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
-.unlockHeader select { max-width: 180px; }
-.startProblem { margin: 0; padding: var(--space-2); border-radius: var(--radius-sm); color: var(--success); background: var(--success-light); }
-.subtaskPicker { display: grid; gap: var(--space-1); margin: 0; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.poolControls { display: grid; gap: var(--space-2); padding: var(--space-2); border-bottom: 1px solid var(--border); }
-.sourceTabs { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.searchControl { display: flex; align-items: center; gap: var(--space-2); }
-.searchControl input { min-width: 0; }
-.poolProblem > div:first-child { display: grid; gap: 2px; }
-.pagination { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-2); border-top: 1px solid var(--border); }
-.rosterGroups { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-2); align-items: end; }
-.rosterList { display: grid; gap: var(--space-2); }
-.rosterRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 260px); align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.rosterStats { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.rosterStats button { display: grid; min-width: 110px; gap: 2px; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text); text-align: left; cursor: pointer; }
-.rosterStats button:hover, .rosterStats button:focus-visible { border-color: var(--primary); outline: 2px solid color-mix(in srgb, var(--primary) 28%, transparent); }
-.rosterStats button[data-warning='true'] { border-color: var(--warning); background: var(--warning-light); }
-.rosterStats strong { font-size: 1.25rem; }
-.rosterStats span { color: var(--text-muted); font-size: .82rem; }
-.rosterWarning { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--warning-text, var(--text)); }
-.rosterFilters { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(150px, 1fr) minmax(150px, 1fr); gap: var(--space-2); }
-.rosterTable { min-width: 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
-.rosterTableHeader, .rosterTableRow { display: grid; grid-template-columns: 42px minmax(180px, 1.5fr) minmax(130px, .8fr) minmax(190px, 1fr); align-items: center; min-width: 650px; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
-.rosterTableHeader { border-bottom: 1px solid var(--border); background: var(--bg-muted); color: var(--text-muted); font-size: .82rem; font-weight: 700; }
-.rosterTableRow + .rosterTableRow { border-top: 1px solid var(--border); }
-.rosterTableRow > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
-.rosterTableRow small { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
-.rosterBatchBar { position: sticky; bottom: var(--space-2); z-index: 2; display: grid; grid-template-columns: auto minmax(170px, 1fr) auto auto auto; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--primary); border-radius: var(--radius-lg); background: var(--bg-card); box-shadow: var(--shadow-md); }
-.publishChecklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
-.publishChecklist p { display: grid; gap: var(--space-1); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--bg-muted); }
-.publishChecklist span { font-size: 1.2rem; font-weight: 700; }
-@media (max-width: 1180px) { .designWorkspace { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); } .designColumn:last-child { grid-column: 1 / -1; } }
-@media (max-width: 1000px) { .workspace { grid-template-columns: 220px minmax(0, 1fr); } .coach { grid-column: 1 / -1; } .designSteps { grid-template-columns: 1fr; } .designSteps > * { text-align: left; border-right: 0; border-bottom: 1px solid var(--border); } .basicGrid { grid-template-columns: 1fr; } }
-@media (max-width: 720px) { .draftCompare, .trainingSetupLayout, .setupSection { grid-template-columns: 1fr; } .trainingSetupSummary { position: static; } .sessionGrid { grid-template-columns: 1fr; } .workspace, .designWorkspace { grid-template-columns: 1fr; } .designColumn:last-child { grid-column: auto; } .designColumnBody { max-height: none; overflow: visible; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow, .compactGrid, .rosterRow { grid-template-columns: 1fr; } .unlockHeader { align-items: stretch; flex-direction: column; } .unlockHeader select { max-width: none; } .listControls, .listFilters { align-items: stretch; flex-direction: column; } .listFilters > * { width: 100%; min-width: 0; } .rosterFilters, .rosterBatchBar { grid-template-columns: 1fr; } .rosterStats button { flex: 1 1 120px; } }
-
-.matrixTable { display: grid; grid-template-columns: minmax(140px, .65fr) repeat(var(--training-stage-count, 3), minmax(180px, 1fr)); gap: 1px; overflow-x: auto; border: 1px solid var(--border); background: var(--border); }
-.matrixRow { display: contents; }
-.matrixHeader, .matrixCell { display: grid; gap: 4px; min-width: 160px; padding: var(--space-3); border: 0; background: var(--bg-card); color: var(--text); text-align: left; }
-.matrixHeader { font-weight: 700; background: var(--bg-muted); }
-.matrixHeader small, .matrixCell small { color: var(--text-muted); font-weight: 400; }
-.matrixCell { cursor: pointer; }
-.matrixCell:hover, .matrixCell:focus-visible { background: var(--primary-light); outline: 2px solid var(--primary); outline-offset: -2px; }
-
-
-/* Training designer: flow canvas, progressive panels and stage drawer. */
-.saveState { display: inline-flex; align-items: center; min-height: 34px; padding: 0 var(--space-2); color: var(--success); font-size: .875rem; font-weight: 600; white-space: nowrap; }
-.saveState::before { content: ''; width: 7px; height: 7px; margin-right: var(--space-1); border-radius: 50%; background: currentColor; }
-.saveStateDirty { color: var(--warning); }
-.designerIdentity { display: grid; grid-template-columns: minmax(240px, .75fr) minmax(360px, 1.5fr); gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
-.designerCanvas { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: var(--space-4); align-items: start; min-width: 0; }
-.trainingFlow { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; }
-.trainingFlowHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); background: var(--bg-muted); }
-.trainingFlowHeader h2, .trainingFlowHeader p { margin: 0; }
-.trainingFlowHeader h2 { font-size: 1rem; }
-.trainingFlowHeader p { margin-top: var(--space-1); color: var(--text-muted); font-size: .875rem; }
-.trainingFlowList { display: grid; padding: var(--space-4); }
-.trainingFlowItem { display: grid; }
-.trainingFlow .stageCard { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); min-height: 86px; padding: var(--space-3); cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
-.trainingFlow .stageCard:hover { border-color: color-mix(in srgb, var(--primary) 50%, var(--border)); background: var(--bg-muted); }
-.stageNumber { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--bg-muted); color: var(--text-muted); font-weight: 700; font-variant-numeric: tabular-nums; }
-.activeDesignCard .stageNumber { background: var(--primary); color: white; }
-.stageCardContent { display: grid; gap: 3px; min-width: 0; }
-.stageCardContent strong, .stageCardContent span, .stageCardContent small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stageCardContent span, .stageCardContent small { color: var(--text-muted); font-size: .875rem; }
-.stageCardActions { display: flex; align-items: center; gap: 2px; color: var(--text-muted); }
-.stageConnector { display: grid; justify-items: start; height: 24px; padding-left: 33px; }
-.stageConnector span { width: 2px; height: 100%; background: var(--border); }
-.trainingFlowEmpty { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6); color: var(--text-muted); }
-.designerSidebar { position: sticky; top: var(--space-4); display: grid; gap: var(--space-3); }
-.designerSummaryCard { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
-.designerSummaryCard p { margin: 0; color: var(--text-muted); font-size: .875rem; line-height: 1.55; }
-.designerSummaryHeading { display: flex; align-items: center; gap: var(--space-2); color: var(--text-primary); }
-.designerSummaryHeading > div { display: grid; gap: 2px; }
-.designerSummaryHeading span { color: var(--text-muted); font-size: .8125rem; }
-.designerMetrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin: 0; }
-.designerMetrics > div { display: grid; gap: 2px; padding: var(--space-2); border-radius: var(--radius-sm); background: var(--bg-muted); text-align: center; }
-.designerMetrics dt { color: var(--text-muted); font-size: .75rem; }
-.designerMetrics dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
-.designerSummaryCard .issueList { margin-top: 0; }
-.issueList button, .publishIssues button { border: 0; padding: var(--space-1) 0; background: transparent; color: var(--danger); text-align: left; cursor: pointer; }
-
-.stageDrawerLayer { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; }
-.stageDrawerBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--overlay-backdrop); cursor: default; }
-.stageDrawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(720px, calc(100vw - 48px)); height: 100%; background: var(--bg-card); box-shadow: var(--shadow-lg); }
-.stageDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
-.stageDrawerHeader h2, .stageDrawerHeader p { margin: 0; }
-.stageDrawerHeader h2 { font-size: 1.1rem; }
-.stageDrawerHeader p { margin-top: var(--space-1); color: var(--text-muted); font-size: .875rem; }
-.stageDrawerBody { display: grid; align-content: start; gap: var(--space-4); min-height: 0; padding: var(--space-4); overflow-y: auto; }
-.stageEditor { min-width: 0; }
-.readOnlyNotice { margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); color: var(--text-muted); }
-.stageProblemList { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
-.stageProblemListHeader { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
-.stageProblemListHeader > div { display: flex; align-items: baseline; gap: var(--space-2); }
-.stageProblemListHeader span, .stageProblemListHeader small { color: var(--text-muted); font-size: .8125rem; }
-.problemChainSummary { display: grid; grid-template-columns: auto 28px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
-.problemChainSummary > div { display: grid; min-width: 0; }
-.problemChainSummary > div strong, .problemChainSummary > div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.problemChainSummary > div span { color: var(--text-muted); font-size: .875rem; }
-.problemQuickActions { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-1); }
-.drawerProblemPicker { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-muted); }
-.drawerProblemPicker p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: .875rem; }
-.studentPreview { display: grid; gap: var(--space-4); }
-.studentPreviewGoal { display: grid; gap: var(--space-1); padding: var(--space-4); border-left: 3px solid var(--primary); background: var(--bg-muted); }
-.studentPreviewGoal span, .studentPreviewGoal p { color: var(--text-muted); }
-.studentPreviewGoal p { margin: 0; }
-.studentPreviewFlow { display: grid; gap: var(--space-2); }
-.studentPreviewFlow article { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.studentPreviewFlow article > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--bg-muted); font-weight: 700; }
-.studentPreviewFlow article p { margin: 3px 0 0; color: var(--text-muted); }
-.studentPreviewFlow article small { color: var(--text-muted); }
-.publishReview, .publishIssues { display: grid; gap: var(--space-3); }
-.publishReview dl { display: grid; gap: var(--space-2); margin: 0; }
-.publishReview dl > div { display: flex; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
-.publishReview dd { margin: 0; font-weight: 600; }
-.publishIssues { padding: var(--space-3); border: 1px solid var(--danger); border-radius: var(--radius-md); background: var(--danger-light); }
-
-@media (max-width: 980px) {
-  .designerCanvas { grid-template-columns: 1fr; }
-  .designerSidebar { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .designerSummaryCard:last-child { grid-column: 1 / -1; }
+.stack {
+  display: grid;
+  gap: var(--space-4);
 }
+
+.trainingListFrame {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.sessionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
+
+.sessionCard {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 220px;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.sessionCard > button {
+  justify-self: start;
+  margin-top: auto;
+}
+
+.sessionCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sessionCardHeader h3 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.sessionAudience,
+.sessionProgress {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.sessionProgress {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.trainingSetupLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.trainingSetupMain {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.setupSection {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.42fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.setupSection:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.problemSetupSection {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.problemSetupSection > div:first-child {
+  max-width: 720px;
+}
+
+.problemSetupSection > div:first-child p {
+  max-width: 640px;
+}
+
+.setupSection h3,
+.setupSection p,
+.trainingSetupSummary p {
+  margin: 0;
+}
+
+.setupSection > div:first-child p,
+.trainingSetupSummary p {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.trainingSetupSummary {
+  position: sticky;
+  top: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+}
+
+.trainingSetupSummary dl {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.trainingSetupSummary dl > div {
+  display: grid;
+  gap: 2px;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.trainingSetupSummary dt {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.trainingSetupSummary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.field small {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.compactGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.v3StatusBar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.v3StatusBar > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+
+.v3StatusBar > div > svg {
+  grid-row: 1 / 3;
+  color: var(--primary);
+}
+
+.v3StatusBar span {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.v3PrimaryActions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.v3ActiveNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-left: 3px solid var(--primary);
+  background: var(--primary-light);
+}
+
+.v3Workspace {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 260px;
+  gap: var(--space-4);
+  align-items: start;
+  margin-top: var(--space-4);
+}
+
+.v3ProblemRail,
+.v3Editor,
+.v3Ranking {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.v3ProblemRail,
+.v3Ranking {
+  overflow: hidden;
+}
+
+.v3ProblemRail h2,
+.v3Ranking h2 {
+  margin: 0;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 1rem;
+}
+
+.v3ProblemRail > button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  width: 100%;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.v3ProblemRail > button:hover,
+.v3ProblemActive {
+  background: var(--bg-muted) !important;
+}
+
+.v3ProblemRail > button > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-muted);
+  font-weight: 700;
+}
+
+.v3ProblemRail > button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.v3ProblemRail strong,
+.v3ProblemRail small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v3ProblemRail small,
+.v3ProblemHeading > span,
+.v3Ranking small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.v3Editor {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.v3ProblemHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.v3RankingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.v3RankingRow > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.v3ParticipantPicker {
+  display: grid;
+  max-height: 320px;
+  gap: var(--space-2);
+  overflow-y: auto;
+}
+
+.v3RoundGroup {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.v3RoundGroup h3 {
+  margin: 0;
+}
+
+@media (max-width: 1080px) {
+  .v3Workspace {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .v3Ranking {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 720px) {
-  .designerIdentity, .designerSidebar { grid-template-columns: 1fr; }
-  .designerSummaryCard:last-child { grid-column: auto; }
-  .trainingFlowHeader { align-items: stretch; flex-direction: column; }
-  .trainingFlow .stageCard { grid-template-columns: 34px minmax(0, 1fr); }
-  .stageCardActions { grid-column: 1 / -1; justify-content: flex-end; padding-top: var(--space-2); border-top: 1px solid var(--border); }
-  .stageConnector { padding-left: 29px; }
-  .stageDrawer { width: 100vw; }
-  .problemChainSummary { grid-template-columns: auto 28px minmax(0, 1fr); }
-  .problemChainSummary > :last-child { grid-column: 2 / -1; justify-self: start; }
-  .problemQuickActions { justify-content: flex-start; flex-wrap: wrap; }
-  .studentPreviewFlow article { grid-template-columns: 32px minmax(0, 1fr); }
-  .studentPreviewFlow article small { grid-column: 2; }
-}
+  .trainingSetupLayout,
+  .setupSection,
+  .compactGrid,
+  .v3StatusBar,
+  .v3PrimaryActions,
+  .v3Workspace {
+    grid-template-columns: 1fr;
+  }
 
+  .trainingSetupSummary {
+    position: static;
+  }
 
+  .sessionGrid {
+    grid-template-columns: 1fr;
+  }
 
-/* Classroom workspace: status first, intervention second, controls on demand. */
-.runtimeHero { display: grid; gap: var(--space-4); padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
-.runtimeHeroMain { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
-.runtimeHeroTitle { display: grid; gap: var(--space-1); }
-.runtimeHeroTitle span { color: var(--text-muted); font-size: .875rem; font-weight: 600; }
-.runtimeHeroTitle h2 { margin: 0; font-size: 1.35rem; }
-.runtimeHeroMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
-.runtimeHeroMetrics > div { display: grid; gap: 2px; padding: var(--space-3); border-left: 2px solid var(--border); }
-.runtimeHeroMetrics strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
-.runtimeHeroMetrics span { color: var(--text-muted); font-size: .8125rem; }
-.runtimePrimaryActions { display: flex; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--border); }
-.runtimeOverviewGrid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); gap: var(--space-4); align-items: start; }
-.attentionPanel { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
-.attentionPanel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
-.attentionPanel > header > div { display: flex; align-items: flex-start; gap: var(--space-2); }
-.attentionPanel h2, .attentionPanel p { margin: 0; }
-.attentionPanel h2 { font-size: 1rem; }
-.attentionPanel p { margin-top: 2px; color: var(--text-muted); font-size: .8125rem; }
-.attentionIcon { display: grid; place-items: center; width: 32px; height: 32px; color: var(--warning); border-radius: 50%; background: var(--warning-light); }
-.attentionList { display: grid; }
-.attentionList article { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); min-height: 62px; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
-.attentionList article:last-child { border-bottom: 0; }
-.attentionList article > div { display: grid; gap: 3px; min-width: 0; }
-.attentionList article span { overflow: hidden; color: var(--text-muted); font-size: .8125rem; text-overflow: ellipsis; white-space: nowrap; }
-.attentionEmpty { display: grid; justify-items: center; gap: var(--space-1); padding: var(--space-6) var(--space-4); color: var(--text-muted); text-align: center; }
-.attentionEmpty strong { color: var(--text-primary); }
-.runtimeGroupList { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
-.runtimeGroupCard { display: grid; gap: var(--space-2); padding: var(--space-3); border-top: 1px solid var(--border); }
-.runtimeGroupCard > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.runtimeGroupCard p { margin: 0; }
-.runtimeGroupCard > span { color: var(--text-muted); font-size: .8125rem; }
-.classroomControlBar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
-.classroomControlBar .controlDisclosure > summary { text-align: center; }
-.classroomControlBar .controlDisclosure[open] { grid-column: 1 / -1; }
-.participantFilters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2); }
-.participantList { display: grid; gap: var(--space-1); }
-.participantRow { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
-.participantRow:hover, .participantRow:focus-visible { border-color: var(--border); background: var(--bg-muted); outline: none; }
-.participantRowMain { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); min-width: 0; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.participantRowMain:focus-visible { outline: none; border-radius: var(--radius-sm); box-shadow: var(--focus-ring); }
-.participantRowMain > span:nth-child(2) { display: grid; min-width: 0; }
-.participantRow small { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
-.participantTableWrap { width: 100%; overflow-x: auto; }
-.participantTable { min-width: 760px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
-.participantTableHeader, .participantTableRow { display: grid; grid-template-columns: 28px minmax(110px, 1.2fr) minmax(90px, .8fr) minmax(150px, 1.5fr) 56px 56px 64px 90px; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
-.participantTableHeader { background: var(--bg-muted); color: var(--text-muted); font-size: .78rem; font-weight: 700; }
-.participantTableRow { border-top: 1px solid var(--border); font-size: .84rem; }
-.participantTableRow:hover { background: var(--bg-muted); }
-.participantTableRow > button { display: grid; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.participantTableRow > button:focus-visible { outline: none; border-radius: var(--radius-sm); box-shadow: var(--focus-ring); }
-.participantTableRow > button small, .participantTableRow > span { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
-.participantAvatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: var(--primary); font-weight: 700; }
-.participantDrawerLayer { position: fixed; inset: 0; z-index: 1210; display: flex; justify-content: flex-end; }
-.participantDrawerBackdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--overlay-backdrop); }
-.participantDrawer { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(480px, calc(100vw - 48px)); height: 100%; background: var(--bg-card); box-shadow: var(--shadow-lg); }
-.participantDrawer > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
-.participantDrawer h2, .participantDrawer p { margin: 0; }
-.participantDrawer header p { margin-top: var(--space-1); color: var(--text-muted); }
-.participantDrawerBody { display: grid; align-content: start; gap: var(--space-4); min-height: 0; padding: var(--space-4); overflow-y: auto; }
-.participantCurrent { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: var(--space-2); padding: var(--space-4); background: var(--bg-muted); }
-.participantCurrent span, .participantState span { color: var(--text-muted); font-size: .8125rem; }
-.participantMetrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: 0; }
-.participantMetrics > div { display: grid; gap: 2px; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.participantMetrics dt { color: var(--text-muted); font-size: .8125rem; }
-.participantMetrics dd { margin: 0; font-size: 1.05rem; font-weight: 700; }
-.participantState { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.participantActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.participantDrawerNote { color: var(--text-muted); font-size: .8125rem; line-height: 1.55; }
-.studentMission { display: grid; gap: var(--space-4); padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
-.studentMissionHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
-.studentMissionHeader span, .studentContinue span { color: var(--text-muted); font-size: .875rem; font-weight: 600; }
-.studentMissionHeader h2 { margin: var(--space-1) 0 0; font-size: 1.3rem; }
-.studentMissionMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
-.studentContinue { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
-.studentContinue > div { display: grid; gap: 3px; min-width: 0; }
-.studentContinue strong, .studentContinue small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.studentContinue small { color: var(--text-muted); }
+  .actions > * {
+    flex: 1 1 auto;
+  }
 
-@media (max-width: 1100px) {
-  .runtimeOverviewGrid { grid-template-columns: 1fr; }
-  .classroomControlBar { grid-template-columns: 1fr; }
-  .classroomControlBar .controlDisclosure[open] { grid-column: auto; }
-}
-@media (max-width: 720px) {
-  .runtimeHero, .studentMission { padding: var(--space-4); }
-  .runtimeHeroMetrics, .studentMissionMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .runtimePrimaryActions, .studentContinue { align-items: stretch; flex-direction: column; }
-  .runtimePrimaryActions > *, .studentContinue > * { width: 100%; }
-  .participantFilters { grid-template-columns: 1fr; }
-  .participantDrawer { width: 100vw; }
-  .participantActions { grid-template-columns: 1fr; }
-  .participantCurrent { grid-template-columns: 1fr; }
-}
+  .v3ProblemRail {
+    display: flex;
+    overflow-x: auto;
+  }
 
+  .v3ProblemRail h2 {
+    display: none;
+  }
 
-.classroomActions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
-.classroomActions h2, .classroomActions p { margin: 0; }
-.classroomActions h2 { font-size: 1rem; }
-.classroomActions p { margin-top: 3px; color: var(--text-muted); font-size: .8125rem; }
-.nextStepChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.tableWrap { width: 100%; overflow-x: auto; }
-.tableWrap table { width: 100%; min-width: 440px; border-collapse: collapse; }
-.tableWrap th, .tableWrap td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-.tableWrap th { background: var(--bg-muted); color: var(--text-muted); font-size: .8125rem; }
+  .v3ProblemRail > button {
+    flex: 0 0 180px;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+  }
 
-@media (max-width: 720px) {
-  .classroomActions { align-items: stretch; flex-direction: column; }
-  .classroomActions .actions, .nextStepChoices { grid-template-columns: 1fr; width: 100%; }
-  .classroomActions .actions { display: grid; }
+  .v3Ranking {
+    grid-column: auto;
+  }
+
+  .v3ProblemHeading {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }

@@ -18,7 +18,7 @@ interface TaskItem { id: string; title: string; openAt: string; dueAt: string; c
 interface AssignmentPayload { items: TaskItem[]; pagination: { total: number }; statusCounts?: Record<string, number> }
 interface SubmissionItem { id: number; problemId: string; result: string; submittedAt: string }
 interface SubmissionPayload { submissions?: SubmissionItem[]; total?: number }
-interface TrainingItem { id: string; title: string; status: string; scheduledStartAt?: string | null; dueAt?: string | null; problemCount?: number }
+interface TrainingItem { id: string; title: string; status: string; scheduledStartAt?: string | null; problemCount?: number }
 interface ContestItem { id: number; title: string; startTime: string; endTime: string; problemCount: number }
 
 function taskStatus(task: TaskItem) {
@@ -49,11 +49,11 @@ export default function StudentPage() {
     href: `${pathPrefix}/homeworks/${task.id}`, actionLabel: task.status === 'SCHEDULED' ? '作业即将开始' : task.status === 'OVERDUE' ? '作业迟交期' : '继续作业',
     actionAt: task.openAt, dueAt: task.dueAt, problemCount: task.problemCount, detail: `${task.problemCount} 道题 · 截止 ${deadline(task.dueAt)}`,
   }))
-  const trainingTasks: LearningTask[] = (trainingResource.data || []).filter(item => ['SCHEDULED', 'RUNNING', 'PAUSED'].includes(item.status)).map(item => ({
+  const trainingTasks: LearningTask[] = (trainingResource.data || []).filter(item => ['READY', 'RUNNING', 'PAUSED'].includes(item.status)).map(item => ({
     id: `training-${item.id}`, type: 'training', title: item.title, status: item.status,
-    href: `${pathPrefix}/training-sessions/${item.id}`, actionLabel: item.status === 'SCHEDULED' ? '训练即将开始' : '继续训练',
-    actionAt: item.scheduledStartAt, dueAt: item.dueAt, problemCount: item.problemCount,
-    detail: item.status === 'SCHEDULED' ? `${item.problemCount || 0} 道题 · ${item.scheduledStartAt ? deadline(item.scheduledStartAt) + ' 开始' : '等待老师开始'}` : `${item.problemCount || 0} 道题 · 训练进行中`,
+    href: `${pathPrefix}/training-sessions/${item.id}`, actionLabel: item.status === 'READY' ? '训练尚未开始' : '继续训练',
+    actionAt: item.scheduledStartAt, problemCount: item.problemCount,
+    detail: item.status === 'READY' ? `${item.problemCount || 0} 道题 · ${item.scheduledStartAt ? deadline(item.scheduledStartAt) + ' 开始' : '等待老师开始'}` : `${item.problemCount || 0} 道题 · 训练进行中`,
   }))
   const contestTasks: LearningTask[] = (contestResource.data || []).filter(item => new Date(item.endTime).getTime() >= now).map(item => ({
     id: `contest-${item.id}`, type: 'contest', title: item.title, status: new Date(item.startTime).getTime() <= now ? 'ONGOING' : 'SCHEDULED',

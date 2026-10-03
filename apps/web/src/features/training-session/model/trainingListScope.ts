@@ -1,4 +1,4 @@
-export type TrainingListStatus = 'active' | 'upcoming' | 'completed' | 'draft'
+export type TrainingListStatus = 'active' | 'upcoming' | 'completed'
 
 export interface TrainingListQueryInput {
   organizationId?: string

@@ -78,14 +78,13 @@ erDiagram
 #### 数据与并发约束
 
 - 题目槽 Writer、训练/比赛结构、聊天会话、经济账本等高竞争写入使用数据库事务锁或 advisory lock，并通过 revision/CAS 防止丢失更新。
-- `TrainingSession` 是一堂课，并以 `currentStageId` 指向全班唯一 RUNNING Stage；`TrainingSessionStage` 保存有序教学定义与全局生命周期。`TrainingSessionGroup` 是整场训练的稳定分组；数据库模型 `TrainingSessionStageGroup` 现在表示默认 StagePlan 或分组覆盖，不再是独立运行单元。Participant 通过必填 `groupId` 归属稳定 Group，ProblemPlan 通过 `stageGroupId` 归属计划。Progress 绑定稳定 StageProblem，因此换组不会删除历史成绩。
-- `TrainingSessionTemplate` 只保存个人、学校或团队可复用的 Stage/分组/规则骨架。模板不会复制题目、学员和运行事实，停用模板也不会改变已经创建的 Session。
+- `TrainingSession` 是一堂训练课，以 `currentRoundId` 指向当前唯一 RUNNING Round。`TrainingSessionProblem` 是 Session 内稳定题目身份，`TrainingRoundProblemAssignment` 决定各 Round × Group 的有效题集。Participant 通过 `groupId` 归属稳定 Group；Progress、Draft、ScoreEvent、Overlay 和 Submission 绑定 SessionProblem，因此换组或题目暂时移出不会删除历史。
 - 正式版本、账本分录、消息、审计、举报证据和发布版本均按追加或不可变方式保存。
 - 用户控制的源码、压缩包、消息、AI 请求、Candidate 和 Judge 输出均有服务端硬上限；前端禁用状态不是安全边界。
 - PostgreSQL `FOR UPDATE SKIP LOCKED` 用于队列领取；测试环境不得以 SQLite 代替并发语义。
 
-## Training Engine V2 数据关系补充
+## Training Engine V3 数据关系补充
 
-V2 的核心关系为 TrainingSession → 全局 TrainingSessionStage 时间轴 → 默认 StagePlan / 可选 Group override → TrainingSessionStageProblemPlan。TrainingSessionGroup 是整场训练的稳定分组，TrainingSessionParticipant.groupId 表示当前归属；Stage 生命周期、计时和结束原因只保存在 Stage。迁移和换组不重建已有 Progress 或 Submission。
+V3 的核心关系为 TrainingSession → TrainingSessionProblem，以及 TrainingSession → TrainingSessionRound → TrainingRoundProblemAssignment。TrainingSessionGroup 是整场训练的稳定分组，TrainingSessionParticipant.groupId 表示当前归属。轮次生命周期、计时和结束原因只保存在 TrainingSessionRound；待开始轮次及其分配不会暴露给普通学员。
 
-Models covered by Training Engine V2: `TrainingSessionGroup`, `TrainingSessionGroupChange`, `TrainingSessionStageGroup`（StagePlan）, `TrainingSessionStageProblemPlan`, `TrainingSessionStageRuntimeSnapshot`, and `TrainingSessionStageTimeAdjustment`.
+Models covered by Training Engine V3: `TrainingSessionProblem`, `TrainingSessionRound`, `TrainingRoundProblemAssignment`, `TrainingSessionGroup`, and `TrainingSessionGroupChange`.

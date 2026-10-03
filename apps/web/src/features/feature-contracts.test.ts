@@ -22,15 +22,12 @@ import {
   JudgeProgramTemplateSchema,
   SimilarityComparisonSchema,
   SubmissionDetailSchema,
-  TrainingDesignSchema,
-  TrainingGroupSuggestionSchema,
-  TrainingStageGroupChangeInputSchema,
-  TrainingStageTimeExtensionInputSchema,
-  TrainingStageTransitionInputSchema,
-  TrainingProblemTimePolicySchema,
-  TrainingStuckPolicySchema,
-  TrainingTemplateSchema,
-  TrainingStructureInputSchema,
+  TrainingSessionCreateInputSchema,
+  TrainingNextRoundInputSchema,
+  TrainingReplaceAssignmentsInputSchema,
+  TrainingGroupingChangeInputSchema,
+  TrainingCommandInputSchema,
+  TrainingWorkspaceSchema,
   WorkspaceContracts,
   WorkspaceListSchema,
   CurrentAccountSchema,
@@ -155,66 +152,59 @@ describe('feature slice contracts', () => {
     expect(parsed.standing?.finalizedAt).toBe('2026-09-14T00:01:00.000Z')
   })
 
-  it('shares the Training design and mutation contract at runtime', () => {
-    expect(TrainingDesignSchema.safeParse({
-      editable: true,
-      statusRevision: 3,
+  it('shares the Training V3 round and mutation contracts at runtime', () => {
+    expect(TrainingSessionCreateInputSchema.safeParse({
+      title: '图论训练',
+      sessionType: 'GENERAL',
+      organizationId: 'organization-1',
+      participantTarget: 'organization_students',
+      totalDurationSeconds: 7200,
+      startImmediately: false,
+      problems: [{ problemId: 'problem-1', alias: '热身题' }],
+    }).success).toBe(true)
+    expect(TrainingNextRoundInputSchema.safeParse({
+      expectedRevision: 3,
+      name: '第二轮',
+      timeLimitSeconds: 1800,
+      groups: [{ groupId: 'group-1', problems: [{ problemId: 'problem-2' }] }],
+    }).success).toBe(true)
+    expect(TrainingReplaceAssignmentsInputSchema.safeParse({
+      expectedRevision: 3,
+      groupId: 'group-1',
+      problems: [{ problemId: 'problem-1' }],
+    }).success).toBe(true)
+    expect(TrainingGroupingChangeInputSchema.safeParse({
+      expectedRevision: 3,
+      participantIds: ['participant-1'],
+      toGroupId: 'group-2',
+      reason: '课堂分组调整',
+    }).success).toBe(true)
+    expect(TrainingCommandInputSchema.safeParse({
+      type: 'FOCUS_PROBLEM',
+      expectedRevision: 3,
+      targetType: 'GROUP',
+      targetId: 'group-1',
+      payload: { sessionProblemId: 'session-problem-1' },
+    }).success).toBe(true)
+    expect(TrainingWorkspaceSchema.safeParse({
       session: {
         id: 'session-1',
-        title: '顺序训练',
-        description: null,
+        title: '图论训练',
+        status: 'READY',
         sessionType: 'GENERAL',
-        status: 'DRAFT',
-        organizationId: 'organization-1',
-        teamId: null,
-        scheduledStartAt: new Date('2026-09-15T00:00:00Z'),
-      },
-      stages: [{
-        id: 'stage-1',
-        clientKey: 'stage-1',
-        name: '热身',
-        kind: 'TRAINING',
-        orderIndex: 0,
-        lifecycle: 'PENDING',
-        accessPolicy: 'ALL_AT_ONCE',
-        submissionMode: 'ENABLED',
-        endPolicy: 'MANUAL',
+        statusRevision: 3,
+        totalDurationSeconds: 7200,
+        activeElapsedSeconds: 0,
+        createdBy: 'teacher-1',
         Problems: [],
-      }],
-      participants: [{ id: 'participant-1', userId: 'user-1', groupId: 'group-1' }],
-      groups: [{ id: 'group-1', clientKey: 'group-1', name: '全体学员', orderIndex: 0, status: 'active', participantIds: ['user-1'] }],
-      stagePlans: [{ id: 'plan-1', clientKey: 'plan-1', stageId: 'stage-1', stageName: '热身', groupId: null, groupName: null, isDefault: true, inheritsDefault: false, accessPolicy: 'SEQUENTIAL', submissionMode: 'ENABLED', problemIds: [], requiredProblemIds: [] }],
-      issues: [],
-    }).success).toBe(true)
-
-    expect(TrainingStructureInputSchema.safeParse({
-      expectedRevision: 3,
-      title: '顺序训练',
-      description: '',
-      stages: [{
-        clientKey: 'draft-stage-1',
-        name: '热身',
-        kind: 'TRAINING',
-        problems: [],
-      }],
-    }).success).toBe(true)
-
-    expect(TrainingStageTransitionInputSchema.safeParse({ expectedRevision: 3, action: 'advance', stageId: 'stage-1', outcome: 'completed' }).success).toBe(true)
-    expect(TrainingStageTransitionInputSchema.safeParse({ expectedRevision: 3, action: 'back', stageId: 'stage-1' }).success).toBe(false)
-    expect(TrainingStageGroupChangeInputSchema.safeParse({ expectedRevision: 3, participantIds: ['participant-1'], toGroupId: 'group-2', effectiveMode: 'immediate', reason: '根据课堂观察调整' }).success).toBe(true)
-    expect(TrainingStageGroupChangeInputSchema.safeParse({ expectedRevision: 3, participantIds: ['participant-1'], toGroupId: 'group-2', effectiveMode: 'immediate', reason: '' }).success).toBe(false)
-    expect(TrainingStageTimeExtensionInputSchema.safeParse({ expectedRevision: 3, seconds: 600, reason: '课堂需要继续讲解' }).success).toBe(true)
-    expect(TrainingStageTimeExtensionInputSchema.safeParse({ expectedRevision: 3, seconds: 30, reason: '太短' }).success).toBe(false)
-    expect(TrainingGroupSuggestionSchema.safeParse({
-      stageId: 'stage-2',
-      suggestions: [{ participantId: 'participant-1', user: { id: 'user-1', username: 'alice' }, groupId: 'group-1', groupName: '基础巩固', reason: '上一阶段完成 1 题；按可解释的蛇形均衡顺序建议分组' }],
-    }).success).toBe(true)
-    expect(TrainingProblemTimePolicySchema.safeParse({ mode: 'FORCE_SWITCH', limitSeconds: 600 }).success).toBe(true)
-    expect(TrainingProblemTimePolicySchema.safeParse({ mode: 'FORCE_SWITCH' }).success).toBe(false)
-    expect(TrainingStuckPolicySchema.safeParse({ minActiveSeconds: 600, minAttempts: 3, noImprovementSeconds: 300 }).success).toBe(true)
-    expect(TrainingTemplateSchema.safeParse({
-      key: 'database:template-1', name: '分层课堂', sessionType: 'GENERAL', description: '', source: 'organization',
-      stages: [{ name: '分层', description: '', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' }],
+        Rounds: [],
+        Groups: [],
+        Overlays: [],
+      },
+      manager: true,
+      effectiveProblems: [],
+      progress: [],
+      permissions: {},
     }).success).toBe(true)
   })
 
