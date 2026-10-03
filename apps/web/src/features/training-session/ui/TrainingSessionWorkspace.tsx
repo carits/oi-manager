@@ -27,6 +27,7 @@ import {
   saveTrainingDraft,
   sendTrainingHeartbeat,
   submitTrainingSolution,
+  trainingEventStreamUrl,
 } from '../api/trainingSessionApi'
 import styles from './TrainingEngine.module.css'
 
@@ -85,6 +86,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [data, setData] = useState<TrainingWorkspace>()
   const [dashboard, setDashboard] = useState<Dashboard>()
   const [ranking, setRanking] = useState<Ranking>()
+  const [rankingGroupId, setRankingGroupId] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState('')
@@ -124,16 +126,19 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       setMovingTargetGroup(current => current || workspace.session.Groups[0]?.id || '')
       const [coach, peers] = await Promise.allSettled([
         workspace.manager ? getTrainingCoachDashboard(sessionId) : Promise.resolve(undefined),
-        getTrainingPeerProgress(sessionId),
+        getTrainingPeerProgress(sessionId, rankingGroupId && workspace.session.Groups.some(group => group.id === rankingGroupId) ? rankingGroupId : undefined),
       ])
       if (coach.status === 'fulfilled' && coach.value) setDashboard(coach.value)
-      if (peers.status === 'fulfilled') setRanking(peers.value)
+      if (peers.status === 'fulfilled') {
+        setRanking(peers.value)
+        setRankingGroupId(peers.value.scope === 'group' ? peers.value.groupId || '' : '')
+      }
     } catch (error) {
       setLoadError(publicErrorMessage(error, '训练加载失败'))
     } finally {
       if (!quiet) setLoading(false)
     }
-  }, [sessionId])
+  }, [rankingGroupId, sessionId])
 
   useEffect(() => { void refresh() }, [refresh])
   useEffect(() => {
@@ -142,10 +147,41 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     return () => window.clearInterval(timer)
   }, [data, refresh])
 
+  const eventStreamEnabled = Boolean(data)
+  const eventStreamOrganizationId = data?.session.organizationId
+  useEffect(() => {
+    if (!eventStreamEnabled || typeof EventSource === 'undefined') return
+    const stream = new EventSource(trainingEventStreamUrl(sessionId, eventStreamOrganizationId))
+    const refreshFromEvent = () => void refresh(true)
+    stream.addEventListener('training', refreshFromEvent)
+    stream.addEventListener('resync_required', refreshFromEvent)
+    return () => stream.close()
+  }, [eventStreamEnabled, eventStreamOrganizationId, refresh, sessionId])
+
   const selected = useMemo(() => data?.effectiveProblems.find(problem => problem.id === selectedId), [data, selectedId])
   const selectedPermission = selected ? data?.permissions[selected.id] : undefined
   const currentRound = data?.session.currentRound
   const pendingRound = data?.session.Rounds.find(round => round.lifecycle === 'PENDING')
+  const focusCandidates = useMemo(() => {
+    if (!data || !currentRound) return []
+    const groupIds = focusTargetType === 'GROUP'
+      ? [focusGroupId]
+      : data.session.Groups.map(group => group.id)
+    if (!groupIds.length || groupIds.some(groupId => !groupId)) return []
+    const sets = groupIds.map(groupId => new Set(currentRound.Assignments.filter(item => item.groupId === groupId && item.active).map(item => item.sessionProblemId)))
+    const common = sets[0] || new Set<string>()
+    for (const id of [...common]) if (sets.slice(1).some(set => !set.has(id))) common.delete(id)
+    const byId = new Map(data.session.Problems.map(problem => [problem.id, problem]))
+    return currentRound.Assignments
+      .filter(item => item.groupId === groupIds[0] && item.active && common.has(item.sessionProblemId))
+      .sort((left, right) => left.orderIndex - right.orderIndex)
+      .map(item => byId.get(item.sessionProblemId))
+      .filter((problem): problem is SessionProblem => Boolean(problem))
+  }, [currentRound, data, focusGroupId, focusTargetType])
+
+  useEffect(() => {
+    setFocusProblemId(current => focusCandidates.some(problem => problem.id === current) ? current : focusCandidates[0]?.id || '')
+  }, [focusCandidates])
 
   useEffect(() => {
     if (!selected) {
@@ -306,7 +342,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const currentGroupName = data.session.Groups.find(group => group.id === data.participant?.currentGroupId)?.name
   const progressByProblem = new Map(data.progress.map(item => [item.sessionProblemId, item]))
   const canSubmit = Boolean(selected && selectedPermission?.canSubmit && data.session.status === 'RUNNING')
-  const focusActive = data.session.Overlays.some(overlay => overlay.type === 'FOCUS_PROBLEM' && overlay.status === 'ACTIVE')
+  const focusActive = data.session.Overlays.some(overlay => overlay.type === 'FOCUS' && overlay.status === 'active')
 
   return <PageFrame>
     <PageHeader
@@ -333,7 +369,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     </div>}>
       <div className={styles.v3PrimaryActions}>
         <Button variant="outline" icon={<Settings2 size={17} />} disabled={!currentRound} onClick={() => setAssignmentOpen(true)}>题目调整</Button>
-        <Button variant="outline" icon={<Focus size={17} />} disabled={!data.effectiveProblems.length} onClick={() => { setFocusProblemId(selectedId || data.effectiveProblems[0]?.id || ''); setFocusGroupId(data.session.Groups[0]?.id || ''); setFocusOpen(true) }}>聚焦题目</Button>
+        <Button variant="outline" icon={<Focus size={17} />} disabled={!currentRound} onClick={() => { setFocusTargetType('ALL'); setFocusGroupId(data.session.Groups[0]?.id || ''); setFocusOpen(true) }}>聚焦题目</Button>
         <Button variant="outline" icon={<Users size={17} />} disabled={!dashboard?.participants.length} onClick={() => setGroupOpen(true)}>调整分组</Button>
         <Button icon={<Layers3 size={17} />} onClick={pendingRound ? () => void advanceRound() : openNextRound} loading={busy === 'round-advance'}>{pendingRound ? '下一步' : '准备下一步'}</Button>
       </div>
@@ -371,15 +407,13 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </main>
 
       <aside className={styles.v3Ranking}>
-        <h2>{data.manager ? '课堂进度' : '当前排名'}</h2>
-        {data.manager ? dashboard?.participants.map(participant => <div key={participant.id} className={styles.v3RankingRow}>
-          <span><strong>{participant.user.displayName}</strong><small>{data.session.Groups.find(group => group.id === participant.currentGroupId)?.name}</small></span>
-          <span>{participant.completed}/{participant.total}</span>
-        </div>) : ranking?.entries.map(entry => <div key={entry.user.id} className={styles.v3RankingRow}>
+        <h2>{data.manager ? '课堂排名' : '当前排名'}</h2>
+        {data.manager && ranking?.scope === 'group' && <label className={styles.field}>排名分组<Select value={rankingGroupId} onChange={event => setRankingGroupId(event.target.value)}>{data.session.Groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>}
+        {ranking?.entries.map(entry => <div key={entry.user.id} className={styles.v3RankingRow}>
           <span><strong>{entry.rank}. {entry.user.displayName}</strong><small>@{entry.user.username}</small></span>
-          <span>{data.session.sessionType === 'ACM' ? `${entry.completed} 题` : data.session.sessionType === 'OI' ? `${entry.score || 0} 分` : `${entry.completed}/${entry.total}`}</span>
+          <span>{data.session.sessionType === 'ACM' ? `${entry.completed} 题 · ${entry.penaltyMinutes || 0} 分钟` : data.session.sessionType === 'OI' ? `${entry.score || 0} 分` : `${entry.completed}/${entry.total}`}</span>
         </div>)}
-        {!data.manager && !ranking?.entries.length && <p className={styles.muted}>暂无排名数据</p>}
+        {!ranking?.entries.length && <p className={styles.muted}>暂无排名数据</p>}
       </aside>
     </div>
 
@@ -390,7 +424,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
 
     <FormDialog isOpen={focusOpen} onClose={() => setFocusOpen(false)} onSubmit={applyFocus} title="聚焦题目" submitText="开始聚焦" submitDisabled={!focusProblemId || focusTargetType === 'GROUP' && !focusGroupId}>
       <div className={styles.stack}>
-        <label className={styles.field}>题目<Select value={focusProblemId} onChange={event => setFocusProblemId(event.target.value)}>{data.effectiveProblems.map(problem => <option key={problem.id} value={problem.id}>{problem.alias || problem.titleSnapshot}</option>)}</Select></label>
+        <label className={styles.field}>题目<Select value={focusProblemId} onChange={event => setFocusProblemId(event.target.value)}><option value="">{focusCandidates.length ? '请选择题目' : '当前范围没有共同题目'}</option>{focusCandidates.map(problem => <option key={problem.id} value={problem.id}>{problem.alias || problem.titleSnapshot}</option>)}</Select></label>
         <label className={styles.field}>范围<Select value={focusTargetType} onChange={event => setFocusTargetType(event.target.value as 'ALL' | 'GROUP')}><option value="ALL">全部学生</option><option value="GROUP">指定分组</option></Select></label>
         {focusTargetType === 'GROUP' && <label className={styles.field}>分组<Select value={focusGroupId} onChange={event => setFocusGroupId(event.target.value)}>{data.session.Groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>}
       </div>

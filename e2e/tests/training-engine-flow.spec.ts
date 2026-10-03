@@ -109,7 +109,96 @@ test.describe('Training V3 hard cut @smoke', () => {
     await studentContext.close()
   })
 
-  test('E: 聚焦仅接受当前有效题目', async ({ browser }) => {
+  test('D/G: 分组题集和排名相互隔离，学生不能查看其他组', async ({ browser }) => {
+    const coachContext = await browser.newContext({ storageState: accounts.principal.storageState, extraHTTPHeaders: organizationHeaders })
+    const campusContext = await browser.newContext({ storageState: accounts.campusStudent.storageState, extraHTTPHeaders: organizationHeaders })
+    const personalContext = await browser.newContext({ storageState: accounts.personalStudent.storageState, extraHTTPHeaders: organizationHeaders })
+    const session = await apiData(await coachContext.request.post('/api/training-sessions', {
+      data: {
+        title: 'E2E V3 分组排名',
+        organizationId,
+        participantTarget: 'custom_students',
+        participantUserIds: [ids.users.campusStudent, ids.users.personalStudent],
+        sessionType: 'OI',
+        totalDurationSeconds: 20 * 60 * 60,
+        startImmediately: true,
+        problems: [{ problemId: ids.problem }, { problemId: ids.secondProblem }],
+        grouping: {
+          groups: [
+            { name: '基础组', participantIds: [ids.users.campusStudent], problemIds: [ids.problem] },
+            { name: '进阶组', participantIds: [ids.users.personalStudent], problemIds: [ids.problem, ids.secondProblem] },
+          ],
+        },
+      },
+    }))
+    const coachWorkspace = await workspace(coachContext.request, session.id)
+    const basicGroup = coachWorkspace.session.Groups.find((group: any) => group.name === '基础组')
+    const advancedGroup = coachWorkspace.session.Groups.find((group: any) => group.name === '进阶组')
+    expect(basicGroup).toBeTruthy()
+    expect(advancedGroup).toBeTruthy()
+
+    const basicRanking = await apiData(await coachContext.request.get(`/api/training-sessions/${session.id}/peer-progress?groupId=${basicGroup.id}`))
+    const advancedRanking = await apiData(await coachContext.request.get(`/api/training-sessions/${session.id}/peer-progress?groupId=${advancedGroup.id}`))
+    expect(basicRanking).toMatchObject({ scope: 'group', groupId: basicGroup.id })
+    expect(basicRanking.entries.map((entry: any) => entry.user.id)).toEqual([ids.users.campusStudent])
+    expect(basicRanking.entries[0].total).toBe(1)
+    expect(advancedRanking).toMatchObject({ scope: 'group', groupId: advancedGroup.id })
+    expect(advancedRanking.entries.map((entry: any) => entry.user.id)).toEqual([ids.users.personalStudent])
+    expect(advancedRanking.entries[0].total).toBe(2)
+
+    const forbidden = await campusContext.request.get(`/api/training-sessions/${session.id}/peer-progress?groupId=${advancedGroup.id}`)
+    expect(forbidden.status()).toBe(403)
+    const ownRanking = await apiData(await personalContext.request.get(`/api/training-sessions/${session.id}/peer-progress`))
+    expect(ownRanking.groupId).toBe(advancedGroup.id)
+    expect(ownRanking.entries.map((entry: any) => entry.user.id)).toEqual([ids.users.personalStudent])
+    await coachContext.close()
+    await campusContext.close()
+    await personalContext.close()
+  })
+
+  test('H: 相同 revision 的并发题目调整只能成功一次', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: accounts.principal.storageState, extraHTTPHeaders: organizationHeaders })
+    const session = await createSession(context.request, 'E2E V3 并发写入')
+    const current = await workspace(context.request, session.id)
+    const groupId = current.session.Groups[0].id
+    const responses = await Promise.all([
+      context.request.put(`/api/training-sessions/${session.id}/assignments`, {
+        data: { expectedRevision: current.session.statusRevision, groupId, problems: [{ problemId: ids.problem }] },
+      }),
+      context.request.put(`/api/training-sessions/${session.id}/assignments`, {
+        data: { expectedRevision: current.session.statusRevision, groupId, problems: [{ problemId: ids.secondProblem }] },
+      }),
+    ])
+    expect(responses.map(response => response.status()).sort()).toEqual([200, 409])
+    const updated = await workspace(context.request, session.id)
+    expect(updated.session.statusRevision).toBe(current.session.statusRevision + 1)
+    expect(updated.effectiveProblems).toHaveLength(1)
+    await context.close()
+  })
+
+  test('I: SSE 在轮询前把题目调整推送到学生页面', async ({ browser }) => {
+    const coachContext = await browser.newContext({ storageState: accounts.principal.storageState, extraHTTPHeaders: organizationHeaders })
+    const studentContext = await browser.newContext({ storageState: accounts.campusStudent.storageState, extraHTTPHeaders: organizationHeaders })
+    const session = await createSession(coachContext.request, 'E2E V3 实时题目调整')
+    const student = await studentContext.newPage()
+    await student.goto(`/org/${organizationId}/training-sessions/${session.id}`)
+    await expect(student.getByText('热身题', { exact: true })).toBeVisible()
+
+    const current = await workspace(coachContext.request, session.id)
+    await apiData(await coachContext.request.put(`/api/training-sessions/${session.id}/assignments`, {
+      data: {
+        expectedRevision: current.session.statusRevision,
+        groupId: current.session.Groups[0].id,
+        problems: [{ problemId: ids.secondProblem, alias: '实时进阶题' }],
+      },
+    }))
+    await expect(student.getByText('实时进阶题', { exact: true })).toBeVisible({ timeout: 7000 })
+    await expect(student.getByText('热身题', { exact: true })).toHaveCount(0)
+    await coachContext.close()
+    await studentContext.close()
+  })
+
+  test('E: 暂停、续时和聚焦生命周期保持一致', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState, extraHTTPHeaders: organizationHeaders })
     const session = await createSession(coachContext.request, 'E2E V3 聚焦')
     let current = await workspace(coachContext.request, session.id)
@@ -133,6 +222,56 @@ test.describe('Training V3 hard cut @smoke', () => {
       },
     })
     expect(accepted.ok()).toBe(true)
+
+    current = await workspace(coachContext.request, session.id)
+    expect(current.session.Overlays.some((overlay: any) => overlay.type === 'FOCUS' && overlay.status === 'active')).toBe(true)
+    const coach = await coachContext.newPage()
+    await coach.goto(`/org/${organizationId}/training-sessions/${session.id}`)
+    await expect(coach.getByRole('button', { name: '结束聚焦' })).toBeVisible()
+
+    current = await apiData(await coachContext.request.post(`/api/training-sessions/${session.id}/commands`, {
+      data: {
+        type: 'END_FOCUS',
+        expectedRevision: current.session.statusRevision,
+        targetType: 'ALL',
+        payload: {},
+      },
+    }))
+    expect(current.session.Overlays.some((overlay: any) => overlay.type === 'FOCUS' && overlay.status === 'active')).toBe(false)
+
+    const originalDuration = current.session.totalDurationSeconds
+    current = await apiData(await coachContext.request.post(`/api/training-sessions/${session.id}/commands`, {
+      data: {
+        type: 'PAUSE_SESSION',
+        expectedRevision: current.session.statusRevision,
+        targetType: 'ALL',
+        payload: {},
+      },
+    }))
+    expect(current.session.status).toBe('PAUSED')
+    expect(current.session.runningSince).toBeFalsy()
+
+    current = await apiData(await coachContext.request.post(`/api/training-sessions/${session.id}/commands`, {
+      data: {
+        type: 'EXTEND_SESSION',
+        expectedRevision: current.session.statusRevision,
+        targetType: 'ALL',
+        payload: { seconds: 600 },
+      },
+    }))
+    expect(current.session.totalDurationSeconds).toBe(originalDuration + 600)
+    expect(current.session.status).toBe('PAUSED')
+
+    current = await apiData(await coachContext.request.post(`/api/training-sessions/${session.id}/commands`, {
+      data: {
+        type: 'RESUME_SESSION',
+        expectedRevision: current.session.statusRevision,
+        targetType: 'ALL',
+        payload: {},
+      },
+    }))
+    expect(current.session.status).toBe('RUNNING')
+    expect(current.session.runningSince).toBeTruthy()
     await coachContext.close()
   })
 

@@ -143,6 +143,14 @@ function assertRevision(actual: number, expected: unknown) {
   if (actual !== Number(expected)) throw new TrainingEngineError(409, 'TRAINING_REVISION_CONFLICT', '训练已在其他页面更新，请刷新后重试')
 }
 
+async function lockTrainingSession(tx: Prisma.TransactionClient, sessionId: string, expectedRevision?: unknown) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
+  const session = await tx.trainingSession.findUnique({ where: { id: sessionId } })
+  if (!session) throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不存在')
+  if (expectedRevision !== undefined) assertRevision(session.statusRevision, expectedRevision)
+  return session
+}
+
 async function appendEvent(tx: Prisma.TransactionClient, sessionId: string, type: string, targetType: TrainingEngineTargetType = 'ALL', targetId: string | null = null, payload?: unknown) {
   const sequence = await tx.trainingSession.update({ where: { id: sessionId }, data: { eventSeq: { increment: 1 } }, select: { eventSeq: true } })
   return tx.trainingSessionEvent.create({ data: { sessionId, seq: sequence.eventSeq, type, targetType, targetId, payload: asJson(payload), expiresAt: new Date(Date.now() + 14 * 24 * 3600_000) } })
@@ -181,6 +189,7 @@ function summary(session: any) {
     activeElapsedSeconds: session.activeElapsedSeconds,
     scheduledStartAt: session.scheduledStartAt,
     startedAt: session.startedAt,
+    runningSince: session.runningSince,
     endedAt: session.endedAt,
     currentRoundId: session.currentRoundId,
     problemCount: session._count?.Problems ?? session.Problems?.length ?? 0,
@@ -336,6 +345,7 @@ export async function replaceCurrentAssignments(userId: string, sessionId: strin
   assertRevision(managed.statusRevision, body?.expectedRevision)
   if (!managed.currentRoundId || !['RUNNING', 'PAUSED'].includes(managed.status)) throw new TrainingEngineError(409, 'TRAINING_ROUND_NOT_RUNNING', '当前没有可调整题目的训练轮次')
   await prisma.$transaction(async tx => {
+    await lockTrainingSession(tx, sessionId, body?.expectedRevision)
     await replaceRoundAssignments(tx, sessionId, managed.currentRoundId!, String(body.groupId), body.problems || [])
     const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, groupId: String(body.groupId), status: 'active' }, select: { id: true } })
     for (const participant of participants) await reconcileParticipantCurrentProblem(sessionId, participant.id, tx)
@@ -353,6 +363,7 @@ export async function putTrainingNextRound(userId: string, sessionId: string, bo
   const groups = Array.isArray(body?.groups) ? body.groups : []
   if (!groups.length) throw new TrainingEngineError(422, 'TRAINING_ROUND_GROUP_REQUIRED', '下一轮至少需要一个分组题集')
   await prisma.$transaction(async tx => {
+    await lockTrainingSession(tx, sessionId, body?.expectedRevision)
     const last = await tx.trainingSessionRound.findFirst({ where: { sessionId }, orderBy: { orderIndex: 'desc' } })
     const round = await tx.trainingSessionRound.create({ data: { sessionId, name: boundedText(body?.name, 200, '轮次名称', 1), orderIndex: (last?.orderIndex ?? -1) + 1, timeLimitSeconds: body?.timeLimitSeconds == null ? null : boundedInteger(body.timeLimitSeconds, 60, 7 * 24 * 3600, '本轮限时') } })
     for (const group of groups) await replaceRoundAssignments(tx, sessionId, round.id, String(group.groupId), group.problems || [])
@@ -368,6 +379,7 @@ export async function deleteTrainingNextRound(userId: string, sessionId: string,
   const pending = managed.Rounds.find(round => round.lifecycle === 'PENDING')
   if (!pending) throw new TrainingEngineError(404, 'TRAINING_NEXT_ROUND_NOT_FOUND', '没有已准备的下一轮')
   await prisma.$transaction(async tx => {
+    await lockTrainingSession(tx, sessionId, body?.expectedRevision)
     await tx.trainingSessionRound.delete({ where: { id: pending.id } })
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 } } })
     await appendEvent(tx, sessionId, 'NEXT_ROUND_DELETED')
@@ -383,6 +395,7 @@ export async function advanceTrainingRound(userId: string, sessionId: string, bo
   if (!pending) throw new TrainingEngineError(409, 'TRAINING_NEXT_ROUND_NOT_FOUND', '请先准备下一轮')
   const now = new Date()
   await prisma.$transaction(async tx => {
+    await lockTrainingSession(tx, sessionId, body?.expectedRevision)
     const current = managed.currentRoundId ? await tx.trainingSessionRound.findUnique({ where: { id: managed.currentRoundId } }) : null
     if (current?.lifecycle === 'RUNNING') await tx.trainingSessionRound.update({ where: { id: current.id }, data: { lifecycle: 'ENDED', activeElapsedSeconds: runningElapsed(current, now), runningSince: null, endedAt: now, endReason: 'TEACHER_ADVANCED' } })
     await tx.trainingSessionRound.update({ where: { id: pending.id }, data: { lifecycle: 'RUNNING', startedAt: now, runningSince: managed.status === 'RUNNING' ? now : null } })
@@ -409,6 +422,7 @@ export async function replaceTrainingGrouping(userId: string, sessionId: string,
   }
   if (assigned.size !== participantIds.length) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_UNASSIGNED', '每名学生都必须属于一个训练组')
   await prisma.$transaction(async tx => {
+    await lockTrainingSession(tx, sessionId, body?.expectedRevision)
     const existing = await tx.trainingSessionGroup.findMany({ where: { sessionId, status: 'active' }, orderBy: { orderIndex: 'asc' } })
     for (const group of existing) await tx.trainingSessionGroup.update({ where: { id: group.id }, data: { name: `__moving__${group.id}`, orderIndex: group.orderIndex + 10_000 } })
     const resolved = []
@@ -448,6 +462,7 @@ export async function changeTrainingGrouping(userId: string, sessionId: string, 
   const ids: string[] = [...new Set<string>((body?.participantIds || []).map((value: unknown) => String(value)))]
   const reason = boundedText(body?.reason, 2000, '换组原因', 1)
   await prisma.$transaction(async tx => {
+    await lockTrainingSession(tx, sessionId, body?.expectedRevision)
     for (const participantId of ids) {
       const participant = await tx.trainingSessionParticipant.findFirst({ where: { id: participantId, sessionId, status: 'active' } })
       if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
@@ -475,8 +490,7 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
   const payload = body?.payload && typeof body.payload === 'object' ? body.payload as Record<string, any> : {}
   const now = new Date()
   await prisma.$transaction(async tx => {
-    const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId } })
-    assertRevision(current.statusRevision, body?.expectedRevision)
+    const current = await lockTrainingSession(tx, sessionId, body?.expectedRevision)
     const update: Prisma.TrainingSessionUpdateInput = { statusRevision: { increment: 1 } }
     if (type === 'START_SESSION') {
       if (current.status !== 'READY') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有待开始训练可以开始')
@@ -542,9 +556,12 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
 export async function archiveTrainingSession(userId: string, sessionId: string, expectedRevision: number) {
   const session = await assertManage(userId, sessionId)
   assertRevision(session.statusRevision, expectedRevision)
-  if (session.status !== 'ENDED') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有已结束训练可以归档')
-  const updated = await prisma.trainingSession.update({ where: { id: sessionId }, data: { status: 'ARCHIVED', archivedAt: new Date(), statusRevision: { increment: 1 } }, include: { Team: { select: { name: true } }, _count: { select: { Problems: true, Participants: true } } } })
-  return summary(updated)
+  return prisma.$transaction(async tx => {
+    const current = await lockTrainingSession(tx, sessionId, expectedRevision)
+    if (current.status !== 'ENDED') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有已结束训练可以归档')
+    const updated = await tx.trainingSession.update({ where: { id: sessionId }, data: { status: 'ARCHIVED', archivedAt: new Date(), statusRevision: { increment: 1 } }, include: { Team: { select: { name: true } }, _count: { select: { Problems: true, Participants: true } } } })
+    return summary(updated)
+  })
 }
 
 export async function joinTrainingSession(userId: string, sessionId: string) {
@@ -646,8 +663,9 @@ export async function syncTrainingEngineSubmission(input: { id: number; userId: 
   })
 }
 
-async function rankingRows(userId: string, sessionId: string) {
+async function rankingRows(userId: string, sessionId: string, requestedGroupId?: string) {
   const session = await assertAccess(userId, sessionId)
+  const manager = await canManageSession(userId, session)
   const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, include: { Progress: true }, orderBy: { joinedAt: 'asc' } })
   const effectiveByParticipant = new Map<string, string[]>()
   for (const participant of participants) effectiveByParticipant.set(participant.id, (await resolveEffectiveSessionProblems(sessionId, participant.id)).map(problem => problem.id))
@@ -657,7 +675,16 @@ async function rankingRows(userId: string, sessionId: string) {
   let groupId: string | null = null
   if (signatures.size > 1) {
     scope = 'group'
-    groupId = participants.find(participant => participant.userId === userId)?.groupId || session.Groups[0]?.id || null
+    const viewerGroupId = participants.find(participant => participant.userId === userId)?.groupId || null
+    if (requestedGroupId && !session.Groups.some(group => group.id === requestedGroupId)) {
+      throw new TrainingEngineError(422, 'TRAINING_GROUP_NOT_FOUND', '排名分组不存在')
+    }
+    if (!manager && requestedGroupId && requestedGroupId !== viewerGroupId) {
+      throw new TrainingEngineError(403, 'TRAINING_RANKING_GROUP_FORBIDDEN', '只能查看自己所在分组的排名')
+    }
+    groupId = manager
+      ? requestedGroupId || session.Groups[0]?.id || null
+      : viewerGroupId
     selected = groupId ? participants.filter(participant => participant.groupId === groupId) : []
   }
   const userMap = await participantDisplayNames(session, selected.map(participant => participant.userId))
@@ -692,8 +719,8 @@ async function rankingRows(userId: string, sessionId: string) {
   return { session, scope, groupId, entries: rows.map((row, index) => ({ rank: index + 1, ...row })) }
 }
 
-export async function getTrainingPeerProgress(userId: string, sessionId: string) {
-  const result = await rankingRows(userId, sessionId)
+export async function getTrainingPeerProgress(userId: string, sessionId: string, groupId?: string) {
+  const result = await rankingRows(userId, sessionId, groupId)
   return { sessionType: result.session.sessionType, scope: result.scope, groupId: result.groupId, entries: result.entries }
 }
 
@@ -728,8 +755,8 @@ export async function processDueTrainingSessions(now = new Date()) {
   let started = 0, roundsEnded = 0, ended = 0
   for (const item of ready) try {
     await prisma.$transaction(async tx => {
-      const current = await tx.trainingSession.findUnique({ where: { id: item.id } })
-      if (!current || current.status !== 'READY') return
+      const current = await lockTrainingSession(tx, item.id)
+      if (current.status !== 'READY') return
       const round = await tx.trainingSessionRound.findFirst({ where: { sessionId: item.id, lifecycle: 'PENDING' }, orderBy: { orderIndex: 'asc' } })
       if (!round) return
       await tx.trainingSessionRound.update({ where: { id: round.id }, data: { lifecycle: 'RUNNING', startedAt: now, runningSince: now } })
@@ -743,6 +770,7 @@ export async function processDueTrainingSessions(now = new Date()) {
   for (const session of running) try {
     if (runningElapsed(session, now) >= session.totalDurationSeconds) {
       await prisma.$transaction(async tx => {
+        await lockTrainingSession(tx, session.id)
         const current = await tx.trainingSession.findUnique({ where: { id: session.id }, include: { CurrentRound: true } })
         if (!current || current.status !== 'RUNNING') return
         if (current.CurrentRound?.lifecycle === 'RUNNING') await tx.trainingSessionRound.update({ where: { id: current.CurrentRound.id }, data: { lifecycle: 'ENDED', activeElapsedSeconds: runningElapsed(current.CurrentRound, now), runningSince: null, endedAt: now, endReason: 'SESSION_ENDED' } })
@@ -755,6 +783,7 @@ export async function processDueTrainingSessions(now = new Date()) {
     const round = session.CurrentRound
     if (round?.lifecycle === 'RUNNING' && round.timeLimitSeconds != null && runningElapsed(round, now) >= round.timeLimitSeconds) {
       await prisma.$transaction(async tx => {
+        await lockTrainingSession(tx, session.id)
         const current = await tx.trainingSession.findUnique({ where: { id: session.id }, include: { CurrentRound: true } })
         if (!current?.CurrentRound || current.CurrentRound.lifecycle !== 'RUNNING') return
         await tx.trainingSessionRound.update({ where: { id: current.CurrentRound.id }, data: { lifecycle: 'ENDED', activeElapsedSeconds: runningElapsed(current.CurrentRound, now), runningSince: null, endedAt: now, endReason: 'TIME_REACHED' } })

@@ -552,7 +552,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/training-sessions/:id/heartbeat` | 上报当前稳定训练题目的有效活跃时间 |
 | `POST` | `/api/training-sessions/:id/submit` | 校验当前有效题集并创建训练提交 |
 | `GET` | `/api/training-sessions/:id/coach-dashboard` | 获取教师实时课堂进度 |
-| `GET` | `/api/training-sessions/:id/peer-progress` | 获取按赛制动态计算并裁剪的同学排名 |
+| `GET` | `/api/training-sessions/:id/peer-progress` | 获取按赛制动态计算并裁剪的同学排名；教师可选分组，学员只能查看本组 |
 | `GET` | `/api/training-sessions/:id/report` | 获取轮次、分组和学员过程报告 |
 | `GET` | `/api/training-sessions/:id/events` | 可补偿的训练 SSE 事件流 |
 | `PUT` | `/api/users/:id/status` | 见对应路由实现 |
@@ -601,7 +601,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 
 ## Training Engine V3 API
 
-训练 Session 使用稳定 SessionProblem、稳定 Group 和全局 Round 时间线。创建接口直接生成 READY 或 RUNNING 训练，不存在草稿发布、模板、设计器或 Stage API。当前有效题集由服务端统一解析 Round × Group 分配；所有结构写入和课堂命令都使用 `statusRevision` 做并发校验。
+训练 Session 使用稳定 SessionProblem、稳定 Group 和全局 Round 时间线。创建接口直接生成 READY 或 RUNNING 训练，不存在草稿发布、模板、设计器或 Stage API。当前有效题集由服务端统一解析 Round × Group 分配；所有结构写入和课堂命令都在训练级事务锁内使用 `statusRevision` 做并发校验。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|

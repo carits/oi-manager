@@ -59,10 +59,10 @@ source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/sch
 - `OI`：各题最后一次已完成提交计分。
 - `ACM`：通过题数、错误尝试与罚时。
 
-排名从提交和当前训练事实动态计算，不保存可漂移的旧榜单快照。
+排名从提交和当前训练事实动态计算，不保存可漂移的旧榜单快照。不同分组有效题集不一致时，排名自动收敛为分组范围；教师可明确选择分组，学员只能查看自己所在分组。
 
-## 硬切边界
+## 实时更新\n\n- 课堂结构变更、命令和评测结果写入单调 `TrainingSessionEvent`。\n- 浏览器通过可补偿 SSE 订阅训练事件并立即回读权威工作区；15 秒轮询只作为断线兜底。\n- SSE 无法携带自定义组织请求头，因此同源事件地址只接受经服务端校验的单一 `organizationId` 查询参数。\n\n## 硬切边界
 
 - 不存在训练草稿发布流程、训练模板、Stage、Hint、必做/选做、旧 Designer 路由或兼容接口。
 - 数据库迁移若发现旧训练场次或旧训练提交会立即终止，不猜测转换。
-- 创建、调整题目、分组、切轮和运行控制全部使用 `statusRevision` 做并发校验。
+- 创建、调整题目、分组、切轮和运行控制全部在训练级 PostgreSQL advisory transaction lock 内执行，并使用 `statusRevision` 做 CAS 校验；同一 revision 的并发命令只能成功一次。

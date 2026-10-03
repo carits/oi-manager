@@ -287,6 +287,10 @@ export const TrainingSubmitInputSchema = z.object({
 
 export const TrainingSubmitResultSchema = z.object({ id: z.number().int() }).passthrough()
 
+export const TrainingPeerProgressQuerySchema = z.object({
+  groupId: z.string().min(1).optional(),
+})
+
 export const TrainingPeerProgressSchema = z.object({
   sessionType: TrainingSessionTypeSchema,
   scope: z.enum(['all', 'group']),
@@ -354,7 +358,7 @@ export const TrainingContracts = {
   getDraft: defineApiEndpoint({ key: 'training.draft.get', method: 'GET', scope: 'organization', data: TrainingDraftSchema.nullable() }),
   saveDraft: defineApiEndpoint({ key: 'training.draft.save', method: 'PUT', scope: 'organization', body: TrainingDraftInputSchema, data: TrainingDraftSchema }),
   submit: defineApiEndpoint({ key: 'training.submit', method: 'POST', scope: 'organization', body: TrainingSubmitInputSchema, data: TrainingSubmitResultSchema }),
-  getPeerProgress: defineApiEndpoint({ key: 'training.peer-progress', method: 'GET', scope: 'organization', data: TrainingPeerProgressSchema }),
+  getPeerProgress: defineApiEndpoint({ key: 'training.peer-progress', method: 'GET', scope: 'organization', query: TrainingPeerProgressQuerySchema, data: TrainingPeerProgressSchema }),
   getCoachDashboard: defineApiEndpoint({ key: 'training.coach-dashboard', method: 'GET', scope: 'organization', data: TrainingCoachDashboardSchema }),
   getReport: defineApiEndpoint({ key: 'training.report', method: 'GET', scope: 'organization', data: TrainingReportSchema }),
 } as const

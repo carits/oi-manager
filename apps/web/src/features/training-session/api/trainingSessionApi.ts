@@ -64,8 +64,10 @@ export const getTrainingCoachDashboard = (sessionId: string) =>
 export const getTrainingReport = (sessionId: string) =>
   apiClient.queryContract(TrainingContracts.getReport, `${sessionPath(sessionId)}/report`)
 
-export const getTrainingPeerProgress = (sessionId: string) =>
-  apiClient.queryContract(TrainingContracts.getPeerProgress, `${sessionPath(sessionId)}/peer-progress`)
+export const getTrainingPeerProgress = (sessionId: string, groupId?: string) => {
+  const query = groupId ? `?groupId=${encodeURIComponent(groupId)}` : ''
+  return apiClient.queryContract(TrainingContracts.getPeerProgress, `${sessionPath(sessionId)}/peer-progress${query}`)
+}
 
 export const trainingEventStreamUrl = (sessionId: string, organizationId?: string | null) => {
   const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''

@@ -1,9 +1,16 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-10-03
+last_verified: 2026-10-04
 source_of_truth: Git history
 ---
+
+## 2026-10-04 — Training V3 硬切与实时课堂收口
+
+- 训练模型已直接切换为稳定 SessionProblem、Round × Group 分配和 READY / RUNNING / PAUSED / ENDED / ARCHIVED 生命周期；不保留旧数据、旧 Stage、旧接口、模板、设计器或字段兼容。
+- 所有结构写入、课堂命令和自动计时使用训练级 PostgreSQL advisory transaction lock 与 statusRevision CAS；同版本并发写仅允许一个成功。
+- 浏览器工作台接入可补偿 SSE；教师可切换分组排名，学生只能查看自己的分组。聚焦题目按目标范围的共同有效题集过滤，聚焦结束、暂停、恢复和续时均已完成真实页面回归。
+- 隔离 E2E 覆盖稳定题目身份、待开始轮次隐藏、切轮、分组题集、跨组权限、并发写、SSE、聚焦、计时和窄屏，共 13/13 通过。
 
 ## 2026-10-03 — 训练渐进式阶段规划
 

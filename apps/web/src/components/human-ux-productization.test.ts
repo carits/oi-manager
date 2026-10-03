@@ -246,7 +246,8 @@ describe('human UX productization contract', () => {
 
   it('uses one searchable student table for live classroom management', () => {
     const source = read('../features/training-session/ui/TrainingSessionWorkspace.tsx')
-    expect(source).toContain("data.manager ? '课堂进度' : '当前排名'")
+    expect(source).toContain("data.manager ? '课堂排名' : '当前排名'")
+    expect(source).toContain('排名分组')
     expect(source).toContain('dashboard?.participants.map')
     expect(source).toContain('participant.user.displayName')
     expect(source).toContain('调整分组')
@@ -256,6 +257,7 @@ describe('human UX productization contract', () => {
   it('makes training realtime and batch controls explicit and safe', () => {
     const source = read('../features/training-session/ui/TrainingSessionWorkspace.tsx')
     expect(source).toContain('window.setInterval(() => void refresh(true), 15000)')
+    expect(source).toContain('new EventSource(trainingEventStreamUrl')
     expect(source).toContain('replaceTrainingAssignments')
     expect(source).toContain('changeTrainingGrouping')
     expect(source).toContain('putTrainingNextRound')

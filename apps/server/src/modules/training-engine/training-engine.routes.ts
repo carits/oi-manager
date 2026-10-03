@@ -186,7 +186,10 @@ trainingEngineRouter.get('/training-sessions/:id/report', authenticate, asyncHan
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/peer-progress', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  try { sendContractData(res, TrainingContracts.getPeerProgress, await getTrainingPeerProgress(req.user!.userId, req.params.id)) } catch (error) { return sendError(error, res) }
+  try {
+    const query = parseContractQuery(TrainingContracts.getPeerProgress, req.query)
+    sendContractData(res, TrainingContracts.getPeerProgress, await getTrainingPeerProgress(req.user!.userId, req.params.id, query.groupId))
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/events', authenticate, asyncHandler(async (req: AuthRequest, res) => {
