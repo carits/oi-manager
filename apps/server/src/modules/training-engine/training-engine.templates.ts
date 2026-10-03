@@ -20,7 +20,7 @@ export type TrainingTemplate = {
 export const BUILTIN_TRAINING_TEMPLATES: TrainingTemplate[] = [
   {
     key: 'simple-practice', name: '简单刷题', sessionType: 'GENERAL',
-    description: '一个阶段的全体训练；系统仍为默认组创建完整 StageGroup。',
+    description: '一个阶段的全体训练，并为全班准备完整的阶段训练方案。',
     stages: [{ name: '训练', description: '按自己的节奏完成训练题', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED' }],
   },
   {
@@ -42,7 +42,7 @@ export const BUILTIN_TRAINING_TEMPLATES: TrainingTemplate[] = [
     ],
   },
   {
-    key: 'oi-score-progressive', name: 'OI 部分分', sessionType: 'OI', description: '同一 Stage 内按 30、60、100 分里程碑逐步优化。',
+    key: 'oi-score-progressive', name: 'OI 部分分', sessionType: 'OI', description: '同一阶段内按 30、60、100 分目标逐步优化。',
     stages: [{ name: '部分分训练', description: '逐步优化同一道题', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', rules: { defaultScoreGoals: [{ score: 30 }, { score: 60 }, { score: 100 }] } }],
   },
   {

@@ -3,6 +3,9 @@ import path from 'node:path'
 
 const root = process.cwd()
 const sourceRoot = path.join(root, 'apps', 'web', 'src')
+const serverPresentationFiles = [
+  path.join(root, 'apps', 'server', 'src', 'modules', 'training-engine', 'training-engine.templates.ts'),
+]
 const failures = []
 
 function walk(directory) {
@@ -12,7 +15,7 @@ function walk(directory) {
   })
 }
 
-const files = walk(sourceRoot).filter(file => {
+const files = [...walk(sourceRoot), ...serverPresentationFiles].filter(file => {
   const relative = path.relative(root, file).replaceAll('\\', '/')
   return /\.(?:ts|tsx)$/.test(file) && !/\.(?:test|spec)\.(?:ts|tsx)$/.test(file) && !relative.includes('/__tests__/')
 })
@@ -28,6 +31,7 @@ const visibleTerms = [
   /Candidate Pool|Candidate Selector|Wrong Corpus|Hidden Holdout|Corpus R\d*/i,
   /\bDQS\b|Critical Gate/i,
   /测试数据槽|数据槽|槽位/,
+  /\bStage(?:Group|Plan|Problem)?\b/,
 ]
 
 function record(relative, lineNumber, rule, line) {
@@ -80,7 +84,10 @@ for (const file of files) {
     const visibleProp = [...line.matchAll(/(?:title|description|label|placeholder|hint|emptyText|submitText|aria-label)\s*=\s*(?:["']([^"']*)["']|\{[`"']([^`"']*)[`"']\})/g)]
       .flatMap(match => [match[1], match[2]]).filter(Boolean).join(' ')
     const feedbackCopy = [...line.matchAll(/(?:toast\.(?:error|warning|success|info)|setError|setMessage)\s*\(\s*[`"']([^`"']+)[`"']/g)].map(match => match[1]).join(' ')
-    const presentationCopy = [jsxText, visibleProp, feedbackCopy].join(' ')
+    const serverObjectCopy = relative.startsWith('apps/server/')
+      ? [...line.matchAll(/(?:name|title|description|label|hint|message)\s*:\s*[`"']([^`"']+)[`"']/g)].map(match => match[1]).join(' ')
+      : ''
+    const presentationCopy = [jsxText, visibleProp, feedbackCopy, serverObjectCopy].join(' ')
     if (presentationCopy && containsForbiddenVisibleTerm(presentationCopy)) {
       record(relative, lineNumber, 'internal implementation term appears in user-facing copy', line)
     }
