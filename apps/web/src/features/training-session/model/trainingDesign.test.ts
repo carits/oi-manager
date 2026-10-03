@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isTrainingGroupingDefinitionLocked, isTrainingStageDefinitionLocked, type Stage } from './trainingDesign'
+import { isTrainingGroupingDefinitionLocked, isTrainingStageDefinitionLocked, unlockLabel, type Stage } from './trainingDesign'
 
 const stage = (id: string, lifecycle: Stage['lifecycle']): Stage => ({
   id,
@@ -23,5 +23,10 @@ describe('training definition locking', () => {
   it('locks grouping definitions once runtime has started', () => {
     expect(isTrainingGroupingDefinitionLocked('RUNNING', [stage('stage-2', 'PENDING')])).toBe(true)
     expect(isTrainingGroupingDefinitionLocked('SCHEDULED', [stage('stage-1', 'ENDED'), stage('stage-2', 'PENDING')])).toBe(true)
+  })
+
+  it('presents unlock policies in classroom language', () => {
+    expect(unlockLabel({ mode: 'ANY', conditions: [{ type: 'AC' }] })).toBe('满足任意一项 · 完成前一道题')
+    expect(unlockLabel({ mode: 'ALL', conditions: [{ type: 'TIME', value: 600 }, { type: 'TEACHER' }] })).toBe('必须全部满足 · 用时达标 600 / 教练放行')
   })
 })

@@ -195,7 +195,7 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
             const currentGroupKey = groupKeyByParticipant.get(candidate.userId) || ''
             return <div className={styles.rosterTableRow} role="row" key={candidate.userId}>
               <span role="cell"><Input type="checkbox" aria-label={'选择 ' + candidate.displayName} checked={checkedRosterIds.includes(candidate.userId)} onChange={event => setCheckedRosterIds(current => event.target.checked ? [...new Set([...current, candidate.userId])] : current.filter(id => id !== candidate.userId))} /></span>
-              <span role="cell"><strong>{candidate.displayName}</strong><small>{candidate.username} · {candidate.role}</small></span>
+              <span role="cell"><strong>{candidate.displayName}</strong><small>{candidate.username} · {organizationRoleLabel(candidate.role)}</small></span>
               <span role="cell"><Checkbox label={candidate.selected ? '已加入' : '未加入'} checked={candidate.selected} onChange={event => setCandidateSelected(candidate.userId, event.target.checked)} /></span>
               <span role="cell"><Select aria-label={candidate.displayName + '训练分组'} value={currentGroupKey} disabled={groupsFrozen || !candidate.selected} onChange={event => setCandidateGroup(candidate.userId, event.target.value)}><option value="">未分组（使用默认方案）</option>{trainingGroups.map(group => <option key={group.clientKey} value={group.clientKey}>{group.name}</option>)}</Select></span>
             </div>

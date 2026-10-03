@@ -552,6 +552,8 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/training-sessions/:id/runtime-participants` | 运行中加入范围内学员，记录迟到/补训语义和原因 |
 | `POST` | `/api/training-sessions/:id/runtime-participants/:participantId/leave` | 记录学员中途退出，保留此前进度、提交和报告历史 |
 | `POST` | `/api/training-sessions/:id/stage-transitions` | 开始、完成/提前结束、跳过 pending Stage 或结束 Session；不支持回滚 |
+| `PUT` | `/api/training-sessions/:id/next-stage` | 创建或替换唯一下一阶段；用途限自主练习、引导练习、统一讲解、复盘 |
+| `DELETE` | `/api/training-sessions/:id/next-stage` | 丢弃唯一下一阶段；旧版多待运行阶段队列拒绝批量删除 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/group-changes` | 即时换组或预设下一 Stage 分组，必须记录原因 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/end` | 结束当前阶段并记录结束原因与备注 |
 | `POST` | `/api/training-sessions/:id/stages/:stageId/clone` | 复制未来阶段定义，不复制运行时快照、进度或事件 |

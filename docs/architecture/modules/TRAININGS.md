@@ -1,11 +1,11 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-27
+last_verified: 2026-10-03
 source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/schema.prisma, packages/contracts/src/training.ts
 ---
 
-# Training Engine V2：全局 Stage 时间轴与稳定分组
+# Training Engine V2：渐进式 Stage 时间轴与稳定分组
 
 ## 背景与最终模型
 
@@ -88,6 +88,16 @@ JSON API 使用 `packages/contracts` Runtime Contract，Web 只通过 Training F
 - 报告：按全局 Stage 时间线展示计划、实际时间、结束原因、快照哈希、各组人数与完成情况、Progress、Hint、Command 和带生效 Stage 的换组记录。
 
 用户界面不得出现“启动某个组的阶段”“组 A 在阶段 1、组 B 在阶段 2”或“上一阶段回滚”等旧语义。
+
+## 渐进式阶段规划
+
+- 新建或待开始训练最多保留一个 PENDING 初始 Stage；运行中最多一个 RUNNING 当前 Stage 和一个 PENDING 下一 Stage。
+- 普通教师界面只编辑第一个阶段或唯一下一阶段，不提供任意未来阶段、拖拽全时间轴、阶段复制、多阶段批量加题或 Stage × Group 矩阵主入口。
+- 阶段用途固定为自主练习、引导练习、统一讲解和复盘。练习/引导至少一道题；讲解/复盘允许零题且默认禁止提交。
+- 下一阶段可以沿用当前题目、从本次训练已有题目选择或按题号添加。同一道题可跨阶段复用，同一阶段内不得重复。
+- 阶段结束后工作台统一询问“接下来做什么”：继续当前阶段、使用/修改/丢弃已准备阶段、准备新阶段或结束训练。
+- 学生投影只包含历史和当前 Stage，不返回 PENDING Stage 或 nextStage。历史多个 PENDING Stage 作为旧版队列保留，按原顺序自然收敛，期间禁止扩展。
+- 新能力复用现有 PENDING 生命周期、statusRevision CAS、advisory lock 与 RuntimeSnapshot；不修改 Prisma Schema，不删除历史数据。
 
 ## 迁移与验证
 

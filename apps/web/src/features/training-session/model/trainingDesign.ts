@@ -34,7 +34,7 @@ export type ProblemPage = { data: ProblemSummary[]; total?: number; page?: numbe
 export type SourceGroup = 'school' | 'carits' | 'external'
 
 export const stageKinds = [['TRAINING', '练习'], ['TEACHING', '统一讲解'], ['REVIEW', '复盘']] as const
-export const conditionLabels: Record<UnlockCondition['type'], string> = { AC: 'AC 前题', SCORE: '分数达标', TIME: '用时达标', ATTEMPTS: '提交次数', TEACHER: '教练放行' }
+export const conditionLabels: Record<UnlockCondition['type'], string> = { AC: '完成前一道题', SCORE: '分数达标', TIME: '用时达标', ATTEMPTS: '提交次数', TEACHER: '教练放行' }
 export const moveItem = <T,>(items: T[], from: number, to: number) => { const next = [...items]; const [item] = next.splice(from, 1); next.splice(to, 0, item); return next }
 export const normalizeProblemOrder = (items: Assignment[]): Assignment[] => items.map((item, index) => index === 0 || item.unlockPolicy ? item : { ...item, unlockPolicy: { mode: 'ANY', conditions: [{ type: 'AC' }] } })
 export const closeSubtaskSelection = (subtasks: Subtask[], selectedIds: number[]) => {
@@ -57,4 +57,4 @@ export const createTrainingDesignDraft = (data: TrainingDesignContract): Design 
   stages: data.stages.map(stage => ({ ...stage, clientKey: stage.clientKey || stage.id || newTrainingDesignKey(), Problems: normalizeAssignments(stage.Problems.map(problem => ({ ...problem, clientKey: problem.clientKey || problem.assignmentId || problem.id || newTrainingDesignKey(), allowedSubtaskIds: problem.allowedSubtaskIds || [], subtasks: problem.subtasks || [] }))) })),
   stagePlans: data.stagePlans.map(plan => ({ ...plan, clientKey: plan.clientKey || plan.id || newTrainingDesignKey() })),
 })
-export const unlockLabel = (policy?: UnlockPolicy | null) => !policy?.conditions?.length ? '未配置' : `${policy.mode} · ${policy.conditions.map(item => `${conditionLabels[item.type]}${item.value == null ? '' : ` ${item.value}`}`).join(' / ')}`
+export const unlockLabel = (policy?: UnlockPolicy | null) => !policy?.conditions?.length ? '未配置' : (policy.mode === 'ANY' ? '满足任意一项' : '必须全部满足') + ' · ' + policy.conditions.map(item => conditionLabels[item.type] + (item.value == null ? '' : ' ' + item.value)).join(' / ')

@@ -34,6 +34,15 @@ export function trainingStageEndReasonLabel(reason: string) {
   return '结束原因待确认'
 }
 
+export function trainingPermissionReasonLabel(reason: string) {
+  return ({
+    ALLOWED: '可以提交', SEQUENTIAL_LOCK: '完成前一道题后开放', FOCUS_REQUIRED: '等待教师开放',
+    FOCUS_LOCK: '等待教师开放', PROBLEM_LOCKED: '题目暂时锁定', STAGE_NOT_RUNNING: '当前阶段尚未开始',
+    STAGE_ENDED: '当前阶段已经结束', SUBMISSION_DISABLED: '当前阶段不开放提交', SESSION_PAUSED: '训练已暂停',
+    SESSION_ENDED: '训练已经结束', NOT_PARTICIPANT: '不在本次训练名单中',
+  } as Record<string, string>)[reason] || '当前暂不可提交'
+}
+
 export function trainingSessionTypeLabel(type: string) {
   return ({ OI: 'OI 训练', ACM: 'ACM 训练', GENERAL: '综合训练' } as Record<string, string>)[type] || '训练'
 }

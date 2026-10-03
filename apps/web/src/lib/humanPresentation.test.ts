@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activityStatusLabel, genericStatusLabel, membershipStatusLabel, organizationRoleLabel, reviewStatusLabel, testDataVersion, trainingHintOpenModeLabel, trainingProgressStatusLabel, trainingSessionTypeLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from './humanPresentation'
+import { activityStatusLabel, genericStatusLabel, membershipStatusLabel, organizationRoleLabel, reviewStatusLabel, testDataVersion, trainingHintOpenModeLabel, trainingPermissionReasonLabel, trainingProgressStatusLabel, trainingSessionTypeLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from './humanPresentation'
 
 describe('human presentation vocabulary', () => {
   it('translates training types and lifecycle states', () => {
@@ -9,6 +9,7 @@ describe('human presentation vocabulary', () => {
     expect(activityStatusLabel('finished')).toBe('已结束')
     expect(trainingStageStatusLabel('PENDING')).toBe('未开始')
     expect(trainingProgressStatusLabel('LOCKED')).toBe('尚未开放')
+    expect(trainingPermissionReasonLabel('SEQUENTIAL_LOCK')).toBe('完成前一道题后开放')
     expect(trainingStageKindLabel('TEACHING')).toBe('统一讲解')
     expect(trainingHintOpenModeLabel('ATTEMPT')).toBe('按提交次数')
     expect(trainingStageEndReasonLabel('TEACHER_ENDED_EARLY')).toBe('教师提前结束')
@@ -20,6 +21,7 @@ describe('human presentation vocabulary', () => {
     expect(trainingStatusLabel('FUTURE_INTERNAL_VALUE')).toBe('状态待确认')
     expect(trainingStageStatusLabel('FUTURE_INTERNAL_VALUE')).toBe('状态待确认')
     expect(trainingProgressStatusLabel('FUTURE_INTERNAL_VALUE')).toBe('状态待确认')
+    expect(trainingPermissionReasonLabel('FUTURE_INTERNAL_VALUE')).toBe('当前暂不可提交')
     expect(trainingStageKindLabel('FUTURE_INTERNAL_VALUE')).toBe('训练阶段')
     expect(trainingHintOpenModeLabel('FUTURE_INTERNAL_VALUE')).toBe('开放方式待确认')
     expect(trainingStageEndReasonLabel('FUTURE_INTERNAL_VALUE')).toBe('结束原因待确认')

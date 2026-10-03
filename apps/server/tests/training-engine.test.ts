@@ -11,6 +11,7 @@ import {
   createTrainingHint,
   createTrainingSession,
   createTrainingSessionTemplate,
+  deleteTrainingNextStage,
   executeStageTransition,
   executeTrainingCommand,
   getCoachDashboard,
@@ -23,6 +24,7 @@ import {
   mergeTrainingGroup,
   publishTrainingSession,
   processDueTrainingSessions,
+  putTrainingNextStage,
   replaceTrainingRoster,
   replaceTrainingStageGroupMatrix,
   resolveTrainingPermission,
@@ -103,23 +105,73 @@ describe('Training Engine global Stage domain', () => {
     const grouping = groupCount === 1
       ? { groups: [{ clientKey: 'all', name: '全体学员', participantIds: users }] }
       : { groups: [{ clientKey: 'g1', name: '基础组', participantIds: [users[0]] }, { clientKey: 'g2', name: '提高组', participantIds: [users[1]] }] }
-    return createTrainingSession(coach.user.id, {
+    const created = await createTrainingSession(coach.user.id, {
       title: '全局阶段训练',
       teamId: team.id,
       participantUserIds: users,
       settings: sessionSettings,
       grouping,
       ...(scheduled ? { scheduledStartAt: new Date(Date.now() + 3600_000).toISOString() } : {}),
-      stages: Array.from({ length: stageCount }, (_, index) => ({
-        name: `阶段 ${index + 1}`,
+      stages: [{
+        name: '阶段 1',
         kind: 'TRAINING',
         mode: 'PRACTICE',
         accessPolicy: 'ALL_AT_ONCE',
         submissionMode: 'ENABLED',
         endPolicy: 'MANUAL',
         problems: [{ problemId: problem.id, required: true }],
-      })),
+      }],
     })
+    // Historical multi-stage fixtures are inserted directly to exercise the
+    // read-only legacy queue. Product creation is intentionally single-stage.
+    if (stageCount > 1) {
+      const firstStage = await prisma.trainingSessionStage.findFirstOrThrow({
+        where: { sessionId: created.id },
+        include: { Problems: true, Groups: { include: { ProblemPlans: true } } },
+      })
+      for (let index = 1; index < stageCount; index += 1) {
+        const copiedStage = await prisma.trainingSessionStage.create({ data: {
+          sessionId: created.id,
+          name: '阶段 ' + (index + 1),
+          orderIndex: index,
+          kind: firstStage.kind,
+          mode: firstStage.mode,
+          accessPolicy: firstStage.accessPolicy,
+          submissionMode: firstStage.submissionMode,
+          endPolicy: firstStage.endPolicy,
+        } })
+        const problemMap = new Map<string, string>()
+        for (const item of firstStage.Problems) {
+          const copied = await prisma.trainingSessionStageProblem.create({ data: {
+            stageId: copiedStage.id,
+            problemId: item.problemId,
+            alias: item.alias,
+            orderIndex: item.orderIndex,
+            titleSnapshot: item.titleSnapshot,
+            statementsSnapshot: item.statementsSnapshot || undefined,
+          } })
+          problemMap.set(item.id, copied.id)
+        }
+        for (const plan of firstStage.Groups) {
+          const copiedPlan = await prisma.trainingSessionStageGroup.create({ data: {
+            stageId: copiedStage.id,
+            groupId: plan.groupId,
+            isDefault: plan.isDefault,
+            inheritsDefault: plan.inheritsDefault,
+            accessPolicy: plan.accessPolicy,
+            submissionMode: plan.submissionMode,
+          } })
+          for (const item of plan.ProblemPlans) await prisma.trainingSessionStageProblemPlan.create({ data: {
+            stageId: copiedStage.id,
+            stageProblemId: problemMap.get(item.stageProblemId)!,
+            stageGroupId: copiedPlan.id,
+            required: item.required,
+            orderIndex: item.orderIndex,
+          } })
+        }
+      }
+    }
+    return created
   }
 
   async function loaded(id: string) {
@@ -137,6 +189,101 @@ describe('Training Engine global Stage domain', () => {
     await publishTrainingSession(coach.user.id, id, 0)
     return loaded(id)
   }
+
+  it('rejects more than one initial stage from the product creation API', async () => {
+    await expect(createTrainingSession(coach.user.id, {
+      title: '非法预排训练',
+      teamId: team.id,
+      participantUserIds: [first.user.id],
+      settings: { participantTarget: 'custom_students' },
+      stages: [1, 2].map(index => ({
+        name: '阶段 ' + index,
+        kind: 'TRAINING',
+        mode: 'PRACTICE',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'ENABLED',
+        endPolicy: 'MANUAL',
+        problems: [{ problemId: problem.id, required: true }],
+      })),
+    })).rejects.toMatchObject<Partial<TrainingEngineError>>({ code: 'TRAINING_INITIAL_STAGE_LIMIT' })
+  })
+
+  it('prepares, replaces, hides, starts and deletes the unique next stage', async () => {
+    const created = await createSession(1, 1)
+    let session = await publishAndStart(created.id)
+    const currentStage = session.Stages[0]
+    const initialStudentWorkspace = await getTrainingWorkspace(first.user.id, session.id)
+    expect(initialStudentWorkspace.session.Stages[0].Problems[0].id).toBe(currentStage.Problems[0].id)
+    expect(initialStudentWorkspace.permissions[currentStage.Problems[0].id]).toMatchObject({ canView: true, canSeeMetadata: true })
+    const initialDashboard = await getCoachDashboard(coach.user.id, session.id)
+    expect(initialDashboard.session.currentStage).toMatchObject({ id: currentStage.id, Plans: expect.any(Array) })
+
+    let workspace = await putTrainingNextStage(coach.user.id, session.id, {
+      expectedRevision: session.statusRevision,
+      purpose: 'TEACHING',
+      stage: {
+        clientKey: 'next-teaching',
+        name: '统一讲解',
+        kind: 'TEACHING',
+        mode: 'GUIDED',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'DISABLED',
+        endPolicy: 'MANUAL',
+        problems: [],
+      },
+    })
+    expect(workspace.nextStage).toMatchObject({ name: '统一讲解', kind: 'TEACHING', submissionMode: 'DISABLED' })
+    expect(workspace.session.Stages.filter(stage => stage.lifecycle === 'PENDING')).toHaveLength(1)
+
+    const studentWorkspace = await getTrainingWorkspace(first.user.id, session.id)
+    expect(studentWorkspace).not.toHaveProperty('nextStage')
+    expect(studentWorkspace.session.Stages.some(stage => stage.lifecycle === 'PENDING')).toBe(false)
+
+    workspace = await putTrainingNextStage(coach.user.id, session.id, {
+      expectedRevision: workspace.session.statusRevision,
+      purpose: 'GUIDED',
+      stage: {
+        clientKey: 'next-guided',
+        name: '针对练习',
+        kind: 'TRAINING',
+        mode: 'GUIDED',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'ENABLED',
+        endPolicy: 'MANUAL',
+        problems: [{ clientKey: 'reused-problem', problemId: problem.id, required: true }],
+      },
+    })
+    expect(workspace.nextStage).toMatchObject({ name: '针对练习', mode: 'GUIDED' })
+    expect(workspace.session.Stages.filter(stage => stage.lifecycle === 'PENDING')).toHaveLength(1)
+
+    workspace = await executeStageTransition(coach.user.id, session.id, {
+      expectedRevision: workspace.session.statusRevision,
+      action: 'advance',
+      stageId: currentStage.id,
+      nextStageId: workspace.nextStage!.id,
+      outcome: 'completed',
+    })
+    expect(workspace.session.currentStage?.name).toBe('针对练习')
+    expect(workspace.nextStage).toBeNull()
+
+    workspace = await putTrainingNextStage(coach.user.id, session.id, {
+      expectedRevision: workspace.session.statusRevision,
+      purpose: 'REVIEW',
+      stage: {
+        clientKey: 'next-review',
+        name: '课堂复盘',
+        kind: 'REVIEW',
+        mode: 'REVIEW',
+        accessPolicy: 'ALL_AT_ONCE',
+        submissionMode: 'DISABLED',
+        endPolicy: 'MANUAL',
+        problems: [],
+      },
+    })
+    workspace = await deleteTrainingNextStage(coach.user.id, session.id, { expectedRevision: workspace.session.statusRevision })
+    expect(workspace.nextStage).toBeNull()
+    expect(workspace.session.Stages.filter(stage => stage.lifecycle === 'PENDING')).toHaveLength(0)
+  })
 
   it('creates stable participant Groups and exactly one default plan per Stage', async () => {
     const created = await createSession(2, 3)
@@ -288,40 +435,37 @@ describe('Training Engine global Stage domain', () => {
   it('shows the current Stage sequential lock reason without revealing future Stages', async () => {
     const secondProblem = await configuredProblem(coach.user.id)
     const users = [first.user.id, second.user.id]
-    const created = await createTrainingSession(coach.user.id, {
-      title: '顺序解锁训练',
-      teamId: team.id,
-      participantUserIds: users,
-      settings: { participantTarget: 'custom_students' },
-      grouping: { groups: [{ clientKey: 'all', name: '全体学员', participantIds: users }] },
-      stages: [
-        {
-          name: '当前阶段',
-          kind: 'TRAINING',
-          mode: 'PRACTICE',
-          accessPolicy: 'SEQUENTIAL',
-          submissionMode: 'ENABLED',
-          endPolicy: 'MANUAL',
-          problems: [
-            { problemId: problem.id, required: true },
-            {
-              problemId: secondProblem.id,
-              required: true,
-              unlockPolicy: { mode: 'ANY', conditions: [{ type: 'AC' }] },
-            },
-          ],
-        },
-        {
-          name: '未来阶段',
-          kind: 'TRAINING',
-          mode: 'PRACTICE',
-          accessPolicy: 'ALL_AT_ONCE',
-          submissionMode: 'ENABLED',
-          endPolicy: 'MANUAL',
-          problems: [{ problemId: problem.id, required: true }],
-        },
-      ],
+    const created = await createSession(1, 2)
+    const draft = await loaded(created.id)
+    const currentStage = draft.Stages[0]
+    await prisma.trainingSessionStage.update({
+      where: { id: currentStage.id },
+      data: { accessPolicy: 'SEQUENTIAL' },
     })
+    await prisma.trainingSessionStageGroup.updateMany({
+      where: { stageId: currentStage.id },
+      data: { accessPolicy: 'SEQUENTIAL' },
+    })
+    const addedProblem = await prisma.trainingSessionStageProblem.create({
+      data: {
+        stageId: currentStage.id,
+        problemId: secondProblem.id,
+        orderIndex: 1,
+        titleSnapshot: secondProblem.title,
+      },
+    })
+    for (const groupPlan of currentStage.Groups) {
+      await prisma.trainingSessionStageProblemPlan.create({
+        data: {
+          stageId: currentStage.id,
+          stageProblemId: addedProblem.id,
+          stageGroupId: groupPlan.id,
+          required: true,
+          orderIndex: 1,
+          unlockPolicy: { mode: 'ANY', conditions: [{ type: 'AC' }] },
+        },
+      })
+    }
     const session = await publishAndStart(created!.id)
     const currentProblems = session.Stages[0].Problems
     const futureProblem = session.Stages[1].Problems[0]
@@ -334,12 +478,8 @@ describe('Training Engine global Stage domain', () => {
       blockedByStageProblemId: currentProblems[0].id,
     })
     expect(workspace.session.Stages[0].Problems[1].Problem.title).not.toBe('未开放题目')
-    expect(workspace.permissions[futureProblem.id]).toMatchObject({
-      canView: false,
-      canSeeMetadata: false,
-      reason: 'FUTURE_STAGE',
-    })
-    expect(workspace.session.Stages[1].Problems[0].Problem.title).toBe('未开放题目')
+    expect(workspace.permissions).not.toHaveProperty(futureProblem.id)
+    expect(workspace.session.Stages.some(stage => stage.lifecycle === 'PENDING')).toBe(false)
   })
 
   it('hides exam results from learners until the session ends', async () => {
@@ -532,23 +672,14 @@ describe('Training Engine global Stage domain', () => {
   })
 
   it('advances and ends timed Stages through the scheduler', async () => {
-    const users = [first.user.id, second.user.id]
-    const created = await createTrainingSession(coach.user.id, {
-      title: '定时模拟测试',
-      teamId: team.id,
-      participantUserIds: users,
-      settings: { participantTarget: 'custom_students', preset: 'oi_exam', resultVisibility: 'AFTER_END' },
-      grouping: { groups: [{ clientKey: 'all', name: '全体学员', participantIds: users }] },
-      stages: [0, 1].map(index => ({
-        name: `测试阶段 ${index + 1}`,
-        kind: 'TRAINING',
-        mode: 'EXAM',
-        accessPolicy: 'ALL_AT_ONCE',
-        submissionMode: 'ENABLED',
-        endPolicy: 'TIME',
-        plannedDurationSeconds: 60,
-        problems: [{ problemId: problem.id, required: true }],
-      })),
+    const created = await createSession(1, 2, false, {
+      participantTarget: 'custom_students',
+      preset: 'oi_exam',
+      resultVisibility: 'AFTER_END',
+    })
+    await prisma.trainingSessionStage.updateMany({
+      where: { sessionId: created.id },
+      data: { mode: 'EXAM', endPolicy: 'TIME', plannedDurationSeconds: 60 },
     })
     let session = await publishAndStart(created!.id)
     const firstStageId = session.Stages[0].id
@@ -726,7 +857,7 @@ describe('Training Engine global Stage domain', () => {
   })
 
   it('saves and reapplies a full immutable training template', async () => {
-    const created = await createSession(2, 2)
+    const created = await createSession(2, 1)
     const source = await loaded(created!.id)
     const sourceProblem = source.Stages[0].Problems[0]
     await createTrainingHint(coach.user.id, source.id, {
@@ -744,7 +875,7 @@ describe('Training Engine global Stage domain', () => {
     expect(template).toMatchObject({
       name: '完整训练模板',
       source: 'personal',
-      problemCount: 2,
+      problemCount: 1,
     })
     expect(template.key).toMatch(/^database:/)
 
@@ -776,10 +907,10 @@ describe('Training Engine global Stage domain', () => {
   })
 
   it('clones only the reusable training definition into a new draft', async () => {
-    const created = await createSession(2, 2)
+    const created = await createSession(2, 1)
     const source = await loaded(created!.id)
     await createTrainingHint(coach.user.id, source.id, {
-      stageProblemId: source.Stages[1].Problems[0].id,
+      stageProblemId: source.Stages[0].Problems[0].id,
       level: 2,
       content: '第二阶段提示',
       openMode: 'ATTEMPT',
@@ -797,7 +928,7 @@ describe('Training Engine global Stage domain', () => {
     expect(copied).toMatchObject({ title: '训练副本', status: 'DRAFT', currentStageId: null })
     expect(copied.Participants).toHaveLength(0)
     expect(copied.Groups.map(group => group.name)).toEqual(source.Groups.map(group => group.name))
-    expect(copied.Stages.map(stage => stage.lifecycle)).toEqual(['PENDING', 'PENDING'])
+    expect(copied.Stages.map(stage => stage.lifecycle)).toEqual(['PENDING'])
     expect(copied.Stages.map(stage => stage.Problems.map(item => item.problemId)))
       .toEqual(source.Stages.map(stage => stage.Problems.map(item => item.problemId)))
     expect(copiedHints).toHaveLength(1)

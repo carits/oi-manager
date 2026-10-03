@@ -47,6 +47,11 @@ type Props = {
 const localDateTime = (date: Date) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 
+const defaultTrainingTimes = () => ({
+  start: localDateTime(new Date()),
+  due: localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)),
+})
+
 export function TrainingSetupDialog({
   isOpen,
   organizationId,
@@ -60,8 +65,9 @@ export function TrainingSetupDialog({
   const { user } = useAuth()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [scheduledStartAt, setScheduledStartAt] = useState(() => localDateTime(new Date()))
-  const [dueAt, setDueAt] = useState(() => localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)))
+  const [baselineTimes, setBaselineTimes] = useState(defaultTrainingTimes)
+  const [scheduledStartAt, setScheduledStartAt] = useState(baselineTimes.start)
+  const [dueAt, setDueAt] = useState(baselineTimes.due)
   const [selectedTeamId, setSelectedTeamId] = useState(fixedTeamId || teams[0]?.id || '')
   const [participantTarget, setParticipantTarget] = useState<ParticipantTarget>('team')
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
@@ -82,13 +88,14 @@ export function TrainingSetupDialog({
   const selectedTeamName = teams.find(team => team.id === targetTeamId)?.name || '当前团队'
   const requiredProblemCount = selectedProblems.filter(problem => problem.required).length
   const optionalProblemCount = selectedProblems.length - requiredProblemCount
-  const readyToCreate = Boolean(
-    title.trim()
-    && dueAt
+  const timeRangeValid = Boolean(scheduledStartAt && dueAt && new Date(dueAt).getTime() > new Date(scheduledStartAt).getTime())
+  const canContinueClassroomSetup = Boolean(title.trim() && scopeReady)
+  const canPublishDirectly = Boolean(
+    canContinueClassroomSetup
+    && timeRangeValid
     && selectedProblems.length
     && !problemEditorBlocked
     && requiredProblemCount > 0
-    && scopeReady
     && participantPreview?.participantCount
     && (participantTarget !== 'organization_students' || schoolWideConfirmed),
   )
@@ -96,8 +103,10 @@ export function TrainingSetupDialog({
   const reset = () => {
     setTitle('')
     setDescription('')
-    setScheduledStartAt(localDateTime(new Date()))
-    setDueAt(localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)))
+    const times = defaultTrainingTimes()
+    setBaselineTimes(times)
+    setScheduledStartAt(times.start)
+    setDueAt(times.due)
     setSelectedTeamId(fixedTeamId || teams[0]?.id || '')
     setParticipantTarget('team')
     setSelectedStudentIds([])
@@ -105,6 +114,7 @@ export function TrainingSetupDialog({
     setProblemEditorBlocked(false)
     setParticipantPreview(null)
     setSchoolWideConfirmed(false)
+    setSubmitting(undefined)
   }
 
   const close = () => {
@@ -146,7 +156,8 @@ export function TrainingSetupDialog({
   }, [isOpen, organizationId, participantTarget, scopeReady, selectedStudentIds, targetTeamId, toast, useTeamScope])
 
   const create = async (action: SubmitAction) => {
-    if (!readyToCreate || submitting) return
+    const allowed = action === 'classroom' ? canContinueClassroomSetup : canPublishDirectly
+    if (!allowed || submitting) return
     setSubmitting(action)
     const response = await createTrainingSession({
       title: title.trim(),
@@ -242,14 +253,14 @@ export function TrainingSetupDialog({
     isOpen={isOpen}
     onClose={close}
     title="布置训练"
-    description="把一组题目布置给学生；需要多阶段或分层流程时，再转为课堂训练。"
+    description="把一组题目布置给学生；课堂阶段会在运行中根据反馈逐步安排。"
     size="wide"
     loading={Boolean(submitting)}
-    dirty={Boolean(title || selectedProblems.length)}
+    dirty={Boolean(title || description || selectedProblems.length || selectedStudentIds.length || selectedTeamId !== (fixedTeamId || teams[0]?.id || '') || participantTarget !== 'team' || schoolWideConfirmed || scheduledStartAt !== baselineTimes.start || dueAt !== baselineTimes.due)}
     footer={<>
       <Button variant="secondary" onClick={close} disabled={Boolean(submitting)}>取消</Button>
-      <Button variant="outline" icon={<ArrowRight size={16} />} onClick={() => void create('classroom')} loading={submitting === 'classroom'} disabled={!readyToCreate || Boolean(submitting)}>转为课堂训练</Button>
-      <Button icon={<Send size={16} />} onClick={() => void create('publish')} loading={submitting === 'publish'} disabled={!readyToCreate || Boolean(submitting)}>发布训练</Button>
+      <Button variant="outline" icon={<ArrowRight size={16} />} onClick={() => void create('classroom')} loading={submitting === 'classroom'} disabled={!canContinueClassroomSetup || Boolean(submitting)}>继续课堂设置</Button>
+      <Button icon={<Send size={16} />} onClick={() => void create('publish')} loading={submitting === 'publish'} disabled={!canPublishDirectly || Boolean(submitting)}>发布训练</Button>
     </>}
   >
     <div className={styles.trainingSetupLayout}>
@@ -276,7 +287,7 @@ export function TrainingSetupDialog({
         </section>
 
         <section className={`${styles.setupSection} ${styles.problemSetupSection}`} aria-labelledby="training-setup-problems">
-          <div><h3 id="training-setup-problems">训练题目</h3><p>按题号添加题库中已存在的题目。</p></div>
+          <div><h3 id="training-setup-problems">训练题目</h3><p>这里选择的题目会成为第一个阶段；后续阶段根据课堂反馈逐步准备。</p></div>
           <div className={styles.stack}>
             <ProblemListEditor
               references={selectedProblems.map(problem => ({
@@ -305,7 +316,8 @@ export function TrainingSetupDialog({
         <section className={styles.setupSection} aria-labelledby="training-setup-rules">
           <div><h3 id="training-setup-rules">完成要求与时间</h3><p>学生需要完成全部必做题；选做题不影响完成状态。</p></div>
           <div className={styles.stack}>
-            {requiredProblemCount === 0 && selectedProblems.length > 0 && <p className={styles.rosterWarning} role="alert">至少保留一道必做题，才能发布训练。</p>}
+            {requiredProblemCount === 0 && selectedProblems.length > 0 && <p className={styles.rosterWarning} role="alert">至少保留一道必做题，才能直接发布训练。</p>}
+            {!timeRangeValid && <p className={styles.rosterWarning} role="alert">截止时间必须晚于开始时间。</p>}
             <div className={styles.compactGrid}>
               <label className={styles.field}>开始时间<Input type="datetime-local" value={scheduledStartAt} onChange={event => setScheduledStartAt(event.target.value)} /></label>
               <label className={styles.field}>截止时间<Input type="datetime-local" value={dueAt} min={scheduledStartAt || undefined} onChange={event => setDueAt(event.target.value)} /></label>
@@ -314,12 +326,12 @@ export function TrainingSetupDialog({
         </section>
       </div>
 
-      <aside className={styles.trainingSetupSummary} aria-label="发布摘要">
-        <div><strong>发布摘要</strong><p>确认后会直接发布给所选学生。</p></div>
+      <aside className={styles.trainingSetupSummary} aria-label="当前设置">
+        <div><strong>当前设置</strong><p>可直接发布，也可继续设置课堂阶段。</p></div>
         <dl>{summaryItems.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
         <div className={styles.message}>
-          <strong>需要更复杂的课堂流程？</strong>
-          <p>转为课堂训练后，可继续添加阶段、分组和提示，当前内容不会丢失。</p>
+          <strong>课堂阶段按反馈逐步安排</strong>
+          <p>继续课堂设置后，当前题目会作为第一个阶段；下一阶段在课堂运行时按学员情况准备。</p>
         </div>
       </aside>
     </div>
