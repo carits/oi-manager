@@ -920,12 +920,18 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           setRuntimeProblemTargetScore(100)
           setRuntimeProblemReason('')
         }}
-        onTeach={() => router.push(pathname + '/design?action=teaching')}
+        onFocusProblem={() => {
+          if (!selectedId) {
+            toast.error('请先选择要聚焦的题目')
+            document.getElementById('training-problem-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            return
+          }
+          void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' }, 'ALL', '')
+        }}
         onAdjustGroups={() => document.getElementById('training-participants')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-        onMessage={() => { setSelectedParticipantIds([]); setMessageOpen(true) }}
-        onEnd={() => {
+        onNext={() => {
           if (!currentStage) return
-          setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'completed' })
+          setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'completed' })
           setTransitionReason('')
         }}
       />
