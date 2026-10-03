@@ -189,7 +189,7 @@ Baekjoon | 28057 | 1 | AN
     expect(read('./index.ts')).toContain('ProblemListEditor')
     expect(read('./ui/ProblemReferenceLink.tsx')).toContain('problemReferenceHref(pathname, problem.id)')
     expect(read('../training-session/ui/TrainingSessionListPage.tsx')).toContain('<TrainingSetupDialog')
-    expect(read('../training-session/ui/TrainingProblemChain.tsx')).toContain('<ProblemReferenceLink problem={problem.Problem}')
+    expect(read('../training-session/ui/TrainingSessionWorkspace.tsx')).toContain('<ProblemReferenceLink problem={item}')
     expect(creationSources[3]).toContain('onReplace={replaceProblems}')
     expect(creationSources[3]).toContain('aliasLabel="别名"')
   })

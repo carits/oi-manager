@@ -45,6 +45,6 @@ describe('navigation route reachability', () => {
   it('provides a guarded return from training design to the same runtime', () => {
     const source = fs.readFileSync(new URL('../features/training-session/ui/TrainingSessionDesigner.tsx', import.meta.url), 'utf8')
     expect(source).toContain('requestNavigation(runtimePath)')
-    expect(source).toContain('返回运行工作台')
+    expect(source).toContain('返回课堂')
   })
 })

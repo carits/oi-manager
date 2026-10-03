@@ -45,12 +45,13 @@ import { trainingPermissionReasonLabel, trainingProgressStatusLabel, trainingSta
 import { csvCell, saveBlobDownload } from '@/lib/download'
 import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { arbitrateTrainingDraft, type TrainingDraftSnapshot } from '../model/trainingDraftArbitration'
-import {
-  TrainingAttentionPanel,
-  TrainingParticipantDrawer,
-  TrainingRuntimeHeader,
-  type TrainingDashboardParticipant,
-} from './TrainingRuntimePanels'
+import { ClassroomHeader } from './ClassroomHeader'
+import { CurrentActivity } from './CurrentActivity'
+import { ClassroomOverview } from './ClassroomOverview'
+import { ClassroomActions } from './ClassroomActions'
+import { NextStepPanel } from './NextStepPanel'
+import { StudentDrawer } from './StudentDrawer'
+import type { ClassroomParticipant } from './trainingClassroomTypes'
 import styles from './TrainingEngine.module.css'
 
 
@@ -74,7 +75,7 @@ type StrategyState = {
 }
 type V2RuntimeGroup = { id: string; name: string; orderIndex: number; status: string; Participants?: Array<{ id?: string; userId?: string }> }
 type Workspace = { nextStage?: Stage | null; legacyStageQueue?: boolean; session: { Groups: V2RuntimeGroup[]; settings?: { resultVisibility?: 'LIVE' | 'AFTER_END' | 'TEACHER_PUBLISHED'; resultsPublishedAt?: string | null }; currentStageId?: string | null; currentStage?: { id: string; name: string; orderIndex: number; lifecycle: string } | null; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentGroupId: string; requiredCount?: number; completedCount?: number; latestGroupChange?: { id: string; fromGroupName?: string | null; toGroupName: string; reason: string; appliedAt?: string | null } | null }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string; blockedByStageProblemId?: string }>; strategy: Record<string, StrategyState> }
-type Dashboard = { participants: TrainingDashboardParticipant[]; summary: { total: number; working: number; stuck: number; completed: number } }
+type Dashboard = { participants: ClassroomParticipant[]; summary: { total: number; working: number; stuck: number; completed: number } }
 type Roster = { revision: number; candidates: Array<{ userId: string; username: string; displayName: string; role: string; selected: boolean }> }
 type Hint = { id: string; level: number; title?: string; content?: string; opened: boolean; globallyOpenedAt?: string }
 type PeerProgress = { rankingMode: string; peerVisibility: string; entries: Array<{ rank?: number; user: { id: string; username: string }; completed: number; total: number; score?: number; attempts?: number; penaltyMinutes?: number; activeSeconds?: number }> }
@@ -519,7 +520,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setCommandBusy(true)
     const response = await transitionTrainingStage(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, action, stageId, ...extra })
     setCommandBusy(false)
-    if (!response.ok) { toast.error(response.error.userMessage || '阶段转换失败'); return false }
+    if (!response.ok) { toast.error(response.error.userMessage || '进入下一步失败'); return false }
     await load()
     return true
   }
@@ -529,7 +530,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setCommandBusy(true)
     const response = await extendTrainingStageTime(sessionId, stageId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, seconds: Math.round(extensionMinutes * 60), reason: extensionReason.trim() })
     setCommandBusy(false)
-    if (!response.ok) return toast.error(response.error.userMessage || '延长阶段失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '延长当前安排失败')
     setExtensionOpen(false); setExtensionMinutes(10); setExtensionReason('')
     await load()
   }
@@ -575,7 +576,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     })
     setRosterSaving(false)
     if (!response.ok) return toast.error(response.error.userMessage || '加入训练失败')
-    toast.success('学员已加入当前阶段；历史阶段处理方式已记录')
+    toast.success('学生已加入当前安排；历史记录处理方式已保存')
     setJoinOpen(false)
     await load()
   }
@@ -644,7 +645,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     })
     setCommandBusy(false)
     if (!response.ok) return toast.error(response.error.userMessage || '拆组失败')
-    toast.success(splitMode === 'next_stage' ? '新分组已建立，将在目标阶段开始时生效' : '新分组已建立，所有学员仍处于当前阶段')
+    toast.success(splitMode === 'next_stage' ? '新分组已建立，将在目标安排开始时生效' : '新分组已建立，所有学生仍处于当前安排')
     setSplitSourceGroupId(''); setSplitName(''); setSplitParticipantIds([]); setSplitReason(''); setSplitMode('immediate'); setSplitStageId('')
     await load()
   }
@@ -714,7 +715,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }
   const chooseNextAction = async (action: 'advance' | 'end_session') => {
     if (!transitionDialog) return
-    if (transitionDialog.outcome === 'ended_early' && !transitionReason.trim()) return toast.error('提前结束阶段需要填写原因')
+    if (transitionDialog.outcome === 'ended_early' && !transitionReason.trim()) return toast.error('提前结束需要填写原因')
     const ok = await transitionStage(action, transitionDialog.stageId, {
       outcome: transitionDialog.outcome || 'completed',
       ...(action === 'advance' && nextPendingStage ? { nextStageId: nextPendingStage.id } : {}),
@@ -727,8 +728,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setCommandBusy(true)
     const response = await deleteTrainingNextStage(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision })
     setCommandBusy(false)
-    if (!response.ok) return toast.error(response.error.userMessage || '无法丢弃下一阶段')
-    toast.success('已丢弃准备中的下一阶段')
+    if (!response.ok) return toast.error(response.error.userMessage || '无法丢弃已准备安排')
+    toast.success('已丢弃准备中的安排')
     setTransitionDialog(undefined)
     await load()
   }
@@ -755,7 +756,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const futureStages = pendingStages
   const groupTargetStage = groupChangeMode === 'next_stage' ? futureStages.find(stage => stage.id === groupChangeStageId) : currentStage
   const reportGroupName = (groupId?: string) => data.session.Groups.find(group => group.id === groupId)?.name || (groupId ? '未知分组' : '未分组')
-  const reportStageName = (stageId?: string | null) => report?.timeline.find(stage => stage.id === stageId)?.name || '未记录阶段'
+  const reportStageName = (stageId?: string | null) => report?.timeline.find(stage => stage.id === stageId)?.name || '未记录安排'
   const reportParticipantName = (participantId: string) => dashboard?.participants.find(item => item.id === participantId)?.user.username || '未知学员'
   const reportUserName = (userId?: string | null) => report?.participants.find(item => item.user.id === userId)?.user.username || '未知学员'
   const targetedCommandDisabled = commandBusy || ((commandTargetType === 'GROUP' || commandTargetType === 'USER') && !commandTargetId) || (commandTargetType === 'TEAM' && !data.session.teamId)
@@ -774,7 +775,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const currentProblemProgress = selectedId ? data.progress.find(item => item.stageProblemId === selectedId) : undefined
   const scoreGoals = problem?.scoreGoals?.map(goal => goal.score).sort((a, b) => a - b) || []
   const nextScoreGoal = activeStrategy?.nextScoreTarget ?? scoreGoals.find(score => score > (currentProblemProgress?.bestScore || 0))
-  const participantMetrics = (item: TrainingDashboardParticipant) => {
+  const participantMetrics = (item: ClassroomParticipant) => {
     const current = item.progress.find(progress => progress.stageProblemId === item.currentProblemId)
     return {
       current,
@@ -813,7 +814,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const selectedParticipantGroup = selectedParticipant?.currentGroupId ? data.session.Groups.find(group => group.id === selectedParticipant.currentGroupId) : undefined
   const currentStageIndex = currentStage ? data.session.Stages.findIndex(stage => stage.id === currentStage.id) : 0
   const offlineCount = dashboard?.participants.filter(item => !item.online).length || 0
-  const openGroupChange = (item: TrainingDashboardParticipant) => {
+  const openGroupChange = (item: ClassroomParticipant) => {
     setGroupChangeParticipantIds([item.id])
     setGroupChangeMode(currentStage ? 'immediate' : 'next_stage')
     setGroupChangeStageId(futureStages[0]?.id || '')
@@ -853,25 +854,22 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       : access?.canView
         ? trainingProgressStatusLabel(progress?.status || 'NOT_STARTED') + (progress?.bestScore != null ? ' · ' + progress.bestScore + ' 分' : '')
         : lockedLabel
-    return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? requirementLabel : '本阶段历史'} · {progressLabel}{data.manager ? ' · 使用当前训练数据' : ''}</small></span></Button>
+    return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? requirementLabel : '课堂记录'} · {progressLabel}{data.manager ? ' · 使用当前训练数据' : ''}</small></span></Button>
   }
   return <PageFrame width="workbench"><div className={styles.stack}>
-    <PageHeader
+    <ClassroomHeader
       title={data.session.title}
-      description={data.session.description || '训练工作台'}
-      actions={<div className={styles.actions}>
-        <StatusBadge variant={connectionState === 'connected' ? 'success' : 'warning'}>{connectionState === 'connected' ? '实时连接正常' : connectionState === 'connecting' ? '正在建立实时连接' : '实时连接中断，正在重连'}</StatusBadge>
-        {lastSyncedAt && <span className={styles.muted}>最后同步 {new Date(lastSyncedAt).toLocaleTimeString('zh-CN')}</span>}
-        <Button size="sm" variant="ghost" onClick={() => void load()}>手动刷新</Button>
-        <StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge>
-      </div>}
+      description={data.session.description}
+      status={status}
+      connectionState={connectionState}
+      lastSyncedAt={lastSyncedAt}
+      onRefresh={() => void load()}
     />
     {data.manager && <>
-      <TrainingRuntimeHeader
+      <CurrentActivity
         status={status}
-        stageName={currentStage?.name}
-        stageIndex={currentStageIndex}
-        stageCount={data.session.Stages.length}
+        name={currentStage?.name}
+        problemCount={currentStage?.Problems.length || 0}
         activeElapsedSeconds={currentStage?.activeElapsedSeconds || 0}
         runningSince={currentStage?.runningSince}
         plannedDurationSeconds={currentStageLimit}
@@ -879,54 +877,65 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         total={dashboard?.summary.total || 0}
         stuck={dashboard?.summary.stuck || 0}
         offline={offlineCount}
-        hasNextStage={Boolean(nextPendingStage)}
         busy={commandBusy}
         onStart={() => { if (nextPendingStage) void transitionStage('start', nextPendingStage.id) }}
         onPause={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}
         onResume={() => void command('RESUME_SESSION', {}, 'ALL', '')}
-        onAdvance={() => {
+        onNext={() => {
           if (!currentStage) return
           setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'completed' })
           setTransitionReason('')
         }}
       />
-      <Section title="下一步" description="先观察当前课堂，再只准备紧接着的一个阶段。" actions={<Button variant="outline" onClick={() => router.push(pathname + '/design')}>{nextPendingStage ? '修改已准备阶段' : '准备下一阶段'}</Button>}>
-        {data.legacyStageQueue ? <div className={styles.message} role="status"><strong>旧版多阶段训练</strong><p>未来阶段会继续按原顺序运行；队列收敛为一个前不能继续扩展。</p></div> : nextPendingStage ? <div className={styles.timelineItem}><strong>{nextPendingStage.name}</strong><span>{trainingStageKindLabel(nextPendingStage.kind)} · {nextPendingStage.Problems.length} 道题</span></div> : <p className={styles.muted}>尚未准备下一阶段。可以等看到学员完成情况后再决定。</p>}
-      </Section>
-      <div className={styles.runtimeOverviewGrid}>
-        <TrainingAttentionPanel
-          participants={attentionParticipants}
-          problemNames={problemNames}
-          onOpen={item => setSelectedParticipantId(item.id)}
-          onOpenAll={() => document.getElementById('training-participants')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-        />
-        <Section title="当前分组" description="所有分组共享同一个阶段时间轴；分组只决定本阶段适用的题目与规则。">
-          <div className={styles.runtimeGroupList}>{data.session.Groups.filter(group => group.status === 'active').map(group => {
-            const groupParticipants = dashboard?.participants.filter(item => item.currentGroupId === group.id) || []
-            const groupCompleted = groupParticipants.filter(item => item.completed).length
-            const groupAttention = groupParticipants.filter(item => !item.online || item.progress.some(progress => progress.status === 'STUCK')).length
-            const plan = currentStage?.Plans.find(item => item.groupId === group.id) || currentStage?.Plans.find(item => item.isDefault)
-            return <article className={styles.runtimeGroupCard} key={group.id}>
-              <div><strong>{group.name}</strong><StatusBadge variant={currentStage ? 'success' : 'neutral'}>{currentStage ? '跟随当前阶段' : '等待开始'}</StatusBadge></div>
-              <p>{currentStage?.name || '尚未开始'} · {plan?.name || '默认计划'}</p>
-              <span>{groupCompleted} / {groupParticipants.length} 完成{groupAttention ? ' · ' + groupAttention + ' 人需要关注' : ''}</span>
-              {!['ENDED', 'ARCHIVED'].includes(status) && <div className={styles.actions}>
-                {groupParticipants.length > 1 && <Button size="sm" variant="outline" onClick={() => {
-                  setSplitSourceGroupId(group.id)
-                  setSplitName(group.name + ' · 新组')
-                  setSplitParticipantIds([])
-                  setSplitReason('')
-                }}>拆组</Button>}
-                {data.session.Groups.filter(item => item.status === 'active' && item.id !== group.id).length > 0 && <Button size="sm" variant="ghost" onClick={() => {
-                  setMergeSourceGroupId(group.id)
-                  setMergeTargetGroupId('')
-                  setMergeReason('')
-                }}>合并到…</Button>}
-              </div>}
-            </article>
-          })}</div>
-        </Section>
-      </div>
+      <ClassroomOverview
+        participants={dashboard?.participants || []}
+        attention={attentionParticipants}
+        problemNames={problemNames}
+        groups={data.session.Groups}
+        current={currentStage}
+        canManage={!['ENDED', 'ARCHIVED'].includes(status)}
+        onOpenParticipant={item => setSelectedParticipantId(item.id)}
+        onOpenAll={() => document.getElementById('training-participants')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        onSplit={group => {
+          setSplitSourceGroupId(group.id)
+          setSplitName(group.name + ' · 新组')
+          setSplitParticipantIds([])
+          setSplitReason('')
+        }}
+        onMerge={group => {
+          setMergeSourceGroupId(group.id)
+          setMergeTargetGroupId('')
+          setMergeReason('')
+        }}
+      />
+      <ClassroomActions
+        running={['RUNNING', 'PAUSED'].includes(status) && Boolean(currentStage)}
+        busy={commandBusy}
+        onAdjustProblems={() => {
+          setRuntimeProblemOpen(true)
+          setRuntimeProblems([])
+          setRuntimeProblemTargetType('ALL')
+          setRuntimeProblemTargetId('')
+          setRuntimeProblemRequired(true)
+          setRuntimeProblemTargetScore(100)
+          setRuntimeProblemReason('')
+        }}
+        onTeach={() => router.push(pathname + '/design?action=teaching')}
+        onAdjustGroups={() => document.getElementById('training-participants')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        onMessage={() => { setSelectedParticipantIds([]); setMessageOpen(true) }}
+        onEnd={() => {
+          if (!currentStage) return
+          setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'completed' })
+          setTransitionReason('')
+        }}
+      />
+      <NextStepPanel
+        prepared={nextPendingStage?.name}
+        preparedKind={nextPendingStage ? trainingStageKindLabel(nextPendingStage.kind) : undefined}
+        problemCount={nextPendingStage?.Problems.length}
+        legacyQueue={Boolean(data.legacyStageQueue)}
+        onPrepare={() => router.push(pathname + '/design')}
+      />
       <section className={styles.classroomControlBar} aria-label="课堂控制">
         <details className={styles.controlDisclosure}>
           <summary>课堂工具</summary>
@@ -939,7 +948,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
             <div className={styles.actions}>
               {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
               {status === 'RUNNING' && <><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>暂停提交（可继续编辑）</Button><Button variant="outline" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>暂停提交与编辑</Button></>}
-              {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长阶段</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setRuntimeProblemOpen(true); setRuntimeProblems([]); setRuntimeProblemTargetType('ALL'); setRuntimeProblemTargetId(''); setRuntimeProblemRequired(true); setRuntimeProblemTargetScore(100); setRuntimeProblemReason('') }}>追加训练题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => { setSelectedParticipantIds([]); setMessageOpen(true) }}>发送消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
+              {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setExtensionOpen(true); setExtensionMinutes(10); setExtensionReason('') }}>延长当前安排</Button><Button variant="outline" disabled={commandBusy} onClick={() => { setRuntimeProblemOpen(true); setRuntimeProblems([]); setRuntimeProblemTargetType('ALL'); setRuntimeProblemTargetId(''); setRuntimeProblemRequired(true); setRuntimeProblemTargetScore(100); setRuntimeProblemReason('') }}>追加训练题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => { setSelectedParticipantIds([]); setMessageOpen(true) }}>发送消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
               {resultVisibility === 'TEACHER_PUBLISHED' && !resultsPublished && ['RUNNING', 'PAUSED', 'ENDED'].includes(status) && <Button disabled={commandBusy} onClick={() => void command('PUBLISH_RESULTS', {}, 'ALL', '')}>公布测试成绩</Button>}
               {resultVisibility === 'TEACHER_PUBLISHED' && resultsPublished && <StatusBadge variant="success">成绩已公布</StatusBadge>}
             </div>
@@ -948,8 +957,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <details className={styles.controlDisclosure}>
           <summary>课堂管理</summary>
           <div className={styles.actions}>
-            {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
-            {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(pathname + '/design')}>准备下一阶段</Button>}
+            {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '完善第一个安排' : '调整已准备安排'}</Button>}
+
             {['DRAFT', 'SCHEDULED'].includes(status)
               ? <Button variant="secondary" onClick={() => void openRoster()}>管理发布名单</Button>
               : ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => void openRuntimeJoin()}>加入学员</Button>}
@@ -960,16 +969,16 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {['RUNNING', 'PAUSED'].includes(status) && currentStage && <details className={`${styles.controlDisclosure} ${styles.dangerDisclosure}`}>
           <summary>更多操作</summary>
           <div className={styles.actions}>
-            <Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前阶段</Button>
-            {nextPendingStage && <Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: nextPendingStage.id }); setTransitionReason('') }}>跳过未来阶段</Button>}
-            <Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束整场训练</Button>
+            <Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: nextPendingStage ? 'advance' : 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>提前结束当前安排</Button>
+            {nextPendingStage && <Button variant="outline" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: nextPendingStage.id }); setTransitionReason('') }}>跳过已准备安排</Button>}
+            <Button variant="danger" disabled={commandBusy} onClick={() => { setTransitionDialog({ action: 'end_session', stageId: currentStage.id, outcome: 'ended_early' }); setTransitionReason('') }}>结束训练</Button>
           </div>
         </details>}
       </section>
     </>}
     {!data.manager && currentStage && <section className={styles.studentMission} aria-label="我的当前训练目标">
       <div className={styles.studentMissionHeader}>
-        <div><span>{examActive ? examTitle : '阶段 ' + (currentStageIndex + 1) + ' / ' + data.session.Stages.length}</span><h2>{currentStage.name}</h2></div>
+        <div><span>{examActive ? examTitle : '当前安排'}</span><h2>{currentStage.name}</h2></div>
         <StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{trainingStatusLabel(status)}</StatusBadge>
       </div>
       <div className={styles.studentMissionMetrics}>
@@ -993,15 +1002,24 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </div>}
     </section>}
     <div className={styles.workspace}>
-      <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}>
-        <div><strong>{stage.name}</strong> {data.manager && <StatusBadge variant={stage.id === activeStageId ? 'success' : 'neutral'}>{trainingStageKindLabel(stage.kind)} · {trainingStageStatusLabel(stage.lifecycle)}</StatusBadge>}</div>
-        {stage.endedAt && <small>{Math.floor(stage.activeElapsedSeconds / 60)} 分钟{stage.endReason ? ' · ' + trainingStageEndReasonLabel(stage.endReason) : ''}</small>}
-        {data.manager && stage.lifecycle === 'PENDING' && ['RUNNING', 'PAUSED'].includes(status) && <Button size="sm" variant="text" onClick={() => { setTransitionDialog({ action: 'skip_pending', stageId: stage.id }); setTransitionReason('') }}>跳过此阶段</Button>}
-        {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).some(item => item.required !== false) && <small className={styles.problemGroupLabel}>必做题</small>}
-        {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).filter(item => item.required !== false).map(item => renderRailProblem(stage, item, '当前必做'))}
-        {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).some(item => item.required === false) && <small className={styles.problemGroupLabel}>选做题</small>}
-        {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).filter(item => item.required === false).map(item => renderRailProblem(stage, item, '当前选做'))}
-      </section>)}</aside>
+      <aside className={styles.rail}>
+        {currentStage && <section className={styles.stage}>
+          <div><strong>当前安排</strong> {data.manager && <StatusBadge variant="success">正在训练</StatusBadge>}</div>
+          <small>{currentStage.name}{currentStage.activeElapsedSeconds ? ' · ' + Math.floor(currentStage.activeElapsedSeconds / 60) + ' 分钟' : ''}</small>
+          {currentStage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).some(item => item.required !== false) && <small className={styles.problemGroupLabel}>必做题</small>}
+          {currentStage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).filter(item => item.required !== false).map(item => renderRailProblem(currentStage, item, '当前必做'))}
+          {currentStage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).some(item => item.required === false) && <small className={styles.problemGroupLabel}>选做题</small>}
+          {currentStage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).filter(item => item.required === false).map(item => renderRailProblem(currentStage, item, '当前选做'))}
+        </section>}
+        {data.manager && data.session.Stages.some(item => item.lifecycle === 'ENDED' || item.lifecycle === 'SKIPPED') && <details className={styles.controlDisclosure}>
+          <summary>课堂记录</summary>
+          {data.session.Stages.filter(item => item.lifecycle === 'ENDED' || item.lifecycle === 'SKIPPED').map(item => <section className={styles.stage} key={item.id}>
+            <strong>{item.name}</strong>
+            <small>{Math.floor(item.activeElapsedSeconds / 60)} 分钟{item.endReason ? ' · ' + trainingStageEndReasonLabel(item.endReason) : ''}</small>
+            {item.Problems.map(problem => renderRailProblem(item, problem, '历史题目'))}
+          </section>)}
+        </details>}
+      </aside>
       <main id="training-problem-workspace" className={styles.stack}>{problem ? <>
         <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${ojPlatformDisplayName(problem.Problem.platform)} · 提交时使用当前可用的训练数据评测` : '提交时使用当前训练数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的题面内容。</p>}</Section>
         <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。">
@@ -1034,10 +1052,10 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
               : activeStrategy.timeAction === 'LOCK_SUBMISSION'
                 ? '已达到本题硬性时限，代码与历史进度保留，但不能继续提交。'
                 : '已达到强制切题阈值，请先切换到其他开放题目。'}
-        ><p className={styles.muted}>时间策略只改变 Runtime 权限与提示，不会修改阶段计划时长或删除已有进度。</p></Section>}
+        ><p className={styles.muted}>时间规则只影响当前训练权限与提示，不会修改原计划或删除已有进度。</p></Section>}
         {data.session.sessionType === 'ACM' && status === 'RUNNING' && activeStrategy && (activeStrategy.decisionDue || activeStrategy.switchRecommended || activeStrategy.switchRequired) && <Section title="策略检查" description={activeStrategy.switchRequired ? '当前策略要求切题；记录切题决定后选择其他开放题目。' : activeStrategy.switchRecommended ? '当前题已持续较久，建议重新评估是否切题。' : '到了本轮策略复盘时间，请记录你的决定。'}><div className={styles.actions}><Button variant="secondary" disabled={activeStrategy.switchRequired} onClick={() => void recordStrategy('CONTINUE')}>继续当前题</Button><Button onClick={() => void recordStrategy('SWITCH')}>决定切题</Button></div></Section>}
         <Section title="分级提示" description="提示支持教练手动、训练时间、提交次数或分数条件开放；使用情况会进入训练报告。" actions={data.manager ? <Button variant="secondary" onClick={() => setHintOpen(true)}>新增提示</Button> : undefined}><div className={styles.actions}>{hints.length ? hints.map(hint => data.manager ? <span className={styles.actions} key={hint.id}><Button variant={hint.globallyOpenedAt ? 'secondary' : 'outline'} disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('OPEN_HINT', { hintId: hint.id })}>{hint.level} 级 · {hint.title || '提示'} · 开放</Button><Button variant="ghost" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('CLOSE_HINT', { hintId: hint.id })}>关闭</Button></span> : <Button key={hint.id} variant="outline" onClick={async () => { const response = await openTrainingHint(sessionId, hint.id); if (response.ok && response.data) setOpenedHint(response.data as Hint); else toast.error(response.ok ? '提示尚未开放' : response.error.userMessage) }}>{hint.opened ? '再次查看' : '打开'} {hint.level} 级提示</Button>) : <p className={styles.muted}>暂无已开放提示。</p>}</div></Section>
-      </> : <Section title="请选择训练题目"><p className={styles.muted}>题目可能尚未按当前阶段开放。</p></Section>}</main>
+      </> : <Section title="请选择训练题目"><p className={styles.muted}>题目可能尚未在当前安排中开放。</p></Section>}</main>
       {data.manager && <aside id="training-participants" className={`${styles.stack} ${styles.coach}`}>
         <Section title="全部学员" description="筛选后点击学员查看详情和课堂干预操作。">
           <div className={styles.stack}>
@@ -1099,9 +1117,9 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
 
     </div>
     {!data.manager && peerProgress && peerProgress.entries.length > 0 && <Section title="同学训练进度" description={`可见内容：${visibilityLabel[peerProgress.peerVisibility] || '可见范围待确认'} · 排列方式：${rankingLabel[peerProgress.rankingMode] || '排列方式待确认'}`}><div className={styles.peerGrid}>{peerProgress.entries.map(item => <article className={styles.peerCard} key={item.user.id}>{item.rank && <span>#{item.rank}</span>}<strong>{item.user.username}</strong><span>完成 {item.completed}/{item.total}</span>{item.score !== undefined && <span>{item.score} 分</span>}{item.penaltyMinutes !== undefined && <span>罚时 {item.penaltyMinutes} 分钟</span>}{item.attempts !== undefined && <span>{item.attempts} 次提交</span>}</article>)}</div></Section>}
-    <TrainingParticipantDrawer
+    <StudentDrawer
       participant={selectedParticipant}
-      stageName={selectedParticipantStage?.name}
+      arrangementName={selectedParticipantStage?.name}
       groupName={selectedParticipantGroup?.name}
       problemName={selectedParticipant?.currentProblemId ? problemNames[selectedParticipant.currentProblemId] : undefined}
       busy={commandBusy}
@@ -1148,7 +1166,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       isOpen={joinOpen}
       onClose={() => setJoinOpen(false)}
       title="中途加入训练"
-      description="运行中的加入是课堂事件，不会改写发布前名单；加入后从当前全局阶段开始。"
+      description="运行中的加入会写入课堂记录，不会改写发布前名单；加入后从当前安排开始。"
       onSubmit={() => void submitRuntimeJoin()}
       submitText="确认加入"
       loading={rosterSaving}
@@ -1157,7 +1175,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       <div className={styles.stack}>
         <label className={styles.field}>学员<Select value={joinUserId} onChange={event => setJoinUserId(event.target.value)}><option value="">请选择尚未参加的学员</option>{roster?.candidates.filter(item => !item.selected).map(item => <option key={item.userId} value={item.userId}>{item.displayName}（{item.username}）</option>)}</Select></label>
         <label className={styles.field}>加入分组<Select value={joinGroupId} onChange={event => setJoinGroupId(event.target.value)}>{data.session.Groups.filter(group => group.status === 'active').map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>
-        <label className={styles.field}>历史阶段处理<Select value={joinHistoryMode} onChange={event => setJoinHistoryMode(event.target.value as 'absent' | 'makeup')}><option value="absent">标记为未参加，不要求补做</option><option value="makeup">保留补做要求记录</option></Select></label>
+        <label className={styles.field}>此前课堂记录<Select value={joinHistoryMode} onChange={event => setJoinHistoryMode(event.target.value as 'absent' | 'makeup')}><option value="absent">标记为未参加，不要求补做</option><option value="makeup">保留补做要求记录</option></Select></label>
         <label className={styles.field}>加入原因<Textarea rows={4} maxLength={2000} value={joinReason} onChange={event => setJoinReason(event.target.value)} /></label>
       </div>
     </FormDialog>
@@ -1176,12 +1194,12 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <label className={styles.field}>退出原因<Textarea rows={5} maxLength={2000} value={leaveReason} onChange={event => setLeaveReason(event.target.value)} /></label>
       </div>
     </FormDialog>
-    <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理训练学员" description="这里决定谁参加训练；不同阶段的分组方案在训练设计中配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${organizationRoleLabel(item.role)}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
+    <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理训练学员" description="这里决定谁参加训练；当前分组可以在课堂中继续调整。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${organizationRoleLabel(item.role)}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
     <FormDialog
       isOpen={Boolean(splitSourceGroupId)}
       onClose={() => { setSplitSourceGroupId(''); setSplitName(''); setSplitParticipantIds([]); setSplitReason(''); setSplitMode('immediate'); setSplitStageId('') }}
       title="拆分训练组"
-      description="从当前分组选择部分学员建立新组。当前阶段不会改变，既有草稿、提交和进度全部保留。"
+      description="从当前分组选择部分学生建立新组。当前安排不会改变，既有草稿、提交和进度全部保留。"
       onSubmit={() => void submitSplitGroup()}
       submitText="确认拆组"
       loading={commandBusy}
@@ -1204,8 +1222,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           </div>
         </fieldset>
         <p className={styles.muted}>已选择 {splitParticipantIds.length} 人；来源组必须至少保留 1 人。</p>
-        <label className={styles.field}>生效时间<Select value={splitMode} onChange={event => { setSplitMode(event.target.value as 'immediate' | 'next_stage'); setSplitStageId('') }}><option value="immediate">立即生效</option><option value="next_stage">下一阶段生效</option></Select></label>
-        {splitMode === 'next_stage' && <label className={styles.field}>目标阶段<Select value={splitStageId} onChange={event => setSplitStageId(event.target.value)}><option value="">请选择尚未开始的阶段</option>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}
+        <label className={styles.field}>生效时间<Select value={splitMode} onChange={event => { setSplitMode(event.target.value as 'immediate' | 'next_stage'); setSplitStageId('') }}><option value="immediate">立即生效</option><option value="next_stage">下一步生效</option></Select></label>
+        {splitMode === 'next_stage' && <label className={styles.field}>目标安排<Select value={splitStageId} onChange={event => setSplitStageId(event.target.value)}><option value="">请选择尚未开始的安排</option>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}
         <label className={styles.field}>拆组原因<Textarea rows={4} maxLength={2000} value={splitReason} onChange={event => setSplitReason(event.target.value)} /></label>
       </div>
     </FormDialog>
@@ -1229,7 +1247,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       isOpen={groupChangeParticipantIds.length > 0}
       onClose={() => setGroupChangeParticipantIds([])}
       title="调整训练分组"
-      description="可立即调整当前要求，也可预设下一阶段；既有草稿、提交和历史进度永不删除。"
+      description="可立即调整当前要求，也可预设下一步；既有草稿、提交和历史进度不会删除。"
       onSubmit={() => void submitGroupChange()}
       submitText="确认换组"
       loading={commandBusy}
@@ -1237,8 +1255,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     >
       <div className={styles.stack}>
         <p>学员：<strong>{groupChangeParticipantIds.length === 1 ? dashboard?.participants.find(item => item.id === groupChangeParticipantIds[0])?.user.username : '已选择 ' + groupChangeParticipantIds.length + ' 人'}</strong></p>
-        <label className={styles.field}>生效方式<Select value={groupChangeMode} onChange={event => { const mode = event.target.value as 'immediate' | 'next_stage'; setGroupChangeMode(mode); setGroupChangeTarget(''); if (mode === 'next_stage') setGroupChangeStageId(futureStages[0]?.id || '') }}><option value="immediate" disabled={!currentStage}>立即应用到当前阶段</option><option value="next_stage" disabled={!futureStages.length}>预设下一阶段</option></Select></label>
-        {groupChangeMode === 'next_stage' && <label className={styles.field}>目标阶段<Select value={groupChangeStageId} onChange={event => { setGroupChangeStageId(event.target.value); setGroupChangeTarget('') }}>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}
+        <label className={styles.field}>生效方式<Select value={groupChangeMode} onChange={event => { const mode = event.target.value as 'immediate' | 'next_stage'; setGroupChangeMode(mode); setGroupChangeTarget(''); if (mode === 'next_stage') setGroupChangeStageId(futureStages[0]?.id || '') }}><option value="immediate" disabled={!currentStage}>立即应用到当前安排</option><option value="next_stage" disabled={!futureStages.length}>预设下一步</option></Select></label>
+        {groupChangeMode === 'next_stage' && <label className={styles.field}>目标安排<Select value={groupChangeStageId} onChange={event => { setGroupChangeStageId(event.target.value); setGroupChangeTarget('') }}>{futureStages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</Select></label>}
         <label className={styles.field}>目标分组<Select value={groupChangeTarget} onChange={event => setGroupChangeTarget(event.target.value)}><option value="">请选择</option>{data.session.Groups.filter(group => group.status === 'active').map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>
         <label className={styles.field}>调整原因<Textarea rows={4} maxLength={2000} value={groupChangeReason} onChange={event => setGroupChangeReason(event.target.value)} /></label>
       </div>
@@ -1246,26 +1264,60 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     <FormDialog
       isOpen={Boolean(transitionDialog)}
       onClose={() => { setTransitionDialog(undefined); setTransitionReason('') }}
-      title={transitionDialog?.action === 'skip_pending' ? '跳过未来阶段' : '接下来做什么？'}
-      description={transitionDialog?.action === 'skip_pending' ? '跳过后会保留历史记录。' : '先确认当前阶段结果，再决定紧接着的一步。'}
+      title={transitionDialog?.action === 'skip_pending' ? '跳过已准备安排' : '下一步'}
+      description={transitionDialog?.action === 'skip_pending' ? '跳过后仍会保留课堂记录。' : '先看当前课堂，再决定接下来怎么做。'}
       loading={commandBusy}
       dirty={Boolean(transitionReason)}
       size="lg"
-      footer={<><Button variant="secondary" onClick={() => { setTransitionDialog(undefined); setTransitionReason('') }} disabled={commandBusy}>继续当前阶段</Button><Button variant="danger" onClick={() => void chooseNextAction('end_session')} disabled={commandBusy}>结束训练</Button></>}
+      footer={transitionDialog?.action === 'skip_pending'
+        ? <><Button variant="secondary" onClick={() => { setTransitionDialog(undefined); setTransitionReason('') }} disabled={commandBusy}>取消</Button><Button variant="danger" onClick={() => void submitTransition()} disabled={commandBusy || !transitionReason.trim()}>确认跳过</Button></>
+        : <Button variant="secondary" onClick={() => { setTransitionDialog(undefined); setTransitionReason('') }} disabled={commandBusy}>关闭</Button>}
     >
       <div className={styles.stack}>
-        {transitionStageRecord && <div className={styles.card}><strong>{transitionStageRecord.name}</strong><div className={styles.summary}><div className={styles.metric}><strong>{formatDuration(transitionElapsedSeconds)}</strong>实际用时</div>{transitionIsCurrent && <div className={styles.metric}><strong>{transitionCompletionPercent}%</strong>学员完成率</div>}</div></div>}
-        <label className={styles.field}>阶段结果<Select value={transitionDialog?.outcome || 'completed'} onChange={event => setTransitionDialog(current => current ? { ...current, outcome: event.target.value as 'completed' | 'ended_early' } : current)}><option value="completed">正常完成</option><option value="ended_early">提前结束</option></Select></label>
-        <label className={styles.field}>{transitionDialog?.outcome === 'ended_early' ? '原因（必填）' : '备注（可选）'}<Textarea rows={3} maxLength={2000} value={transitionReason} onChange={event => setTransitionReason(event.target.value)} /></label>
-        {data.legacyStageQueue && <div className={styles.message}><strong>旧版阶段队列</strong><p>只能按既有顺序进入下一个阶段，不能继续扩展未来阶段。</p></div>}
-        {nextPendingStage ? <div className={styles.card}><strong>已准备：{nextPendingStage.name}</strong><p className={styles.muted}>{trainingStageKindLabel(nextPendingStage.kind)} · {nextPendingStage.Problems.length} 道题</p><div className={styles.actions}><Button onClick={() => void chooseNextAction('advance')} disabled={commandBusy}>使用已准备阶段</Button>{!data.legacyStageQueue && <><Button variant="outline" onClick={() => { setTransitionDialog(undefined); router.push(pathname + '/design') }}>修改已准备阶段</Button><Button variant="ghost" onClick={() => void discardPreparedStage()} disabled={commandBusy}>丢弃</Button></>}</div></div> : <div className={styles.card}><strong>还没有下一阶段</strong><p className={styles.muted}>可以临时准备练习、引导练习、统一讲解或复盘，也可以直接结束训练。</p><Button onClick={() => { setTransitionDialog(undefined); router.push(pathname + '/design') }}>准备下一阶段</Button></div>}
+        {transitionStageRecord && <div className={styles.card}>
+          <strong>当前安排：{transitionStageRecord.name}</strong>
+          <div className={styles.summary}>
+            <div className={styles.metric}><strong>{formatDuration(transitionElapsedSeconds)}</strong>已进行</div>
+            {transitionIsCurrent && <div className={styles.metric}><strong>{dashboard?.summary.completed || 0} / {dashboard?.summary.total || 0}</strong>学生完成</div>}
+            {transitionIsCurrent && <div className={styles.metric}><strong>{dashboard?.summary.stuck || 0}</strong>可能卡题</div>}
+          </div>
+        </div>}
+        {transitionDialog?.action === 'skip_pending'
+          ? <label className={styles.field}>跳过原因（必填）<Textarea rows={3} maxLength={2000} value={transitionReason} onChange={event => setTransitionReason(event.target.value)} /></label>
+          : <>
+            <div className={styles.nextStepChoices}>
+              <Button variant="outline" onClick={() => { setTransitionDialog(undefined); setTransitionReason('') }}>继续当前安排</Button>
+              <Button variant="outline" onClick={() => {
+                setTransitionDialog(undefined)
+                setRuntimeProblemOpen(true)
+                setRuntimeProblems([])
+                setRuntimeProblemTargetType('ALL')
+                setRuntimeProblemTargetId('')
+                setRuntimeProblemRequired(true)
+                setRuntimeProblemTargetScore(100)
+                setRuntimeProblemReason('')
+              }}>调整题目后继续</Button>
+              {nextPendingStage
+                ? <Button onClick={() => void chooseNextAction('advance')} disabled={commandBusy}>进入已准备安排</Button>
+                : <Button onClick={() => { setTransitionDialog(undefined); router.push(pathname + '/design?action=practice') }}>准备新的练习</Button>}
+              <Button variant="outline" onClick={() => { setTransitionDialog(undefined); router.push(pathname + '/design?action=teaching') }}>统一讲解</Button>
+              <Button variant="outline" onClick={() => { setTransitionDialog(undefined); router.push(pathname + '/design?action=review') }}>复盘总结</Button>
+              <Button variant="danger" onClick={() => void chooseNextAction('end_session')} disabled={commandBusy}>结束训练</Button>
+            </div>
+            {nextPendingStage && !data.legacyStageQueue && <div className={styles.actions}>
+              <Button variant="ghost" onClick={() => { setTransitionDialog(undefined); router.push(pathname + '/design') }}>修改已准备安排</Button>
+              <Button variant="ghost" onClick={() => void discardPreparedStage()} disabled={commandBusy}>丢弃已准备安排</Button>
+            </div>}
+            <label className={styles.field}>{transitionDialog?.outcome === 'ended_early' ? '提前结束原因（必填）' : '课堂记录（可选）'}<Textarea rows={3} maxLength={2000} value={transitionReason} onChange={event => setTransitionReason(event.target.value)} /></label>
+            {data.legacyStageQueue && <div className={styles.message}><strong>旧版预设安排</strong><p>只能按原顺序进入下一个安排，不能继续新增。</p></div>}
+          </>}
       </div>
     </FormDialog>
     <FormDialog
       isOpen={runtimeProblemOpen}
       onClose={() => setRuntimeProblemOpen(false)}
-      title="追加训练题"
-      description="临时题只影响当前阶段和指定对象，不会修改原有训练安排，并会写入训练报告。"
+      title="调整题目"
+      description="临时加入的题目只影响当前安排和指定对象，并会写入课堂记录。"
       onSubmit={() => void submitRuntimeProblems()}
       submitText="确认追加"
       loading={commandBusy}
@@ -1288,14 +1340,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <label className={styles.field}>加题原因<Textarea rows={4} maxLength={2000} value={runtimeProblemReason} onChange={event => setRuntimeProblemReason(event.target.value)} /></label>
       </div>
     </FormDialog>
-    <FormDialog isOpen={extensionOpen} onClose={() => setExtensionOpen(false)} title="延长当前阶段" description="延时作为运行记录追加，不会覆盖原计划时长。" onSubmit={() => void extendCurrentStage()} submitText="确认延长" loading={commandBusy} dirty={Boolean(extensionReason)}><div className={styles.stack}><label className={styles.field}>延长分钟数<Input type="number" min={1} max={1440} value={extensionMinutes} onChange={event => setExtensionMinutes(Number(event.target.value))} /></label><label className={styles.field}>原因<Textarea rows={4} maxLength={2000} value={extensionReason} onChange={event => setExtensionReason(event.target.value)} /></label></div></FormDialog>
+    <FormDialog isOpen={extensionOpen} onClose={() => setExtensionOpen(false)} title="延长当前安排" description="延时会写入课堂记录，不会覆盖原计划时长。" onSubmit={() => void extendCurrentStage()} submitText="确认延长" loading={commandBusy} dirty={Boolean(extensionReason)}><div className={styles.stack}><label className={styles.field}>延长分钟数<Input type="number" min={1} max={1440} value={extensionMinutes} onChange={event => setExtensionMinutes(Number(event.target.value))} /></label><label className={styles.field}>原因<Textarea rows={4} maxLength={2000} value={extensionReason} onChange={event => setExtensionReason(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={messageOpen} onClose={() => setMessageOpen(false)} title="发送教练消息" description={selectedParticipantIds.length ? '发送给已选的 ' + selectedParticipantIds.length + ' 名学员' : '发送给：' + (commandTargetType === 'ALL' ? '全体学员' : commandTargetType === 'GROUP' ? '指定分组' : commandTargetType === 'USER' ? '指定学员' : '当前团队')} onSubmit={() => void submitCoachMessage()} submitText="发送消息" dirty={Boolean(message)}><div className={styles.stack}><label className={styles.field}>消息类型<Select value={messageType} onChange={event => setMessageType(event.target.value)}><option value="INFO">信息</option><option value="WARNING">提醒</option><option value="INSTRUCTION">教学指令</option><option value="COUNTDOWN">倒计时</option></Select></label><label className={styles.field}>消息内容<Textarea rows={6} maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} /></label></div></FormDialog>
     <FormDialog isOpen={hintOpen} onClose={() => setHintOpen(false)} title="新增分级提示" onSubmit={() => void createHint()} submitText="创建提示" dirty={Boolean(hintContent)}><div className={styles.stack}><label className={styles.field}>级别<Input type="number" min={1} max={20} value={hintLevel} onChange={event => setHintLevel(Number(event.target.value))} /></label><label className={styles.field}>开放方式<Select value={hintMode} onChange={event => setHintMode(event.target.value)}><option value="MANUAL">教练手动</option><option value="TIME">有效训练时间</option><option value="ATTEMPT">提交次数</option><option value="SCORE">最高分数</option></Select></label>{hintMode !== 'MANUAL' && <label className={styles.field}>{hintMode === 'TIME' ? '触发秒数' : hintMode === 'ATTEMPT' ? '触发提交次数' : '触发分数'}<Input type="number" min={hintMode === 'TIME' ? 60 : hintMode === 'SCORE' ? 0 : 1} max={hintMode === 'TIME' ? 86400 : 100} value={hintTrigger} onChange={event => setHintTrigger(event.target.value)} /></label>}<label className={styles.field}>标题<Input value={hintTitle} onChange={event => setHintTitle(event.target.value)} /></label><label className={styles.field}>内容<Textarea rows={6} value={hintContent} onChange={event => setHintContent(event.target.value)} /></label></div></FormDialog>
     <DetailDialog isOpen={Boolean(openedHint)} onClose={() => setOpenedHint(undefined)} title={`${openedHint?.level || ''} 级提示 · ${openedHint?.title || '提示'}`} size="md"><p>{openedHint?.content}</p></DetailDialog>
-    <DetailDialog isOpen={reportOpen} onClose={() => setReportOpen(false)} title="训练过程报告" description="按阶段和训练组展示真实运行历史。" size="xl">
+    <DetailDialog isOpen={reportOpen} onClose={() => setReportOpen(false)} title="课堂记录" description="按课堂安排和训练组展示真实运行历史。" size="xl">
       <div className={styles.stack}>
         {report && <div className={styles.actions}><Button variant="secondary" onClick={exportReportCsv}>导出学员明细 CSV</Button></div>}
-        {report && <Section title="训练汇总"><div className={styles.summary}><div className={styles.metric}><strong>{report.timeline.length}</strong>阶段</div><div className={styles.metric}><strong>{report.participants.length}</strong>学员</div><div className={styles.metric}><strong>{report.groupChanges.length}</strong>换组记录</div></div></Section>}
+        {report && <Section title="训练汇总"><div className={styles.summary}><div className={styles.metric}><strong>{report.timeline.length}</strong>课堂安排</div><div className={styles.metric}><strong>{report.participants.length}</strong>学员</div><div className={styles.metric}><strong>{report.groupChanges.length}</strong>换组记录</div></div></Section>}
         {report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.orderIndex + 1}. {stage.name}</h3><p>状态：{trainingStageStatusLabel(stage.lifecycle)} · 计划 {formatDuration(stage.plannedDurationSeconds)} · 实际 {formatDuration(stage.actualDurationSeconds)}{stage.endReason ? ' · ' + trainingStageEndReasonLabel(stage.endReason) : ''}</p><div className={styles.timeline}>{stage.plans.map(plan => <div className={styles.timelineItem} key={plan.id}><strong>{plan.groupName || '全班默认'}{plan.isDefault ? ' · 默认计划' : plan.inheritsDefault ? ' · 继承默认' : ' · 独立覆盖'}</strong><br /><span>{plan.problemIds.length} 题</span></div>)}</div>{Boolean(stage.groupCompletions?.length) && <div className={styles.timeline}>{stage.groupCompletions?.map(group => <div className={styles.timelineItem} key={group.groupId}><strong>{group.groupName} · {group.completedParticipants}/{group.participantCount} 人完成</strong><br /><span>计划要求完成 {group.completedAssignments}/{group.requiredAssignments} 项</span></div>)}</div>}{stage.timeAdjustments.length > 0 && <small>延时记录：{stage.timeAdjustments.map(item => formatDuration(item.seconds) + '（' + item.reason + '）').join('；')}</small>}</article>)}
         {Boolean(report?.runtimeProblems.length) && <Section title="临时追加题目"><div className={styles.timeline}>{report?.runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><strong>{ojPlatformDisplayName(item.payload?.platform)} · {item.payload?.problemId || '题号待确认'} · {item.payload?.title || '训练题'}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? '指定分组' : '指定学员'} · {item.payload?.required === false ? '选做' : '必做'} · 目标 {item.payload?.targetScore ?? 100} 分 · {item.payload?.reason || '未记录原因'}</span></div>)}</div></Section>}
         {Boolean(report?.rosterEvents.length) && <Section title="中途加入与退出"><div className={styles.timeline}>{report?.rosterEvents.map(event => <div className={styles.timelineItem} key={event.id}><strong>{event.type.endsWith('.joined') ? '加入训练' : '退出训练'} · {reportUserName(event.targetId)}</strong><br /><span>{event.payload?.reason || '未记录原因'} · {new Date(event.createdAt).toLocaleString()}</span></div>)}</div></Section>}

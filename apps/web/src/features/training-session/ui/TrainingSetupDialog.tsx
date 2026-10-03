@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Send } from 'lucide-react'
+import { Play, Save } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -18,7 +18,7 @@ import {
 import styles from './TrainingEngine.module.css'
 
 type ParticipantTarget = 'team' | 'organization_students' | 'custom_students'
-type SubmitAction = 'publish' | 'classroom'
+type SubmitAction = 'draft' | 'start'
 
 type Problem = {
   id: string
@@ -48,7 +48,6 @@ const localDateTime = (date: Date) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 
 const defaultTrainingTimes = () => ({
-  start: localDateTime(new Date()),
   due: localDateTime(new Date(Date.now() + 7 * 24 * 3600_000)),
 })
 
@@ -66,7 +65,7 @@ export function TrainingSetupDialog({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [baselineTimes, setBaselineTimes] = useState(defaultTrainingTimes)
-  const [scheduledStartAt, setScheduledStartAt] = useState(baselineTimes.start)
+  const [plannedDurationMinutes, setPlannedDurationMinutes] = useState(45)
   const [dueAt, setDueAt] = useState(baselineTimes.due)
   const [selectedTeamId, setSelectedTeamId] = useState(fixedTeamId || teams[0]?.id || '')
   const [participantTarget, setParticipantTarget] = useState<ParticipantTarget>('team')
@@ -88,11 +87,11 @@ export function TrainingSetupDialog({
   const selectedTeamName = teams.find(team => team.id === targetTeamId)?.name || '当前团队'
   const requiredProblemCount = selectedProblems.filter(problem => problem.required).length
   const optionalProblemCount = selectedProblems.length - requiredProblemCount
-  const timeRangeValid = Boolean(scheduledStartAt && dueAt && new Date(dueAt).getTime() > new Date(scheduledStartAt).getTime())
-  const canContinueClassroomSetup = Boolean(title.trim() && scopeReady)
-  const canPublishDirectly = Boolean(
-    canContinueClassroomSetup
-    && timeRangeValid
+  const dueAtValid = Boolean(dueAt && new Date(dueAt).getTime() > Date.now())
+  const canSaveDraft = Boolean(title.trim() && scopeReady)
+  const canCreateAndStart = Boolean(
+    canSaveDraft
+    && dueAtValid
     && selectedProblems.length
     && !problemEditorBlocked
     && requiredProblemCount > 0
@@ -105,8 +104,8 @@ export function TrainingSetupDialog({
     setDescription('')
     const times = defaultTrainingTimes()
     setBaselineTimes(times)
-    setScheduledStartAt(times.start)
     setDueAt(times.due)
+    setPlannedDurationMinutes(45)
     setSelectedTeamId(fixedTeamId || teams[0]?.id || '')
     setParticipantTarget('team')
     setSelectedStudentIds([])
@@ -156,7 +155,7 @@ export function TrainingSetupDialog({
   }, [isOpen, organizationId, participantTarget, scopeReady, selectedStudentIds, targetTeamId, toast, useTeamScope])
 
   const create = async (action: SubmitAction) => {
-    const allowed = action === 'classroom' ? canContinueClassroomSetup : canPublishDirectly
+    const allowed = action === 'draft' ? canSaveDraft : canCreateAndStart
     if (!allowed || submitting) return
     setSubmitting(action)
     const response = await createTrainingSession({
@@ -165,7 +164,7 @@ export function TrainingSetupDialog({
       organizationId: useTeamScope ? undefined : organizationId,
       teamId: useTeamScope ? targetTeamId : undefined,
       participantUserIds: participantTarget === 'custom_students' ? selectedStudentIds : undefined,
-      scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : null,
+      scheduledStartAt: action === 'start' ? new Date().toISOString() : null,
       sessionType: 'GENERAL',
       rankingMode: 'PROGRESS_ONLY',
       peerVisibility: 'PROGRESS',
@@ -185,7 +184,7 @@ export function TrainingSetupDialog({
         accessPolicy: 'ALL_AT_ONCE',
         submissionMode: 'ENABLED',
         endPolicy: 'MANUAL',
-        plannedDurationSeconds: null,
+        plannedDurationSeconds: plannedDurationMinutes * 60,
         minDurationSeconds: null,
         completionThreshold: null,
         problems: selectedProblems.map(problem => ({ problemId: problem.id, alias: problem.alias || null, allowedSubtaskIds: [], required: problem.required })),
@@ -196,12 +195,14 @@ export function TrainingSetupDialog({
       toast.error(response.ok ? '布置训练失败' : response.error.userMessage)
       return
     }
-    const designPath = `${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${response.data.id}/design`
-    if (action === 'classroom') {
-      toast.success('已保留当前内容，继续编排课堂流程')
+    const sessionPath = `${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${response.data.id}`
+    if (action === 'draft') {
+      setSubmitting(undefined)
+      toast.success('训练草稿已保存')
       reset()
       onClose()
-      router.push(designPath)
+      await onPublished()
+      router.push(sessionPath)
       return
     }
     const published = await publishTraining(response.data.id, {
@@ -209,16 +210,17 @@ export function TrainingSetupDialog({
     })
     setSubmitting(undefined)
     if (!published.ok) {
-      toast.error(`训练草稿已保存，但暂时无法发布：${published.error.userMessage || '请继续完善'}`)
+      toast.error(`训练草稿已保存，但暂时无法开始：${published.error.userMessage || '请检查当前安排'}`)
       reset()
       onClose()
-      router.push(designPath)
+      router.push(sessionPath)
       return
     }
-    toast.success('训练已发布')
+    toast.success('训练已创建并开始')
     reset()
     onClose()
     await onPublished()
+    router.push(sessionPath)
   }
 
   const replaceSelectedProblems = (references: SelectedProblemReference[]) => {
@@ -246,21 +248,22 @@ export function TrainingSetupDialog({
     ['训练对象', previewLoading ? '正在确认…' : participantPreview ? `${participantPreview.targetName} · ${participantPreview.participantCount} 人` : audienceText],
     ['训练题目', selectedProblems.length ? selectedProblems.length + ' 道' : '尚未添加'],
     ['完成要求', optionalProblemCount ? `${requiredProblemCount} 道必做 · ${optionalProblemCount} 道选做` : `${requiredProblemCount} 道题全部必做`],
+    ['预计用时', `${plannedDurationMinutes} 分钟`],
     ['截止时间', dueAt ? new Date(dueAt).toLocaleString('zh-CN') : '未设置'],
-  ], [audienceText, dueAt, optionalProblemCount, participantPreview, previewLoading, requiredProblemCount, selectedProblems.length])
+  ], [audienceText, dueAt, optionalProblemCount, participantPreview, plannedDurationMinutes, previewLoading, requiredProblemCount, selectedProblems.length])
 
   return <FormDialog
     isOpen={isOpen}
     onClose={close}
-    title="布置训练"
-    description="把一组题目布置给学生；课堂阶段会在运行中根据反馈逐步安排。"
+    title="创建训练"
+    description="一次说明练什么、谁来练、练哪些题和大概练多久。"
     size="wide"
     loading={Boolean(submitting)}
-    dirty={Boolean(title || description || selectedProblems.length || selectedStudentIds.length || selectedTeamId !== (fixedTeamId || teams[0]?.id || '') || participantTarget !== 'team' || schoolWideConfirmed || scheduledStartAt !== baselineTimes.start || dueAt !== baselineTimes.due)}
+    dirty={Boolean(title || description || selectedProblems.length || selectedStudentIds.length || selectedTeamId !== (fixedTeamId || teams[0]?.id || '') || participantTarget !== 'team' || schoolWideConfirmed || plannedDurationMinutes !== 45 || dueAt !== baselineTimes.due)}
     footer={<>
       <Button variant="secondary" onClick={close} disabled={Boolean(submitting)}>取消</Button>
-      <Button variant="outline" icon={<ArrowRight size={16} />} onClick={() => void create('classroom')} loading={submitting === 'classroom'} disabled={!canContinueClassroomSetup || Boolean(submitting)}>继续课堂设置</Button>
-      <Button icon={<Send size={16} />} onClick={() => void create('publish')} loading={submitting === 'publish'} disabled={!canPublishDirectly || Boolean(submitting)}>发布训练</Button>
+      <Button variant="outline" icon={<Save size={16} />} onClick={() => void create('draft')} loading={submitting === 'draft'} disabled={!canSaveDraft || Boolean(submitting)}>保存草稿</Button>
+      <Button icon={<Play size={16} />} onClick={() => void create('start')} loading={submitting === 'start'} disabled={!canCreateAndStart || Boolean(submitting)}>创建并开始</Button>
     </>}
   >
     <div className={styles.trainingSetupLayout}>
@@ -274,7 +277,7 @@ export function TrainingSetupDialog({
         </section>
 
         <section className={styles.setupSection} aria-labelledby="training-setup-audience">
-          <div><h3 id="training-setup-audience">训练对象</h3><p>选择本次需要完成训练的学生范围。</p></div>
+          <div><h3 id="training-setup-audience">参加学生</h3><p>选择本次一起训练的学生。</p></div>
           <div className={styles.stack}>
             <div className={styles.compactGrid}>
               {organizationId && <label className={styles.field}>训练范围<Select value={participantTarget} onChange={event => { setParticipantTarget(event.target.value as ParticipantTarget); setSchoolWideConfirmed(false) }}><option value="team">团队（推荐）</option><option value="custom_students">自定义学生</option>{user?.organizationRole === 'school_principal' && <option value="organization_students">全校学生</option>}</Select></label>}
@@ -287,7 +290,7 @@ export function TrainingSetupDialog({
         </section>
 
         <section className={`${styles.setupSection} ${styles.problemSetupSection}`} aria-labelledby="training-setup-problems">
-          <div><h3 id="training-setup-problems">训练题目</h3><p>这里选择的题目会成为第一个阶段；后续阶段根据课堂反馈逐步准备。</p></div>
+          <div><h3 id="training-setup-problems">第一个安排</h3><p>先选择这节训练开始时要练的题目。</p></div>
           <div className={styles.stack}>
             <ProblemListEditor
               references={selectedProblems.map(problem => ({
@@ -314,24 +317,24 @@ export function TrainingSetupDialog({
         </section>
 
         <section className={styles.setupSection} aria-labelledby="training-setup-rules">
-          <div><h3 id="training-setup-rules">完成要求与时间</h3><p>学生需要完成全部必做题；选做题不影响完成状态。</p></div>
+          <div><h3 id="training-setup-rules">大概练多久</h3><p>预计用时帮助课堂掌握节奏，截止时间用于课后继续训练。</p></div>
           <div className={styles.stack}>
-            {requiredProblemCount === 0 && selectedProblems.length > 0 && <p className={styles.rosterWarning} role="alert">至少保留一道必做题，才能直接发布训练。</p>}
-            {!timeRangeValid && <p className={styles.rosterWarning} role="alert">截止时间必须晚于开始时间。</p>}
+            {requiredProblemCount === 0 && selectedProblems.length > 0 && <p className={styles.rosterWarning} role="alert">至少保留一道必做题，才能开始训练。</p>}
+            {!dueAtValid && <p className={styles.rosterWarning} role="alert">截止时间必须晚于当前时间。</p>}
             <div className={styles.compactGrid}>
-              <label className={styles.field}>开始时间<Input type="datetime-local" value={scheduledStartAt} onChange={event => setScheduledStartAt(event.target.value)} /></label>
-              <label className={styles.field}>截止时间<Input type="datetime-local" value={dueAt} min={scheduledStartAt || undefined} onChange={event => setDueAt(event.target.value)} /></label>
+              <label className={styles.field}>预计用时（分钟）<Input type="number" min={5} max={1440} value={plannedDurationMinutes} onChange={event => setPlannedDurationMinutes(Math.max(5, Math.min(1440, Number(event.target.value) || 45)))} /></label>
+              <label className={styles.field}>截止时间<Input type="datetime-local" value={dueAt} min={localDateTime(new Date())} onChange={event => setDueAt(event.target.value)} /></label>
             </div>
           </div>
         </section>
       </div>
 
       <aside className={styles.trainingSetupSummary} aria-label="当前设置">
-        <div><strong>当前设置</strong><p>可直接发布，也可继续设置课堂阶段。</p></div>
+        <div><strong>本次训练</strong><p>先保存草稿，或立即开始课堂。</p></div>
         <dl>{summaryItems.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
         <div className={styles.message}>
-          <strong>课堂阶段按反馈逐步安排</strong>
-          <p>继续课堂设置后，当前题目会作为第一个阶段；下一阶段在课堂运行时按学员情况准备。</p>
+          <strong>后续安排不用现在决定</strong>
+          <p>课堂开始后，根据学生完成情况再选择继续、调整题目、讲解或结束。</p>
         </div>
       </aside>
     </div>

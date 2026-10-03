@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Send, Trash2 } from 'lucide-react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
@@ -20,10 +20,10 @@ import styles from './TrainingEngine.module.css'
 type StagePurpose = 'PRACTICE' | 'GUIDED' | 'TEACHING' | 'REVIEW'
 type GroupMode = 'all' | 'current_groups'
 const purposeOptions: Array<{ value: StagePurpose; label: string; description: string }> = [
-  { value: 'PRACTICE', label: '自主练习', description: '学生独立完成题目，可以提交评测。' },
-  { value: 'GUIDED', label: '引导练习', description: '教师引导推进，学生仍可提交评测。' },
+  { value: 'PRACTICE', label: '继续做题', description: '学生独立完成题目，可以提交评测。' },
+  { value: 'GUIDED', label: '教师带着练', description: '教师引导推进，学生仍可提交评测。' },
   { value: 'TEACHING', label: '统一讲解', description: '用于课堂讲解，默认不开放提交，也可以不选题。' },
-  { value: 'REVIEW', label: '复盘总结', description: '用于回顾本阶段，默认不开放提交，也可以不选题。' },
+  { value: 'REVIEW', label: '复盘总结', description: '用于回顾本轮训练，默认不开放提交，也可以不选题。' },
 ]
 const purposeFromStage = (stage?: Stage | null): StagePurpose => stage?.kind === 'TEACHING' ? 'TEACHING' : stage?.kind === 'REVIEW' ? 'REVIEW' : stage?.mode === 'GUIDED' ? 'GUIDED' : 'PRACTICE'
 const purposeDefaults = (purpose: StagePurpose) => ({
@@ -32,9 +32,9 @@ const purposeDefaults = (purpose: StagePurpose) => ({
   submissionMode: purpose === 'PRACTICE' || purpose === 'GUIDED' ? 'ENABLED' as const : 'DISABLED' as const,
 })
 const emptyStage = (): Stage => ({
-  clientKey: newTrainingDesignKey(), name: '下一阶段', description: '', kind: 'TRAINING', lifecycle: 'PENDING',
+  clientKey: newTrainingDesignKey(), name: '下一步安排', description: '', kind: 'TRAINING', lifecycle: 'PENDING',
   mode: 'PRACTICE', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', endPolicy: 'MANUAL',
-  plannedDurationSeconds: null, minDurationSeconds: null, completionThreshold: null, completionPolicy: null,
+  plannedDurationSeconds: 45 * 60, minDurationSeconds: null, completionThreshold: null, completionPolicy: null,
   rules: { groupMode: 'all' }, Problems: [],
 })
 const toAssignment = (reference: SelectedProblemReference, existing?: Assignment): Assignment => ({
@@ -64,6 +64,7 @@ const stageInput = (stage: Stage, purpose: StagePurpose, groupMode: GroupMode) =
 export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const toast = useToast()
   const [design, setDesign] = useState<Design | null>(null)
   const [stage, setStage] = useState<Stage | null>(null)
@@ -82,18 +83,20 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     try {
       const loaded = createTrainingDesignDraft(await getTrainingDesign(sessionId))
       const pending = loaded.stages.filter(item => item.lifecycle === 'PENDING')
-      const editable = pending[0] || (!['ENDED', 'ARCHIVED'].includes(loaded.session.status) ? emptyStage() : null)
+      const requested = searchParams.get('action') === 'teaching' ? 'TEACHING' : searchParams.get('action') === 'review' ? 'REVIEW' : searchParams.get('action') === 'guided' ? 'GUIDED' : searchParams.get('action') === 'practice' ? 'PRACTICE' : null
+      const base = pending[0] || (!['ENDED', 'ARCHIVED'].includes(loaded.session.status) ? emptyStage() : null)
+      const editable = base && requested && !pending[0] ? { ...base, ...purposeDefaults(requested), name: purposeOptions.find(item => item.value === requested)?.label || base.name } : base
       setDesign(loaded)
       setStage(editable)
-      setPurpose(purposeFromStage(editable))
+      setPurpose(requested && !pending[0] ? requested : purposeFromStage(editable))
       setGroupMode(editable?.rules?.groupMode === 'current_groups' ? 'current_groups' : 'all')
       setDirty(false)
     } catch {
-      toast.error('训练阶段加载失败')
+      toast.error('课堂安排加载失败')
     } finally {
       setLoading(false)
     }
-  }, [sessionId, toast])
+  }, [searchParams, sessionId, toast])
   useEffect(() => { void load() }, [load])
 
   const updateStage = (updater: (current: Stage) => Stage) => {
@@ -141,7 +144,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       const validation = await validateTrainingDesign(sessionId, structure)
       if (!validation.ok || !validation.data.valid) {
         setSaving(false)
-        toast.error(validation.ok ? validation.data.issues.find(issue => issue.severity === 'error')?.message || '当前阶段设置需要调整' : validation.error.userMessage)
+        toast.error(validation.ok ? validation.data.issues.find(issue => issue.severity === 'error')?.message || '当前安排需要调整' : validation.error.userMessage)
         return false
       }
     }
@@ -149,8 +152,8 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       ? await saveTrainingDesign(sessionId, structure)
       : await putTrainingNextStage(sessionId, { expectedRevision: design.statusRevision, purpose, stage: input })
     setSaving(false)
-    if (!response.ok) { toast.error(response.error.userMessage || '阶段保存失败'); return false }
-    toast.success(isInitialStage ? '第一个阶段已保存' : '下一阶段已准备')
+    if (!response.ok) { toast.error(response.error.userMessage || '安排保存失败'); return false }
+    toast.success(isInitialStage ? '第一个安排已保存' : '下一步已准备')
     await load()
     return true
   }
@@ -161,7 +164,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     const response = await publishTraining(sessionId, { expectedRevision: latest.statusRevision })
     setPublishing(false)
     if (!response.ok) return toast.error(response.error.userMessage || '发布失败')
-    toast.success('训练已发布，后续阶段可在课堂中根据反馈准备')
+    toast.success('训练已开始，后续安排可根据课堂反馈准备')
     requestNavigation(runtimePath)
   }
   const discard = async () => {
@@ -169,53 +172,56 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     setSaving(true)
     const response = await deleteTrainingNextStage(sessionId, { expectedRevision: design.statusRevision })
     setSaving(false)
-    if (!response.ok) return toast.error(response.error.userMessage || '无法删除下一阶段')
-    toast.success('已丢弃准备中的下一阶段')
+    if (!response.ok) return toast.error(response.error.userMessage || '无法删除已准备安排')
+    toast.success('已丢弃准备中的安排')
     await load()
   }
 
-  if (loading) return <PageLoadingFrame title="正在打开课堂设置" rows={5} />
-  if (!design) return <PageFrame><Empty title="无法打开课堂设置" action={<Button onClick={() => router.back()}>返回</Button>} /></PageFrame>
-  if (['ENDED', 'ARCHIVED'].includes(design.session.status)) return <PageFrame><Empty title="训练已经结束" description="历史阶段与课堂记录保持只读。" action={<Button onClick={() => requestNavigation(runtimePath)}>返回训练工作台</Button>} /></PageFrame>
+  if (loading) return <PageLoadingFrame title="正在打开课堂安排" rows={5} />
+  if (!design) return <PageFrame><Empty title="无法打开课堂安排" action={<Button onClick={() => router.back()}>返回</Button>} /></PageFrame>
+  if (['ENDED', 'ARCHIVED'].includes(design.session.status)) return <PageFrame><Empty title="训练已经结束" description="历史课堂记录保持只读。" action={<Button onClick={() => requestNavigation(runtimePath)}>返回训练工作台</Button>} /></PageFrame>
 
   return <PageFrame width="workbench"><div className={styles.stack}>
     <PageHeader
-      title={isInitialStage ? '设置第一个阶段' : '准备下一阶段'}
-      description={isInitialStage ? '先安排本次课堂的起点；后续阶段在课堂运行中根据反馈逐步准备。' : '只准备紧接当前课堂的一个阶段，不提前铺设整条流程。'}
-      breadcrumbs={[{ label: '训练', href: runtimePath.replace(/\/[^/]+$/, '') }, { label: design.session.title }, { label: isInitialStage ? '课堂设置' : '下一阶段' }]}
+      title={isInitialStage ? '完善第一个安排' : '准备下一步'}
+      description={isInitialStage ? '确认开始时练什么、谁来练和大概练多久。' : '只准备紧接当前课堂的一步，后面的安排等看到学生反馈再决定。'}
+      breadcrumbs={[{ label: '训练', href: runtimePath.replace(/\/[^/]+$/, '') }, { label: design.session.title }, { label: isInitialStage ? '第一个安排' : '下一步' }]}
       actions={<>
-        <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => requestNavigation(runtimePath)}>返回运行工作台</Button>
-        {!isInitialStage && stage?.id && <Button variant="ghost" icon={<Trash2 size={16} />} onClick={() => void discard()} disabled={saving}>丢弃下一阶段</Button>}
-        <Button variant="secondary" onClick={() => void save()} loading={saving} disabled={!dirty || !canSave}>保存阶段</Button>
-        {isInitialStage && design.session.status === 'DRAFT' && <Button icon={<Send size={16} />} onClick={() => void publish()} loading={publishing} disabled={!canSave || saving}>发布训练</Button>}
+        <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => requestNavigation(runtimePath)}>返回课堂</Button>
+        {!isInitialStage && stage?.id && <Button variant="ghost" icon={<Trash2 size={16} />} onClick={() => void discard()} disabled={saving}>丢弃已准备安排</Button>}
+        <Button variant="secondary" onClick={() => void save()} loading={saving} disabled={!dirty || !canSave}>保存安排</Button>
+        {isInitialStage && design.session.status === 'DRAFT' && <Button icon={<Send size={16} />} onClick={() => void publish()} loading={publishing} disabled={!canSave || saving}>开始训练</Button>}
       </>}
     />
-    {legacyStageQueue && <section className={styles.message} role="status"><strong>旧版多阶段训练</strong><p>该训练仍保留多个已准备阶段，将继续按原顺序运行；在待运行阶段收敛为一个之前，不能新增或替换未来阶段。</p></section>}
+    {legacyStageQueue && <section className={styles.message} role="status"><strong>旧版预设安排</strong><p>该训练仍保留多个旧安排，将按原顺序运行；收敛为一个之前不能继续新增。</p></section>}
     {!legacyStageQueue && stage && <div className={styles.trainingSetupLayout}>
       <div className={styles.trainingSetupMain}>
         <section className={styles.setupSection}>
-          <div><h3>阶段用途</h3><p>用途决定默认的课堂方式和是否允许学生提交。</p></div>
+          <div><h3>接下来做什么</h3><p>选择符合课堂语境的动作，系统会自动使用合适规则。</p></div>
           <div className={styles.stack}>
-            <label className={styles.field}>用途<Select value={purpose} onChange={event => {
+            <label className={styles.field}>课堂动作<Select value={purpose} onChange={event => {
               const next = event.target.value as StagePurpose
               setPurpose(next)
-              updateStage(current => ({ ...current, ...purposeDefaults(next) }))
+              updateStage(current => ({ ...current, ...purposeDefaults(next), name: purposeOptions.find(item => item.value === next)?.label || current.name }))
             }}>{purposeOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>
             <p className={styles.muted}>{purposeOptions.find(item => item.value === purpose)?.description}</p>
-            <label className={styles.field}>阶段名称<Input value={stage.name} maxLength={200} onChange={event => updateStage(current => ({ ...current, name: event.target.value }))} /></label>
-            <label className={styles.field}>阶段说明（可选）<Textarea rows={3} value={stage.description || ''} onChange={event => updateStage(current => ({ ...current, description: event.target.value }))} /></label>
+            <label className={styles.field}>预计用时（分钟）<Input type="number" min={5} max={1440} value={Math.max(5, Math.round((stage.plannedDurationSeconds || 45 * 60) / 60))} onChange={event => updateStage(current => ({ ...current, plannedDurationSeconds: Math.max(5, Math.min(1440, Number(event.target.value) || 45)) * 60 }))} /></label>
+            <details className={styles.controlDisclosure}><summary>补充说明</summary><label className={styles.field}>给教师的安排说明（可选）<Textarea rows={3} value={stage.description || ''} onChange={event => updateStage(current => ({ ...current, description: event.target.value }))} /></label></details>
           </div>
         </section>
         <section className={styles.setupSection}>
-          <div><h3>适用范围</h3><p>可以面向全班，也可以沿用当前课堂分组。</p></div>
-          <label className={styles.field}>阶段对象<Select value={groupMode} onChange={event => { setGroupMode(event.target.value as GroupMode); setDirty(true) }}><option value="all">全班统一安排</option><option value="current_groups">沿用当前分组</option></Select></label>
+          <div><h3>谁来练</h3><p>默认全班统一安排，需要时可沿用当前分组。</p></div>
+          <div className={styles.stack}>
+            <label className={styles.field}>参与范围<Select value={groupMode} onChange={event => { setGroupMode(event.target.value as GroupMode); setDirty(true) }}><option value="all">全班统一安排</option><option value="current_groups">按当前分组安排</option></Select></label>
+            {groupMode === 'current_groups' && <div className={styles.tableWrap}><table><thead><tr><th>训练组</th><th>本次内容</th></tr></thead><tbody>{design.groups.map(group => <tr key={group.id || group.clientKey}><td>{group.name}</td><td>{stage.Problems.length ? stage.Problems.map(problem => problem.alias || problem.Problem.problemId).join('、') : purposeOptions.find(item => item.value === purpose)?.label}</td></tr>)}</tbody></table></div>}
+          </div>
         </section>
         <section className={styles.setupSection}>
-          <div><h3>阶段题目</h3><p>{requiresProblems ? '练习阶段至少需要一道题。' : '讲解或复盘阶段可以不选择题目。'}</p></div>
+          <div><h3>练哪些题</h3><p>{requiresProblems ? '至少选择一道题，默认只需标记必做或选做。' : '讲解或复盘可以不选择题目。'}</p></div>
           <div className={styles.stack}>
             {!isInitialStage && <div className={styles.actions}>
               <Button variant="outline" onClick={() => reuseProblems(currentStageProblems)} disabled={!currentStageProblems.length}>沿用当前题目</Button>
-              <Button variant="outline" onClick={() => reuseProblems(allTrainingProblems)} disabled={!allTrainingProblems.length}>从本次训练已有题目选择</Button>
+              <Button variant="outline" onClick={() => reuseProblems(allTrainingProblems)} disabled={!allTrainingProblems.length}>沿用本次训练题目</Button>
             </div>}
             <ProblemListEditor
               references={stage.Problems.map(problem => ({ problem: problem.Problem, alias: problem.alias || undefined }))}
@@ -231,15 +237,15 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           </div>
         </section>
       </div>
-      <aside className={styles.trainingSetupSummary} aria-label="当前阶段设置">
-        <div><strong>{isInitialStage ? '第一个阶段' : '下一阶段'}</strong><p>课堂每次只准备紧接着的一步。</p></div>
+      <aside className={styles.trainingSetupSummary} aria-label="安排摘要">
+        <div><strong>{isInitialStage ? '第一个安排' : '已准备的下一步'}</strong><p>这里只显示老师真正需要确认的信息。</p></div>
         <dl>
-          <div><dt>用途</dt><dd>{purposeOptions.find(item => item.value === purpose)?.label}</dd></div>
+          <div><dt>动作</dt><dd>{purposeOptions.find(item => item.value === purpose)?.label}</dd></div>
           <div><dt>对象</dt><dd>{groupMode === 'all' ? '全班' : '当前分组'}</dd></div>
           <div><dt>题目</dt><dd>{stage.Problems.length ? stage.Problems.length + ' 道' : '无题目'}</dd></div>
           <div><dt>提交</dt><dd>{purposeDefaults(purpose).submissionMode === 'ENABLED' ? '允许' : '不开放'}</dd></div>
         </dl>
-        <div className={styles.message}><strong>运行一段，再决定下一段</strong><p>阶段结束时可以继续当前阶段、使用或修改已准备阶段、临时准备新阶段，或结束训练。</p></div>
+        <div className={styles.message}><strong>后面的安排以后再决定</strong><p>课堂运行中可以继续训练、调整题目、统一讲解、调整分组或结束。</p></div>
       </aside>
     </div>}
   </div></PageFrame>

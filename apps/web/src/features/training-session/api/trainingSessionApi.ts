@@ -21,8 +21,6 @@ export const validateTrainingDesign = (sessionId: string, body: TrainingStructur
     body,
   )
 
-export const saveTrainingStageGroupMatrix = (sessionId: string, body: EndpointBody<typeof TrainingContracts.replaceStageGroupMatrix>) =>
-  apiClient.mutateContract(TrainingContracts.replaceStageGroupMatrix, `${sessionPath(sessionId)}/stage-group-matrix`, body)
 
 export const splitTrainingGroup = (sessionId: string, body: EndpointBody<typeof TrainingContracts.splitGroup>) =>
   apiClient.mutateContract(TrainingContracts.splitGroup, `${sessionPath(sessionId)}/groups/split`, body)
