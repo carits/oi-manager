@@ -1,3 +1,10 @@
+---
+status: current
+audience: development
+last_verified: 2026-10-03
+source_of_truth: apps/web/src and scripts/ui-language-check.mjs
+---
+
 # 前端呈现边界审计与整改清单
 
 下面是目前**已经确认存在**的问题清单。我把同一根因的多个页面合并成一个问题项，但会把已发现的具体文件和例子列出来。这样后面可以按任务逐项修，而不是继续零散改文案。
