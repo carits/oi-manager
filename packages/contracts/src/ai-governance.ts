@@ -47,7 +47,7 @@ const EvaluationAccountSchema = z.object({
 export const EvaluationBudgetOverviewSchema = z.object({
   periodStart: DateTimeWireSchema,
   platform: EvaluationAccountSchema,
-  users: z.array(EvaluationAccountSchema.extend({ id: z.string(), subjectId: z.string() })),
+  users: z.array(EvaluationAccountSchema.extend({ id: z.string(), subjectId: z.string(), username: z.string() })),
   candidates: z.array(z.object({
     status: z.string(),
     count: z.number().int().nonnegative(),

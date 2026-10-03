@@ -106,7 +106,7 @@ Baekjoon | 28057 | 1 | AN
     const uuid = '00000000-0000-0000-0000-000000000001'
     expect(parseProblemIds(`CF2036G ${uuid}`)).toEqual(['CF2036G', uuid])
   })
-  it('separates identity from Stable and training readiness', () => {
+  it('separates problem identity from activity readiness', () => {
     const assessment = prepareProblemSelection([found], [], 'stable')
     expect(assessment.accepted).toHaveLength(0)
     expect(assessment.rows[0].result.status).toBe('resolved')
@@ -115,7 +115,8 @@ Baekjoon | 28057 | 1 | AN
     expect(prepareProblemSelection([found], [], 'none').accepted).toEqual([found.problem])
     const evolving = { ...found, problem: { ...found.problem!, evolvingData: { slot: 'EVOLVING' as const, graphHash: 'evolving', fencingToken: 2, mode: 'oi' as const } } }
     expect(prepareProblemSelection([evolving], [], 'training').accepted).toEqual([evolving.problem])
-    expect(prepareProblemSelection([found], [], 'training').rows[0].message).toContain('Evolving')
+    expect(prepareProblemSelection([found], [], 'training').rows[0].message).toContain('可用于训练的评测数据')
+    expect(prepareProblemSelection([found], [], 'training').rows[0].message).not.toContain('Evolving')
   })
   it('deduplicates against current canonical IDs and within the batch', () => {
     expect(prepareProblemSelection([found], ['internal-1'], 'stable').rows[0].state).toBe('duplicate')

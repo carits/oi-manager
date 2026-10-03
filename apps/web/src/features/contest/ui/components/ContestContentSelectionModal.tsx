@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import unifiedStyles from './ContestContentSelectionModal.unified.module.css'
 import { Select } from '@/components/ui/FormControls'
@@ -53,7 +54,7 @@ export function ContestContentSelectionModal({
       setStatementKey(response.currentSelection.statementOptionKey || response.statement[0]?.key || '')
       setSolutionKey(response.currentSelection.solutionOptionKey || 'none')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '加载内容版本失败')
+      toast.error(publicErrorMessage(error, '加载内容版本失败'))
     } finally {
       setLoading(false)
     }
@@ -77,7 +78,7 @@ export function ContestContentSelectionModal({
         fileUrl: response.fileUrl,
       })
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '预览失败')
+      toast.error(publicErrorMessage(error, '预览失败'))
     }
   }
 
@@ -90,7 +91,7 @@ export function ContestContentSelectionModal({
         solutionOptionKey: solutionKey,
       })
       if (!response.ok) {
-        toast.error(response.error.message || '保存失败')
+        toast.error(response.error.userMessage || '保存失败')
         return
       }
       toast.success('活动内容版本已更新')
@@ -127,7 +128,7 @@ export function ContestContentSelectionModal({
             <section key={item.kind} className={unifiedStyles.u6}>
               <div className={unifiedStyles.u7}>
                 <strong>{item.label}</strong>
-                {item.revision && <span className={unifiedStyles.u8}>当前 revision {item.revision}</span>}
+                {item.revision && <span className={unifiedStyles.u8}>当前内容</span>}
               </div>
               <div className={unifiedStyles.u9}>
                 <Select aria-label={item.label} value={item.value} onChange={event => item.setValue(event.target.value)}>

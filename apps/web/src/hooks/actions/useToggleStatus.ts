@@ -21,7 +21,7 @@ export function useToggleStatus(endpoint: string, onSuccess?: () => void): UseTo
         onSuccess?.()
         return true
       } else {
-        toast.error(res.message || '操作失败')
+        console.error('Toggle status response:', res); toast.error('操作失败')
         return false
       }
     } catch (error) {

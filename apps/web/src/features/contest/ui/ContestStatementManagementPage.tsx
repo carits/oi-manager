@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import unifiedStyles from './ContestStatementManagementPage.unified.module.css'
 import { Button } from '@/components/ui/Button'
@@ -37,7 +38,7 @@ export function ContestStatementManagementPage({ contestId, backPath }: { contes
         defaultKey: problem.selected.find(item => item.isDefault)?.key || problem.selected[0]?.key || '',
       }])))
     } catch (error) {
-      const message = error instanceof Error ? error.message : '加载题面管理失败'
+      const message = publicErrorMessage(error, '加载题面管理失败')
       setLoadError(message)
     } finally {
       setLoading(false)
@@ -86,7 +87,7 @@ export function ContestStatementManagementPage({ contestId, backPath }: { contes
       })),
     })
     if (response.ok) { toast.success('活动题面配置已保存'); await load() }
-    else toast.error(response.error.message || '保存失败')
+    else toast.error(response.error.userMessage || '保存失败')
     setSaving(false)
   }
 

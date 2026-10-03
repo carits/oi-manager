@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useState, useEffect, useRef } from 'react'
 import collisionStyles from './ContestFormModal.collision.module.css'
 import unifiedStyles from './ContestFormModal.unified.module.css'
@@ -238,7 +239,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
         setProblemRows(rows)
         readyRef.current = true
       } catch (error) {
-        if (current()) setLoadError(error instanceof Error ? error.message : '加载失败，未开放空白表单')
+        if (current()) setLoadError(publicErrorMessage(error, '加载失败，未开放空白表单'))
       } finally {
         if (current()) setLoading(false)
       }
@@ -294,7 +295,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
         solutionOptionKey: options.solution.find(option => option.key !== 'none')?.key || 'none',
       })
     } catch (error) {
-      if (current()) updateRow(id, { contentOptionsLoading: false, contentOptionsError: error instanceof Error ? error.message : '题面选项加载失败' })
+      if (current()) updateRow(id, { contentOptionsLoading: false, contentOptionsError: publicErrorMessage(error, '题面选项加载失败') })
     }
   }
   const replaceSelectedProblems: AddProblemReferences = async (references, operation) => {
@@ -386,7 +387,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
     const changedContent = problemRows.some(row => row.existing && (
       row.statementOptionKey !== row.originalStatementOptionKey || row.solutionOptionKey !== row.originalSolutionOptionKey
     ))
-    if (editContestStarted && changedContent && !window.confirm('更换后所有参与者将看到新版本，旧版本会保留在活动快照历史中。确定继续吗？')) return
+    if (editContestStarted && changedContent && !window.confirm('更换后所有参与者将看到新内容，之前使用的内容仍会保留。确定继续吗？')) return
 
     savingRef.current = true
     setSaving(true)
@@ -499,7 +500,7 @@ function ContestFormEditor({ isOpen, onClose, teamId, schoolId, organizationId, 
       complete = true
     } catch (error) {
       if (mountedRef.current) {
-        const message = error instanceof Error ? error.message : '保存失败'
+        const message = publicErrorMessage(error, '保存失败')
         setRecoveryContestId(targetId)
         setRecoveryBlocked(writeAttempted || baselineConflict)
         setRecoveryMessage(`${message}。${writeAttempted ? '部分请求可能已经保存；当前草稿和已确认回执已保留。请先核对服务器状态，不要直接重复提交。' : '当前输入已保留。'}`)

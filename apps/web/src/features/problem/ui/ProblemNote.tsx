@@ -123,7 +123,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       setNoteSaving(true)
       const result = await saveProblemNote(problemId, content)
       if (!result.ok) {
-        const message = result.error.message || '保存失败，内容仍保留在编辑器中'
+        const message = result.error.userMessage || '保存失败，内容仍保留在编辑器中'
         setNoteSaveError(message)
         if (notify) toast.error(message)
         return false

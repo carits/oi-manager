@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useMemo, useState } from 'react'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { AlertTriangle, Check, ClipboardList, ListChecks, LoaderCircle, RotateCcw, UserRound } from 'lucide-react'
@@ -72,7 +73,7 @@ export function ContestRejudgeModal({
         })
         if (!cancelled) setPreview(data)
       } catch (error) {
-        if (!cancelled) setPreviewError(error instanceof Error ? error.message : '无法获取预计数量，请重试')
+        if (!cancelled) setPreviewError(publicErrorMessage(error, '无法获取预计数量，请重试'))
       } finally {
         if (!cancelled) setPreviewLoading(false)
       }
@@ -99,7 +100,7 @@ export function ContestRejudgeModal({
     const result = await rejudgeContest(contestId, selectedScope)
     setSubmitting(false)
     if (!result.ok) {
-      setMessage({ type: 'error', text: result.error.message })
+      setMessage({ type: 'error', text: result.error.userMessage })
       return
     }
     await onSuccess()

@@ -71,7 +71,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
       if (result.ok) {
         void fetchInviteList()
       } else {
-        toast.error(result.error.message || '取消失败')
+        toast.error(result.error.userMessage || '取消失败')
       }
     } catch (error) {
       console.error('Cancel invite error:', error)

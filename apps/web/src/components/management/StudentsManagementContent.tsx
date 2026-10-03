@@ -209,9 +209,9 @@ export default function StudentsManagementContent() {
           {isPrincipal && <Select className={managementListStyles.select} value={filters.headTeacherMembershipId} onChange={event => updateFilter('headTeacherMembershipId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.membershipId}>{teacher.name}</option>)}</Select>}
           <Select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></Select>
         </ManagementToolbar>
-        {resource.error && !data ? <LoadError message={resource.error.message} requestId={resource.error.requestId} onRetry={() => void resource.retry()} /> : <>
+        {resource.error && !data ? <LoadError message={resource.error.userMessage} requestId={resource.error.requestId} onRetry={() => void resource.retry()} /> : <>
         {resource.refreshing && data && <p className={unifiedStyles.u8} role="status">正在更新学生列表…</p>}
-        {resource.error && <LoadError compact message={resource.error.message} requestId={resource.error.requestId} onRetry={() => void resource.retry()} />}
+        {resource.error && <LoadError compact message={resource.error.userMessage} requestId={resource.error.requestId} onRetry={() => void resource.retry()} />}
         <Table
           data={students}
           loading={resource.isLoading}

@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useState } from 'react'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Search, UsersRound } from 'lucide-react'
@@ -91,7 +92,7 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
     } catch (requestError) {
       if (signal?.aborted) return
       setRows([])
-      setError(requestError instanceof Error ? requestError.message : '排名获取失败')
+      setError(publicErrorMessage(requestError, '排名获取失败'))
     } finally {
       if (!signal?.aborted) setLoading(false)
     }

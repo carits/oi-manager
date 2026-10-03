@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { useRouter, useParams } from 'next/navigation'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { getManagedUser, type ManagedUser as UserDetail } from '@/features/user-admin'
+import { organizationRoleLabel } from '@/lib/humanPresentation'
 
 export default function UserDetailPage() {
   const router = useRouter()
@@ -31,16 +32,6 @@ export default function UserDetailPage() {
     }
   }
 
-  const getRoleLabel = (role: string) => {
-    const labels: Record<string, string> = {
-      super_admin: '超级管理员',
-      platform_admin: '平台管理员',
-      school_principal: '学校负责人',
-      teacher: '教师',
-      student: '学生'
-    }
-    return labels[role] || role
-  }
 
   if (loading) {
     return <PageLoadingFrame title="用户详情" />
@@ -83,7 +74,7 @@ export default function UserDetailPage() {
               </div>
               <div>
                 <label className={unifiedStyles.u9}>角色</label>
-                <p className={unifiedStyles.u10}>{getRoleLabel(user.accountRole)}</p>
+                <p className={unifiedStyles.u10}>{organizationRoleLabel(user.accountRole)}</p>
               </div>
               <div>
                 <label className={unifiedStyles.u9}>状态</label>

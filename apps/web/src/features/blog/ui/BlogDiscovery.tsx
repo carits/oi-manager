@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { BookOpenText, Search } from 'lucide-react'
@@ -35,7 +36,7 @@ export function BlogDiscovery({ workspaceBasePath = '/blog', embedded = false }:
       }))
     } catch (reason) {
       setPayload(null)
-      setError(reason instanceof Error ? reason.message : '知识广场加载失败')
+      setError(publicErrorMessage(reason, '知识广场加载失败'))
     } finally {
       setLoading(false)
     }

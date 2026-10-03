@@ -18,12 +18,12 @@ describe('feature resource presentation isolation', () => {
     expect(featureResourceKey('a', 'list:1', false)).toBeNull()
   })
   it('never turns an unsuccessful first read into a business-empty state', () => {
-    const error = new ApiError({ kind: 'http', status: 503, message: '服务暂不可用' })
+    const error = new ApiError({ kind: 'http', status: 503, userMessage: '服务暂不可用' })
     expect(toResourceState({ error, isValidating: false }, () => true)).toMatchObject({ state: 'error', error })
     expect(toResourceState({ data: [], isValidating: false }, data => data.length === 0)).toEqual({ state: 'empty' })
   })
   it('keeps failed refresh data with an explicit error', () => {
-    const error = new ApiError({ kind: 'timeout', status: 0, message: '更新超时' })
+    const error = new ApiError({ kind: 'timeout', status: 0, userMessage: '更新超时' })
     expect(toResourceState({ data: previous.data, error, isValidating: false }, () => false)).toMatchObject({ state: 'error', previousData: previous.data })
   })
 })

@@ -18,6 +18,22 @@ export const VERIFICATION_STATUS_LABELS: Record<string, string> = {
   INFRA_ERROR: '验证服务异常', SKIPPED: '无需代码验证',
 }
 
+export function solutionStatusLabel(status: string) {
+  return SOLUTION_STATUS_LABELS[status] || '状态待确认'
+}
+
+export function solutionVerificationLabel(status: string) {
+  return VERIFICATION_STATUS_LABELS[status] || '验证状态待确认'
+}
+
+export function solutionReviewTypeLabel(type: string) {
+  return ({ CONTENT: '内容审核', TECHNICAL: '技术审核', COPYRIGHT: '版权审核' } as Record<string, string>)[type] || '审核类型待确认'
+}
+
+export function solutionReviewDecisionLabel(decision: string) {
+  return ({ APPROVE: '通过', REQUEST_REVISION: '要求修改', REJECT: '拒绝', ACCEPT: '采纳', PUBLISH: '发布' } as Record<string, string>)[decision] || '审核结论待确认'
+}
+
 export type SolutionType = keyof typeof SOLUTION_TYPE_LABELS
 export type SolutionDraftLike = {
   type: SolutionType

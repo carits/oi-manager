@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useState } from 'react'
 import unifiedStyles from './UserProblemContentPanel.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -45,7 +46,7 @@ export function UserProblemContentPanel({ problemId }: Props) {
       setItems(data.contents)
       setShareTargets(data.shareTargets)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '加载个人版本失败')
+      toast.error(publicErrorMessage(error, '加载个人版本失败'))
     } finally {
       setLoading(false)
     }
@@ -68,7 +69,7 @@ export function UserProblemContentPanel({ problemId }: Props) {
       if (format === 'markdown') {
         const response = await saveProblemPersonalContent(problemId, kind, { title, language, content })
         if (!response.ok) {
-          toast.error(response.error.message || '保存失败')
+          toast.error(response.error.userMessage || '保存失败')
           return
         }
       } else {
@@ -82,13 +83,13 @@ export function UserProblemContentPanel({ problemId }: Props) {
         body.append('language', language)
         const response = await uploadProblemPersonalContentPdf(problemId, kind, body)
         if (!response.success) {
-          toast.error(response.message || '保存失败')
+          console.error('Problem content save response:', response); toast.error('保存失败')
           return
         }
       }
       const shareResponse = await updateProblemPersonalContentShares(problemId, kind, shareKeys)
       if (!shareResponse.ok) {
-        toast.warning(shareResponse.error.message || '内容已保存，但共享范围保存失败')
+        toast.warning(shareResponse.error.userMessage || '内容已保存，但共享范围保存失败')
       } else {
         toast.success('个人版本已保存')
       }
@@ -99,12 +100,12 @@ export function UserProblemContentPanel({ problemId }: Props) {
   }
 
   const remove = async () => {
-    if (!window.confirm(`确定删除我的${kind === 'statement' ? '题面' : '题解'}吗？已被活动选用的快照不会受影响。`)) return
+    if (!window.confirm(`确定删除我的${kind === 'statement' ? '题面' : '题解'}吗？之前已在活动中使用的内容不会受影响。`)) return
     const response = await deleteProblemPersonalContent(problemId, kind)
     if (response.ok) {
       toast.success('已删除')
       await load()
-    } else toast.error(response.error.message || '删除失败')
+    } else toast.error(response.error.userMessage || '删除失败')
   }
 
   const current = items.find(item => item.kind === kind)

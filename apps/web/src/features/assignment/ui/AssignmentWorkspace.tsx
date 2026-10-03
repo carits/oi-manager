@@ -35,6 +35,20 @@ import type {
 } from '@oi-manager/contracts'
 
 interface ValidationResult { valid: boolean; issues: Array<{ path: string; code: string; message: string }> }
+
+const ASSIGNMENT_VALIDATION_MESSAGES: Record<string, string> = {
+  PROBLEMS_REQUIRED: '请至少添加一道题目。',
+  REQUIRED_PROBLEM_REQUIRED: '请至少设置一道必做题。',
+  OPTIONAL_PROBLEM_REQUIRED: '已启用选做题计分，请至少设置一道选做题。',
+  OPTIONAL_BEST_COUNT_INVALID: '最佳选做题数量不能超过现有选做题数量。',
+  CHALLENGE_PROBLEM_REQUIRED: '已启用挑战题加分，请至少设置一道挑战题。',
+  RECIPIENTS_REQUIRED: '请至少选择一名学生。',
+  TIMELINE_INVALID: '请检查开放、截止和关闭时间。',
+}
+
+function assignmentValidationMessage(code: string) {
+  return ASSIGNMENT_VALIDATION_MESSAGES[code] || '有一项发布条件尚未满足，请检查当前设置。'
+}
 type ProgressItem = ContractProgressCell
 type ProgressRecipient = ContractProgressRecipient
 type ProgressPayload = ContractProgressData
@@ -96,7 +110,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     setSaving(key)
     try {
       const result = await apiClient.mutate<Assignment>(endpoint, method, body)
-      if (!result.ok) { toast.error(result.error.message); return null }
+      if (!result.ok) { toast.error(result.error.userMessage); return null }
       setValidation(null)
       onChange(result.data)
       toast.success('当前区域已保存')
@@ -222,7 +236,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     setSaving('validate')
     const result = await apiClient.post<ValidationResult>(`/api/assignments/${assignment.id}/validate`)
     setSaving(null)
-    if (!result.success || !result.data) return toast.error(result.message || '发布检查失败')
+    if (!result.success || !result.data) return console.error('Assignment publish check response:', result); toast.error('发布检查失败')
     setValidation(result.data)
     result.data.valid ? toast.success('发布检查通过') : toast.warning('请先修复发布检查中的问题')
   }
@@ -234,7 +248,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     const result = await apiClient.post<Assignment>(`/api/assignments/${assignment.id}/publish`, { expectedRevision: assignment.statusRevision })
     setSaving(null)
     setConfirmPublish(false)
-    if (!result.success || !result.data) return toast.error(result.message || '发布失败')
+    if (!result.success || !result.data) return console.error('Assignment publish response:', result); toast.error('发布失败')
     onChange(result.data)
     toast.success('作业已发布，题目和学生名单已经固定')
   }
@@ -328,7 +342,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
       description="所有区域保存后，检查题目、时间和学生名单是否完整。"
       actions={<><Button variant="secondary" loading={saving === 'validate'} onClick={() => void runValidation()}>运行检查</Button><Button icon={<CheckCircle2 size={16} />} onClick={() => setConfirmPublish(true)}>发布作业</Button></>}
     >
-      {!validation ? <p className={styles.muted}>尚未运行发布检查。</p> : validation.valid ? <p>所有检查均已通过，可以发布。</p> : <ul className={styles.validationList}>{validation.issues.map(issue => <li key={`${issue.path}:${issue.code}`}>{issue.path}：{issue.message}</li>)}</ul>}
+      {!validation ? <p className={styles.muted}>尚未运行发布检查。</p> : validation.valid ? <p>所有检查均已通过，可以发布。</p> : <ul className={styles.validationList}>{validation.issues.map(issue => <li key={`${issue.path}:${issue.code}`}>{assignmentValidationMessage(issue.code)}</li>)}</ul>}
     </Section>
 
     <ConfirmDialog isOpen={confirmPublish} onClose={() => setConfirmPublish(false)} onConfirm={() => void publish()} loading={saving === 'publish'} title="发布并冻结作业？" message={`发布后将固定 ${problemDraft.length} 道题和${rosterMode === 'DYNAMIC' ? '发布时生成的学生名单' : ` ${rosterDraft.size} 名学生`}，不能再修改结构。请确认各配置区域均已保存。`} confirmText="确认发布" />
@@ -352,7 +366,7 @@ function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: 
     setSending(true)
     const result = await apiClient.mutate<{ id: number }>(`/api/assignments/${assignment.id}/submit`, 'POST', { assignmentProblemId: selected.id, language, code, inputFilename: inputFilename || null, outputFilename: outputFilename || null })
     setSending(false)
-    if (!result.ok) return toast.error(result.error.message)
+    if (!result.ok) return toast.error(result.error.userMessage)
     toast.success(`提交 #${result.data.id} 已进入评测队列`)
     onSubmitted()
   }
@@ -386,13 +400,13 @@ function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: 
           : '查看题目'
         return <div className={styles.problemCard} key={item.id}>
           <span className={styles.problemOrder}>{index + 1}</span>
-          <span className={styles.problemIdentity}><strong>{item.Problem.problemId} · {item.titleSnapshot}</strong><span>目标 {item.targetScore}/{item.maxScore}</span>{progress && <span>{learningLabel[progress.learningStatus] || progress.learningStatus} · 得分 {progress.finalScore ?? progress.bestScore ?? 0} · 提交 {progress.attemptCount ?? 0} 次{progress.correctionStatus !== 'NONE' ? ` · ${correctionLabel[progress.correctionStatus] || progress.correctionStatus}` : ''}</span>}</span>
+          <span className={styles.problemIdentity}><strong>{item.Problem.problemId} · {item.titleSnapshot}</strong><span>目标 {item.targetScore}/{item.maxScore}</span>{progress && <span>{learningLabel[progress.learningStatus] || '学习状态待确认'} · 得分 {progress.finalScore ?? progress.bestScore ?? 0} · 提交 {progress.attemptCount ?? 0} 次{progress.correctionStatus !== 'NONE' ? ` · ${correctionLabel[progress.correctionStatus] || '订正状态待确认'}` : ''}</span>}</span>
           <Button icon={canSubmit ? <Send size={16} /> : undefined} variant={canSubmit ? 'primary' : 'secondary'} onClick={() => setSelected(item)}>{actionLabel}</Button>
         </div>
       })}</div>
     </Section>
     {(workspace.corrections.length > 0 || workspace.feedback.length > 0) && <Section title="订正与教师反馈" description="只显示与你本人有关的批改事实。"><div className={styles.reviewFeed}>
-      {workspace.corrections.map(item => <div className={styles.reviewItem} key={item.id}><strong>订正 · {problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}</strong><span>{correctionLabel[item.status] || item.status}{item.requiredScore !== null && item.requiredScore !== undefined ? ` · 要求达到 ${item.requiredScore} 分` : ''}{item.dueAt ? ` · 截止 ${formatAssignmentTime(item.dueAt)}` : ''}</span>{item.reason && <p>{item.reason}</p>}</div>)}
+      {workspace.corrections.map(item => <div className={styles.reviewItem} key={item.id}><strong>订正 · {problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}</strong><span>{correctionLabel[item.status] || '订正状态待确认'}{item.requiredScore !== null && item.requiredScore !== undefined ? ` · 要求达到 ${item.requiredScore} 分` : ''}{item.dueAt ? ` · 截止 ${formatAssignmentTime(item.dueAt)}` : ''}</span>{item.reason && <p>{item.reason}</p>}</div>)}
       {workspace.feedback.map(item => <div className={styles.reviewItem} key={item.id}><strong>教师反馈{item.assignmentProblemId ? ` · ${problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}` : ''}</strong><span>{formatAssignmentTime(item.createdAt)}</span><p>{item.content}</p></div>)}
     </div></Section>}
     <FormDialog
@@ -400,7 +414,7 @@ function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: 
       onClose={() => setSelected(null)}
       onSubmit={() => void submit()}
       title={selected ? `${selected.Problem.problemId} · ${selected.titleSnapshot}` : '作业题目'}
-      description="题面在发布时固定；每次提交动态使用当时的 Stable 测试数据。"
+      description="题面在发布时固定；每次提交使用当时可用的评测数据。"
       submitText={selectedCanSubmit ? '提交评测' : '当前不可提交'}
       loading={sending}
       dirty={selectedCanSubmit && Boolean(code)}
@@ -455,7 +469,7 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
     setTransitioning(true)
     const result = await apiClient.post<Assignment>(`/api/assignments/${assignment.id}/${action}`, { expectedRevision: assignment.statusRevision })
     setTransitioning(false)
-    if (!result.success || !result.data) return toast.error(result.message || '状态更新失败')
+    if (!result.success || !result.data) return console.error('Assignment status response:', result); toast.error('状态更新失败')
     onChange(result.data); toast.success('作业状态已更新')
   }
   const nextAction = assignment.status === 'OPEN' || assignment.status === 'OVERDUE'
@@ -478,7 +492,7 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
         : { recipientId: reviewing.id, assignmentProblemId: reviewProblemId || null, delta, reason: reviewContent }
     const result = await apiClient.mutate(`/api/assignments/${assignment.id}/${endpoint}`, 'POST', body)
     setSavingReview(false)
-    if (!result.ok) return toast.error(result.error.message)
+    if (!result.ok) return toast.error(result.error.userMessage)
     toast.success(reviewKind === 'feedback' ? '反馈已保存' : reviewKind === 'correction' ? '订正任务已布置' : '调分流水已追加')
     setReviewing(null); setReviewContent(''); setReviewProblemId(''); setCorrectionRequiredScore(0); setDelta(0); onRefresh()
     void matrix.retry()
@@ -499,7 +513,7 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
       expectedVersion: reviewingCell.manualCompletionVersion || 0,
     })
     setManualSaving(false)
-    if (!result.ok) return toast.error(result.error.message)
+    if (!result.ok) return toast.error(result.error.userMessage)
     toast.success(reviewingCell.manualCompletedAt ? '已撤销人工完成' : '已确认完成')
     setManualOpen(false); setManualReason(''); closeCell(); onRefresh(); void matrix.retry()
   }
@@ -530,7 +544,7 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
       {displayed?.pagination && <Pagination currentPage={displayed.pagination.page} totalPages={displayed.pagination.totalPages} total={displayed.pagination.total} pageSize={displayed.pagination.pageSize} onPageChange={setPage} showQuickJumper={false} />}
     </Section>
     <DetailDialog isOpen={Boolean(reviewing && reviewingCell)} onClose={closeCell} title={reviewing && reviewingCell ? `批改 · ${reviewing.user.username} · ${assignment.Problems.find(problem => problem.id === reviewingCell.assignmentProblemId)?.Problem.problemId || '题目'}` : '批改详情'} description="提交、成绩、订正和人工完成均来自服务端评测事实。" size="lg" footer={<><Button variant="secondary" onClick={closeCell}>关闭</Button><Button onClick={() => { setReviewKind('feedback'); setReviewContent('') }}>添加批改动作</Button></>}>
-      {reviewingCell && <div className={styles.cellDetail}><div><span>主状态</span><strong>{statusText(reviewingCell, assignment.Problems.find(problem => problem.id === reviewingCell.assignmentProblemId)!)}</strong></div><div><span>提交次数</span><strong>{reviewingCell.attemptCount || 0}</strong></div><div><span>最好成绩</span><strong>{reviewingCell.bestScore ?? '—'}</strong></div><div><span>最终成绩</span><strong>{reviewingCell.finalScore ?? '—'}</strong></div><div><span>时间状态</span><strong>{reviewingCell.timelinessStatus === 'LATE' ? '迟交' : '按时'}</strong></div><div><span>订正状态</span><strong>{correctionLabel[reviewingCell.correctionStatus] || reviewingCell.correctionStatus}</strong></div></div>}
+      {reviewingCell && <div className={styles.cellDetail}><div><span>主状态</span><strong>{statusText(reviewingCell, assignment.Problems.find(problem => problem.id === reviewingCell.assignmentProblemId)!)}</strong></div><div><span>提交次数</span><strong>{reviewingCell.attemptCount || 0}</strong></div><div><span>最好成绩</span><strong>{reviewingCell.bestScore ?? '—'}</strong></div><div><span>最终成绩</span><strong>{reviewingCell.finalScore ?? '—'}</strong></div><div><span>时间状态</span><strong>{reviewingCell.timelinessStatus === 'LATE' ? '迟交' : '按时'}</strong></div><div><span>订正状态</span><strong>{correctionLabel[reviewingCell.correctionStatus] || '订正状态待确认'}</strong></div></div>}
       {reviewingCell && assignment.Problems.find(problem => problem.id === reviewingCell.assignmentProblemId)?.completionPolicy === 'MANUAL' && <div className={styles.manualAction}>{reviewingCell.attemptCount ? <Button variant={reviewingCell.manualCompletedAt ? 'danger' : 'primary'} onClick={() => setManualOpen(true)}>{reviewingCell.manualCompletedAt ? '撤销确认' : '确认完成'}</Button> : <span className={styles.muted}>等待学生首次提交后，才可人工确认完成。</span>}{reviewingCell.manualCompletedAt && <span>由 {reviewingCell.manualCompletedBy?.username || '教师'} 确认{reviewingCell.manualCompletionReason ? `：${reviewingCell.manualCompletionReason}` : ''}</span>}</div>}
       <div className={styles.reviewActions}><Tabs label="批改动作" value={reviewKind} onChange={value => setReviewKind(value)} items={[{ value: 'feedback', label: '反馈' }, { value: 'correction', label: '布置订正' }, { value: 'adjustment', label: '人工调分' }]} /><FormField label={reviewKind === 'feedback' ? '反馈内容' : '原因'} required><Textarea rows={4} value={reviewContent} onChange={event => setReviewContent(event.target.value)} /></FormField>{reviewKind === 'correction' && <FormField label="订正达标分"><Input type="number" min={0} max={assignment.Problems.find(problem => problem.id === reviewProblemId)?.maxScore || 0} value={correctionRequiredScore} onChange={event => setCorrectionRequiredScore(Number(event.target.value))} /></FormField>}{reviewKind === 'adjustment' && <FormField label="调分值"><Input type="number" min={-1000} max={1000} value={delta} onChange={event => setDelta(Number(event.target.value))} /></FormField>}<Button loading={savingReview} disabled={!reviewContent.trim() || (reviewKind === 'adjustment' && delta === 0)} onClick={() => void submitReview()}>保存批改动作</Button></div>
     </DetailDialog>
@@ -565,7 +579,7 @@ export function AssignmentWorkspace() {
     const result = await apiClient.post<Assignment>(`/api/assignments/${assignment.id}/cancel`, { expectedRevision: assignment.statusRevision })
     setCancelling(false)
     setConfirmCancel(false)
-    if (!result.success || !result.data) return toast.error(result.message || '取消作业失败')
+    if (!result.success || !result.data) return console.error('Assignment cancellation response:', result); toast.error('取消作业失败')
     setLocal(result.data)
     toast.success('作业已取消')
   }

@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import type { ResolvedProblemSelection } from '@oi-manager/contracts'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
@@ -75,8 +76,7 @@ function readyReferences(rows: readonly DraftRow[]): SelectedProblemReference[] 
     : [])
 }
 
-function rowMessage(status: RowStatus, fallback?: string) {
-  if (fallback) return fallback
+function rowMessage(status: RowStatus) {
   if (status === 'not_found') return '未找到该题'
   if (status === 'unavailable') return '该题暂不可用'
   if (status === 'conflict') return '平台和题号存在重复记录'
@@ -191,7 +191,7 @@ export function ProblemListEditor({
           : row))
       }
     } catch (error) {
-      if (ticket.isCurrent()) setBusinessError(error instanceof Error ? error.message : '题目列表更新失败')
+      if (ticket.isCurrent()) setBusinessError(publicErrorMessage(error, '题目列表更新失败'))
     } finally {
       businessOperation.current.finish(ticket)
     }
@@ -207,7 +207,7 @@ export function ProblemListEditor({
         : result.status === 'identity_conflict' ? 'conflict'
           : result.status === 'not_published' ? 'unavailable'
             : 'error'
-      return { status, message: rowMessage(status, result.message) }
+      return { status, message: rowMessage(status) }
     }
     const problem = result.problem
     const duplicate = currentRows.some(row => row.clientKey !== clientKey && row.status === 'ready' && row.problem?.id === problem.id)
@@ -263,7 +263,7 @@ export function ProblemListEditor({
       if (controller.signal.aborted) return false
       const currentRows = rowsRef.current
       const next = currentRows.map(item => item.clientKey === clientKey
-        ? { ...item, status: 'error' as const, problem: undefined, message: error instanceof Error ? error.message : '暂时无法确认' }
+        ? { ...item, status: 'error' as const, problem: undefined, message: publicErrorMessage(error, '暂时无法确认') }
         : item)
       setRows(next)
       await commitProjection(next)
@@ -416,7 +416,7 @@ export function ProblemListEditor({
     } catch (error) {
       if (textController.current?.signal.aborted || !mounted.current) return
       setRows(current => current.map(row => row.status === 'resolving'
-        ? { ...row, status: 'error' as const, message: error instanceof Error ? error.message : '暂时无法确认' }
+        ? { ...row, status: 'error' as const, message: publicErrorMessage(error, '暂时无法确认') }
         : row))
     } finally {
       textController.current = null

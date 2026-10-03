@@ -3,7 +3,7 @@
 import { ArrowDown, ArrowUp, Copy, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { Stage } from '../model/trainingDesign'
-import { stageKinds } from '../model/trainingDesign'
+import { trainingStageKindLabel } from '@/lib/humanPresentation'
 import styles from './TrainingEngine.module.css'
 
 type Props = {
@@ -58,7 +58,7 @@ export function TrainingStageTimeline({
             <div className={styles.stageNumber}>{index + 1}</div>
             <div className={styles.stageCardContent}>
               <strong>{stage.name}</strong>
-              <span>{stageKinds.find(item => item[0] === stage.kind)?.[1] || stage.kind} · {stage.Problems.length} 道题</span>
+              <span>{trainingStageKindLabel(stage.kind)} · {stage.Problems.length} 道题</span>
               {!editable && <small>已开始，定义只读</small>}
             </div>
             <div className={styles.stageCardActions}>

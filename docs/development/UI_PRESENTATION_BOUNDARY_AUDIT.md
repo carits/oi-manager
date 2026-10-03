@@ -7,6 +7,17 @@ source_of_truth: apps/web/src and scripts/ui-language-check.mjs
 
 # 前端呈现边界审计与整改清单
 
+## 整改状态（2026-10-03）
+
+- 基础入口已收口：`ApiError` 分离用户信息与诊断信息，未知错误 fail-closed；运行时错误、契约名称和服务端原始 message 不再直接进入业务 UI。
+- 展示适配已收口：评测结果、语言、OJ 平台、钱包、贡献、成员关系、训练、比赛、题解审核等未知枚举均使用严格 mapper，不再回退原始值。
+- 普通与管理页面已清理：revision、snapshot、Stable/Evolving、slot、graph hash、fencing token、内部 ID、raw JSON 等实现信息不再作为普通页面文案；request ID 仅在默认收起的诊断信息中提供。
+- 用户导出已清理：训练 CSV 使用平台、题号、题目等业务字段，不再导出阶段题目关系 ID。
+- 长期门禁已落地：仓库级 `AGENTS.md`、PR 用户语言审计模板、`scripts/ui-language-check.mjs` 与现有 `ui:state-check`/CI 已形成闭环；服务端内置 UI 模板也纳入扫描。
+- 验证证据：Web 单元测试 59 文件/401 项通过，Evaluation Budget 10 项服务端测试通过，Web 类型检查、完整生产构建、文档源检查、`ui:state-check` 与 `git diff --check` 通过。
+- 已知独立基线：文档总门禁仍会报告 main 既有的 9 个 Rating 路由缺显式 auth policy；全量浏览器 smoke 暴露排名列宽、导航折叠和旧 ProblemReference 交互等主干旧断言，并按用户要求停止，未以本次改动掩盖或放宽这些失败。
+
+
 下面是目前**已经确认存在**的问题清单。我把同一根因的多个页面合并成一个问题项，但会把已发现的具体文件和例子列出来。这样后面可以按任务逐项修，而不是继续零散改文案。
 
 1. **未知枚举值会直接原样显示给用户 — P0**

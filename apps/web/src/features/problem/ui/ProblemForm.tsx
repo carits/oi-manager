@@ -1,5 +1,7 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
+
 import { useAuth } from '@/features/auth'
 import { normalizeOjPlatformKey } from '@/lib/oj-platforms'
 import { ProblemPrimaryIdentity, type ProblemPrimaryIdentityValue } from './ProblemPrimaryIdentity'
@@ -34,14 +36,7 @@ interface ProblemFormProps {
   problemId?: string
 }
 
-const requestErrorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error) return error.message || fallback
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string; error?: { message?: string } } } }).response
-    return response?.data?.error?.message || response?.data?.message || fallback
-  }
-  return fallback
-}
+const requestErrorMessage = publicErrorMessage
 
 const problemDraftBootstraps = new Map<string, ReturnType<typeof createProblem>>()
 type EditorDraft = Omit<ProblemEditorMutation, 'expectedUpdatedAt'>
@@ -120,7 +115,7 @@ function ProblemFormEditor({ mode, role, problemId }: ProblemFormProps) {
         const result = await request
         if (cancelled || contextRef.current !== context) return
         if (!result.ok || !result.data.id) {
-          setLoadError(result.ok ? '无法创建题目草稿，请返回题库后重试' : result.error.message)
+          setLoadError(result.ok ? '无法创建题目草稿，请返回题库后重试' : result.error.userMessage)
           setLoading(false)
           return
         }
@@ -222,7 +217,7 @@ function ProblemFormEditor({ mode, role, problemId }: ProblemFormProps) {
       if (contextRef.current !== context) return result
       if (!result.ok) {
         setAutoSaveStatus('failed')
-        setEditorError(result.error.message || '保存失败，草稿已保留')
+        setEditorError(result.error.userMessage || '保存失败，草稿已保留')
         return result
       }
       editorVersionRef.current = result.data.updatedAt
@@ -419,7 +414,7 @@ function ProblemFormEditor({ mode, role, problemId }: ProblemFormProps) {
         setRemoteAttachments(prev => prev.filter(a => a.filename !== attachment.filename))
         void fetchAttachments()
         toast.success(`附件 "${attachment.filename}" 下载成功`)
-      } else toast.error(result.error.message || '下载失败')
+      } else toast.error(result.error.userMessage || '下载失败')
     } catch (error) {
       if (contextRef.current === context) toast.error(requestErrorMessage(error, '下载失败'))
     } finally {
@@ -437,7 +432,7 @@ function ProblemFormEditor({ mode, role, problemId }: ProblemFormProps) {
       const result = await uploadProblemAttachment(problemId, file)
       if (contextRef.current !== context) return
       if (result.success) void fetchAttachments()
-      else toast.error(result.message || '上传失败')
+      else console.error('Attachment upload response:', result); toast.error('上传失败')
     } catch (error) {
       if (contextRef.current === context) toast.error(requestErrorMessage(error, '上传失败'))
     } finally {
@@ -476,7 +471,7 @@ function ProblemFormEditor({ mode, role, problemId }: ProblemFormProps) {
       const savedFingerprint = JSON.stringify(data)
       const result = await persistEditorDraft(data)
       if (contextRef.current !== context) return
-      if (!result.ok) { toast.error(result.error.message || '保存失败，草稿已保留'); return }
+      if (!result.ok) { toast.error(result.error.userMessage || '保存失败，草稿已保留'); return }
       if (fingerprintRef.current !== savedFingerprint && fingerprintRef.current !== savedFingerprintRef.current) {
         toast.success('当前版本已保存，后续修改仍在草稿中')
         return

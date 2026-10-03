@@ -50,11 +50,11 @@ export function ContestContentEditorModal({ isOpen, contestId, value, onClose, o
         : await updateContestContentMarkdown(contestId, value.contestProblemId, value.kind, content)
       if ('ok' in response) {
         if (!response.ok) {
-          toast.error(response.error.message || '保存失败')
+          toast.error(response.error.userMessage || '保存失败')
           return
         }
       } else if (!response.success) {
-        toast.error(response.message || '保存失败')
+        console.error('Contest content save response:', response); toast.error('保存失败')
         return
       }
       toast.success(`比赛${value.kind === 'statement' ? '题面' : '题解'}已更新`)

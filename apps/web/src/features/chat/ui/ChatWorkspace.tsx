@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, MoreHorizontal } from 'lucide-react'
 import type {
@@ -53,6 +54,8 @@ import {
   updateChatPrivacy,
 } from '../api/chatApi'
 import styles from './ChatWorkspace.module.css'
+
+const contactRequestStatusLabel = (status: string) => ({ pending: '待处理', accepted: '已接受', rejected: '已拒绝', cancelled: '已撤销' } as Record<string, string>)[status] || '状态待确认'
 
 type Tab = 'messages' | 'contacts' | 'requests' | 'blocks'
 type ConfirmAction = 'clear' | 'archive' | 'remove' | 'block' | null
@@ -256,7 +259,7 @@ export default function ChatWorkspace() {
       } catch { setRecentStickerIds([]) }
     }).catch(error => {
       setStickerPacks([])
-      toast.error(error instanceof Error ? error.message : '表情包加载失败')
+      toast.error(publicErrorMessage(error, '表情包加载失败'))
     })
   }, [toast, user?.userId])
   useEffect(() => {
@@ -339,24 +342,24 @@ export default function ChatWorkspace() {
 
   const search = async () => {
     if (query.trim().length < 2) return
-    try { setResults(await searchChatUsers(query.trim())) } catch (error) { toast.error(error instanceof Error ? error.message : '搜索失败') }
+    try { setResults(await searchChatUsers(query.trim())) } catch (error) { toast.error(publicErrorMessage(error, '搜索失败')) }
   }
   const sendRequest = async () => {
     if (!requestTarget) return
     setBusy(true)
     const response = await createChatFriendRequest({ addresseeId: requestTarget.id, ...(requestMessage.trim() ? { message: requestMessage } : {}) })
     setBusy(false)
-    if (!response.ok) return toast.error(response.error.message || '申请发送失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '申请发送失败')
     setRequestTarget(undefined); setRequestMessage(''); toast.success('联系申请已发送'); await loadRelations()
   }
   const actRequest = async (request: ChatFriendRequest, action: 'accept' | 'reject' | 'cancel') => {
     const response = await respondChatFriendRequest(request.id, action)
-    if (!response.ok) toast.error(response.error.message || '操作失败')
+    if (!response.ok) toast.error(response.error.userMessage || '操作失败')
     await loadRelations()
   }
   const openFriend = async (friend: ChatFriend) => {
     const response = await createChatConversation(friend.user.id)
-    if (!response.ok) return toast.error(response.error.message || '无法创建会话')
+    if (!response.ok) return toast.error(response.error.userMessage || '无法创建会话')
     setScope('active'); await loadConversations('active'); setSelectedId(response.data.id); setTab('messages')
   }
   const send = async () => {
@@ -370,7 +373,7 @@ export default function ChatWorkspace() {
     setBusy(true)
     try {
       const response = await sendChatTextMessage(conversationId, content, clientMessageId)
-      if (!response.ok) return toast.error(response.error.message || '发送失败')
+      if (!response.ok) return toast.error(response.error.userMessage || '发送失败')
       delete pendingSendRef.current[conversationId]
       setDrafts(current => ({ ...current, [conversationId]: '' }))
       if (selectedRef.current === conversationId) {
@@ -395,7 +398,7 @@ export default function ChatWorkspace() {
     setSendingStickerId(sticker.id)
     try {
       const response = await sendChatStickerMessage(conversationId, sticker, clientMessageId)
-      if (!response.ok) { toast.error(response.error.message || '表情发送失败'); return false }
+      if (!response.ok) { toast.error(response.error.userMessage || '表情发送失败'); return false }
       delete pendingStickerRef.current[conversationId]
       if (selectedRef.current === conversationId) {
         setMessages(current => mergeMessages(current, [response.data]))
@@ -414,7 +417,7 @@ export default function ChatWorkspace() {
     setBusy(true)
     const response = await createChatReport(reportMessage.id, reportReason)
     setBusy(false)
-    if (!response.ok) return toast.error(response.error.message || '举报提交失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '举报提交失败')
     setReportMessage(undefined); toast.success('举报已提交，平台将进行审核')
   }
 
@@ -426,16 +429,16 @@ export default function ChatWorkspace() {
     let failure: string | undefined
     if (confirmAction === 'clear') {
       const result = await clearChatConversation(selected!.id)
-      if (!result.ok) failure = result.error.message
+      if (!result.ok) failure = result.error.userMessage
     } else if (confirmAction === 'archive') {
       const result = selected!.archivedAt ? await unarchiveChatConversation(selected!.id) : await archiveChatConversation(selected!.id)
-      if (!result.ok) failure = result.error.message
+      if (!result.ok) failure = result.error.userMessage
     } else if (confirmAction === 'remove') {
       const result = await removeChatFriend(target!.id)
-      if (!result.ok) failure = result.error.message
+      if (!result.ok) failure = result.error.userMessage
     } else if (confirmAction === 'block') {
       const result = await blockChatUser(target!.id)
-      if (!result.ok) failure = result.error.message
+      if (!result.ok) failure = result.error.userMessage
     }
     setBusy(false)
     if (failure) return toast.error(failure || '操作失败')
@@ -454,7 +457,7 @@ export default function ChatWorkspace() {
         : { title: '拉黑联系人？', message: '将解除联系人关系，并阻止搜索、联系申请和消息。解除拉黑不会自动恢复关系。', text: '确认拉黑' }
 
   return <PageFrame width="workbench">
-    <PageHeader title="联系人与私信" description="私聊属于平台账号空间，不随当前学校身份变化。" actions={<Switch label="允许完整用户名找到我" description="默认关闭；共享学校或团队成员不受此项影响。" checked={privacy} disabled={relationsLoading} onChange={async checked => { try { const response = await updateChatPrivacy({ allowExactUsernameDiscovery: checked }); if (response.ok) setPrivacy(checked); else toast.error(response.error.message || '设置失败') } catch { toast.error('设置保存失败，请稍后重试') } }} />} />
+    <PageHeader title="联系人与私信" description="私聊属于平台账号空间，不随当前学校身份变化。" actions={<Switch label="允许完整用户名找到我" description="默认关闭；共享学校或团队成员不受此项影响。" checked={privacy} disabled={relationsLoading} onChange={async checked => { try { const response = await updateChatPrivacy({ allowExactUsernameDiscovery: checked }); if (response.ok) setPrivacy(checked); else toast.error(response.error.userMessage || '设置失败') } catch { toast.error('设置保存失败，请稍后重试') } }} />} />
     <Tabs<Tab> value={tab} onChange={setTab} items={[{ value: 'messages', label: '消息' }, { value: 'contacts', label: '联系人', count: friends.length }, { value: 'requests', label: '联系申请', count: pending.length }, { value: 'blocks', label: '黑名单', count: blocks.length }]} />
 
     {tab === 'messages' && <div className={styles.workspace}>
@@ -485,11 +488,11 @@ export default function ChatWorkspace() {
 
     {tab === 'requests' && <section className={styles.stack}>
       {relationsError && <div className={styles.actions} role="alert"><span>{relationsError}</span><Button variant="ghost" onClick={() => void loadRelations()}>重试</Button></div>}
-      {relationsLoading && requests.length === 0 ? <div role="status">正在加载联系申请…</div> : requests.length === 0 ? <Empty title="暂无联系申请" description="收到和发出的申请会显示在这里。" /> : requests.map(request => { const incoming = request.addresseeId === user?.userId; const peer = incoming ? request.Requester : request.Addressee; return <article className={styles.row} key={request.id}><div className={styles.rowIdentity}><UserAvatar avatar={peer.avatar} username={peer.username} decorative /><div><strong>{peer.username}</strong><span>@{peer.username} · {incoming ? '向你发送联系申请' : '你发送的联系申请'} · {request.status}</span>{request.message && <p>{request.message}</p>}</div></div>{request.status === 'pending' && <div className={styles.actions}>{incoming ? <><Button onClick={() => void actRequest(request, 'accept')}>接受</Button><Button variant="secondary" onClick={() => void actRequest(request, 'reject')}>拒绝</Button></> : <Button variant="secondary" onClick={() => void actRequest(request, 'cancel')}>撤销</Button>}</div>}</article> })}</section>}
+      {relationsLoading && requests.length === 0 ? <div role="status">正在加载联系申请…</div> : requests.length === 0 ? <Empty title="暂无联系申请" description="收到和发出的申请会显示在这里。" /> : requests.map(request => { const incoming = request.addresseeId === user?.userId; const peer = incoming ? request.Requester : request.Addressee; return <article className={styles.row} key={request.id}><div className={styles.rowIdentity}><UserAvatar avatar={peer.avatar} username={peer.username} decorative /><div><strong>{peer.username}</strong><span>@{peer.username} · {incoming ? '向你发送联系申请' : '你发送的联系申请'} · {contactRequestStatusLabel(request.status)}</span>{request.message && <p>{request.message}</p>}</div></div>{request.status === 'pending' && <div className={styles.actions}>{incoming ? <><Button onClick={() => void actRequest(request, 'accept')}>接受</Button><Button variant="secondary" onClick={() => void actRequest(request, 'reject')}>拒绝</Button></> : <Button variant="secondary" onClick={() => void actRequest(request, 'cancel')}>撤销</Button>}</div>}</article> })}</section>}
 
     {tab === 'blocks' && <section className={styles.stack}>
       {relationsError && <div className={styles.actions} role="alert"><span>{relationsError}</span><Button variant="ghost" onClick={() => void loadRelations()}>重试</Button></div>}
-      {relationsLoading && blocks.length === 0 ? <div role="status">正在加载黑名单…</div> : blocks.length === 0 ? <Empty title="黑名单为空" description="被拉黑的用户不能向你发送联系申请或消息。" /> : blocks.map(block => <article className={styles.row} key={block.id}><div className={styles.rowIdentity}><UserAvatar avatar={block.Blocked.avatar} username={block.Blocked.username} decorative /><div><strong>{block.Blocked.username}</strong><span>@{block.Blocked.username}</span></div></div><Button variant="secondary" onClick={async () => { try { const result = await unblockChatUser(block.blockedId); if (!result.ok) toast.error(result.error.message); else toast.success('已解除拉黑') } catch { toast.error('解除拉黑失败，请稍后重试') } await loadRelations() }}>解除拉黑</Button></article>)}</section>}
+      {relationsLoading && blocks.length === 0 ? <div role="status">正在加载黑名单…</div> : blocks.length === 0 ? <Empty title="黑名单为空" description="被拉黑的用户不能向你发送联系申请或消息。" /> : blocks.map(block => <article className={styles.row} key={block.id}><div className={styles.rowIdentity}><UserAvatar avatar={block.Blocked.avatar} username={block.Blocked.username} decorative /><div><strong>{block.Blocked.username}</strong><span>@{block.Blocked.username}</span></div></div><Button variant="secondary" onClick={async () => { try { const result = await unblockChatUser(block.blockedId); if (!result.ok) toast.error(result.error.userMessage); else toast.success('已解除拉黑') } catch { toast.error('解除拉黑失败，请稍后重试') } await loadRelations() }}>解除拉黑</Button></article>)}</section>}
 
     <FormDialog isOpen={Boolean(requestTarget)} onClose={() => setRequestTarget(undefined)} onSubmit={() => void sendRequest()} title={`添加 ${requestTarget?.username || ''} 为联系人`} submitText="发送申请" loading={busy} dirty={Boolean(requestMessage)}><label className={styles.field}>申请附言（可选）<Textarea value={requestMessage} maxLength={500} rows={4} onChange={event => setRequestMessage(event.target.value)} /></label></FormDialog>
     <FormDialog isOpen={Boolean(reportMessage)} onClose={() => setReportMessage(undefined)} onSubmit={() => void submitReport()} title="举报消息" description="平台管理员只能在举报审核中查看有限上下文，所有查看都会记录审计。" submitText="提交举报" danger loading={busy}><label className={styles.field}>举报原因<Input value={reportReason} maxLength={100} onChange={event => setReportReason(event.target.value)} /></label></FormDialog>

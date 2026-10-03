@@ -40,6 +40,7 @@ export interface ApiClientResponse<T> {
   success: boolean
   data?: T
   message?: string
+  debugMessage?: string
   status: number
   code?: string
   requestId?: string
@@ -53,18 +54,24 @@ export class ApiError extends Error {
   readonly retryable: boolean
   readonly requestId?: string
   readonly data?: unknown
+  readonly userMessage: string
+  readonly debugMessage?: string
 
   constructor(input: {
     kind: ApiErrorKind
     status: number
-    message: string
+    userMessage?: string
+    debugMessage?: string
     code?: string
     retryable?: boolean
     requestId?: string
     data?: unknown
   }) {
-    super(input.message)
+    const userMessage = input.userMessage || '操作未完成，请稍后重试。'
+    super(userMessage)
     this.name = 'ApiError'
+    this.userMessage = userMessage
+    this.debugMessage = input.debugMessage
     this.kind = input.kind
     this.status = input.status
     this.code = input.code
@@ -99,7 +106,8 @@ function apiErrorFromResponse<T>(response: ApiClientResponse<T>): ApiError {
     kind,
     status: response.status,
     code: response.code,
-    message: response.message || '请求失败',
+    userMessage: response.message || '请求失败',
+    debugMessage: response.debugMessage,
     requestId: response.requestId,
     data: response.data,
   })
@@ -155,6 +163,7 @@ export async function parseApiResponse<T>(res: Response): Promise<ApiClientRespo
           typeof payload.message === 'string' ? payload.message : `请求失败（HTTP ${res.status}）`,
           res.status,
         ),
+    debugMessage: success || typeof payload.message !== 'string' ? undefined : payload.message,
     code: typeof payload.code === 'string' ? payload.code : undefined,
     requestId,
     errorKind: success ? undefined : 'http',
@@ -306,7 +315,7 @@ export class ApiClient {
         throw new ApiError({
           kind: 'timeout',
           status: 0,
-          message: '请求超时，请重试',
+          userMessage: '请求超时，请重试',
           retryable: false,
         })
       }
@@ -320,7 +329,7 @@ export class ApiClient {
         throw new ApiError({
           kind: 'invalid_response',
           status: response.status,
-          message: '服务器返回了空响应',
+          userMessage: '服务器返回了空响应',
           requestId: response.requestId,
           retryable: false,
         })
@@ -338,7 +347,7 @@ export class ApiClient {
     throw new ApiError({
       kind: 'network',
       status: 0,
-      message: '请求失败，请重试',
+      userMessage: '请求失败，请重试',
     })
   }
 
@@ -360,7 +369,8 @@ export class ApiClient {
       throw new ApiError({
         kind: 'invalid_response',
         status: 200,
-        message: `服务器响应不符合 ${contract.key} 契约`,
+        userMessage: '服务返回的数据暂时无法处理，请重试。',
+        debugMessage: `服务器响应不符合 ${contract.key} 契约`,
         data: parsed.error.issues,
         retryable: false,
       })
@@ -410,7 +420,8 @@ export class ApiClient {
         error: new ApiError({
           kind: 'invalid_response',
           status: 0,
-          message: `请求不符合 ${contract.key} 契约`,
+          userMessage: '当前提交的数据无法处理，请检查后重试。',
+          debugMessage: `请求不符合 ${contract.key} 契约`,
           data: bodyResult.error.issues,
           retryable: false,
         }),
@@ -425,7 +436,8 @@ export class ApiClient {
         error: new ApiError({
           kind: 'invalid_response',
           status: response.status,
-          message: `服务器响应不符合 ${contract.key} 契约`,
+          userMessage: '服务返回的数据暂时无法处理，请重试。',
+          debugMessage: `服务器响应不符合 ${contract.key} 契约`,
           requestId: response.requestId,
           data: dataResult.error.issues,
           retryable: false,
@@ -511,14 +523,14 @@ export class ApiClient {
         throw new ApiError({
           kind: timedOut ? 'timeout' : 'cancelled',
           status: 0,
-          message: timedOut ? '下载超时，请重试' : '下载已取消',
+          userMessage: timedOut ? '下载超时，请重试' : '下载已取消',
           retryable: false,
         })
       }
       throw new ApiError({
         kind: 'network',
         status: 0,
-        message: '下载失败，请检查网络后重试',
+        userMessage: '下载失败，请检查网络后重试',
       })
     } finally {
       clearTimeout(timeoutId)

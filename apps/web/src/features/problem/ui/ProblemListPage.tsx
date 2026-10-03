@@ -62,7 +62,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   const deleteList = async (id: string) => {
     const result = await deleteProblemList(id)
     setDeleteConfirm(null)
-    if (!result.ok) return toast.error(result.error.message || '删除失败')
+    if (!result.ok) return toast.error(result.error.userMessage || '删除失败')
     toast.success('题单已删除')
     await resource.retry()
   }

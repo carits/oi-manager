@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { PageFrame } from '@/components/ui/PageFrame'
@@ -39,8 +40,9 @@ import {
   submitTrainingSolution,
   transitionTrainingStage,
 } from '../api/trainingSessionApi'
-import { trainingProgressStatusLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from '@/lib/humanPresentation'
+import { trainingProgressStatusLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel , organizationRoleLabel } from '@/lib/humanPresentation'
 import { csvCell, saveBlobDownload } from '@/lib/download'
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { arbitrateTrainingDraft, type TrainingDraftSnapshot } from '../model/trainingDraftArbitration'
 import {
   TrainingAttentionPanel,
@@ -173,7 +175,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     try {
       workspace = await getTrainingWorkspace(sessionId) as Workspace
     } catch (error) {
-      const message = error instanceof Error ? error.message : '训练加载失败'
+      const message = publicErrorMessage(error, '训练加载失败')
       if (version === workspaceLoadVersion.current) setLoadError(message)
       return toast.error(message)
     }
@@ -194,9 +196,9 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     ])
     if (version !== workspaceLoadVersion.current) return
     if (coachResult.status === 'fulfilled' && coachResult.value) setDashboard(coachResult.value as Dashboard)
-    else if (coachResult.status === 'rejected') toast.error(coachResult.reason instanceof Error ? coachResult.reason.message : '教练看板加载失败')
+    else if (coachResult.status === 'rejected') toast.error(publicErrorMessage(coachResult.reason, '教练看板加载失败'))
     if (peerResult.status === 'fulfilled') setPeerProgress(peerResult.value as PeerProgress)
-    else toast.error(peerResult.reason instanceof Error ? peerResult.reason.message : '同伴进度加载失败')
+    else toast.error(publicErrorMessage(peerResult.reason, '同伴进度加载失败'))
   }, [sessionId, toast])
   useEffect(() => { void load() }, [load])
 
@@ -285,7 +287,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       const response = await listTrainingHints(sessionId, id)
       if (version === hintLoadVersion.current) setHints(response as Hint[])
     } catch (error) {
-      if (version === hintLoadVersion.current) toast.error(error instanceof Error ? error.message : '提示加载失败')
+      if (version === hintLoadVersion.current) toast.error(publicErrorMessage(error, '提示加载失败'))
     }
   }, [sessionId, toast])
   useEffect(() => {
@@ -329,7 +331,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       } catch (error) {
         if (cancelled || version !== draftLoadVersion.current) return
         setDraftState('error')
-        toast.error(error instanceof Error ? `服务器草稿加载失败：${error.message}` : '服务器草稿加载失败；本机草稿仍会保留')
+        console.error(error)
+        toast.error('服务器草稿加载失败；本机草稿仍会保留')
       }
     })()
     void loadHints(problem.id)
@@ -361,7 +364,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         if (!response.ok) {
           draftDirtyRef.current = true
           setDraftState('error')
-          if (!quiet) toast.error(response.error.message || '草稿保存失败')
+          if (!quiet) toast.error(response.error.userMessage || '草稿保存失败')
           return false
         }
         const nextRevision = Number(response.data?.revision ?? draftRevisionRef.current[snapshot.problemId] ?? 0)
@@ -380,7 +383,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       } catch (error) {
         draftDirtyRef.current = true
         setDraftState('error')
-        if (!quiet) toast.error(error instanceof Error ? error.message : '草稿保存失败')
+        if (!quiet) toast.error(publicErrorMessage(error, '草稿保存失败'))
         return false
       } finally {
         setSaving(false)
@@ -456,7 +459,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     try {
       await saveDraftRef.current(true)
       const response = await executeTrainingCommand(sessionId, { type: type as 'PAUSE_SESSION', expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, targetType: targetType as 'ALL', targetId: resolvedTargetId, payload })
-      if (!response.ok) { toast.error(response.error.message || '训练指令失败'); return false }
+      if (!response.ok) { toast.error(response.error.userMessage || '训练指令失败'); return false }
       const responseRevision = trainingResponseRevision(response.data)
       if (typeof responseRevision === 'number') statusRevisionRef.current = responseRevision
       await load(); await loadHints(selectedId)
@@ -486,7 +489,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           payload: { ...payload, ...(type === 'UNLOCK_FOR_USER' || type === 'SKIP_FOR_USER' ? { stageProblemId } : {}) },
         })
         if (!response.ok) {
-          toast.error('已处理 ' + completed + ' 人，' + participant.user.username + ' 操作失败：' + (response.error.message || '请求失败'))
+          toast.error('已处理 ' + completed + ' 人，' + participant.user.username + ' 操作失败：' + (response.error.userMessage || '请求失败'))
           return false
         }
         const responseRevision = trainingResponseRevision(response.data)
@@ -515,7 +518,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setCommandBusy(true)
     const response = await transitionTrainingStage(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, action, stageId, ...extra })
     setCommandBusy(false)
-    if (!response.ok) { toast.error(response.error.message || '阶段转换失败'); return false }
+    if (!response.ok) { toast.error(response.error.userMessage || '阶段转换失败'); return false }
     await load()
     return true
   }
@@ -525,7 +528,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setCommandBusy(true)
     const response = await extendTrainingStageTime(sessionId, stageId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, seconds: Math.round(extensionMinutes * 60), reason: extensionReason.trim() })
     setCommandBusy(false)
-    if (!response.ok) return toast.error(response.error.message || '延长阶段失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '延长阶段失败')
     setExtensionOpen(false); setExtensionMinutes(10); setExtensionReason('')
     await load()
   }
@@ -539,7 +542,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         return
       }
       const response = await submitTrainingSolution(sessionId, { stageProblemId: selectedId, code: codeRef.current, language: languageRef.current, inputFilename: submissionIoRef.current.inputFilename, outputFilename: submissionIoRef.current.outputFilename })
-      if (!response.ok) { toast.error(response.error.message || '提交失败'); return }
+      if (!response.ok) { toast.error(response.error.userMessage || '提交失败'); return }
       // A submission is a checkpoint, not the end of the editing session.
       // Keep the exact source and I/O settings so WA / partial-score workflows can iterate naturally.
       toast.success(`提交 #${response.data?.id} 已进入评测队列，代码已保留，可继续修改`)
@@ -570,7 +573,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       reason: joinReason.trim(),
     })
     setRosterSaving(false)
-    if (!response.ok) return toast.error(response.error.message || '加入训练失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '加入训练失败')
     toast.success('学员已加入当前阶段；历史阶段处理方式已记录')
     setJoinOpen(false)
     await load()
@@ -583,36 +586,35 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       reason: leaveReason.trim(),
     })
     setRosterSaving(false)
-    if (!response.ok) return toast.error(response.error.message || '退出训练失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '退出训练失败')
     toast.success('已记录中途退出；该学员的提交和进度仍然保留')
     setLeaveParticipant(undefined)
     setLeaveReason('')
     setSelectedParticipantId(undefined)
     await load()
   }
-  const saveRosterChanges = async () => { if (!roster) return; setRosterSaving(true); const response = await saveTrainingRoster(sessionId, { expectedRevision: roster.revision, participants: roster.candidates.filter(item => item.selected).map(item => ({ userId: item.userId })) }); setRosterSaving(false); if (!response.ok) return toast.error(response.error.message || '学员名单保存失败'); setRosterOpen(false); await load() }
+  const saveRosterChanges = async () => { if (!roster) return; setRosterSaving(true); const response = await saveTrainingRoster(sessionId, { expectedRevision: roster.revision, participants: roster.candidates.filter(item => item.selected).map(item => ({ userId: item.userId })) }); setRosterSaving(false); if (!response.ok) return toast.error(response.error.userMessage || '学员名单保存失败'); setRosterOpen(false); await load() }
   const createHint = async () => {
     if (!selectedId) return
     const trigger = Number(hintTrigger) || undefined
     const response = await createTrainingHint(sessionId, { stageProblemId: selectedId, level: hintLevel, title: hintTitle || undefined, content: hintContent, openMode: hintMode as 'MANUAL' | 'TIME' | 'ATTEMPT' | 'SCORE', triggerSeconds: hintMode === 'TIME' ? trigger : undefined, triggerAttempts: hintMode === 'ATTEMPT' ? trigger : undefined, triggerScore: hintMode === 'SCORE' ? trigger : undefined })
-    if (!response.ok) return toast.error(response.error.message || '提示创建失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '提示创建失败')
     setHintOpen(false); setHintTitle(''); setHintContent(''); setHintMode('MANUAL'); setHintTrigger(''); await loadHints(selectedId)
   }
   const showReport = async () => { const response = await getTrainingReport(sessionId).catch(() => null); if (!response) return toast.error('训练报告加载失败'); setReport(response as TrainingReport); setReportOpen(true) }
   const exportReportCsv = () => {
     if (!report || !data) return
+    const problems = new Map(data.session.Stages.flatMap(stage => stage.Problems.map(item => [item.id, item] as const)))
     const rows = [
-      ['学员', '分组', '训练题目 ID', '状态', '最高分', '提交次数', '学员有效训练秒数'],
-      ...report.participants.flatMap(participant => participant.progress.map(entry => [participant.user.username, participant.group.name, entry.stageProblemId, trainingProgressStatusLabel(entry.status), entry.bestScore ?? 0, entry.attemptCount ?? 0, participant.activeSeconds])),
+      ['学员', '分组', '平台', '题号', '题目', '状态', '最高分', '提交次数', '有效训练时长'],
+      ...report.participants.flatMap(participant => participant.progress.map(entry => {
+        const problem = problems.get(entry.stageProblemId)
+        return [participant.user.username, participant.group.name, problem ? ojPlatformDisplayName(problem.Problem.platform) : '其他平台', problem?.Problem.problemId || '—', problem?.alias || problem?.Problem.title || '题目', trainingProgressStatusLabel(entry.status), entry.bestScore ?? 0, entry.attemptCount ?? 0, formatDuration(participant.activeSeconds)]
+      })),
     ]
     const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n')
     const safeTitle = data.session.title.replace(/[\\/:*?"<>|]/g, '_')
     saveBlobDownload(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${safeTitle}-训练报告.csv`)
-  }
-  const exportReportJson = () => {
-    if (!report || !data) return
-    const safeTitle = data.session.title.replace(/[\\/:*?"<>|]/g, '_')
-    saveBlobDownload(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' }), `${safeTitle}-训练报告.json`)
   }
   const submitGroupChange = async () => {
     const stageId = groupChangeMode === 'next_stage' ? groupChangeStageId : data?.session.currentStageId
@@ -620,7 +622,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setCommandBusy(true)
     const response = await changeTrainingStageGroup(sessionId, stageId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, participantIds: groupChangeParticipantIds, toGroupId: groupChangeTarget, effectiveMode: groupChangeMode, ...(groupChangeMode === 'next_stage' ? { targetStageId: groupChangeStageId } : {}), reason: groupChangeReason.trim() })
     setCommandBusy(false)
-    if (!response.ok) return toast.error(response.error.message || '调整分组失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '调整分组失败')
     toast.success('已调整 ' + groupChangeParticipantIds.length + ' 名学员的训练分组')
     setGroupChangeParticipantIds([]); setSelectedParticipantIds([]); setGroupChangeTarget(''); setGroupChangeReason(''); setGroupChangeMode('immediate'); setGroupChangeStageId(''); await load()
   }
@@ -640,7 +642,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       reason: splitReason.trim(),
     })
     setCommandBusy(false)
-    if (!response.ok) return toast.error(response.error.message || '拆组失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '拆组失败')
     toast.success(splitMode === 'next_stage' ? '新分组已建立，将在目标阶段开始时生效' : '新分组已建立，所有学员仍处于当前阶段')
     setSplitSourceGroupId(''); setSplitName(''); setSplitParticipantIds([]); setSplitReason(''); setSplitMode('immediate'); setSplitStageId('')
     await load()
@@ -655,7 +657,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       reason: mergeReason.trim(),
     })
     setCommandBusy(false)
-    if (!response.ok) return toast.error(response.error.message || '合组失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '合组失败')
     toast.success('分组已合并，历史进度和提交均已保留')
     setMergeSourceGroupId(''); setMergeTargetGroupId(''); setMergeReason('')
     await load()
@@ -681,14 +683,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       })
       if (!response.ok) {
         setCommandBusy(false)
-        toast.error(response.error.message || '追加训练题失败')
+        toast.error(response.error.userMessage || '追加训练题失败')
         await load()
         return
       }
       expectedRevision = response.data.session.statusRevision
     }
     setCommandBusy(false)
-    toast.success('临时训练题已追加，原始阶段快照保持不变')
+    toast.success('临时训练题已追加，原有训练安排不会被修改')
     setRuntimeProblemOpen(false)
     setRuntimeProblems([])
     setRuntimeProblemTargetType('ALL')
@@ -709,7 +711,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       setTransitionDialog(undefined); setTransitionReason('')
     }
   }
-  const recordStrategy = async (decision: string) => { const response = await recordTrainingStrategy(sessionId, { stageProblemId: selectedId, decision }); if (!response.ok) toast.error(response.error.message || '策略记录失败'); else toast.success('策略决策已记录') }
+  const recordStrategy = async (decision: string) => { const response = await recordTrainingStrategy(sessionId, { stageProblemId: selectedId, decision }); if (!response.ok) toast.error(response.error.userMessage || '策略记录失败'); else toast.success('策略决策已记录') }
 
   if (!data) return <PageFrame width="workbench"><div className={styles.stack}>
     <PageHeader title="训练工作台" description={loadError ? "训练状态暂时无法读取" : "正在准备训练状态…"} />
@@ -730,10 +732,10 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const nextPendingStage = pendingStages.find(stage => !currentStage || data.session.Stages.indexOf(stage) > data.session.Stages.indexOf(currentStage))
   const futureStages = pendingStages
   const groupTargetStage = groupChangeMode === 'next_stage' ? futureStages.find(stage => stage.id === groupChangeStageId) : currentStage
-  const reportGroupName = (groupId?: string) => data.session.Groups.find(group => group.id === groupId)?.name || (groupId ? groupId : '未分组')
+  const reportGroupName = (groupId?: string) => data.session.Groups.find(group => group.id === groupId)?.name || (groupId ? '未知分组' : '未分组')
   const reportStageName = (stageId?: string | null) => report?.timeline.find(stage => stage.id === stageId)?.name || '未记录阶段'
-  const reportParticipantName = (participantId: string) => dashboard?.participants.find(item => item.id === participantId)?.user.username || participantId
-  const reportUserName = (userId?: string | null) => report?.participants.find(item => item.user.id === userId)?.user.username || userId || '未知学员'
+  const reportParticipantName = (participantId: string) => dashboard?.participants.find(item => item.id === participantId)?.user.username || '未知学员'
+  const reportUserName = (userId?: string | null) => report?.participants.find(item => item.user.id === userId)?.user.username || '未知学员'
   const targetedCommandDisabled = commandBusy || ((commandTargetType === 'GROUP' || commandTargetType === 'USER') && !commandTargetId) || (commandTargetType === 'TEAM' && !data.session.teamId)
   const runningExtraSeconds = currentStage?.runningSince && status === 'RUNNING' ? Math.max(0, Math.floor((Date.now() - new Date(currentStage.runningSince).getTime()) / 1000)) : 0
   const currentStageElapsed = (currentStage?.activeElapsedSeconds || 0) + runningExtraSeconds
@@ -829,7 +831,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       : access?.canView
         ? trainingProgressStatusLabel(progress?.status || 'NOT_STARTED') + (progress?.bestScore != null ? ' · ' + progress.bestScore + ' 分' : '')
         : lockedLabel
-    return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? requirementLabel : '本阶段历史'} · {progressLabel}{data.manager ? ' · 动态 Evolving' : ''}</small></span></Button>
+    return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{stage.id === activeStageId ? requirementLabel : '本阶段历史'} · {progressLabel}{data.manager ? ' · 使用当前训练数据' : ''}</small></span></Button>
   }
   return <PageFrame width="workbench"><div className={styles.stack}>
     <PageHeader
@@ -976,21 +978,21 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {stage.Problems.filter(item => data.manager || data.permissions[item.id]?.canSeeMetadata).filter(item => item.required === false).map(item => renderRailProblem(stage, item, '当前选做'))}
       </section>)}</aside>
       <main id="training-problem-workspace" className={styles.stack}>{problem ? <>
-        <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${problem.Problem.platform} · 提交时使用当前 Evolving（缺失时回退 Stable）` : '提交时使用当前训练数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的 Markdown 题面快照。</p>}</Section>
+        <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={data.manager ? `${ojPlatformDisplayName(problem.Problem.platform)} · 提交时使用当前可用的训练数据评测` : '提交时使用当前训练数据评测'}>{problem.Statements?.find((item) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problem.Statements.find((item) => item.format === 'markdown')!.content!} /> : <p className={styles.muted}>该训练发布时没有可用的题面内容。</p>}</Section>
         <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。">
           <div className={styles.stack}>
             <label className={styles.field}>语言<Select value={language} disabled={!data.permissions[problem.id]?.canEdit} onChange={event => { if (!code || window.confirm('将保留当前代码并切换语言。是否继续？')) handleLanguageChange(event.target.value) }}><option value="cpp17">C++17</option><option value="python3">Python3</option><option value="c">C</option></Select></label>
             <label className={styles.field} htmlFor="training-source-editor">代码草稿<SubmissionCodeEditor id="training-source-editor" value={code} onChange={handleCodeChange} onLocalDraftRestore={handleLocalDraftRestore} language={language} draftKey={editorDraftKey} readOnly={!data.permissions[problem.id]?.canEdit} minHeight={420} aria-describedby="training-draft-status" /></label>
             <SubmissionIoFields value={submissionIo} onChange={handleSubmissionIoChange} disabled={!data.permissions[problem.id]?.canEdit} />
             <p id="training-draft-status" className={styles.muted} aria-live="polite">
-              {draftState === 'loading' ? '正在读取草稿…' : draftState === 'saving' ? '正在保存草稿…' : draftState === 'dirty' ? '有尚未同步到服务器的修改' : draftState === 'conflict' ? '检测到本地草稿与云端草稿不一致；当前编辑器保留本地内容。' : draftState === 'error' ? '草稿同步失败，本机副本仍保留；请重试保存' : `草稿已同步${draftRevision ? ` · 版本 ${draftRevision}` : ''}`}
+              {draftState === 'loading' ? '正在读取草稿…' : draftState === 'saving' ? '正在保存草稿…' : draftState === 'dirty' ? '有尚未同步到服务器的修改' : draftState === 'conflict' ? '检测到本地草稿与云端草稿不一致；当前编辑器保留本地内容。' : draftState === 'error' ? '草稿同步失败，本机副本仍保留；请重试保存' : '草稿已同步'}
             </p>
-            {draftConflict && <section className={styles.draftConflict} role="alert" aria-label="草稿版本冲突">
-              <strong>发现两个不同的草稿版本</strong>
-              <p>为避免覆盖，当前编辑器继续保留本地内容。请比较后选择保留本地版本或改用云端版本；也可以先下载两个版本。</p>
+            {draftConflict && <section className={styles.draftConflict} role="alert" aria-label="草稿内容冲突">
+              <strong>发现两份不同的草稿</strong>
+              <p>为避免覆盖，当前编辑器继续保留本地内容。请比较后选择保留本地内容或改用云端内容；也可以先下载两份草稿。</p>
               <div className={styles.draftCompare}>
                 <div><strong>本地草稿</strong><pre>{draftConflict.local.code || '（空草稿）'}</pre></div>
-                <div><strong>云端草稿{draftRevision ? ` · 版本 ${draftRevision}` : ''}</strong><pre>{draftConflict.remote.code || '（空草稿）'}</pre></div>
+                <div><strong>云端草稿</strong><pre>{draftConflict.remote.code || '（空草稿）'}</pre></div>
               </div>
               <div className={styles.actions}><Button onClick={keepLocalDraft}>保留本地草稿</Button><Button variant="secondary" onClick={useRemoteDraft}>使用云端草稿</Button><Button variant="ghost" onClick={downloadDraftConflict}>下载冲突副本</Button></div>
             </section>}
@@ -1009,7 +1011,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
                 : '已达到强制切题阈值，请先切换到其他开放题目。'}
         ><p className={styles.muted}>时间策略只改变 Runtime 权限与提示，不会修改阶段计划时长或删除已有进度。</p></Section>}
         {data.session.sessionType === 'ACM' && status === 'RUNNING' && activeStrategy && (activeStrategy.decisionDue || activeStrategy.switchRecommended || activeStrategy.switchRequired) && <Section title="策略检查" description={activeStrategy.switchRequired ? '当前策略要求切题；记录切题决定后选择其他开放题目。' : activeStrategy.switchRecommended ? '当前题已持续较久，建议重新评估是否切题。' : '到了本轮策略复盘时间，请记录你的决定。'}><div className={styles.actions}><Button variant="secondary" disabled={activeStrategy.switchRequired} onClick={() => void recordStrategy('CONTINUE')}>继续当前题</Button><Button onClick={() => void recordStrategy('SWITCH')}>决定切题</Button></div></Section>}
-        <Section title="分级提示" description="提示支持教练手动、训练时间、提交次数或分数条件开放；使用情况会进入训练报告。" actions={data.manager ? <Button variant="secondary" onClick={() => setHintOpen(true)}>新增提示</Button> : undefined}><div className={styles.actions}>{hints.length ? hints.map(hint => data.manager ? <span className={styles.actions} key={hint.id}><Button variant={hint.globallyOpenedAt ? 'secondary' : 'outline'} disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('OPEN_HINT', { hintId: hint.id })}>{hint.level} 级 · {hint.title || '提示'} · 开放</Button><Button variant="ghost" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('CLOSE_HINT', { hintId: hint.id })}>关闭</Button></span> : <Button key={hint.id} variant="outline" onClick={async () => { const response = await openTrainingHint(sessionId, hint.id); if (response.ok && response.data) setOpenedHint(response.data as Hint); else toast.error(response.ok ? '提示尚未开放' : response.error.message) }}>{hint.opened ? '再次查看' : '打开'} {hint.level} 级提示</Button>) : <p className={styles.muted}>暂无已开放提示。</p>}</div></Section>
+        <Section title="分级提示" description="提示支持教练手动、训练时间、提交次数或分数条件开放；使用情况会进入训练报告。" actions={data.manager ? <Button variant="secondary" onClick={() => setHintOpen(true)}>新增提示</Button> : undefined}><div className={styles.actions}>{hints.length ? hints.map(hint => data.manager ? <span className={styles.actions} key={hint.id}><Button variant={hint.globallyOpenedAt ? 'secondary' : 'outline'} disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('OPEN_HINT', { hintId: hint.id })}>{hint.level} 级 · {hint.title || '提示'} · 开放</Button><Button variant="ghost" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('CLOSE_HINT', { hintId: hint.id })}>关闭</Button></span> : <Button key={hint.id} variant="outline" onClick={async () => { const response = await openTrainingHint(sessionId, hint.id); if (response.ok && response.data) setOpenedHint(response.data as Hint); else toast.error(response.ok ? '提示尚未开放' : response.error.userMessage) }}>{hint.opened ? '再次查看' : '打开'} {hint.level} 级提示</Button>) : <p className={styles.muted}>暂无已开放提示。</p>}</div></Section>
       </> : <Section title="请选择训练题目"><p className={styles.muted}>题目可能尚未按当前阶段开放。</p></Section>}</main>
       {data.manager && <aside id="training-participants" className={`${styles.stack} ${styles.coach}`}>
         <Section title="全部学员" description="筛选后点击学员查看详情和课堂干预操作。">
@@ -1071,7 +1073,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </aside>}
 
     </div>
-    {!data.manager && peerProgress && peerProgress.entries.length > 0 && <Section title="同学训练进度" description={`可见内容：${visibilityLabel[peerProgress.peerVisibility] || peerProgress.peerVisibility} · 排列方式：${rankingLabel[peerProgress.rankingMode] || peerProgress.rankingMode}`}><div className={styles.peerGrid}>{peerProgress.entries.map(item => <article className={styles.peerCard} key={item.user.id}>{item.rank && <span>#{item.rank}</span>}<strong>{item.user.username}</strong><span>完成 {item.completed}/{item.total}</span>{item.score !== undefined && <span>{item.score} 分</span>}{item.penaltyMinutes !== undefined && <span>罚时 {item.penaltyMinutes} 分钟</span>}{item.attempts !== undefined && <span>{item.attempts} 次提交</span>}</article>)}</div></Section>}
+    {!data.manager && peerProgress && peerProgress.entries.length > 0 && <Section title="同学训练进度" description={`可见内容：${visibilityLabel[peerProgress.peerVisibility] || '可见范围待确认'} · 排列方式：${rankingLabel[peerProgress.rankingMode] || '排列方式待确认'}`}><div className={styles.peerGrid}>{peerProgress.entries.map(item => <article className={styles.peerCard} key={item.user.id}>{item.rank && <span>#{item.rank}</span>}<strong>{item.user.username}</strong><span>完成 {item.completed}/{item.total}</span>{item.score !== undefined && <span>{item.score} 分</span>}{item.penaltyMinutes !== undefined && <span>罚时 {item.penaltyMinutes} 分钟</span>}{item.attempts !== undefined && <span>{item.attempts} 次提交</span>}</article>)}</div></Section>}
     <TrainingParticipantDrawer
       participant={selectedParticipant}
       stageName={selectedParticipantStage?.name}
@@ -1149,7 +1151,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <label className={styles.field}>退出原因<Textarea rows={5} maxLength={2000} value={leaveReason} onChange={event => setLeaveReason(event.target.value)} /></label>
       </div>
     </FormDialog>
-    <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理训练学员" description="这里决定谁参加训练；不同阶段的分组方案在训练设计中配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
+    <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理训练学员" description="这里决定谁参加训练；不同阶段的分组方案在训练设计中配置。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRosterChanges()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.problemPicker}>{roster?.candidates.map(item => <Checkbox key={item.userId} label={item.displayName} description={`${item.username} · ${organizationRoleLabel(item.role)}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />)}</div></FormDialog>
     <FormDialog
       isOpen={Boolean(splitSourceGroupId)}
       onClose={() => { setSplitSourceGroupId(''); setSplitName(''); setSplitParticipantIds([]); setSplitReason(''); setSplitMode('immediate'); setSplitStageId('') }}
@@ -1260,7 +1262,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       isOpen={runtimeProblemOpen}
       onClose={() => setRuntimeProblemOpen(false)}
       title="追加训练题"
-      description="临时题只影响当前全局阶段和指定对象，不修改阶段启动时的不可变设计快照，并会写入训练报告。"
+      description="临时题只影响当前阶段和指定对象，不会修改原有训练安排，并会写入训练报告。"
       onSubmit={() => void submitRuntimeProblems()}
       submitText="确认追加"
       loading={commandBusy}
@@ -1289,13 +1291,13 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     <DetailDialog isOpen={Boolean(openedHint)} onClose={() => setOpenedHint(undefined)} title={`${openedHint?.level || ''} 级提示 · ${openedHint?.title || '提示'}`} size="md"><p>{openedHint?.content}</p></DetailDialog>
     <DetailDialog isOpen={reportOpen} onClose={() => setReportOpen(false)} title="训练过程报告" description="按阶段和训练组展示真实运行历史。" size="xl">
       <div className={styles.stack}>
-        {report && <div className={styles.actions}><Button variant="secondary" onClick={exportReportCsv}>导出学员明细 CSV</Button><Button variant="ghost" onClick={exportReportJson}>导出完整 JSON</Button></div>}
+        {report && <div className={styles.actions}><Button variant="secondary" onClick={exportReportCsv}>导出学员明细 CSV</Button></div>}
         {report && <Section title="训练汇总"><div className={styles.summary}><div className={styles.metric}><strong>{report.timeline.length}</strong>阶段</div><div className={styles.metric}><strong>{report.participants.length}</strong>学员</div><div className={styles.metric}><strong>{report.groupChanges.length}</strong>换组记录</div></div></Section>}
         {report?.timeline.map(stage => <article className={styles.card} key={stage.id}><h3>{stage.orderIndex + 1}. {stage.name}</h3><p>状态：{trainingStageStatusLabel(stage.lifecycle)} · 计划 {formatDuration(stage.plannedDurationSeconds)} · 实际 {formatDuration(stage.actualDurationSeconds)}{stage.endReason ? ' · ' + trainingStageEndReasonLabel(stage.endReason) : ''}</p><div className={styles.timeline}>{stage.plans.map(plan => <div className={styles.timelineItem} key={plan.id}><strong>{plan.groupName || '全班默认'}{plan.isDefault ? ' · 默认计划' : plan.inheritsDefault ? ' · 继承默认' : ' · 独立覆盖'}</strong><br /><span>{plan.problemIds.length} 题</span></div>)}</div>{Boolean(stage.groupCompletions?.length) && <div className={styles.timeline}>{stage.groupCompletions?.map(group => <div className={styles.timelineItem} key={group.groupId}><strong>{group.groupName} · {group.completedParticipants}/{group.participantCount} 人完成</strong><br /><span>计划要求完成 {group.completedAssignments}/{group.requiredAssignments} 项</span></div>)}</div>}{stage.timeAdjustments.length > 0 && <small>延时记录：{stage.timeAdjustments.map(item => formatDuration(item.seconds) + '（' + item.reason + '）').join('；')}</small>}</article>)}
-        {Boolean(report?.runtimeProblems.length) && <Section title="临时追加题目"><div className={styles.timeline}>{report?.runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><strong>{item.payload?.platform || '题库'} · {item.payload?.problemId || item.stageProblemId} · {item.payload?.title || '训练题'}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? '指定分组' : '指定学员'} · {item.payload?.required === false ? '选做' : '必做'} · 目标 {item.payload?.targetScore ?? 100} 分 · {item.payload?.reason || '未记录原因'}</span></div>)}</div></Section>}
+        {Boolean(report?.runtimeProblems.length) && <Section title="临时追加题目"><div className={styles.timeline}>{report?.runtimeProblems.map(item => <div className={styles.timelineItem} key={item.id}><strong>{ojPlatformDisplayName(item.payload?.platform)} · {item.payload?.problemId || '题号待确认'} · {item.payload?.title || '训练题'}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? '指定分组' : '指定学员'} · {item.payload?.required === false ? '选做' : '必做'} · 目标 {item.payload?.targetScore ?? 100} 分 · {item.payload?.reason || '未记录原因'}</span></div>)}</div></Section>}
         {Boolean(report?.rosterEvents.length) && <Section title="中途加入与退出"><div className={styles.timeline}>{report?.rosterEvents.map(event => <div className={styles.timelineItem} key={event.id}><strong>{event.type.endsWith('.joined') ? '加入训练' : '退出训练'} · {reportUserName(event.targetId)}</strong><br /><span>{event.payload?.reason || '未记录原因'} · {new Date(event.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         {Boolean(report?.groupChanges.length) && <Section title="换组时间线"><div className={styles.timeline}>{report?.groupChanges.map(change => <div className={styles.timelineItem} key={change.id}><strong>{reportParticipantName(change.participantId)}</strong><br /><span>{reportStageName(change.targetStageId)} · {reportGroupName(change.fromGroupId || undefined)} → {reportGroupName(change.toGroupId)} · {change.reason} · {new Date(change.appliedAt || change.createdAt).toLocaleString()}</span></div>)}</div></Section>}
-        {Boolean(report?.interventions.length) && <Section title="课堂干预时间线"><div className={styles.timeline}>{report?.interventions.map(item => <div className={styles.timelineItem} key={item.id}><strong>{interventionLabel[item.type] || item.type}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? reportGroupName(item.targetId || undefined) : item.targetType === 'USER' ? reportUserName(item.targetId) : '当前团队'}{item.payload?.stageProblemId ? ' · ' + (problemNames[item.payload.stageProblemId] || item.payload.stageProblemId) : ''}{item.payload?.message ? ' · ' + item.payload.message : ''} · {new Date(item.createdAt).toLocaleString()}</span></div>)}</div></Section>}
+        {Boolean(report?.interventions.length) && <Section title="课堂干预时间线"><div className={styles.timeline}>{report?.interventions.map(item => <div className={styles.timelineItem} key={item.id}><strong>{interventionLabel[item.type] || '课堂操作'}</strong><br /><span>{item.targetType === 'ALL' ? '全体学员' : item.targetType === 'GROUP' ? reportGroupName(item.targetId || undefined) : item.targetType === 'USER' ? reportUserName(item.targetId) : '当前团队'}{item.payload?.stageProblemId ? ' · ' + (problemNames[item.payload.stageProblemId] || '题目') : ''}{item.payload?.message ? ' · ' + item.payload.message : ''} · {new Date(item.createdAt).toLocaleString()}</span></div>)}</div></Section>}
         <div className={styles.grid}>{report?.participants.map(item => <article className={styles.card} key={item.user.id}><h3>{item.user.username}</h3><p>{item.group.name} · 有效训练 {formatDuration(item.activeSeconds)}</p><p>{item.progress.length} 条题目进度</p></article>)}</div>
       </div>
     </DetailDialog>

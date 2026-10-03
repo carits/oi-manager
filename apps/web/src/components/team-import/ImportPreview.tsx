@@ -19,6 +19,18 @@ import { useToast } from '@/components/ui/Toast'
 
 const conflictColorStyle = (color: string): React.CSSProperties => ({ '--conflict-color': color } as React.CSSProperties)
 
+function conflictDescription(conflict: ConflictInfo) {
+  if (conflict.type === 'username_same_school') return `当前学校已有用户名“${conflict.matchedUsername || '该用户名'}”${conflict.matchedStudentName ? `（${conflict.matchedStudentName}）` : ''}。`
+  if (conflict.type === 'name_same_school') return `当前学校已有同名学生${conflict.matchedStudentName ? `“${conflict.matchedStudentName}”` : ''}，请确认是否为同一人。`
+  if (conflict.type === 'username_diff_school') return '该用户名已被其他账号使用，请修改用户名。'
+  if (conflict.type === 'invalid_username') return '用户名格式不正确，请使用字母、数字、下划线、连字符或点。'
+  return '该成员信息需要确认。'
+}
+
+function importSummary(result: ImportResult) {
+  return `已创建 ${result.createdCount} 人，发送邀请 ${result.invitedCount} 人，跳过 ${result.skippedCount} 人，失败 ${result.errorCount} 人。`
+}
+
 // ── 可编辑文本框：独立 state，打字时不触发父组件重渲染 ──
 
 function EditableField({
@@ -151,7 +163,7 @@ export default function ImportPreview({
       try {
         const result = await checkTeamId(teamId)
         if (!result.valid) {
-          setTeamIdError(result.message || '团队ID不可用')
+          setTeamIdError('团队标识不可用')
           setTeamIdValidating(false)
           return
         }
@@ -287,7 +299,7 @@ export default function ImportPreview({
       if (result.success) {
         setImportResult(result)
       } else {
-        toast.error(result.message || '导入失败')
+        console.error('Import response:', result); toast.error('导入失败')
       }
     } catch {
       toast.error('导入失败')
@@ -323,7 +335,7 @@ export default function ImportPreview({
           </p>
         )}
         {importResult.message && (
-          <p className={unifiedStyles.u5}>{importResult.message}</p>
+          <p className={unifiedStyles.u5}>{importSummary(importResult)}</p>
         )}
 
         {/* 新学生账号信息 */}
@@ -548,7 +560,7 @@ export default function ImportPreview({
                           </span>
                         </div>
                         <p className={unifiedStyles.u27}>
-                          {conflict.message}
+                          {conflictDescription(conflict)}
                         </p>
 
                         {/* 解决方案按钮组 */}

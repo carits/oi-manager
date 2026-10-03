@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS } from './judge-constants'
+import { getLanguageLabel, judgeFailureSummary, judgeResultLabel, JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS } from './judge-constants'
 
 describe('judge filter options', () => {
   it('uses explicit localized labels for the unfiltered state', () => {
@@ -13,5 +13,12 @@ describe('judge filter options', () => {
       'judging',
       'ole',
     ]))
+  })
+
+  it('does not expose unknown result or language protocol values', () => {
+    const internal = 'FUTURE_INTERNAL_VALUE'
+    expect(judgeResultLabel(internal)).not.toContain(internal)
+    expect(getLanguageLabel(internal)).not.toContain(internal)
+    expect(judgeFailureSummary(internal)).not.toContain(internal)
   })
 })

@@ -1,9 +1,17 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-28
+last_verified: 2026-10-03
 source_of_truth: Git history
 ---
+
+## 2026-10-03 — 前端呈现边界收口
+
+- 建立用户信息与诊断信息双通道：业务组件只消费安全的用户文案，原始错误、请求编号、内部 ID、版本、哈希、并发令牌和协议数据仅进入日志或受权限控制的诊断区域。
+- 收紧错误处理、业务枚举、评测结果、平台、钱包、贡献、题解审核和评测程序展示 mapper；未知值不再回退为 API 原值，并用 `FUTURE_INTERNAL_VALUE` 覆盖未来枚举回归。
+- 清理训练、比赛、作业、提交、博客、聊天、题目质量、候选测试数据、数据市场和管理后台中的实现术语、原始 JSON 与内部标识；导出内容同步改为业务字段。
+- 新增 `scripts/ui-language-check.mjs` 并接入 `pnpm ui:state-check`，阻止 raw enum fallback、后端原始 message、实现术语和 JSX 原始 JSON 重新进入界面。
+- 完整问题清单、整改原则和验收证据见 [前端呈现边界审计](development/UI_PRESENTATION_BOUNDARY_AUDIT.md)。
 
 
 ## 2026-09-28 — 题目身份与保存完整性收口

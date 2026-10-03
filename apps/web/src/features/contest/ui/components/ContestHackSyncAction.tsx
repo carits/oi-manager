@@ -32,8 +32,8 @@ export function ContestHackSyncAction({ contestId, contestProblemId }: { contest
     setSyncing(true)
     try {
       const result = await applyContestTestSetUpdate(contestId, contestProblemId)
-      if (!result.ok) return toast.error(result.error.message || 'Stable 数据快照更新失败')
-      toast.success('比赛已刷新到当前 Stable 数据')
+      if (!result.ok) return toast.error(result.error.userMessage || '正式评测数据更新失败')
+      toast.success('比赛已刷新到当前正式评测数据')
       setPreview(current => current ? {
         ...current,
         pending: false,

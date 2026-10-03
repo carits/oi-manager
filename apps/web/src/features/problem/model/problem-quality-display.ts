@@ -8,10 +8,10 @@ export function effectiveQualityStatus(status: QualityStatus, isStale?: boolean)
 
 export function qualityStatusPresentation(status: QualityStatus, isStale?: boolean): { label: string; variant: BadgeVariant; description: string } {
   const effective = effectiveQualityStatus(status, isStale)
-  if (effective === 'READY') return { label: '可用', variant: 'success', description: '正确性硬门槛已通过，可解读 DQS。' }
-  if (effective === 'CRITICAL') return { label: '严重问题', variant: 'error', description: '命中正确性 Critical Gate，DQS 不可用。' }
-  if (effective === 'STALE') return { label: '已过期', variant: 'warning', description: '评估输入已变化，历史快照保留但需重新评估。' }
-  return { label: '未就绪', variant: 'warning', description: '缺少 STD、Validator、Checker、完整 Revision 或可用 Evaluation/Holdout，DQS 不可用。' }
+  if (effective === 'READY') return { label: '可用', variant: 'success', description: '数据质量检查已通过。' }
+  if (effective === 'CRITICAL') return { label: '严重问题', variant: 'error', description: '发现影响评测正确性的严重问题。' }
+  if (effective === 'STALE') return { label: '已过期', variant: 'warning', description: '评估依据已变化，需要重新进行质量检查。' }
+  return { label: '未就绪', variant: 'warning', description: '当前缺少完成质量检查所需的评测配置或验证数据。' }
 }
 
 export function qualityJobPresentation(status: string): { label: string; variant: BadgeVariant } {

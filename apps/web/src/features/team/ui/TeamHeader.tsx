@@ -67,7 +67,7 @@ export function TeamHeader({
       if (result.ok) {
         onAvatarUpdate?.(result.data.avatar)
       } else {
-        toast.error(result.error.message || '上传失败')
+        toast.error(result.error.userMessage || '上传失败')
       }
     } catch (error) {
       console.error('Upload avatar error:', error)

@@ -1,5 +1,8 @@
 'use client'
 
+import { getLanguageLabel } from '@/lib/judge-constants'
+
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BookOpenCheck, FileClock, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/features/auth'
@@ -13,13 +16,15 @@ import {
   canEditSolutionContribution,
   isFullSolutionType,
   reviewActionsForStatus,
-  SOLUTION_STATUS_LABELS,
   SOLUTION_TYPE_LABELS,
+  solutionReviewDecisionLabel,
+  solutionReviewTypeLabel,
+  solutionStatusLabel,
   solutionSubmissionAction,
+  solutionVerificationLabel,
   type SolutionDraftLike,
   type SolutionType,
   validateSolutionDraft,
-  VERIFICATION_STATUS_LABELS,
 } from '../model/solution-editorial'
 import styles from './SolutionEditorialPanel.module.css'
 import {
@@ -73,6 +78,7 @@ function latestSimilarity(item: Contribution) {
 
 function latestSimilarityJob(item: Contribution) { return item.Revisions?.[0]?.SimilarityJob || null }
 const SIMILARITY_JOB_LABELS: Record<string, string> = { QUEUED: '等待检查', RUNNING: '检查中', READY: '已完成', FAILED: '检查失败' }
+const similarityJobStatusLabel = (status: string) => SIMILARITY_JOB_LABELS[status] || '检查状态待确认'
 
 function statusTone(status: string) {
   if (['PUBLISHED', 'ACCEPTED', 'TECHNICALLY_VALID', 'PASSED', 'SKIPPED'].includes(status)) return 'success'
@@ -114,11 +120,11 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
       canManage ? listSolutionReviewQueue() : Promise.resolve([]),
     ])
     if (published.status === 'fulfilled') setSolutions(published.value)
-    else toast.error(published.reason instanceof Error ? published.reason.message : '读取题解失败')
+    else toast.error(publicErrorMessage(published.reason, '读取题解失败'))
     if (mine.status === 'fulfilled') setContributions(mine.value)
-    else toast.error(mine.reason instanceof Error ? mine.reason.message : '读取我的投稿失败')
+    else toast.error(publicErrorMessage(mine.reason, '读取我的投稿失败'))
     if (pending.status === 'fulfilled') setQueue(pending.value.filter(item => item.problemId === problemId))
-    else toast.error(pending.reason instanceof Error ? pending.reason.message : '读取审核队列失败')
+    else toast.error(publicErrorMessage(pending.reason, '读取审核队列失败'))
     setLoading(false)
   // Toast actions close over a stable provider callback. Keeping them out of
   // the resource key prevents a toast render from re-triggering all reads.
@@ -134,7 +140,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
       setSelectedSolution(result)
       setSelectedVersion(result.CurrentVersion)
     } catch (reason) {
-      toast.error(reason instanceof Error ? reason.message : '读取题解版本失败')
+      toast.error(publicErrorMessage(reason, '读取题解版本失败'))
     } finally {
       setBusyId(null)
     }
@@ -186,7 +192,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
         ? await createSolutionCorrection(correctionTarget.solutionId, { ...payload, type: 'CORRECTION' })
         : await createSolutionContribution(problemId, payload)
     setSaving(false)
-    if (!result.ok) return toast.error(result.error.message || '保存失败')
+    if (!result.ok) return toast.error(result.error.userMessage || '保存失败')
     toast.success(editing ? '草稿已更新' : '投稿草稿已创建')
     setEditorOpen(false); await load()
   }
@@ -199,7 +205,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
         ? await resubmitSolutionContribution(item.id)
         : await refreshSolutionContributionVerification(item.id)
     setBusyId(null)
-    if (!result.ok) return toast.error(result.error.message || '操作失败')
+    if (!result.ok) return toast.error(result.error.userMessage || '操作失败')
     toast.success(action === 'verification/refresh' ? '验证状态已刷新' : '投稿已送审，当前版本已冻结')
     await load()
   }
@@ -211,7 +217,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
       setReviewing({ ...result, Author: item.Author })
       setReviewOpen(true)
     } catch (reason) {
-      toast.error(reason instanceof Error ? reason.message : '读取投稿失败')
+      toast.error(publicErrorMessage(reason, '读取投稿失败'))
     } finally {
       setBusyId(null)
     }
@@ -228,7 +234,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
         ? await requestSolutionRevision(reviewing.id, body)
         : await rejectSolutionContribution(reviewing.id, body)
     setBusyId(null)
-    if (!result.ok) return toast.error(result.error.message || '审核操作失败')
+    if (!result.ok) return toast.error(result.error.userMessage || '审核操作失败')
     toast.success(reviewAction === 'approve' ? '审核已通过，可继续采纳' : reviewAction === 'reject' ? '投稿已拒绝' : '已要求作者修改')
     setReviewAction(null); setReviewComment(''); setReviewOpen(false); await load()
   }
@@ -237,7 +243,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
     setBusyId(item.id)
     const result = await acceptSolutionContribution(item.id)
     setBusyId(null)
-    if (!result.ok) return toast.error(result.error.message || '采纳失败')
+    if (!result.ok) return toast.error(result.error.userMessage || '采纳失败')
     toast.success('投稿已采纳，发布前仍不会对读者可见'); setReviewOpen(false); await load()
   }
 
@@ -245,7 +251,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
     setBusyId(item.id)
     const result = await retrySolutionSimilarity(item.id)
     setBusyId(null)
-    if (!result.ok) return toast.error(result.error.message || '相似度检查重试失败')
+    if (!result.ok) return toast.error(result.error.userMessage || '相似度检查重试失败')
     toast.success('相似度检查已重新排队')
     setReviewOpen(false); await load()
   }
@@ -257,7 +263,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
       result = await getSimilarityComparison(item.id)
     } catch (reason) {
       setComparisonLoading(false)
-      return toast.error(reason instanceof Error ? reason.message : '读取相似片段失败')
+      return toast.error(publicErrorMessage(reason, '读取相似片段失败'))
     }
     setComparisonLoading(false)
     setComparison(result); setComparisonOpen(true)
@@ -270,7 +276,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
       visibilityPolicy: visibilityPolicy as 'PUBLIC' | 'AFTER_AC' | 'MANAGER_ONLY',
     })
     setBusyId(null)
-    if (!result.ok) return toast.error(result.error.message || '发布失败')
+    if (!result.ok) return toast.error(result.error.userMessage || '发布失败')
     toast.success('新题解版本已发布'); setPublishing(null); setReviewOpen(false); await load()
   }
 
@@ -278,11 +284,11 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
 
   return <div className={styles.root}>
     <section className={styles.section}>
-      <div className={styles.header}><div><h3>版本化题解</h3><p>已发布内容可阅读；每次纠错发布都会保留不可变历史版本。</p></div><Button icon={<Plus size={16} />} onClick={openNew}>贡献题解</Button></div>
+      <div className={styles.header}><div><h3>版本化题解</h3><p>已发布内容可阅读；每次纠错发布都会保留当时发布的历史版本。</p></div><Button icon={<Plus size={16} />} onClick={openNew}>贡献题解</Button></div>
       {loading ? <div className={styles.empty}>正在读取题解…</div> : solutions.length === 0 ? <div className={styles.empty}><p>暂无已发布的版本化题解，你可以成为第一位贡献者。</p></div> : <div className={styles.grid}>{solutions.map(item => <Button variant="ghost" className={styles.card} data-selected={selectedSolution?.id === item.id} key={item.id} onClick={() => void openSolution(item)} disabled={busyId === item.id}><div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[item.type]}</span>{item.primary && <span className={styles.badge} data-tone="success">主解</span>}{item.recommended && <span className={styles.badge}>推荐</span>}</div><h4>{item.title}</h4><p className={styles.meta}>作者：{item.Author?.username || '匿名贡献者'} · V{item.CurrentVersion.version} · {item.visibilityPolicy === 'PUBLIC' ? '公开' : item.visibilityPolicy === 'AFTER_AC' ? 'AC 后可见' : '仅管理员'}</p></Button>)}</div>}
       {selectedSolution && currentVersion && <div className={styles.reader}>
         <div className={styles.readerHead}><div><div className={styles.badges}><span className={styles.badge} data-tone="success">只读版本 V{currentVersion.version}</span><span className={styles.badge}>{currentVersion.sourceType === 'ORIGINAL' ? '原创' : '含引用/授权来源'}</span></div><h3>{currentVersion.title}</h3></div><div className={styles.actions}>{(selectedSolution.Versions?.length || 0) > 1 && <Select aria-label="历史版本" className={styles.versionPicker} value={currentVersion.id} onChange={event => setSelectedVersion(selectedSolution.Versions?.find(version => version.id === event.target.value) || selectedSolution.CurrentVersion)}>{selectedSolution.Versions?.map(version => <option key={version.id} value={version.id}>V{version.version} · {version.status === 'PUBLISHED' ? '当前发布版' : '历史版本'}</option>)}</Select>}<Button variant="outline" icon={<FileClock size={16} />} onClick={openCorrection}>报告纠错</Button></div></div>
-        <div className={styles.facts}>{currentVersion.complexityTime && <span>时间：{currentVersion.complexityTime}</span>}{currentVersion.complexityMemory && <span>空间：{currentVersion.complexityMemory}</span>}{currentVersion.language && <span>语言：{currentVersion.language}</span>}{tags(currentVersion.algorithmTags).map(tag => <span key={tag}>#{tag}</span>)}</div>
+        <div className={styles.facts}>{currentVersion.complexityTime && <span>时间：{currentVersion.complexityTime}</span>}{currentVersion.complexityMemory && <span>空间：{currentVersion.complexityMemory}</span>}{currentVersion.language && <span>语言：{getLanguageLabel(currentVersion.language)}</span>}{tags(currentVersion.algorithmTags).map(tag => <span key={tag}>#{tag}</span>)}</div>
         <MarkdownRenderer content={currentVersion.contentMarkdown} />
         {currentVersion.referenceCode && <pre className={styles.code}><code>{currentVersion.referenceCode}</code></pre>}
         {(currentVersion.sourceUrl || currentVersion.citation) && <div className={styles.hint}>来源：{currentVersion.sourceUrl ? <a href={currentVersion.sourceUrl} target="_blank" rel="noreferrer">{currentVersion.sourceUrl}</a> : currentVersion.citation}</div>}
@@ -290,16 +296,16 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
     </section>
 
     <section className={styles.section}>
-      <div className={styles.header}><div><h3>我的投稿</h3><p>送审会冻结一个不可变版本；需修改时编辑草稿后重投。</p></div><Button variant="ghost" icon={<RefreshCw size={15} />} onClick={() => void load()}>刷新</Button></div>
+      <div className={styles.header}><div><h3>我的投稿</h3><p>送审会保留本次送审内容；需修改时编辑草稿后重投。</p></div><Button variant="ghost" icon={<RefreshCw size={15} />} onClick={() => void load()}>刷新</Button></div>
       {contributions.length === 0 ? <div className={styles.empty}>尚无投稿草稿</div> : <div className={styles.grid}>{contributions.map(item => {
         const verification = latestVerification(item); const submissionAction = solutionSubmissionAction(item.status)
-        return <article className={styles.card} key={item.id}><div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[item.type]}</span><span className={styles.badge} data-tone={statusTone(item.status)}>{SOLUTION_STATUS_LABELS[item.status] || item.status}</span>{verification && <span className={styles.badge} data-tone={statusTone(verification.status)}>验证：{VERIFICATION_STATUS_LABELS[verification.status] || verification.status}</span>}</div><h4>{item.title}</h4><p className={styles.meta}>最近保存于 {new Date(item.updatedAt).toLocaleString()}</p>{verification?.errorMessage && <p className={styles.error}>{verification.errorMessage}</p>}<div className={styles.actions}>{canEditSolutionContribution(item.status) && <Button size="sm" variant="outline" onClick={() => openEdit(item)}>编辑</Button>}{submissionAction && <Button size="sm" loading={busyId === item.id} onClick={() => void runContributionAction(item, submissionAction)}>{submissionAction === 'submit' ? '提交审核' : '重新提交'}</Button>}{['AUTO_CHECKING', 'SUBMITTED'].includes(item.status) && <Button size="sm" variant="ghost" loading={busyId === item.id} onClick={() => void runContributionAction(item, 'verification/refresh')}>刷新验证</Button>}</div></article>
+        return <article className={styles.card} key={item.id}><div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[item.type]}</span><span className={styles.badge} data-tone={statusTone(item.status)}>{solutionStatusLabel(item.status)}</span>{verification && <span className={styles.badge} data-tone={statusTone(verification.status)}>验证：{solutionVerificationLabel(verification.status)}</span>}</div><h4>{item.title}</h4><p className={styles.meta}>最近保存于 {new Date(item.updatedAt).toLocaleString()}</p>{verification?.errorMessage && <p className={styles.error}>自动检查未通过，请修改内容后重试。</p>}<div className={styles.actions}>{canEditSolutionContribution(item.status) && <Button size="sm" variant="outline" onClick={() => openEdit(item)}>编辑</Button>}{submissionAction && <Button size="sm" loading={busyId === item.id} onClick={() => void runContributionAction(item, submissionAction)}>{submissionAction === 'submit' ? '提交审核' : '重新提交'}</Button>}{['AUTO_CHECKING', 'SUBMITTED'].includes(item.status) && <Button size="sm" variant="ghost" loading={busyId === item.id} onClick={() => void runContributionAction(item, 'verification/refresh')}>刷新验证</Button>}</div></article>
       })}</div>}
     </section>
 
     {canManage && <section className={styles.section}>
       <div className={styles.header}><div><h3>题目审核队列</h3><p>仅显示本题待审核、待采纳或待发布的他人投稿。</p></div><ShieldCheck size={20} aria-hidden="true" /></div>
-      {queue.length === 0 ? <div className={styles.empty}>当前没有待处理投稿</div> : <div className={styles.grid}>{queue.map(item => <Button variant="ghost" className={styles.card} key={item.id} onClick={() => void openReview(item)} disabled={busyId === item.id}><div className={styles.badges}><span className={styles.badge} data-tone={statusTone(item.status)}>{SOLUTION_STATUS_LABELS[item.status] || item.status}</span><span className={styles.badge}>{SOLUTION_TYPE_LABELS[item.type]}</span></div><h4>{item.title}</h4><p className={styles.meta}>作者：{item.Author?.username || '未知'} · {new Date(item.updatedAt).toLocaleString()}</p></Button>)}</div>}
+      {queue.length === 0 ? <div className={styles.empty}>当前没有待处理投稿</div> : <div className={styles.grid}>{queue.map(item => <Button variant="ghost" className={styles.card} key={item.id} onClick={() => void openReview(item)} disabled={busyId === item.id}><div className={styles.badges}><span className={styles.badge} data-tone={statusTone(item.status)}>{solutionStatusLabel(item.status)}</span><span className={styles.badge}>{SOLUTION_TYPE_LABELS[item.type]}</span></div><h4>{item.title}</h4><p className={styles.meta}>作者：{item.Author?.username || '未知'} · {new Date(item.updatedAt).toLocaleString()}</p></Button>)}</div>}
     </section>}
 
     <FormDialog isOpen={editorOpen} onClose={() => setEditorOpen(false)} onSubmit={() => void saveDraft()} title={editing ? '编辑投稿草稿' : correctionTarget ? '发起纠错投稿' : '贡献题解'} description="保存只创建或更新草稿；请回到“我的投稿”主动送审。" size="xl" submitText="保存草稿" loading={saving} dirty={Boolean(draft.title || draft.contentMarkdown)}>
@@ -315,19 +321,19 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
         <label className={styles.field}>来源链接（非原创）<Input type="url" value={draft.sourceUrl || ''} onChange={event => setDraft(value => ({ ...value, sourceUrl: event.target.value }))} /></label>
         <label className={`${styles.field} ${styles.wide}`}>引用或授权说明<Textarea rows={3} value={draft.citation || ''} onChange={event => setDraft(value => ({ ...value, citation: event.target.value }))} /></label>
       </div>
-      {user?.organizationId && <Checkbox checked={draft.organizationAttributed} onChange={event => setDraft(value => ({ ...value, organizationAttributed: event.target.checked }))} label={`归因到当前组织：${user.organizationName || user.organizationId}`} description="发布奖励将保留这一投稿时选择的组织归因。" />}
+      {user?.organizationId && <Checkbox checked={draft.organizationAttributed} onChange={event => setDraft(value => ({ ...value, organizationAttributed: event.target.checked }))} label={`归因到当前组织：${user.organizationName || '当前学校'}`} description="发布奖励将保留这一投稿时选择的组织归因。" />}
       <Checkbox checked={draft.licenseAccepted} onChange={event => setDraft(value => ({ ...value, licenseAccepted: event.target.checked }))} label="我确认内容为原创或已取得授权，并接受当前投稿声明" />
       </div>
     </FormDialog>
 
-    <DetailDialog isOpen={reviewOpen} onClose={() => setReviewOpen(false)} title="审核题解投稿" description={reviewing ? `${reviewing.title} · ${SOLUTION_STATUS_LABELS[reviewing.status] || reviewing.status}` : undefined} size="xl" footer={reviewing && <div className={styles.actions}>{latestSimilarityJob(reviewing)?.status === 'FAILED' && <Button variant="outline" onClick={() => void retrySimilarity(reviewing)} loading={busyId === reviewing.id}>重试相似度检查</Button>}{reviewActionsForStatus(reviewing.status).map(action => action === 'accept' ? <Button key={action} onClick={() => void accept(reviewing)} loading={busyId === reviewing.id}>采纳</Button> : action === 'publish' ? <Button key={action} onClick={() => setPublishing(reviewing)}>发布</Button> : <Button key={action} variant={action === 'reject' ? 'danger' : action === 'request-revision' ? 'outline' : 'primary'} disabled={latestSimilarityJob(reviewing)?.status !== 'READY'} onClick={() => { setReviewAction(action); setReviewComment('') }}>{action === 'approve' ? '审核通过' : action === 'reject' ? '拒绝' : '要求修改'}</Button>)}</div>}>
+    <DetailDialog isOpen={reviewOpen} onClose={() => setReviewOpen(false)} title="审核题解投稿" description={reviewing ? `${reviewing.title} · ${solutionStatusLabel(reviewing.status)}` : undefined} size="xl" footer={reviewing && <div className={styles.actions}>{latestSimilarityJob(reviewing)?.status === 'FAILED' && <Button variant="outline" onClick={() => void retrySimilarity(reviewing)} loading={busyId === reviewing.id}>重试相似度检查</Button>}{reviewActionsForStatus(reviewing.status).map(action => action === 'accept' ? <Button key={action} onClick={() => void accept(reviewing)} loading={busyId === reviewing.id}>采纳</Button> : action === 'publish' ? <Button key={action} onClick={() => setPublishing(reviewing)}>发布</Button> : <Button key={action} variant={action === 'reject' ? 'danger' : action === 'request-revision' ? 'outline' : 'primary'} disabled={latestSimilarityJob(reviewing)?.status !== 'READY'} onClick={() => { setReviewAction(action); setReviewComment('') }}>{action === 'approve' ? '审核通过' : action === 'reject' ? '拒绝' : '要求修改'}</Button>)}</div>}>
       {reviewing && <div className={styles.form}>
-        <div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[reviewing.type]}</span><span className={styles.badge}>作者：{reviewing.Author?.username || '未知'}</span>{latestVerification(reviewing) && <span className={styles.badge} data-tone={statusTone(latestVerification(reviewing)!.status)}>验证：{VERIFICATION_STATUS_LABELS[latestVerification(reviewing)!.status] || latestVerification(reviewing)!.status}</span>}{latestSimilarityJob(reviewing) && <span className={styles.badge} data-tone={statusTone(latestSimilarityJob(reviewing)!.status)}>相似度：{SIMILARITY_JOB_LABELS[latestSimilarityJob(reviewing)!.status] || latestSimilarityJob(reviewing)!.status}</span>}</div>
+        <div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[reviewing.type]}</span><span className={styles.badge}>作者：{reviewing.Author?.username || '未知'}</span>{latestVerification(reviewing) && <span className={styles.badge} data-tone={statusTone(latestVerification(reviewing)!.status)}>验证：{solutionVerificationLabel(latestVerification(reviewing)!.status)}</span>}{latestSimilarityJob(reviewing) && <span className={styles.badge} data-tone={statusTone(latestSimilarityJob(reviewing)!.status)}>相似度：{similarityJobStatusLabel(latestSimilarityJob(reviewing)!.status)}</span>}</div>
         {latestSimilarityJob(reviewing) && latestSimilarityJob(reviewing)!.status !== 'READY' && <div className={styles.hint}>{latestSimilarityJob(reviewing)!.status === 'FAILED' ? '相似度检查失败，必须重试成功后才能审核。' : '相似度检查正在异步执行，完成前不能提交审核结论。'}</div>}
         {latestSimilarity(reviewing) && <section className={styles.similarity} data-risk={latestSimilarity(reviewing)!.riskLevel}><div><strong>内容相似度风险：{latestSimilarity(reviewing)!.riskLevel === 'HIGH' ? '高' : latestSimilarity(reviewing)!.riskLevel === 'MEDIUM' ? '中' : '低'}</strong><p>该结果仅作为审核提示，不会自动拒绝投稿。{latestSimilarity(reviewing)!.sourceDeclared ? '投稿已声明来源。' : '投稿未声明外部来源。'}</p></div>{latestSimilarity(reviewing)!.maximumSimilarityBasisPoints !== undefined && <dl><div><dt>正文</dt><dd>{((latestSimilarity(reviewing)!.textSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div><div><dt>代码</dt><dd>{((latestSimilarity(reviewing)!.codeSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div><div><dt>最高</dt><dd>{((latestSimilarity(reviewing)!.maximumSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div></dl>}<Button variant="outline" loading={comparisonLoading} onClick={() => void openComparison(reviewing)}>并排查看相似片段</Button></section>}
         <MarkdownRenderer content={reviewing.Revisions?.[0]?.contentMarkdown || reviewing.contentMarkdown} />
         {(reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode) && <pre className={styles.code}><code>{reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode}</code></pre>}
-        <div className={styles.timeline}>{reviewing.Reviews?.map(review => <div className={styles.timelineItem} key={review.id}><strong>{review.Reviewer?.username || '审核者'} · {review.reviewType} · {review.decision}</strong>{review.comment && <p>{review.comment}</p>}</div>)}</div>
+        <div className={styles.timeline}>{reviewing.Reviews?.map(review => <div className={styles.timelineItem} key={review.id}><strong>{review.Reviewer?.username || '审核者'} · {solutionReviewTypeLabel(review.reviewType)} · {solutionReviewDecisionLabel(review.decision)}</strong>{review.comment && <p>{review.comment}</p>}</div>)}</div>
       </div>}
     </DetailDialog>
 

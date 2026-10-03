@@ -105,7 +105,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
         onClose()
         onSuccess()
       } else {
-        toast.error(result.error.message || '邀请失败')
+        toast.error(result.error.userMessage || '邀请失败')
       }
     } catch (error) {
       console.error('Invite members error:', error)

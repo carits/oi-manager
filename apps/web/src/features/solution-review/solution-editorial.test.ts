@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   canEditSolutionContribution,
   reviewActionsForStatus,
+  solutionReviewDecisionLabel,
+  solutionReviewTypeLabel,
+  solutionStatusLabel,
   solutionSubmissionAction,
+  solutionVerificationLabel,
   validateSolutionDraft,
 } from './model/solution-editorial'
 
@@ -35,5 +39,13 @@ describe('solution editorial workflow', () => {
     expect(reviewActionsForStatus('UNDER_REVIEW')).toEqual(['accept', 'request-revision', 'reject'])
     expect(reviewActionsForStatus('ACCEPTED')).toEqual(['publish'])
     expect(reviewActionsForStatus('AUTO_CHECKING')).toEqual([])
+  })
+
+  it('does not expose future review enum values', () => {
+    const internal = 'FUTURE_INTERNAL_VALUE'
+    expect(solutionStatusLabel(internal)).not.toContain(internal)
+    expect(solutionVerificationLabel(internal)).not.toContain(internal)
+    expect(solutionReviewTypeLabel(internal)).not.toContain(internal)
+    expect(solutionReviewDecisionLabel(internal)).not.toContain(internal)
   })
 })

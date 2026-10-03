@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast'
 import styles from './JudgeProgramWizard.module.css'
 import type { GeneratorProtocolConfig as ProtocolConfig, JudgeProgramFixture as Fixture, JudgeProgramKind as Kind, ParameterRule, ProgramCatalog, ProgramTemplate } from '../model/judgeProgramTemplateTypes'
 import { getJudgeProgramTemplate } from '../api/judgeProgramTemplateApi'
+import { judgeProgramCopy, judgeProgramKindLabel, judgeProgramLanguageLabel, judgeProgramProtocolLabel, judgeProgramVerificationStatusLabel } from '../model/judge-program-display'
 import { compileJudgeProgramVersion, createJudgeProgram, createJudgeProgramFixtureSet, createValidatorSpec, getJudgeProgramVerification, listJudgeProgramDrafts, materializeValidatorSpec, preflightJudgeProgramVersion, saveJudgeProgramDraft, updateJudgeProgram } from '../api/judgeProgramApi'
 
 type CreatedProgramVersion = { program: Program; version: JudgeProgramVersion }
@@ -25,7 +26,6 @@ function downloadSource(name: string, language: string, source: string) {
   link.click(); URL.revokeObjectURL(link.href)
 }
 
-function languageLabel(language: string) { return language === 'python3' ? 'Python3' : language === 'validator-dsl' ? 'Validator DSL' : 'C++17' }
 const cloneConfig = (value?: ProtocolConfig) => value ? JSON.parse(JSON.stringify(value)) as ProtocolConfig : DEFAULT_CONFIG
 const cloneFixtures = (value: Fixture[]) => JSON.parse(JSON.stringify(value)) as Fixture[]
 
@@ -106,16 +106,16 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
     const hasContent = Boolean(source.trim() || fixtures.length)
     const modifiedCurrentTemplate = Boolean(selectedTemplate && (source !== selectedTemplate.source || JSON.stringify(fixtures) !== JSON.stringify(selectedTemplate.examples) || JSON.stringify(protocolConfig) !== JSON.stringify(selectedTemplate.protocolConfig || DEFAULT_CONFIG)))
     if ((id !== templateId && hasContent) || modifiedCurrentTemplate) {
-      if (!window.confirm('使用其他模板会替换当前源码、Fixture 和 Generator 配置。已有代码草稿仍保存在服务端，确定继续吗？')) return
+      if (!window.confirm('使用其他模板会替换当前源码、验证样例和数据生成配置。已有代码草稿仍会保留，确定继续吗？')) return
     }
     void loadTemplate(id)
   }
   const startBlank = () => { setTemplateId(''); setLoadedTemplate(null); setPreviewTemplate(null); setName(''); setSource(language === 'validator-dsl' ? DEFAULT_DSL : ''); setFixtures([]); setProtocolConfig(cloneConfig()); setBlankChosen(true) }
   const resetTemplate = () => { if (selectedTemplate && window.confirm('确定恢复推荐模板内容？')) void loadTemplate(selectedTemplate.id) }
-  const restoreTemplateFixtures = () => { if (!selectedTemplate) return; if (JSON.stringify(fixtures) !== JSON.stringify(selectedTemplate.examples) && !window.confirm('当前 Fixture 将替换为模板示例，确定继续吗？')) return; setFixtures(cloneFixtures(selectedTemplate.examples)) }
+  const restoreTemplateFixtures = () => { if (!selectedTemplate) return; if (JSON.stringify(fixtures) !== JSON.stringify(selectedTemplate.examples) && !window.confirm('当前验证样例将替换为模板示例，确定继续吗？')) return; setFixtures(cloneFixtures(selectedTemplate.examples)) }
   const upload = async (file?: File) => { if (!file) return; if (file.size > 256 * 1024) return toast.error('源码最大 256 KiB'); if (source.trim() && !window.confirm('上传内容将覆盖当前编辑器，草稿已保存在服务端。继续吗？')) return; setSource(await file.text()) }
   const updateFixture = (index: number, changes: Partial<Fixture>) => setFixtures(current => current.map((item, position) => position === index ? { ...item, ...changes } : item))
-  const addFixture = () => setFixtures(current => [...current, { name: `Fixture ${current.length + 1}`, stdin: '', ...(kind === 'validator' ? { expectedExitCode: 0 } : kind === 'classifier' ? { expectedSubtasks: [] } : {}) }])
+  const addFixture = () => setFixtures(current => [...current, { name: `验证样例 ${current.length + 1}`, stdin: '', ...(kind === 'validator' ? { expectedExitCode: 0 } : kind === 'classifier' ? { expectedSubtasks: [] } : {}) }])
   const addParameter = () => {
     let index = Object.keys(protocolConfig.parameterSchema).length + 1, key = `param${index}`
     while (protocolConfig.parameterSchema[key]) key = `param${++index}`
@@ -133,7 +133,7 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
   const parseParameterValue = (value: string, type: ParameterRule['type']): string | number | boolean => type === 'boolean' ? value === 'true' : type === 'integer' ? Number.parseInt(value || '0', 10) : type === 'number' ? Number(value || 0) : value
   const retryVerification = async () => {
     if (!program || !versionId || !verification) return
-    if (verification.mode === 'compile') { setVerification(null); const result = await compileJudgeProgramVersion(problemId, program.id, versionId); if (result.ok) setVerification(result.data); else toast.error(result.error.message || '重新编译失败') }
+    if (verification.mode === 'compile') { setVerification(null); const result = await compileJudgeProgramVersion(problemId, program.id, versionId); if (result.ok) setVerification(result.data); else toast.error(result.error.userMessage || '重新编译失败') }
     else { setVerification(null); await preflight() }
   }
 
@@ -146,20 +146,20 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
       let created: CreatedProgramVersion
       if (method === 'dsl') {
         let spec: unknown
-        try { spec = JSON.parse(source) } catch { return toast.error('Validator DSL 必须是合法 JSON') }
+        try { spec = JSON.parse(source) } catch { return toast.error('输入规则格式不正确，请检查后重试') }
         const saved = await createValidatorSpec(problemId, { spec })
-        if (!saved.ok) return toast.error(saved.error.message || 'DSL 保存失败')
+        if (!saved.ok) return toast.error(saved.error.userMessage || 'DSL 保存失败')
         const materialized = await materializeValidatorSpec(problemId, saved.data.id)
-        if (!materialized.ok) return toast.error(materialized.error.message || 'DSL 生成程序版本失败')
+        if (!materialized.ok) return toast.error(materialized.error.userMessage || 'DSL 生成程序版本失败')
         created = materialized.data
       } else {
         const response = await createJudgeProgram(problemId, { kind, name: name || catalog?.capabilities[kind].title, language, protocol, templateId: templateId || undefined, templateVersion: selectedTemplateVersion ?? undefined, source, fixtures, protocolConfig })
-        if (!response.ok) return toast.error(response.error.message || '程序版本创建失败')
+        if (!response.ok) return toast.error(response.error.userMessage || '程序版本创建失败')
         created = response.data
       }
       setProgram(created.program); setVersionId(created.version.id)
       const compile = await compileJudgeProgramVersion(problemId, created.program.id, created.version.id)
-      if (!compile.ok) return toast.error(compile.error.message || '编译任务创建失败')
+      if (!compile.ok) return toast.error(compile.error.userMessage || '编译任务创建失败')
       setVerification(compile.data); toast.success('版本已保存，Judge 正在编译')
     } finally { setBusy(false) }
   }
@@ -168,16 +168,16 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
     setBusy(true)
     try {
       const fixtureSet = await createJudgeProgramFixtureSet(problemId, program.id, { fixtures })
-      if (!fixtureSet.ok) return toast.error(fixtureSet.error.message || 'Fixture 保存失败')
+      if (!fixtureSet.ok) return toast.error(fixtureSet.error.userMessage || '验证样例保存失败')
       const result = await preflightJudgeProgramVersion(problemId, program.id, versionId, { fixtureSetId: fixtureSet.data.id })
-      if (!result.ok) return toast.error(result.error.message || '预检任务创建失败')
+      if (!result.ok) return toast.error(result.error.userMessage || '预检任务创建失败')
       setVerification(result.data)
     } finally { setBusy(false) }
   }
   const activate = async () => {
     if (!program || !versionId) return
     setBusy(true)
-    try { const result = await updateJudgeProgram(problemId, program.id, { currentVersionId: versionId }); if (!result.ok) return toast.error(result.error.message || '激活失败'); toast.success('评测程序已激活'); await onChanged(); onClose() } finally { setBusy(false) }
+    try { const result = await updateJudgeProgram(problemId, program.id, { currentVersionId: versionId }); if (!result.ok) return toast.error(result.error.userMessage || '激活失败'); toast.success('评测程序已激活'); await onChanged(); onClose() } finally { setBusy(false) }
   }
 
   const canNext = step < 4
@@ -189,62 +189,62 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
       : !versionId
         ? <Button variant="primary" loading={busy} disabled={!source.trim() || !fixtures.length} onClick={createVersion}>保存版本并编译</Button>
         : verification?.status === 'completed' && verification.mode === 'compile'
-          ? <Button variant="primary" loading={busy} disabled={unknownFixtureSubtasks.length > 0} onClick={preflight}>运行协议预检</Button>
+          ? <Button variant="primary" loading={busy} disabled={unknownFixtureSubtasks.length > 0} onClick={preflight}>运行运行规则检查</Button>
           : verification?.status === 'completed' && verification.mode === 'preflight'
             ? <Button variant="primary" loading={busy} onClick={activate}>人工确认并激活</Button>
             : verification?.status === 'failed'
               ? <Button variant="primary" loading={busy} onClick={retryVerification}>修正后重新验证</Button>
-              : <Button disabled>Judge 处理中…</Button>}
+              : <Button disabled>评测服务处理中…</Button>}
   </div>
 
-  return <FormDialog isOpen={open} onClose={onClose} title="新增评测程序" description="选择完整示例 → 修改源码与 Fixture → Judge 编译和协议预检 → 人工激活" size="xl" dirty={Boolean(source) && !versionId} loading={busy} footer={footer}>
+  return <FormDialog isOpen={open} onClose={onClose} title="新增评测程序" description="选择示例 → 修改源码与验证样例 → 完成编译和规则检查 → 人工启用" size="xl" dirty={Boolean(source) && !versionId} loading={busy} footer={footer}>
     <ol className={styles.steps}>{STEPS.map((label, index) => <li key={label} data-active={step === index} data-done={step > index}><span>{index + 1}</span>{label}</li>)}</ol>
 
-    {step === 0 && <div className={styles.kindGrid}>{Object.entries(catalog?.capabilities || {}).filter(([value]) => judgeMode === 'oi' || value !== 'classifier').map(([value, capability]) => <Button variant={kind === value ? 'primary' : 'outline'} className={styles.kindCard} key={value} onClick={() => selectKind(value as Kind)}><strong>{capability.title}</strong><span>{capability.description}</span></Button>)}</div>}
+    {step === 0 && <div className={styles.kindGrid}>{Object.entries(catalog?.capabilities || {}).filter(([value]) => judgeMode === 'oi' || value !== 'classifier').map(([value, capability]) => <Button variant={kind === value ? 'primary' : 'outline'} className={styles.kindCard} key={value} onClick={() => selectKind(value as Kind)}><strong>{judgeProgramKindLabel(value)}</strong><span>{judgeProgramCopy(capability.description)}</span></Button>)}</div>}
 
     {step === 1 && <div className={styles.section}>
-      <div className={styles.fixtureHeader}><div><h3>选择模板或空白开始</h3><p>模板会同时载入源码、Fixture；Generator 还会载入 Parameter Schema 和 Profile。不会自动创建或激活版本。</p></div></div>
+      <div className={styles.fixtureHeader}><div><h3>选择模板或空白开始</h3><p>模板会同时载入源码和验证样例；数据生成程序还会载入参数规则与预设方案。模板不会自动启用。</p></div></div>
       <div className={styles.templateGrid}>
         {templates.map(template => <article className={styles.templateCard} data-selected={templateId === template.id} key={template.id}>
-          <div><strong>{template.title}</strong>{template.recommended && <span className={styles.recommended}>推荐</span>}</div>
-          <p>{template.description}</p>
-          <span>{languageLabel(template.language)} · {template.protocol} · {template.fixtureCount} 个 Fixture{template.profileCount ? ` · ${template.profileCount} 个 Profile` : ''}</span>
+          <div><strong>{judgeProgramCopy(template.title, judgeProgramKindLabel(template.kind))}</strong>{template.recommended && <span className={styles.recommended}>推荐</span>}</div>
+          <p>{judgeProgramCopy(template.description)}</p>
+          <span>{judgeProgramLanguageLabel(template.language)} · {judgeProgramProtocolLabel(template.protocol)} · {template.fixtureCount} 个验证样例{template.profileCount ? ` · ${template.profileCount} 个参数方案` : ''}</span>
           <div className={styles.actions}><Button variant="secondary" onClick={() => void previewTemplateById(template.id)}>预览完整示例</Button><Button variant="primary" onClick={() => chooseTemplate(template.id)}>使用此模板</Button></div>
         </article>)}
       </div>
       {previewTemplate && <section className={styles.templatePreview}>
-        <div className={styles.fixtureHeader}><div><h3>{previewTemplate.title} · 完整示例</h3><p>{previewTemplate.description}</p></div><Button variant="primary" onClick={() => chooseTemplate(previewTemplate.id)}>使用此模板</Button></div>
-        <strong>协议</strong><div className={styles.protocol}>{previewTemplate.protocolHelp.map(item => <span key={item}>{item}</span>)}</div>
-        <strong>{previewTemplate.language === 'validator-dsl' ? 'Validator DSL' : '源码'}</strong><pre>{previewTemplate.source}</pre>
-        {previewTemplate.protocolConfig && <><strong>Parameter Schema 与 Profile</strong><pre>{JSON.stringify(previewTemplate.protocolConfig, null, 2)}</pre></>}
-        <strong>Fixture（{previewTemplate.examples.length}）</strong>{previewTemplate.examples.map(item => <code key={item.name}>{item.name} · {item.expectedSubtasks?.length ? `Subtask ${item.expectedSubtasks.join(', ')}` : item.expectedStdout !== undefined ? '校验 stdout' : item.expectedExitCode === 0 ? '应接受' : item.expectedExitCode ? '应拒绝' : '确定性联调'}</code>)}
+        <div className={styles.fixtureHeader}><div><h3>{judgeProgramCopy(previewTemplate.title, judgeProgramKindLabel(previewTemplate.kind))} · 完整示例</h3><p>{judgeProgramCopy(previewTemplate.description)}</p></div><Button variant="primary" onClick={() => chooseTemplate(previewTemplate.id)}>使用此模板</Button></div>
+        <strong>协议</strong><div className={styles.protocol}>{previewTemplate.protocolHelp.map(item => <span key={item}>{judgeProgramCopy(item)}</span>)}</div>
+        <strong>{previewTemplate.language === 'validator-dsl' ? '输入规则' : '源码'}</strong><pre>{previewTemplate.source}</pre>
+        {previewTemplate.protocolConfig && <><strong>参数规则与预设方案</strong><div className={styles.protocol}><span>可配置参数：{Object.keys(previewTemplate.protocolConfig.parameterSchema || {}).length} 项</span><span>预设参数方案：{previewTemplate.protocolConfig.profiles?.length || 0} 个</span></div></>}
+        <strong>验证样例（{previewTemplate.examples.length}）</strong>{previewTemplate.examples.map(item => <code key={item.name}>{item.name} · {item.expectedSubtasks?.length ? `子任务 ${item.expectedSubtasks.join(', ')}` : item.expectedStdout !== undefined ? '校验标准输出' : item.expectedExitCode === 0 ? '应接受' : item.expectedExitCode ? '应拒绝' : '确定性联调'}</code>)}
         <strong>使用前必须修改</strong><ul>{previewTemplate.requiredChanges.map(item => <li key={item}>{item}</li>)}</ul>
       </section>}
       <section className={styles.blankStart}>
-        <div><strong>不使用模板，空白开始</strong><span>适合已经准备好完整源码和 Fixture 的管理员。</span></div>
-        <Select aria-label="空白程序语言" value={language} onChange={event => switchLanguage(event.target.value)}>{Object.keys(catalog?.capabilities[kind]?.languages || {}).map(value => <option value={value} key={value}>{languageLabel(value)}</option>)}</Select>
+        <div><strong>不使用模板，空白开始</strong><span>适合已经准备好完整源码和验证样例的管理员。</span></div>
+        <Select aria-label="空白程序语言" value={language} onChange={event => switchLanguage(event.target.value)}>{Object.keys(catalog?.capabilities[kind]?.languages || {}).map(value => <option value={value} key={value}>{judgeProgramLanguageLabel(value)}</option>)}</Select>
         <Button variant={blankChosen && !templateId ? 'primary' : 'outline'} onClick={startBlank}>选择空白编辑器</Button>
       </section>
-      <div className={styles.protocol}><strong>{catalog?.capabilities[kind]?.description}</strong>{catalog?.capabilities[kind]?.quickProtocol.map(item => <span key={item}>{item}</span>)}</div>
+      <div className={styles.protocol}><strong>{judgeProgramCopy(catalog?.capabilities[kind]?.description)}</strong>{catalog?.capabilities[kind]?.quickProtocol.map(item => <span key={item}>{judgeProgramCopy(item)}</span>)}</div>
     </div>}
 
     {step === 2 && <div className={styles.section}>
       {selectedTemplate && <aside className={styles.templateBanner}><strong>正在使用：{selectedTemplate.title} v{selectedTemplateVersion ?? selectedTemplate.version}</strong><span>这是教学示例，必须按当前题目修改。</span></aside>}
-      <div className={styles.editorHeader}><div><strong>{method === 'dsl' ? 'Validator DSL 示例（可修改）' : selectedTemplate ? '模板源码示例（可修改）' : '程序源码'}</strong><span>协议：{protocol} · 模板：{selectedTemplate ? selectedTemplate.title : '空白开始'}</span></div><div className={styles.actions}>{selectedTemplate && <Button variant="ghost" onClick={resetTemplate}><RotateCcw size={15} />恢复完整模板</Button>}<Button variant="ghost" onClick={() => setProtocolOpen(value => !value)}>查看协议</Button><label className={styles.upload}><Upload size={15} />上传源码<Input type="file" accept={method === 'dsl' ? '.json' : language === 'python3' ? '.py,.txt' : '.cpp,.cc,.cxx,.txt'} onChange={event => void upload(event.target.files?.[0])} /></label><Button variant="ghost" onClick={() => downloadSource(name, language, source)}><Download size={15} />下载</Button></div></div>
-      {protocolOpen && <div className={styles.protocol}>{catalog?.capabilities[kind]?.quickProtocol.map(item => <span key={item}>{item}</span>)}</div>}
-      <label>程序名称<Input value={name} maxLength={80} onChange={event => setName(event.target.value)} placeholder={catalog?.capabilities[kind]?.title} /></label>
-      <label>{method === 'dsl' ? 'Validator DSL 示例（可修改）' : '模板源码示例（可修改）'}<Textarea aria-label={method === 'dsl' ? 'Validator DSL 示例（可修改）' : '模板源码示例（可修改）'} className={styles.editor} spellCheck={false} value={source} onChange={event => setSource(event.target.value)} placeholder="选择模板、上传源码或从空白开始" /></label>
-      {kind === 'classifier' && <aside className={styles.subtasks}><strong>{subtasks.length ? `当前题目 Subtask：${subtasks.map(item => `${item.id}（${item.score ?? '—'} 分）`).join('、')}` : '当前题目 Subtask：尚未建立'}</strong>{subtasks.length ? subtasks.map(item => <span key={item.id}>Subtask {item.id}（{item.score ?? '—'} 分）{item.dependencies?.length ? ` · 依赖 ${item.dependencies.join(', ')}` : ''}</span>) : <span>当前题目尚未建立 Subtask。</span>}{unknownFixtureSubtasks.length > 0 && <p className={styles.blocker}>模板 Fixture 引用了当前题目不存在的 Subtask：{unknownFixtureSubtasks.join(', ')}。请在下一步修改，否则不能预检。</p>}</aside>}
-      {kind === 'generator' && <div className={styles.profiles}><strong>模板 Profile（已随源码载入）</strong>{protocolConfig.profiles.map((item, index) => <div key={index}><Input value={item.id} onChange={event => setProtocolConfig(current => ({ ...current, profiles: current.profiles.map((profile, position) => position === index ? { ...profile, id: event.target.value } : profile) }))} placeholder="profile id" /><Input value={item.label} onChange={event => setProtocolConfig(current => ({ ...current, profiles: current.profiles.map((profile, position) => position === index ? { ...profile, label: event.target.value } : profile) }))} placeholder="显示名称" /></div>)}</div>}
+      <div className={styles.editorHeader}><div><strong>{method === 'dsl' ? '输入规则 示例（可修改）' : selectedTemplate ? '模板源码示例（可修改）' : '程序源码'}</strong><span>协议：{protocol} · 模板：{selectedTemplate ? selectedTemplate.title : '空白开始'}</span></div><div className={styles.actions}>{selectedTemplate && <Button variant="ghost" onClick={resetTemplate}><RotateCcw size={15} />恢复完整模板</Button>}<Button variant="ghost" onClick={() => setProtocolOpen(value => !value)}>查看协议</Button><label className={styles.upload}><Upload size={15} />上传源码<Input type="file" accept={method === 'dsl' ? '.json' : language === 'python3' ? '.py,.txt' : '.cpp,.cc,.cxx,.txt'} onChange={event => void upload(event.target.files?.[0])} /></label><Button variant="ghost" onClick={() => downloadSource(name, language, source)}><Download size={15} />下载</Button></div></div>
+      {protocolOpen && <div className={styles.protocol}>{catalog?.capabilities[kind]?.quickProtocol.map(item => <span key={item}>{judgeProgramCopy(item)}</span>)}</div>}
+      <label>程序名称<Input value={name} maxLength={80} onChange={event => setName(event.target.value)} placeholder={judgeProgramKindLabel(kind)} /></label>
+      <label>{method === 'dsl' ? '输入规则 示例（可修改）' : '模板源码示例（可修改）'}<Textarea aria-label={method === 'dsl' ? '输入规则 示例（可修改）' : '模板源码示例（可修改）'} className={styles.editor} spellCheck={false} value={source} onChange={event => setSource(event.target.value)} placeholder="选择模板、上传源码或从空白开始" /></label>
+      {kind === 'classifier' && <aside className={styles.subtasks}><strong>{subtasks.length ? `当前题目子任务：${subtasks.map(item => `${item.id}（${item.score ?? '—'} 分）`).join('、')}` : '当前题目子任务：尚未建立'}</strong>{subtasks.length ? subtasks.map(item => <span key={item.id}>子任务 {item.id}（{item.score ?? '—'} 分）{item.dependencies?.length ? ` · 依赖 ${item.dependencies.join(', ')}` : ''}</span>) : <span>当前题目尚未建立子任务。</span>}{unknownFixtureSubtasks.length > 0 && <p className={styles.blocker}>模板验证样例引用了当前题目不存在的子任务：{unknownFixtureSubtasks.join(', ')}。请在下一步修改，否则不能检查。</p>}</aside>}
+      {kind === 'generator' && <div className={styles.profiles}><strong>预设参数方案（已随源码载入）</strong>{protocolConfig.profiles.map((item, index) => <div key={index}><Input value={item.id} onChange={event => setProtocolConfig(current => ({ ...current, profiles: current.profiles.map((profile, position) => position === index ? { ...profile, id: event.target.value } : profile) }))} placeholder="方案标识" /><Input value={item.label} onChange={event => setProtocolConfig(current => ({ ...current, profiles: current.profiles.map((profile, position) => position === index ? { ...profile, label: event.target.value } : profile) }))} placeholder="显示名称" /></div>)}</div>}
     </div>}
 
     {step === 3 && <div className={styles.section}>
-      {kind === 'generator' && <section className={styles.parameterEditor}><div className={styles.fixtureHeader}><div><h3>Parameter Schema</h3><p>参数由服务端校验，Seed 由服务端安全生成；使用模板时 Schema 与 Profile 已完整载入。</p></div><Button variant="outline" onClick={addParameter}>添加参数</Button></div>{Object.entries(protocolConfig.parameterSchema).map(([key, rule]) => <article className={styles.parameter} key={key}><Input aria-label="参数名" defaultValue={key} onBlur={event => renameParameter(key, event.target.value.trim())} /><Select aria-label={`${key} 类型`} value={rule.type} onChange={event => setProtocolConfig(current => ({ ...current, parameterSchema: { ...current.parameterSchema, [key]: { ...rule, type: event.target.value as ParameterRule['type'] } } }))}><option value="integer">整数</option><option value="number">有限浮点数</option><option value="string">字符串</option><option value="boolean">布尔值</option></Select><Input aria-label={`${key} 默认值`} value={String(rule.default ?? '')} onChange={event => setProtocolConfig(current => ({ ...current, parameterSchema: { ...current.parameterSchema, [key]: { ...rule, default: parseParameterValue(event.target.value, rule.type) } } }))} placeholder="默认值" /><Button variant="ghost" onClick={() => setProtocolConfig(current => { const parameterSchema = { ...current.parameterSchema }; delete parameterSchema[key]; return { parameterSchema, profiles: current.profiles.map(profile => { const params = { ...profile.params }; delete params[key]; return { ...profile, params } }) } })}>删除</Button></article>)}</section>}
-      <div className={styles.fixtureHeader}><div><h3>结构化 Fixture</h3><p>{kind === 'validator' ? '必须同时包含应通过与应拒绝输入。' : kind === 'classifier' ? '每条输入都要填写满足的全部 Subtask。' : kind === 'generator' ? 'Fixture 是完整 Generator Context，用于确定性、Validator、STD 和 Checker 联调。' : '每条输入都应提供明确期望输出。'}</p></div><div className={styles.actions}>{selectedTemplate && <Button variant="secondary" onClick={restoreTemplateFixtures}><RotateCcw size={15} />恢复模板 Fixture</Button>}<Button variant="outline" onClick={addFixture}>添加 Fixture</Button></div></div>
-      {unknownFixtureSubtasks.length > 0 && <p className={styles.blocker}>以下 Subtask 不属于当前题目：{unknownFixtureSubtasks.join(', ')}。修改所有相关 Fixture 后才能运行协议预检。</p>}
-      {fixtures.map((fixture, index) => <article className={styles.fixture} key={index}><div><div className={styles.fixtureName}><Input value={fixture.name} onChange={event => updateFixture(index, { name: event.target.value })} placeholder="Fixture 名称" /><span>{selectedTemplate?.examples.some(item => JSON.stringify(item) === JSON.stringify(fixture)) ? '模板示例' : '自定义'}</span></div><Button variant="ghost" onClick={() => setFixtures(current => current.filter((_, position) => position !== index))}>删除</Button></div><Textarea rows={5} value={fixture.stdin} onChange={event => updateFixture(index, { stdin: event.target.value })} placeholder={kind === 'generator' ? 'oj.generator/v1 Context JSON' : '完整 stdin'} />{kind === 'validator' && <Select value={fixture.expectedExitCode === 0 ? 'accept' : 'reject'} onChange={event => updateFixture(index, { expectedExitCode: event.target.value === 'accept' ? 0 : 1 })}><option value="accept">应接受（exit 0）</option><option value="reject">应拒绝（非 0）</option></Select>}{kind === 'classifier' && <Input value={(fixture.expectedSubtasks || []).join(',')} onChange={event => updateFixture(index, { expectedSubtasks: event.target.value.split(',').map(Number).filter(Number.isInteger) })} placeholder="预期全部 Subtask，例如 1,2,3" />}{kind === 'standard' && <Textarea rows={3} value={fixture.expectedStdout || ''} onChange={event => updateFixture(index, { expectedStdout: event.target.value })} placeholder="期望 stdout" />}</article>)}
+      {kind === 'generator' && <section className={styles.parameterEditor}><div className={styles.fixtureHeader}><div><h3>参数规则</h3><p>参数会自动检查，随机种子由系统安全生成；模板中的参数规则与预设方案已完整载入。</p></div><Button variant="outline" onClick={addParameter}>添加参数</Button></div>{Object.entries(protocolConfig.parameterSchema).map(([key, rule]) => <article className={styles.parameter} key={key}><Input aria-label="参数名" defaultValue={key} onBlur={event => renameParameter(key, event.target.value.trim())} /><Select aria-label={`${key} 类型`} value={rule.type} onChange={event => setProtocolConfig(current => ({ ...current, parameterSchema: { ...current.parameterSchema, [key]: { ...rule, type: event.target.value as ParameterRule['type'] } } }))}><option value="integer">整数</option><option value="number">有限浮点数</option><option value="string">字符串</option><option value="boolean">布尔值</option></Select><Input aria-label={`${key} 默认值`} value={String(rule.default ?? '')} onChange={event => setProtocolConfig(current => ({ ...current, parameterSchema: { ...current.parameterSchema, [key]: { ...rule, default: parseParameterValue(event.target.value, rule.type) } } }))} placeholder="默认值" /><Button variant="ghost" onClick={() => setProtocolConfig(current => { const parameterSchema = { ...current.parameterSchema }; delete parameterSchema[key]; return { parameterSchema, profiles: current.profiles.map(profile => { const params = { ...profile.params }; delete params[key]; return { ...profile, params } }) } })}>删除</Button></article>)}</section>}
+      <div className={styles.fixtureHeader}><div><h3>验证样例</h3><p>{kind === 'validator' ? '必须同时包含应通过与应拒绝输入。' : kind === 'classifier' ? '每条输入都要填写满足的全部子任务。' : kind === 'generator' ? '验证样例包含完整生成条件，用于检查数据生成、输入、答案和结果校验是否一致。' : '每条输入都应提供明确期望输出。'}</p></div><div className={styles.actions}>{selectedTemplate && <Button variant="secondary" onClick={restoreTemplateFixtures}><RotateCcw size={15} />恢复模板验证样例</Button>}<Button variant="outline" onClick={addFixture}>添加验证样例</Button></div></div>
+      {unknownFixtureSubtasks.length > 0 && <p className={styles.blocker}>以下子任务不属于当前题目：{unknownFixtureSubtasks.join(', ')}。修改所有相关验证样例后才能运行规则检查。</p>}
+      {fixtures.map((fixture, index) => <article className={styles.fixture} key={index}><div><div className={styles.fixtureName}><Input value={fixture.name} onChange={event => updateFixture(index, { name: event.target.value })} placeholder="验证样例名称" /><span>{selectedTemplate?.examples.some(item => JSON.stringify(item) === JSON.stringify(fixture)) ? '模板示例' : '自定义'}</span></div><Button variant="ghost" onClick={() => setFixtures(current => current.filter((_, position) => position !== index))}>删除</Button></div><Textarea rows={5} value={fixture.stdin} onChange={event => updateFixture(index, { stdin: event.target.value })} placeholder={kind === 'generator' ? '完整生成条件' : '完整标准输入'} />{kind === 'validator' && <Select value={fixture.expectedExitCode === 0 ? 'accept' : 'reject'} onChange={event => updateFixture(index, { expectedExitCode: event.target.value === 'accept' ? 0 : 1 })}><option value="accept">应接受</option><option value="reject">应拒绝</option></Select>}{kind === 'classifier' && <Input value={(fixture.expectedSubtasks || []).join(',')} onChange={event => updateFixture(index, { expectedSubtasks: event.target.value.split(',').map(Number).filter(Number.isInteger) })} placeholder="预期全部子任务，例如 1,2,3" />}{kind === 'standard' && <Textarea rows={3} value={fixture.expectedStdout || ''} onChange={event => updateFixture(index, { expectedStdout: event.target.value })} placeholder="期望标准输出" />}</article>)}
     </div>}
 
-    {step === 4 && <div className={styles.section}><h3>验证与激活</h3><p>保存源码不会直接上线。Judge 会编译一次、复用产物执行全部 Fixture，再由你明确激活。</p>{unknownFixtureSubtasks.length > 0 && <p className={styles.blocker}>Classifier Fixture 仍包含未知 Subtask：{unknownFixtureSubtasks.join(', ')}，协议预检已禁用。</p>}{!verification ? <div className={styles.pending}><AlertTriangle size={20} />尚未创建不可变版本</div> : <div className={verification.status === 'completed' ? styles.success : verification.status === 'failed' ? styles.failure : styles.pending}>{verification.status === 'completed' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}<div><strong>{verification.mode === 'compile' ? '编译' : '协议预检'}：{verification.status}</strong>{verification.errorMessage && <p>{verification.errorMessage}</p>}</div></div>}{verification?.report?.warnings?.map(item => <p className={styles.warning} key={item}>{item}</p>)}{verification?.report?.fixtures?.map(item => <article className={styles.report} key={item.name}><strong>{item.passed ? '✓' : '×'} {item.name}</strong><span>{item.message} · {item.timeMs} ms · {item.memoryKb} KiB</span>{item.stderrPreview && <pre>{item.stderrPreview}</pre>}</article>)}</div>}
+    {step === 4 && <div className={styles.section}><h3>验证与激活</h3><p>保存源码不会直接启用。系统会编译并运行全部验证样例，检查通过后仍需人工启用。</p>{unknownFixtureSubtasks.length > 0 && <p className={styles.blocker}>子任务判定程序的验证样例仍包含未知子任务：{unknownFixtureSubtasks.join(', ')}，运行规则检查已禁用。</p>}{!verification ? <div className={styles.pending}><AlertTriangle size={20} />尚未生成可检查的程序版本</div> : <div className={verification.status === 'completed' ? styles.success : verification.status === 'failed' ? styles.failure : styles.pending}>{verification.status === 'completed' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}<div><strong>{verification.mode === 'compile' ? '编译' : '运行规则检查'}：{judgeProgramVerificationStatusLabel(verification.status)}</strong>{verification.errorMessage && <p>检查未通过，请修改后重试。</p>}</div></div>}{Boolean(verification?.report?.warnings?.length) && <p className={styles.warning}>检查发现 {verification?.report?.warnings?.length} 项需要确认的内容。</p>}{verification?.report?.fixtures?.map(item => <article className={styles.report} key={item.name}><strong>{item.passed ? '✓' : '×'} {item.name}</strong><span>{item.passed ? '检查通过' : '检查未通过'} · {item.timeMs} ms · {item.memoryKb} KiB</span>{item.stderrPreview && <details><summary>诊断信息</summary><pre>{item.stderrPreview}</pre></details>}</article>)}</div>}
   </FormDialog>
 }

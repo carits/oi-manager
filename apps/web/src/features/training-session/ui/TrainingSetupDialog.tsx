@@ -164,7 +164,7 @@ export function TrainingSetupDialog({
         if (cancelled) return
         setParticipantPreview(response.ok ? response.data : null)
         setPreviewLoading(false)
-        if (!response.ok) toast.error(response.error.message || '无法确认训练对象')
+        if (!response.ok) toast.error(response.error.userMessage || '无法确认训练对象')
       })
     }, 250)
     return () => {
@@ -213,7 +213,7 @@ export function TrainingSetupDialog({
     })
     if (!response.ok || !response.data) {
       setSubmitting(undefined)
-      toast.error(response.ok ? '布置训练失败' : response.error.message)
+      toast.error(response.ok ? '布置训练失败' : response.error.userMessage)
       return
     }
     const designPath = `${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${response.data.id}/design`
@@ -229,7 +229,7 @@ export function TrainingSetupDialog({
     })
     setSubmitting(undefined)
     if (!published.ok) {
-      toast.error(`训练草稿已保存，但暂时无法发布：${published.error.message || '请继续完善'}`)
+      toast.error(`训练草稿已保存，但暂时无法发布：${published.error.userMessage || '请继续完善'}`)
       reset()
       onClose()
       router.push(designPath)

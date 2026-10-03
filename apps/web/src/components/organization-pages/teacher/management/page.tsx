@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/features/auth'
@@ -41,7 +42,7 @@ export default function CampusManagementPage() {
         if (!current) return
         setPending(previous => ({ applications: applications.status === 'fulfilled' ? applications.value.pending : previous.applications, invitations: invitations.status === 'fulfilled' ? invitations.value.pending : previous.invitations }))
         const failure = [applications, invitations].find(result => result.status === 'rejected')
-        setCountError(failure?.status === 'rejected' ? (failure.reason instanceof Error ? failure.reason.message : '待处理数量更新失败') : '')
+        setCountError(failure?.status === 'rejected' ? (publicErrorMessage(failure.reason, '待处理数量更新失败')) : '')
       })
     return () => { current = false }
   }, [activeTab, deniedTab, organizationId, refreshVersion, role])

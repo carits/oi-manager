@@ -13,6 +13,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { PasswordResetModal } from '@/components/ui/PasswordResetModal'
 import { useToast } from '@/components/ui/Toast'
 import { listManagedUsers, updateManagedUserStatus, type ManagedUser as User } from '@/features/user-admin'
+import { organizationRoleLabel } from '@/lib/humanPresentation'
 
 export default function AdminUsersPage() {
   const router = useRouter()
@@ -80,7 +81,7 @@ export default function AdminUsersPage() {
         toast.success('状态更新成功')
         fetchUsers()
       } else {
-        toast.error(result.error.message || '更新失败')
+        toast.error(result.error.userMessage || '更新失败')
       }
     } catch (e) {
       toast.error('网络错误')
@@ -90,16 +91,6 @@ export default function AdminUsersPage() {
     }
   }
 
-  const getRoleLabel = (role: string) => {
-    const labels: Record<string, string> = {
-      super_admin: '超级管理员',
-      platform_admin: '平台管理员',
-      school_principal: '学校负责人',
-      teacher: '教师',
-      student: '学生'
-    }
-    return labels[role] || role
-  }
 
   const handlePageChange = (page: number) => {
     setPagination(prev => ({ ...prev, page }))
@@ -211,7 +202,7 @@ export default function AdminUsersPage() {
                       <TableRow key={user.id} className={unifiedStyles.u17}>
                         <TableCell className={unifiedStyles.u18}>{user.username}</TableCell>
                         <TableCell className={unifiedStyles.u19}>{user.profile?.name || '-'}</TableCell>
-                        <TableCell className={unifiedStyles.u19}>{getRoleLabel(user.accountRole)}</TableCell>
+                        <TableCell className={unifiedStyles.u19}>{organizationRoleLabel(user.accountRole)}</TableCell>
                         <TableCell className={unifiedStyles.u19}>{user.profile?.schoolName || '-'}</TableCell>
                         <TableCell className={unifiedStyles.u19}>
                           <span className={`${unifiedStyles.statusBadge} ${user.status === 'active' ? unifiedStyles.statusActive : unifiedStyles.statusInactive}`}>

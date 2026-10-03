@@ -1,5 +1,7 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
+
 import { useState, useEffect, useRef } from 'react'
 import collisionStyles from './ProblemDetail.collision.module.css'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
@@ -25,8 +27,8 @@ import {
 } from '../api/problemDetailApi'
 import { createClientUUID } from '@/lib/uuid'
 import { saveBlobDownload } from '@/lib/download'
-import { getOjProblemUrl, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
-import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
+import { getOjProblemUrl, ojPlatformDisplayName } from '@/lib/oj-platforms'
+import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, LANGUAGE_LABEL_MAP, getLanguageLabel, judgeResultLabel } from '@/lib/judge-constants'
 import { TranslateModal } from './TranslateModal'
 import { SubmissionDetailModal, SubmissionIoFields, SubmissionCodeEditor, submitProblem, type SubmissionIoValue } from '@/features/submission'
 import { UserProblemContentPanel } from './UserProblemContentPanel'
@@ -114,14 +116,7 @@ interface AiUsage {
   formattedStatementIds: string[]
 }
 
-const errorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error) return error.message || fallback
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response
-    if (response?.data?.message) return response.data.message
-  }
-  return fallback
-}
+const errorMessage = publicErrorMessage
 
 const getPdfUrl = (path: string | null) => {
   if (!path) return null
@@ -344,7 +339,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         if (!result.ok && result.error.status > 0 && result.error.status < 500) {
           submitKeyRef.current = null
         }
-        toast.error(result.ok ? '提交结果缺少评测编号' : result.error.message)
+        toast.error(result.ok ? '提交结果缺少评测编号' : result.error.userMessage)
       }
     } catch (error: unknown) {
       toast.error(errorMessage(error, '提交失败'))
@@ -414,7 +409,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       if (result.ok) {
         router.push(`${pathPrefix}/problems`)
       } else {
-        toast.error(result.error.message)
+        toast.error(result.error.userMessage)
       }
     } catch (error) {
       console.error('Failed to delete problem:', error)
@@ -437,7 +432,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       if (existingId) router.push(`${pathPrefix}/problems/${existingId}`)
       return
     }
-    toast.error(result.error.message)
+    toast.error(result.error.userMessage)
   }
 
   // 判断是否有编辑/删除权限
@@ -485,7 +480,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         statementId: selectedStatementId,
       })
       if (!result.ok) {
-        setAiError(result.error.message)
+        setAiError(result.error.userMessage)
         return
       }
       // 重新获取题目数据以包含新翻译的版本
@@ -509,7 +504,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         statementId: selectedStatementId,
       })
       if (!result.ok) {
-        setAiError(result.error.message)
+        setAiError(result.error.userMessage)
         return
       }
       await fetchProblem()
@@ -618,7 +613,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   rel="noopener noreferrer"
                   className={unifiedStyles.u16}
                 >
-                  [{OJ_PLATFORM_LABEL_MAP[binding.platform] || binding.platform} {binding.problemId}]
+                  [{ojPlatformDisplayName(binding.platform)} {binding.problemId}]
                 </a>
               ))}
             </div>
@@ -849,7 +844,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         <TableCell className={unifiedStyles.u44}>{s.username}</TableCell>
                         <TableCell className={unifiedStyles.u44}>
                           <span className={unifiedStyles.submissionResult} data-result={s.result}>
-                            {JUDGE_RESULT_LABEL_MAP[s.result] || s.result}
+                            {judgeResultLabel(s.result)}
                           </span>
                         </TableCell>
                         <TableCell className={unifiedStyles.u44}>{s.timeUsed ?? '-'}</TableCell>
@@ -949,7 +944,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       {showSubmitPanel && (
         <section className={unifiedStyles.u55} aria-label="代码提交工作台">
           <div className={unifiedStyles.u61}>
-            <strong>{OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform} {problem.problemId} · 代码工作台</strong>
+            <strong>{ojPlatformDisplayName(problem.platform)} {problem.problemId} · 代码工作台</strong>
             <div className={unifiedStyles.u61}>
               {(() => {
               const platformLangs: PlatformLanguage[] = problem.allowedLanguages

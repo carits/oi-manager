@@ -34,7 +34,7 @@ describe('toResourceState', () => {
     const error = new ApiError({
       kind: 'network',
       status: 0,
-      message: 'offline',
+      userMessage: 'offline',
     })
 
     expect(toResourceState<string[]>({
@@ -52,7 +52,7 @@ describe('toResourceState', () => {
     const error = new ApiError({
       kind: 'http',
       status: 500,
-      message: 'failed',
+      userMessage: 'failed',
     })
 
     expect(toResourceState<string[]>({

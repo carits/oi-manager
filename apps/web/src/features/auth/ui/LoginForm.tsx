@@ -34,7 +34,7 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
     setError('')
     const result = await login(username.trim(), password)
     if (!result.success) {
-      setError(result.message || '登录失败，请检查用户名和密码')
+      setError('登录失败，请检查用户名和密码')
       setLoading(false)
     }
   }

@@ -45,7 +45,7 @@ function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { 
     setSaving(true)
     const result = await createAssignmentDraft(organizationId, { organizationId, title, description, publishAt: publishAt || null, openAt, dueAt, closeAt, latePolicy: latePolicy as 'DISALLOW' | 'ALLOW_MARK_LATE' | 'ALLOW_NO_PENALTY' | 'ALLOW_WITH_PENALTY', latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null })
     setSaving(false)
-    if (!result.ok) return toast.error(result.error.message)
+    if (!result.ok) return toast.error(result.error.userMessage)
     toast.success('作业已创建，请继续选择题目和学生')
     onCreated(result.data)
   }

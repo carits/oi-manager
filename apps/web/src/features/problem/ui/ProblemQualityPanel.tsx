@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -16,6 +17,7 @@ import {
   updateProblemSolutionProfile,
 } from '../api/problemQualityApi'
 import { displayScore, qualityJobPresentation, qualityStatusPresentation, type QualityStatus } from '../model/problem-quality-display'
+import { judgeResultLabel } from '@/lib/judge-constants'
 import styles from './ProblemQualityPanel.module.css'
 
 type EvidenceIssue = { code: string; message: string }
@@ -130,12 +132,26 @@ const DQS_PARTS: Array<{ key: keyof QualitySnapshot; label: string; maximum: num
   { key: 'discriminationScore', label: '区分能力', maximum: 25 },
   { key: 'coverageScore', label: '语义覆盖', maximum: 15 },
   { key: 'diversityScore', label: '数据多样性', maximum: 10 },
-  { key: 'subtaskQualityScore', label: 'Subtask', maximum: 10 },
+  { key: 'subtaskQualityScore', label: '分组设计', maximum: 10 },
   { key: 'stabilityScore', label: '稳定性', maximum: 10 },
 ]
 
 function percent(value: number) {
   return `${(value * 100).toFixed(1)}%`
+}
+
+function confidenceLabel(value: string) {
+  if (value === 'HIGH') return '高'
+  if (value === 'MEDIUM') return '中'
+  if (value === 'LOW') return '低'
+  return '待确认'
+}
+
+function maturityLabel(value: string) {
+  if (value === 'MATURE') return '成熟'
+  if (value === 'GROWING') return '持续完善'
+  if (value === 'EARLY') return '初步可用'
+  return '待确认'
 }
 
 function qualityConclusion(snapshot: QualitySnapshot) {
@@ -157,18 +173,16 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   const [originalityScore, setOriginalityScore] = useState('')
   const [comment, setComment] = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
-  const [profileKey, setProfileKey] = useState('')
   const [profileName, setProfileName] = useState('')
   const [profileClass, setProfileClass] = useState('')
   const [profileComplexity, setProfileComplexity] = useState('')
   const [profileScoreMin, setProfileScoreMin] = useState('')
   const [profileScoreMax, setProfileScoreMax] = useState('')
   const [profileSubmissionId, setProfileSubmissionId] = useState('')
-  const [profileSubtasks, setProfileSubtasks] = useState('[]')
 
   const load = useCallback(async () => {
     try { setData(await getProblemQualityDashboard(problemId) as QualityDashboard) }
-    catch (error) { toast.error(error instanceof Error ? error.message : '质量评估加载失败') }
+    catch (error) { toast.error(publicErrorMessage(error, '质量评估加载失败')) }
     setLoading(false)
   }, [problemId, toast])
 
@@ -181,11 +195,11 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   }, [pending, load])
 
   const triggerDqs = async () => {
-    if (!data?.stableTestSet) return toast.error('题目尚无 Stable 测试数据')
+    if (!data?.stableTestSet) return toast.error('题目尚无可用于正式评测的数据')
     setBusy(true)
     try {
       const result = await requestProblemQualityEvaluation(problemId, 'STABLE')
-      if (!result.ok) return toast.error(result.error.message || '质量评估入队失败')
+      if (!result.ok) return toast.error(result.error.userMessage || '质量评估入队失败')
       toast.success('质量评估已加入队列')
       await load()
     } finally { setBusy(false) }
@@ -195,7 +209,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
     setBusy(true)
     try {
       const result = await runAutomatedProblemQuality(problemId)
-      if (!result.ok) return toast.error(result.error.message || '题目质量机器评估失败')
+      if (!result.ok) return toast.error(result.error.userMessage || '题目质量机器评估失败')
       toast.success('题目质量机器评估已完成')
       await load()
     } finally { setBusy(false) }
@@ -211,7 +225,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
         originalityScore: Number(originalityScore),
         comment,
       })
-      if (!result.ok) return toast.error(result.error.message || '专家评估提交失败')
+      if (!result.ok) return toast.error(result.error.userMessage || '专家评估提交失败')
       toast.success('专家评估已固化')
       setExpertOpen(false)
       setAlgorithmicValueScore(''); setEditorialScore(''); setOriginalityScore(''); setComment('')
@@ -220,33 +234,25 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   }
 
   const resetProfileForm = () => {
-    setProfileKey(''); setProfileName(''); setProfileClass(''); setProfileComplexity('')
-    setProfileScoreMin(''); setProfileScoreMax(''); setProfileSubmissionId(''); setProfileSubtasks('[]')
+    setProfileName(''); setProfileClass(''); setProfileComplexity('')
+    setProfileScoreMin(''); setProfileScoreMax(''); setProfileSubmissionId('')
   }
 
   const submitProfile = async () => {
-    let expectedSubtaskScores: unknown
-    try {
-      expectedSubtaskScores = JSON.parse(profileSubtasks)
-      if (!Array.isArray(expectedSubtaskScores)) throw new Error('not-array')
-    } catch {
-      toast.error('Subtask 预期分必须是 JSON 数组')
-      return
-    }
     setBusy(true)
     try {
       const result = await createProblemSolutionProfile(problemId, {
-        key: profileKey,
+        key: `profile-${Date.now().toString(36)}`,
         name: profileName,
         expectedClass: profileClass,
         expectedComplexity: profileComplexity || null,
         expectedScoreMin: Number(profileScoreMin),
         expectedScoreMax: Number(profileScoreMax),
-        expectedSubtaskScores,
+        expectedSubtaskScores: [],
         submissionId: Number(profileSubmissionId),
       })
-      if (!result.ok) return toast.error(result.error.message || 'Reference Solution Profile 保存失败')
-      toast.success('Reference Solution Profile 已保存，并已触发新版质量评估')
+      if (!result.ok) return toast.error(result.error.userMessage || '参考解法档案保存失败')
+      toast.success('参考解法档案已保存，并已重新进行质量评估')
       setProfileOpen(false); resetProfileForm(); await load()
     } finally { setBusy(false) }
   }
@@ -255,8 +261,8 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
     setBusy(true)
     try {
       const result = await updateProblemSolutionProfile(problemId, profile.id, profile.revision, status)
-      if (!result.ok) return toast.error(result.error.message || 'Profile 状态更新失败')
-      toast.success(status === 'active' ? 'Profile 已启用' : 'Profile 已停用')
+      if (!result.ok) return toast.error(result.error.userMessage || '参考解法状态更新失败')
+      toast.success(status === 'active' ? '参考解法已启用' : '参考解法已停用')
       await load()
     } finally { setBusy(false) }
   }
@@ -269,7 +275,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   const conclusion = snapshot ? qualityConclusion(snapshot) : null
   const pqs = data.problemQuality
   const expertDirty = Boolean(algorithmicValueScore || editorialScore || originalityScore || comment)
-  const profileDirty = Boolean(profileKey || profileName || profileClass || profileComplexity || profileScoreMin || profileScoreMax || profileSubmissionId || profileSubtasks !== '[]')
+  const profileDirty = Boolean(profileName || profileClass || profileComplexity || profileScoreMin || profileScoreMax || profileSubmissionId)
 
   return <div className={styles.panel}>
     <section className={styles.card}>
@@ -283,65 +289,64 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
           <strong>{displayScore(snapshot.overallScore)} / 100</strong>
         </div>
         {(snapshot.criticalIssueCount > 0 || snapshot.warningCount > 0 || snapshot.isStale) && <div className={styles.diagnostics}>
-          {snapshot.isStale && <p><strong>需重新评估：</strong>{snapshot.reasons?.join('、')}</p>}
-          {snapshot.evidence?.criticalIssues?.map(item => <p key={`${item.code}-${item.message}`} className={styles.critical}><strong>必须处理：</strong>{item.message}</p>)}
-          {snapshot.evidence?.warnings?.map(item => <p key={`${item.code}-${item.message}`}><strong>建议：</strong>{item.message}</p>)}
+          {snapshot.isStale && <p><strong>需重新评估：</strong>题目或评测数据已经变化。</p>}
+          {snapshot.evidence?.criticalIssues?.map((item, index) => <p key={item.code || index} className={styles.critical}><strong>必须处理：</strong>发现一项影响评测正确性的问题，请检查题目和评测数据。</p>)}
+          {snapshot.evidence?.warnings?.map((item, index) => <p key={item.code || index}><strong>建议：</strong>发现一项可改进的数据质量问题。</p>)}
         </div>}
-        <details className={styles.technicalCertificate}><summary>查看技术证书与评分细项</summary>
+        <details className={styles.technicalCertificate}><summary>查看质量指标与评估依据</summary>
         <div className={styles.summary}>
-          <div className={styles.overall}><span>DQS</span><strong>{displayScore(snapshot.overallScore)}</strong><small>/ 100</small></div>
+          <div className={styles.overall}><span>数据质量</span><strong>{displayScore(snapshot.overallScore)}</strong><small>/ 100</small></div>
           <div><span>状态</span><StatusBadge variant={status!.variant}>{status!.label}</StatusBadge><small>{status!.description}</small></div>
-          <div><span>置信度</span><strong>{snapshot.confidenceLevel} · {snapshot.confidenceScore}</strong><small>证据充足度，不混入 DQS</small></div>
-          <div><span>成熟度</span><strong>{snapshot.maturityLevel}</strong><small>{snapshot.realSubmissionCount} 次真实提交 · {snapshot.validHackCount} 次 Hack</small></div>
+          <div><span>依据充足度</span><strong>{confidenceLabel(snapshot.confidenceLevel)} · {snapshot.confidenceScore}</strong><small>用于说明本次结论的可靠程度</small></div>
+          <div><span>数据成熟度</span><strong>{maturityLabel(snapshot.maturityLevel)}</strong><small>{snapshot.realSubmissionCount} 次真实提交 · {snapshot.validHackCount} 次有效补充</small></div>
         </div>
         <div className={styles.scoreGrid}>{DQS_PARTS.map(item => <div key={item.key}><span>{item.label}</span><strong>{String(snapshot[item.key])} / {item.maximum}</strong></div>)}</div>
         <div className={styles.metrics}>
-          <span>Evaluation {percent(snapshot.evaluationCoverage)}</span>
-          <span>Hidden Holdout {percent(snapshot.holdoutCoverage)}</span>
+          <span>常规检查覆盖 {percent(snapshot.evaluationCoverage)}</span>
+          <span>隐藏检查覆盖 {percent(snapshot.holdoutCoverage)}</span>
           <span>加权错误簇覆盖 {percent(snapshot.weightedKillCoverage)}</span>
-          <span>Feature {percent(snapshot.featureCoverage)}</span>
-          {snapshot.evidence?.scoring?.solutionProfileCount != null && snapshot.evidence.scoring.solutionProfileCount > 0 && <span>Reference 对齐 {snapshot.evidence.scoring.evaluatedSolutionProfileCount ?? 0}/{snapshot.evidence.scoring.solutionProfileCount} · {percent(snapshot.evidence.scoring.solutionProfileAlignment || 0)}</span>}
+          <span>特征覆盖 {percent(snapshot.featureCoverage)}</span>
+          {snapshot.evidence?.scoring?.solutionProfileCount != null && snapshot.evidence.scoring.solutionProfileCount > 0 && <span>参考解法一致性 {snapshot.evidence.scoring.evaluatedSolutionProfileCount ?? 0}/{snapshot.evidence.scoring.solutionProfileCount} · {percent(snapshot.evidence.scoring.solutionProfileAlignment || 0)}</span>}
         </div>
-        {snapshot.evidence?.pinnedInputs && <details className={styles.evidence}><summary>查看固定评估输入</summary><pre>{JSON.stringify(snapshot.evidence.pinnedInputs, null, 2)}</pre></details>}
+        {snapshot.evidence?.pinnedInputs && <div className={styles.evidence}><strong>评估依据</strong><ul><li>测试数据：已固定</li><li>标准答案：已确认</li><li>输入检查：已确认</li></ul></div>}
         </details>
-      </> : <div className={styles.empty}>尚无 DQS 快照。需要 Stable 数据、Active STD / Validator 和可用 Wrong Corpus。</div>}
+      </> : <div className={styles.empty}>尚无质量评估结果。请先完善评测数据、标准答案和输入检查。</div>}
     </section>
 
     <section className={styles.card}>
-      <header className={styles.heading}><div><h3>题目质量 PQS</h3><p>机器分与专家分分开保存，普通用户评分不进入 PQS。</p></div><div className={styles.actions}><Button variant="outline" loading={busy} onClick={runPqs}>{pqs ? '重新检查当前内容' : '运行机器评估'}</Button>{pqs && data.permissions.canExpertReview && pqs.status !== 'EXPERT_REVIEWED' && <Button variant="primary" onClick={() => setExpertOpen(true)}>平台专家审核</Button>}</div></header>
+      <header className={styles.heading}><div><h3>题目内容质量</h3><p>自动检查与专家审核分别记录，普通用户评分不影响质量结论。</p></div><div className={styles.actions}><Button variant="outline" loading={busy} onClick={runPqs}>{pqs ? '重新检查当前内容' : '运行机器评估'}</Button>{pqs && data.permissions.canExpertReview && pqs.status !== 'EXPERT_REVIEWED' && <Button variant="primary" onClick={() => setExpertOpen(true)}>平台专家审核</Button>}</div></header>
       {pqs ? <div className={styles.pqs}>
         <div><span>机器分</span><strong>{pqs.automatedScore} / 70</strong></div>
         <div><span>专家分</span><strong>{displayScore(pqs.expertScore)} / 30</strong></div>
-        <div><span>综合 PQS</span><strong>{displayScore(pqs.overallScore)} / 100</strong></div>
-        <div><span>置信度</span><strong>{pqs.confidenceLevel} · {pqs.confidenceScore}</strong>{pqs.isStale && <StatusBadge variant="warning">内容已变化</StatusBadge>}</div>
+        <div><span>综合质量</span><strong>{displayScore(pqs.overallScore)} / 100</strong></div>
+        <div><span>依据充足度</span><strong>{confidenceLabel(pqs.confidenceLevel)} · {pqs.confidenceScore}</strong>{pqs.isStale && <StatusBadge variant="warning">内容已变化</StatusBadge>}</div>
       </div> : <div className={styles.empty}>尚未评估题面、题解、难度与约束设计。</div>}
     </section>
 
     <section className={styles.card}>
       <header className={styles.heading}>
-        <div><h3>Reference Solution Profiles</h3><p>为 OI Subtask 记录代表算法的预期总分与单个 Subtask 分数区间；评估只读取提交时固定的数据槽图哈希与终态结果。</p></div>
-        <Button variant="outline" onClick={() => setProfileOpen(true)}>新增 Profile</Button>
+        <div><h3>参考解法档案</h3><p>记录代表性解法的预期表现，用于检查评测数据能否正确区分不同解法。</p></div>
+        <Button variant="outline" onClick={() => setProfileOpen(true)}>新增参考解法</Button>
       </header>
       {data.solutionProfiles?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow>
-        <TableHeaderCell>Profile</TableHeaderCell><TableHeaderCell>预期算法</TableHeaderCell><TableHeaderCell>预期分</TableHeaderCell><TableHeaderCell>当前证据</TableHeaderCell><TableHeaderCell>Subtask 预期</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell>
+        <TableHeaderCell>参考解法</TableHeaderCell><TableHeaderCell>预期算法</TableHeaderCell><TableHeaderCell>预期分</TableHeaderCell><TableHeaderCell>当前结果</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell>
       </TableRow></TableHead><TableBody>{data.solutionProfiles.map(profile => <TableRow key={profile.id}>
-        <TableCell><strong>{profile.name}</strong><small className={styles.blockMeta}>{profile.key} · v{profile.revision} · 提交 #{profile.submissionId}</small></TableCell>
+        <TableCell><strong>{profile.name}</strong></TableCell>
         <TableCell>{profile.expectedClass}<small className={styles.blockMeta}>{profile.expectedComplexity || '未填写复杂度'}</small></TableCell>
         <TableCell>{profile.expectedScoreMin}–{profile.expectedScoreMax}</TableCell>
-        <TableCell>{profile.observed?.score ?? '—'}<small className={styles.blockMeta}>{profile.observed?.result || '尚无终态'}{profile.observed?.evaluatedGraphHash ? ` · ${profile.observed.evaluatedGraphHash.slice(0, 8)}` : ''}</small></TableCell>
-        <TableCell>{profile.expectedSubtaskScores.length ? profile.expectedSubtaskScores.map(item => `S${item.subtaskId}: ${item.min}–${item.max}`).join('；') : '—'}</TableCell>
+        <TableCell>{profile.observed?.score ?? '—'}<small className={styles.blockMeta}>{profile.observed?.result ? judgeResultLabel(profile.observed.result) : '尚无最终结果'}</small></TableCell>
         <TableCell><div className={styles.profileStatus}><StatusBadge variant={profile.status === 'active' ? 'success' : 'neutral'}>{profile.status === 'active' ? '启用' : '停用'}</StatusBadge><Button size="sm" variant="ghost" loading={busy} onClick={() => void setProfileStatus(profile, profile.status === 'active' ? 'retired' : 'active')}>{profile.status === 'active' ? '停用' : '启用'}</Button></div></TableCell>
-      </TableRow>)}</TableBody></TableRoot></div> : <div className={styles.empty}>尚未配置 Reference Solution Profile。OI 数据只能获得结构分，无法验证预期 30/60/100 等得分梯度。</div>}
+      </TableRow>)}</TableBody></TableRoot></div> : <div className={styles.empty}>尚未配置参考解法，暂时无法验证评测数据对不同解法的区分能力。</div>}
     </section>
 
     <section className={styles.card}>
       <h3>评估任务</h3>
-      {data.jobs?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow><TableHeaderCell>任务</TableHeaderCell><TableHeaderCell>数据槽</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>尝试</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell></TableRow></TableHead><TableBody>{data.jobs.map(job => { const presentation = qualityJobPresentation(job.status); return <TableRow key={job.id}><TableCell>{job.id.slice(0, 8)}</TableCell><TableCell>{job.slot} · {job.graphHash.slice(0, 8)}</TableCell><TableCell><StatusBadge variant={presentation.variant}>{presentation.label}</StatusBadge>{job.errorMessage && <small className={styles.error}>{job.errorCode} · {job.errorMessage}</small>}</TableCell><TableCell>{job.attempts}/3</TableCell><TableCell>{new Date(job.queuedAt).toLocaleString('zh-CN')}</TableCell></TableRow> })}</TableBody></TableRoot></div> : <div className={styles.empty}>暂无评估任务。</div>}
+      {data.jobs?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow><TableHeaderCell>任务</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>尝试</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell></TableRow></TableHead><TableBody>{data.jobs.map((job, index) => { const presentation = qualityJobPresentation(job.status); return <TableRow key={job.id}><TableCell>质量检查 {data.jobs!.length - index}</TableCell><TableCell><StatusBadge variant={presentation.variant}>{presentation.label}</StatusBadge>{job.errorMessage && <small className={styles.error}>任务执行失败，请重试。</small>}</TableCell><TableCell>{job.attempts}/3</TableCell><TableCell>{new Date(job.queuedAt).toLocaleString('zh-CN')}</TableCell></TableRow> })}</TableBody></TableRoot></div> : <div className={styles.empty}>暂无评估任务。</div>}
     </section>
 
     <section className={styles.card}>
-      <h3>历史 DQS 快照</h3>
-      {data.qualityHistory?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow><TableHeaderCell>数据槽</TableHeaderCell><TableHeaderCell>DQS</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>置信度</TableHeaderCell><TableHeaderCell>成熟度</TableHeaderCell><TableHeaderCell>评估时间</TableHeaderCell></TableRow></TableHead><TableBody>{data.qualityHistory.map(item => { const presentation = qualityStatusPresentation(item.qualityStatus, item.isStale); return <TableRow key={item.id}><TableCell>{item.slot} · {item.graphHash.slice(0, 8)}</TableCell><TableCell>{displayScore(item.overallScore)}</TableCell><TableCell><StatusBadge variant={presentation.variant}>{presentation.label}</StatusBadge></TableCell><TableCell>{item.confidenceLevel} · {item.confidenceScore}</TableCell><TableCell>{item.maturityLevel}</TableCell><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell></TableRow> })}</TableBody></TableRoot></div> : <div className={styles.empty}>还没有历史质量证书。</div>}
+      <h3>历史质量记录</h3>
+      {data.qualityHistory?.length ? <div className={styles.tableScroll}><TableRoot><TableHead><TableRow><TableHeaderCell>质量评分</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>依据充足度</TableHeaderCell><TableHeaderCell>成熟度</TableHeaderCell><TableHeaderCell>评估时间</TableHeaderCell></TableRow></TableHead><TableBody>{data.qualityHistory.map(item => { const presentation = qualityStatusPresentation(item.qualityStatus, item.isStale); return <TableRow key={item.id}><TableCell>{displayScore(item.overallScore)}</TableCell><TableCell><StatusBadge variant={presentation.variant}>{presentation.label}</StatusBadge></TableCell><TableCell>{confidenceLabel(item.confidenceLevel)} · {item.confidenceScore}</TableCell><TableCell>{maturityLabel(item.maturityLevel)}</TableCell><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell></TableRow> })}</TableBody></TableRoot></div> : <div className={styles.empty}>还没有历史质量记录。</div>}
     </section>
 
     <FormDialog isOpen={expertOpen} onClose={() => setExpertOpen(false)} onSubmit={submitExpert} title="平台专家质量审核" description="只写入 30 分专家部分；已固化的机器分和证据不会被覆盖。" loading={busy} dirty={expertDirty} submitText="固化专家结论" submitDisabled={!algorithmicValueScore || !editorialScore || !originalityScore || comment.trim().length < 20}>
@@ -353,16 +358,14 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
       </div>
     </FormDialog>
 
-    <FormDialog isOpen={profileOpen} onClose={() => setProfileOpen(false)} onSubmit={submitProfile} title="新增 Reference Solution Profile" description="选择一条本题本地终态提交作为可复现证据。保存后会以新的固定输入触发 DQS 评估。" loading={busy} dirty={profileDirty} submitText="保存并重新评估" submitDisabled={!profileKey.trim() || !profileName.trim() || !profileClass.trim() || !profileScoreMin || !profileScoreMax || !profileSubmissionId}>
+    <FormDialog isOpen={profileOpen} onClose={() => setProfileOpen(false)} onSubmit={submitProfile} title="新增参考解法" description="选择一条本题已有的最终提交作为参考，保存后会重新检查评测数据。" loading={busy} dirty={profileDirty} submitText="保存并重新评估" submitDisabled={!profileName.trim() || !profileClass.trim() || !profileScoreMin || !profileScoreMax || !profileSubmissionId}>
       <div className={styles.profileForm}>
-        <label>Profile Key<Input value={profileKey} placeholder="partial-n2" onChange={event => setProfileKey(event.target.value)} /></label>
         <label>名称<Input value={profileName} placeholder="O(n²) 部分解" onChange={event => setProfileName(event.target.value)} /></label>
         <label>预期算法类别<Input value={profileClass} placeholder="partial" onChange={event => setProfileClass(event.target.value)} /></label>
         <label>预期复杂度<Input value={profileComplexity} placeholder="O(n²)" onChange={event => setProfileComplexity(event.target.value)} /></label>
         <label>最低预期总分<Input type="number" min={0} max={100} value={profileScoreMin} onChange={event => setProfileScoreMin(event.target.value)} /></label>
         <label>最高预期总分<Input type="number" min={0} max={100} value={profileScoreMax} onChange={event => setProfileScoreMax(event.target.value)} /></label>
-        <label>本地提交 ID<Input type="number" min={1} value={profileSubmissionId} onChange={event => setProfileSubmissionId(event.target.value)} /></label>
-        <label className={styles.fullField}>Subtask 预期分 JSON<Textarea rows={5} value={profileSubtasks} onChange={event => setProfileSubtasks(event.target.value)} placeholder='[{"subtaskId":1,"min":30,"max":30}]' /><small>ACM 或不需要单点验证时填 []。Subtask ID 必须属于当前 Stable 数据。</small></label>
+        <label>参考提交<Input type="number" min={1} value={profileSubmissionId} onChange={event => setProfileSubmissionId(event.target.value)} /></label>
       </div>
     </FormDialog>
   </div>

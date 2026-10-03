@@ -2,6 +2,7 @@
 
 import useSWR from 'swr'
 import type { TeamSummary } from '@oi-manager/contracts'
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { listTeams, type TeamListQuery } from '../api/teamApi'
 
 export type Team = TeamSummary
@@ -25,7 +26,7 @@ export function useTeams(filters?: TeamListQuery | null, sessionKey?: string | n
   return {
     data: data ?? null,
     loading: isLoading,
-    error: error instanceof Error ? error.message : null,
+    error: error ? publicErrorMessage(error, '团队列表加载失败，请重试。') : null,
     refetch: async () => { await mutate() },
   }
 }

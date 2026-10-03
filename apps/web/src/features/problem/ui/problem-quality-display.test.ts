@@ -8,7 +8,7 @@ describe('problem quality presentation', () => {
     expect(qualityStatusPresentation('NOT_READY')).toMatchObject({ label: '未就绪', variant: 'warning' })
   })
 
-  it('shows an immutable historical snapshot as stale when its inputs moved on', () => {
+  it('marks an earlier quality result as expired after its inputs change', () => {
     expect(effectiveQualityStatus('READY', true)).toBe('STALE')
     expect(qualityStatusPresentation('READY', true).label).toBe('已过期')
   })

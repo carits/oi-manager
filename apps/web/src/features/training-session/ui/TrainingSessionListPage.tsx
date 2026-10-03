@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Copy, Plus } from 'lucide-react'
@@ -138,10 +139,10 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     try {
       if (item.canJoin) {
         const joined = await joinTrainingSession(item.id)
-        if (!joined.ok) { toast.error(joined.error.message || '加入训练失败'); return }
+        if (!joined.ok) { toast.error(joined.error.userMessage || '加入训练失败'); return }
       }
       router.push(`${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${item.id}${item.status === 'DRAFT' ? '/design' : ''}`)
-    } catch (error) { toast.error(error instanceof Error ? error.message : '无法打开训练') }
+    } catch (error) { toast.error(publicErrorMessage(error, '无法打开训练')) }
     finally { busyRef.current = false; setBusyId(null) }
   }
   const cloneSession = async (item: Session) => {
@@ -151,10 +152,10 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     rememberPosition()
     try {
       const result = await cloneTrainingSession(item.id, { expectedRevision: item.statusRevision || 0 })
-      if (!result.ok) { toast.error(result.error.message || '复制训练失败'); return }
+      if (!result.ok) { toast.error(result.error.userMessage || '复制训练失败'); return }
       toast.success('已复制为新的训练草稿')
       router.push((organizationId ? '/org/' + organizationId : '/personal') + '/training-sessions/' + result.data.id + '/design')
-    } catch (error) { toast.error(error instanceof Error ? error.message : '复制训练失败') }
+    } catch (error) { toast.error(publicErrorMessage(error, '复制训练失败')) }
     finally { busyRef.current = false; setBusyId(null) }
   }
   const actionLabel = (item: Session) => item.canJoin ? '加入训练'
@@ -176,7 +177,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
         {teams.map(team => <option value={team.id} key={team.id}>{team.name}</option>)}
       </Select></FormField>}
     </div>
-    {teamsResource.error && <LoadError compact message={`训练列表仍可使用；团队筛选暂不可用：${teamsResource.error.message}`} onRetry={() => void teamsResource.retry()} />}
+    {teamsResource.error && <LoadError compact message={`训练列表仍可使用；团队筛选暂不可用：${teamsResource.error.userMessage}`} onRetry={() => void teamsResource.retry()} />}
     <Section title={managerView ? '训练列表' : '我的训练'} description={resource.data ? `共 ${resource.data.pagination.total} 个` : undefined}>
       <AsyncRegion state={resource.state} onRetry={() => void resource.retry()}>{(data, refreshing) => <div aria-busy={refreshing}>
         {refreshing && <p className={listStyles.notice} role="status">{resource.showingPreviousQuery ? '正在更新筛选结果，暂时显示上一次列表…' : '正在更新训练列表…'}</p>}

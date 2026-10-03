@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { JUDGE_RESULT_LABEL_MAP } from '@/lib/judge-constants'
+import { judgeResultLabel } from '@/lib/judge-constants'
 import unifiedStyles from './SubmissionJudgeResult.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
@@ -31,7 +31,7 @@ const CASE_TONE: Record<string, { mark: string; tone: 'accepted' | 'skipped' }> 
 }
 
 function verdictLabel(result: string | null): string {
-  return result ? JUDGE_RESULT_LABEL_MAP[result] || result : '-'
+  return judgeResultLabel(result)
 }
 
 export function SubmissionJudgeResult({
@@ -90,8 +90,8 @@ export function SubmissionJudgeResult({
                 return (
                   <TableRow key={`subtask-${row.subtask.id}-${rowIndex}`} className={unifiedStyles.u7}>
                     <TableCell colSpan={judgeMode === 'oi' ? 5 : 4} className={unifiedStyles.u8}>
-                      Subtask {row.subtask.id}
-                      <span className={unifiedStyles.u9}>{row.subtask.cases?.length || 0} 个测试点{row.subtask.type ? ` · ${row.subtask.type}` : ''}</span>
+                      子任务 {row.subtask.id}
+                      <span className={unifiedStyles.u9}>{row.subtask.cases?.length || 0} 个测试点</span>
                       <span className={unifiedStyles.u10}>{row.subtask.score} 分</span>
                     </TableCell>
                   </TableRow>
@@ -103,10 +103,7 @@ export function SubmissionJudgeResult({
                   <TableCell className={unifiedStyles.bodyCell}>{row.index + 1}</TableCell>
                   <TableCell className={unifiedStyles.bodyCell}>
                     <span className={unifiedStyles[`tone_${tone.tone}`]}>{tone.mark}</span>
-                    <span className={unifiedStyles.u12}>{row.testCase.result}</span>
-                    {row.testCase.message && row.testCase.message !== row.testCase.result && (
-                      <div className={unifiedStyles.u13}>{row.testCase.message}</div>
-                    )}
+                    <span className={unifiedStyles.u12}>{verdictLabel(row.testCase.result)}</span>
                   </TableCell>
                   {judgeMode === 'oi' && <TableCell className={unifiedStyles.bodyCellScore}>{row.testCase.score ?? '-'}</TableCell>}
                   <TableCell className={unifiedStyles.bodyCellRight}>{row.testCase.time != null ? `${row.testCase.time} ms` : '-'}</TableCell>

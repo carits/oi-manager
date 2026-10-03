@@ -1,5 +1,7 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
+import { activityStatusLabel } from '@/lib/humanPresentation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Archive, ArrowLeft, BookOpenCheck, FolderPlus, History, Save, Send } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
@@ -151,7 +153,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
       applyPost(postResult)
       setVersions(versionResult)
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : '文章加载失败')
+      setError(publicErrorMessage(loadError, '文章加载失败'))
     } finally {
       setLoading(false)
     }
@@ -179,7 +181,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
           ...(slug.trim() ? { slug: slug.trim() } : {}), type, organizationId: organizationId || null,
           title: draft.title, summary: draft.summary || null, contentMarkdown: draft.contentMarkdown, references: draft.references, classification: draft.classification,
         })
-        if (!result.ok || !result.data.draft) { toast.error(result.ok ? '草稿创建失败' : result.error.message); return null }
+        if (!result.ok || !result.data.draft) { toast.error(result.ok ? '草稿创建失败' : result.error.userMessage); return null }
         applyPost(result.data)
         window.history.replaceState(null, '', '/personal/blogs/' + result.data.id)
         return { id: result.data.id, revision: result.data.draft.revision }
@@ -189,7 +191,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
       const result = await updateBlogDraft(post.id, {
         expectedRevision: post.draft.revision, title: draft.title, summary: draft.summary || null, contentMarkdown: draft.contentMarkdown, references: draft.references, classification: draft.classification,
       })
-      if (!result.ok) { toast.error(result.error.message); return null }
+      if (!result.ok) { toast.error(result.error.userMessage); return null }
       const next = { title: result.data.title, summary: result.data.summary || '', contentMarkdown: result.data.contentMarkdown, references: result.data.references || [], classification: result.data.classification || { ...EMPTY_BLOG_CLASSIFICATION } }
       setDraft(next); setAuthorTagsText(next.classification.authorTags.join(', ')); setBaseline(serializeEditorState({ type, slug, organizationId, visibility, draft: next })); setPost(current => current ? { ...current, draft: { ...current.draft!, ...result.data } } : current)
       return { id: post.id, revision: result.data.revision }
@@ -203,7 +205,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
       const saved = await persistDraft()
       if (!saved) return
       const result = await publishBlogPost(saved.id, { expectedDraftRevision: saved.revision, visibility })
-      if (!result.ok) return toast.error(result.error.message)
+      if (!result.ok) return toast.error(result.error.userMessage)
       applyPost(result.data); setVersions([]); setTab('published'); toast.success('已发布 V' + (result.data.currentVersion?.version || ''))
       setVersions(await listBlogVersions(saved.id))
     } finally { setPublishing(false) }
@@ -214,7 +216,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     try {
       setHistoryVersion(await getBlogVersion(post.id, versionId))
     } catch (versionError) {
-      toast.error(versionError instanceof Error ? versionError.message : '版本加载失败')
+      toast.error(publicErrorMessage(versionError, '版本加载失败'))
     }
   }
 
@@ -223,7 +225,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     setSaving(true)
     const result = await archiveBlogPost(post.id)
     setSaving(false); setArchiveOpen(false)
-    if (result.ok) { toast.success('文章已归档'); requestNavigation('/personal/blogs') } else toast.error(result.error.message)
+    if (result.ok) { toast.success('文章已归档'); requestNavigation('/personal/blogs') } else toast.error(result.error.userMessage)
   }
 
   const createSeries = async () => {
@@ -236,7 +238,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
       organizationId: organizationId || null,
     })
     setSaving(false)
-    if (!result.ok) return toast.error(result.error.message)
+    if (!result.ok) return toast.error(result.error.userMessage)
     setSeries(current => [result.data, ...current])
     setDraft(current => ({ ...current, classification: { ...current.classification, seriesId: result.data.id } }))
     setSeriesDialogOpen(false); setSeriesTitle(''); setSeriesDescription('')
@@ -309,8 +311,8 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     </section>}
 
     {tab === 'versions' && post && <section className={styles.historyLayout}>
-      <div className={styles.versionList}>{versions.map(version => <Button key={version.id} variant={historyVersion?.id === version.id ? 'secondary' : 'ghost'} onClick={() => void openVersion(version.id)}><History size={15} />V{version.version} · {version.title} · {version.status}</Button>)}</div>
-      <article className={styles.reader}>{historyVersion ? <><header><StatusBadge variant={historyVersion.status === 'CURRENT' ? 'success' : 'neutral'}>V{historyVersion.version} · {historyVersion.status}</StatusBadge><time>{new Date(historyVersion.publishedAt).toLocaleString('zh-CN')}</time></header><BlogClassificationView classification={historyVersion.classification} /><MarkdownRenderer content={historyVersion.contentMarkdown} securityProfile="knowledge" /><div className={styles.referenceSection}><h2>该版本的固定引用</h2><BlogReferenceCards references={historyVersion.references} /></div></> : <div className={styles.historyEmpty}><BookOpenCheck size={28} /><p>选择一个版本查看不可变正文和当时的引用。</p></div>}</article>
+      <div className={styles.versionList}>{versions.map(version => <Button key={version.id} variant={historyVersion?.id === version.id ? 'secondary' : 'ghost'} onClick={() => void openVersion(version.id)}><History size={15} />第 {version.version} 版 · {version.title} · {activityStatusLabel(version.status)}</Button>)}</div>
+      <article className={styles.reader}>{historyVersion ? <><header><StatusBadge variant={historyVersion.status === 'CURRENT' ? 'success' : 'neutral'}>第 {historyVersion.version} 版 · {activityStatusLabel(historyVersion.status)}</StatusBadge><time>{new Date(historyVersion.publishedAt).toLocaleString('zh-CN')}</time></header><BlogClassificationView classification={historyVersion.classification} /><MarkdownRenderer content={historyVersion.contentMarkdown} securityProfile="knowledge" /><div className={styles.referenceSection}><h2>该版本的固定引用</h2><BlogReferenceCards references={historyVersion.references} /></div></> : <div className={styles.historyEmpty}><BookOpenCheck size={28} /><p>选择一个版本查看当时发布的正文和引用。</p></div>}</article>
     </section>}
     <ConfirmDialog isOpen={archiveOpen} onClose={() => setArchiveOpen(false)} onConfirm={() => void archive()} title="归档这篇文章？" message="归档后不会出现在反向索引中，固定版本仍保留用于审计。" confirmText="确认归档" danger loading={saving} />
     <FormDialog isOpen={seriesDialogOpen} onClose={() => setSeriesDialogOpen(false)} onSubmit={() => void createSeries()} title="新建博客系列" description="系列与文章使用相同归属和可见范围，防止目录泄露。" submitText="创建并选中" loading={saving} dirty={Boolean(seriesTitle || seriesDescription)} submitDisabled={!seriesTitle.trim()}><div className={styles.formGrid}><FormField label="系列名称" required><Input value={seriesTitle} onChange={event => setSeriesTitle(event.target.value)} maxLength={120} /></FormField><FormField label="可见范围"><Select value={seriesVisibility} onChange={event => setSeriesVisibility(event.target.value as BlogVisibility)}>{(organizationId ? ['PRIVATE', 'ORGANIZATION'] : ['PRIVATE', 'UNLISTED', 'PLATFORM', 'PUBLIC']).map(item => <option key={item} value={item}>{BLOG_VISIBILITY_LABELS[item as BlogVisibility]}</option>)}</Select></FormField><FormField label="系列说明"><Textarea value={seriesDescription} onChange={event => setSeriesDescription(event.target.value)} rows={4} maxLength={1000} /></FormField></div></FormDialog>

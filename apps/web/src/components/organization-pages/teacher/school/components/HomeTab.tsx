@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useState } from 'react'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import Link from 'next/link'
@@ -56,7 +57,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
       onAnnouncementUpdate()
       toast.success('公告已保存')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '保存失败')
+      toast.error(publicErrorMessage(error, '保存失败'))
     } finally {
       setSaving(false)
     }

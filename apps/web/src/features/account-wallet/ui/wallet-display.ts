@@ -20,15 +20,15 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
 const TRANSACTION_SOURCE_LABELS: Record<string, string> = {
   contribution_event: "正式测试集贡献",
   resource_purchase: "评测额度兑换",
-  system: "系统账本",
+  system: "系统调整",
 };
 
 export function walletTransactionTypeLabel(value: string): string {
-  return TRANSACTION_TYPE_LABELS[value] || value || "未知变动";
+  return TRANSACTION_TYPE_LABELS[value] || "其他资产变动";
 }
 
 export function walletTransactionSourceLabel(value: string): string {
-  return TRANSACTION_SOURCE_LABELS[value] || value || "系统账本";
+  return TRANSACTION_SOURCE_LABELS[value] || "来源待确认";
 }
 
 export function resourcePurchaseStatusLabel(value: string): string {
@@ -38,5 +38,5 @@ export function resourcePurchaseStatusLabel(value: string): string {
     failed: "兑换失败",
     reversed: "已冲正",
   };
-  return labels[value] || `未识别状态：${value}`;
+  return labels[value] || "状态待确认";
 }

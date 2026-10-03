@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
@@ -171,7 +172,7 @@ function ReferenceEditor({
       setCommitRequested(false)
       setNotice('题目已加入当前列表。')
     } catch (error) {
-      if (mounted.current) setAddError(error instanceof Error ? error.message : '添加失败，请重试')
+      if (mounted.current) setAddError(publicErrorMessage(error, '添加失败，请重试'))
     }
   }
 
@@ -217,7 +218,7 @@ function ReferenceEditor({
         const receipt = await runBusinessAction('replace', [], onReplace)
         if (receipt && mounted.current) { setTextMode(false); setTextError('') }
       } catch (error) {
-        if (mounted.current) setTextError(error instanceof Error ? error.message : '更新失败，请重试')
+        if (mounted.current) setTextError(publicErrorMessage(error, '更新失败，请重试'))
       }
       return
     }
@@ -260,7 +261,7 @@ function ReferenceEditor({
       setTextError('')
       setNotice('题目列表已更新。')
     } catch (error) {
-      if (mounted.current && !latest.current.disabled) setTextError(error instanceof Error ? error.message : '解析题目失败，请重试')
+      if (mounted.current && !latest.current.disabled) setTextError(publicErrorMessage(error, '解析题目失败，请重试'))
     } finally {
       if (current()) setTextBusy(false)
       operation.current.finish(ticket)

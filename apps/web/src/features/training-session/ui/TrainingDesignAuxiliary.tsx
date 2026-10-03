@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/Toast'
 import { createTrainingHint, deleteTrainingHint, getTrainingGroupSuggestions, getTrainingRoster, listTrainingHints, saveTrainingRoster, updateTrainingHint } from '../api/trainingSessionApi'
 import type { Assignment, Stage, TrainingGrouping } from '../model/trainingDesign'
 import { isTrainingGroupingDefinitionLocked, isTrainingStageDefinitionLocked } from '../model/trainingDesign'
-import { trainingHintOpenModeLabel } from '@/lib/humanPresentation'
+import { trainingHintOpenModeLabel , organizationRoleLabel } from '@/lib/humanPresentation'
 import styles from './TrainingEngine.module.css'
 
 type Roster = { revision: number; candidates: Array<{ userId: string; username: string; displayName: string; role: string; selected: boolean }> }
@@ -57,7 +57,7 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     setSaving(true)
     const response = await saveTrainingRoster(sessionId, { expectedRevision: roster.revision, participants: roster.candidates.filter(item => item.selected).map(item => ({ userId: item.userId })) })
     setSaving(false)
-    if (!response.ok) return toast.error(response.error.message || '学员名单保存失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '学员名单保存失败')
     onRevisionChanged?.(response.data.session.statusRevision)
     toast.success('训练学员已保存；未保存的分组草稿仍保留'); await loadRoster()
   }
@@ -77,7 +77,7 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
       ? await updateTrainingHint(sessionId, editingHint.id, body)
       : await createTrainingHint(sessionId, { stageProblemId: selectedAssignmentId, ...body })
     setSaving(false)
-    if (!response.ok) return toast.error(response.error.message || (editingHint ? '提示修改失败' : '提示创建失败'))
+    if (!response.ok) return toast.error(response.error.userMessage || (editingHint ? '提示修改失败' : '提示创建失败'))
     resetHintForm(); toast.success(editingHint ? '提示已更新' : '分级提示已创建'); await loadHints(selectedAssignmentId)
   }
   const confirmDeleteHint = async () => {
@@ -85,7 +85,7 @@ export function TrainingDesignAuxiliary({ sessionId, mode, stages, onStagesChang
     setSaving(true)
     const response = await deleteTrainingHint(sessionId, deleteHintTarget.id)
     setSaving(false)
-    if (!response.ok) return toast.error(response.error.message || '提示删除失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '提示删除失败')
     setDeleteHintTarget(undefined); toast.success('提示已删除'); await loadHints(selectedAssignmentId)
   }
   const previewSuggestions = async (stageId: string) => {

@@ -13,9 +13,10 @@ export function SessionUnavailable({
         <h1 className={unifiedStyles.u3}>暂时无法确认登录状态</h1>
         <p className={unifiedStyles.u4}>{message}</p>
         {requestId && (
-          <p className={unifiedStyles.u5}>
-            请求编号：{requestId}
-          </p>
+          <details className={unifiedStyles.u5}>
+            <summary>诊断信息</summary>
+            <code>请求编号：{requestId}</code>
+          </details>
         )}
         <a
           href=""

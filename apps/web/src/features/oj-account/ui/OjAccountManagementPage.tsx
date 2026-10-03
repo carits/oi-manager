@@ -16,7 +16,7 @@ import {
   updateOjAccount,
   verifyOjAccount,
 } from '../api/ojAccountApi'
-import { OJ_PLATFORM_LABEL_MAP, OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
+import { OJ_PLATFORMS_NO_ALL, ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
@@ -77,7 +77,7 @@ export function OjAccountManagementPage() {
     try {
       const result = await verifyOjAccount(id)
       if (!result.ok) throw result.error
-      toast.success(`验证结果: ${result.data.message}`)
+      toast.success('账号验证已完成')
       fetchAccounts()
       fetchStats()
     } catch {
@@ -97,7 +97,7 @@ export function OjAccountManagementPage() {
         fetchAccounts()
         fetchStats()
       } else {
-        toast.error(result.data.message || '登录失败')
+        toast.error('登录失败，请检查账号信息')
       }
     } catch {
       toast.error('登录失败')
@@ -161,7 +161,7 @@ export function OjAccountManagementPage() {
                       onClick={() => setFilterPlatform(filterPlatform === s.platform ? '' : s.platform)}
                     >
                       <div className={unifiedStyles.u8}>
-                        {OJ_PLATFORM_LABEL_MAP[s.platform] || s.platform}
+                        {ojPlatformDisplayName(s.platform)}
                       </div>
                       <div className={unifiedStyles.u4}>
                         <span className={unifiedStyles[`tone_${statusCfg.tone}`]}>{s.active}</span>
@@ -183,7 +183,7 @@ export function OjAccountManagementPage() {
               // 只展示有数据的平台，避免空柱太多
               const platformMap = new Map<string, string>()
               for (const s of stats) {
-                platformMap.set(s.platform, OJ_PLATFORM_LABEL_MAP[s.platform] || s.platform)
+                platformMap.set(s.platform, ojPlatformDisplayName(s.platform))
               }
               const platforms = Array.from(platformMap.entries())
               const chartStyle = { '--chart-width': `${Math.max(platforms.length * 70, 300)}px` } as CSSProperties
@@ -272,7 +272,7 @@ export function OjAccountManagementPage() {
                     const sc = STATUS_CONFIG[acc.status] || STATUS_CONFIG.unverified
                     return (
                       <TableRow key={acc.id} className={`${unifiedStyles.accountRow} ${acc.enabled ? '' : unifiedStyles.accountDisabled}`}>
-                        <TableCell className={unifiedStyles.u23}>{OJ_PLATFORM_LABEL_MAP[acc.platform] || acc.platform}</TableCell>
+                        <TableCell className={unifiedStyles.u23}>{ojPlatformDisplayName(acc.platform)}</TableCell>
                         <TableCell className={unifiedStyles.u24}>{acc.username}</TableCell>
                         <TableCell className={unifiedStyles.u21}>
                           <span className={`${unifiedStyles.accountState} ${acc.enabled ? unifiedStyles.tone_active : unifiedStyles.tone_expired}`}>
@@ -358,7 +358,7 @@ export function OjAccountManagementPage() {
           onClose={() => setRemoveTarget(null)}
           onConfirm={handleRemove}
           title="删除账号"
-          message={`确定要删除 ${OJ_PLATFORM_LABEL_MAP[removeTarget?.platform || ''] || removeTarget?.platform} 账号「${removeTarget?.username}」吗？`}
+          message={`确定要删除 ${ojPlatformDisplayName(removeTarget?.platform)} 账号「${removeTarget?.username}」吗？`}
           confirmText="删除"
           danger
         />
@@ -579,7 +579,7 @@ function EditAccountModal({ isOpen, onClose, account, onSuccess }: {
   if (!account) return null
 
   return (
-    <FormDialog isOpen={isOpen} onClose={onClose} title={`编辑配置 — ${OJ_PLATFORM_LABEL_MAP[account.platform] || account.platform} / ${account.username}`} size="lg">
+    <FormDialog isOpen={isOpen} onClose={onClose} title={`编辑配置 — ${ojPlatformDisplayName(account.platform)} / ${account.username}`} size="lg">
       <div className={unifiedStyles.u37}>
         {CONFIG_FIELDS.map(group => (
           <div key={group.group}>

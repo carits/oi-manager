@@ -57,6 +57,31 @@ function rewardVariant(value?: string) {
   return "neutral" as const;
 }
 
+function evidenceStatus(value: unknown) {
+  const status = typeof value === "string" ? value.toUpperCase() : "";
+  if (["UPLOADED", "ADMITTED", "VALIDATING"].includes(status)) return "检查中";
+  if (status === "ELIGIBLE") return "等待采用";
+  if (status === "PROMOTED") return "已采用";
+  if (status === "REDUNDANT") return "与现有数据重复";
+  if (["REJECTED", "FAILED"].includes(status)) return "未通过";
+  return "状态待确认";
+}
+
+function ContributionEvidenceSummary({ detail }: { detail: ContributionEvidence }) {
+  if (detail.kind === "evolving") {
+    return <dl>
+      <div><dt>数据变化</dt><dd>{detail.isCurrent ? "当前评测数据已包含此变更" : "该变更已被后续更新替代"}</dd></div>
+      <div><dt>最近更新时间</dt><dd>{detail.current?.updatedAt ? new Date(detail.current.updatedAt).toLocaleString("zh-CN") : "暂无记录"}</dd></div>
+    </dl>;
+  }
+  const candidate = detail.candidate as Record<string, unknown>;
+  return <dl>
+    <div><dt>候选测试数据</dt><dd>已找到</dd></div>
+    <div><dt>来源</dt><dd>{candidateSourceLabel(typeof candidate.source === "string" ? candidate.source : undefined)}</dd></div>
+    <div><dt>质量检查</dt><dd>{evidenceStatus(candidate.status)}</dd></div>
+  </dl>;
+}
+
 export default function PlatformContributionPage() {
   const toast = useToast();
   const { user } = useAuth();
@@ -101,14 +126,15 @@ export default function PlatformContributionPage() {
       setTotal(0);
       setTotalPages(0);
       setPendingCount(null);
-      setLoadError(resultState.status === "rejected" && resultState.reason instanceof Error ? resultState.reason.message : "贡献审计记录加载失败");
+      if (resultState.status === "rejected") console.error(resultState.reason);
+      setLoadError("贡献审计记录加载失败，请重试。");
     }
     if (economyState.status === "fulfilled")
       setEconomy(economyState.value);
     else {
       setEconomy(null);
       setLoadError((current) =>
-        [current, economyState.reason instanceof Error ? economyState.reason.message : "Carits 账本摘要加载失败"]
+        [current, "Carits 账本摘要加载失败，请重试。"]
           .filter(Boolean)
           .join("；"),
       );
@@ -133,7 +159,7 @@ export default function PlatformContributionPage() {
       : action === "revoke" ? await revokeContribution(selected.id, { reason })
       : await retryContributionReward(selected.id);
     setSaving(false);
-    if (!result.ok) return toast.error(result.error.message);
+    if (!result.ok) return toast.error(result.error.userMessage);
     const successMessage: Record<ReviewAction, string> = {
       accept: "贡献已接受，奖励进入结算队列",
       reject: "贡献已拒绝",
@@ -166,12 +192,12 @@ export default function PlatformContributionPage() {
       toast.error("该贡献没有可用的详情引用");
       return;
     }
-    const title = kind === "candidate" ? "Candidate 详情" : "Evolving 图哈希详情";
+    const title = kind === "candidate" ? "候选测试数据" : "当前数据变化";
     setEvidenceDetail({ kind, title, data: null, error: "" });
     setEvidenceLoading(true);
     const result = await getContributionEvidence(selected.id, kind).then(
       data => ({ data, error: "" }),
-      error => ({ data: null, error: error instanceof Error ? error.message : "证据详情加载失败" }),
+      error => { console.error(error); return { data: null, error: "证据详情加载失败，请重试。" }; },
     );
     setEvidenceLoading(false);
     setEvidenceDetail(current => current?.kind === kind
@@ -187,7 +213,7 @@ export default function PlatformContributionPage() {
         accept: {
           title: "接受贡献并发放奖励",
           description:
-            "请核对题目、Candidate 和Evolving 图哈希证据。接受后会创建奖励任务。",
+            "请核对题目、候选测试数据和质量检查结果。接受后会创建奖励任务。",
           submitText: "确认接受",
         },
         reject: {
@@ -204,13 +230,13 @@ export default function PlatformContributionPage() {
         retry: {
           title: "重试奖励结算",
           description:
-            "请先核对贡献证据和失败诊断。确认后只重置奖励任务，不会重复创建贡献或 Revision。",
+            "请先核对贡献证据和失败诊断。确认后只重置奖励任务，不会重复创建贡献记录。",
           submitText: "确认重试",
         },
       }[action]
     : {
         title: "贡献证据",
-        description: "查看贡献的晋升来源、规则版本和奖励结算状态。",
+        description: "查看贡献来源、质量检查结果和奖励结算状态。",
         submitText: "",
       };
   return (
@@ -339,7 +365,7 @@ export default function PlatformContributionPage() {
                     {new Date(item.createdAt).toLocaleString("zh-CN")}
                   </TableCell>
                   <TableCell>{item.Actor.username}</TableCell>
-                  <TableCell>{item.type}</TableCell>
+                  <TableCell>{contributionTypeLabel(item.type)}</TableCell>
                   <TableCell>{item.score}</TableCell>
                   <TableCell>
                     <StatusBadge
@@ -352,7 +378,7 @@ export default function PlatformContributionPage() {
                     {item.RewardDelivery && (
                       <span className={styles.rewardState}>
                         <StatusBadge variant={rewardVariant(item.RewardDelivery.status)}>
-                          {rewardStatus[item.RewardDelivery.status] || item.RewardDelivery.status}
+                          {rewardStatus[item.RewardDelivery.status] || "状态待确认"}
                         </StatusBadge>
                         <small>{item.RewardDelivery.userCarits} C</small>
                       </span>
@@ -461,18 +487,18 @@ export default function PlatformContributionPage() {
                 </div>
                 <div>
                   <dt>来源记录</dt>
-                  <dd>{contributionSourceLabel(selected.sourceType)} · {selected.sourceId}</dd>
+                  <dd>{contributionSourceLabel(selected.sourceType)}</dd>
                 </div>
                 <div>
                   <dt>题目</dt>
-                  <dd>{selected.evidence?.problemId || "—"}</dd>
+                  <dd>{selected.evidence?.problemId ? "已关联题目" : "—"}</dd>
                 </div>
                 <div>
-                  <dt>Candidate</dt>
+                  <dt>候选测试数据</dt>
                   <dd>
                     {selected.evidence?.candidateId ? (
                       <span className={styles.evidenceAction}>
-                        <code>{selected.evidence.candidateId}</code>
+                        <span>已找到</span>
                         <Button
                           size="sm"
                           variant="text"
@@ -485,11 +511,11 @@ export default function PlatformContributionPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt>Evolving 图哈希</dt>
+                  <dt>数据变化</dt>
                   <dd>
                     {selected.evidence?.promotedGraphHash ? (
                       <span className={styles.evidenceAction}>
-                        <code>{selected.evidence.promotedGraphHash}</code>
+                        <span>已记录</span>
                         <Button
                           size="sm"
                           variant="text"
@@ -512,18 +538,13 @@ export default function PlatformContributionPage() {
                 <div>
                   <dt>规则</dt>
                   <dd>
-                    {selected.ruleCode
-                      ? `${selected.ruleCode} v${selected.ruleVersion || 1}`
-                      : "—"}
+                    {selected.ruleCode ? "已按系统贡献规则评估" : "—"}
                   </dd>
                 </div>
                 <div>
                   <dt>组织归因</dt>
                   <dd>
                     {selected.Attribution?.Organization?.name || "个人贡献"}
-                    {selected.Attribution?.organizationId && (
-                      <small className={styles.identifier}>ID：{selected.Attribution.organizationId}</small>
-                    )}
                   </dd>
                 </div>
               </dl>
@@ -533,14 +554,14 @@ export default function PlatformContributionPage() {
                   <>
                     <StatusBadge variant={rewardVariant(selected.RewardDelivery.status)}>
                       {rewardStatus[selected.RewardDelivery.status] ||
-                        selected.RewardDelivery.status}
+                        "状态待确认"}
                     </StatusBadge>
                     <span>{selected.RewardDelivery.userCarits} C</span>
                     {typeof selected.RewardDelivery.attemptCount === "number" && (
                       <span>尝试 {selected.RewardDelivery.attemptCount} 次</span>
                     )}
                     {selected.RewardDelivery.errorMessage && (
-                      <code>{selected.RewardDelivery.errorMessage}</code>
+                      <span>结算失败，请查看诊断日志后重试。</span>
                     )}
                   </>
                 ) : (
@@ -566,7 +587,7 @@ export default function PlatformContributionPage() {
             if (!evidenceLoading) setEvidenceDetail(null);
           }}
           title={evidenceDetail?.title || "贡献证据详情"}
-          description="以下内容来自现有 Candidate / Evolving 数据槽详情接口，审核前请核对状态、哈希和晋升投影。"
+          description="以下内容用于核对候选测试数据、数据变化和质量检查结果。"
           size="xl"
           footer={(
             <Button
@@ -593,9 +614,7 @@ export default function PlatformContributionPage() {
                 </Button>
               </div>
             ) : (
-              <pre className={styles.detailJson}>
-                {JSON.stringify(evidenceDetail?.data ?? {}, null, 2)}
-              </pre>
+              evidenceDetail?.data ? <ContributionEvidenceSummary detail={evidenceDetail.data} /> : <p>暂无可展示的证据。</p>
             )}
           </div>
         </DetailDialog>

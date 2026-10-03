@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useState, useCallback } from 'react'
 import collisionStyles from './TeamProblemListsTab.collision.module.css'
 import unifiedStyles from './TeamProblemListsTab.unified.module.css'
@@ -42,7 +43,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
     try {
       setItems(await listTeamProblemLists(teamId))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '团队题单加载失败')
+      toast.error(publicErrorMessage(error, '团队题单加载失败'))
     } finally {
       setLoading(false)
     }
@@ -59,7 +60,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
       const result = await listProblemLists({ tab: 'mine', page: 1, pageSize: 100 })
       setMyLists(result.lists)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '我的题单加载失败')
+      toast.error(publicErrorMessage(error, '我的题单加载失败'))
     } finally {
       setLoadingMyLists(false)
     }
@@ -72,7 +73,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
     try {
       const result = await addTeamProblemList(teamId, problemListId)
       if (!result.ok) {
-        toast.error(result.error.message || '添加失败')
+        toast.error(result.error.userMessage || '添加失败')
         return
       }
       toast.success('添加成功')
@@ -90,7 +91,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
     try {
       const result = await removeTeamProblemList(teamId, removeTarget.id)
       if (!result.ok) {
-        toast.error(result.error.message || '移除失败')
+        toast.error(result.error.userMessage || '移除失败')
         return
       }
       toast.success('已移除')

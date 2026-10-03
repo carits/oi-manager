@@ -1,9 +1,11 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useState } from 'react'
 import { Select } from '@/components/ui/FormControls'
 import { useToast } from '@/components/ui/Toast'
 import { activityStatusLabel } from '@/lib/humanPresentation'
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { listWorkspaces } from '@/features/workspace'
 import type { WorkspaceSummary } from '@oi-manager/contracts'
 import { getDataMarketQuality, listDataMarketContests, listDataMarketProblems, listDataMarketSlots, type DataMarketContest as Contest, type DataMarketProblem as Problem, type DataMarketQuality as Quality, type DataMarketSlot as Slot } from '../api/dataMarketApi'
@@ -24,12 +26,12 @@ export function ProblemSlotPicker({ problemId, slot, onProblemChange, onSlotChan
   const toast = useToast()
 
   useEffect(() => {
-    void listDataMarketProblems().then(setProblems).catch(error => { setProblems([]); toast.error(error instanceof Error ? error.message : '题目列表加载失败') })
+    void listDataMarketProblems().then(setProblems).catch(error => { setProblems([]); toast.error(publicErrorMessage(error, '题目列表加载失败')) })
   }, [])
   useEffect(() => {
     setSlots([]); setQuality(null)
     if (!problemId) return
-    void listDataMarketSlots(problemId).then(setSlots).catch(error => { setSlots([]); toast.error(error instanceof Error ? error.message : '测试数据槽加载失败') })
+    void listDataMarketSlots(problemId).then(setSlots).catch(error => { setSlots([]); toast.error(publicErrorMessage(error, '评测数据加载失败')) })
   }, [problemId])
   useEffect(() => {
     setQuality(null); onQualityChange?.('')
@@ -37,7 +39,7 @@ export function ProblemSlotPicker({ problemId, slot, onProblemChange, onSlotChan
     void getDataMarketQuality(problemId, slot as 'STABLE' | 'EVOLVING').then(snapshot => {
       setQuality(snapshot)
       if (snapshot?.qualityStatus === 'READY' && snapshot.criticalIssueCount === 0) onQualityChange?.(snapshot.id)
-    }).catch(error => { setQuality(null); toast.error(error instanceof Error ? error.message : '质量证书加载失败') })
+    }).catch(error => { setQuality(null); toast.error(publicErrorMessage(error, '质量证书加载失败')) })
   // Callback identity must not retrigger resource loading.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problemId, requireQuality, slot, toast])
@@ -46,17 +48,17 @@ export function ProblemSlotPicker({ problemId, slot, onProblemChange, onSlotChan
     <label>题目
       <Select value={problemId} disabled={lockProblem} onChange={event => { onProblemChange(event.target.value); onSlotChange(''); onQualityChange?.('') }}>
         <option value="">请选择题目</option>
-        {problems.map(problem => <option key={problem.id} value={problem.id}>{problem.platform} · {problem.problemId} · {problem.title}</option>)}
+        {problems.map(problem => <option key={problem.id} value={problem.id}>{ojPlatformDisplayName(problem.platform)} · {problem.problemId} · {problem.title}</option>)}
       </Select>
     </label>
-    <label>测试数据槽
+    <label>评测数据
       <Select value={slot} disabled={!problemId} onChange={event => onSlotChange(event.target.value)}>
-        <option value="">请选择数据槽</option>
-        {slots.map(item => <option key={item.slot} value={item.slot}>{item.slot === 'STABLE' ? 'Stable 正式数据' : 'Evolving 演进数据'} · {item.mode.toUpperCase()} · {item.graphHash.slice(0, 8)}</option>)}
+        <option value="">请选择评测数据</option>
+        {slots.map(item => <option key={item.slot} value={item.slot}>{item.slot === 'STABLE' ? '正式评测数据' : '当前评测数据'}</option>)}
       </Select>
     </label>
     {requireQuality && slot && <p aria-live="polite">
-      {!quality ? '正在读取质量证书…' : quality.qualityStatus === 'READY' && quality.criticalIssueCount === 0 ? `已选择可用质量证书（${quality.overallScore ?? '—'} 分）` : '该数据槽尚无可用的质量证书'}
+      {!quality ? '正在读取质量证书…' : quality.qualityStatus === 'READY' && quality.criticalIssueCount === 0 ? `已选择可用质量证书（${quality.overallScore ?? '—'} 分）` : '该评测数据尚无可用的质量证书'}
     </p>}
   </>
 }
@@ -73,12 +75,12 @@ export function LicenseScopePicker({ license, organizationId, contestId, onOrgan
   const toast = useToast()
   useEffect(() => {
     if (license === 'PERSONAL') return
-    void listWorkspaces().then(result => setOrganizations(result.workspaces.filter(item => item.type === 'organization'))).catch(error => { setOrganizations([]); toast.error(error instanceof Error ? error.message : '学校列表加载失败') })
+    void listWorkspaces().then(result => setOrganizations(result.workspaces.filter(item => item.type === 'organization'))).catch(error => { setOrganizations([]); toast.error(publicErrorMessage(error, '学校列表加载失败')) })
   }, [license, toast])
   useEffect(() => {
     setContests([]); onContestChange('')
     if (license !== 'CONTEST' || !organizationId) return
-    void listDataMarketContests(organizationId).then(setContests).catch(error => { setContests([]); toast.error(error instanceof Error ? error.message : '比赛列表加载失败') })
+    void listDataMarketContests(organizationId).then(setContests).catch(error => { setContests([]); toast.error(publicErrorMessage(error, '比赛列表加载失败')) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [license, organizationId, toast])
 
@@ -93,7 +95,7 @@ export function LicenseScopePicker({ license, organizationId, contestId, onOrgan
     {license === 'CONTEST' && <label>比赛
       <Select value={contestId} disabled={!organizationId} onChange={event => onContestChange(event.target.value)}>
         <option value="">请选择比赛</option>
-        {contests.map(item => <option key={item.id} value={item.id}>{item.title || item.name || `比赛 ${item.id}`}{item.status ? ` · ${activityStatusLabel(item.status)}` : ''}</option>)}
+        {contests.map(item => <option key={item.id} value={item.id}>{item.title || item.name || '未命名比赛'}{item.status ? ` · ${activityStatusLabel(item.status)}` : ''}</option>)}
       </Select>
     </label>}
   </>

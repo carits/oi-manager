@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Award, History, TrendingUp } from 'lucide-react'
@@ -50,7 +51,7 @@ export function PersonalRatingDashboard() {
     setAccountsLoading(true)
     setAccountsError(null)
     void getMyRatingAccounts().then(data => { if (activeRequest) setAccountsPayload(data) })
-      .catch(error => { if (activeRequest) setAccountsError(error instanceof Error ? error.message : 'Rating 账户加载失败') })
+      .catch(error => { if (activeRequest) setAccountsError(publicErrorMessage(error, 'Rating 账户加载失败')) })
       .finally(() => { if (activeRequest) setAccountsLoading(false) })
     return () => { activeRequest = false }
   }, [reload])
@@ -62,7 +63,7 @@ export function PersonalRatingDashboard() {
     setHistoryError(null)
     void getMyRatingHistory(user.userId, { page: 1, pageSize: 100, scope: active.scope, track: active.track, organizationId: active.organizationId || undefined }, controller.signal)
       .then(data => setHistory(data.items))
-      .catch(error => { if (!controller.signal.aborted) setHistoryError(error instanceof Error ? error.message : 'Rating 历史加载失败') })
+      .catch(error => { if (!controller.signal.aborted) setHistoryError(publicErrorMessage(error, 'Rating 历史加载失败')) })
       .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false) })
     return () => controller.abort()
   }, [active, user?.userId])

@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
@@ -19,7 +20,7 @@ export function BlogDiscoveryDetail({ id, workspaceBasePath = '/blog', embedded 
     try {
       setPost(await getBlogDiscovery(id))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '文章加载失败')
+      setError(publicErrorMessage(reason, '文章加载失败'))
     }
   }, [id])
   useEffect(() => { void load() }, [load])

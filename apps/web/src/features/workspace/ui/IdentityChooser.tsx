@@ -45,7 +45,7 @@ export function IdentityChooser({ user, unavailableReason }: { user: AuthUser; u
         <p>请选择个人空间或其他有效工作区；如需恢复学校权限，请联系学校管理员。</p>
         <Button variant="outline" disabled={directory.refreshing} onClick={() => void directory.retry()}>刷新成员身份</Button>
       </div>}
-      {directory.error && <div className={styles.error} role="alert"><p>{directory.error.message}</p><Button variant="secondary" onClick={() => void directory.retry()}>重新加载</Button></div>}
+      {directory.error && <div className={styles.error} role="alert"><p>{directory.error.userMessage}</p><Button variant="secondary" onClick={() => void directory.retry()}>重新加载</Button></div>}
       {!workspaces && !directory.error && <p className={styles.loading} role="status">正在加载可进入的工作区…</p>}
       {workspaces && <div className={styles.list}>{workspaces.map(workspace => {
         const Icon = workspace.type === 'platform' ? ShieldCheck : workspace.type === 'personal' ? UserRound : Building2

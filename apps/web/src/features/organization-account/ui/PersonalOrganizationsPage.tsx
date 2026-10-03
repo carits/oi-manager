@@ -92,13 +92,13 @@ export default function PersonalOrganizationsPage() {
       organizationType: 'school', ...creationForm, schoolType, region,
     }, createClientUUID())
     setCreationSubmitting(false)
-    if (!response.ok) return toast.error(response.error.message || '申请提交失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '申请提交失败')
     setCreationResult(response.data)
     await loadCreationApplications()
   }
   const cancelCreation = async (id: string) => {
     const response = await cancelOrganizationApplication(id, createClientUUID())
-    if (!response.ok) return toast.error(response.error.message || '撤销失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '撤销失败')
     toast.success('已撤销创建申请')
     await loadCreationApplications()
   }
@@ -120,21 +120,21 @@ export default function PersonalOrganizationsPage() {
         realName: form.realName, message: form.message, profileData: { title: form.title },
       })
     setSubmitting(false)
-    if (!response.ok) return toast.error(response.error.message || '申请提交失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '申请提交失败')
     toast.success('申请已提交，学校审核后会通过站内消息通知你')
     setSelected(null)
     await Promise.all([loadMine(), search()])
   }
   const respond = async (id: string, action: 'accept' | 'decline') => {
     const response = await respondOrganizationInvitation(id, action)
-    if (!response.ok) return toast.error(response.error.message || '邀请处理失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '邀请处理失败')
     toast.success(action === 'accept' ? '已加入学校' : '已拒绝邀请')
     if (action === 'accept' && response.data.organizationId) return window.location.assign(`/org/${response.data.organizationId}/overview`)
     await loadMine()
   }
   const cancel = async (id: string) => {
     const response = await cancelOrganizationJoinApplication(id)
-    if (!response.ok) return toast.error(response.error.message || '撤销失败')
+    if (!response.ok) return toast.error(response.error.userMessage || '撤销失败')
     await loadMine()
   }
 

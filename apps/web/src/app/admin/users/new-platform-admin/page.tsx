@@ -45,7 +45,7 @@ export default function NewPlatformAdminPage() {
         toast.success('平台管理员创建成功')
         router.push('/admin/users')
       } else {
-        setError(result.error.message || '创建失败')
+        setError(result.error.userMessage || '创建失败')
       }
     } catch (e) {
       setError('网络错误')

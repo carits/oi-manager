@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-28
+last_verified: 2026-10-03
 source_of_truth: apps/web/src
 ---
 
@@ -73,6 +73,26 @@ Header、背景和最大宽度。
 | UI | `components/ui` | Button、Pagination 等基础控件 |
 | 数据 Hooks | `hooks/data` | 缓存、加载、错误和刷新 |
 | Contract Client | `lib/apiClient.ts` | 认证、作用域、超时及共享 Runtime Schema 校验 |
+
+## 用户信息与诊断信息边界
+
+数据库、API、并发控制和数据一致性字段不能直接进入界面。Domain/API 数据必须先经过显式
+Presentation Adapter，再分别进入用户信息或诊断信息通道：
+
+- 用户信息只表达业务事实、影响和可执行动作。业务枚举、评测结果、平台、角色和状态必须使用完整
+  mapper；未知值返回通用业务文案或省略，严禁回退到原始输入。
+- `revision`、内部 ID、哈希、fencing token、slot、canonical 标识、原始枚举、协议 key、契约名和
+  后端原始错误只能进入日志、遥测或有权限且默认收起的诊断区域，不能作为标题、状态、Toast、表格值
+  或导出字段。
+- `ApiError.userMessage` 是业务组件唯一可展示的错误字段；`debugMessage`、原始响应和校验详情只用于
+  诊断。未知错误采用固定、可操作的安全文案，不根据后端 `message` 猜测是否适合展示。
+- requestId 只在用户主动展开或复制诊断信息时出现。原始 JSON 不得直接渲染到 JSX；需要展示的证据
+  必须转换为结构化业务摘要。
+- CSV、下载包、通知和浏览器错误页同样属于呈现边界，不能绕过上述规则。
+
+`scripts/ui-language-check.mjs` 扫描完整 `apps/web/src`，并由 `pnpm ui:state-check` 和文档工作流执行。
+新增 mapper 必须用 `FUTURE_INTERNAL_VALUE` 验证未知值不会穿透到展示结果。完整审计与实例见
+[前端呈现边界审计](UI_PRESENTATION_BOUNDARY_AUDIT.md)。
 
 Assignment、Blog、Submission、Contest Rating、Solution Review、Problem、Contest、Training Session、Chat、
 Organization Account、Notification、Workspace、Auth、User Profile、Team 与 Data Market 已迁入
@@ -148,7 +168,7 @@ Wire Envelope 固定为 `{ success: true, data } | { success: false, code?, mess
 列表和详情使用 `pending/ready/empty/error` 资源状态，并遵守：
 
 1. 首次请求：导航、标题和操作立即显示，只有数据区域使用稳定骨架，不显示整页等待文案。
-2. 错误：显示服务端消息，并提供重试。
+2. 错误：显示经过 Presentation Adapter 处理的 `userMessage`；可重试错误提供重试，原始服务端消息仅进入诊断通道。
 3. 空数据：只在成功响应且集合为空时显示。
 4. 重新验证：保留旧数据，只显示非阻塞刷新状态。
 

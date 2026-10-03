@@ -49,7 +49,7 @@ export function ProfileEditor() {
         toast.success('保存成功')
         refreshUser?.()
       } else {
-        toast.error(result.error.message || '保存失败')
+        toast.error(result.error.userMessage || '保存失败')
       }
     } catch (error) {
       toast.error('保存失败')
@@ -72,7 +72,7 @@ export function ProfileEditor() {
       if (result.success) {
         refreshUser?.()
       } else {
-        toast.error(result.message || '上传失败')
+        console.error('Avatar upload response:', result); toast.error('上传失败')
       }
     } catch (error) {
       toast.error('上传失败')

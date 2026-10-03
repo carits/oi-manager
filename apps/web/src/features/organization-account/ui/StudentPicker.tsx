@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Input, Select } from '@/components/ui/FormControls'
@@ -51,7 +52,7 @@ export function StudentPicker({ organizationId, teams, selectedIds, onChange }: 
         setGrades(response.filters?.grades || [])
         setError('')
       } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : '学生列表加载失败')
+        setError(publicErrorMessage(requestError, '学生列表加载失败'))
       } finally {
         setLoading(false)
       }
@@ -70,7 +71,7 @@ export function StudentPicker({ organizationId, teams, selectedIds, onChange }: 
       <Select aria-label="按年级筛选" value={grade} onChange={event => { setGrade(event.target.value); setPage(1) }}><option value="">全部年级</option>{grades.map(item => <option key={item} value={item}>{item}</option>)}</Select>
       <Select aria-label="按团队筛选" value={teamId} onChange={event => { setTeamId(event.target.value); setPage(1) }}><option value="">全部团队</option>{availableTeams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</Select>
     </div>
-    {error ? <p className={styles.error} role="alert">{error}</p> : loading ? <p className={styles.state}>正在加载学生…</p> : students.length === 0 ? <p className={styles.state}>没有符合条件的学生</p> : <div className={styles.rows}>{students.map(student => <div className={styles.row} key={student.userId}><Checkbox label={student.name || student.user?.username || student.userId} checked={selected.has(student.userId)} onChange={event => toggle(student.userId, event.target.checked)} /><span>{student.user?.username || ''}</span></div>)}</div>}
+    {error ? <p className={styles.error} role="alert">{error}</p> : loading ? <p className={styles.state}>正在加载学生…</p> : students.length === 0 ? <p className={styles.state}>没有符合条件的学生</p> : <div className={styles.rows}>{students.map(student => <div className={styles.row} key={student.userId}><Checkbox label={student.name || student.user?.username || '未知学生'} checked={selected.has(student.userId)} onChange={event => toggle(student.userId, event.target.checked)} /><span>{student.user?.username || ''}</span></div>)}</div>}
     <footer><span>共 {total} 人 · 第 {page}/{totalPages} 页</span><div><Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage(value => value - 1)}>上一页</Button><Button size="sm" variant="secondary" disabled={page >= totalPages || loading} onClick={() => setPage(value => value + 1)}>下一页</Button></div></footer>
   </section>
 }

@@ -55,7 +55,7 @@ export const BLOG_REFERENCE_LABELS: Record<BlogReferenceType, string> = {
   SOLUTION_VERSION: '题解（固定内容）',
   CONTEST_STANDING: '比赛榜单（固定内容）',
   RATING_CHANGE: 'Rating 变化（固定记录）',
-  SUBMISSION_SNAPSHOT: '提交快照（固定安全副本）',
+  SUBMISSION_SNAPSHOT: '引用的提交记录',
 }
 
 export const BLOG_PUBLISHED_REFERENCE_LABELS: Record<PublishedBlogReferenceType, string> = BLOG_REFERENCE_LABELS
@@ -82,7 +82,7 @@ export function validateBlogDraft(input: { title: string; contentMarkdown: strin
     if (reference.type === 'SOLUTION_VERSION' && !reference.solutionVersionId?.trim()) return `${prefix}尚未关联题解，请从题解页面重新进入写作`
     if (reference.type === 'CONTEST_STANDING' && !reference.standingSnapshotId?.trim()) return `${prefix}尚未关联比赛榜单，请从榜单页面重新进入写作`
     if (reference.type === 'RATING_CHANGE' && !reference.ratingChangeId?.trim()) return `${prefix}尚未关联 Rating 记录，请从 Rating 页面重新进入写作`
-    if (reference.type === 'SUBMISSION_SNAPSHOT' && !reference.submissionSnapshotId?.trim()) return `${prefix}尚未关联提交快照，请从提交详情重新进入写作`
+    if (reference.type === 'SUBMISSION_SNAPSHOT' && !reference.submissionSnapshotId?.trim()) return `${prefix}尚未关联提交记录，请从提交详情重新进入写作`
   }
   return null
 }
@@ -92,7 +92,7 @@ export function referenceSnapshotTitle(reference: { type: PublishedBlogReference
     ? reference.snapshot as Record<string, unknown>
     : {}
   const text = (value: unknown, fallback: string) => typeof value === 'string' && value ? value : fallback
-  if (reference.type === 'PROBLEM') return text(snapshot.title, text(snapshot.problemId, '题目'))
+  if (reference.type === 'PROBLEM') return text(snapshot.title, '题目')
   if (reference.type === 'SOLUTION_VERSION') return text(snapshot.title, '题解版本')
   if (reference.type === 'CONTEST_STANDING') return text(snapshot.title, '比赛榜单')
   if (reference.type === 'RATING_CHANGE') {
@@ -101,6 +101,6 @@ export function referenceSnapshotTitle(reference: { type: PublishedBlogReference
       : null
     return text(contest?.title, 'Rating 变化')
   }
-  if (reference.type === 'SUBMISSION_SNAPSHOT') return `${text(snapshot.sourcePlatform, '平台')} · ${text(snapshot.sourceProblemId, '题目')} 提交快照`
+  if (reference.type === 'SUBMISSION_SNAPSHOT') return '引用的提交记录'
   return '引用'
 }

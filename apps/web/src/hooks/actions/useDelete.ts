@@ -25,7 +25,7 @@ export function useDelete(endpoint: string, onSuccess?: () => void): UseDeleteRe
         onSuccess?.()
         return true
       } else {
-        toast.error(res.message || '删除失败')
+        console.error('Delete response:', res); toast.error('删除失败')
         return false
       }
     } catch (error) {

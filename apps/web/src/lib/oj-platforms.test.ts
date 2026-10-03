@@ -4,6 +4,7 @@ import {
   OJ_PLATFORMS_NO_ALL,
   getOjProblemUrl,
   getOjPlatformLabel,
+  ojPlatformDisplayName,
   normalizeOjPlatformKey,
 } from './oj-platforms'
 
@@ -27,5 +28,9 @@ describe('canonical OJ platform registry', () => {
     expect(getOjProblemUrl('codeforces', '1454E')).toBe('https://codeforces.com/problemset/problem/1454/E')
     expect(getOjProblemUrl('atcoder', 'abc300_a')).toBe('https://atcoder.jp/contests/abc300/tasks/abc300_a?lang=en')
     expect(getOjProblemUrl('unknown', '1')).toBeNull()
+  })
+
+  it('does not expose an unknown platform key', () => {
+    expect(ojPlatformDisplayName('FUTURE_INTERNAL_VALUE')).toBe('其他平台')
   })
 })

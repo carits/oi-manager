@@ -64,7 +64,7 @@ export function TrainingStageGroupMatrix({ sessionId, revision, stages, grouping
       })),
     });
     setSaving(false);
-    if (!response.ok) return toast.error(response.error.message || "阶段训练方案保存失败");
+    if (!response.ok) return toast.error(response.error.userMessage || "阶段训练方案保存失败");
     toast.success("阶段训练方案已保存");
     setEditing(undefined);
     await onSaved();

@@ -52,16 +52,16 @@ export function prepareProblemSelection(
     const problem = result.problem
     if (result.status !== 'resolved' || !problem) {
       remainingProblemIds.push(result.problemId)
-      return { result, state: 'blocked', message: result.message || statusMessages[result.status] }
+      return { result, state: 'blocked', message: statusMessages[result.status] }
     }
     if (seen.has(problem.id)) return { result, state: 'duplicate', message: '该题已在当前列表中' }
     if (dataRequirement === 'stable' && !problem.stableData) {
       remainingProblemIds.push(result.problemId)
-      return { result, state: 'blocked', message: '已找到题目，但当前入口需要 Stable 评测数据，暂不能选入' }
+      return { result, state: 'blocked', message: '已找到题目，但当前没有可用于正式评测的数据。' }
     }
     if (dataRequirement === 'training' && !problem.evolvingData && !problem.stableData) {
       remainingProblemIds.push(result.problemId)
-      return { result, state: 'blocked', message: '已找到题目，但没有可用于训练的 Evolving 或 Stable 评测数据' }
+      return { result, state: 'blocked', message: '已找到题目，但目前没有可用于训练的评测数据。' }
     }
     seen.add(problem.id)
     accepted.push(problem)

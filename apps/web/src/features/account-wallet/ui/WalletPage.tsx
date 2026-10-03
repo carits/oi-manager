@@ -1,4 +1,5 @@
 "use client";
+import { publicErrorMessage } from '@/lib/humanErrors'
 
 import { useCallback, useEffect, useState } from "react";
 import { CircleDollarSign, Cpu, ReceiptText } from "lucide-react";
@@ -65,12 +66,12 @@ export function WalletPage({
     if (wallet.status === "fulfilled") setData(wallet.value);
     else {
       setData(null);
-      setWalletError(wallet.reason instanceof Error ? wallet.reason.message : "钱包信息加载失败");
+      setWalletError(publicErrorMessage(wallet.reason, "钱包信息加载失败"));
     }
     if (credits.status === "fulfilled" && credits.value) setEvaluation(credits.value);
     else if (scope === "personal") {
       setEvaluation(null);
-      setEvaluationError(credits.status === "rejected" && credits.reason instanceof Error ? credits.reason.message : "评测额度加载失败");
+      setEvaluationError(credits.status === "rejected" ? publicErrorMessage(credits.reason, "评测额度加载失败") : "评测额度加载失败");
     }
     setLoading(false);
   }, [organizationId, scope]);
@@ -107,7 +108,7 @@ export function WalletPage({
     setBuying(true);
     try {
       const response = await purchaseEvaluationCreditPackage({ packageCode }, purchaseRequestKey);
-      if (!response.ok) return toast.error(response.error.message);
+      if (!response.ok) return toast.error(response.error.userMessage);
       toast.success("评测额度已到账");
       setPurchaseOpen(false);
       setPurchaseRequestKey(createClientUUID());

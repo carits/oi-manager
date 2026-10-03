@@ -1,5 +1,8 @@
 'use client'
 
+import { getLanguageLabel } from '@/lib/judge-constants'
+
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import unifiedStyles from './StatementVersionWorkspace.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -62,7 +65,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
       next ||= response.official[0] || response.mine[0] || response.public[0] || null
       setSelected(next)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '加载题面版本失败')
+      toast.error(publicErrorMessage(error, '加载题面版本失败'))
     } finally {
       setLoading(false)
     }
@@ -76,7 +79,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
       try {
         detail = await getProblemStatementVersion(problemId, item.id)
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : '题面不可访问')
+        toast.error(publicErrorMessage(error, '题面不可访问'))
         return
       }
     }
@@ -106,7 +109,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
         name, language, visibility, format: selected?.format || 'markdown', source,
       })
       if (!response.ok) {
-        toast.error(response.error.message || '创建失败')
+        toast.error(response.error.userMessage || '创建失败')
         return
       }
       setCreateOpen(false)
@@ -130,7 +133,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
         setEditing(false)
         toast.success('题面已保存')
         await load(showAll)
-      } else toast.error(response.error.message || '保存失败')
+      } else toast.error(response.error.userMessage || '保存失败')
     } finally {
       setSaving(false)
     }
@@ -140,14 +143,14 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
     if (!selected?.isMine) return
     const response = await updateProblemStatementVersionMetadata(problemId, selected.id, body)
     if (response.ok) { setSelected(response.data); await load(showAll) }
-    else toast.error(response.error.message || '修改失败')
+    else toast.error(response.error.userMessage || '修改失败')
   }
 
   const remove = async () => {
-    if (!selected?.isMine || !window.confirm(`确定删除题面「${selected.name}」吗？活动快照不会受影响。`)) return
+    if (!selected?.isMine || !window.confirm(`确定删除题面「${selected.name}」吗？之前已在活动中使用的内容不会受影响。`)) return
     const response = await deleteProblemStatementVersion(problemId, selected.id)
     if (response.ok) { toast.success('题面已删除'); setSelected(null); await load(showAll) }
-    else toast.error(response.error.message || '删除失败')
+    else toast.error(response.error.userMessage || '删除失败')
   }
 
   const uploadPdf = async (file: File | undefined) => {
@@ -161,7 +164,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
       setEditing(false)
       toast.success('PDF 题面已上传')
       await load(showAll)
-    } else toast.error(response.message || 'PDF 上传失败')
+    } else console.error('Statement PDF upload response:', response); toast.error('PDF 上传失败')
     if (pdfInputRef.current) pdfInputRef.current.value = ''
     setSaving(false)
   }
@@ -176,7 +179,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
     <Button variant="ghost" key={`${item.isOfficial ? 'official' : 'user'}-${item.id}`} onClick={() => choose(item)} className={unifiedStyles.versionButton} aria-selected={selected?.id === item.id}>
       <strong className={unifiedStyles.u1}>{item.name}</strong>
       <span className={unifiedStyles.u2}>
-        {item.isOfficial ? 'System · 官方' : `${item.authorUsername || ''} · ${item.isMine ? (item.visibility === 'public' ? '我的 · 公开' : '我的 · 私有') : '公开'}`} · {item.language || '未知'}
+        {item.isOfficial ? '系统 · 官方' : `${item.authorUsername || ''} · ${item.isMine ? (item.visibility === 'public' ? '我的 · 公开' : '我的 · 私有') : '公开'}`} · {getLanguageLabel(item.language)}
       </span>
     </Button>
   )

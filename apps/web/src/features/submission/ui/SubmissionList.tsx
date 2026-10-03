@@ -10,8 +10,8 @@ import { useAuth } from '@/features/auth'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { hasAccountCapability } from '@/lib/capabilities'
 import { useResource } from '@/hooks/useResource'
-import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS, JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
-import { SUBMISSION_OJ_OPTIONS, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS, getLanguageLabel, judgeResultLabel } from '@/lib/judge-constants'
+import { SUBMISSION_OJ_OPTIONS, ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -164,7 +164,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         data={submissions}
         loading={resource.state.state === 'pending' && !resource.state.previousData}
         refreshing={resource.state.state === 'ready' && resource.state.refreshing}
-        error={resource.state.state === 'error' && !resource.state.previousData ? resource.state.error.message : undefined}
+        error={resource.state.state === 'error' && !resource.state.previousData ? resource.state.error.userMessage : undefined}
         onRetry={resource.retry}
         emptyText="暂无评测记录"
         rowKey={item => String(item.id)}
@@ -172,9 +172,9 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         columns={[
           { key: 'id', label: '提交', width: '86px', render: item => <span className={styles.link}>#{item.id}</span> },
           ...(!showUsernameFilter ? [] : [{ key: 'username', label: '用户', width: '120px', render: (item: Submission) => <span onClick={stopRowActivation} onKeyDown={stopRowActivation}><UserIdentityLink id={item.userId} userType={item.userType} username={item.username} /></span> }]),
-          { key: 'oj', label: '平台', width: '110px', render: item => item.oj === 'carits' ? 'Carits' : OJ_PLATFORM_LABEL_MAP[item.oj] || item.oj.toUpperCase() },
+          { key: 'oj', label: '平台', width: '110px', render: item => item.oj === 'carits' ? 'Carits' : ojPlatformDisplayName(item.oj) },
           { key: 'problemId', label: '题目', render: problemCell },
-          { key: 'result', label: '结果', width: '120px', render: item => <StatusBadge variant={getResultVariant(item.result)}>{JUDGE_RESULT_LABEL_MAP[item.result] || item.result}</StatusBadge> },
+          { key: 'result', label: '结果', width: '120px', render: item => <StatusBadge variant={getResultVariant(item.result)}>{judgeResultLabel(item.result)}</StatusBadge> },
           { key: 'timeUsed', label: '\u65f6\u95f4', width: '100px', render: item => item.timeUsed == null ? '\u2014' : `${item.timeUsed} MS` },
           { key: 'memoryUsed', label: '\u5185\u5b58', width: '100px', render: item => item.memoryUsed == null ? '\u2014' : `${(item.memoryUsed / 1024).toFixed(2)} MB` },
           { key: 'language', label: '语言', width: '100px', render: item => getLanguageLabel(item.language) },

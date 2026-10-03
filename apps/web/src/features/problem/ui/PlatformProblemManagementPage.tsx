@@ -1,5 +1,7 @@
 'use client'
 
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
+
 import { useState, useEffect } from 'react'
 import collisionStyles from './PlatformProblemManagementPage.collision.module.css'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
@@ -319,7 +321,7 @@ export function PlatformProblemManagementPage() {
       failed: '失败',
       duplicate: '已存在',
     }
-    return <span className={unifiedStyles.statusText} data-status={status}>{map[status] || status}</span>
+    return <span className={unifiedStyles.statusText} data-status={status}>{map[status] || '状态待确认'}</span>
   }
 
   const renderAttachmentStatus = (status: string | null) => {
@@ -330,7 +332,7 @@ export function PlatformProblemManagementPage() {
       failed: '失败',
       skipped: '跳过',
     }
-    return <span className={unifiedStyles.statusText} data-status={status}>{map[status] || status}</span>
+    return <span className={unifiedStyles.statusText} data-status={status}>{map[status] || '附件状态待确认'}</span>
   }
 
   // 渲染附件列：区分"无附件"和"有附件但xxx"
@@ -366,7 +368,7 @@ export function PlatformProblemManagementPage() {
             </TableHead>
             <TableBody>
               {problems.map((problem) => {
-                let source = problem.platform ? `${problem.platform} / ${problem.problemId}` : '-'
+                let source = problem.platform ? `${ojPlatformDisplayName(problem.platform)} / ${problem.problemId}` : '-'
                 return (
                   <TableRow key={problem.id} className={unifiedStyles.u5}>
                     <TableCell className={unifiedStyles.u7}>{problem.problemId}</TableCell>
@@ -524,11 +526,11 @@ export function PlatformProblemManagementPage() {
                   <TableBody>
                     {jobs.map((job) => (
                       <TableRow key={job.id} className={unifiedStyles.u5}>
-                        <TableCell className={unifiedStyles.u7}>{job.platform}</TableCell>
+                        <TableCell className={unifiedStyles.u7}>{ojPlatformDisplayName(job.platform)}</TableCell>
                         <TableCell className={unifiedStyles.u7}>{job.problemId}</TableCell>
                         <TableCell className={unifiedStyles.u7}>{renderStatus(job.status)}</TableCell>
                         <TableCell className={unifiedStyles.u7}>{renderAttachmentColumn(job)}</TableCell>
-                        <TableCell className={unifiedStyles.u34}>{job.message || '-'}</TableCell>
+                        <TableCell className={unifiedStyles.u34}>{job.message ? '任务需要处理，请重试' : '-'}</TableCell>
                         <TableCell className={unifiedStyles.u7}>
                           <div className={unifiedStyles.u10}>
                             {job.createdProblemId && (

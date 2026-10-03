@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useState, useEffect } from 'react'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { createTeam, listMyTeamInvitations, respondToTeamInvitation, TeamListPage, TeamItem, Invitation } from '@/features/team'
@@ -71,7 +72,7 @@ export default function TeamsPage() {
         setInvitations([...adminInvitations, ...memberInvitations])
       } catch (error) {
         console.error('Failed to fetch invitations:', error)
-        toast.error(error instanceof Error ? error.message : '团队邀请加载失败')
+        toast.error(publicErrorMessage(error, '团队邀请加载失败'))
       } finally {
         setLoadingInvitations(false)
       }
@@ -88,7 +89,7 @@ export default function TeamsPage() {
         setInvitations(invitations.filter(i => i.id !== invitationId))
         refetch()
       } else {
-        toast.error(result.error.message || '操作失败')
+        toast.error(result.error.userMessage || '操作失败')
       }
     } catch (error) {
       toast.error('操作失败')
@@ -105,7 +106,7 @@ export default function TeamsPage() {
       if (result.ok) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
       } else {
-        toast.error(result.error.message || '操作失败')
+        toast.error(result.error.userMessage || '操作失败')
       }
     } catch (error) {
       toast.error('操作失败')
@@ -130,7 +131,7 @@ export default function TeamsPage() {
         toast.success('团队创建成功')
         return true
       } else {
-        toast.error(result.error.message || '创建失败')
+        toast.error(result.error.userMessage || '创建失败')
         return false
       }
     } catch (error) {

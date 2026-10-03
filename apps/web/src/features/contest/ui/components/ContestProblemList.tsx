@@ -1,6 +1,6 @@
 'use client'
 
-import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { Button } from '@/components/ui/Button'
 import type { ContestInfo, ProblemListEntry } from '../../model/types'
@@ -19,7 +19,7 @@ function sourceText(problem: ProblemListEntry) {
   if (!problem.platform || !problem.platformProblemId || problem.platform === 'all') return ''
   const platform = problem.platform === 'carits'
     ? 'Carits'
-    : OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platformLabel || problem.platform
+    : problem.platformLabel || ojPlatformDisplayName(problem.platform)
   return platform && platform !== '全部平台' ? `${platform} ${problem.platformProblemId}` : ''
 }
 
@@ -49,7 +49,7 @@ function renderStatus(problem: ProblemListEntry, contest: ContestInfo) {
     return <span className={`${styles.problemScore} ${scoreClass(score, max)}`}>{score} / {max}</span>
   }
   const status = problem.displayStatus || (problem.hasAccepted ? 'accepted' : problem.latestResult || problem.bestResult || 'submitted')
-  const label = RESULT_LABEL_MAP[status] || status
+  const label = RESULT_LABEL_MAP[status] || 'Status Pending'
   const tone = status === 'accepted'
     ? styles.problemStatusAccepted
     : status === 'submitted' || status === 'queuing' || status === 'judging'

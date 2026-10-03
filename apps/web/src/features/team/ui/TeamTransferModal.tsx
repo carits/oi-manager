@@ -41,7 +41,7 @@ export function TeamTransferModal({ isOpen, onClose, teamId, selectedTarget, onS
         onClose()
         onSuccess()
       } else {
-        toast.error(result.error.message || '转移失败')
+        toast.error(result.error.userMessage || '转移失败')
       }
     } catch (error) {
       console.error('Transfer error:', error)

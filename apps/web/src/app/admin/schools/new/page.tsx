@@ -122,7 +122,7 @@ export default function NewSchoolPage() {
       if (result.ok) {
         router.push('/admin/schools')
       } else {
-        toast.error(result.error.message || '创建失败')
+        toast.error(result.error.userMessage || '创建失败')
       }
     } catch {
       toast.error('创建失败')

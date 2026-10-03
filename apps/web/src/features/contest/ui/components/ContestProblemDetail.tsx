@@ -10,11 +10,14 @@ import type { ResourceState } from '@/lib/resource'
 import type { ContestInfo, ContestProblem, ProblemDetail } from '../../model/types'
 import { contestProblemCode, contestProblemTitle } from '../problem-label'
 import { ContestHackSyncAction } from './ContestHackSyncAction'
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 
 const STATEMENT_LANGUAGE_LABELS: Record<string, string> = {
   zh: '中文',
-  en: 'English'
+  en: 'English',
 }
+
+const statementLanguageLabel = (value?: string | null) => value ? STATEMENT_LANGUAGE_LABELS[value] || '其他语言' : '未标注语言'
 
 function getPdfUrl(fileUrl: string): string | null {
   if (!fileUrl) return null
@@ -103,7 +106,7 @@ export function ContestProblemDetail({
     if (problemDetailState.state === 'error' && !problemDetail) {
       return (
         <LoadError
-          message={problemDetailState.error.message}
+          message={problemDetailState.error.userMessage}
           requestId={problemDetailState.error.requestId}
           onRetry={retryProblemDetail}
         />
@@ -166,8 +169,8 @@ export function ContestProblemDetail({
             setSelectedStatementId(statement.id)
             if (selectedProblemId) localStorage.setItem(`contest-stmt-pref-${contest.id}-${selectedProblemId}`, statement.id)
           }} className={unifiedStyles.statementButton} aria-selected={selectedStatementId === statement.id}>
-            <strong className={unifiedStyles.u12}>{statement.name || (statement.language ? STATEMENT_LANGUAGE_LABELS[statement.language] || statement.language : '题面')}</strong>
-            <span className={unifiedStyles.u13}>{statement.authorUsername || 'System'} · {statement.isDefault ? '默认 · ' : ''}{statement.language || '未知'}</span>
+            <strong className={unifiedStyles.u12}>{statement.name || statementLanguageLabel(statement.language)}</strong>
+            <span className={unifiedStyles.u13}>{statement.authorUsername || '系统'} · {statement.isDefault ? '默认 · ' : ''}{statementLanguageLabel(statement.language)}</span>
           </Button>
         ))}
       </aside>
@@ -213,7 +216,7 @@ export function ContestProblemDetail({
             <div className={unifiedStyles.u18} />
             <span className={unifiedStyles.u19}>{problemDetail.platformProblemId}</span>
             <span>{problemDetail.problemTitle}</span>
-            <span className={unifiedStyles.u20}>({problemDetail.platform})</span>
+            <span className={unifiedStyles.u20}>({ojPlatformDisplayName(problemDetail.platform)})</span>
           </>
         )}
       </div>

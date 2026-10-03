@@ -61,7 +61,7 @@ export function PasswordEditor() {
           confirmPassword: ''
         })
       } else {
-        setError(result.error.message || '修改失败')
+        setError(result.error.userMessage || '修改失败')
       }
     } catch (error) {
       setError('修改失败')
@@ -142,7 +142,7 @@ export function PasswordEditor() {
               try {
                 const result = await revokeOtherSessions()
                 if (result.ok) setSuccessMessage('其他设备已退出，当前设备保持登录')
-                else setError(result.error.message || '退出其他设备失败')
+                else setError(result.error.userMessage || '退出其他设备失败')
               } catch {
                 setError('退出其他设备失败')
               } finally {

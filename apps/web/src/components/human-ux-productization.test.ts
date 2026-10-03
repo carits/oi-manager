@@ -83,7 +83,7 @@ describe('human UX productization contract', () => {
     expect(workspace).toContain('加入学员')
     expect(workspace).toContain('记录中途退出')
     expect(workspace).toContain('追加训练题')
-    expect(workspace).toContain('原始阶段快照保持不变')
+    expect(workspace).toContain('原有训练安排不会被修改')
     expect(workspace).toContain('全选当前筛选')
     expect(workspace).toContain('批量解锁当前题')
     expect(workspace).toContain('批量允许跳过')
@@ -219,8 +219,10 @@ describe('human UX productization contract', () => {
   it('keeps student views free of internal revision terminology', () => {
     const assignment = read('../features/assignment/ui/AssignmentWorkspace.tsx')
     const training = read('../features/training-session/ui/TrainingSessionWorkspace.tsx')
-    expect(assignment).toContain('每次提交动态使用当时的 Stable 测试数据')
-    expect(training).toContain('提交时使用当前 Evolving（缺失时回退 Stable）')
+    expect(assignment).toContain('每次提交使用当时可用的评测数据')
+    expect(training).toContain('提交时使用当前训练数据评测')
+    expect(assignment).not.toContain('Stable')
+    expect(training).not.toContain('Evolving')
     expect(assignment).not.toContain('TestSet Revision 与学生名单')
     expect(assignment).not.toContain('版本号并发校验')
     expect(assignment).not.toContain('成绩快照 v')
@@ -230,7 +232,7 @@ describe('human UX productization contract', () => {
   it('renders quality conclusions and hides technical certificates by default', () => {
     const source = read('../features/problem/ui/ProblemQualityPanel.tsx')
     expect(source).toContain('数据质量良好')
-    expect(source).toContain('查看技术证书与评分细项')
+    expect(source).toContain('查看质量指标与评估依据')
   })
 
   it('does not ask users to type resource IDs in the data market', () => {

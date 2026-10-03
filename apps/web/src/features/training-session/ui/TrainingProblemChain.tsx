@@ -84,7 +84,7 @@ export function TrainingProblemChain({
             <StatusBadge variant="neutral">目标：{problem.targetScore ?? 100} 分</StatusBadge>
           </div>
           <div className={styles.problemQuickActions}>
-            <StatusBadge variant="neutral">提交时使用当前 Evolving</StatusBadge>
+            <StatusBadge variant="neutral">提交时使用当前可用的训练数据</StatusBadge>
             <Button iconOnly aria-label="上移题目" variant="text" disabled={index === 0} onClick={() => updateProblems(items => normalizeProblemOrder(moveItem(items, index, index - 1)))}><ArrowUp size={14} /></Button>
             <Button iconOnly aria-label="下移题目" variant="text" disabled={index === problems.length - 1} onClick={() => updateProblems(items => normalizeProblemOrder(moveItem(items, index, index + 1)))}><ArrowDown size={14} /></Button>
             <Button iconOnly aria-label="移除题目" variant="text" onClick={() => updateProblems(items => normalizeProblemOrder(items.filter(item => item.clientKey !== problem.clientKey)))}><Trash2 size={14} /></Button>

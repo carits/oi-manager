@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname, useSearchParams } from 'next/navigation'
@@ -154,7 +155,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
           await prepareWorkspaceTransition(workspace)
           return true
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : '目标工作区暂时无法进入，请重试')
+          toast.error(publicErrorMessage(error, '目标工作区暂时无法进入，请重试'))
           return false
         } finally {
           setSwitchingKey(current => current === targetKey ? null : current)
@@ -190,7 +191,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
         requestNavigation('/personal/organizations', { beforeNavigate: async () => {
           setSwitchingKey('personal')
           try { await prepareWorkspaceTransition(personalWorkspace); return true }
-          catch (error) { toast.error(error instanceof Error ? error.message : '个人空间暂时无法进入，请重试'); return false }
+          catch (error) { toast.error(publicErrorMessage(error, '个人空间暂时无法进入，请重试')); return false }
           finally { setSwitchingKey(current => current === 'personal' ? null : current) }
         } })
       }}><Plus size={17} /><span>加入或创建学校</span></Button></div>

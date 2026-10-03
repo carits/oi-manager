@@ -128,10 +128,28 @@ export const LUOGU_LANGUAGE_MAP: Record<string, string> = {
   'typescript': 'TypeScript',
 }
 
+export function judgeResultLabel(result: string | null | undefined): string {
+  return result ? JUDGE_RESULT_LABEL_MAP[result] || '未知结果' : '-'
+}
+
 // 获取语言显示名称（支持 HDU、洛谷等平台语言 ID）
-export function getLanguageLabel(lang: string): string {
+export function getLanguageLabel(lang: string | null | undefined): string {
+  if (!lang) return '其他语言'
   return LANGUAGE_LABEL_MAP[lang]
     || LUOGU_LANGUAGE_MAP[lang]
     || HDU_LANGUAGE_MAP[lang]
-    || lang
+    || '其他语言'
+}
+
+
+export function judgeFailureSummary(result: string | null | undefined): string {
+  const normalized = result?.trim().toLowerCase()
+  if (normalized === 'ce' || normalized === 'compile error' || normalized === 'compilation error') {
+    return '编译未通过，请检查代码和所选语言。'
+  }
+  if (normalized === 're' || normalized === 'runtime error') return '程序运行时发生错误，请检查代码。'
+  if (normalized === 'tle' || normalized === 'time limit exceed' || normalized === 'time limit exceeded') return '程序运行超出时间限制。'
+  if (normalized === 'mle' || normalized === 'memory limit exceed' || normalized === 'memory limit exceeded') return '程序使用的内存超出限制。'
+  if (normalized === 'judge_failed' || normalized === 'remote_unavailable' || normalized === 'submit_failed') return '评测暂时未完成，请稍后重试。'
+  return '本次评测未通过，请根据评测结果检查代码。'
 }

@@ -41,6 +41,11 @@ export const PLATFORM_COOKIE_FIELDS: Record<string, Array<{
   ],
 }
 
+export function ojPlatformDisplayName(platform: string | null | undefined): string {
+  if (!platform) return '其他平台'
+  return OJ_PLATFORM_LABEL_MAP[platform] || '其他平台'
+}
+
 export function isFetchablePlatform(platform: string): boolean {
   return Boolean(getOjPlatform(platform)?.fetch.supported)
 }

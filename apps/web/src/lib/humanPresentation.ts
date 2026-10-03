@@ -1,13 +1,11 @@
 export const humanTerms = {
   evaluationCredits: '评测额度',
-  testSetSlot: '测试数据槽位',
   qualityScore: '数据质量评分',
   organization: '学校',
 } as const
 
-export function testDataVersion(revision: number | null | undefined, technical = false) {
-  if (!technical) return '使用发布时固定的数据评测'
-  return revision == null ? '测试数据版本待确认' : `测试数据版本 R${revision}`
+export function testDataVersion(_revision?: number | null, _diagnostic = false) {
+  return '使用发布时固定的数据评测'
 }
 
 export function trainingStatusLabel(status: string) {
@@ -33,7 +31,7 @@ export function trainingHintOpenModeLabel(mode: string) {
 export function trainingStageEndReasonLabel(reason: string) {
   const known = ({ TIME_REACHED: '达到计划时长', COMPLETION_REACHED: '达到完成要求', HYBRID_REACHED: '达到阶段要求', TEACHER_ENDED: '教师结束', TEACHER_ENDED_EARLY: '教师提前结束', SESSION_ENDED: '训练已结束', SYSTEM_ENDED: '系统结束' } as Record<string, string>)[reason]
   if (known) return known
-  return /^[A-Z][A-Z0-9_]*$/.test(reason) ? '结束原因待确认' : reason
+  return '结束原因待确认'
 }
 
 export function trainingSessionTypeLabel(type: string) {
@@ -53,6 +51,29 @@ export function reviewStatusLabel(status: string) {
   return ({ pending: '待处理', resolved: '已处理', dismissed: '已驳回' } as Record<string, string>)[status] || '状态待确认'
 }
 
-export function technicalLabel(label: string) {
-  return `技术详情：${label}`
+export function membershipStatusLabel(status: string) {
+  return ({
+    pending: '待处理', approved: '已通过', rejected: '已拒绝', cancelled: '已撤销',
+    accepted: '已接受', declined: '已拒绝', revoked: '已撤回', expired: '已过期',
+    active: '正常', inactive: '已停用', archived: '已归档',
+  } as Record<string, string>)[status] || '状态待确认'
+}
+
+export function organizationRoleLabel(role: string) {
+  return ({
+    student: '学生', teacher: '教师', principal: '学校负责人', school_principal: '学校负责人',
+    admin: '管理员', platform_admin: '平台管理员', super_admin: '超级管理员',
+    user: '普通用户',
+  } as Record<string, string>)[role] || '身份待确认'
+}
+
+export function genericStatusLabel(status: string) {
+  return ({
+    pending: '待处理', processing: '处理中', running: '进行中', completed: '已完成',
+    succeeded: '已完成', failed: '失败', cancelled: '已取消', rejected: '已拒绝',
+    approved: '已通过', active: '正常', inactive: '已停用', archived: '已归档',
+    PENDING: '待处理', PROCESSING: '处理中', RUNNING: '进行中', COMPLETED: '已完成',
+    SUCCEEDED: '已完成', FAILED: '失败', CANCELLED: '已取消', REJECTED: '已拒绝',
+    APPROVED: '已通过', ACTIVE: '正常', INACTIVE: '已停用', ARCHIVED: '已归档',
+  } as Record<string, string>)[status] || '状态待确认'
 }

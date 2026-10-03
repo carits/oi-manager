@@ -127,7 +127,7 @@ export function AuthProvider({
     const result = await loginAccount(username, password)
 
     if (!result.ok) {
-      return { success: false, message: result.error.message }
+      return { success: false, message: result.error.userMessage }
     }
 
     const nextUser = result.data

@@ -72,7 +72,7 @@ export function useContestActions(
         if (result.error.status > 0 && result.error.status < 500) {
           submitKeyRef.current = null
         }
-        toast.error(result.error.message || '提交失败')
+        toast.error(result.error.userMessage || '提交失败')
       }
       return null
     } catch {
@@ -102,7 +102,7 @@ export function useContestActions(
         router.push(teamId ? `${basePath}/${teamId}?tab=${listKind === 'contest' ? 'contest' : listKind}` : listHref(listKind, { workspace, organizationId, platformBasePath, accountRole: 'user', organizationRole: 'teacher' }))
         return true
       } else {
-        toast.error(res.message || '删除失败')
+        console.error('Contest deletion response:', res); toast.error('删除失败')
         return false
       }
     } catch {

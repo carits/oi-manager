@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activityStatusLabel, reviewStatusLabel, trainingHintOpenModeLabel, trainingProgressStatusLabel, trainingSessionTypeLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from './humanPresentation'
+import { activityStatusLabel, genericStatusLabel, membershipStatusLabel, organizationRoleLabel, reviewStatusLabel, testDataVersion, trainingHintOpenModeLabel, trainingProgressStatusLabel, trainingSessionTypeLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel } from './humanPresentation'
 
 describe('human presentation vocabulary', () => {
   it('translates training types and lifecycle states', () => {
@@ -12,10 +12,11 @@ describe('human presentation vocabulary', () => {
     expect(trainingStageKindLabel('TEACHING')).toBe('统一讲解')
     expect(trainingHintOpenModeLabel('ATTEMPT')).toBe('按提交次数')
     expect(trainingStageEndReasonLabel('TEACHER_ENDED_EARLY')).toBe('教师提前结束')
-    expect(trainingStageEndReasonLabel('提前完成课堂目标')).toBe('提前完成课堂目标')
+    expect(trainingStageEndReasonLabel('提前完成课堂目标')).toBe('结束原因待确认')
   })
 
   it('does not leak unknown internal values into primary status labels', () => {
+    const internal = 'FUTURE_INTERNAL_VALUE'
     expect(trainingStatusLabel('FUTURE_INTERNAL_VALUE')).toBe('状态待确认')
     expect(trainingStageStatusLabel('FUTURE_INTERNAL_VALUE')).toBe('状态待确认')
     expect(trainingProgressStatusLabel('FUTURE_INTERNAL_VALUE')).toBe('状态待确认')
@@ -25,5 +26,12 @@ describe('human presentation vocabulary', () => {
     expect(activityStatusLabel('FUTURE_INTERNAL_VALUE')).toBe('状态待确认')
     expect(reviewStatusLabel('pending')).toBe('待处理')
     expect(reviewStatusLabel('FUTURE_INTERNAL_VALUE')).toBe('状态待确认')
+    expect(membershipStatusLabel(internal)).not.toContain(internal)
+    expect(organizationRoleLabel(internal)).not.toContain(internal)
+    expect(genericStatusLabel(internal)).not.toContain(internal)
+  })
+
+  it('does not expose storage revisions', () => {
+    expect(testDataVersion(17, true)).toBe('使用发布时固定的数据评测')
   })
 })

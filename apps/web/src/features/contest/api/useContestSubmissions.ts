@@ -1,3 +1,4 @@
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useState, useCallback } from 'react'
 import { listContestSubmissions } from './contestApi'
 import type { SubmissionRow } from '../model/types'
@@ -34,7 +35,7 @@ export function useContestSubmissions(
       setSubmissionsTotal(data.total)
     } catch (loadError) {
       if (signal?.aborted) return
-      setError(loadError instanceof Error ? loadError.message : '评测记录获取失败')
+      setError(publicErrorMessage(loadError, '评测记录获取失败'))
     } finally {
       if (!signal?.aborted) setLoading(false)
     }

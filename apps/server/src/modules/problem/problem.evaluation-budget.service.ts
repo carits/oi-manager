@@ -252,7 +252,26 @@ export async function getUserEvaluationCreditOverview(userId: string) {
 
 export async function getEvaluationBudgetOverview() {
   const periodStart = dayStart()
-  const [platform, users, candidates, blobs, orphanBlobs] = await Promise.all([prisma.evaluationCreditAccount.findUnique({ where: { subjectType_subjectId_periodStart: { subjectType: 'platform', subjectId: 'global', periodStart } } }), prisma.evaluationCreditAccount.findMany({ where: { subjectType: 'user', periodStart }, orderBy: { consumedCredits: 'desc' }, take: 100 }), prisma.testcaseCandidate.groupBy({ by: ['status'], _count: { _all: true }, _sum: { inputSize: true, outputSize: true } }), prisma.blobObject.aggregate({ _count: { _all: true }, _sum: { size: true } }), prisma.blobObject.aggregate({ where: { References: { none: {} } }, _count: { _all: true }, _sum: { size: true } })])
-  const ledger = await prisma.evaluationCreditLedgerEntry.findMany({ where: { accountId: { in: [platform?.id, ...users.map(item => item.id)].filter((id): id is string => Boolean(id)) } }, orderBy: { createdAt: 'desc' }, take: 200 })
-  return { periodStart, hardLimits: EVALUATION_LIMITS, platform: platform || { limitCredits: EVALUATION_LIMITS.platformDailyCredits, availableCredits: EVALUATION_LIMITS.platformDailyCredits, reservedCredits: 0, consumedCredits: 0 }, users, ledger, candidates: candidates.map(item => ({ status: item.status, count: item._count._all, bytes: Number(item._sum.inputSize || 0) + Number(item._sum.outputSize || 0) })), blobs: { count: blobs._count._all, bytes: Number(blobs._sum.size || 0), orphanCount: orphanBlobs._count._all, orphanBytes: Number(orphanBlobs._sum.size || 0) } }
+  const [platform, users, candidates, blobs, orphanBlobs] = await Promise.all([
+    prisma.evaluationCreditAccount.findUnique({ where: { subjectType_subjectId_periodStart: { subjectType: 'platform', subjectId: 'global', periodStart } } }),
+    prisma.evaluationCreditAccount.findMany({ where: { subjectType: 'user', periodStart }, orderBy: { consumedCredits: 'desc' }, take: 100 }),
+    prisma.testcaseCandidate.groupBy({ by: ['status'], _count: { _all: true }, _sum: { inputSize: true, outputSize: true } }),
+    prisma.blobObject.aggregate({ _count: { _all: true }, _sum: { size: true } }),
+    prisma.blobObject.aggregate({ where: { References: { none: {} } }, _count: { _all: true }, _sum: { size: true } }),
+  ])
+  const userIds = users.map(item => item.subjectId)
+  const [ledger, userRows] = await Promise.all([
+    prisma.evaluationCreditLedgerEntry.findMany({ where: { accountId: { in: [platform?.id, ...users.map(item => item.id)].filter((id): id is string => Boolean(id)) } }, orderBy: { createdAt: 'desc' }, take: 200 }),
+    userIds.length ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } }) : Promise.resolve([]),
+  ])
+  const usernames = new Map(userRows.map(item => [item.id, item.username]))
+  return {
+    periodStart,
+    hardLimits: EVALUATION_LIMITS,
+    platform: platform || { limitCredits: EVALUATION_LIMITS.platformDailyCredits, availableCredits: EVALUATION_LIMITS.platformDailyCredits, reservedCredits: 0, consumedCredits: 0 },
+    users: users.map(item => ({ ...item, username: usernames.get(item.subjectId) || '已停用账号' })),
+    ledger,
+    candidates: candidates.map(item => ({ status: item.status, count: item._count._all, bytes: Number(item._sum.inputSize || 0) + Number(item._sum.outputSize || 0) })),
+    blobs: { count: blobs._count._all, bytes: Number(blobs._sum.size || 0), orphanCount: orphanBlobs._count._all, orphanBytes: Number(orphanBlobs._sum.size || 0) },
+  }
 }

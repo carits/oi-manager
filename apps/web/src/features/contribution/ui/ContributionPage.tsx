@@ -1,4 +1,5 @@
 "use client";
+import { publicErrorMessage } from '@/lib/humanErrors'
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageFrame } from "@/components/ui/PageFrame";
@@ -49,7 +50,7 @@ export function ContributionPage() {
       setSummary(summaryResult.value);
     else {
       setSummary(null);
-      errors.push(summaryResult.reason instanceof Error ? summaryResult.reason.message : "贡献摘要加载失败");
+      errors.push(publicErrorMessage(summaryResult.reason, "贡献摘要加载失败"));
     }
     if (eventResult.status === "fulfilled") {
       setEvents(eventResult.value.items);
@@ -61,7 +62,7 @@ export function ContributionPage() {
       setEventsLoaded(false);
       setTotal(0);
       setTotalPages(0);
-      errors.push(eventResult.reason instanceof Error ? eventResult.reason.message : "贡献记录加载失败");
+      errors.push(publicErrorMessage(eventResult.reason, "贡献记录加载失败"));
     }
     setError([...new Set(errors)].join("；"));
     setLoading(false);

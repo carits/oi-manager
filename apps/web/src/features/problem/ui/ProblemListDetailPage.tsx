@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './ProblemListDetailPage.unified.module.css'
@@ -13,7 +14,7 @@ import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
-import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
+import { OJ_PLATFORMS_NO_ALL, ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { getAssetUrl } from '@/lib/assets'
 import { Edit3, Send, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -106,7 +107,7 @@ interface ProblemListWire extends Partial<ListDetail> {
 interface TeamSummary { id: string; name: string }
 interface TeamListResponse { items?: TeamSummary[] }
 
-const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback
+const errorMessage = (error: unknown, fallback: string) => publicErrorMessage(error, fallback)
 
 // ==================== 工具函数 ====================
 
@@ -114,7 +115,7 @@ function getOjPlatformLabel(ojBindings: string | null, ojName?: string | null): 
   // 优先使用条目存储的 ojName
   if (ojName) {
     const found = OJ_PLATFORMS_NO_ALL.find(oj => oj.value === ojName)
-    return found?.label || ojName
+    return found?.label || ojPlatformDisplayName(ojName)
   }
   if (!ojBindings) return '-'
   try {
@@ -123,7 +124,7 @@ function getOjPlatformLabel(ojBindings: string | null, ojName?: string | null): 
       return bindings.map((value: unknown) => {
         const binding = typeof value === 'object' && value !== null ? value as OjBindingSummary : {}
         const found = OJ_PLATFORMS_NO_ALL.find(oj => oj.value === binding.platform)
-        return found?.label || binding.platform || '-'
+        return found?.label || ojPlatformDisplayName(binding.platform)
       }).join(', ')
     }
   } catch { /* skip */ }
@@ -369,7 +370,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
     try {
       const response = await apiClient.get<ContextProblem>(`/api/problem-lists/${listId}/entries/${entryId}/problem`)
       if (response.success && response.data) setContextProblem(response.data)
-      else setContextError(response.message || '题面暂时不可用')
+      else { console.error('Problem context response:', response); setContextError('题面暂时不可用') }
     } catch (error: unknown) {
       setContextError(errorMessage(error, '题面暂时不可用'))
     } finally {
@@ -717,7 +718,7 @@ function PublishHomeworkModal({ listId, onClose, onCreated }: {
       if (res.success && res.data) {
         onCreated(res.data.assignmentId)
       } else {
-        toast.error(res.message || '创建失败')
+        console.error('Problem creation response:', res); toast.error('创建失败')
       }
     } catch (error: unknown) {
       toast.error(errorMessage(error, '创建失败'))

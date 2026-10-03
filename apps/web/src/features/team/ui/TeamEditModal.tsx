@@ -50,7 +50,7 @@ export function TeamEditModal({ isOpen, onClose, teamId, initialData, onSuccess 
         onClose()
         onSuccess()
       } else {
-        toast.error(result.error.message || '编辑失败')
+        toast.error(result.error.userMessage || '编辑失败')
       }
     } catch (error) {
       console.error('Edit team error:', error)

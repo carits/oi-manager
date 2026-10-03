@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, School } from 'lucide-react'
@@ -30,7 +31,7 @@ export function UserProfilePage({ userType }: { userType: ProfileUserType }) {
     try {
       setProfile(await getPublicUserProfile(id, userType))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '用户资料读取失败')
+      setError(publicErrorMessage(cause, '用户资料读取失败'))
     } finally {
       setLoading(false)
     }

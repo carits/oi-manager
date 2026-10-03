@@ -1,12 +1,13 @@
 import crypto from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
-import { EVALUATION_LIMITS, EvaluationBudgetError, getUserEvaluationCreditOverview, reconcileEvaluationCreditReservations, reserveEvaluationCredits, settleEvaluationCredits, usageCredits } from '../src/modules/problem/problem.evaluation-budget.service'
+import { EVALUATION_LIMITS, EvaluationBudgetError, getEvaluationBudgetOverview, getUserEvaluationCreditOverview, reconcileEvaluationCreditReservations, reserveEvaluationCredits, settleEvaluationCredits, usageCredits } from '../src/modules/problem/problem.evaluation-budget.service'
 import { createTestUser } from './helpers/testUser'
 
 describe('Candidate evaluation budget', () => {
   it('reserves once, settles actual usage and releases the remainder', async () => {
-    const taskId = crypto.randomUUID(), userId = (await createTestUser()).user.id
+    const accountUser = await createTestUser()
+    const taskId = crypto.randomUUID(), userId = accountUser.user.id
     await reserveEvaluationCredits({ userId, manager: false, taskType: 'candidate', taskId, credits: 400 })
     await reserveEvaluationCredits({ userId, manager: false, taskType: 'candidate', taskId, credits: 400 })
     await settleEvaluationCredits({ taskType: 'candidate', taskId, reserved: 400, actual: 73 })
@@ -22,6 +23,11 @@ describe('Candidate evaluation budget', () => {
     expect(platform.consumedCredits).toBe(73)
     const overview = await getUserEvaluationCreditOverview(userId)
     expect(overview.today).toEqual({ reserved: 0, consumed: 73 })
+    const platformOverview = await getEvaluationBudgetOverview()
+    expect(platformOverview.users).toContainEqual(expect.objectContaining({
+      subjectId: userId,
+      username: accountUser.user.username,
+    }))
   })
 
   it('rejects a reused task identity with a different user or amount', async () => {

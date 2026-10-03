@@ -8,7 +8,7 @@ import { Copy, Eye, Pencil, Plus, RotateCcw, Search } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useResource } from '@/hooks/useResource'
 import { copyProblemToSchool } from '../api/problemEditorApi'
-import { OJ_PLATFORMS, OJ_PLATFORMS_NO_ALL, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { OJ_PLATFORMS, OJ_PLATFORMS_NO_ALL, ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -171,7 +171,7 @@ export function ProblemList({ role }: ProblemListProps) {
       if (existingId) router.push(`${pathPrefix}/problems/${existingId}`)
       return
     }
-    toast.error(result.error.message)
+    toast.error(result.error.userMessage)
   }
 
   const resetFilters = () => {
@@ -256,7 +256,7 @@ export function ProblemList({ role }: ProblemListProps) {
         data={problems}
         loading={resource.state.state === 'pending' && !resource.state.previousData}
         refreshing={resource.state.state === 'ready' && resource.state.refreshing}
-        error={resource.state.state === 'error' && !resource.state.previousData ? resource.state.error.message : undefined}
+        error={resource.state.state === 'error' && !resource.state.previousData ? resource.state.error.userMessage : undefined}
         onRetry={resource.retry}
         emptyText="暂无题目"
         emptyDescription={library === 'school'
@@ -284,8 +284,8 @@ export function ProblemList({ role }: ProblemListProps) {
             label: library === 'school' ? '来源' : '来源平台',
             width: '140px',
             render: (problem: Problem) => library === 'platform'
-              ? OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform || '-'
-              : (problem.platforms || [problem.platform]).filter(Boolean).map(value => OJ_PLATFORM_LABEL_MAP[value] || value).join(', ') || '-',
+              ? ojPlatformDisplayName(problem.platform)
+              : (problem.platforms || [problem.platform]).filter(Boolean).map(value => ojPlatformDisplayName(value)).join(', ') || '-',
           }] : []),
           { key: 'problemId', label: '题号', width: '130px', render: problem => <span className={styles.titleLink}>{problem.problemId}</span> },
           { key: 'title', label: '标题' },

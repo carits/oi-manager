@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useRef } from 'react'
 import useSWR from 'swr'
 import { ApiError } from '@/lib/apiClient'
@@ -24,7 +25,7 @@ export function useFeatureResource<T>(key: string, scope: string | null, load: (
     try { return { scope: requestScope, key: requestKey, data: await read() } }
     catch (error) {
       if (error instanceof ApiError) throw error
-      throw new ApiError({ kind: 'network', status: 0, message: error instanceof Error ? error.message : '内容加载失败，请重试', retryable: true })
+      throw new ApiError({ kind: 'network', status: 0, userMessage: publicErrorMessage(error, '内容加载失败，请重试'), retryable: true })
     }
   }, [])
   const result = useSWR<FeatureSnapshot<T>, ApiError>(cacheKey, fetcher, {

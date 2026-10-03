@@ -76,7 +76,7 @@ export default function EditSchoolPage() {
         // 重新获取教师列表
         fetchTeachers()
       } else {
-        setPrincipalError(result.error.message || '创建失败')
+        setPrincipalError(result.error.userMessage || '创建失败')
       }
     } catch {
       setPrincipalError('网络错误')
@@ -160,7 +160,7 @@ export default function EditSchoolPage() {
         region
       })
       if (!result.ok) {
-        toast.error(result.error.message || '保存失败')
+        toast.error(result.error.userMessage || '保存失败')
         setSaving(false)
         return
       }
@@ -169,7 +169,7 @@ export default function EditSchoolPage() {
       if (selectedTeacherId && selectedTeacherId !== principal?.id) {
         const principalResult = await transferPlatformSchoolPrincipal(schoolId, selectedTeacherId)
         if (!principalResult.ok) {
-          toast.error(principalResult.error.message || '负责人更新失败')
+          toast.error(principalResult.error.userMessage || '负责人更新失败')
           setSaving(false)
           return
         }

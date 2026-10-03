@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/FormControls'
 import { FormField } from '@/components/ui/FormField'
 import { listProblems } from '@/features/problem'
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import {
   BLOG_REFERENCE_LABELS,
   emptyBlogReference,
@@ -25,7 +26,7 @@ function ProblemReferencePicker({ reference, update }: { reference: BlogDraftRef
     ]).then(results => setProblems(Array.from(new Map(results.flatMap(result => result.data).map(item => [item.id, item])).values())))
   }, [])
   return <>
-    <FormField label="题目" required><Select value={reference.problemId || ''} onChange={event => update({ problemId: event.target.value })}><option value="">搜索结果中选择题目</option>{problems.map(problem => <option value={problem.id} key={problem.id}>{problem.platform} · {problem.problemId} · {problem.title}</option>)}</Select></FormField>
+    <FormField label="题目" required><Select value={reference.problemId || ''} onChange={event => update({ problemId: event.target.value })}><option value="">搜索结果中选择题目</option>{problems.map(problem => <option value={problem.id} key={problem.id}>{ojPlatformDisplayName(problem.platform)} · {problem.problemId} · {problem.title}</option>)}</Select></FormField>
   </>
 }
 

@@ -40,7 +40,7 @@ export function PasswordResetModal({
         onSuccess?.(password)
         onClose()
       } else {
-        setError(result.error.message || '重置失败')
+        setError(result.error.userMessage || '重置失败')
       }
     } catch {
       setError('操作失败')

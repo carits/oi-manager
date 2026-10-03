@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bookmark, Flag, Heart, MessageCircle, ThumbsUp, Trash2 } from 'lucide-react'
@@ -43,11 +44,11 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
   const [busy, setBusy] = useState(false)
   const [loadingReplies, setLoadingReplies] = useState<Set<string>>(new Set())
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [loadError, setLoadError] = useState<{ message: string; requestId?: string } | null>(null)
+  const [loadFailure, setLoadFailure] = useState<{ userMessage: string; requestId?: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoadState('loading')
-    setLoadError(null)
+    setLoadFailure(null)
     try {
       const [summary, commentPage] = await Promise.all([
         getBlogCommunity(postId, publicRead),
@@ -58,7 +59,7 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
       setLoadState('ready')
     } catch (loadFailure) {
       setLoadState('error')
-      setLoadError({ message: loadFailure instanceof Error ? loadFailure.message : '社区互动暂时无法加载' })
+      setLoadFailure({ userMessage: publicErrorMessage(loadFailure, '社区互动暂时无法加载') })
     }
   }, [postId, publicRead])
 
@@ -76,7 +77,7 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
     if (!community) return
     const active = community.myReactions.includes(type)
     const result = await setBlogReaction(postId, type, !active)
-    if (!result.ok) return toast.error(result.error.message)
+    if (!result.ok) return toast.error(result.error.userMessage)
     setCommunity(result.data)
   }
 
@@ -84,7 +85,7 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
     if (!requireLogin()) return
     if (!community) return
     const result = await setBlogBookmark(postId, !community.bookmarked)
-    if (!result.ok) return toast.error(result.error.message)
+    if (!result.ok) return toast.error(result.error.userMessage)
     setCommunity(result.data)
   }
 
@@ -94,7 +95,7 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
     setBusy(true)
     try {
       const result = await createBlogComment(postId, { content, parentId: replyTo?.id || null })
-      if (!result.ok) return toast.error(result.error.message)
+      if (!result.ok) return toast.error(result.error.userMessage)
       setContent(''); setReplyTo(null); await load()
     } finally {
       setBusy(false)
@@ -103,14 +104,14 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
 
   const remove = async (id: string) => {
     const result = await removeBlogComment(postId, id)
-    if (!result.ok) return toast.error(result.error.message)
+    if (!result.ok) return toast.error(result.error.userMessage)
     await load()
   }
 
   const report = async (commentId?: string) => {
     if (!requireLogin()) return
     const result = await reportBlogContent(postId, { reason: 'INAPPROPRIATE', commentId: commentId || null })
-    result.ok ? toast.success('举报已提交，平台会进行复核') : toast.error(result.error.message)
+    result.ok ? toast.success('举报已提交，平台会进行复核') : toast.error(result.error.userMessage)
   }
 
   const loadMoreReplies = async (comment: Comment) => {
@@ -123,7 +124,7 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
         ? { ...item, replies: [...(item.replies || []), ...result.items.filter(reply => !(item.replies || []).some(existing => existing.id === reply.id))] }
         : item))
     } catch (replyError) {
-      toast.error(replyError instanceof Error ? replyError.message : '加载回复失败')
+      toast.error(publicErrorMessage(replyError, '加载回复失败'))
     } finally {
       setLoadingReplies(current => { const next = new Set(current); next.delete(comment.id); return next })
     }
@@ -138,7 +139,7 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
   </article>
 
   if (loadState === 'loading') return <section className={styles.community} aria-busy="true" aria-labelledby="blog-community-title"><h2 id="blog-community-title">社区互动</h2><p className={styles.muted}>正在加载评论与互动…</p></section>
-  if (loadState === 'error') return <section className={styles.community} aria-labelledby="blog-community-title"><h2 id="blog-community-title">社区互动</h2><div className={styles.error} role="alert"><span>{loadError?.message || '社区互动暂时无法加载'}{loadError?.requestId ? `（请求 ID：${loadError.requestId}）` : ''}</span><Button size="sm" variant="outline" onClick={() => void load()}>重试</Button></div></section>
+  if (loadState === 'error') return <section className={styles.community} aria-labelledby="blog-community-title"><h2 id="blog-community-title">社区互动</h2><div className={styles.error} role="alert"><span>{loadFailure?.userMessage || '社区互动暂时无法加载'}{loadFailure?.requestId && <details><summary>诊断信息</summary><code>请求编号：{loadFailure.requestId}</code></details>}</span><Button size="sm" variant="outline" onClick={() => void load()}>重试</Button></div></section>
 
   return <section className={styles.community} aria-labelledby="blog-community-title">
     <div className={styles.communityHead}><div><h2 id="blog-community-title">社区互动</h2>{community?.featured && <span className={styles.featured}>社区精选</span>}</div><div className={styles.communityActions}><Button size="sm" variant={community?.myReactions.includes('LIKE') ? 'primary' : 'secondary'} icon={<Heart size={15} />} onClick={() => void react('LIKE')}>喜欢 {community?.reactions.LIKE || 0}</Button><Button size="sm" variant={community?.myReactions.includes('HELPFUL') ? 'primary' : 'secondary'} icon={<ThumbsUp size={15} />} onClick={() => void react('HELPFUL')}>有帮助 {community?.reactions.HELPFUL || 0}</Button><Button size="sm" variant={community?.bookmarked ? 'primary' : 'secondary'} icon={<Bookmark size={15} />} onClick={() => void bookmark()}>{community?.bookmarked ? '已收藏' : '收藏'}</Button><Button size="sm" variant="ghost" icon={<Flag size={15} />} onClick={() => void report()}>举报文章</Button></div></div>

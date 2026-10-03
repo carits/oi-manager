@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ProblemSelectionItem, ResolvedProblemSelection } from '@oi-manager/contracts'
 import { resolveProblemSelection } from '../api/problemSelectionApi'
@@ -53,7 +54,7 @@ export function useProblemReferenceResolver({
       if (!response.ok) throw response.error
       setState({ key, loading: false, items: orderProblemSelectionResults(requestItems, response.data.items), error: '' })
     } catch (error) {
-      if (current()) setState({ key, loading: false, items: [], error: error instanceof Error ? error.message : '检索失败，请重试' })
+      if (current()) setState({ key, loading: false, items: [], error: publicErrorMessage(error, '检索失败，请重试') })
     } finally {
       operation.current.finish(ticket)
     }

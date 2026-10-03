@@ -6,6 +6,8 @@ import { useResource } from '@/hooks/useResource'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { judgeResultLabel } from '@/lib/judge-constants'
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import styles from './personal.module.css'
 
 interface PersonalOverview {
@@ -41,7 +43,7 @@ export default function PersonalHomePage() {
             <div className={styles.grid}>
               <section className={styles.section}><div className={styles.sectionHeader}><h2>团队邀请</h2><Link href="/personal/teams">查看团队</Link></div>{data.invitations.length === 0 ? <div className={styles.empty}>没有待处理邀请</div> : <div className={styles.list}>{data.invitations.map(item => <Link className={styles.item} href="/personal/teams" key={item.id}><span className={styles.itemTitle}>{item.team.name}</span><span className={styles.itemMeta}>{formatDate(item.invitedAt)}</span></Link>)}</div>}</section>
               <section className={styles.section}><div className={styles.sectionHeader}><h2>近期比赛</h2><Link href="/personal/contests">全部比赛</Link></div>{data.contests.length === 0 ? <div className={styles.empty}>暂时没有比赛安排</div> : <div className={styles.list}>{data.contests.map(item => <Link className={styles.item} href={`/personal/contests/${item.id}`} key={item.id}><span className={styles.itemTitle}>{item.title}</span><span className={styles.itemMeta}>{formatDate(item.startTime)}</span></Link>)}</div>}</section>
-              <section className={styles.section}><div className={styles.sectionHeader}><h2>最近提交</h2><Link href="/personal/submissions">全部记录</Link></div>{data.submissions.length === 0 ? <div className={styles.empty}>还没有个人提交</div> : <div className={styles.list}>{data.submissions.map(item => <Link className={styles.item} href={`/personal/submissions/${item.id}`} key={item.id}><span className={styles.itemTitle}>{item.oj} / {item.problemId}</span><span className={styles.itemMeta}>{item.result} · {formatDate(item.createdAt)}</span></Link>)}</div>}</section>
+              <section className={styles.section}><div className={styles.sectionHeader}><h2>最近提交</h2><Link href="/personal/submissions">全部记录</Link></div>{data.submissions.length === 0 ? <div className={styles.empty}>还没有个人提交</div> : <div className={styles.list}>{data.submissions.map(item => <Link className={styles.item} href={`/personal/submissions/${item.id}`} key={item.id}><span className={styles.itemTitle}>{ojPlatformDisplayName(item.oj)} / {item.problemId}</span><span className={styles.itemMeta}>{judgeResultLabel(item.result)} · {formatDate(item.createdAt)}</span></Link>)}</div>}</section>
               <section className={styles.section}><div className={styles.sectionHeader}><h2>题目数据</h2><Link href="/personal/data-market">进入市场</Link></div><div className={styles.empty}>购买经过质量检查的测试数据，并管理已有授权。</div></section>
             </div>
           </>

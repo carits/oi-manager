@@ -1,4 +1,5 @@
 "use client";
+import { publicErrorMessage } from '@/lib/humanErrors'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -256,7 +257,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
         if (detail.id !== problem.id) throw new Error("题目详情与检索身份不一致");
         details.push({ problem: detail, alias: reference.alias });
       } catch (error) {
-        rejected.push({ id: problem.id, message: error instanceof Error ? error.message : "训练题目详情加载失败，请重试" });
+        rejected.push({ id: problem.id, message: publicErrorMessage(error, "训练题目详情加载失败，请重试") });
       }
     }
     if (!operation.isCurrent()) return { acceptedIds: [], rejected };
@@ -364,7 +365,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
     const safeTitle = (title || "training-design").replace(/[\\/:*?"<>|]/g, "-");
     saveBlobDownload(
       new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" }),
-      `${safeTitle}-本地编排-${snapshot.sourceRevision}.json`,
+      `${safeTitle}-本地编排.json`,
     );
   };
   const restoreRecoveryDraft = () => {
@@ -399,7 +400,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
     if (hadUnsavedChanges) persistRecoveryDraft();
     setReloadConfirmOpen(false);
     const loaded = await load();
-    if (loaded) toast.success(hadUnsavedChanges ? "已保存本地副本并载入服务器版本" : "已载入最新服务器版本");
+    if (loaded) toast.success(hadUnsavedChanges ? "已保留未保存的修改并加载最新内容" : "已加载最新内容");
   };
   const requestReload = () => {
     if (dirty) setReloadConfirmOpen(true);
@@ -409,7 +410,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
   const validate = async () => {
     const response = await validateTrainingDesign(sessionId, requestBody());
     if (!response.ok) {
-      toast.error(response.error.message || "结构校验失败");
+      toast.error(response.error.userMessage || "结构校验失败");
       return false;
     }
     setIssues(response.data.issues || []);
@@ -448,7 +449,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
         toast.error("另一名管理员已修改训练；完整本地编排已保存，可下载或在载入新版本后恢复");
       } else {
         setSaveStatus("error");
-        if (!quiet) toast.error(response.error.message || "保存失败");
+        if (!quiet) toast.error(response.error.userMessage || "保存失败");
       }
       return false;
     }
@@ -517,7 +518,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
     setTemplateSaving(true);
     const response = await createTrainingTemplate(sessionId, { name: templateName.trim(), scope: templateScope });
     setTemplateSaving(false);
-    if (!response.ok) return toast.error(response.error.message || "模板保存失败");
+    if (!response.ok) return toast.error(response.error.userMessage || "模板保存失败");
     setTemplateOpen(false);
     toast.success("训练模板已保存，可在下次创建训练时使用");
   };
@@ -534,7 +535,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
     setPublishing(true);
     const response = await publishTraining(sessionId, { expectedRevision: statusRevisionRef.current });
     setPublishing(false);
-    if (!response.ok) return toast.error(response.error.message || "发布失败");
+    if (!response.ok) return toast.error(response.error.userMessage || "发布失败");
     toast.success("训练已发布；阶段开始后其配置固定，运行调整请在训练工作台完成");
     requestNavigation(runtimePath);
   };
@@ -667,7 +668,7 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
           readOnly={activeStageReadOnly}
         />
         <section className={styles.drawerProblemPicker} aria-label="按题号添加">
-          <div><strong>添加题目</strong><p>训练提交时动态使用当前 Evolving；未配置 Evolving 时回退 Stable。</p></div>
+          <div><strong>添加题目</strong><p>训练提交时使用当前可用的评测数据。</p></div>
           <label className={styles.field}>添加到<Select value={problemTarget} onChange={event => {
             const next = event.target.value as "current" | "multiple"
             setProblemTarget(next)
@@ -797,8 +798,8 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
         isOpen={reloadConfirmOpen}
         onClose={() => setReloadConfirmOpen(false)}
         onConfirm={() => void reloadFromServer()}
-        title="用服务器版本替换当前编排？"
-        message="当前修改尚未保存。继续后会先在此浏览器保存一份完整恢复副本，再载入服务器版本。"
+        title="加载其他位置的最新内容？"
+        message="当前内容在其他位置已有更新。继续后会保留你尚未保存的修改，并加载最新内容。"
         confirmText="保存副本并重新加载"
         loading={loading}
       />

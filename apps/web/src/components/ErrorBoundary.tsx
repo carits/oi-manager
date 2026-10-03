@@ -1,6 +1,6 @@
 'use client'
 
-import { Component, ReactNode } from 'react'
+import { Component, ErrorInfo, ReactNode } from 'react'
 import unifiedStyles from './ErrorBoundary.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle } from 'lucide-react'
@@ -24,6 +24,10 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error }
   }
 
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Unhandled page error', { error, componentStack: info.componentStack })
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -36,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
           />
           <h2 className={unifiedStyles.u3}>页面出现错误</h2>
           <p className={unifiedStyles.u4}>
-            {this.state.error?.message || '发生了未知错误'}
+            页面遇到问题，请重新加载。
           </p>
           <Button variant="ghost"
             onClick={() => {

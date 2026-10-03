@@ -11,16 +11,16 @@ describe('submission detail polling policy', () => {
   })
 
   it.each([
-    new ApiError({ kind: 'network', status: 0, message: 'offline' }),
-    new ApiError({ kind: 'timeout', status: 0, message: 'timeout' }),
-    new ApiError({ kind: 'http', status: 429, message: 'rate limited' }),
-    new ApiError({ kind: 'http', status: 503, message: 'unavailable' }),
+    new ApiError({ kind: 'network', status: 0, userMessage: 'offline' }),
+    new ApiError({ kind: 'timeout', status: 0, userMessage: 'timeout' }),
+    new ApiError({ kind: 'http', status: 429, userMessage: 'rate limited' }),
+    new ApiError({ kind: 'http', status: 503, userMessage: 'unavailable' }),
   ])('retries transient detail failures', error => {
     expect(shouldRetrySubmissionPoll(error)).toBe(true)
   })
 
   it.each([401, 403, 404, 422])('stops polling for permanent HTTP %s failures', status => {
-    const error = new ApiError({ kind: 'http', status, message: 'permanent' })
+    const error = new ApiError({ kind: 'http', status, userMessage: 'permanent' })
     expect(shouldRetrySubmissionPoll(error)).toBe(false)
   })
 

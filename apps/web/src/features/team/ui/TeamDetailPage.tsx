@@ -143,7 +143,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
         setEditingAnnouncement(false)
         refetch()
       } else {
-        toast.error(result.error.message || '保存失败')
+        toast.error(result.error.userMessage || '保存失败')
       }
     } catch (error) {
       toast.error('保存失败')
@@ -174,7 +174,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
       } else {
         setShowLeaveConfirm(false)
         // 显示错误提示
-        setTimeout(() => toast.error(result.error.message || '退出失败'), 100)
+        setTimeout(() => toast.error(result.error.userMessage || '退出失败'), 100)
       }
     } catch (error) {
       console.error('Leave team error:', error)
@@ -200,7 +200,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
       if (result.ok) {
         refetch()
       } else {
-        toast.error(result.error.message || '移除失败')
+        toast.error(result.error.userMessage || '移除失败')
       }
     } catch (error) {
       console.error('Remove member error:', error)
@@ -229,7 +229,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
         setShowSetAdminConfirm(false)
         setSetAdminTarget(null)
       } else {
-        toast.error(result.error.message || '设置失败')
+        toast.error(result.error.userMessage || '设置失败')
       }
     } catch (error) {
       console.error('Set admin error:', error)
@@ -278,7 +278,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
         fetchJoinRequests()
         refetch()
       } else {
-        toast.error(result.error.message || '操作失败')
+        toast.error(result.error.userMessage || '操作失败')
       }
     } catch (error) {
       console.error('Approve request error:', error)
@@ -292,7 +292,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
       if (result.ok) {
         fetchJoinRequests()
       } else {
-        toast.error(result.error.message || '操作失败')
+        toast.error(result.error.userMessage || '操作失败')
       }
     } catch (error) {
       console.error('Reject request error:', error)
@@ -310,7 +310,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
         toast.success('申请已提交')
         refetch()
       } else {
-        toast.error(result.error.message || '申请失败')
+        toast.error(result.error.userMessage || '申请失败')
       }
     } catch (error) {
       toast.error('申请失败')

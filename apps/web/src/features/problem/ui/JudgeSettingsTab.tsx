@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useState, useEffect, useRef, useMemo, forwardRef, useImperativeHandle } from 'react'
 import collisionStyles from './JudgeSettingsTab.collision.module.css'
 import unifiedStyles from './JudgeSettingsTab.unified.module.css'
@@ -352,12 +353,12 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       for (const file of files) { const result = await uploadProblemChecker(problemId, file); if (!result.success) throw new Error(result.message || "上传失败") }
       await fetchCheckerFiles(); toast.success("Checker 文件已上传")
       const cpp = files.find(file => /\.(cpp|cc|cxx)$/i.test(file.name)); if (cpp) setCheckerFile(cpp.name)
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Checker 上传失败") }
+    } catch (error) { toast.error(publicErrorMessage(error, "Checker 上传失败")) }
     finally { setCheckerUploading(false); if (checkerInputRef.current) checkerInputRef.current.value = "" }
   }
 
   const handleCheckerDelete = async (file: CheckerFile) => {
-    setConfirmState({ message: `确定要删除 ${file.fileName} 吗？`, action: async () => { try { const result = await deleteProblemChecker(problemId, file.id); if (result.ok) { setCheckerFiles(prev => prev.filter(item => item.id !== file.id)); if (checkerFile === file.fileName) setCheckerFile(""); toast.success("Checker 文件已删除") } else toast.error(result.error.message || "删除失败") } catch { toast.error("删除失败") } } })
+    setConfirmState({ message: `确定要删除 ${file.fileName} 吗？`, action: async () => { try { const result = await deleteProblemChecker(problemId, file.id); if (result.ok) { setCheckerFiles(prev => prev.filter(item => item.id !== file.id)); if (checkerFile === file.fileName) setCheckerFile(""); toast.success("Checker 文件已删除") } else toast.error(result.error.userMessage || "删除失败") } catch { toast.error("删除失败") } } })
   }
 
   // ==================== 保存配置 ====================
@@ -390,7 +391,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         // 更新初始配置快照（清除脏标记）
         initialConfigRef.current = JSON.stringify(buildConfig())
       } else {
-        toast.error(result.error.message || '保存失败')
+        toast.error(result.error.userMessage || '保存失败')
       }
     } catch (error) {
       console.error('[JudgeSettings] Save error:', error)
@@ -408,13 +409,13 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       const slotState = await listProblemTestSetSlots(problemId)
       const targetSlot = slotState.slots.find(item => item.slot === 'STABLE')
         || slotState.slots.find(item => item.slot === 'EVOLVING')
-      if (!targetSlot) return toast.error('题目尚无可迁移的测试数据槽')
+      if (!targetSlot) return toast.error('题目尚无可迁移的评测数据')
       const result = await transitionProblemJudgeMode(problemId, {
         targetMode: pendingJudgeMode,
         slot: targetSlot.slot,
         expectedFencingToken: targetSlot.fencingToken,
       })
-      if (!result.ok) return toast.error(result.error.message || '评测模式迁移失败')
+      if (!result.ok) return toast.error(result.error.userMessage || '评测模式迁移失败')
       toast.success('评测模式迁移完成，Hack 已关闭并需要重新确认')
       setJudgeMode(pendingJudgeMode)
       setLoadedJudgeMode(pendingJudgeMode)
@@ -477,13 +478,13 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               setUploading(true)
               const retry = await uploadTestdataFiles(selectedFiles, true)
               if (retry.success) { toast.success(`\u6210\u529f\u66ff\u6362\u5e76\u4e0a\u4f20 ${selectedFiles.length} \u4e2a\u6587\u4ef6`); fetchTestdata() }
-              else toast.error(retry.message || '\u4e0a\u4f20\u5931\u8d25')
+              else console.error('Test data retry response:', retry); toast.error('\u4e0a\u4f20\u5931\u8d25')
             } catch { toast.error('\u4e0a\u4f20\u5931\u8d25') }
             finally { setUploading(false) }
           }
         })
       } else {
-        toast.error(result.message || '\u4e0a\u4f20\u5931\u8d25')
+        console.error('Test data upload response:', result); toast.error('\u4e0a\u4f20\u5931\u8d25')
       }
     } catch { toast.error('\u4e0a\u4f20\u5931\u8d25') }
     finally {
@@ -511,7 +512,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           setDeletingFile(fileId)
           const result = await deleteProblemTestdata(problemId, fileId)
           if (result.ok) { toast.success('文件已删除'); fetchTestdata() }
-          else toast.error(result.error.message || '删除失败')
+          else toast.error(result.error.userMessage || '删除失败')
         } catch { toast.error('删除失败') }
         finally { setDeletingFile(null) }
       }

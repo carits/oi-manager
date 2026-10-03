@@ -56,7 +56,7 @@ export function useContestDetail(
   const loading = overviewResource.state.state === 'pending'
   const error =
     overviewResource.state.state === 'error' && !overviewResource.state.previousData
-      ? overviewResource.state.error.message
+      ? overviewResource.state.error.userMessage
       : null
   const refreshError =
     overviewResource.state.state === 'error' && overviewResource.state.previousData

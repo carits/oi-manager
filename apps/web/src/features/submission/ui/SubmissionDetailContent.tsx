@@ -5,8 +5,8 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge, getResultVariant } from '@/components/ui/StatusBadge'
-import { JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
-import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { getLanguageLabel, judgeFailureSummary, judgeResultLabel } from '@/lib/judge-constants'
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { SubmissionJudgeResult } from './SubmissionJudgeResult'
 import type { SubmissionDetailDto } from '../model/submission-detail.types'
 import type { SubmissionDetailLoadError } from '../model/useSubmissionDetail'
@@ -48,8 +48,8 @@ export function SubmissionDetailErrorState({ error, onRetry, onBack }: {
   return (
     <div className={styles.errorState} role="alert">
       <h3 className={styles.errorTitle}>{error.status === 404 ? '提交记录不存在' : error.status === 403 ? '无法查看该提交' : '评测详情加载失败'}</h3>
-      <p className={styles.errorMessage}>{error.message}</p>
-      {error.requestId && <span className={styles.requestId}>请求编号：{error.requestId}</span>}
+      <p className={styles.errorMessage}>{error.userMessage}</p>
+      {error.requestId && <details className={styles.requestId}><summary>诊断信息</summary><code>请求编号：{error.requestId}</code></details>}
       <div className={styles.errorActions}>
         {onBack && <Button variant="secondary" onClick={onBack}>{permanent ? '关闭' : '返回'}</Button>}
         {!permanent && <Button onClick={onRetry}>重试</Button>}
@@ -68,9 +68,9 @@ export function SubmissionDetailContent({ detail }: { detail: SubmissionDetailDt
   const shownResult = detail.hidden || detail.displayResult === 'pending' ? 'pending' : detail.result || ''
   const resultLabel = detail.hidden || detail.displayResult === 'pending'
     ? '已提交'
-    : JUDGE_RESULT_LABEL_MAP[detail.result || ''] || detail.result || '-'
+    : judgeResultLabel(detail.result)
   const sourceLabel = detail.sourcePlatform
-    ? OJ_PLATFORM_LABEL_MAP[detail.sourcePlatform] || detail.sourcePlatform
+    ? ojPlatformDisplayName(detail.sourcePlatform)
     : null
 
   return (
@@ -82,8 +82,8 @@ export function SubmissionDetailContent({ detail }: { detail: SubmissionDetailDt
         {!detail.hidden && <div className={styles.metric}><span className={styles.metricLabel}>内存</span><span className={styles.metricValue}>{detail.memoryUsed != null ? `${(detail.memoryUsed / 1024).toFixed(2)} MB` : '-'}</span></div>}
         <div className={styles.metric}><span className={styles.metricLabel}>语言</span><span className={styles.metricValue}>{getLanguageLabel(detail.language)}</span></div>
         <div className={styles.metric}><span className={styles.metricLabel}>代码长度</span><span className={styles.metricValue}>{detail.codeLength} B</span></div>
-        <div className={styles.metric}><span className={styles.metricLabel}>输入</span><span className={styles.metricValue}>{detail.io?.input.type === 'file' ? detail.io.input.filename : 'stdin'}</span></div>
-        <div className={styles.metric}><span className={styles.metricLabel}>输出</span><span className={styles.metricValue}>{detail.io?.output.type === 'file' ? detail.io.output.filename : 'stdout'}</span></div>
+        <div className={styles.metric}><span className={styles.metricLabel}>输入</span><span className={styles.metricValue}>{detail.io?.input.type === 'file' ? detail.io.input.filename : '标准输入'}</span></div>
+        <div className={styles.metric}><span className={styles.metricLabel}>输出</span><span className={styles.metricValue}>{detail.io?.output.type === 'file' ? detail.io.output.filename : '标准输出'}</span></div>
       </section>
 
       <section className={styles.meta} aria-label="提交信息">
@@ -92,7 +92,7 @@ export function SubmissionDetailContent({ detail }: { detail: SubmissionDetailDt
         {!detail.problemSourceHidden && sourceLabel && detail.sourceProblemId && <span>来源：{sourceLabel} · {detail.sourceProblemId}</span>}
       </section>
 
-      {detail.errorMessage && <div className={styles.warning}>{detail.errorMessage}</div>}
+      {detail.errorMessage && <div className={styles.warning}>{judgeFailureSummary(detail.result)}</div>}
       <SubmissionJudgeResult key={detail.id} judgeMode={detail.judgeMode} result={detail.result} score={detail.score} cases={detail.cases} subtasks={detail.subtasks} hidden={detail.hidden} />
 
       <section className={styles.codePanel} aria-label="源代码">

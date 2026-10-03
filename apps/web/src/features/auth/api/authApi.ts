@@ -16,7 +16,7 @@ export async function loginAccount(username: string, password: string) {
         kind: 'http',
         status: 401,
         code: result.error.code,
-        message: '用户名或密码错误',
+        userMessage: '用户名或密码错误',
         requestId: result.error.requestId,
         retryable: false,
       }),

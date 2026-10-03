@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useState, useEffect, type CSSProperties } from 'react'
 import collisionStyles from './PlatformBindingsPage.collision.module.css'
 import unifiedStyles from './PlatformBindingsPage.module.css'
@@ -46,7 +47,7 @@ export default function PlatformBindingsPage() {
         setBindings(map)
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : '平台绑定状态加载失败')
+      setLoadError(publicErrorMessage(err, '平台绑定状态加载失败'))
     } finally {
       setLoading(false)
     }
@@ -127,7 +128,7 @@ export default function PlatformBindingsPage() {
         await fetchData()
         setModalOpen(false)
       } else {
-        setError(result.error.message)
+        setError(result.error.userMessage)
       }
     } catch (err) {
       setError('网络错误，请稍后重试')
@@ -149,7 +150,7 @@ export default function PlatformBindingsPage() {
         await fetchData()
         setModalOpen(false)
       } else {
-        setError(result.error.message)
+        setError(result.error.userMessage)
       }
     } catch (err) {
       setError('网络错误，请稍后重试')

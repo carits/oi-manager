@@ -113,7 +113,8 @@ describe('parseApiResponse', () => {
     expect(result).toMatchObject({
       success: false,
       status: 502,
-      message: 'Bad Gateway',
+      message: '服务暂时不可用，请稍后重试。',
+      debugMessage: 'Bad Gateway',
     })
   })
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useState, type ReactNode } from 'react'
 import unifiedStyles from './EditSchoolModal.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -94,7 +95,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess, organizati
         onSuccess()
         onClose()
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : '保存失败')
+        toast.error(publicErrorMessage(error, '保存失败'))
       } finally {
         setSubmitting(false)
       }

@@ -149,5 +149,5 @@ export function typeLabel(type: string) {
 
 export function formatLabel(format: string) {
   const map: Record<string, string> = { oi: 'OI', ioi: 'IOI', icpc: 'ICPC' }
-  return map[format] || format.toUpperCase()
+  return map[format] || '比赛'
 }

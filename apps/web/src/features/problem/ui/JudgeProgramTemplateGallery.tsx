@@ -9,32 +9,27 @@ import { useToast } from '@/components/ui/Toast'
 import type { JudgeProgramKind, ProgramCatalog, ProgramTemplate, ProgramTemplateSummary } from '../model/judgeProgramTemplateTypes'
 import styles from './JudgeProgramTemplateGallery.module.css'
 import { getJudgeProgramTemplate } from '../api/judgeProgramTemplateApi'
+import { judgeProgramCopy, judgeProgramLanguageLabel, judgeProgramProtocolLabel } from '../model/judge-program-display'
 
 const KINDS: Array<{ value: JudgeProgramKind; label: string; short: string }> = [
-  { value: 'standard', label: '标准程序 STD 示例', short: 'STD' },
-  { value: 'validator', label: '输入校验器 Validator 示例', short: 'Validator' },
-  { value: 'classifier', label: '子任务分类器 Classifier 示例', short: 'Classifier' },
-  { value: 'generator', label: '数据生成器 Generator 示例', short: 'Generator' },
+  { value: 'standard', label: '标准答案程序示例', short: '标准答案' },
+  { value: 'validator', label: '输入检查程序示例', short: '输入检查' },
+  { value: 'classifier', label: '子任务判定程序示例', short: '子任务判定' },
+  { value: 'generator', label: '数据生成程序示例', short: '数据生成' },
 ]
-
-function languageLabel(language: string) {
-  if (language === 'python3') return 'Python3'
-  if (language === 'validator-dsl') return 'Validator DSL'
-  return 'C++17'
-}
 
 function fixtureExpectation(template: ProgramTemplate, index: number) {
   const fixture = template.examples[index]
-  if (fixture.expectedSubtasks?.length) return `Subtask：${fixture.expectedSubtasks.join(', ')}`
-  if (fixture.expectedStdout !== undefined) return `期望 stdout：\n${fixture.expectedStdout}`
-  if (fixture.expectedExitCode !== undefined) return fixture.expectedExitCode === 0 ? '应接受（exit 0）' : '应拒绝（非 0）'
+  if (fixture.expectedSubtasks?.length) return `子任务：${fixture.expectedSubtasks.join(', ')}`
+  if (fixture.expectedStdout !== undefined) return `期望输出：\n${fixture.expectedStdout}`
+  if (fixture.expectedExitCode !== undefined) return fixture.expectedExitCode === 0 ? '应接受' : '应拒绝'
   return '验证确定性及联调结果'
 }
 
 function downloadBundle(template: ProgramTemplate) {
   const link = document.createElement('a')
   link.href = URL.createObjectURL(new Blob([JSON.stringify(template, null, 2)], { type: 'application/json;charset=utf-8' }))
-  link.download = `${template.id}-v${template.version}.json`
+  link.download = `${template.title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]+/g, '-') || '评测程序模板'}.json`
   link.click()
   URL.revokeObjectURL(link.href)
 }
@@ -71,7 +66,7 @@ export function JudgeProgramTemplateGallery({ catalog, subtasks, onUse }: {
     <div className={styles.heading}>
       <div>
         <h3 id="judge-template-gallery-title">内置模板与完整示例</h3>
-        <p>先查看源码、协议、Fixture 和参数配置，再明确选择是否载入草稿。模板不会自动激活。</p>
+        <p>先查看源码、运行规则、验证样例和参数配置，再决定是否载入草稿。模板不会自动启用。</p>
       </div>
       <Sparkles size={22} aria-hidden="true" />
     </div>
@@ -90,17 +85,17 @@ export function JudgeProgramTemplateGallery({ catalog, subtasks, onUse }: {
       {templates.map(template => <article className={styles.templateCard} key={template.id}>
         <div className={styles.cardTitle}>
           <div>
-            <strong>{template.title}</strong>
-            <span>{languageLabel(template.language)} · {template.protocol} · v{template.version}</span>
+            <strong>{judgeProgramCopy(template.title, '评测程序模板')}</strong>
+            <span>{judgeProgramLanguageLabel(template.language)} · {judgeProgramProtocolLabel(template.protocol)}</span>
           </div>
           {template.recommended && <span className={styles.recommended}>推荐</span>}
         </div>
-        <p>{template.description}</p>
+        <p>{judgeProgramCopy(template.description)}</p>
         <div className={styles.inclusions}>
           <span>完整源码</span>
-          <span>{template.fixtureCount} 个 Fixture</span>
-          {template.profileCount > 0 && <span>{template.profileCount} 个 Profile</span>}
-          {template.hasProtocolConfig && <span>参数 Schema</span>}
+          <span>{template.fixtureCount} 个验证样例</span>
+          {template.profileCount > 0 && <span>{template.profileCount} 个参数方案</span>}
+          {template.hasProtocolConfig && <span>参数规则</span>}
         </div>
         <div className={styles.actions}>
           <Button variant="secondary" loading={loadingId === template.id} onClick={() => void openPreview(template)}><Eye size={15} />查看完整示例</Button>
@@ -113,7 +108,7 @@ export function JudgeProgramTemplateGallery({ catalog, subtasks, onUse }: {
       isOpen={Boolean(preview)}
       onClose={() => setPreview(null)}
       title={preview ? `${preview.title} · 完整示例` : '完整示例'}
-      description={preview ? `${languageLabel(preview.language)} · ${preview.protocol} · 模板 v${preview.version}` : undefined}
+      description={preview ? `${judgeProgramLanguageLabel(preview.language)} · ${judgeProgramProtocolLabel(preview.protocol)}` : undefined}
       size="xl"
       footer={preview ? <>
         <Button variant="secondary" onClick={() => setPreview(null)}>关闭</Button>
@@ -125,43 +120,43 @@ export function JudgeProgramTemplateGallery({ catalog, subtasks, onUse }: {
       {preview && <div className={styles.detail}>
         <section className={styles.notice}>
           <strong>这是教学示例，不是当前题目的自动答案</strong>
-          <span>载入后必须按本题输入格式、约束、算法和 Subtask 修改，并通过 Judge 协议预检。</span>
+          <span>载入后必须按本题输入格式、约束、算法和子任务修改，并通过评测规则检查。</span>
         </section>
 
         {preview.kind === 'classifier' && <section className={styles.currentSubtasks}>
-          <strong>{subtasks.length ? `当前题目 Subtask：${subtasks.map(item => `${item.id}（${item.score ?? '—'} 分）`).join('、')}` : '当前题目 Subtask：尚未建立'}</strong>
-          {subtasks.length ? subtasks.map(item => <span key={item.id}>Subtask {item.id}（{item.score ?? '—'} 分）{item.dependencies?.length ? ` · 依赖 ${item.dependencies.join(', ')}` : ''}</span>) : <span>当前题目尚未建立 Subtask。</span>}
-          {unknownSubtasks.length > 0 && <p>模板 Fixture 引用了当前题目不存在的 Subtask：{unknownSubtasks.join(', ')}。必须修改后才能预检。</p>}
+          <strong>{subtasks.length ? `当前题目子任务：${subtasks.map(item => `${item.id}（${item.score ?? '—'} 分）`).join('、')}` : '当前题目子任务：尚未建立'}</strong>
+          {subtasks.length ? subtasks.map(item => <span key={item.id}>子任务 {item.id}（{item.score ?? '—'} 分）{item.dependencies?.length ? ` · 依赖 ${item.dependencies.join(', ')}` : ''}</span>) : <span>当前题目尚未建立子任务。</span>}
+          {unknownSubtasks.length > 0 && <p>模板验证样例引用了当前题目不存在的子任务：{unknownSubtasks.join(', ')}。必须修改后才能预检。</p>}
         </section>}
 
         <section>
           <h4>用途与学习要点</h4>
-          <p>{preview.description}</p>
-          <ul>{preview.learningNotes.map(item => <li key={item}>{item}</li>)}</ul>
+          <p>{judgeProgramCopy(preview.description)}</p>
+          <ul>{preview.learningNotes.map(item => <li key={item}>{judgeProgramCopy(item)}</li>)}</ul>
         </section>
         <section>
-          <h4>stdin / stdout 协议</h4>
-          <ul>{preview.protocolHelp.map(item => <li key={item}>{item}</li>)}</ul>
+          <h4>输入与输出规则</h4>
+          <ul>{preview.protocolHelp.map(item => <li key={item}>{judgeProgramCopy(item)}</li>)}</ul>
         </section>
         <section>
-          <h4>{preview.language === 'validator-dsl' ? 'Validator DSL 示例' : '完整源码示例'}</h4>
+          <h4>{preview.language === 'validator-dsl' ? '输入规则示例' : '完整源码示例'}</h4>
           <pre>{preview.source}</pre>
         </section>
         {preview.protocolConfig && <section>
-          <h4>Generator Parameter Schema 与 Profile</h4>
-          <pre>{JSON.stringify(preview.protocolConfig, null, 2)}</pre>
+          <h4>数据生成参数</h4>
+          <div className={styles.protocol}><span>可配置参数：{Object.keys(preview.protocolConfig.parameterSchema || {}).length} 项</span><span>预设参数方案：{preview.protocolConfig.profiles?.length || 0} 个</span></div>
         </section>}
         <section>
-          <h4>Fixture 示例（{preview.examples.length}）</h4>
+          <h4>验证样例（{preview.examples.length}）</h4>
           <div className={styles.fixtureGrid}>{preview.examples.map((fixture, index) => <article key={`${fixture.name}-${index}`}>
-            <strong>{fixture.name}</strong>
+            <strong>{judgeProgramCopy(fixture.name, `验证样例 ${index + 1}`)}</strong>
             <span>{fixtureExpectation(preview, index)}</span>
             <pre>{fixture.stdin}</pre>
           </article>)}</div>
         </section>
         <section className={styles.requiredChanges}>
           <h4>使用前必须修改</h4>
-          <ul>{preview.requiredChanges.map(item => <li key={item}>{item}</li>)}</ul>
+          <ul>{preview.requiredChanges.map(item => <li key={item}>{judgeProgramCopy(item)}</li>)}</ul>
         </section>
       </div>}
     </DetailDialog>

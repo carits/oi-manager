@@ -29,9 +29,10 @@ export function LoadError({
       </h2>
       <p style={{ marginBottom: '1rem' }}>{message}</p>
       {requestId && (
-        <p style={{ margin: '-0.5rem 0 1rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-          请求编号：{requestId}
-        </p>
+        <details style={{ margin: '-0.5rem 0 1rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+          <summary style={{ cursor: 'pointer' }}>诊断信息</summary>
+          <code>请求编号：{requestId}</code>
+        </details>
       )}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
         <button

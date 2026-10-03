@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useEffect, useRef, useState } from 'react'
 import { Bell, UserPlus } from 'lucide-react'
 import { usePathname } from 'next/navigation'
@@ -35,7 +36,7 @@ export function NotificationBell() {
       const data = await listContextNotifications(10)
       setNotifications(data.notifications); setUnreadCount(data.unreadCount); setError('')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '通知加载失败')
+      setError(publicErrorMessage(cause, '通知加载失败'))
     }
   }
   useEffect(() => {
@@ -68,13 +69,13 @@ export function NotificationBell() {
     const response = await respondToNotification(notification, action)
     setProcessingId(null)
     if (response.ok || (!response.ok && response.error.code?.includes('ALREADY_PROCESSED'))) await load()
-    else if (!response.ok) setError(response.error.message || '操作失败，请重试')
+    else if (!response.ok) setError(response.error.userMessage || '操作失败，请重试')
   }
 
   return <div className={styles.notificationRoot} ref={rootRef}>
     <Button variant="ghost" type="button" className={styles.notificationButton} onClick={() => setOpen(current => !current)} aria-expanded={open} aria-haspopup="true" aria-label={unreadCount ? `打开通知，${unreadCount} 条未读` : '打开通知'} title="通知"><Bell size={20} aria-hidden="true" />{unreadCount > 0 && <span className={styles.notificationBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</Button>
     {open && <div className={styles.notificationPanel} role="region" aria-label="通知">
-      <div className={styles.notificationHeader}><strong>通知</strong><Button variant="ghost" type="button" className={styles.readAllButton} disabled={!unreadCount} onClick={async () => { const response = await readAllContextNotifications(); if (response.ok) await load(); else setError(response.error.message || '全部已读失败，请重试') }}>全部已读</Button></div>
+      <div className={styles.notificationHeader}><strong>通知</strong><Button variant="ghost" type="button" className={styles.readAllButton} disabled={!unreadCount} onClick={async () => { const response = await readAllContextNotifications(); if (response.ok) await load(); else setError(response.error.userMessage || '全部已读失败，请重试') }}>全部已读</Button></div>
       <div className={styles.notificationList}>{error && <p className={styles.notificationError} role="status">{error}</p>}{!error && notifications.length === 0 && <p className={styles.notificationEmpty}>暂时没有新通知</p>}{notifications.map(notification => <article key={notification.id} className={`${styles.notificationItem} ${!notification.readAt ? styles.notificationUnread : ''}`}>
         <Button variant="ghost" type="button" className={styles.notificationContent} onClick={() => void openNotification(notification)}><span className={styles.notificationIcon} aria-hidden="true">{notification.type.includes('join_application') ? <UserPlus size={17} /> : <Bell size={17} />}</span><span className={styles.notificationText}><strong>{notification.title}</strong><span>{notification.body}</span><time>{new Date(notification.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></span>{!notification.readAt && <span className={styles.unreadDot} aria-label="未读" />}</Button>
         {notification.actionable && <div className={styles.notificationActions}>{(notification.actions || []).map(action => <Button key={action.key} variant="ghost" type="button" className={action.style === 'primary' ? styles.primaryAction : styles.secondaryAction} disabled={processingId === notification.id} onClick={() => void act(notification, action.key)}>{action.label}</Button>)}</div>}

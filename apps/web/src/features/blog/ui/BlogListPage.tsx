@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useState } from 'react'
 import { BookOpenText, Library, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -39,7 +40,7 @@ export function BlogListPage() {
       const result = await listMyBlogPosts({ page, pageSize: 20, status: status ? status as BlogPostStatus : undefined })
       setItems(result.items); setPayload(result)
     } catch (reason) {
-      setItems([]); setPayload(null); setError(reason instanceof Error ? reason.message : '博客列表加载失败')
+      setItems([]); setPayload(null); setError(publicErrorMessage(reason, '博客列表加载失败'))
     } finally {
       setLoading(false)
     }
@@ -61,7 +62,7 @@ export function BlogListPage() {
         <div className={styles.cardTop}><span>{BLOG_TYPE_LABELS[item.type]}</span>{statusBadge(item.status)}</div>
         <h2>{title}</h2>{summary && <p>{summary}</p>}
         {(item.currentVersion?.classification?.series || item.currentVersion?.classification?.tags?.length) && <div className={styles.classificationSummary}>{item.currentVersion.classification.series && <span>系列：{item.currentVersion.classification.series.title}</span>}{item.currentVersion.classification.tags?.map(tag => <StatusBadge key={tag.id} variant="neutral">{tag.name}</StatusBadge>)}</div>}
-        <div className={styles.cardMeta}><span>{BLOG_VISIBILITY_LABELS[item.visibility]}</span><span>{item.currentVersion ? `V${item.currentVersion.version}` : `草稿 R${item.draft?.revision || 1}`}</span><time>{new Date(item.updatedAt).toLocaleString('zh-CN')}</time></div>
+        <div className={styles.cardMeta}><span>{BLOG_VISIBILITY_LABELS[item.visibility]}</span><span>{item.currentVersion ? `V${item.currentVersion.version}` : '草稿'}</span><time>{new Date(item.updatedAt).toLocaleString('zh-CN')}</time></div>
       </Link>
     })}</div>}
     {payload && payload.totalPages > 1 && <Pagination currentPage={payload.page} totalPages={payload.totalPages} total={payload.total} pageSize={payload.pageSize} onPageChange={setPage} />}

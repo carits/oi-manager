@@ -21,7 +21,7 @@ export function AsyncRegion<T>({ state, onRetry, emptyText, empty, skeletonRows,
 }) {
   if (state.state === 'pending') return state.previousData !== undefined ? <>{children(state.previousData, true)}</> : <SkeletonRegion rows={skeletonRows} />
   if (state.state === 'error') return <>
-    <LoadError compact={state.previousData !== undefined} message={state.error.message} requestId={state.error.requestId} onRetry={onRetry} />
+    <LoadError compact={state.previousData !== undefined} message={state.error.userMessage} requestId={state.error.requestId} onRetry={onRetry} />
     {state.previousData !== undefined && children(state.previousData, false)}
   </>
   if (state.state === 'empty') return <>{empty ?? <Empty text={emptyText} />}</>

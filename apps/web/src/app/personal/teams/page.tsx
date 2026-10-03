@@ -63,7 +63,7 @@ export default function PersonalTeamsPage() {
     setProcessingInvitation(id)
     try {
       const result = await respondToTeamInvitation(id, action, type === 'admin' ? 'admin' : 'all')
-      if (!result.ok) return toast.error(result.error.message || '操作失败')
+      if (!result.ok) return toast.error(result.error.userMessage || '操作失败')
       setInvitations(current => current.filter(invitation => invitation.id !== id))
       if (action === 'accept') await resource.refetch()
     } finally {
@@ -81,7 +81,7 @@ export default function PersonalTeamsPage() {
         isPublic: form.isPublic,
       })
       if (!result.ok) {
-        toast.error(result.error.message || '创建失败')
+        toast.error(result.error.userMessage || '创建失败')
         return false
       }
       toast.success('团队创建成功')

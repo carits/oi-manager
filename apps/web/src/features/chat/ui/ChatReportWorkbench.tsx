@@ -11,12 +11,11 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Table } from '@/components/ui/Table'
 import { useToast } from '@/components/ui/Toast'
 import { reviewStatusLabel } from '@/lib/humanPresentation'
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { getPlatformChatReport, listPlatformChatReports, reviewPlatformChatReport } from '../api/chatApi'
 import styles from './ChatReportWorkbench.module.css'
 
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback
-}
+const errorMessage = publicErrorMessage
 
 export function ChatReportWorkbench() {
   const toast = useToast()
@@ -56,7 +55,7 @@ export function ChatReportWorkbench() {
     setLoading(true)
     try {
       const response = await reviewPlatformChatReport(selected.id, action, resolutionNote.trim())
-      if (!response.ok) return toast.error(response.error.message || '处理失败')
+      if (!response.ok) return toast.error(response.error.userMessage || '处理失败')
       toast.success('举报已处理')
       setSelected(undefined)
       setDetail(undefined)

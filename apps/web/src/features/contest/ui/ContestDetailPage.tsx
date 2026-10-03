@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useState } from 'react'
 import unifiedStyles from './ContestDetailPage.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -11,7 +12,7 @@ import { AsyncRegion, SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { LoadError } from '@/components/ui/LoadError'
 import { useResource } from '@/hooks/useResource'
 import { LANGUAGE_OPTIONS } from '@/lib/judge-constants'
-import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { useAuth } from '@/features/auth'
 import type { Attachment, TabType } from '../model/types'
 import { typeLabel, formatLabel as formatLabelFn } from '../model/types'
@@ -126,7 +127,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
       const data = await listContestSubmissionUsers(contestId)
       setRejudgeUsers(data.users)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '重判用户列表加载失败')
+      toast.error(publicErrorMessage(error, '重判用户列表加载失败'))
     } finally {
       setRejudgeUsersLoading(false)
     }
@@ -348,7 +349,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
         {refreshError && (
           <LoadError
             compact
-            message={refreshError.message}
+            message={refreshError.userMessage}
             requestId={refreshError.requestId}
             onRetry={refresh}
           />
@@ -550,7 +551,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
           title={(() => {
             const trainingFinished = (contest.status as string) === 'finished' || new Date() > new Date(contest.endTime)
             const hideProblemId = !contest.problemIdVisible && !trainingFinished && !contest.isAdmin
-            const platformPrefix = selectedProblem?.platform ? (OJ_PLATFORM_LABEL_MAP[selectedProblem.platform] || selectedProblem.platform) + ' ' : ''
+            const platformPrefix = selectedProblem?.platform ? `${ojPlatformDisplayName(selectedProblem.platform)} ` : ''
             const problemIdPart = hideProblemId ? '' : (selectedProblem?.platformProblemId || '')
             return `${platformPrefix}${problemIdPart} - ${selectedProblem?.alias || selectedProblem?.problemTitle || ''}`
           })()}
@@ -578,7 +579,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
           {/* Submit button */}
           <div className={unifiedStyles.u7}>
             <span className={unifiedStyles.u8}>
-              本地评测 · 题目来源：{OJ_PLATFORM_LABEL_MAP[selectedProblem?.platform || ''] || selectedProblem?.platform || 'Carits'}
+              本地评测 · 题目来源：{ojPlatformDisplayName(selectedProblem?.platform)}
             </span>
             <Button variant="primary"
               onClick={handleSubmitCode}
@@ -670,7 +671,7 @@ export function ContestDetailPage({ basePath, teamIdOverride, contestIdOverride 
                   const homeworkHref = resourceHref('homework', navigationContext, res.data.id)
                   if (homeworkHref) router.push(homeworkHref)
                 } catch (err: unknown) {
-                  toast.error((err as Error).message || '创建失败')
+                  toast.error(publicErrorMessage(err, '创建失败'))
                 } finally {
                   setMakeupLoading(false)
                 }

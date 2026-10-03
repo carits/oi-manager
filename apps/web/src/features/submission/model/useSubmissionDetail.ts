@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError } from '@/lib/apiClient'
 import { getSubmissionDetail } from '../api/submissionApi'
@@ -7,7 +8,7 @@ import { shouldPollSubmissionDetail, shouldRetrySubmissionPoll } from './submiss
 import type { SubmissionDetailDto } from './submission-detail.types'
 
 export interface SubmissionDetailLoadError {
-  message: string
+  userMessage: string
   status?: number
   code?: string
   requestId?: string
@@ -17,7 +18,7 @@ export interface SubmissionDetailLoadError {
 function normalizeError(error: unknown): SubmissionDetailLoadError {
   if (error instanceof ApiError) {
     return {
-      message: error.message,
+      userMessage: error.userMessage,
       status: error.status,
       code: error.code,
       requestId: error.requestId,
@@ -25,7 +26,7 @@ function normalizeError(error: unknown): SubmissionDetailLoadError {
     }
   }
   return {
-    message: error instanceof Error ? error.message : '评测详情获取失败',
+    userMessage: publicErrorMessage(error, '评测详情获取失败'),
     retryable: shouldRetrySubmissionPoll(error),
   }
 }

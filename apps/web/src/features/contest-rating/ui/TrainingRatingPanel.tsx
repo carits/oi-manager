@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/FormControls'
@@ -66,7 +67,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
       setParticipation(participationResponse)
       setSelectedOrganizationId(participationResponse.selectedOrganizationId || '')
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '读取 Rating 结算状态失败')
+      setError(publicErrorMessage(reason, '读取 Rating 结算状态失败'))
     } finally {
       setLoading(false)
     }
@@ -85,7 +86,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
       setData(response.data)
       await onChanged()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Rating 操作失败')
+      setError(publicErrorMessage(reason, 'Rating 操作失败'))
     } finally {
       setAction(null)
     }
@@ -100,7 +101,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
       setParticipation(response.data)
       setSelectedOrganizationId(response.data.selectedOrganizationId || '')
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '保存参赛组织失败')
+      setError(publicErrorMessage(reason, '保存参赛组织失败'))
     } finally {
       setParticipationSaving(false)
     }
@@ -131,7 +132,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     >
       <div className={styles.summary}>
         <StatusBadge variant={status === 'FINALIZED' ? 'success' : status === 'HELD' || status === 'FAILED' ? 'warning' : 'pending'}>
-          {stateLabel[status] || status}
+          {stateLabel[status] || '结算状态待确认'}
         </StatusBadge>
         {data?.standing && <span>最终榜单 · {data.standing.entries.length} 人</span>}
         {data?.batches.map(batch => (
@@ -180,7 +181,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
           <summary>查看最终榜单与计算规则（{data.standing.entries.length}）</summary>
           <div className={styles.entries}>
             {data.standing.entries.map(entry => <div key={entry.userId} className={styles.entry}>
-              <strong>#{entry.rank} {entry.user?.username || entry.userId}</strong>
+              <strong>#{entry.rank} {entry.user?.username || '未知用户'}</strong>
               <span>{entry.totalScore !== null && entry.totalScore !== undefined
                 ? `${entry.totalScore} 分`
                 : `${entry.solvedCount || 0} 题 · ${entry.penaltySeconds || 0} 秒`}{data.batches.flatMap(batch => batch.changes.map(change => ({ ...change, batch }))).filter(change => change.userId === entry.userId).map(change => ` · ${scopeText(change.batch.scope, change.batch.track, change.batch.organization?.shortName || change.batch.organization?.name)} ${change.ratingBefore} → ${change.ratingAfter}（${change.appliedDelta >= 0 ? '+' : ''}${change.appliedDelta}）`).join('')}</span>

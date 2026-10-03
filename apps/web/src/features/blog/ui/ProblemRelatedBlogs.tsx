@@ -1,5 +1,6 @@
 'use client'
 
+import { publicErrorMessage } from '@/lib/humanErrors'
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowRight, BookOpenText, PenLine } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -23,7 +24,7 @@ export function ProblemRelatedBlogs({ problemId }: { problemId: string }) {
       setItems((await listProblemRelatedBlogs(problemId)).items)
     } catch (loadError) {
       setItems([])
-      setError(loadError instanceof Error ? loadError.message : '关联文章加载失败')
+      setError(publicErrorMessage(loadError, '关联文章加载失败'))
     } finally {
       setLoading(false)
     }

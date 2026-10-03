@@ -96,7 +96,7 @@ export default function StudentTeamPage() {
         setInvitations(invitations.filter(i => i.id !== invitationId))
         refetch()
       } else {
-        toast.error(result.error.message || '操作失败')
+        toast.error(result.error.userMessage || '操作失败')
       }
     } catch (error) {
       toast.error('操作失败')
@@ -113,7 +113,7 @@ export default function StudentTeamPage() {
       if (result.ok) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
       } else {
-        toast.error(result.error.message || '操作失败')
+        toast.error(result.error.userMessage || '操作失败')
       }
     } catch (error) {
       toast.error('操作失败')
@@ -143,7 +143,7 @@ export default function StudentTeamPage() {
         toast.success('团队创建成功')
         return true
       } else {
-        toast.error(result.error.message || '创建失败')
+        toast.error(result.error.userMessage || '创建失败')
         return false
       }
     } catch (error) {
