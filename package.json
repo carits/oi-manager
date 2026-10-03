@@ -99,11 +99,12 @@
     "incident:verify": "bash scripts/verify-incident-evidence.sh",
     "api:auth-audit": "node scripts/audit-api-auth.mjs",
     "api:anonymous-audit": "node scripts/check-api-anonymous.mjs",
-    "ui:state-check": "node scripts/ui-state-check.mjs && node scripts/ui-contract-check.mjs",
+    "ui:state-check": "node scripts/ui-state-check.mjs && node scripts/ui-contract-check.mjs && node scripts/ui-language-check.mjs",
     "ui:contract-baseline": "node scripts/ui-contract-check.mjs --update",
     "routes:audit": "node scripts/audit-web-navigation.mjs",
     "lint": "pnpm -r lint",
-    "install:all": "pnpm install"
+    "install:all": "pnpm install",
+    "ui:language-check": "node scripts/ui-language-check.mjs"
   },
   "keywords": [
     "oi",

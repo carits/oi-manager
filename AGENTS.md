@@ -48,6 +48,64 @@ or personal notes.
 
 The detailed workflow and record ownership are defined in docs/development/WORKFLOW.md.
 
+## User-facing presentation boundary
+
+User-facing UI is a product boundary, not a direct rendering of domain or API state. The repository
+principle is: **business facts in, implementation facts out**.
+
+### Forbidden direct presentation
+
+User-visible presentation must not directly expose database or API field names, raw enum values,
+internal UUIDs or relation IDs, contract names, raw backend errors, stack traces, request payloads,
+or raw JSON diagnostics. The same rule covers JSX, toast and dialog copy, tables, tooltips, empty and
+error states, accessibility labels, CSV/JSON exports, downloadable reports, filenames, emails, and
+notifications.
+
+Implementation terms such as `revision`, `statusRevision`, `sourceRevision`, `snapshot`,
+`canonicalProblemId`, `stageProblemId`, test-data slots, `graphHash`, `fencingToken`, and
+Stable/Evolving storage terminology may remain in domain and data code, but must not cross into
+normal user presentation.
+
+### Enum and error rules
+
+Never use a raw fallback such as `LABELS[value] || value`, `LABELS[value] ?? value`, or
+`find(...)?.label || value`. Unknown values must map to a safe product fallback such as
+`状态待确认`, `其他类型`, or `其他平台`, or be omitted when not useful.
+
+Business UI consumes only a user-safe error message. It must never display raw `error.message`,
+server messages, contract names, validation internals, or ORM errors. Unknown errors fail closed to a
+generic user message; raw details belong to logs, telemetry, or an explicitly marked administrator
+diagnostic disclosure that is hidden by default.
+
+Describe what happened, its consequence, and what the user can do. Do not explain concurrency,
+storage, or consistency mechanisms. For example, an expected-revision mismatch becomes “其他人已更新
+这部分内容，请重新加载后继续”, and an unchanged snapshot becomes “原有配置不会受影响”.
+
+### Role levels and adapters
+
+- Students and ordinary teachers receive pure business language.
+- Problem authors and contest managers may see genuine authoring concepts such as Checker, Subtask,
+  input validators, and standard programs, but not hashes, fencing tokens, revisions, canonical IDs,
+  or database slots.
+- Platform engineers may see technical identifiers only inside an explicit, collapsed advanced
+  diagnostics surface.
+
+Normal React business components should consume presentation models or dedicated presentation
+helpers, not invent labels from domain objects. Presentation mappers must never return an unknown
+input value unchanged. Add a regression case using a future value such as
+`FUTURE_INTERNAL_VALUE` whenever an enum presentation mapper is added or changed.
+
+### Completion and baseline rules
+
+Any Tier 2 or Tier 3 task that changes user-visible behavior must inspect every touched presentation
+sink: JSX, toast, dialog, table, tooltip, empty state, error state, CSV/JSON export, notification,
+accessibility label, and download filename. It must run `pnpm ui:language-check` (normally through
+`pnpm ui:state-check`), relevant unit tests, and targeted browser coverage.
+
+New presentation-language violations must never be added to a baseline. Presentation baselines may
+only shrink. Do not add an ignore, exception, or alternate wording merely to make a gate pass unless
+the value is an approved product concept with a documented reason.
+
 ## Architecture migration burn-down
 
 docs/architecture-progress.json is the machine-readable source of truth for current migration
