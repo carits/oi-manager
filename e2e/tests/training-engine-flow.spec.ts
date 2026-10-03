@@ -90,12 +90,30 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     const dialog = coach.getByRole('dialog', { name: '布置训练' })
     await assertAccessibleState(coach)
     await dialog.getByLabel('训练名称').fill('E2E 顺序编排')
-    const setupProblemInput = dialog.getByRole('region', { name: '按题号添加' })
-    await setupProblemInput.getByLabel('题目平台').selectOption('carits')
-    await setupProblemInput.getByLabel('题号').fill('E2E-1000')
-    await setupProblemInput.getByRole('button', { name: '添加' }).click()
-    await expect(dialog.getByLabel('已选训练题目').getByText(/E2E A Plus B/)).toBeVisible()
+    await expect(dialog.getByText('训练模板')).toHaveCount(0)
+    await expect(dialog.getByText('使用场景')).toHaveCount(0)
+    const setupProblemInput = dialog.getByTestId('problem-list-editor')
+    await setupProblemInput.getByRole('button', { name: '＋ 添加一道题目', exact: true }).click()
+    await setupProblemInput.getByLabel('第 1 题平台', { exact: true }).selectOption('carits')
+    const resolved = coach.waitForResponse(response => new URL(response.url()).pathname === '/api/problem-selection/resolve')
+    await setupProblemInput.getByRole('textbox', { name: '第 1 题题号', exact: true }).fill('E2E-1000')
+    await expect((await resolved).ok()).toBe(true)
+    await expect(setupProblemInput.getByRole('link', { name: 'E2E A Plus B', exact: true })).toBeVisible()
+
+    const createRequest = coach.waitForRequest(request => request.method() === 'POST' && new URL(request.url()).pathname === '/api/training-sessions')
+    await expect(dialog.getByRole('button', { name: '转为课堂训练' })).toBeEnabled()
     await dialog.getByRole('button', { name: '转为课堂训练' }).click()
+    const createPayload = (await createRequest).postDataJSON()
+    expect(createPayload).not.toHaveProperty('templateKey')
+    expect(createPayload).toMatchObject({
+      sessionType: 'GENERAL',
+      rankingMode: 'PROGRESS_ONLY',
+      peerVisibility: 'PROGRESS',
+      joinMode: 'CURRENT_STAGE',
+      allowHints: true,
+      settings: { resultVisibility: 'LIVE' },
+      stages: [{ name: '训练任务', mode: 'PRACTICE', endPolicy: 'MANUAL', plannedDurationSeconds: null }],
+    })
 
     await expect(coach).toHaveURL(/\/training-sessions\/[^/]+\/design$/)
     await expect(coach.getByRole('heading', { name: '训练编排' })).toBeVisible()
@@ -107,7 +125,7 @@ test.describe('coach-directed training engine @smoke @compact', () => {
     const stageDrawer = coach.getByRole('dialog', { name: '训练任务' })
     const problemChain = stageDrawer.getByRole('region', { name: '当前阶段题目链' })
     await expect(problemChain.getByText(/E2E A Plus B/)).toBeVisible()
-    await expect(problemChain.getByText('高级设置')).toBeVisible()
+    await expect(problemChain.getByText('高级设置', { exact: true })).toBeVisible()
     await stageDrawer.getByRole('button', { name: '关闭阶段设置' }).click()
 
     await coach.getByRole('button', { name: '预览学生视角' }).click()
@@ -116,7 +134,7 @@ test.describe('coach-directed training engine @smoke @compact', () => {
 
     await coach.getByRole('button', { name: '设置学员与分组' }).click()
     const rosterDialog = coach.getByRole('dialog', { name: '学员与分组' })
-    await expect(rosterDialog.getByRole('heading', { name: '训练学员' })).toBeVisible()
+    await expect(rosterDialog.getByRole('table', { name: '训练学员与分组' })).toBeVisible()
     await rosterDialog.getByRole('button', { name: '关闭' }).last().click()
 
     await coach.getByRole('button', { name: '管理提示' }).click()

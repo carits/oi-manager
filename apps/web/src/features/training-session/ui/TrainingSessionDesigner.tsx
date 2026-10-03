@@ -3,7 +3,7 @@ import { publicErrorMessage } from '@/lib/humanErrors'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BookMarked, Download, Eye, Lightbulb, RefreshCw, RotateCcw, Send, Settings2, Users } from "lucide-react";
+import { Download, Eye, Lightbulb, RefreshCw, RotateCcw, Send, Settings2, Users } from "lucide-react";
 import { PageFrame } from "@/components/ui/PageFrame";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
@@ -25,7 +25,6 @@ import { useAuth } from "@/features/auth";
 import {
   getTrainingDesign,
   getTrainingDesignProblem,
-  createTrainingTemplate,
   publishTraining,
   saveTrainingDesign,
   validateTrainingDesign,
@@ -74,10 +73,6 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
   const [auxiliaryPanel, setAuxiliaryPanel] = useState<"roster" | "hints" | "matrix" | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
-  const [templateOpen, setTemplateOpen] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [templateScope, setTemplateScope] = useState<"personal" | "organization" | "team">("personal");
-  const [templateSaving, setTemplateSaving] = useState(false);
   const [title, setTitle] = useState(""),
     [description, setDescription] = useState(""),
     [activeStageKey, setActiveStageKey] = useState("");
@@ -506,22 +501,6 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
     if (dirty && !(await save(false, true))) return;
     setAuxiliaryPanel(panel);
   };
-  const openTemplateDialog = async () => {
-    if (dirty && !(await save(false, true))) return;
-    setTemplateName((title || "未命名训练") + "模板");
-    setTemplateScope(design?.session.teamId ? "team" : design?.session.organizationId ? "organization" : "personal");
-    setTemplateOpen(true);
-  };
-  const saveAsTemplate = async () => {
-    if (dirty) return toast.error("请先保存当前编排，再保存为模板");
-    if (!templateName.trim()) return toast.error("请输入模板名称");
-    setTemplateSaving(true);
-    const response = await createTrainingTemplate(sessionId, { name: templateName.trim(), scope: templateScope });
-    setTemplateSaving(false);
-    if (!response.ok) return toast.error(response.error.userMessage || "模板保存失败");
-    setTemplateOpen(false);
-    toast.success("训练模板已保存，可在下次创建训练时使用");
-  };
   const preparePublish = async () => {
     if (!design) return;
     if (dirty && !(await save(false, true))) return;
@@ -585,7 +564,6 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
               <Button iconOnly variant="ghost" aria-label="恢复本地副本" title="恢复本地副本" onClick={restoreRecoveryDraft}><RotateCcw size={16} /></Button>
             </>}
             <Button variant="outline" icon={<Eye size={16} />} onClick={() => setPreviewOpen(true)}>预览学生视角</Button>
-            <Button variant="outline" icon={<BookMarked size={16} />} disabled={saving} onClick={() => void openTemplateDialog()}>保存为模板</Button>
             <Button variant="secondary" onClick={() => void save()} loading={saving} disabled={!dirty}>{saveStatus === "error" || saveStatus === "conflict" ? "重试保存" : "立即保存"}</Button>
             {design.session.status === "DRAFT" && <Button icon={<Send size={16} />} onClick={() => void preparePublish()} loading={publishing} disabled={saving}>发布训练</Button>}
           </>}
@@ -691,20 +669,6 @@ function TrainingSessionDesignEditor({ sessionId }: { sessionId: string }) {
           />
         </section>
       </TrainingStageDrawer>
-
-      <FormDialog
-        isOpen={templateOpen}
-        onClose={() => setTemplateOpen(false)}
-        title="保存为训练模板"
-        description="保存阶段、分组方案、题目规则和提示配置；不会保存学员、课堂进度或运行指令。"
-        loading={templateSaving}
-        footer={<><Button variant="secondary" onClick={() => setTemplateOpen(false)}>取消</Button><Button onClick={() => void saveAsTemplate()} loading={templateSaving}>保存模板</Button></>}
-      >
-        <div className={styles.stack}>
-          <label className={styles.field}>模板名称<Input autoFocus maxLength={100} value={templateName} onChange={event => setTemplateName(event.target.value)} /></label>
-          <label className={styles.field}>可用范围<Select value={templateScope} onChange={event => setTemplateScope(event.target.value as "personal" | "organization" | "team")}><option value="personal">仅自己</option>{design.session.organizationId && <option value="organization">当前学校</option>}{design.session.teamId && <option value="team">当前团队</option>}</Select></label>
-        </div>
-      </FormDialog>
 
       <FormDialog
         isOpen={Boolean(auxiliaryPanel)}

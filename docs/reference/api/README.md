@@ -534,9 +534,9 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `PUT` | `/api/contests/:id/problems/:problemId/note` | 见对应路由实现 |
 | `PUT` | `/api/contests/:id/problems/reorder` | 见对应路由实现 |
 | `PUT` | `/api/contests/:id/record` | 见对应路由实现 |
-| `GET` | `/api/training-session-templates` | 获取内置及当前账号/学校/团队可用的 Stage 骨架模板 |
-| `POST` | `/api/training-sessions/:id/templates` | 将可管理 Session 的 Stage、分组和规则骨架保存为个人/学校/团队模板；不复制题目和运行数据 |
-| `DELETE` | `/api/training-session-templates/:id` | 停用自定义模板；既有训练不受影响 |
+| `GET` | `/api/training-session-templates` | 保留的模板查询接口；当前 Web 不调用 |
+| `POST` | `/api/training-sessions/:id/templates` | 保留的模板保存接口；当前 Web 不提供入口 |
+| `DELETE` | `/api/training-session-templates/:id` | 保留的模板停用接口；当前 Web 不提供入口 |
 | `GET` | `/api/training-sessions` | 查询独立教练训练 |
 | `POST` | `/api/training-sessions` | 创建独立教练训练 |
 | `POST` | `/api/training-sessions/participant-preview` | 使用与创建/发布相同的权限和学生边界解析训练对象及权威人数 |

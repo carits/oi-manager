@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Send } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
-import { StatusBadge } from '@/components/ui/Badge'
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
@@ -13,18 +12,13 @@ import { StudentPicker } from '@/features/organization-account'
 import { ProblemListEditor, type SelectedProblemReference } from '@/features/problem-selection'
 import {
   createTrainingSession,
-  listTrainingTemplates,
   previewTrainingParticipants,
   publishTraining,
 } from '../api/trainingSessionApi'
 import styles from './TrainingEngine.module.css'
 
 type ParticipantTarget = 'team' | 'organization_students' | 'custom_students'
-type TrainingPreset = 'practice' | 'oi_exam' | 'acm_exam'
-type ExamResultVisibility = 'LIVE' | 'AFTER_END' | 'TEACHER_PUBLISHED'
 type SubmitAction = 'publish' | 'classroom'
-
-type TrainingTemplateOption = { key: string; name: string; description: string; source: "builtin" | "personal" | "organization" | "team"; problemCount?: number; stages: Array<{ name: string }> }
 
 type Problem = {
   id: string
@@ -73,11 +67,6 @@ export function TrainingSetupDialog({
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
   const [selectedProblems, setSelectedProblems] = useState<Problem[]>([])
   const [problemEditorBlocked, setProblemEditorBlocked] = useState(false)
-  const [preset, setPreset] = useState<TrainingPreset>('practice')
-  const [templates, setTemplates] = useState<TrainingTemplateOption[]>([])
-  const [templateKey, setTemplateKey] = useState('')
-  const [examDurationMinutes, setExamDurationMinutes] = useState(120)
-  const [examResultVisibility, setExamResultVisibility] = useState<ExamResultVisibility>('AFTER_END')
   const [participantPreview, setParticipantPreview] = useState<{ participantCount: number; targetName: string } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [schoolWideConfirmed, setSchoolWideConfirmed] = useState(false)
@@ -91,17 +80,13 @@ export function TrainingSetupDialog({
       ? selectedStudentIds.length > 0
       : user?.organizationRole === 'school_principal'
   const selectedTeamName = teams.find(team => team.id === targetTeamId)?.name || '当前团队'
-  const selectedTemplate = templates.find(template => template.key === templateKey)
-  const effectiveProblemCount = templateKey ? selectedTemplate?.problemCount || 0 : selectedProblems.length
-  const requiredProblemCount = templateKey
-    ? effectiveProblemCount
-    : selectedProblems.filter(problem => problem.required).length
-  const optionalProblemCount = templateKey ? 0 : effectiveProblemCount - requiredProblemCount
+  const requiredProblemCount = selectedProblems.filter(problem => problem.required).length
+  const optionalProblemCount = selectedProblems.length - requiredProblemCount
   const readyToCreate = Boolean(
     title.trim()
     && dueAt
-    && (selectedProblems.length || templateKey)
-    && (templateKey || !problemEditorBlocked)
+    && selectedProblems.length
+    && !problemEditorBlocked
     && requiredProblemCount > 0
     && scopeReady
     && participantPreview?.participantCount
@@ -118,10 +103,6 @@ export function TrainingSetupDialog({
     setSelectedStudentIds([])
     setSelectedProblems([])
     setProblemEditorBlocked(false)
-    setPreset('practice')
-    setTemplateKey('')
-    setExamDurationMinutes(120)
-    setExamResultVisibility('AFTER_END')
     setParticipantPreview(null)
     setSchoolWideConfirmed(false)
   }
@@ -135,15 +116,6 @@ export function TrainingSetupDialog({
   useEffect(() => {
     if (!fixedTeamId && !selectedTeamId && teams[0]?.id) setSelectedTeamId(teams[0].id)
   }, [fixedTeamId, selectedTeamId, teams])
-
-  useEffect(() => {
-    if (!isOpen) return
-    let cancelled = false
-    void listTrainingTemplates(useTeamScope ? { teamId: targetTeamId || undefined } : { organizationId }).then(result => {
-      if (!cancelled) setTemplates(result as TrainingTemplateOption[])
-    }).catch(() => { if (!cancelled) setTemplates([]) })
-    return () => { cancelled = true }
-  }, [isOpen, organizationId, targetTeamId, useTeamScope])
 
   useEffect(() => {
     if (!isOpen || !scopeReady) {
@@ -176,36 +148,33 @@ export function TrainingSetupDialog({
   const create = async (action: SubmitAction) => {
     if (!readyToCreate || submitting) return
     setSubmitting(action)
-    const exam = preset !== 'practice'
     const response = await createTrainingSession({
       title: title.trim(),
       description: description.trim(),
-      templateKey: templateKey || undefined,
       organizationId: useTeamScope ? undefined : organizationId,
       teamId: useTeamScope ? targetTeamId : undefined,
       participantUserIds: participantTarget === 'custom_students' ? selectedStudentIds : undefined,
       scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : null,
-      sessionType: preset === 'oi_exam' ? 'OI' : preset === 'acm_exam' ? 'ACM' : 'GENERAL',
-      rankingMode: preset === 'acm_exam' ? 'ACM_RANKING' : preset === 'oi_exam' ? 'OFF' : 'PROGRESS_ONLY',
-      peerVisibility: exam ? 'NONE' : 'PROGRESS',
-      joinMode: exam ? 'TEACHER_ASSIGN' : 'CURRENT_STAGE',
-      allowHints: !exam,
+      sessionType: 'GENERAL',
+      rankingMode: 'PROGRESS_ONLY',
+      peerVisibility: 'PROGRESS',
+      joinMode: 'CURRENT_STAGE',
+      allowHints: true,
       settings: {
         dueAt: new Date(dueAt).toISOString(),
         completionMode: 'all',
         requiredProblemCount,
         participantTarget,
-        preset,
-        resultVisibility: exam ? examResultVisibility : 'LIVE',
+        resultVisibility: 'LIVE',
       },
-      stages: templateKey ? undefined : [{
-        name: exam ? (preset === 'oi_exam' ? 'OI 模拟测试' : 'ACM 模拟测试') : '训练任务',
+      stages: [{
+        name: '训练任务',
         kind: 'TRAINING',
-        mode: exam ? 'EXAM' : 'PRACTICE',
+        mode: 'PRACTICE',
         accessPolicy: 'ALL_AT_ONCE',
         submissionMode: 'ENABLED',
-        endPolicy: exam ? 'TIME' : 'MANUAL',
-        plannedDurationSeconds: exam ? Math.max(10, examDurationMinutes) * 60 : null,
+        endPolicy: 'MANUAL',
+        plannedDurationSeconds: null,
         minDurationSeconds: null,
         completionThreshold: null,
         problems: selectedProblems.map(problem => ({ problemId: problem.id, alias: problem.alias || null, allowedSubtaskIds: [], required: problem.required })),
@@ -263,13 +232,11 @@ export function TrainingSetupDialog({
       ? `已选择 ${selectedStudentIds.length} 名学生`
       : '全校有效学生'
   const summaryItems = useMemo(() => [
-    ['训练类型', preset === 'oi_exam' ? 'OI 模拟测试' : preset === 'acm_exam' ? 'ACM 模拟测试' : '日常训练'],
     ['训练对象', previewLoading ? '正在确认…' : participantPreview ? `${participantPreview.targetName} · ${participantPreview.participantCount} 人` : audienceText],
-    ['训练题目', templateKey ? selectedTemplate ? selectedTemplate.name + ' · ' + (selectedTemplate.problemCount || 0) + ' 道固定题目' : '模板加载中' : selectedProblems.length ? selectedProblems.length + ' 道' : '尚未添加'],
+    ['训练题目', selectedProblems.length ? selectedProblems.length + ' 道' : '尚未添加'],
     ['完成要求', optionalProblemCount ? `${requiredProblemCount} 道必做 · ${optionalProblemCount} 道选做` : `${requiredProblemCount} 道题全部必做`],
-    ...(preset === 'practice' ? [] : [['成绩公布', examResultVisibility === 'LIVE' ? '提交后立即可见' : examResultVisibility === 'AFTER_END' ? '测试结束后可见' : '由教师手动公布']]),
     ['截止时间', dueAt ? new Date(dueAt).toLocaleString('zh-CN') : '未设置'],
-  ], [audienceText, dueAt, examResultVisibility, optionalProblemCount, participantPreview, preset, previewLoading, requiredProblemCount, selectedProblems.length, selectedTemplate, templateKey])
+  ], [audienceText, dueAt, optionalProblemCount, participantPreview, previewLoading, requiredProblemCount, selectedProblems.length])
 
   return <FormDialog
     isOpen={isOpen}
@@ -282,7 +249,7 @@ export function TrainingSetupDialog({
     footer={<>
       <Button variant="secondary" onClick={close} disabled={Boolean(submitting)}>取消</Button>
       <Button variant="outline" icon={<ArrowRight size={16} />} onClick={() => void create('classroom')} loading={submitting === 'classroom'} disabled={!readyToCreate || Boolean(submitting)}>转为课堂训练</Button>
-      <Button icon={<Send size={16} />} onClick={() => void create('publish')} loading={submitting === 'publish'} disabled={!readyToCreate || Boolean(submitting) || (Boolean(templateKey) && !effectiveProblemCount)}>发布训练</Button>
+      <Button icon={<Send size={16} />} onClick={() => void create('publish')} loading={submitting === 'publish'} disabled={!readyToCreate || Boolean(submitting)}>发布训练</Button>
     </>}
   >
     <div className={styles.trainingSetupLayout}>
@@ -290,14 +257,6 @@ export function TrainingSetupDialog({
         <section className={styles.setupSection} aria-labelledby="training-setup-basic">
           <div><h3 id="training-setup-basic">基本信息</h3><p>给学生一个清楚、容易识别的训练名称。</p></div>
           <div className={styles.stack}>
-            <div className={styles.compactGrid}>
-              <label className={styles.field}>训练模板（可选）<Select value={templateKey} disabled={preset !== 'practice'} onChange={event => { setTemplateKey(event.target.value); if (event.target.value) setSelectedProblems([]) }}><option value="">空白开始</option>{templates.map(template => <option key={template.key} value={template.key}>{template.name}{template.problemCount ? ' · ' + template.problemCount + ' 题' : ' · 结构骨架'}</option>)}</Select><small>{preset !== 'practice' ? '模拟测试使用固定考试预设，不叠加日常训练模板。' : selectedTemplate?.description || '教师保存的模板会连同阶段、分组方案、题目规则与提示载入。'}</small></label>
-              <label className={styles.field}>使用场景<Select value={preset} onChange={event => { const nextPreset = event.target.value as TrainingPreset; setPreset(nextPreset); if (nextPreset !== 'practice') { setTemplateKey(''); setSelectedProblems(current => current.map(problem => ({ ...problem, required: true }))) } }}><option value="practice">日常训练</option><option value="oi_exam">OI 模拟测试</option><option value="acm_exam">ACM 模拟测试</option></Select><small>{preset === 'practice' ? '开放提示与同伴进度，适合日常练习。' : '关闭提示与同伴进度，按时长自动结束；成绩按所选公布规则展示。'}</small></label>
-            </div>
-            {preset !== 'practice' && <div className={styles.compactGrid}>
-              <label className={styles.field}>测试时长（分钟）<Input type="number" min={10} max={1440} value={examDurationMinutes} onChange={event => setExamDurationMinutes(Math.max(10, Number(event.target.value) || 10))} /></label>
-              <label className={styles.field}>成绩公布<Select value={examResultVisibility} onChange={event => setExamResultVisibility(event.target.value as ExamResultVisibility)}><option value="LIVE">提交后立即可见</option><option value="AFTER_END">测试结束后可见</option><option value="TEACHER_PUBLISHED">由教师手动公布</option></Select><small>未公布前，学生看不到分数、提交统计、完成情况或训练报告。</small></label>
-            </div>}
             <label className={styles.field}>训练名称<Input autoFocus value={title} maxLength={200} placeholder="例如：图论专项训练" onChange={event => setTitle(event.target.value)} /></label>
             <label className={styles.field}>训练说明（可选）<Textarea rows={2} value={description} onChange={event => setDescription(event.target.value)} /></label>
           </div>
@@ -316,7 +275,7 @@ export function TrainingSetupDialog({
           </div>
         </section>
 
-        {!templateKey && <section className={`${styles.setupSection} ${styles.problemSetupSection}`} aria-labelledby="training-setup-problems">
+        <section className={`${styles.setupSection} ${styles.problemSetupSection}`} aria-labelledby="training-setup-problems">
           <div><h3 id="training-setup-problems">训练题目</h3><p>按题号添加题库中已存在的题目。</p></div>
           <div className={styles.stack}>
             <ProblemListEditor
@@ -337,18 +296,16 @@ export function TrainingSetupDialog({
               renderTrailing={(reference) => {
                 const current = selectedProblems.find(problem => problem.id === reference.problem.id)
                 if (!current) return null
-                return preset === 'practice'
-                  ? <Checkbox label={current.required ? '必做' : '选做'} checked={current.required} onChange={event => setSelectedProblems(items => items.map(item => item.id === current.id ? { ...item, required: event.target.checked } : item))} />
-                  : <StatusBadge variant="neutral">必做</StatusBadge>
+                return <Checkbox label={current.required ? '必做' : '选做'} checked={current.required} onChange={event => setSelectedProblems(items => items.map(item => item.id === current.id ? { ...item, required: event.target.checked } : item))} />
               }}
             />
           </div>
-        </section>}
+        </section>
 
         <section className={styles.setupSection} aria-labelledby="training-setup-rules">
           <div><h3 id="training-setup-rules">完成要求与时间</h3><p>学生需要完成全部必做题；选做题不影响完成状态。</p></div>
           <div className={styles.stack}>
-            {!templateKey && requiredProblemCount === 0 && selectedProblems.length > 0 && <p className={styles.rosterWarning} role="alert">至少保留一道必做题，才能发布训练。</p>}
+            {requiredProblemCount === 0 && selectedProblems.length > 0 && <p className={styles.rosterWarning} role="alert">至少保留一道必做题，才能发布训练。</p>}
             <div className={styles.compactGrid}>
               <label className={styles.field}>开始时间<Input type="datetime-local" value={scheduledStartAt} onChange={event => setScheduledStartAt(event.target.value)} /></label>
               <label className={styles.field}>截止时间<Input type="datetime-local" value={dueAt} min={scheduledStartAt || undefined} onChange={event => setDueAt(event.target.value)} /></label>
@@ -358,7 +315,7 @@ export function TrainingSetupDialog({
       </div>
 
       <aside className={styles.trainingSetupSummary} aria-label="发布摘要">
-        <div><strong>发布摘要</strong><p>确认后会按所选场景直接发布。</p></div>
+        <div><strong>发布摘要</strong><p>确认后会直接发布给所选学生。</p></div>
         <dl>{summaryItems.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
         <div className={styles.message}>
           <strong>需要更复杂的课堂流程？</strong>
