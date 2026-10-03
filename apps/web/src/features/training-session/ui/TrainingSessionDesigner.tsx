@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Send, Trash2 } from 'lucide-react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
-import { Checkbox, Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Select, Textarea } from '@/components/ui/FormControls'
 import { Empty } from '@/components/ui/Empty'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
@@ -19,27 +19,21 @@ import styles from './TrainingEngine.module.css'
 
 type StagePurpose = 'PRACTICE' | 'GUIDED' | 'TEACHING' | 'REVIEW'
 type GroupMode = 'all' | 'current_groups'
-const purposeOptions: Array<{ value: StagePurpose; label: string; description: string }> = [
-  { value: 'PRACTICE', label: '继续做题', description: '学生独立完成题目，可以提交评测。' },
-  { value: 'GUIDED', label: '教师带着练', description: '教师引导推进，学生仍可提交评测。' },
-  { value: 'TEACHING', label: '统一讲解', description: '用于课堂讲解，默认不开放提交，也可以不选题。' },
-  { value: 'REVIEW', label: '复盘总结', description: '用于回顾本轮训练，默认不开放提交，也可以不选题。' },
-]
 const purposeFromStage = (stage?: Stage | null): StagePurpose => stage?.kind === 'TEACHING' ? 'TEACHING' : stage?.kind === 'REVIEW' ? 'REVIEW' : stage?.mode === 'GUIDED' ? 'GUIDED' : 'PRACTICE'
-const purposeDefaults = (purpose: StagePurpose) => ({
-  kind: purpose === 'TEACHING' ? 'TEACHING' as const : purpose === 'REVIEW' ? 'REVIEW' as const : 'TRAINING' as const,
-  mode: purpose === 'GUIDED' || purpose === 'TEACHING' ? 'GUIDED' as const : purpose === 'REVIEW' ? 'REVIEW' as const : 'PRACTICE' as const,
-  submissionMode: purpose === 'PRACTICE' || purpose === 'GUIDED' ? 'ENABLED' as const : 'DISABLED' as const,
+const purposeDefaults = (_purpose: StagePurpose) => ({
+  kind: 'TRAINING' as const,
+  mode: 'PRACTICE' as const,
+  submissionMode: 'ENABLED' as const,
 })
 const emptyStage = (): Stage => ({
   clientKey: newTrainingDesignKey(), name: '下一步安排', description: '', kind: 'TRAINING', lifecycle: 'PENDING',
   mode: 'PRACTICE', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', endPolicy: 'MANUAL',
-  plannedDurationSeconds: 45 * 60, minDurationSeconds: null, completionThreshold: null, completionPolicy: null,
+  plannedDurationSeconds: null, minDurationSeconds: null, completionThreshold: null, completionPolicy: null,
   rules: { groupMode: 'all' }, Problems: [],
 })
 const toAssignment = (reference: SelectedProblemReference, existing?: Assignment): Assignment => ({
   clientKey: existing?.clientKey || newTrainingDesignKey(), id: existing?.id, assignmentId: existing?.assignmentId,
-  problemId: reference.problem.id, alias: reference.alias || null, required: existing?.required !== false,
+  problemId: reference.problem.id, alias: reference.alias || null, required: true,
   allowedSubtaskIds: existing?.allowedSubtaskIds || [], unlockPolicy: existing?.unlockPolicy || null,
   targetScore: existing?.targetScore ?? null, scoreGoals: existing?.scoreGoals || null,
   timePolicy: existing?.timePolicy || null, stuckPolicy: existing?.stuckPolicy || null,
@@ -57,14 +51,13 @@ const stageInput = (stage: Stage, purpose: StagePurpose, groupMode: GroupMode) =
     alias: problem.alias || null, unlockPolicy: problem.unlockPolicy || undefined, targetScore: problem.targetScore ?? null,
     scoreGoals: problem.scoreGoals, timePolicy: problem.timePolicy || undefined, stuckPolicy: problem.stuckPolicy || undefined,
     allowedSubtaskIds: problem.allowedSubtaskIds, strategyIntervalSeconds: problem.strategyIntervalSeconds ?? null,
-    required: problem.required !== false,
+    required: true,
   })),
 })
 
 export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const toast = useToast()
   const [design, setDesign] = useState<Design | null>(null)
   const [stage, setStage] = useState<Stage | null>(null)
@@ -83,12 +76,10 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     try {
       const loaded = createTrainingDesignDraft(await getTrainingDesign(sessionId))
       const pending = loaded.stages.filter(item => item.lifecycle === 'PENDING')
-      const requested = searchParams.get('action') === 'teaching' ? 'TEACHING' : searchParams.get('action') === 'review' ? 'REVIEW' : searchParams.get('action') === 'guided' ? 'GUIDED' : searchParams.get('action') === 'practice' ? 'PRACTICE' : null
-      const base = pending[0] || (!['ENDED', 'ARCHIVED'].includes(loaded.session.status) ? emptyStage() : null)
-      const editable = base && requested && !pending[0] ? { ...base, ...purposeDefaults(requested), name: purposeOptions.find(item => item.value === requested)?.label || base.name } : base
+      const editable = pending[0] || (!['ENDED', 'ARCHIVED'].includes(loaded.session.status) ? emptyStage() : null)
       setDesign(loaded)
       setStage(editable)
-      setPurpose(requested && !pending[0] ? requested : purposeFromStage(editable))
+      setPurpose(purposeFromStage(editable))
       setGroupMode(editable?.rules?.groupMode === 'current_groups' ? 'current_groups' : 'all')
       setDirty(false)
     } catch {
@@ -96,7 +87,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     } finally {
       setLoading(false)
     }
-  }, [searchParams, sessionId, toast])
+  }, [sessionId, toast])
   useEffect(() => { void load() }, [load])
 
   const updateStage = (updater: (current: Stage) => Stage) => {
@@ -110,9 +101,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     })
     return { acceptedIds: references.map(reference => reference.problem.id) }
   }
-  const setRequired = (problemId: string, required: boolean) => updateStage(current => ({
-    ...current, Problems: current.Problems.map(problem => problem.problemId === problemId ? { ...problem, required } : problem),
-  }))
   const allTrainingProblems = useMemo(() => {
     const seen = new Map<string, Assignment>()
     for (const item of design?.stages || []) for (const problem of item.Problems) if (!seen.has(problem.problemId)) seen.set(problem.problemId, problem)
@@ -122,8 +110,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   const pendingCount = design?.stages.filter(item => item.lifecycle === 'PENDING').length || 0
   const legacyStageQueue = pendingCount > 1
   const isInitialStage = design ? ['DRAFT', 'SCHEDULED'].includes(design.session.status) : false
-  const requiresProblems = purpose === 'PRACTICE' || purpose === 'GUIDED'
-  const canSave = Boolean(stage?.name.trim() && !problemEditorBlocked && (!requiresProblems || stage.Problems.length > 0) && !legacyStageQueue)
+  const canSave = Boolean(stage?.name.trim() && !problemEditorBlocked && stage.Problems.length > 0 && !legacyStageQueue)
 
   const reuseProblems = (problems: Assignment[]) => {
     if (!problems.length) return toast.error('本次训练还没有可沿用的题目')
@@ -197,15 +184,9 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     {!legacyStageQueue && stage && <div className={styles.trainingSetupLayout}>
       <div className={styles.trainingSetupMain}>
         <section className={styles.setupSection}>
-          <div><h3>接下来做什么</h3><p>选择符合课堂语境的动作，系统会自动使用合适规则。</p></div>
+          <div><h3>{isInitialStage ? '第一个安排' : '下一轮训练'}</h3><p>这一轮只决定学生接下来看到哪些题；讲解、聚焦等课堂行为不创建新的训练轮次。</p></div>
           <div className={styles.stack}>
-            <label className={styles.field}>课堂动作<Select value={purpose} onChange={event => {
-              const next = event.target.value as StagePurpose
-              setPurpose(next)
-              updateStage(current => ({ ...current, ...purposeDefaults(next), name: purposeOptions.find(item => item.value === next)?.label || current.name }))
-            }}>{purposeOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>
-            <p className={styles.muted}>{purposeOptions.find(item => item.value === purpose)?.description}</p>
-            <label className={styles.field}>预计用时（分钟）<Input type="number" min={5} max={1440} value={Math.max(5, Math.round((stage.plannedDurationSeconds || 45 * 60) / 60))} onChange={event => updateStage(current => ({ ...current, plannedDurationSeconds: Math.max(5, Math.min(1440, Number(event.target.value) || 45)) * 60 }))} /></label>
+            <label className={styles.field}>安排名称<Textarea rows={1} value={stage.name} onChange={event => updateStage(current => ({ ...current, name: event.target.value }))} /></label>
             <details className={styles.controlDisclosure}><summary>补充说明</summary><label className={styles.field}>给教师的安排说明（可选）<Textarea rows={3} value={stage.description || ''} onChange={event => updateStage(current => ({ ...current, description: event.target.value }))} /></label></details>
           </div>
         </section>
@@ -213,11 +194,11 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
           <div><h3>谁来练</h3><p>默认全班统一安排，需要时可沿用当前分组。</p></div>
           <div className={styles.stack}>
             <label className={styles.field}>参与范围<Select value={groupMode} onChange={event => { setGroupMode(event.target.value as GroupMode); setDirty(true) }}><option value="all">全班统一安排</option><option value="current_groups">按当前分组安排</option></Select></label>
-            {groupMode === 'current_groups' && <div className={styles.tableWrap}><table><thead><tr><th>训练组</th><th>本次内容</th></tr></thead><tbody>{design.groups.map(group => <tr key={group.id || group.clientKey}><td>{group.name}</td><td>{stage.Problems.length ? stage.Problems.map(problem => problem.alias || problem.Problem.problemId).join('、') : purposeOptions.find(item => item.value === purpose)?.label}</td></tr>)}</tbody></table></div>}
+            {groupMode === 'current_groups' && <div className={styles.tableWrap}><table><thead><tr><th>训练组</th><th>本次内容</th></tr></thead><tbody>{design.groups.map(group => <tr key={group.id || group.clientKey}><td>{group.name}</td><td>{stage.Problems.length ? stage.Problems.map(problem => problem.alias || problem.Problem.problemId).join('、') : '尚未设置题目'}</td></tr>)}</tbody></table></div>}
           </div>
         </section>
         <section className={styles.setupSection}>
-          <div><h3>练哪些题</h3><p>{requiresProblems ? '至少选择一道题，默认只需标记必做或选做。' : '讲解或复盘可以不选择题目。'}</p></div>
+          <div><h3>练哪些题</h3><p>至少选择一道题。学生当前能看到的题，就是这一轮需要完成的训练内容。</p></div>
           <div className={styles.stack}>
             {!isInitialStage && <div className={styles.actions}>
               <Button variant="outline" onClick={() => reuseProblems(currentStageProblems)} disabled={!currentStageProblems.length}>沿用当前题目</Button>
@@ -229,10 +210,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
               aliasLabel="别名"
               dataRequirement="training"
               onBlockingChange={setProblemEditorBlocked}
-              renderTrailing={reference => {
-                const problem = stage.Problems.find(item => item.problemId === reference.problem.id)
-                return problem ? <Checkbox label={problem.required === false ? '选做' : '必做'} checked={problem.required !== false} onChange={event => setRequired(problem.problemId, event.target.checked)} /> : null
-              }}
             />
           </div>
         </section>
@@ -240,12 +217,10 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
       <aside className={styles.trainingSetupSummary} aria-label="安排摘要">
         <div><strong>{isInitialStage ? '第一个安排' : '已准备的下一步'}</strong><p>这里只显示老师真正需要确认的信息。</p></div>
         <dl>
-          <div><dt>动作</dt><dd>{purposeOptions.find(item => item.value === purpose)?.label}</dd></div>
           <div><dt>对象</dt><dd>{groupMode === 'all' ? '全班' : '当前分组'}</dd></div>
           <div><dt>题目</dt><dd>{stage.Problems.length ? stage.Problems.length + ' 道' : '无题目'}</dd></div>
-          <div><dt>提交</dt><dd>{purposeDefaults(purpose).submissionMode === 'ENABLED' ? '允许' : '不开放'}</dd></div>
         </dl>
-        <div className={styles.message}><strong>后面的安排以后再决定</strong><p>课堂运行中可以继续训练、调整题目、统一讲解、调整分组或结束。</p></div>
+        <div className={styles.message}><strong>后面的安排以后再决定</strong><p>课堂运行中只通过题目调整、聚焦题目、调整分组和下一步继续推进。</p></div>
       </aside>
     </div>}
   </div></PageFrame>
