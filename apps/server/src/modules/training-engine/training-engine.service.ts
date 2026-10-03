@@ -7,6 +7,7 @@ import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.se
 import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { BUILTIN_TRAINING_TEMPLATES, getBuiltinTrainingTemplate } from './training-engine.templates'
 import { flattenTrainingDesignParticipants } from './training-engine.design'
+import { progressiveStagePurposeDefaults, progressiveStageQueueState, type ProgressiveStagePurpose } from './training-progressive-stage'
 import { TrainingEngineError } from './training-engine.errors'
 import { eligibleTrainingParticipantIds, validateTrainingParticipantTarget } from './application/training-roster.service'
 import { trainingMetrics } from './training-metrics'
@@ -914,6 +915,7 @@ export async function createTrainingSession(userId: string, body: any, definitio
   const scheduledStartAt = optionalDate(body?.scheduledStartAt, '计划开始时间')
   const settings = normalizeSessionSettings(body?.settings, scheduledStartAt)
   const rawStages = Array.isArray(body?.stages) && body.stages.length ? body.stages : template?.stages || [{ name: '训练', kind: 'TRAINING', endPolicy: 'MANUAL', accessPolicy: 'ALL_AT_ONCE', submissionMode: 'ENABLED', problems: [] }]
+  if (rawStages.length > 1) throw new TrainingEngineError(422, 'TRAINING_INITIAL_STAGE_LIMIT', '新训练只能先准备一个初始阶段；后续阶段请根据课堂情况逐步添加')
   const stages = rawStages.map((stage: StructureStage) => ({ ...stage, accessPolicy: stage.accessPolicy || defaultAccessPolicy, submissionMode: stage.submissionMode || defaultSubmissionMode }))
   const hydrated = await hydrateStages(stages, await problemAccessContext(userId, scope.organizationId, scope.teamId))
   const title = boundedText(body?.title, 200, '训练名称', 1)
@@ -1007,6 +1009,7 @@ export async function validateTrainingStructure(userId: string, sessionId: strin
   if (session.status === 'ENDED' || session.status === 'ARCHIVED') throw new TrainingEngineError(409, 'TRAINING_STRUCTURE_FROZEN', '已结束训练的结构不能修改')
   const stages = Array.isArray(body?.stages) ? body.stages as StructureStage[] : []
   const issues = structureIssues(stages)
+  if (stages.length > 1) issues.push({ path: 'stages', code: 'TRAINING_INITIAL_STAGE_LIMIT', message: '普通课堂设置只能保留一个待运行阶段', severity: 'error' })
   try { await hydrateStages(stages, await problemAccessContext(userId, session.organizationId, session.teamId)) } catch (error) {
     if (error instanceof TrainingEngineError) issues.push({ path: 'stages', code: error.code, message: error.message, severity: 'error' })
     else throw error
@@ -1107,6 +1110,8 @@ export async function getTrainingDesign(userId: string, sessionId: string) {
     stages,
     stagePlans,
     issues: structureIssues(payloadStages),
+    nextStage: stages.find(stage => stage.lifecycle === 'PENDING') || null,
+    legacyStageQueue: stages.filter(stage => stage.lifecycle === 'PENDING').length > 1,
   }
 }
 
@@ -1147,6 +1152,7 @@ export async function replaceTrainingStructure(userId: string, sessionId: string
   const expectedRevision = Number(body?.expectedRevision)
   if (!Number.isSafeInteger(expectedRevision)) throw new TrainingEngineError(422, 'TRAINING_EXPECTED_REVISION_REQUIRED', '缺少有效的结构版本')
   const stages = Array.isArray(body?.stages) ? body.stages : []
+  if (stages.length > 1) throw new TrainingEngineError(422, 'TRAINING_INITIAL_STAGE_LIMIT', '普通课堂设置只能保留一个待运行阶段')
   const hydrated = await hydrateStages(stages, await problemAccessContext(userId, session.organizationId, session.teamId))
   await prisma.$transaction(async tx => {
     await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS locked', 'training-session:' + sessionId)
@@ -1423,9 +1429,70 @@ export async function endTrainingStage(userId: string, sessionId: string, stageI
   return executeStageTransition(userId, sessionId, { expectedRevision: Number(body?.expectedRevision), action: body?.endSession === true || !next ? 'end_session' : 'advance', stageId, outcome: body?.outcome === 'ended_early' ? 'ended_early' : 'completed', nextStageId: next?.id, reason: body?.reason })
 }
 
+export async function putTrainingNextStage(userId: string, sessionId: string, body: any) {
+  assertTrainingDefinitionWritesEnabled()
+  const session = await assertManage(userId, sessionId)
+  if (!['RUNNING', 'PAUSED'].includes(session.status) || !session.currentStageId) {
+    throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_UNAVAILABLE', '训练运行后才能准备下一阶段')
+  }
+  const pendingStages = session.Stages.filter(stage => stage.lifecycle === 'PENDING')
+  if (progressiveStageQueueState(session.Stages).legacy) {
+    throw new TrainingEngineError(409, 'TRAINING_LEGACY_STAGE_QUEUE', '该训练仍有多个旧版未来阶段，请按原顺序运行完后再准备新阶段')
+  }
+  const purpose = String(body?.purpose || '').toUpperCase() as ProgressiveStagePurpose
+  const purposeDefaults = progressiveStagePurposeDefaults[purpose]
+  if (!purposeDefaults) throw new TrainingEngineError(422, 'TRAINING_STAGE_PURPOSE_INVALID', '请选择有效的下一阶段用途')
+  const rawStage = {
+    ...(body?.stage || {}),
+    ...purposeDefaults,
+    clientKey: String(body?.stage?.clientKey || 'next-stage'),
+    name: boundedText(body?.stage?.name, 200, '阶段名称', 1),
+  }
+  const hydrated = await hydrateStages([rawStage], await problemAccessContext(userId, session.organizationId, session.teamId))
+  const entry = hydrated[0]
+  if (!entry) throw new TrainingEngineError(422, 'TRAINING_STAGE_REQUIRED', '请填写下一阶段')
+  await prisma.$transaction(async tx => {
+    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS locked', 'training-session:' + sessionId)
+    const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId }, include: { Stages: { orderBy: { orderIndex: 'asc' } } } })
+    if (current.statusRevision !== Number(body?.expectedRevision)) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+    const pending = current.Stages.filter(stage => stage.lifecycle === 'PENDING')
+    if (pending.length > 1) throw new TrainingEngineError(409, 'TRAINING_LEGACY_STAGE_QUEUE', '旧版未来阶段尚未收敛，不能新增阶段')
+    if (pending[0]) {
+      await tx.trainingSessionGroupChange.deleteMany({ where: { sessionId, targetStageId: pending[0].id, status: 'pending' } })
+      await tx.trainingSessionStage.delete({ where: { id: pending[0].id } })
+    }
+    const maximum = current.Stages.filter(stage => stage.lifecycle !== 'PENDING').reduce((value, stage) => Math.max(value, stage.orderIndex), -1)
+    entry.stageIndex = maximum + 1
+    await createStageGraph(tx, sessionId, entry)
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 } } })
+    await appendEvent(tx, sessionId, 'NEXT_STAGE_PREPARED', 'ALL', null, { purpose })
+  })
+  return getTrainingWorkspace(userId, sessionId)
+}
+
+export async function deleteTrainingNextStage(userId: string, sessionId: string, body: any) {
+  assertTrainingDefinitionWritesEnabled()
+  const session = await assertManage(userId, sessionId)
+  const pending = session.Stages.filter(stage => stage.lifecycle === 'PENDING')
+  if (pending.length > 1) throw new TrainingEngineError(409, 'TRAINING_LEGACY_STAGE_QUEUE', '旧版未来阶段尚未收敛，不能批量删除')
+  if (!pending[0]) return getTrainingWorkspace(userId, sessionId)
+  await prisma.$transaction(async tx => {
+    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS locked', 'training-session:' + sessionId)
+    const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId }, select: { statusRevision: true } })
+    if (current.statusRevision !== Number(body?.expectedRevision)) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+    await tx.trainingSessionGroupChange.deleteMany({ where: { sessionId, targetStageId: pending[0].id, status: 'pending' } })
+    await tx.trainingSessionStage.delete({ where: { id: pending[0].id } })
+    await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 } } })
+    await appendEvent(tx, sessionId, 'NEXT_STAGE_DISCARDED', 'ALL', null, { stageId: pending[0].id })
+  })
+  return getTrainingWorkspace(userId, sessionId)
+}
+
 export async function cloneTrainingStage(userId: string, sessionId: string, stageId: string, body: any) {
   assertTrainingDefinitionWritesEnabled()
-  await assertManage(userId, sessionId)
+  const managedSession = await assertManage(userId, sessionId)
+  if (managedSession.currentStageId !== stageId) throw new TrainingEngineError(409, 'TRAINING_STAGE_NOT_RUNNING', '只能将当前阶段准备为唯一下一阶段')
+  if (managedSession.Stages.some(stage => stage.lifecycle === 'PENDING')) throw new TrainingEngineError(409, 'TRAINING_NEXT_STAGE_EXISTS', '已有准备中的下一阶段，请先修改或丢弃')
   const expectedRevision = Number(body?.expectedRevision)
   let cloneId = ''
   await prisma.$transaction(async tx => {
@@ -1598,7 +1665,8 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
     session.Stages.find(stage => stage.id === session.currentStageId)?.Problems.map(problem => problem.id) || [],
   )
   const metadataVisibleWhileLocked = new Set(['SEQUENTIAL_LOCK', 'FOCUS_REQUIRED', 'FOCUS_LOCK', 'PROBLEM_LOCKED'])
-  const permissions = Object.fromEntries(Object.entries(resolvedPermissions).map(([stageProblemId, permission]) => [
+  const hiddenFutureProblemIds = new Set(manager ? [] : session.Stages.filter(stage => stage.lifecycle === 'PENDING').flatMap(stage => stage.Problems.map(problem => problem.id)))
+  const permissions = Object.fromEntries(Object.entries(resolvedPermissions).filter(([stageProblemId]) => !hiddenFutureProblemIds.has(stageProblemId)).map(([stageProblemId, permission]) => [
     stageProblemId,
     {
       ...permission,
@@ -1632,14 +1700,17 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
       Groups: undefined,
       Problems: stage.Problems.map((problem: any) => {
         const configured = effectiveProblemPlan(problem.id)
-        const payload = snapshotProblem({ ...problem, ...(configured || {}) })
+        const payload = snapshotProblem({ ...(configured || {}), ...problem })
         return manager || permissions[problem.id]?.canSeeMetadata ? payload : { ...payload, alias: null, Statements: [], Problem: { ...problem.Problem, platform: '', problemId: '', title: '未开放题目', difficulty: null } }
       }),
     }
   }
   const currentStage = session.currentStageId ? session.Stages.find(stage => stage.id === session.currentStageId) || null : null
+  const pendingStages = session.Stages.filter(stage => stage.lifecycle === 'PENDING')
+  const nextStage = pendingStages[0] || null
+  const visibleStages = manager ? session.Stages : session.Stages.filter(stage => stage.lifecycle !== 'PENDING')
   return {
-    session: { ...session, currentStageId: session.currentStageId, currentStage: currentStage ? { id: currentStage.id, name: currentStage.name, orderIndex: currentStage.orderIndex, lifecycle: currentStage.lifecycle } : null, Stages: session.Stages.map(snapshotStage), Overlays: visibleOverlays },
+    session: { ...session, currentStageId: session.currentStageId, currentStage: currentStage ? { id: currentStage.id, name: currentStage.name, orderIndex: currentStage.orderIndex, lifecycle: currentStage.lifecycle } : null, Stages: visibleStages.map(snapshotStage), Overlays: visibleOverlays },
     manager,
     participant: participantView ? {
       ...participantView,
@@ -1656,6 +1727,7 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
     progress: clientProgress,
     permissions,
     strategy: {},
+    ...(manager ? { nextStage: nextStage ? snapshotStage(nextStage) : null, legacyStageQueue: pendingStages.length > 1 } : {}),
   }
 }
 
@@ -2338,6 +2410,7 @@ export async function getCoachDashboard(userId: string, sessionId: string) {
   const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, include: { User: { select: { id: true, username: true, avatar: true } }, Group: true, Progress: true } })
   const now = Date.now()
   const currentStage = session.currentStageId ? session.Stages.find(stage => stage.id === session.currentStageId) || null : null
+  const dashboardStage = currentStage ? { ...currentStage, Plans: currentStage.Groups.map(plan => ({ ...plan, name: plan.TrainingGroup?.name || '默认计划' })), Groups: undefined } : null
   const rows = participants.map(item => {
     const requirements = resolveParticipantSessionRequirements(session, item.id, item.Progress).filter(requirement => !currentStage || requirement.stageId === currentStage.id)
     const completedCount = requirements.filter(requirement => ['SATISFIED', 'BYPASSED'].includes(requirement.state)).length
@@ -2346,7 +2419,7 @@ export async function getCoachDashboard(userId: string, sessionId: string) {
       || null
     return { id: item.id, user: item.User, currentGroupId: item.groupId, currentPlanId: currentPlan?.id || null, currentStageId: currentStage?.id || null, currentProblemId: item.currentProblemId, activeSeconds: item.activeSeconds, online: Boolean(item.lastHeartbeatAt && now - item.lastHeartbeatAt.getTime() < 90000), requiredCount: requirements.length, completedCount, completed: requirements.length > 0 && completedCount === requirements.length, working: item.Progress.some(progress => progress.status === 'WORKING'), stuck: item.Progress.some(progress => progress.status === 'STUCK'), requirements, progress: item.Progress }
   })
-  return { session: { id: session.id, title: session.title, status: session.status, currentStageId: session.currentStageId, currentStage }, participants: rows, summary: { total: rows.length, working: rows.filter(item => item.working).length, stuck: rows.filter(item => item.stuck).length, completed: rows.filter(item => item.completed).length } }
+  return { session: { id: session.id, title: session.title, status: session.status, currentStageId: session.currentStageId, currentStage: dashboardStage }, participants: rows, summary: { total: rows.length, working: rows.filter(item => item.working).length, stuck: rows.filter(item => item.stuck).length, completed: rows.filter(item => item.completed).length } }
 }
 
 export async function getTrainingPeerProgress(userId: string, sessionId: string) {

@@ -156,9 +156,9 @@ Baekjoon | 28057 | 1 | AN
       '../contest/ui/ContestFormModal.tsx',
       '../assignment/ui/AssignmentWorkspace.tsx',
       '../training-session/ui/TrainingSetupDialog.tsx',
+      '../training-session/ui/TrainingSessionDesigner.tsx',
     ]
     const secondaryPaths = [
-      '../training-session/ui/TrainingSessionDesigner.tsx',
       '../problem/ui/ProblemListDetailPage.tsx',
       '../training-session/ui/TrainingSessionWorkspace.tsx',
     ]
@@ -174,9 +174,9 @@ Baekjoon | 28057 | 1 | AN
     }
     for (const source of secondarySources) expect(source).toContain('ProblemReferenceSelector')
     expect(creationSources[2]).toContain('dataRequirement="training"')
-    expect(secondarySources[0]).toContain('dataRequirement="training"')
-    expect(secondarySources[1]).toContain('dataRequirement="none"')
-    expect(secondarySources[2]).toContain('dataRequirement="training"')
+    expect(creationSources[3]).toContain('dataRequirement="training"')
+    expect(secondarySources[0]).toContain('dataRequirement="none"')
+    expect(secondarySources[1]).toContain('dataRequirement="training"')
     for (const source of [...creationSources, ...secondarySources]) expect(source).not.toContain('requireStable=')
     const editorSource = read('./ui/ProblemListEditor.tsx')
     expect(editorSource).toContain('＋ 添加一道题目')
@@ -190,8 +190,7 @@ Baekjoon | 28057 | 1 | AN
     expect(read('./ui/ProblemReferenceLink.tsx')).toContain('problemReferenceHref(pathname, problem.id)')
     expect(read('../training-session/ui/TrainingSessionListPage.tsx')).toContain('<TrainingSetupDialog')
     expect(read('../training-session/ui/TrainingProblemChain.tsx')).toContain('<ProblemReferenceLink problem={problem.Problem}')
-    expect(secondarySources[0]).toContain('operation.isCurrent()')
-    expect(secondarySources[0]).toContain('acceptedIds: details.map')
-    expect(secondarySources[0]).toContain('contextKey=')
+    expect(creationSources[3]).toContain('onReplace={replaceProblems}')
+    expect(creationSources[3]).toContain('aliasLabel="别名"')
   })
 })

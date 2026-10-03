@@ -18,6 +18,7 @@ import { persistSubmissionDraft, SubmissionCodeEditor, SubmissionIoFields, type 
 import {
   appendTrainingRuntimeProblem,
   changeTrainingStageGroup,
+  deleteTrainingNextStage,
   extendTrainingStageTime,
   getTrainingCoachDashboard,
   getTrainingDraft,
@@ -40,7 +41,7 @@ import {
   submitTrainingSolution,
   transitionTrainingStage,
 } from '../api/trainingSessionApi'
-import { trainingProgressStatusLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel , organizationRoleLabel } from '@/lib/humanPresentation'
+import { trainingPermissionReasonLabel, trainingProgressStatusLabel, trainingStageEndReasonLabel, trainingStageKindLabel, trainingStageStatusLabel, trainingStatusLabel, organizationRoleLabel } from '@/lib/humanPresentation'
 import { csvCell, saveBlobDownload } from '@/lib/download'
 import { ojPlatformDisplayName } from '@/lib/oj-platforms'
 import { arbitrateTrainingDraft, type TrainingDraftSnapshot } from '../model/trainingDraftArbitration'
@@ -72,7 +73,7 @@ type StrategyState = {
   lastDecision?: { decision: string; createdAt: string } | null
 }
 type V2RuntimeGroup = { id: string; name: string; orderIndex: number; status: string; Participants?: Array<{ id?: string; userId?: string }> }
-type Workspace = { session: { Groups: V2RuntimeGroup[]; settings?: { resultVisibility?: 'LIVE' | 'AFTER_END' | 'TEACHER_PUBLISHED'; resultsPublishedAt?: string | null }; currentStageId?: string | null; currentStage?: { id: string; name: string; orderIndex: number; lifecycle: string } | null; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentGroupId: string; requiredCount?: number; completedCount?: number; latestGroupChange?: { id: string; fromGroupName?: string | null; toGroupName: string; reason: string; appliedAt?: string | null } | null }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string; blockedByStageProblemId?: string }>; strategy: Record<string, StrategyState> }
+type Workspace = { nextStage?: Stage | null; legacyStageQueue?: boolean; session: { Groups: V2RuntimeGroup[]; settings?: { resultVisibility?: 'LIVE' | 'AFTER_END' | 'TEACHER_PUBLISHED'; resultsPublishedAt?: string | null }; currentStageId?: string | null; currentStage?: { id: string; name: string; orderIndex: number; lifecycle: string } | null; id: string; title: string; description?: string; sessionType: string; status: string; statusRevision: number; pauseMode?: string; rankingMode: string; peerVisibility: string; joinMode: string; teamId?: string; Stages: Stage[]; Overlays: Array<{ id: string; type: string; targetType?: string; targetId?: string; payload?: { message?: string } }> }; manager: boolean; participant?: { id: string; currentProblemId?: string; currentGroupId: string; requiredCount?: number; completedCount?: number; latestGroupChange?: { id: string; fromGroupName?: string | null; toGroupName: string; reason: string; appliedAt?: string | null } | null }; progress: Array<{ stageProblemId: string; status: string; bestScore?: number; attemptCount: number; activeSeconds?: number; continuousActiveSeconds?: number }>; permissions: Record<string, { canSeeMetadata?: boolean; canView: boolean; canSubmit: boolean; canEdit: boolean; reason: string; blockedByStageProblemId?: string }>; strategy: Record<string, StrategyState> }
 type Dashboard = { participants: TrainingDashboardParticipant[]; summary: { total: number; working: number; stuck: number; completed: number } }
 type Roster = { revision: number; candidates: Array<{ userId: string; username: string; displayName: string; role: string; selected: boolean }> }
 type Hint = { id: string; level: number; title?: string; content?: string; opened: boolean; globallyOpenedAt?: string }
@@ -711,6 +712,27 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       setTransitionDialog(undefined); setTransitionReason('')
     }
   }
+  const chooseNextAction = async (action: 'advance' | 'end_session') => {
+    if (!transitionDialog) return
+    if (transitionDialog.outcome === 'ended_early' && !transitionReason.trim()) return toast.error('提前结束阶段需要填写原因')
+    const ok = await transitionStage(action, transitionDialog.stageId, {
+      outcome: transitionDialog.outcome || 'completed',
+      ...(action === 'advance' && nextPendingStage ? { nextStageId: nextPendingStage.id } : {}),
+      ...(transitionReason.trim() ? { reason: transitionReason.trim() } : {}),
+    })
+    if (ok) { setTransitionDialog(undefined); setTransitionReason('') }
+  }
+  const discardPreparedStage = async () => {
+    if (!data?.nextStage) return
+    setCommandBusy(true)
+    const response = await deleteTrainingNextStage(sessionId, { expectedRevision: statusRevisionRef.current ?? data.session.statusRevision })
+    setCommandBusy(false)
+    if (!response.ok) return toast.error(response.error.userMessage || '无法丢弃下一阶段')
+    toast.success('已丢弃准备中的下一阶段')
+    setTransitionDialog(undefined)
+    await load()
+  }
+
   const recordStrategy = async (decision: string) => { const response = await recordTrainingStrategy(sessionId, { stageProblemId: selectedId, decision }); if (!response.ok) toast.error(response.error.userMessage || '策略记录失败'); else toast.success('策略决策已记录') }
 
   if (!data) return <PageFrame width="workbench"><div className={styles.stack}>
@@ -729,7 +751,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const resultsPublished = resultVisibility !== 'TEACHER_PUBLISHED' || Boolean(data.session.settings?.resultsPublishedAt)
   const examTitle = data.session.sessionType === 'ACM' ? 'ACM 模拟赛' : data.session.sessionType === 'OI' ? 'OI 模拟测试' : '模拟测试'
   const pendingStages = data.session.Stages.filter(stage => stage.lifecycle === 'PENDING')
-  const nextPendingStage = pendingStages.find(stage => !currentStage || data.session.Stages.indexOf(stage) > data.session.Stages.indexOf(currentStage))
+  const nextPendingStage = data.nextStage || pendingStages.find(stage => !currentStage || data.session.Stages.indexOf(stage) > data.session.Stages.indexOf(currentStage))
   const futureStages = pendingStages
   const groupTargetStage = groupChangeMode === 'next_stage' ? futureStages.find(stage => stage.id === groupChangeStageId) : currentStage
   const reportGroupName = (groupId?: string) => data.session.Groups.find(group => group.id === groupId)?.name || (groupId ? '未知分组' : '未分组')
@@ -868,6 +890,9 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           setTransitionReason('')
         }}
       />
+      <Section title="下一步" description="先观察当前课堂，再只准备紧接着的一个阶段。" actions={<Button variant="outline" onClick={() => router.push(pathname + '/design')}>{nextPendingStage ? '修改已准备阶段' : '准备下一阶段'}</Button>}>
+        {data.legacyStageQueue ? <div className={styles.message} role="status"><strong>旧版多阶段训练</strong><p>未来阶段会继续按原顺序运行；队列收敛为一个前不能继续扩展。</p></div> : nextPendingStage ? <div className={styles.timelineItem}><strong>{nextPendingStage.name}</strong><span>{trainingStageKindLabel(nextPendingStage.kind)} · {nextPendingStage.Problems.length} 道题</span></div> : <p className={styles.muted}>尚未准备下一阶段。可以等看到学员完成情况后再决定。</p>}
+      </Section>
       <div className={styles.runtimeOverviewGrid}>
         <TrainingAttentionPanel
           participants={attentionParticipants}
@@ -924,7 +949,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
           <summary>课堂管理</summary>
           <div className={styles.actions}>
             {(status === 'DRAFT' || pendingStages.length > 0) && <Button onClick={() => router.push(`${pathname}/design`)}>{status === 'DRAFT' ? '打开训练设计器' : '调整未来阶段'}</Button>}
-            {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(`${pathname}/design?copyStage=${encodeURIComponent(currentStage.id)}`)}>复制当前阶段为未来阶段</Button>}
+            {currentStage && ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => router.push(pathname + '/design')}>准备下一阶段</Button>}
             {['DRAFT', 'SCHEDULED'].includes(status)
               ? <Button variant="secondary" onClick={() => void openRoster()}>管理发布名单</Button>
               : ['RUNNING', 'PAUSED'].includes(status) && <Button variant="secondary" onClick={() => void openRuntimeJoin()}>加入学员</Button>}
@@ -963,7 +988,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         <p className={styles.muted}>{data.participant.latestGroupChange.fromGroupName ? data.participant.latestGroupChange.fromGroupName + ' → ' : ''}{data.participant.latestGroupChange.toGroupName} · {data.participant.latestGroupChange.reason}</p>
       </div>}
       {problem && <div className={styles.studentContinue}>
-        <div><span>继续</span><strong>{problem.alias || problem.Problem.problemId} · {problem.Problem.title}</strong><small>{examActive ? '已提交记录将在结束后公布' : currentProblemProgress?.bestScore != null ? '当前最高分：' + currentProblemProgress.bestScore + (nextScoreGoal != null ? ' · 目标：' + nextScoreGoal : '') : trainingProgressStatusLabel(currentProblemProgress?.status || 'NOT_STARTED')}</small></div>
+        <div><span>继续</span><strong>{problem.alias || problem.Problem.problemId} · {problem.Problem.title}</strong><small>{examActive ? '已提交记录将在结束后公布' : currentProblemProgress?.bestScore != null ? '当前最高分：' + currentProblemProgress.bestScore + (nextScoreGoal != null ? ' · 目标：' + nextScoreGoal : '') : trainingProgressStatusLabel(currentProblemProgress?.status || 'NOT_STARTED') + (nextScoreGoal != null ? ' · 目标：' + nextScoreGoal : '')}</small></div>
         <Button onClick={() => document.getElementById('training-problem-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>继续做题</Button>
       </div>}
     </section>}
@@ -997,7 +1022,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
               <div className={styles.actions}><Button onClick={keepLocalDraft}>保留本地草稿</Button><Button variant="secondary" onClick={useRemoteDraft}>使用云端草稿</Button><Button variant="ghost" onClick={downloadDraftConflict}>下载冲突副本</Button></div>
             </section>}
             <div className={styles.actions}><Button variant="secondary" loading={saving} disabled={!data.permissions[problem.id]?.canEdit || draftState === 'conflict'} onClick={() => void saveDraft()}>保存草稿</Button><Button loading={submitting} disabled={!data.permissions[problem.id]?.canSubmit || !code.trim() || draftState === 'conflict'} onClick={() => void submit()}>提交评测</Button></div>
-            {!data.permissions[problem.id]?.canSubmit && <p className={styles.muted}>当前不可提交：{data.permissions[problem.id]?.reason}</p>}
+            {!data.permissions[problem.id]?.canSubmit && <p className={styles.muted}>当前不可提交：{trainingPermissionReasonLabel(data.permissions[problem.id]?.reason || '')}</p>}
           </div>
         </Section>
         {status === 'RUNNING' && activeStrategy?.timeLimitReached && activeStrategy.timeAction && <Section
@@ -1221,41 +1246,19 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     <FormDialog
       isOpen={Boolean(transitionDialog)}
       onClose={() => { setTransitionDialog(undefined); setTransitionReason('') }}
-      title={transitionDialog?.action === 'skip_pending'
-        ? '跳过未来阶段'
-        : transitionDialog?.outcome === 'completed'
-          ? transitionDialog?.action === 'end_session' ? '确认完成并结束训练' : '确认完成当前阶段'
-          : transitionDialog?.action === 'end_session' ? '提前结束训练' : '提前结束当前阶段'}
-      description="阶段结束会写入不可变课堂时间线；已运行阶段不能回滚或重新编辑。"
-      onSubmit={() => void submitTransition()}
-      submitText={transitionDialog?.action === 'skip_pending' ? '确认跳过' : transitionDialog?.outcome === 'completed' ? '确认完成' : '确认提前结束'}
+      title={transitionDialog?.action === 'skip_pending' ? '跳过未来阶段' : '接下来做什么？'}
+      description={transitionDialog?.action === 'skip_pending' ? '跳过后会保留历史记录。' : '先确认当前阶段结果，再决定紧接着的一步。'}
       loading={commandBusy}
       dirty={Boolean(transitionReason)}
+      size="lg"
+      footer={<><Button variant="secondary" onClick={() => { setTransitionDialog(undefined); setTransitionReason('') }} disabled={commandBusy}>继续当前阶段</Button><Button variant="danger" onClick={() => void chooseNextAction('end_session')} disabled={commandBusy}>结束训练</Button></>}
     >
       <div className={styles.stack}>
-        {transitionStageRecord && <div className={styles.card}>
-          <strong>{transitionStageRecord.name}</strong>
-          <div className={styles.summary}>
-            <div className={styles.metric}><strong>{transitionPlannedSeconds ? formatDuration(transitionPlannedSeconds) : '未设置'}</strong>计划时长</div>
-            <div className={styles.metric}><strong>{formatDuration(transitionElapsedSeconds)}</strong>实际用时</div>
-            {transitionIsCurrent && <div className={styles.metric}><strong>{transitionCompletionPercent}%</strong>学员完成率</div>}
-            {transitionNextStage && <div className={styles.metric}><strong>{transitionNextStage.name}</strong>下一阶段</div>}
-          </div>
-        </div>}
-        {transitionDialog?.action !== 'skip_pending' && <label className={styles.field}>
-          结束方式
-          <Select
-            value={transitionDialog?.outcome || 'completed'}
-            onChange={event => setTransitionDialog(current => current ? { ...current, outcome: event.target.value as 'completed' | 'ended_early' } : current)}
-          >
-            <option value="completed">正常完成</option>
-            <option value="ended_early">提前结束</option>
-          </Select>
-        </label>}
-        <label className={styles.field}>
-          {transitionDialog?.action === 'skip_pending' || transitionDialog?.outcome === 'ended_early' ? '原因（必填）' : '备注（可选）'}
-          <Textarea rows={5} maxLength={2000} value={transitionReason} onChange={event => setTransitionReason(event.target.value)} />
-        </label>
+        {transitionStageRecord && <div className={styles.card}><strong>{transitionStageRecord.name}</strong><div className={styles.summary}><div className={styles.metric}><strong>{formatDuration(transitionElapsedSeconds)}</strong>实际用时</div>{transitionIsCurrent && <div className={styles.metric}><strong>{transitionCompletionPercent}%</strong>学员完成率</div>}</div></div>}
+        <label className={styles.field}>阶段结果<Select value={transitionDialog?.outcome || 'completed'} onChange={event => setTransitionDialog(current => current ? { ...current, outcome: event.target.value as 'completed' | 'ended_early' } : current)}><option value="completed">正常完成</option><option value="ended_early">提前结束</option></Select></label>
+        <label className={styles.field}>{transitionDialog?.outcome === 'ended_early' ? '原因（必填）' : '备注（可选）'}<Textarea rows={3} maxLength={2000} value={transitionReason} onChange={event => setTransitionReason(event.target.value)} /></label>
+        {data.legacyStageQueue && <div className={styles.message}><strong>旧版阶段队列</strong><p>只能按既有顺序进入下一个阶段，不能继续扩展未来阶段。</p></div>}
+        {nextPendingStage ? <div className={styles.card}><strong>已准备：{nextPendingStage.name}</strong><p className={styles.muted}>{trainingStageKindLabel(nextPendingStage.kind)} · {nextPendingStage.Problems.length} 道题</p><div className={styles.actions}><Button onClick={() => void chooseNextAction('advance')} disabled={commandBusy}>使用已准备阶段</Button>{!data.legacyStageQueue && <><Button variant="outline" onClick={() => { setTransitionDialog(undefined); router.push(pathname + '/design') }}>修改已准备阶段</Button><Button variant="ghost" onClick={() => void discardPreparedStage()} disabled={commandBusy}>丢弃</Button></>}</div></div> : <div className={styles.card}><strong>还没有下一阶段</strong><p className={styles.muted}>可以临时准备练习、引导练习、统一讲解或复盘，也可以直接结束训练。</p><Button onClick={() => { setTransitionDialog(undefined); router.push(pathname + '/design') }}>准备下一阶段</Button></div>}
       </div>
     </FormDialog>
     <FormDialog

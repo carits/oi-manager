@@ -48,6 +48,8 @@ import {
   listTrainingSessionTemplates,
   listTrainingSessions,
   moveTrainingStageParticipant,
+  putTrainingNextStage,
+  deleteTrainingNextStage,
   openTrainingHint,
   previewTrainingParticipants,
   publishTrainingSession,
@@ -247,6 +249,20 @@ trainingEngineRouter.post('/training-sessions/:id/groups/split', authenticate, a
 
 trainingEngineRouter.post('/training-sessions/:id/groups/merge', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try { sendContractData(res, TrainingContracts.mergeGroup, await mergeTrainingGroup(req.user!.userId, req.params.id, parseContractBody(TrainingContracts.mergeGroup, req.body))) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.put('/training-sessions/:id/next-stage', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.putNextStage, req.body)
+    sendContractData(res, TrainingContracts.putNextStage, await putTrainingNextStage(req.user!.userId, req.params.id, body))
+  } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.delete('/training-sessions/:id/next-stage', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const body = parseContractBody(TrainingContracts.deleteNextStage, req.body)
+    sendContractData(res, TrainingContracts.deleteNextStage, await deleteTrainingNextStage(req.user!.userId, req.params.id, body))
+  } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.post('/training-sessions/:id/stage-transitions', authenticate, asyncHandler(async (req: AuthRequest, res) => {

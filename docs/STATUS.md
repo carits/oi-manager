@@ -1,9 +1,15 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-10-01
+last_verified: 2026-10-03
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+## 2026-10-03 训练阶段规划改为渐进决策
+
+- 新训练只创建一个初始阶段；课堂运行中最多准备一个下一阶段，阶段结束后由教师选择继续、使用/修改/丢弃下一阶段、临时准备新阶段或结束训练。
+- 历史多阶段训练不删除数据，按原队列继续运行并禁止扩展；学生端看不到待运行阶段。无 Prisma 迁移。
+- 验收通过：训练服务端 24/24、Web 单元测试 402/402、训练浏览器主流程 18 项同轮通过及分组专项 7/7；架构边界、数据库基线与全仓生产构建通过。文档认证审计仍仅受主干既有的 9 个 Rating 路由显式策略缺口阻断。
 
 ## 2026-10-01 HTTPS 证书恢复
 

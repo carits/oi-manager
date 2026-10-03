@@ -5,7 +5,7 @@ const NullableNumber = z.number().int().nullable().optional()
 const JsonObjectSchema = z.record(z.string(), z.unknown())
 const TrainingIssueSchema = FieldIssueSchema.extend({ severity: z.enum(['error', 'warning']) })
 export const TrainingStageKindSchema = z.enum(['TRAINING', 'TEACHING', 'REVIEW'])
-export const TrainingStagePurposeSchema = TrainingStageKindSchema
+export const TrainingStagePurposeSchema = z.enum(['PRACTICE', 'GUIDED', 'TEACHING', 'REVIEW'])
 export const TrainingAccessScopeSchema = z.enum(['CURRENT_STAGE', 'PREVIOUS_AND_CURRENT', 'SESSION_ALL'])
 export const TrainingStageLifecycleSchema = z.enum(['PENDING', 'RUNNING', 'ENDED', 'SKIPPED'])
 export const TrainingStageEndReasonSchema = z.enum(['TIME_REACHED', 'COMPLETION_REACHED', 'HYBRID_REACHED', 'TEACHER_ENDED', 'TEACHER_ENDED_EARLY', 'SESSION_ENDED', 'SYSTEM_ENDED'])
@@ -96,6 +96,8 @@ export const TrainingDesignSchema = z.object({
   session: z.object({ id: z.string(), title: z.string(), description: z.string().nullable().optional(), status: z.string(), sessionType: z.string(), currentStageId: z.string().nullable().optional(), organizationId: z.string().nullable().optional(), teamId: z.string().nullable().optional(), scheduledStartAt: DateTimeWireSchema.nullable().optional() }).passthrough(),
   participants: z.array(z.object({ id: z.string(), userId: z.string(), groupId: z.string() }).passthrough()),
   groups: z.array(TrainingGroupSchema), stages: z.array(TrainingDesignStageSchema), stagePlans: z.array(TrainingStagePlanSchema), issues: z.array(TrainingIssueSchema),
+  nextStage: TrainingDesignStageSchema.nullable().optional(),
+  legacyStageQueue: z.boolean().optional(),
 })
 export const TrainingDesignProblemLookupSchema = z.object({
   id: z.string(), platform: z.string(), problemId: z.string(), title: z.string(), difficulty: z.string().nullable().optional(),
@@ -113,6 +115,12 @@ export const TrainingGroupSplitInputSchema = z.object({ expectedRevision: z.numb
 export const TrainingGroupMergeInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), sourceGroupId: z.string().min(1), targetGroupId: z.string().min(1), reason: z.string().min(1).max(2000) })
 export const TrainingStageEndInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), outcome: z.enum(['completed', 'ended_early']).default('completed'), reason: z.string().max(2000).optional(), endSession: z.boolean().default(false) })
 export const TrainingStageCloneInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), name: z.string().trim().min(1).max(200).optional() })
+export const TrainingNextStageInputSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  purpose: TrainingStagePurposeSchema,
+  stage: TrainingStructureStageInputSchema,
+})
+export const TrainingNextStageDeleteInputSchema = z.object({ expectedRevision: z.number().int().nonnegative() })
 export const TrainingRosterInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), participants: z.array(z.object({ userId: z.string().min(1) })).max(5000) })
 export const TrainingRuntimeParticipantJoinInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), userId: z.string().min(1), groupId: z.string().min(1), historyMode: z.enum(['absent', 'makeup']), reason: z.string().trim().min(1).max(2000) })
 export const TrainingRuntimeParticipantLeaveInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), reason: z.string().trim().min(1).max(2000) })
@@ -187,6 +195,8 @@ export const TrainingWorkspaceSchema = z.object({
   progress: z.array(z.object({ stageProblemId: z.string(), status: z.string(), bestScore: z.number().nullable().optional(), attemptCount: z.number().int(), activeSeconds: z.number().int().optional(), continuousActiveSeconds: z.number().int().optional() }).passthrough()),
   permissions: z.record(z.string(), z.object({ canSeeMetadata: z.boolean().optional(), canView: z.boolean(), canSubmit: z.boolean(), canEdit: z.boolean(), reason: z.string(), blockedByStageProblemId: z.string().optional() }).passthrough()),
   strategy: z.record(z.string(), z.object({ timePolicy: z.union([TrainingProblemTimePolicySchema, JsonObjectSchema]), timeLimitReached: z.boolean(), timeAction: TrainingProblemTimeActionSchema.nullable().optional(), remind: z.boolean().optional(), decisionDue: z.boolean(), switchRecommended: z.boolean(), switchRequired: z.boolean().optional(), nextScoreTarget: z.number().int().nullable().optional() }).passthrough()),
+  nextStage: TrainingRuntimeStageSchema.nullable().optional(),
+  legacyStageQueue: z.boolean().optional(),
 })
 export const TrainingRosterSchema = z.object({
   revision: z.number().int().nonnegative(),
@@ -295,6 +305,8 @@ export const TrainingContracts = {
   replaceStructure: defineApiEndpoint({ key: 'training.structure.replace', method: 'PUT', scope: 'organization', body: TrainingStructureInputSchema, data: TrainingDesignSchema }),
   transitionStage: defineApiEndpoint({ key: 'training.stage.transition', method: 'POST', scope: 'organization', body: TrainingStageTransitionInputSchema, data: TrainingWorkspaceSchema }),
   endStage: defineApiEndpoint({ key: 'training.stage.end', method: 'POST', scope: 'organization', body: TrainingStageEndInputSchema, data: TrainingWorkspaceSchema }),
+  putNextStage: defineApiEndpoint({ key: 'training.next-stage.put', method: 'PUT', scope: 'organization', body: TrainingNextStageInputSchema, data: TrainingWorkspaceSchema }),
+  deleteNextStage: defineApiEndpoint({ key: 'training.next-stage.delete', method: 'DELETE', scope: 'organization', body: TrainingNextStageDeleteInputSchema, data: TrainingWorkspaceSchema }),
   cloneStage: defineApiEndpoint({ key: 'training.stage.clone', method: 'POST', scope: 'organization', body: TrainingStageCloneInputSchema, data: TrainingDesignSchema }),
   changeStageGroup: defineApiEndpoint({ key: 'training.stage.group.change', method: 'POST', scope: 'organization', body: TrainingStageGroupChangeInputSchema, data: TrainingWorkspaceSchema }),
   moveStageParticipant: defineApiEndpoint({ key: 'training.stage.participant.move', method: 'POST', scope: 'organization', body: TrainingStageGroupChangeInputSchema, data: TrainingWorkspaceSchema }),

@@ -64,6 +64,12 @@ export const getTrainingReport = (sessionId: string) =>
 export const transitionTrainingStage = (sessionId: string, body: EndpointBody<typeof TrainingContracts.transitionStage>) =>
   apiClient.mutateContract(TrainingContracts.transitionStage, `${sessionPath(sessionId)}/stage-transitions`, body)
 
+export const putTrainingNextStage = (sessionId: string, body: EndpointBody<typeof TrainingContracts.putNextStage>) =>
+  apiClient.mutateContract(TrainingContracts.putNextStage, sessionPath(sessionId) + '/next-stage', body)
+
+export const deleteTrainingNextStage = (sessionId: string, body: EndpointBody<typeof TrainingContracts.deleteNextStage>) =>
+  apiClient.mutateContract(TrainingContracts.deleteNextStage, sessionPath(sessionId) + '/next-stage', body)
+
 export const changeTrainingStageGroup = (sessionId: string, stageId: string, body: EndpointBody<typeof TrainingContracts.changeStageGroup>) =>
   apiClient.mutateContract(TrainingContracts.changeStageGroup, `${sessionPath(sessionId)}/stages/${encodeURIComponent(stageId)}/group-changes`, body)
 

@@ -63,7 +63,7 @@ export function TrainingRuntimeHeader({ status, stageName, stageIndex, stageCoun
       {status === 'SCHEDULED' && <Button icon={<Play size={17} />} disabled={busy} loading={busy} onClick={onStart}>开始训练</Button>}
       {status === 'RUNNING' && <Button variant="secondary" icon={<Pause size={17} />} disabled={busy} onClick={onPause}>暂停训练</Button>}
       {status === 'PAUSED' && <Button icon={<RotateCcw size={17} />} disabled={busy} loading={busy} onClick={onResume}>恢复训练</Button>}
-      {['RUNNING', 'PAUSED'].includes(status) && stageName && <Button icon={<ArrowRight size={17} />} disabled={busy} onClick={onAdvance}>{hasNextStage ? '进入下一阶段' : '完成训练'}</Button>}
+      {['RUNNING', 'PAUSED'].includes(status) && stageName && <Button icon={<ArrowRight size={17} />} disabled={busy} onClick={onAdvance}>完成当前阶段</Button>}
     </div>
   </section>
 }
