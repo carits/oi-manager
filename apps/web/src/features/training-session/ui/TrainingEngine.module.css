@@ -253,7 +253,7 @@
   font-size: 1rem;
 }
 
-.v3ProblemRail > button {
+.v3ProblemRail > .v3ProblemButton {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   width: 100%;
@@ -267,12 +267,12 @@
   cursor: pointer;
 }
 
-.v3ProblemRail > button:hover,
+.v3ProblemRail > .v3ProblemButton:hover,
 .v3ProblemActive {
   background: var(--bg-muted) !important;
 }
 
-.v3ProblemRail > button > span:first-child {
+.v3ProblemRail > .v3ProblemButton > span:first-child {
   display: grid;
   place-items: center;
   width: 28px;
@@ -282,7 +282,7 @@
   font-weight: 700;
 }
 
-.v3ProblemRail > button > span:last-child {
+.v3ProblemRail > .v3ProblemButton > span:last-child {
   display: grid;
   min-width: 0;
   gap: 3px;
@@ -390,7 +390,7 @@
     display: none;
   }
 
-  .v3ProblemRail > button {
+  .v3ProblemRail > .v3ProblemButton {
     flex: 0 0 180px;
     border-right: 1px solid var(--border);
     border-bottom: 0;

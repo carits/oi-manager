@@ -58,6 +58,21 @@ function runningElapsed(value: { activeElapsedSeconds: number; runningSince?: Da
   return value.activeElapsedSeconds + (value.runningSince ? Math.max(0, Math.floor((now.getTime() - value.runningSince.getTime()) / 1000)) : 0)
 }
 
+export function assertTrainingSubmissionWindow(session: {
+  status: TrainingEngineSessionStatus
+  currentRoundId: string | null
+  totalDurationSeconds: number
+  activeElapsedSeconds: number
+  runningSince?: Date | null
+  Rounds: Array<{ id: string; lifecycle: string; timeLimitSeconds?: number | null; activeElapsedSeconds: number; runningSince?: Date | null }>
+}, now = new Date()) {
+  if (session.status !== 'RUNNING' || !session.currentRoundId) throw new TrainingEngineError(409, 'TRAINING_SESSION_NOT_RUNNING', '只有进行中的训练可以提交')
+  if (runningElapsed(session, now) >= session.totalDurationSeconds) throw new TrainingEngineError(409, 'TRAINING_SESSION_TIME_REACHED', '训练时间已结束，不能继续提交')
+  const round = session.Rounds.find(item => item.id === session.currentRoundId)
+  if (!round || round.lifecycle !== 'RUNNING') throw new TrainingEngineError(409, 'TRAINING_ROUND_NOT_RUNNING', '当前轮次已结束，不能继续提交')
+  if (round.timeLimitSeconds != null && runningElapsed(round, now) >= round.timeLimitSeconds) throw new TrainingEngineError(409, 'TRAINING_ROUND_TIME_REACHED', '本轮时间已结束，不能继续提交')
+}
+
 function isGlobalTrainingRequest(identity: TrainingRequestIdentity) {
   return identity.accountRole === 'platform_admin' || identity.accountRole === 'super_admin'
 }
@@ -359,16 +374,21 @@ export async function putTrainingNextRound(userId: string, sessionId: string, bo
   const managed = await assertManage(userId, sessionId)
   assertRevision(managed.statusRevision, body?.expectedRevision)
   if (!['RUNNING', 'PAUSED'].includes(managed.status)) throw new TrainingEngineError(409, 'TRAINING_SESSION_NOT_ACTIVE', '只有进行中或暂停中的训练可以准备下一轮')
-  if (managed.Rounds.some(round => round.lifecycle === 'PENDING')) throw new TrainingEngineError(409, 'TRAINING_NEXT_ROUND_EXISTS', '只能提前准备一个下一轮')
+  const pending = managed.Rounds.find(round => round.lifecycle === 'PENDING')
   const groups = Array.isArray(body?.groups) ? body.groups : []
   if (!groups.length) throw new TrainingEngineError(422, 'TRAINING_ROUND_GROUP_REQUIRED', '下一轮至少需要一个分组题集')
   await prisma.$transaction(async tx => {
     await lockTrainingSession(tx, sessionId, body?.expectedRevision)
-    const last = await tx.trainingSessionRound.findFirst({ where: { sessionId }, orderBy: { orderIndex: 'desc' } })
-    const round = await tx.trainingSessionRound.create({ data: { sessionId, name: boundedText(body?.name, 200, '轮次名称', 1), orderIndex: (last?.orderIndex ?? -1) + 1, timeLimitSeconds: body?.timeLimitSeconds == null ? null : boundedInteger(body.timeLimitSeconds, 60, 7 * 24 * 3600, '本轮限时') } })
+    const timeLimitSeconds = body?.timeLimitSeconds == null ? null : boundedInteger(body.timeLimitSeconds, 60, 7 * 24 * 3600, '本轮限时')
+    const name = boundedText(body?.name, 200, '轮次名称', 1)
+    const last = pending ? null : await tx.trainingSessionRound.findFirst({ where: { sessionId }, orderBy: { orderIndex: 'desc' } })
+    const round = pending
+      ? await tx.trainingSessionRound.update({ where: { id: pending.id }, data: { name, timeLimitSeconds } })
+      : await tx.trainingSessionRound.create({ data: { sessionId, name, orderIndex: (last?.orderIndex ?? -1) + 1, timeLimitSeconds } })
+    if (pending) await tx.trainingRoundProblemAssignment.deleteMany({ where: { roundId: round.id } })
     for (const group of groups) await replaceRoundAssignments(tx, sessionId, round.id, String(group.groupId), group.problems || [])
     await tx.trainingSession.update({ where: { id: sessionId }, data: { statusRevision: { increment: 1 } } })
-    await appendEvent(tx, sessionId, 'NEXT_ROUND_PREPARED', 'ALL', null, { roundId: round.id })
+    await appendEvent(tx, sessionId, pending ? 'NEXT_ROUND_UPDATED' : 'NEXT_ROUND_PREPARED', 'ALL', null, { roundId: round.id })
   })
   return getTrainingWorkspace(userId, sessionId)
 }
@@ -623,7 +643,7 @@ export async function recordHeartbeat(userId: string, sessionId: string, body: a
 
 export async function submitTrainingSolution(userId: string, sessionId: string, body: any) {
   const session = await assertAccess(userId, sessionId)
-  if (session.status !== 'RUNNING' || !session.currentRoundId) throw new TrainingEngineError(409, 'TRAINING_SESSION_NOT_RUNNING', '只有进行中的训练可以提交')
+  assertTrainingSubmissionWindow(session)
   const participant = await prisma.trainingSessionParticipant.findUniqueOrThrow({ where: { sessionId_userId: { sessionId, userId } } })
   const sessionProblemId = String(body?.sessionProblemId || '')
   const sessionProblem = (await resolveEffectiveSessionProblems(sessionId, participant.id)).find(problem => problem.id === sessionProblemId)
@@ -663,6 +683,41 @@ export async function syncTrainingEngineSubmission(input: { id: number; userId: 
   })
 }
 
+type TrainingRankingProgress = { sessionProblemId: string; status: string; bestScore?: number | null; attemptCount: number }
+type TrainingRankingSubmission = { userId: string; trainingSessionProblemId: string | null; createdAt: Date; CurrentJudgeRun?: { result?: string | null } | null }
+
+export function calculateTrainingRankingMetrics(input: {
+  sessionType: string
+  effectiveProblemIds: Iterable<string>
+  progress: TrainingRankingProgress[]
+  submissions: TrainingRankingSubmission[]
+  userId: string
+  startedAt: Date
+}) {
+  const effective = new Set(input.effectiveProblemIds)
+  const progress = input.progress.filter(item => effective.has(item.sessionProblemId))
+  const base = {
+    completed: progress.filter(item => item.status === 'COMPLETED').length,
+    total: effective.size,
+    score: progress.reduce((sum, item) => sum + Number(item.bestScore || 0), 0),
+    attempts: progress.reduce((sum, item) => sum + item.attemptCount, 0),
+    penaltyMinutes: 0,
+  }
+  if (input.sessionType !== 'ACM') return base
+  let completed = 0
+  let attempts = 0
+  let penaltyMinutes = 0
+  for (const problemId of effective) {
+    const history = input.submissions.filter(item => item.userId === input.userId && item.trainingSessionProblemId === problemId)
+    const acceptedIndex = history.findIndex(item => isAccepted(item.CurrentJudgeRun?.result))
+    if (acceptedIndex >= 0) {
+      completed++
+      attempts += acceptedIndex + 1
+      penaltyMinutes += Math.max(0, Math.floor((history[acceptedIndex].createdAt.getTime() - input.startedAt.getTime()) / 60_000)) + acceptedIndex * 20
+    } else attempts += history.length
+  }
+  return { ...base, completed, attempts, penaltyMinutes }
+}
 async function rankingRows(userId: string, sessionId: string, requestedGroupId?: string) {
   const session = await assertAccess(userId, sessionId)
   const manager = await canManageSession(userId, session)
@@ -694,23 +749,17 @@ async function rankingRows(userId: string, sessionId: string, requestedGroupId?:
     include: { CurrentJudgeRun: { select: { result: true, score: true } } },
   }) : []
   const startedAt = session.startedAt || session.createdAt
-  const rows = selected.map(participant => {
-    const effective = new Set(effectiveByParticipant.get(participant.id) || [])
-    const progress = participant.Progress.filter(item => effective.has(item.sessionProblemId))
-    const base = { user: userMap.get(participant.userId)!, completed: progress.filter(item => item.status === 'COMPLETED').length, total: effective.size, score: progress.reduce((sum, item) => sum + Number(item.bestScore || 0), 0), attempts: progress.reduce((sum, item) => sum + item.attemptCount, 0), penaltyMinutes: 0 }
-    if (session.sessionType !== 'ACM') return base
-    let completed = 0, attempts = 0, penaltyMinutes = 0
-    for (const problemId of effective) {
-      const history = submissions.filter(item => item.userId === participant.userId && item.trainingSessionProblemId === problemId)
-      const acceptedIndex = history.findIndex(item => isAccepted(item.CurrentJudgeRun?.result))
-      if (acceptedIndex >= 0) {
-        completed++
-        attempts += acceptedIndex + 1
-        penaltyMinutes += Math.max(0, Math.floor((history[acceptedIndex].createdAt.getTime() - startedAt.getTime()) / 60_000)) + acceptedIndex * 20
-      } else attempts += history.length
-    }
-    return { ...base, completed, attempts, penaltyMinutes }
-  })
+  const rows = selected.map(participant => ({
+    user: userMap.get(participant.userId)!,
+    ...calculateTrainingRankingMetrics({
+      sessionType: session.sessionType,
+      effectiveProblemIds: effectiveByParticipant.get(participant.id) || [],
+      progress: participant.Progress,
+      submissions,
+      userId: participant.userId,
+      startedAt,
+    }),
+  }))
   rows.sort((left, right) => session.sessionType === 'ACM'
     ? right.completed - left.completed || left.penaltyMinutes - right.penaltyMinutes || left.user.username.localeCompare(right.user.username)
     : session.sessionType === 'OI'

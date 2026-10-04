@@ -61,8 +61,16 @@ test.describe('Training V3 hard cut @smoke', () => {
     await expect(coach).toHaveURL(/\/training-sessions\/[^/]+$/)
     await expect(coach.getByRole('button', { name: '题目调整' })).toBeVisible()
     await expect(coach.getByRole('button', { name: '聚焦题目' })).toBeVisible()
-    await expect(coach.getByRole('button', { name: '调整分组' })).toBeVisible()
-    await expect(coach.getByRole('button', { name: /下一步/ })).toBeVisible()
+    const groupingButton = coach.getByRole('button', { name: '调整分组' })
+    await expect(groupingButton).toBeVisible()
+    await expect(coach.getByRole('button', { name: '下一步', exact: true })).toBeVisible()
+    await groupingButton.click()
+    const groupingDialog = coach.getByRole('dialog', { name: '调整分组' })
+    await groupingDialog.locator('input[type="checkbox"]').first().check()
+    await groupingDialog.getByLabel('调整到').selectOption('__new_group__')
+    await groupingDialog.getByLabel('新分组名称').fill('课堂新分组')
+    await groupingDialog.getByRole('button', { name: '创建并调整' }).click()
+    await expect(coach.getByText('2 个分组', { exact: true })).toBeVisible()
     await context.close()
   })
 
@@ -93,6 +101,31 @@ test.describe('Training V3 hard cut @smoke', () => {
       },
     }))
     expect(coachWorkspace.session.Rounds.some((round: any) => round.lifecycle === 'PENDING')).toBe(true)
+
+    coachWorkspace = await apiData(await coachContext.request.put('/api/training-sessions/' + session.id + '/next-round', {
+      data: {
+        expectedRevision: coachWorkspace.session.statusRevision,
+        name: '第二轮（已修改）',
+        timeLimitSeconds: 2400,
+        groups: [{ groupId, problems: [{ problemId: ids.secondProblem, alias: '修改后的进阶题' }] }],
+      },
+    }))
+    expect(coachWorkspace.session.Rounds.filter((round: any) => round.lifecycle === 'PENDING')).toHaveLength(1)
+    expect(coachWorkspace.session.Rounds.find((round: any) => round.lifecycle === 'PENDING')?.name).toBe('第二轮（已修改）')
+
+    coachWorkspace = await apiData(await coachContext.request.delete('/api/training-sessions/' + session.id + '/next-round', {
+      data: { expectedRevision: coachWorkspace.session.statusRevision },
+    }))
+    expect(coachWorkspace.session.Rounds.some((round: any) => round.lifecycle === 'PENDING')).toBe(false)
+
+    coachWorkspace = await apiData(await coachContext.request.put('/api/training-sessions/' + session.id + '/next-round', {
+      data: {
+        expectedRevision: coachWorkspace.session.statusRevision,
+        name: '第二轮',
+        timeLimitSeconds: 1800,
+        groups: [{ groupId, problems: [{ problemId: ids.secondProblem, alias: '进阶题' }] }],
+      },
+    }))
 
     let studentWorkspace = await workspace(studentContext.request, session.id)
     expect(studentWorkspace.session.Rounds.some((round: any) => round.lifecycle === 'PENDING')).toBe(false)
@@ -272,6 +305,29 @@ test.describe('Training V3 hard cut @smoke', () => {
     }))
     expect(current.session.status).toBe('RUNNING')
     expect(current.session.runningSince).toBeTruthy()
+
+    const groupId = current.session.Groups[0].id
+    current = await apiData(await coachContext.request.put('/api/training-sessions/' + session.id + '/next-round', {
+      data: {
+        expectedRevision: current.session.statusRevision,
+        name: '限时轮次',
+        timeLimitSeconds: 600,
+        groups: [{ groupId, problems: [{ problemId: ids.problem }] }],
+      },
+    }))
+    current = await apiData(await coachContext.request.post('/api/training-sessions/' + session.id + '/rounds/advance', {
+      data: { expectedRevision: current.session.statusRevision },
+    }))
+    const roundDuration = current.session.currentRound.timeLimitSeconds
+    current = await apiData(await coachContext.request.post('/api/training-sessions/' + session.id + '/commands', {
+      data: {
+        type: 'EXTEND_ROUND',
+        expectedRevision: current.session.statusRevision,
+        targetType: 'ALL',
+        payload: { seconds: 600 },
+      },
+    }))
+    expect(current.session.currentRound.timeLimitSeconds).toBe(roundDuration + 600)
     await coachContext.close()
   })
 

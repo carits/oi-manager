@@ -3,9 +3,7 @@ import path from 'node:path'
 
 const root = process.cwd()
 const sourceRoot = path.join(root, 'apps', 'web', 'src')
-const serverPresentationFiles = [
-  path.join(root, 'apps', 'server', 'src', 'modules', 'training-engine', 'training-engine.templates.ts'),
-]
+const serverPresentationFiles = []
 const failures = []
 
 function walk(directory) {

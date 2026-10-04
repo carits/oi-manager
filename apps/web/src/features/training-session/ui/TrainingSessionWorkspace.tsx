@@ -17,6 +17,7 @@ import { SubmissionCodeEditor, SubmissionIoFields, type SubmissionIoValue } from
 import {
   advanceTrainingRound,
   changeTrainingGrouping,
+  deleteTrainingNextRound,
   executeTrainingCommand,
   getTrainingCoachDashboard,
   getTrainingDraft,
@@ -24,6 +25,7 @@ import {
   getTrainingWorkspace,
   putTrainingNextRound,
   replaceTrainingAssignments,
+  replaceTrainingGrouping,
   saveTrainingDraft,
   sendTrainingHeartbeat,
   submitTrainingSolution,
@@ -35,6 +37,8 @@ type Dashboard = TrainingCoachDashboard
 type Ranking = Awaited<ReturnType<typeof getTrainingPeerProgress>>
 type SessionProblem = TrainingWorkspace['effectiveProblems'][number]
 type CommandType = 'START_SESSION' | 'PAUSE_SESSION' | 'RESUME_SESSION' | 'EXTEND_SESSION' | 'EXTEND_ROUND' | 'FOCUS_PROBLEM' | 'END_FOCUS' | 'END_SESSION'
+
+const NEW_GROUP_VALUE = '__new_group__'
 
 const statusText: Record<string, string> = {
   READY: '待开始',
@@ -104,11 +108,13 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [groupOpen, setGroupOpen] = useState(false)
   const [movingParticipants, setMovingParticipants] = useState<string[]>([])
   const [movingTargetGroup, setMovingTargetGroup] = useState('')
+  const [newGroupName, setNewGroupName] = useState('')
   const [movingReason, setMovingReason] = useState('课堂分组调整')
   const [nextOpen, setNextOpen] = useState(false)
   const [nextName, setNextName] = useState('')
   const [nextMinutes, setNextMinutes] = useState(0)
   const [nextProblems, setNextProblems] = useState<Record<string, SelectedProblemReference[]>>({})
+  const [nextDeleteOpen, setNextDeleteOpen] = useState(false)
   const [extendOpen, setExtendOpen] = useState<'session' | 'round' | null>(null)
   const [extendMinutes, setExtendMinutes] = useState(10)
   const [endOpen, setEndOpen] = useState(false)
@@ -283,25 +289,48 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         groupId: group.id,
         problems: (nextProblems[group.id] || []).map(item => ({ problemId: item.problem.id, alias: item.alias || null })),
       })),
-    }), '下一轮已准备')
+    }), pendingRound ? '下一轮已更新' : '下一轮已准备')
     setNextOpen(false)
   }
 
   const advanceRound = async () => {
     if (!data) return
     await run('round-advance', () => advanceTrainingRound(sessionId, { expectedRevision: data.session.statusRevision }), '已进入下一轮')
+    setNextOpen(false)
+  }
+
+  const removeNextRound = async () => {
+    if (!data) return
+    await run('next-delete', () => deleteTrainingNextRound(sessionId, { expectedRevision: data.session.statusRevision }), '待执行轮次已删除')
+    setNextDeleteOpen(false)
+    setNextOpen(false)
   }
 
   const moveGroup = async () => {
-    if (!data || !movingParticipants.length || !movingTargetGroup || !movingReason.trim()) return
-    await run('group-change', () => changeTrainingGrouping(sessionId, {
-      expectedRevision: data.session.statusRevision,
-      participantIds: movingParticipants,
-      toGroupId: movingTargetGroup,
-      reason: movingReason.trim(),
-    }), '分组已调整')
+    if (!data || !movingParticipants.length || !movingTargetGroup) return
+    const creatingGroup = movingTargetGroup === NEW_GROUP_VALUE
+    if (creatingGroup && !newGroupName.trim() || !creatingGroup && !movingReason.trim()) return
+    await run('group-change', () => creatingGroup
+      ? replaceTrainingGrouping(sessionId, {
+        expectedRevision: data.session.statusRevision,
+        groups: [
+          ...data.session.Groups.map(group => ({
+            id: group.id,
+            name: group.name,
+            participantIds: (group.Participants || []).map(participant => participant.id).filter(id => !movingParticipants.includes(id)),
+          })),
+          { clientKey: `new-group-${Date.now()}`, name: newGroupName.trim(), participantIds: movingParticipants },
+        ],
+      })
+      : changeTrainingGrouping(sessionId, {
+        expectedRevision: data.session.statusRevision,
+        participantIds: movingParticipants,
+        toGroupId: movingTargetGroup,
+        reason: movingReason.trim(),
+      }), creatingGroup ? '新分组已创建' : '分组已调整')
     setGroupOpen(false)
     setMovingParticipants([])
+    setNewGroupName('')
   }
 
   const applyFocus = () => {
@@ -349,7 +378,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       title={data.session.title}
       description={[data.session.sessionType, currentRound?.name, currentGroupName].filter(Boolean).join(' · ')}
       actions={<div className={styles.actions}>
-        <StatusBadge variant={data.session.status === 'RUNNING' ? 'success' : data.session.status === 'PAUSED' ? 'warning' : 'neutral'}>{statusText[data.session.status] || data.session.status}</StatusBadge>
+        <StatusBadge variant={data.session.status === 'RUNNING' ? 'success' : data.session.status === 'PAUSED' ? 'warning' : 'neutral'}>{statusText[data.session.status] || '未知状态'}</StatusBadge>
         <Button variant="outline" icon={<RefreshCw size={15} />} onClick={() => void refresh()}>刷新</Button>
       </div>}
     />
@@ -365,13 +394,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       {data.session.status === 'RUNNING' && <Button variant="outline" onClick={() => command('PAUSE_SESSION')}>暂停</Button>}
       {data.session.status === 'PAUSED' && <Button onClick={() => command('RESUME_SESSION')}>继续</Button>}
       {(data.session.status === 'RUNNING' || data.session.status === 'PAUSED') && <Button variant="outline" onClick={() => setExtendOpen('session')}>延长时间</Button>}
+      {(data.session.status === 'RUNNING' || data.session.status === 'PAUSED') && currentRound?.timeLimitSeconds != null && <Button variant="outline" onClick={() => setExtendOpen('round')}>延长本轮</Button>}
       {(data.session.status === 'RUNNING' || data.session.status === 'PAUSED') && <Button variant="danger" onClick={() => setEndOpen(true)}>结束训练</Button>}
     </div>}>
       <div className={styles.v3PrimaryActions}>
         <Button variant="outline" icon={<Settings2 size={17} />} disabled={!currentRound} onClick={() => setAssignmentOpen(true)}>题目调整</Button>
         <Button variant="outline" icon={<Focus size={17} />} disabled={!currentRound} onClick={() => { setFocusTargetType('ALL'); setFocusGroupId(data.session.Groups[0]?.id || ''); setFocusOpen(true) }}>聚焦题目</Button>
-        <Button variant="outline" icon={<Users size={17} />} disabled={!dashboard?.participants.length} onClick={() => setGroupOpen(true)}>调整分组</Button>
-        <Button icon={<Layers3 size={17} />} onClick={pendingRound ? () => void advanceRound() : openNextRound} loading={busy === 'round-advance'}>{pendingRound ? '下一步' : '准备下一步'}</Button>
+        <Button variant="outline" icon={<Users size={17} />} disabled={!dashboard?.participants.length} onClick={() => { setMovingTargetGroup(data.session.Groups[0]?.id || NEW_GROUP_VALUE); setNewGroupName(''); setGroupOpen(true) }}>调整分组</Button>
+        <Button icon={<Layers3 size={17} />} onClick={openNextRound}>下一步</Button>
       </div>
       {focusActive && <div className={styles.v3ActiveNotice}>当前正在聚焦题目。<Button size="sm" variant="secondary" onClick={() => command('END_FOCUS')}>结束聚焦</Button></div>}
     </Section>}
@@ -382,10 +412,10 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {!data.effectiveProblems.length && <p className={styles.muted}>当前分组暂无题目</p>}
         {data.effectiveProblems.map((problem, index) => {
           const progress = progressByProblem.get(problem.id)
-          return <button key={problem.id} type="button" className={selectedId === problem.id ? styles.v3ProblemActive : ''} onClick={() => setSelectedId(problem.id)}>
+          return <Button key={problem.id} variant="ghost" className={`${styles.v3ProblemButton} ${selectedId === problem.id ? styles.v3ProblemActive : ''}`} onClick={() => setSelectedId(problem.id)}>
             <span>{index + 1}</span>
             <span><strong>{problem.alias || problem.titleSnapshot}</strong><small>{progress?.status === 'COMPLETED' ? '已完成' : progress?.attemptCount ? `已提交 ${progress.attemptCount} 次` : '未开始'}</small></span>
-          </button>
+          </Button>
         })}
       </aside>
 
@@ -430,16 +460,25 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </div>
     </FormDialog>
 
-    <FormDialog isOpen={groupOpen} onClose={() => setGroupOpen(false)} onSubmit={() => void moveGroup()} title="调整分组" submitText="确认调整" submitDisabled={!movingParticipants.length || !movingTargetGroup || !movingReason.trim()} loading={busy === 'group-change'}>
+    <FormDialog isOpen={groupOpen} onClose={() => setGroupOpen(false)} onSubmit={() => void moveGroup()} title="调整分组" submitText={movingTargetGroup === NEW_GROUP_VALUE ? '创建并调整' : '确认调整'} submitDisabled={!movingParticipants.length || !movingTargetGroup || (movingTargetGroup === NEW_GROUP_VALUE ? !newGroupName.trim() : !movingReason.trim())} loading={busy === 'group-change'}>
       <div className={styles.stack}>
         <div className={styles.v3ParticipantPicker}>{dashboard?.participants.map(participant => <Checkbox key={participant.id} label={`${participant.user.displayName} · ${data.session.Groups.find(group => group.id === participant.currentGroupId)?.name || '未分组'}`} checked={movingParticipants.includes(participant.id)} onChange={event => setMovingParticipants(current => event.target.checked ? [...current, participant.id] : current.filter(id => id !== participant.id))} />)}</div>
-        <label className={styles.field}>调整到<Select value={movingTargetGroup} onChange={event => setMovingTargetGroup(event.target.value)}>{data.session.Groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>
-        <label className={styles.field}>原因<Input value={movingReason} maxLength={2000} onChange={event => setMovingReason(event.target.value)} /></label>
+        <label className={styles.field}>调整到<Select value={movingTargetGroup} onChange={event => setMovingTargetGroup(event.target.value)}>{data.session.Groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}<option value={NEW_GROUP_VALUE}>＋ 新建分组</option></Select></label>
+        {movingTargetGroup === NEW_GROUP_VALUE
+          ? <label className={styles.field}>新分组名称<Input value={newGroupName} maxLength={100} autoFocus onChange={event => setNewGroupName(event.target.value)} /></label>
+          : <label className={styles.field}>原因<Input value={movingReason} maxLength={2000} onChange={event => setMovingReason(event.target.value)} /></label>}
       </div>
     </FormDialog>
 
-    <FormDialog isOpen={nextOpen} onClose={() => setNextOpen(false)} onSubmit={() => void saveNextRound()} title="准备下一轮" description="下一轮保存后仍对学生隐藏，点击“下一步”才会切换。" size="wide" submitText="保存下一轮" submitDisabled={!nextName.trim()} loading={busy === 'next-save'}>
+    <FormDialog isOpen={nextOpen} onClose={() => setNextOpen(false)} onSubmit={() => void saveNextRound()} title={pendingRound ? '下一步' : '准备下一轮'} description="下一轮保存后仍对学生隐藏，确认进入后才会切换。" size="wide" submitText={pendingRound ? '保存修改' : '保存下一轮'} submitDisabled={!nextName.trim()} loading={busy === 'next-save'}>
       <div className={styles.stack}>
+        {pendingRound && <div className={styles.v3ActiveNotice}>
+          <span>下一轮已经准备好，可继续修改、直接进入或删除。</span>
+          <div className={styles.actions}>
+            <Button size="sm" onClick={() => void advanceRound()} loading={busy === 'round-advance'}>进入下一轮</Button>
+            <Button size="sm" variant="danger" onClick={() => setNextDeleteOpen(true)}>删除下一轮</Button>
+          </div>
+        </div>}
         <div className={styles.compactGrid}>
           <label className={styles.field}>轮次名称<Input value={nextName} maxLength={200} onChange={event => setNextName(event.target.value)} /></label>
           <label className={styles.field}>本轮限时（分钟，0 为不限）<Input type="number" min={0} max={10080} value={nextMinutes} onChange={event => setNextMinutes(Math.max(0, Number(event.target.value) || 0))} /></label>
@@ -456,6 +495,8 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         </section>)}
       </div>
     </FormDialog>
+
+    <ConfirmDialog isOpen={nextDeleteOpen} onClose={() => setNextDeleteOpen(false)} onConfirm={() => void removeNextRound()} title="删除待执行轮次？" message="该轮次尚未对学生生效，删除后需要重新准备。" confirmText="删除轮次" danger loading={busy === 'next-delete'} />
 
     <FormDialog isOpen={Boolean(extendOpen)} onClose={() => setExtendOpen(null)} onSubmit={() => {
       command(extendOpen === 'round' ? 'EXTEND_ROUND' : 'EXTEND_SESSION', { seconds: extendMinutes * 60 })
