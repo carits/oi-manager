@@ -164,7 +164,7 @@ test.describe('Training V3 hard cut @smoke', () => {
         },
       },
     }))
-    const coachWorkspace = await workspace(coachContext.request, session.id)
+    let coachWorkspace = await workspace(coachContext.request, session.id)
     const basicGroup = coachWorkspace.session.Groups.find((group: any) => group.name === '基础组')
     const advancedGroup = coachWorkspace.session.Groups.find((group: any) => group.name === '进阶组')
     expect(basicGroup).toBeTruthy()
@@ -184,6 +184,41 @@ test.describe('Training V3 hard cut @smoke', () => {
     const ownRanking = await apiData(await personalContext.request.get(`/api/training-sessions/${session.id}/peer-progress`))
     expect(ownRanking.groupId).toBe(advancedGroup.id)
     expect(ownRanking.entries.map((entry: any) => entry.user.id)).toEqual([ids.users.personalStudent])
+
+    coachWorkspace = await apiData(await coachContext.request.put(`/api/training-sessions/${session.id}/next-round`, {
+      data: {
+        expectedRevision: coachWorkspace.session.statusRevision,
+        name: '第二轮',
+        groups: [
+          { groupId: basicGroup.id, problems: [{ problemId: ids.problem }] },
+          { groupId: advancedGroup.id, problems: [{ problemId: ids.secondProblem }] },
+        ],
+      },
+    }))
+    coachWorkspace = await apiData(await coachContext.request.put(`/api/training-sessions/${session.id}/grouping`, {
+      data: {
+        expectedRevision: coachWorkspace.session.statusRevision,
+        groups: [
+          { id: basicGroup.id, name: '基础组', participantIds: [basicGroup.Participants[0].id] },
+          { id: advancedGroup.id, name: '进阶组', participantIds: [] },
+          {
+            clientKey: 'sprint-group',
+            name: '冲刺组',
+            sourceGroupId: advancedGroup.id,
+            participantIds: [advancedGroup.Participants[0].id],
+          },
+        ],
+      },
+    }))
+    const sprintGroup = coachWorkspace.session.Groups.find((group: any) => group.name === '冲刺组')
+    const runningRound = coachWorkspace.session.Rounds.find((round: any) => round.lifecycle === 'RUNNING')
+    const pendingRound = coachWorkspace.session.Rounds.find((round: any) => round.lifecycle === 'PENDING')
+    const assignedProblemIds = (round: any) => round.Assignments
+      .filter((assignment: any) => assignment.groupId === sprintGroup.id)
+      .map((assignment: any) => assignment.SessionProblem.problemId)
+    expect(sprintGroup).toBeTruthy()
+    expect(assignedProblemIds(runningRound)).toEqual([ids.problem, ids.secondProblem])
+    expect(assignedProblemIds(pendingRound)).toEqual([ids.secondProblem])
     await coachContext.close()
     await campusContext.close()
     await personalContext.close()

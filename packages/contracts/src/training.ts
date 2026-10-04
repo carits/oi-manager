@@ -24,6 +24,7 @@ export const TrainingProblemReferenceInputSchema = z.object({
 export const TrainingGroupInputSchema = z.object({
   id: z.string().optional(),
   clientKey: z.string().min(1).optional(),
+  sourceGroupId: z.string().min(1).optional(),
   name: z.string().trim().min(1).max(100),
   participantIds: z.array(z.string()).default([]),
   problemIds: z.array(z.string()).optional(),

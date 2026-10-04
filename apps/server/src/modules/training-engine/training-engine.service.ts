@@ -441,6 +441,19 @@ export async function replaceTrainingGrouping(userId: string, sessionId: string,
     assigned.add(id)
   }
   if (assigned.size !== participantIds.length) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_UNASSIGNED', '每名学生都必须属于一个训练组')
+  const sourceGroupByParticipant = new Map(managed.Groups.flatMap(group => group.Participants.map(participant => [participant.id, group.id] as const)))
+  const newGroupSourceIds = groups.map((group: any) => {
+    if (group.id) return null
+    const inferredSourceIds = new Set<string>((group.participantIds || [])
+      .map((participantId: unknown) => sourceGroupByParticipant.get(String(participantId)))
+      .filter((groupId: string | undefined): groupId is string => Boolean(groupId)))
+    const explicitSourceId = group.sourceGroupId ? String(group.sourceGroupId) : null
+    if (explicitSourceId && !managed.Groups.some(item => item.id === explicitSourceId)) throw new TrainingEngineError(422, 'TRAINING_GROUP_SOURCE_NOT_FOUND', '题目来源分组不存在')
+    if (explicitSourceId && inferredSourceIds.size > 0 && !inferredSourceIds.has(explicitSourceId)) throw new TrainingEngineError(422, 'TRAINING_GROUP_SOURCE_MISMATCH', '题目来源必须是所选学生当前所在的分组')
+    if (explicitSourceId) return explicitSourceId
+    if (inferredSourceIds.size !== 1) throw new TrainingEngineError(422, 'TRAINING_GROUP_SOURCE_REQUIRED', '所选学生来自多个分组，请选择新组的题目来源')
+    return [...inferredSourceIds][0]
+  })
   await prisma.$transaction(async tx => {
     await lockTrainingSession(tx, sessionId, body?.expectedRevision)
     const existing = await tx.trainingSessionGroup.findMany({ where: { sessionId, status: 'active' }, orderBy: { orderIndex: 'asc' } })
@@ -453,9 +466,12 @@ export async function replaceTrainingGrouping(userId: string, sessionId: string,
         ? await tx.trainingSessionGroup.update({ where: { id: current.id }, data: { name: boundedText(raw.name, 100, '分组名称', 1), orderIndex: index, status: 'active' } })
         : await tx.trainingSessionGroup.create({ data: { sessionId, name: boundedText(raw.name, 100, '分组名称', 1), orderIndex: index } })
       resolved.push(row)
-      if (!current && managed.currentRoundId && existing[0]) {
-        const source = await tx.trainingRoundProblemAssignment.findMany({ where: { roundId: managed.currentRoundId, groupId: existing[0].id, active: true }, orderBy: { orderIndex: 'asc' } })
-        if (source.length) await tx.trainingRoundProblemAssignment.createMany({ data: source.map(item => ({ roundId: managed.currentRoundId!, groupId: row.id, sessionProblemId: item.sessionProblemId, orderIndex: item.orderIndex })) })
+      if (!current) {
+        const sourceGroupId = newGroupSourceIds[index]
+        for (const round of managed.Rounds.filter(item => item.lifecycle === 'RUNNING' || item.lifecycle === 'PENDING')) {
+          const source = await tx.trainingRoundProblemAssignment.findMany({ where: { roundId: round.id, groupId: sourceGroupId!, active: true }, orderBy: { orderIndex: 'asc' } })
+          if (source.length) await tx.trainingRoundProblemAssignment.createMany({ data: source.map(item => ({ roundId: round.id, groupId: row.id, sessionProblemId: item.sessionProblemId, orderIndex: item.orderIndex })) })
+        }
       }
     }
     const retained = new Set(resolved.map(group => group.id))

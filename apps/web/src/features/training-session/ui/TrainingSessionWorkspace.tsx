@@ -109,6 +109,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [movingParticipants, setMovingParticipants] = useState<string[]>([])
   const [movingTargetGroup, setMovingTargetGroup] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupSourceId, setNewGroupSourceId] = useState('')
   const [movingReason, setMovingReason] = useState('课堂分组调整')
   const [nextOpen, setNextOpen] = useState(false)
   const [nextName, setNextName] = useState('')
@@ -168,6 +169,12 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const selectedPermission = selected ? data?.permissions[selected.id] : undefined
   const currentRound = data?.session.currentRound
   const pendingRound = data?.session.Rounds.find(round => round.lifecycle === 'PENDING')
+  const movingSourceGroupIds = [...new Set(movingParticipants
+    .map(participantId => dashboard?.participants.find(participant => participant.id === participantId)?.currentGroupId)
+    .filter((groupId): groupId is string => Boolean(groupId)))]
+  const resolvedNewGroupSourceId = movingSourceGroupIds.length === 1
+    ? movingSourceGroupIds[0]
+    : movingSourceGroupIds.includes(newGroupSourceId) ? newGroupSourceId : ''
   const focusCandidates = useMemo(() => {
     if (!data || !currentRound) return []
     const groupIds = focusTargetType === 'GROUP'
@@ -309,7 +316,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const moveGroup = async () => {
     if (!data || !movingParticipants.length || !movingTargetGroup) return
     const creatingGroup = movingTargetGroup === NEW_GROUP_VALUE
-    if (creatingGroup && !newGroupName.trim() || !creatingGroup && !movingReason.trim()) return
+    if (creatingGroup && (!newGroupName.trim() || !resolvedNewGroupSourceId) || !creatingGroup && !movingReason.trim()) return
     await run('group-change', () => creatingGroup
       ? replaceTrainingGrouping(sessionId, {
         expectedRevision: data.session.statusRevision,
@@ -319,7 +326,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
             name: group.name,
             participantIds: (group.Participants || []).map(participant => participant.id).filter(id => !movingParticipants.includes(id)),
           })),
-          { clientKey: `new-group-${Date.now()}`, name: newGroupName.trim(), participantIds: movingParticipants },
+          { clientKey: `new-group-${Date.now()}`, name: newGroupName.trim(), sourceGroupId: resolvedNewGroupSourceId, participantIds: movingParticipants },
         ],
       })
       : changeTrainingGrouping(sessionId, {
@@ -331,6 +338,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     setGroupOpen(false)
     setMovingParticipants([])
     setNewGroupName('')
+    setNewGroupSourceId('')
   }
 
   const applyFocus = () => {
@@ -400,7 +408,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       <div className={styles.v3PrimaryActions}>
         <Button variant="outline" icon={<Settings2 size={17} />} disabled={!currentRound} onClick={() => setAssignmentOpen(true)}>题目调整</Button>
         <Button variant="outline" icon={<Focus size={17} />} disabled={!currentRound} onClick={() => { setFocusTargetType('ALL'); setFocusGroupId(data.session.Groups[0]?.id || ''); setFocusOpen(true) }}>聚焦题目</Button>
-        <Button variant="outline" icon={<Users size={17} />} disabled={!dashboard?.participants.length} onClick={() => { setMovingTargetGroup(data.session.Groups[0]?.id || NEW_GROUP_VALUE); setNewGroupName(''); setGroupOpen(true) }}>调整分组</Button>
+        <Button variant="outline" icon={<Users size={17} />} disabled={!dashboard?.participants.length} onClick={() => { setMovingTargetGroup(data.session.Groups[0]?.id || NEW_GROUP_VALUE); setNewGroupName(''); setNewGroupSourceId(''); setGroupOpen(true) }}>调整分组</Button>
         <Button icon={<Layers3 size={17} />} onClick={openNextRound}>下一步</Button>
       </div>
       {focusActive && <div className={styles.v3ActiveNotice}>当前正在聚焦题目。<Button size="sm" variant="secondary" onClick={() => command('END_FOCUS')}>结束聚焦</Button></div>}
@@ -460,12 +468,17 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       </div>
     </FormDialog>
 
-    <FormDialog isOpen={groupOpen} onClose={() => setGroupOpen(false)} onSubmit={() => void moveGroup()} title="调整分组" submitText={movingTargetGroup === NEW_GROUP_VALUE ? '创建并调整' : '确认调整'} submitDisabled={!movingParticipants.length || !movingTargetGroup || (movingTargetGroup === NEW_GROUP_VALUE ? !newGroupName.trim() : !movingReason.trim())} loading={busy === 'group-change'}>
+    <FormDialog isOpen={groupOpen} onClose={() => setGroupOpen(false)} onSubmit={() => void moveGroup()} title="调整分组" submitText={movingTargetGroup === NEW_GROUP_VALUE ? '创建并调整' : '确认调整'} submitDisabled={!movingParticipants.length || !movingTargetGroup || (movingTargetGroup === NEW_GROUP_VALUE ? !newGroupName.trim() || !resolvedNewGroupSourceId : !movingReason.trim())} loading={busy === 'group-change'}>
       <div className={styles.stack}>
         <div className={styles.v3ParticipantPicker}>{dashboard?.participants.map(participant => <Checkbox key={participant.id} label={`${participant.user.displayName} · ${data.session.Groups.find(group => group.id === participant.currentGroupId)?.name || '未分组'}`} checked={movingParticipants.includes(participant.id)} onChange={event => setMovingParticipants(current => event.target.checked ? [...current, participant.id] : current.filter(id => id !== participant.id))} />)}</div>
         <label className={styles.field}>调整到<Select value={movingTargetGroup} onChange={event => setMovingTargetGroup(event.target.value)}>{data.session.Groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}<option value={NEW_GROUP_VALUE}>＋ 新建分组</option></Select></label>
         {movingTargetGroup === NEW_GROUP_VALUE
-          ? <label className={styles.field}>新分组名称<Input value={newGroupName} maxLength={100} autoFocus onChange={event => setNewGroupName(event.target.value)} /></label>
+          ? <>
+            <label className={styles.field}>新分组名称<Input value={newGroupName} maxLength={100} autoFocus onChange={event => setNewGroupName(event.target.value)} /></label>
+            {movingSourceGroupIds.length === 1
+              ? <p className={styles.muted}>题目将继承「{data.session.Groups.find(group => group.id === resolvedNewGroupSourceId)?.name}」在当前轮和已准备下一轮中的题集。</p>
+              : <label className={styles.field}>题目继承自<Select value={newGroupSourceId} onChange={event => setNewGroupSourceId(event.target.value)}><option value="">请选择来源分组</option>{movingSourceGroupIds.map(groupId => <option key={groupId} value={groupId}>{data.session.Groups.find(group => group.id === groupId)?.name}</option>)}</Select></label>}
+          </>
           : <label className={styles.field}>原因<Input value={movingReason} maxLength={2000} onChange={event => setMovingReason(event.target.value)} /></label>}
       </div>
     </FormDialog>
